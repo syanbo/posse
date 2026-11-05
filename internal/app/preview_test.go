@@ -1139,10 +1139,15 @@ func TestPreview(t *testing.T) {
 		a.openQuick(&a.workspaces[0], quickFiles)
 		a.quick.query = "view"
 		savePNG(t, newPreviewTester(a, dark), "quick-open-"+suffix+".png")
-		// 随处搜索的"所有"页：文件和操作各一组
+		// 随处搜索的"所有"页：文件、操作、文本各一组
 		a.openQuick(&a.workspaces[0], quickAll)
 		a.quick.query = "f"
+		until(t, newTester(a.build, 1200, 760), "quick text", func() bool { return a.quick.text.key != "" && !a.quick.text.running })
 		savePNG(t, newPreviewTester(a, dark), "quick-all-"+suffix+".png")
+		// 文本页：命中的那一行在左，文件名和行号在右，底下是"在文件栏中查看全部"
+		a.quick.tab, a.quick.query = quickText, "config"
+		until(t, newTester(a.build, 1200, 760), "quick text page", func() bool { return a.quick.text.key != "" && !a.quick.text.running && len(a.quick.text.hits) > 0 })
+		savePNG(t, newPreviewTester(a, dark), "quick-text-"+suffix+".png")
 
 		// 跳到定义时几处同名的声明：选择列表
 		a = previewApp(t)

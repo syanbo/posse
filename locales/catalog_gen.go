@@ -11461,6 +11461,68 @@ func (msgs Messages) QuickTabFiles() string {
 	return Catalog.Format(msgs.locale, "quickTabFiles", nil)
 }
 
+// QuickTabText says "Text"
+// in the language the app shows.
+//
+// Search Everywhere: tab with full-text matches in the workspace files;
+// also the group title on the All tab.
+func QuickTabText() string { return In(i18n.Locale()).QuickTabText() }
+
+// QuickTabText says "Text"
+// in the language of msgs.
+//
+// Search Everywhere: tab with full-text matches in the workspace files;
+// also the group title on the All tab.
+func (msgs Messages) QuickTabText() string {
+	return Catalog.Format(msgs.locale, "quickTabText", nil)
+}
+
+// QuickTextHint says "Type text to find in files"
+// in the language the app shows.
+//
+// Search Everywhere, Text tab: shown while the search field is empty.
+func QuickTextHint() string { return In(i18n.Locale()).QuickTextHint() }
+
+// QuickTextHint says "Type text to find in files"
+// in the language of msgs.
+//
+// Search Everywhere, Text tab: shown while the search field is empty.
+func (msgs Messages) QuickTextHint() string {
+	return Catalog.Format(msgs.locale, "quickTextHint", nil)
+}
+
+// QuickTextShowAll says "Show all in Files panel"
+// in the language the app shows.
+//
+// Search Everywhere, Text tab: link that hands the query to the Files panel
+// search.
+func QuickTextShowAll() string { return In(i18n.Locale()).QuickTextShowAll() }
+
+// QuickTextShowAll says "Show all in Files panel"
+// in the language of msgs.
+//
+// Search Everywhere, Text tab: link that hands the query to the Files panel
+// search.
+func (msgs Messages) QuickTextShowAll() string {
+	return Catalog.Format(msgs.locale, "quickTextShowAll", nil)
+}
+
+// QuickTextShowAllMore says "{count, plural, one {Showing the first match; see all in Files panel} other {Showing the first # matches; see all in …"
+// in the language the app shows.
+//
+// Search Everywhere, Text tab: same link when there are more matches than
+// listed; count is how many are listed.
+func QuickTextShowAllMore(count int) string { return In(i18n.Locale()).QuickTextShowAllMore(count) }
+
+// QuickTextShowAllMore says "{count, plural, one {Showing the first match; see all in Files panel} other {Showing the first # matches; see all in …"
+// in the language of msgs.
+//
+// Search Everywhere, Text tab: same link when there are more matches than
+// listed; count is how many are listed.
+func (msgs Messages) QuickTextShowAllMore(count int) string {
+	return Catalog.Format(msgs.locale, "quickTextShowAllMore", map[string]any{"count": count})
+}
+
 // QuickTitle says "Search Everywhere"
 // in the language the app shows.
 //

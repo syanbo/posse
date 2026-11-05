@@ -4285,6 +4285,27 @@
   "@quickTabFiles": {
     "description": "Search Everywhere: tab matching file names; also the group title on the All tab."
   },
+  "quickTabText": "Text",
+  "@quickTabText": {
+    "description": "Search Everywhere: tab with full-text matches in the workspace files; also the group title on the All tab."
+  },
+  "quickTextHint": "Type text to find in files",
+  "@quickTextHint": {
+    "description": "Search Everywhere, Text tab: shown while the search field is empty."
+  },
+  "quickTextShowAll": "Show all in Files panel",
+  "@quickTextShowAll": {
+    "description": "Search Everywhere, Text tab: link that hands the query to the Files panel search."
+  },
+  "quickTextShowAllMore": "{count, plural, one {Showing the first match; see all in Files panel} other {Showing the first # matches; see all in Files panel}}",
+  "@quickTextShowAllMore": {
+    "description": "Search Everywhere, Text tab: same link when there are more matches than listed; count is how many are listed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "quickTitle": "Search Everywhere",
   "@quickTitle": {
     "description": "Search Everywhere: accessibility label of the tab group."

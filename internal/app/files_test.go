@@ -1273,3 +1273,47 @@ func TestSearchEverywhere(t *testing.T) {
 		return v.cur != nil && v.cur.path == filepath.Join(root, "internal", "files", "search.go")
 	})
 }
+
+// 随处搜索的文本页：后台全文检索，回车跳到命中的那一行；"在文件栏中查看全部"交给文件栏的检索框
+func TestSearchEverywhereText(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	v := a.filesFor(w)
+	tt := newTester(a.build, 1200, 760)
+	tt.Frame()
+	a.openQuick(w, quickAll)
+	tt.Frame()
+	tt.Type("func")
+	until(t, tt, "all page", func() bool { return !a.quick.text.running && len(a.quick.text.hits) == 4 && tt.HasText("文本") })
+	if !tt.HasText("search.go:3") {
+		t.Fatalf("hit row: %v", tt.Texts())
+	}
+	if err := tt.Click("文本"); err != nil { // 页签
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.quick.tab != quickText {
+		t.Fatalf("tab %d", a.quick.tab)
+	}
+	if err := tt.Click("func Search() {}"); err != nil {
+		t.Fatal(err)
+	}
+	sp := filepath.Join(root, "internal", "files", "search.go")
+	until(t, tt, "jump", func() bool {
+		d := v.doc(sp)
+		return !a.quick.open && d != nil && d.gotoLine == 0 && d.ed.SelectedText() == "func"
+	})
+
+	a.openQuick(w, quickText)
+	tt.Frame()
+	tt.Type("package")
+	until(t, tt, "hits", func() bool { return !a.quick.text.running && len(a.quick.text.hits) > 0 })
+	if err := tt.Click("在文件栏中查看全部"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "panel", func() bool {
+		return !a.quick.open && a.filesPanelOpen() && v.search.query.Text == "package" && !v.search.running && len(v.search.hits) == 4
+	})
+}

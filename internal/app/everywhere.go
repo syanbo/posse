@@ -2,23 +2,27 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/files"
 	"posse/locales"
 )
 
-// 随处搜索（照 WebStorm 的双击 Shift）：一个弹框分"所有""文件""操作"几页，⇥ 换页。
+// 随处搜索（照 WebStorm 的双击 Shift）：一个弹框分"所有""文件""操作""文本"几页，⇥ 换页。
 // ⌘P 打开在"文件"页（原来的快速打开），⇧⌘A 打开在"操作"页。
 
 const (
 	quickAll = iota
 	quickFiles
 	quickActions
+	quickText
 	quickTabs
 )
 
@@ -38,6 +42,21 @@ type quickOpen struct {
 	allList    *files.List
 	allCancel  context.CancelFunc
 	allListing bool
+	// 文本页（和"所有"页的文本一组）：全文检索的前 quickTextMax 条，按文件栏检索限定的目录搜
+	text quickTextSearch
+}
+
+// quickTextMax 是随处搜索里全文检索最多列的条数，看全部到文件栏的检索页。
+const quickTextMax = 50
+
+type quickTextSearch struct {
+	key     string // hits 对应的查询（检索词和限定的目录）
+	gen     int
+	cancel  context.CancelFunc
+	running bool
+	hits    []files.Hit
+	more    bool // 不止 quickTextMax 条
+	err     string
 }
 
 // openQuick 打开随处搜索到 tab 页，清单不新鲜就重列；选中文件后才切到文件标签。
@@ -52,6 +71,10 @@ func (a *app) closeQuick() {
 	if a.quick.allCancel != nil {
 		a.quick.allCancel()
 	}
+	if a.quick.text.cancel != nil {
+		a.quick.text.cancel()
+	}
+	a.quick.text = quickTextSearch{}
 	a.quick.open, a.quick.allList, a.quick.allCancel = false, nil, nil
 }
 
@@ -129,11 +152,81 @@ func allOf[T any](xs []T, f func(T) bool) bool {
 	return true
 }
 
-// quickItem 是弹框列表里的一行：文件、操作，或"所有"页里一组的标题（不能选）。
+// quickItem 是弹框列表里的一行：文件、操作、文本命中，或"所有"页里一组的标题（不能选，tab 是"更多"换到的页）。
 type quickItem struct {
 	file   *files.Match
 	act    *paletteAction
+	hit    *files.Hit
 	header string
+	tab    int
+}
+
+// syncQuickText 让文本检索跟上查询：变了就取消旧的，停顿 150ms 后在后台重搜，攒够 quickTextMax 条就停。
+func (a *app) syncQuickText(v *filesView, query string) {
+	t := &a.quick.text
+	dir := v.search.query.Dir
+	key := dir + "\x00" + query
+	if t.key == key {
+		return
+	}
+	t.key = key
+	t.gen++
+	gen := t.gen
+	if t.cancel != nil {
+		t.cancel()
+		t.cancel = nil
+	}
+	t.hits, t.more, t.err, t.running = nil, false, "", false
+	if strings.TrimSpace(query) == "" {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.cancel, t.running = cancel, true
+	q := files.Query{Text: query, Dir: dir}
+	time.AfterFunc(150*time.Millisecond, func() {
+		a.update(func() {
+			if a.quick.text.gen != gen {
+				return
+			}
+			a.refreshList(v, false, func() {
+				if a.quick.text.gen != gen || v.list == nil {
+					return
+				}
+				l, overlay := v.list, editorOverlay(v)
+				go func() {
+					var err error
+					if q.Dir != "" && l.Ignored(filepath.Join(l.Root, q.Dir), true) {
+						l, err = files.ListDir(ctx, l.Root, q.Dir)
+					}
+					if err == nil {
+						_, err = files.Search(ctx, l, q, overlay, func(hs []files.Hit) {
+							a.update(func() {
+								t := &a.quick.text
+								if t.gen != gen {
+									return
+								}
+								t.hits = append(t.hits, hs...)
+								if len(t.hits) > quickTextMax {
+									t.hits, t.more = t.hits[:quickTextMax], true
+									cancel()
+								}
+							})
+						})
+					}
+					a.update(func() {
+						t := &a.quick.text
+						if t.gen != gen {
+							return
+						}
+						t.running = false
+						if err != nil && ctx.Err() == nil {
+							t.err = errtext.Text(err)
+						}
+					})
+				}()
+			})
+		})
+	})
 }
 
 // recentMatches 是查询为空时文件页先列的最近打开的文件（还在清单里的），后面接清单顺序的。
@@ -183,9 +276,9 @@ func (a *app) quickDialog(c *ui.Context) {
 	ui.Modal(c, &open, func() {
 		ui.Column(c).Width(600).Gap(8).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				segmentedBadges(c, &q.tab, m.QuickTitle(), nil, m.QuickTabAll(), m.QuickTabFiles(), m.QuickTabActions())
+				segmentedBadges(c, &q.tab, m.QuickTitle(), nil, m.QuickTabAll(), m.QuickTabFiles(), m.QuickTabActions(), m.QuickTabText())
 				ui.Spacer(c)
-				if q.tab != quickActions && toggleChip(c, m.QuickIncludeIgnored(), m.QuickIncludeIgnoredTip(), q.all) {
+				if (q.tab == quickAll || q.tab == quickFiles) && toggleChip(c, m.QuickIncludeIgnored(), m.QuickIncludeIgnoredTip(), q.all) {
 					a.toggleQuickAll(v)
 				}
 			})
@@ -195,6 +288,8 @@ func (a *app) quickDialog(c *ui.Context) {
 				placeholder = m.FilesQuickOpenPlaceholder()
 			case quickActions:
 				placeholder = m.QuickPlaceholderActions()
+			case quickText:
+				placeholder = m.FilesSearchPlaceholder()
 			}
 			in, _ := clearableField(c, &q.query, placeholder)
 			in.AutoFocus()
@@ -210,7 +305,8 @@ func (a *app) quickDialog(c *ui.Context) {
 			if q.all && q.allList != nil {
 				l = q.allList
 			}
-			if q.tab != quickActions && l != nil && (q.list != l || q.key != path) {
+			wantFiles := q.tab == quickAll || q.tab == quickFiles
+			if wantFiles && l != nil && (q.list != l || q.key != path) {
 				if path == "" {
 					q.matches = recentMatches(v, l, 50)
 				} else {
@@ -225,8 +321,17 @@ func (a *app) quickDialog(c *ui.Context) {
 				}
 			}
 			acts := []paletteAction(nil)
-			if q.tab != quickFiles {
+			if q.tab == quickAll || q.tab == quickActions {
 				acts = a.matchActions(m, w, q.query)
+			}
+			if q.tab == quickAll || q.tab == quickText {
+				a.syncQuickText(v, q.query)
+			}
+			hits := q.text.hits
+			addHits := func(n int) {
+				for i := range min(n, len(hits)) {
+					items = append(items, quickItem{hit: &hits[i]})
+				}
 			}
 			addActs := func(n int) {
 				for i := range min(n, len(acts)) {
@@ -238,15 +343,21 @@ func (a *app) quickDialog(c *ui.Context) {
 				addFiles(50)
 			case quickActions:
 				addActs(len(acts))
+			case quickText:
+				addHits(quickTextMax)
 			default:
 				// 每组只列前几条，标题点了换到那一页看全部
 				if len(q.matches) > 0 {
-					items = append(items, quickItem{header: m.QuickTabFiles()})
+					items = append(items, quickItem{header: m.QuickTabFiles(), tab: quickFiles})
 					addFiles(5)
 				}
 				if len(acts) > 0 {
-					items = append(items, quickItem{header: m.QuickTabActions()})
+					items = append(items, quickItem{header: m.QuickTabActions(), tab: quickActions})
 					addActs(5)
+				}
+				if len(hits) > 0 {
+					items = append(items, quickItem{header: m.QuickTabText(), tab: quickText})
+					addHits(5)
 				}
 			}
 			var pickable []int
@@ -267,6 +378,12 @@ func (a *app) quickDialog(c *ui.Context) {
 			switch {
 			case q.tab != quickActions && l == nil:
 				ui.Text(c, m.FilesListing()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
+			case q.tab == quickText && q.text.err != "":
+				ui.Text(c, q.text.err).FontSize(fsSmall).TextColor(t.Danger).Padding(4, 2)
+			case q.tab == quickText && strings.TrimSpace(q.query) == "":
+				ui.Text(c, m.QuickTextHint()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
+			case n == 0 && q.text.running && (q.tab == quickText || q.tab == quickAll):
+				ui.Text(c, m.FilesSearching()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
 			case n == 0:
 				ui.Text(c, m.FilesNoMatches()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
 			default:
@@ -276,18 +393,18 @@ func (a *app) quickDialog(c *ui.Context) {
 						for i, it := range items {
 							if it.header != "" {
 								if quickHeader(c, it.header) {
-									q.tab, q.sel = quickFiles, 0
-									if it.header == m.QuickTabActions() {
-										q.tab = quickActions
-									}
+									q.tab, q.sel = it.tab, 0
 								}
 								continue
 							}
 							selected := k < n && pickable[k] == i && k == q.sel
 							var clicked bool
-							if it.file != nil {
+							switch {
+							case it.file != nil:
 								clicked = quickRow(c, *it.file, selected, q.moved)
-							} else {
+							case it.hit != nil:
+								clicked = quickHitRow(c, *it.hit, selected, q.moved)
+							default:
 								clicked = a.actionRow(c, m, *it.act, selected, q.moved)
 							}
 							if clicked {
@@ -299,19 +416,54 @@ func (a *app) quickDialog(c *ui.Context) {
 				})
 			}
 			q.moved = false
-			// 底下一行是选中文件的完整路径
-			if n > 0 {
-				if f := items[pickable[q.sel]].file; f != nil {
-					ui.Text(c, shortPath(filepath.Join(l.Root, f.Path))).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Padding(0, 4)
-				}
+			// 底下一行是选中文件的完整路径；文本页右边是"在文件栏中查看全部"，交给文件栏的检索
+			showAll := q.tab == quickText && strings.TrimSpace(q.query) != ""
+			if n > 0 || showAll {
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(0, 4).Children(func() {
+					footer := ""
+					if n > 0 {
+						switch it := items[pickable[q.sel]]; {
+						case it.file != nil && l != nil:
+							footer = shortPath(filepath.Join(l.Root, it.file.Path))
+						case it.hit != nil:
+							footer = shortPath(filepath.Join(v.root, it.hit.Path))
+						}
+					}
+					if dir := v.search.query.Dir; showAll && dir != "" && footer == "" {
+						footer = m.FilesSearchScope(filepath.ToSlash(dir))
+					}
+					ui.Text(c, footer).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+					ui.Spacer(c)
+					if showAll {
+						label := m.QuickTextShowAll()
+						if q.text.more {
+							label = m.QuickTextShowAllMore(quickTextMax)
+						}
+						if ui.Text(c, label).FontSize(fsSmall).TextColor(t.Accent).Role(ui.RoleButton).Shrink(0).Clicked() {
+							query := q.query
+							a.closeQuick()
+							a.searchText(w, query)
+						}
+					}
+				})
 			}
 			if submitted && n > 0 {
 				it := items[pickable[q.sel]]
-				root := l.Root
+				root := v.root
+				if l != nil {
+					root = l.Root
+				}
 				a.closeQuick()
-				if it.file != nil {
+				switch {
+				case it.file != nil:
 					a.openFile(w, filepath.Join(root, it.file.Path), line, [2]int{})
-				} else {
+				case it.hit != nil:
+					var span [2]int
+					if len(it.hit.Spans) > 0 {
+						span = it.hit.Spans[0]
+					}
+					a.openFile(w, filepath.Join(v.root, it.hit.Path), it.hit.Line+1, span)
+				default:
 					it.act.run(a, m, w)
 				}
 			}
@@ -381,6 +533,33 @@ func (a *app) actionRow(c *ui.Context, m locales.Messages, p paletteAction, sele
 		if k := a.keyText(p.id); k != "" {
 			ui.Text(c, k).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(0)
 		}
+	})
+	return row.Clicked()
+}
+
+// searchText 把随处搜索里的检索词交给文件栏的检索框，看全部命中：和弹框里一样按字面、不分大小写，限定的目录照旧。
+func (a *app) searchText(w *workspace, query string) {
+	v := a.openFilesPanel(w, sideFiles)
+	v.search.query.Text, v.search.query.Regex, v.search.query.MatchCase = query, false, false
+	v.search.focus = true
+	a.startSearch(v, 0)
+}
+
+// quickHitRow 是文本页的一条命中：命中的那一行在左（缩进去掉），文件名和行号在右。返回是否被点了。
+func quickHitRow(c *ui.Context, h files.Hit, selected, reveal bool) bool {
+	t := c.Theme()
+	row := ui.Row(c.Key(fmt.Sprint(h.Path, ":", h.Line))).Height(sz(30)).Margin(2, 0, 0, 0).Padding(0, 12).Gap(12).Radius(rRow).AlignItems(ui.Center).Role(ui.RoleButton).Label(h.Text)
+	selectedBg(c, row, selected)
+	if selected && reveal {
+		row.ScrollIntoView()
+	}
+	text, spans := trimHit(h)
+	row.Children(func() {
+		ui.RichText(c, markSpans(text, spans, ui.Span{Font: monoFont, Size: fsSmall}, colors(t).mark)...).SingleLine().Shrink(1).Grow(1)
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
+			fileGlyph(c, h.Path, fsBody)
+			ui.Text(c, fmt.Sprintf("%s:%d", filepath.Base(h.Path), h.Line+1)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
+		})
 	})
 	return row.Clicked()
 }
