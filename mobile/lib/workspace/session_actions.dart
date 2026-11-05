@@ -15,35 +15,18 @@ Future<bool> closeSession(
 ) async {
   final l = context.l10n;
   final who = tab.agent == null ? null : chatWho(l, 'assistant', tab.agent);
-  final ok = await showPosseDialog<bool>(
-    context: context,
-    builder: (dialog) => AlertDialog(
-      title: Text(
-        who == null
-            ? l.sessionCloseTerminalConfirm
-            : l.sessionCloseSessionConfirm,
-      ),
-      content: Text(
-        who == null
-            ? l.sessionCloseTerminalBody(cleanTitle(tab.title))
-            : l.sessionCloseSessionBody(who),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialog, false),
-          child: Text(l.commonCancel),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: PosseColors.of(dialog).danger,
-          ),
-          onPressed: () => Navigator.pop(dialog, true),
-          child: Text(l.commonClose),
-        ),
-      ],
-    ),
+  final ok = await showPosseConfirm(
+    context,
+    title: who == null
+        ? l.sessionCloseTerminalConfirm
+        : l.sessionCloseSessionConfirm,
+    body: who == null
+        ? l.sessionCloseTerminalBody(cleanTitle(tab.title))
+        : l.sessionCloseSessionBody(who),
+    confirm: l.commonClose,
+    tone: ConfirmTone.danger,
   );
-  if (ok != true) return false;
+  if (!ok) return false;
   final rpc = model.rpc;
   if (rpc == null) return false;
   try {

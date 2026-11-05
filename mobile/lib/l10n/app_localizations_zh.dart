@@ -998,8 +998,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get gitCheckoutAgentBody =>
-      '切换分支会改动工作目录里的文件，agent 正在改的内容可能被覆盖或打乱。仍然要切换吗？';
+  String get gitCheckoutAgentBody => '切换分支会改动工作目录里的文件，可能打乱它正在做的修改。';
 
   @override
   String get gitCheckoutAnyway => '仍然切换';

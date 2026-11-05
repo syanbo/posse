@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/ui/widgets.dart';
 
 Widget host(ValueChanged<bool?> onResult, {bool reduceMotion = false}) {
@@ -49,7 +50,7 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 60));
-    expect(scaleOf(tester), inExclusiveRange(0.9, 1.0));
+    expect(scaleOf(tester), inExclusiveRange(0.94, 1.0));
     await tester.pumpAndSettle();
     expect(scaleOf(tester), 1.0);
 
@@ -70,5 +71,97 @@ void main() {
       ),
       findsNothing,
     );
+  });
+
+  group('confirm', () {
+    Widget confirmHost(
+      ValueChanged<bool> onResult, {
+      ConfirmTone tone = ConfirmTone.normal,
+      bool reduceMotion = false,
+    }) {
+      return MaterialApp(
+        locale: const Locale('zh'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(disableAnimations: reduceMotion),
+          child: child!,
+        ),
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async => onResult(
+              await showPosseConfirm(
+                context,
+                title: '切换分支？',
+                body: '说明',
+                confirm: '仍然切换',
+                tone: tone,
+              ),
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('confirm returns true, cancel and barrier false', (
+      tester,
+    ) async {
+      final results = <bool>[];
+      await tester.pumpWidget(confirmHost(results.add));
+      for (final target in ['仍然切换', '取消']) {
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(target));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pumpAndSettle();
+      expect(results, [true, false, false]);
+    });
+
+    testWidgets('content appears in layers, buttons last', (tester) async {
+      await tester.pumpWidget(confirmHost((_) {}, tone: ConfirmTone.warning));
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      // 160ms：文字刚开始出现，按钮还没出来
+      await tester.pump(const Duration(milliseconds: 170));
+      double opacityAbove(String text) => tester
+          .widget<Opacity>(
+            find
+                .ancestor(of: find.text(text), matching: find.byType(Opacity))
+                .first,
+          )
+          .opacity;
+      expect(opacityAbove('切换分支？'), greaterThan(0));
+      expect(opacityAbove('仍然切换'), 0);
+      expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+      // 落定后各层都是原样，警示图标的子树没有重建过
+      final icon = tester.element(find.byIcon(Icons.warning_amber_rounded));
+      await tester.pumpAndSettle();
+      expect(opacityAbove('切换分支？'), 1);
+      expect(opacityAbove('仍然切换'), 1);
+      expect(
+        tester.element(find.byIcon(Icons.warning_amber_rounded)),
+        same(icon),
+      );
+    });
+
+    testWidgets('reduced motion shows everything at once', (tester) async {
+      await tester.pumpWidget(
+        confirmHost((_) {}, tone: ConfirmTone.warning, reduceMotion: true),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(
+        find.ancestor(of: find.text('仍然切换'), matching: find.byType(Opacity)),
+        findsNothing,
+      );
+      await tester.pumpAndSettle();
+    });
   });
 }

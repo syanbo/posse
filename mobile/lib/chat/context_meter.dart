@@ -111,24 +111,13 @@ class _ContextMeterState extends State<ContextMeter> {
     if (percent == null) return;
     final l = context.l10n;
     final who = chatWho(l, 'assistant', widget.tab.agent);
-    final ok = await showPosseDialog<bool>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: Text(l.chatCompactConfirm),
-        content: Text(l.chatCompactBody(percent, who)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialog, false),
-            child: Text(l.commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialog, true),
-            child: Text(l.chatCompactButton),
-          ),
-        ],
-      ),
+    final ok = await showPosseConfirm(
+      context,
+      title: l.chatCompactConfirm,
+      body: l.chatCompactBody(percent, who),
+      confirm: l.chatCompactButton,
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     final rpc = widget.model.rpc;
     final send =
         widget.send ??

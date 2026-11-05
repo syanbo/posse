@@ -347,6 +347,19 @@ ThemeData posseTheme(Brightness brightness) {
     dialogTheme: DialogThemeData(
       backgroundColor: c.raised,
       surfaceTintColor: Colors.transparent,
+      // Material 3 默认标题是 24 号，跳出字号阶梯；左右离屏幕边默认 40，内容被挤窄
+      titleTextStyle: TextStyle(
+        fontSize: Fs.title,
+        fontWeight: Fw.bold,
+        height: Lh.title,
+        color: c.text,
+      ),
+      contentTextStyle: TextStyle(
+        fontSize: Fs.body,
+        height: Lh.body,
+        color: c.muted,
+      ),
+      insetPadding: const EdgeInsets.all(24),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(Rd.sheet),
       ),

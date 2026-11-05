@@ -1823,7 +1823,7 @@ abstract class AppLocalizations {
   /// Git changes: body of the confirmation before switching branches while an agent is working.
   ///
   /// In en, this message translates to:
-  /// **'Switching branches changes files in the working directory and may overwrite or disrupt what the agent is editing. Switch anyway?'**
+  /// **'Switching branches changes files in the working directory and may disrupt the edits it is making.'**
   String get gitCheckoutAgentBody;
 
   /// Git changes: confirm button to switch branches while an agent is working.

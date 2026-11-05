@@ -384,8 +384,8 @@ class _HexPainter extends CustomPainter {
       old.state != state || old.color != color;
 }
 
-/// 弹框：从略小放大到原大、同时淡入，收起时缩回去、比出来快。Material 默认只淡入一下，看着生硬。
-/// 系统开了减少动态效果时只淡入淡出。
+/// 弹框：从略小放大到原大、从下方升起、同时淡入，放大带一点回弹；收起时缩回去、比出来快，不回弹。
+/// Material 默认只淡入一下，看着生硬。动画只改变换和透明度，不重排内容。系统开了减少动态效果时只淡入淡出。
 Future<T?> showPosseDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -395,25 +395,40 @@ Future<T?> showPosseDialog<T>({
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       pageBuilder: (dialog, _, _) => SafeArea(child: Builder(builder: builder)),
       transitionBuilder: (dialog, animation, _, child) {
-        final curved = CurvedAnimation(
+        final fade = CurvedAnimation(
           parent: animation,
           curve: Curves.easeOutCubic,
           reverseCurve: Curves.easeInCubic,
         );
         if (reduceMotionOf(dialog)) {
-          return FadeTransition(opacity: curved, child: child);
+          return FadeTransition(opacity: fade, child: child);
         }
+        final grow = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+          reverseCurve: Curves.easeInCubic,
+        );
         return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween(begin: 0.9, end: 1.0).animate(curved),
-            child: child,
+          opacity: fade,
+          child: AnimatedBuilder(
+            animation: fade,
+            builder: (_, child) => Transform.translate(
+              offset: Offset(0, _dialogRise * (1 - fade.value)),
+              child: child,
+            ),
+            child: ScaleTransition(
+              scale: Tween(begin: 0.94, end: 1.0).animate(grow),
+              child: child,
+            ),
           ),
         );
       },
     ),
   );
 }
+
+/// 弹框出现时从下方升起的距离。
+const _dialogRise = 8.0;
 
 class _PosseDialogRoute<T> extends RawDialogRoute<T> {
   _PosseDialogRoute({
@@ -422,11 +437,311 @@ class _PosseDialogRoute<T> extends RawDialogRoute<T> {
     super.barrierLabel,
   }) : super(
          barrierColor: PosseColors.barrier,
-         transitionDuration: const Duration(milliseconds: 240),
+         transitionDuration: const Duration(milliseconds: 280),
        );
 
   @override
   Duration get reverseTransitionDuration => const Duration(milliseconds: 160);
+}
+
+/// 确认框的语气：普通确认、有风险（琥珀色警示图标）、删除类（红色按钮）。
+enum ConfirmTone { normal, warning, danger }
+
+/// 弹出确认框，确认返回 true，取消或点遮罩返回 false。
+Future<bool> showPosseConfirm(
+  BuildContext context, {
+  required String title,
+  String? body,
+  required String confirm,
+  ConfirmTone tone = ConfirmTone.normal,
+}) async {
+  final ok = await showPosseDialog<bool>(
+    context: context,
+    builder: (_) =>
+        PosseConfirm(title: title, body: body, confirm: confirm, tone: tone),
+  );
+  return ok == true;
+}
+
+/// 确认框：标题、说明，下面两个等宽按钮，取消在左。
+/// 内容跟着弹框的推入动画分层出现（图标、文字、按钮），不另开动画控制器。
+class PosseConfirm extends StatelessWidget {
+  const PosseConfirm({
+    super.key,
+    required this.title,
+    this.body,
+    required this.confirm,
+    this.tone = ConfirmTone.normal,
+  });
+
+  final String title;
+  final String? body;
+  final String confirm;
+  final ConfirmTone tone;
+
+  // 各层在 280ms 推入动画里开始的位置：图标 80ms、文字 160ms、按钮 200ms
+  static const _iconAt = 80 / 280;
+  static const _textAt = 160 / 280;
+  static const _buttonsAt = 200 / 280;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = PosseColors.of(context);
+    final l = context.l10n;
+    final route = reduceMotionOf(context)
+        ? null
+        : ModalRoute.of(context)?.animation;
+    final body = this.body;
+    return Dialog(
+      child: ConstrainedBox(
+        // 平板上不铺满
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (tone == ConfirmTone.warning) ...[
+                _Stage(
+                  route: route,
+                  start: _iconAt,
+                  pop: true,
+                  child: _WarnIcon(route: route),
+                ),
+                const SizedBox(height: 14),
+              ],
+              _Stage(
+                route: route,
+                start: _textAt,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: Fs.title,
+                        fontWeight: Fw.bold,
+                        height: Lh.title,
+                        color: c.text,
+                      ),
+                    ),
+                    if (body != null && body.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        body,
+                        style: TextStyle(
+                          fontSize: Fs.body,
+                          height: Lh.body,
+                          color: c.muted,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              _Stage(
+                route: route,
+                start: _buttonsAt,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _Press(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text(l.commonCancel),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _Press(
+                        child: FilledButton(
+                          style: tone == ConfirmTone.danger
+                              ? FilledButton.styleFrom(
+                                  backgroundColor: c.danger,
+                                )
+                              : null,
+                          onPressed: () => Navigator.pop(context, true),
+                          child: Text(
+                            confirm,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 弹框里的一层：推入动画走到 [start] 后淡入并升起 4；[pop] 的从 0.6 回弹放大到原大。
+/// 收起时整体随弹框淡出。没有动画（减少动态效果）时直接显示。
+class _Stage extends StatelessWidget {
+  const _Stage({
+    required this.route,
+    required this.start,
+    required this.child,
+    this.pop = false,
+  });
+
+  final Animation<double>? route;
+  final double start;
+  final bool pop;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final route = this.route;
+    if (route == null) return child;
+    return AnimatedBuilder(
+      animation: route,
+      child: child,
+      builder: (_, child) {
+        // 收起时不分层；结构不随状态变，免得子树重建丢掉状态
+        final t = route.status == AnimationStatus.reverse
+            ? 1.0
+            : ((route.value - start) / (1 - start)).clamp(0.0, 1.0);
+        final fade = Curves.easeOutCubic.transform(t);
+        final moved = pop
+            ? Transform.scale(
+                scale: 0.6 + 0.4 * Curves.easeOutBack.transform(t),
+                alignment: AlignmentDirectional.centerStart,
+                child: child,
+              )
+            : Transform.translate(
+                offset: Offset(0, 4 * (1 - fade)),
+                child: child,
+              );
+        return Opacity(opacity: fade, child: moved);
+      },
+    );
+  }
+}
+
+/// 有风险的确认前的警示图标：琥珀色淡底圆。弹框落定后，淡底向外扩一圈并淡出，只播一次。
+class _WarnIcon extends StatefulWidget {
+  const _WarnIcon({required this.route});
+
+  /// 弹框的推入动画；为空时（减少动态效果）不播光圈。
+  final Animation<double>? route;
+
+  @override
+  State<_WarnIcon> createState() => _WarnIconState();
+}
+
+class _WarnIconState extends State<_WarnIcon>
+    with SingleTickerProviderStateMixin {
+  late final _halo = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 600),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    final route = widget.route;
+    if (route == null) return;
+    if (route.status == AnimationStatus.completed) {
+      _halo.forward();
+    } else {
+      route.addStatusListener(_onRoute);
+    }
+  }
+
+  void _onRoute(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    widget.route?.removeStatusListener(_onRoute);
+    if (mounted) _halo.forward();
+  }
+
+  @override
+  void dispose() {
+    widget.route?.removeStatusListener(_onRoute);
+    _halo.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = PosseColors.of(context);
+    final disc = BoxDecoration(color: c.soft(c.honey), shape: BoxShape.circle);
+    final icon = Container(
+      padding: const EdgeInsets.all(8),
+      decoration: disc,
+      child: Icon(Icons.warning_amber_rounded, size: Ic.button, color: c.honey),
+    );
+    // 光圈只重绘图标这一块
+    return RepaintBoundary(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _halo,
+              builder: (_, _) {
+                final t = Curves.easeOutCubic.transform(_halo.value);
+                if (_halo.isDismissed || _halo.isCompleted) {
+                  return const SizedBox.shrink();
+                }
+                return Transform.scale(
+                  scale: 1 + 0.4 * t,
+                  child: Opacity(
+                    opacity: 1 - t,
+                    child: DecoratedBox(decoration: disc),
+                  ),
+                );
+              },
+            ),
+          ),
+          icon,
+        ],
+      ),
+    );
+  }
+}
+
+/// 按下时缩到 0.97，松手弹回。
+class _Press extends StatefulWidget {
+  const _Press({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_Press> createState() => _PressState();
+}
+
+class _PressState extends State<_Press> {
+  var _down = false;
+
+  void _set(bool down) {
+    if (_down != down) setState(() => _down = down);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => _set(true),
+      onPointerUp: (_) => _set(false),
+      onPointerCancel: (_) => _set(false),
+      child: AnimatedScale(
+        scale: _down ? 0.97 : 1,
+        duration: reduceMotionOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 100),
+        curve: Curves.easeOut,
+        child: widget.child,
+      ),
+    );
+  }
 }
 
 /// 列表分组：上面一行小标题，下面一张卡片，行之间是缩进的细线。

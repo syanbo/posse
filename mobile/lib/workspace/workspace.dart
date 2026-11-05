@@ -1388,24 +1388,15 @@ class _ComputerSheet extends StatelessWidget {
   }
 
   Future<void> _remove(BuildContext context, SavedComputer computer) async {
-    final ok = await showPosseDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.l10n.homeForgetConfirm(model.labelOf(computer))),
-        content: Text(context.l10n.homeForgetBody),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(context.l10n.commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(context.l10n.homeForget),
-          ),
-        ],
-      ),
+    final l = context.l10n;
+    final ok = await showPosseConfirm(
+      context,
+      title: l.homeForgetConfirm(model.labelOf(computer)),
+      body: l.homeForgetBody,
+      confirm: l.homeForget,
+      tone: ConfirmTone.danger,
     );
-    if (ok == true) await model.removeComputer(computer.id);
+    if (ok) await model.removeComputer(computer.id);
   }
 
   @override
@@ -1753,8 +1744,6 @@ class _RenameDialogState extends State<_RenameDialog> {
     final computer = widget.computer;
     final l = context.l10n;
     return AlertDialog(
-      // 系统默认两边留 40，输入框太窄
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
       title: Text(l.homeRenameTitle),
       content: SizedBox(
         width: double.maxFinite,

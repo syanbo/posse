@@ -1429,7 +1429,7 @@
       }
     }
   },
-  "gitCheckoutAgentBody": "Switching branches changes files in the working directory and may overwrite or disrupt what the agent is editing. Switch anyway?",
+  "gitCheckoutAgentBody": "Switching branches changes files in the working directory and may disrupt the edits it is making.",
   "@gitCheckoutAgentBody": {
     "description": "Git changes: body of the confirmation before switching branches while an agent is working."
   },

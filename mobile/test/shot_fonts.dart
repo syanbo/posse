@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:posse_mobile/ui/theme.dart';
 
 // 离屏截图用的字体。flutter_test 只带一个把字画成方块的 FlutterTest 字体，没装的字族都落到它：
 // 正文的 Roboto 和兜底的 FlutterTest 换成苹方（和 iPhone 一样），等宽的 Menlo 用系统自带的，
@@ -44,4 +46,19 @@ Iterable<String> _pingFang() sync* {
   } on FileSystemException {
     return;
   }
+}
+
+/// 截图用的主题：按钮的字样式不写字体，测试里落到画方块的默认字体（真机落到系统字体），这里补上。
+ThemeData shotTheme(ThemeData base) {
+  const label = WidgetStatePropertyAll(
+    TextStyle(fontFamily: 'Roboto', fontSize: Fs.body, fontWeight: Fw.medium),
+  );
+  return base.copyWith(
+    filledButtonTheme: FilledButtonThemeData(
+      style: base.filledButtonTheme.style!.copyWith(textStyle: label),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: base.textButtonTheme.style!.copyWith(textStyle: label),
+    ),
+  );
 }

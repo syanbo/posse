@@ -270,24 +270,13 @@ class _BranchSheetState extends State<_BranchSheet> {
 
   Future<bool> _confirmAgent(String agent) async {
     final l = context.l10n;
-    final ok = await showPosseDialog<bool>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: Text(l.gitCheckoutAgentTitle(agentLabel(agent))),
-        content: Text(l.gitCheckoutAgentBody),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialog, false),
-            child: Text(l.commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialog, true),
-            child: Text(l.gitCheckoutAnyway),
-          ),
-        ],
-      ),
+    return showPosseConfirm(
+      context,
+      title: l.gitCheckoutAgentTitle(agentLabel(agent)),
+      body: l.gitCheckoutAgentBody,
+      confirm: l.gitCheckoutAnyway,
+      tone: ConfirmTone.warning,
     );
-    return ok == true;
   }
 
   @override

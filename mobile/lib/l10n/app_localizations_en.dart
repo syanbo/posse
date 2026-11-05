@@ -1058,7 +1058,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gitCheckoutAgentBody =>
-      'Switching branches changes files in the working directory and may overwrite or disrupt what the agent is editing. Switch anyway?';
+      'Switching branches changes files in the working directory and may disrupt the edits it is making.';
 
   @override
   String get gitCheckoutAnyway => 'Switch Anyway';
