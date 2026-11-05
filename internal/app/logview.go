@@ -631,6 +631,13 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 				}
 			}
 		})
+		if v.multiRepo() {
+			g := v.repoOrGone(ld.root)
+			ui.Row(c.Key("log-repo")).Gap(4).AlignItems(ui.Center).Shrink(1).Tooltip(v.shownPath(ld.root)).Children(func() {
+				ui.Icon(c, iconFolder).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, v.repoName(g)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().MaxWidth(160).Shrink(1)
+			})
+		}
 		if ld.filter.Path != "" {
 			ui.Row(c).Height(sz(26)).Padding(0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).Background(colors(t).tint).Children(func() {
 				fileGlyph(c, ld.filter.Path, fsSmall)
