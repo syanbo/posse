@@ -3,6 +3,22 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.25
+
+- 图片面板收录 Codex 查看图片、截图工具返回的图片，保留当时的快照；生成目录中的相同副本只显示一次，多次查看的记录仍保留。
+- 修正会话记录重写后可能读错图片或沿用旧缩略图的问题。
+- 多仓库工作区的 Git 日志在分支筛选旁显示所属仓库，悬停可看完整路径。
+- 菜单的勾选标记与普通图标对齐，去掉多余缩进。
+- 支持手机端 0.1.16 切换 Git 分支，操作结果记入桌面 Git 操作记录。
+
+### English
+
+- The image panel now includes images returned by Codex image-viewing and screenshot tools, preserving the snapshot seen at the time. Matching copies in the generated-images directory are hidden while repeated views remain separate.
+- Fixed incorrect images or stale thumbnails after a session transcript is rewritten.
+- In workspaces with multiple repositories, the Git log shows its repository beside the branch filter, with the full path on hover.
+- Menu checkmarks align with other icons without an extra indentation column.
+- Supports Git branch switching from mobile 0.1.16, with results recorded in the desktop Git operation log.
+
 ## 0.1.24
 
 - 一个工作区目录下有多个 Git 仓库时都能识别（嵌套的、子模块、软链过去的也算），当前仓库跟着打开的文件走，也可以手动换。
