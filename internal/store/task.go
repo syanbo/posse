@@ -20,6 +20,9 @@ type Task struct {
 	Model       string     `json:"model,omitempty"` // 模型和思考深度，为空是 agent 自己的默认设置
 	Effort      string     `json:"effort,omitempty"`
 	Group       string     `json:"group,omitempty"` // 同一次派发给多个 agent 的任务共用
+	// DiscussionID 是讨论成员专用 worker 的任务所属的讨论（roomKey），普通任务为空。
+	// 不放进 Coordinator：那是派发方终端，讨论任务的派发方是用户
+	DiscussionID string `json:"discussionId,omitempty"`
 	Status      string     `json:"status"`          // running | done | failed | stopped | exited | lost
 	Summary     string     `json:"summary,omitempty"`
 	Report      string     `json:"report,omitempty"`
@@ -87,14 +90,14 @@ CREATE INDEX IF NOT EXISTS messages_task ON messages(task_id);
 CREATE INDEX IF NOT EXISTS messages_reply ON messages(reply_to);
 `
 
-const taskCols = `id,title,spec,coordinator,workspace_id,worker,agent,model,effort,grp,status,summary,report,created_at,ended_at`
+const taskCols = `id,title,spec,coordinator,workspace_id,worker,agent,model,effort,grp,status,summary,report,created_at,ended_at,discussion_id`
 
 func scanTask(row interface{ Scan(...any) error }) (Task, error) {
 	var t Task
 	var created int64
 	var ended sql.NullInt64
 	err := row.Scan(&t.ID, &t.Title, &t.Spec, &t.Coordinator, &t.WorkspaceID, &t.Worker, &t.Agent, &t.Model, &t.Effort, &t.Group,
-		&t.Status, &t.Summary, &t.Report, &created, &ended)
+		&t.Status, &t.Summary, &t.Report, &created, &ended, &t.DiscussionID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, ErrNotFound
 	}
@@ -106,9 +109,15 @@ func scanTask(row interface{ Scan(...any) error }) (Task, error) {
 	return t, err
 }
 
-func (s *Store) AddTask(t Task) error {
-	_, err := s.db.Exec(`INSERT INTO tasks(`+taskCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`,
-		t.ID, t.Title, t.Spec, t.Coordinator, t.WorkspaceID, t.Worker, t.Agent, t.Model, t.Effort, t.Group, t.Status, t.Summary, t.Report, ms(t.CreatedAt))
+func (s *Store) AddTask(t Task) error { return addTask(s.db, t) }
+
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+func addTask(db execer, t Task) error {
+	_, err := db.Exec(`INSERT INTO tasks(`+taskCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)`,
+		t.ID, t.Title, t.Spec, t.Coordinator, t.WorkspaceID, t.Worker, t.Agent, t.Model, t.Effort, t.Group, t.Status, t.Summary, t.Report, ms(t.CreatedAt), t.DiscussionID)
 	return err
 }
 
@@ -185,9 +194,10 @@ func (s *Store) MarkRunningTasksLost(at time.Time, keepWorkers []string) error {
 	return err
 }
 
-// DeleteEndedTasks 清掉已结束的任务及其消息。
+// DeleteEndedTasks 清掉已结束的任务及其消息。讨论成员当前绑定的任务两轮之间是 done/failed，
+// 还要接着复用，跳过；讨论历史另存在讨论表里，不随任务删掉。
 func (s *Store) DeleteEndedTasks() (int64, error) {
-	res, err := s.db.Exec(`DELETE FROM tasks WHERE status!='running'`)
+	res, err := s.db.Exec(`DELETE FROM tasks WHERE status!='running' AND id NOT IN (SELECT task_id FROM disc_members WHERE task_id!='')`)
 	if err != nil {
 		return 0, err
 	}
@@ -231,8 +241,10 @@ func (s *Store) queryMessages(q string, args ...any) ([]Message, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) AddMessage(m Message) error {
-	_, err := s.db.Exec(`INSERT INTO messages(id,task_id,kind,body,reply_to,outcome,created_at) VALUES(?,?,?,?,?,?,?)`,
+func (s *Store) AddMessage(m Message) error { return addMessage(s.db, m) }
+
+func addMessage(db execer, m Message) error {
+	_, err := db.Exec(`INSERT INTO messages(id,task_id,kind,body,reply_to,outcome,created_at) VALUES(?,?,?,?,?,?,?)`,
 		m.ID, m.TaskID, m.Kind, m.Body, m.ReplyTo, m.Outcome, ms(m.CreatedAt))
 	return err
 }

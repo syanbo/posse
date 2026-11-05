@@ -105,7 +105,7 @@ func Open(path string) (*Store, error) {
 	}
 	// 单写者足够，也避免 SQLITE_BUSY
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema + taskSchema + traceSchema); err != nil {
+	if _, err := db.Exec(schema + taskSchema + traceSchema + discussionSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
@@ -117,7 +117,7 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	for _, c := range [][2]string{{"tasks", "model"}, {"tasks", "effort"}, {"terminals", "session_id"}, {"terminals", "cwd"}, {"terminals", "label"}, {"messages", "outcome"}} {
+	for _, c := range [][2]string{{"tasks", "model"}, {"tasks", "effort"}, {"tasks", "discussion_id"}, {"terminals", "session_id"}, {"terminals", "cwd"}, {"terminals", "label"}, {"messages", "outcome"}} {
 		if err := addColumn(db, c[0], c[1], "TEXT NOT NULL DEFAULT ''"); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("migrate: %w", err)
