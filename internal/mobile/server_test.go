@@ -403,6 +403,7 @@ func TestPhoneSession(t *testing.T) {
 		"viewport": map[string]any{"cols": 46, "rows": 30}, "capabilities": map[string]any{"terminalBinaryStream": 1},
 	})
 	sub := result(t, p.next(tid))
+	firstStream := uint32(sub["streamId"].(float64))
 	// 没声明 posse.termcolors.v1 的（Orca App）不发配色；声明了再订阅一次
 	if _, ok := sub["colors"]; ok {
 		t.Fatalf("colors sent to a client without %s: %v", termColorsCap, sub)
@@ -429,8 +430,12 @@ func TestPhoneSession(t *testing.T) {
 	if c, r := tm.Size(); c != 46 || r != 30 {
 		t.Fatalf("terminal not phone-sized: %dx%d", c, r)
 	}
-	// 快照：start → chunk* → end
+	// 快照：start → chunk* → end。第一次订阅的流（已经退订）可能还有排在后面的输出帧（shell 晚到的提示符），
+	// 帧带着流 ID，客户端按它丢掉旧流的；新流的第一帧必须是快照开始
 	frame := <-p.binary
+	for binary.LittleEndian.Uint32(frame[4:]) != uint32(sub["streamId"].(float64)) && binary.LittleEndian.Uint32(frame[4:]) == firstStream {
+		frame = <-p.binary
+	}
 	if frame[2] != opSnapshotStart || binary.LittleEndian.Uint32(frame[4:]) != uint32(sub["streamId"].(float64)) {
 		t.Fatalf("first frame op %d", frame[2])
 	}
