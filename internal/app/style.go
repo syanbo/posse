@@ -388,10 +388,16 @@ func fadeEdges(list ui.Element, s *ui.ListState, bg ui.Color) ui.Element {
 }
 
 // fadeIn 从左到右由透明渐变到 bgs 依次叠起来的底色（半透明的底要先垫下面那层），给浮在文字上的按钮做渐隐。
+// 先合成一个不透明色再画一层渐变：逐层各画一遍渐变时，中段底层已压暗、上层还没盖回来，会凹出一块暗色。
 func fadeIn(p *ui.Painter, r ui.Rect, bgs ...ui.Color) {
-	for _, bg := range bgs {
-		p.FillGradient(r, ui.LinearGradient{From: bg.Alpha(0), To: bg, Angle: 90}, 0)
+	if len(bgs) == 0 {
+		return
 	}
+	bg := bgs[0]
+	for _, c := range bgs[1:] {
+		bg = c.Over(bg)
+	}
+	p.FillGradient(r, ui.LinearGradient{From: bg.Alpha(0), To: bg, Angle: 90}, 0)
 }
 
 // 层级只有三档（docs/design.md），投影和描边都经这几个函数，别处不写 Shadow、InsetShadow。

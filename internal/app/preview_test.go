@@ -643,7 +643,12 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		a.workspaces[0].Terminals[0].AgentState = state("idle")
 		a.workspaces[0].Terminals[0].Name = "1009｜feat｜番茄女频长篇调研与连载写作，还要再长一点才超出标签"
-		savePNG(t, newPreviewTester(a, dark), "tab-long-title-"+suffix+".png")
+		tt = newPreviewTester(a, dark)
+		savePNG(t, tt, "tab-long-title-"+suffix+".png")
+		// 悬停时右端浮出关闭按钮，左边一段渐隐进标题，不凹出暗块
+		tt.Move(400, 20)
+		tt.Frame()
+		savePNG(t, tt, "tab-long-title-hover-"+suffix+".png")
 
 		// 协调者阻塞在 posse task wait 上：侧栏是"等待任务"的波形，worker 排在它下面
 		a = previewApp(t)

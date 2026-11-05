@@ -2155,7 +2155,8 @@ func shortcutHint(c *ui.Context, keys, label string) {
 // tab 是第 i 格标签栏里的一个终端；active 是这格选中的，focused 表示这格是焦点格。
 func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active, focused bool) {
 	t := c.Theme()
-	row := ui.Row(c.Key(term.ID)).Height(sz(28)).Padding(0, 8, 0, 8).Gap(6).Radius(rControl).Shrink(1).MaxWidth(tabMaxW)
+	// 右边多留 4：左边的状态图标自带留白，两边都是 8 时文字一侧显得挤
+	row := ui.Row(c.Key(term.ID)).Height(sz(28)).Padding(0, 12, 0, 8).Gap(6).Radius(rControl).Shrink(1).MaxWidth(tabMaxW)
 	hovered := row.Hovered()
 	bg := ui.Transparent
 	switch {
@@ -2193,7 +2194,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 	showDetail := !waiting && detail != ""
 	if !renaming {
 		// 自己按字宽截断再交给排版：排版按分到的宽度截，末尾会空出将近一个汉字，标签不收紧
-		used, items := float32(8+8), 0
+		used, items := float32(8+12), 0
 		add := func(w float32) { used += w; items++ }
 		if status != "" || term.Agent == "" {
 			add(smallIcon())
