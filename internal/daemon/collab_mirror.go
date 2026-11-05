@@ -32,12 +32,22 @@ func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error
 		if !d.mine(target.Owner) {
 			return nil, notYours(target.Name)
 		}
+		if target.Paused == store.ConfigConflict {
+			return nil, rpc.Errorf(rpc.CodeConflict, "the host's copy of %s's settings differs from yours; review and save its settings first", target.Name)
+		}
 		if target.WorkspaceID == "" {
 			return nil, rpc.Errorf(rpc.CodeConflict, "choose a workspace on this computer for %s first", target.Name)
 		}
 	}
 	if len(p.Attachments) > discMaxAttachments {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "at most %d attachments per message", discMaxAttachments)
+	}
+	// 上次发送的响应丢了：先补齐增量，房主已经收下就直接返回，不再传一遍附件
+	if len(p.Attachments) > 0 {
+		rc.syncNow()
+		if m, x, err := d.store.MessageByClientID(disc.Key, p.ClientID); err == nil {
+			return discPostResult{Message: m, Execution: x, Duplicate: true}, nil
+		}
 	}
 	var uploads []string
 	var atts []store.Attachment
@@ -52,7 +62,7 @@ func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error
 	}
 	if target.ID != "" {
 		dig := store.IntentDigest(p.Body, p.Quote, target.ID, atts)
-		if err := d.store.SaveIntent(disc.Key, p.ClientID, target.ID, target.ConfigVersion, dig, time.Now()); err != nil {
+		if err := d.store.SaveIntent(disc.Key, p.ClientID, target.ID, target.ConfigVersion, dig, store.OwnConfigDigest(target), time.Now()); err != nil {
 			return nil, err
 		}
 	}
@@ -87,7 +97,14 @@ func (d *Daemon) mirrorRetry(disc store.Discussion, x store.Execution, abandon b
 	if abandon && d.store.AcceptState(x.ID) == store.AcceptAccepted && store.ExecActive(x.State) {
 		return nil, rpc.Errorf(rpc.CodeConflict, "execution %s is still running on this computer; stop it first", x.ID)
 	}
-	if err := d.store.SaveIntent(disc.Key, "retry:"+x.ID, x.Member, x.ConfigVersion, "", time.Now()); err != nil {
+	m, err := d.memberSel(x.Member)
+	if err != nil {
+		return nil, err
+	}
+	if m.Paused == store.ConfigConflict {
+		return nil, rpc.Errorf(rpc.CodeConflict, "the host's copy of %s's settings differs from yours; review and save its settings first", m.Name)
+	}
+	if err := d.store.SaveIntent(disc.Key, "retry:"+x.ID, x.Member, m.ConfigVersion, "", store.OwnConfigDigest(m), time.Now()); err != nil {
 		return nil, err
 	}
 	var res struct {
@@ -111,15 +128,12 @@ func (d *Daemon) mirrorMemberUpdate(disc store.Discussion, old, nm store.Member,
 			return nil, discError(store.ErrBusyMember)
 		}
 	}
-	if nm.Name != old.Name || nm.Role != old.Role || nm.Agent != old.Agent || nm.Model != old.Model || nm.Effort != old.Effort {
-		if err := rc.call("member.update", map[string]string{"member": old.ID, "name": nm.Name, "role": nm.Role, "agent": nm.Agent, "model": nm.Model, "effort": nm.Effort}, nil); err != nil {
-			return nil, err
-		}
+	// 每次保存都把本机这份公开配置交给房主（房主那份被改过时，保存一次就对齐），再记成本机确认的配置
+	if err := rc.call("member.update", map[string]string{"member": old.ID, "name": nm.Name, "role": nm.Role, "agent": nm.Agent, "model": nm.Model, "effort": nm.Effort}, nil); err != nil {
+		return nil, err
 	}
-	if nm.WorkspaceID != old.WorkspaceID {
-		if err := d.store.SetMemberPrivate(old.ID, nm.WorkspaceID, nm.WorkspaceLabel); err != nil {
-			return nil, discError(err)
-		}
+	if err := d.store.SetOwnConfig(nm); err != nil {
+		return nil, discError(err)
 	}
 	if applyNow {
 		was, err := d.store.ReleaseWorker(old.ID, false)
@@ -195,10 +209,8 @@ func (d *Daemon) collabInfo(disc store.Discussion) *discCollabInfo {
 		srv := d.collab.srv
 		d.collab.mu.Unlock()
 		if srv != nil {
-			for fp, t := range srv.LastSeen(disc.Key) {
-				if time.Since(t) < collaboration.HeartbeatLost {
-					online[fp] = true
-				}
+			for fp := range srv.Online(disc.Key, collaboration.HeartbeatLost) {
+				online[fp] = true
 			}
 		}
 		info.Requests, _ = d.store.JoinRequests(disc.Key, true)

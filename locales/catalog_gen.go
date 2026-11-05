@@ -26810,3 +26810,45 @@ func DiscExecRevoked() string { return In(i18n.Locale()).DiscExecRevoked() }
 func (msgs Messages) DiscExecRevoked() string {
 	return Catalog.Format(msgs.locale, "discExecRevoked", nil)
 }
+
+// CollabLeavingNote says "You are leaving this discussion. Your agents no longer take requests; results already on this Mac are sent when the h…"
+// in the language the app shows.
+//
+// Banner while a leave started offline is pending.
+func CollabLeavingNote() string { return In(i18n.Locale()).CollabLeavingNote() }
+
+// CollabLeavingNote says "You are leaving this discussion. Your agents no longer take requests; results already on this Mac are sent when the h…"
+// in the language of msgs.
+//
+// Banner while a leave started offline is pending.
+func (msgs Messages) CollabLeavingNote() string {
+	return Catalog.Format(msgs.locale, "collabLeavingNote", nil)
+}
+
+// CollabConfigConflict says "The host’s copy of {name}’s settings differs from what you set on this Mac. It does not run requests until you re…"
+// in the language the app shows.
+//
+// Banner: own agent's settings on the host were changed.
+func CollabConfigConflict(name string) string { return In(i18n.Locale()).CollabConfigConflict(name) }
+
+// CollabConfigConflict says "The host’s copy of {name}’s settings differs from what you set on this Mac. It does not run requests until you re…"
+// in the language of msgs.
+//
+// Banner: own agent's settings on the host were changed.
+func (msgs Messages) CollabConfigConflict(name string) string {
+	return Catalog.Format(msgs.locale, "collabConfigConflict", map[string]any{"name": name})
+}
+
+// CollabReviewSettings says "Review settings…"
+// in the language the app shows.
+//
+// Banner button.
+func CollabReviewSettings() string { return In(i18n.Locale()).CollabReviewSettings() }
+
+// CollabReviewSettings says "Review settings…"
+// in the language of msgs.
+//
+// Banner button.
+func (msgs Messages) CollabReviewSettings() string {
+	return Catalog.Format(msgs.locale, "collabReviewSettings", nil)
+}

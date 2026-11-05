@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS collab_joined (
 	cursor INTEGER NOT NULL DEFAULT 0,
 	error TEXT NOT NULL DEFAULT '',
 	secret TEXT NOT NULL DEFAULT '',
+	att_seq INTEGER NOT NULL DEFAULT 0,
 	joined_at INTEGER NOT NULL,
 	updated_at INTEGER NOT NULL
 );
@@ -94,6 +95,7 @@ CREATE TABLE IF NOT EXISTS collab_intents (
 	member TEXT NOT NULL,
 	config_version INTEGER NOT NULL DEFAULT 0,
 	digest TEXT NOT NULL,
+	config TEXT NOT NULL DEFAULT '',
 	created_at INTEGER NOT NULL,
 	PRIMARY KEY(room, client_id)
 );
@@ -138,6 +140,7 @@ const (
 // 接受账本和 outbox 的状态
 const (
 	AcceptAccepted = "accepted" // 领取过，本机队列负责执行
+	AcceptFetching = "fetching" // 领取过，正在下载请求里的附件；下完转 accepted 才进本机队列
 	AcceptRefused  = "refused"  // 本机没有对应的授权意图：不执行
 	AcceptRevoked  = "revoked"  // 访问被撤销：本机结果只能本地查看
 	OutboxPending  = "pending"
@@ -1126,7 +1129,8 @@ func (s *Store) BeginUpload(u Upload, maxConcurrent int, at time.Time) error {
 			return err
 		}
 		var used, n int64
-		if err := tx.QueryRow(`SELECT COALESCE(SUM(size),0) FROM collab_uploads WHERE state='published'`).Scan(&used); err != nil {
+		// 在传的也算进配额（预留）：两个并发上传各自通过检查后合计不会超
+		if err := tx.QueryRow(`SELECT COALESCE(SUM(size),0) FROM collab_uploads WHERE state='published' OR state='uploading' AND created_at>?`, ms(at.Add(-30*time.Minute))).Scan(&used); err != nil {
 			return err
 		}
 		quota := int64(DefaultCollabQuota)
@@ -1249,10 +1253,9 @@ func (s *Store) SyncSince(room string, since int64, limit int) (SyncBatch, error
 		var cut int64
 		if limit > 0 && tx.QueryRow(`SELECT rev FROM disc_messages WHERE discussion=? AND rev>? ORDER BY rev LIMIT 1 OFFSET ?`, room, since, limit-1).Scan(&cut) == nil && cut < upto {
 			upto = cut
-			var n int
-			tx.QueryRow(`SELECT COUNT(*) FROM disc_messages WHERE discussion=? AND rev>?`, room, upto).Scan(&n)
-			b.More = n > 0
 		}
+		// 截断点之后只有成员、执行、人的改动也算还有：游标停在截断点，房主不会为同一版本再推一次
+		b.More = upto < d.Rev
 		b.Rev = upto
 		if b.People, err = collect(tx, scanPerson, `SELECT `+personCols+` FROM collab_people WHERE room=? AND rev>? AND rev<=?`, room, since, upto); err != nil {
 			return err
@@ -1283,6 +1286,8 @@ func (s *Store) SyncSince(room string, since int64, limit int) (SyncBatch, error
 				m.KeyBy = cmpOr(m.KeyBy, d.Host)
 			}
 			m.ClientID = clientIDFor(m, d.Host)
+			// 房主 worker 写的报告是房主本机的路径，没发布成附件就不给别人
+			m.Report = ""
 			for j := range m.Attachments {
 				m.Attachments[j].Path = ""
 			}
@@ -1419,6 +1424,22 @@ func (s *Store) ApplySync(room, self string, b SyncBatch) (bool, error) {
 			if m.RemovedAt != nil {
 				removed = ms(*m.RemovedAt)
 			}
+			var own, paused string
+			if err := tx.QueryRow(`SELECT own_config, paused FROM disc_members WHERE id=? AND discussion=?`, m.ID, room).Scan(&own, &paused); err == nil && own != "" && m.Owner == self {
+				// 自己的 Agent：配置以本机拥有者设下的为准，房主那份对不上时不照搬，暂停并说明，拥有者重新保存设置即可
+				if ownConfig(m) != own {
+					if paused == "" {
+						paused = ConfigConflict
+					}
+				} else if paused == ConfigConflict {
+					paused = ""
+				}
+				if _, err := tx.Exec(`UPDATE disc_members SET config_version=?, removed_at=?, owner=?, generation=?, paused=?, rev=? WHERE id=?`,
+					m.ConfigVersion, removed, m.Owner, m.Generation, paused, rev, m.ID); err != nil {
+					return err
+				}
+				continue
+			}
 			res, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, config_version=?, removed_at=?, owner=?, generation=?, rev=?
 				WHERE id=? AND discussion=?`, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.ConfigVersion, removed, m.Owner, m.Generation, rev, m.ID, room)
 			if err != nil {
@@ -1524,6 +1545,45 @@ func (s *Store) MirrorAttachments(room string) ([]Attachment, error) {
 	return out, nil
 }
 
+// AttachmentsAfter 是序号大于 seq 的消息上的附件（按序号，最多 limit 条消息），后台按游标增量下载。
+func (s *Store) AttachmentsAfter(room string, seq int64, limit int) ([]DiscMessage, error) {
+	return collect(s.db, scanDiscMessage, `SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND seq>? AND attachments!='' ORDER BY seq LIMIT ?`, room, seq, limit)
+}
+
+// AttachmentCursor 是附件下载处理到的消息序号。
+func (s *Store) AttachmentCursor(room string) int64 {
+	var v int64
+	s.db.QueryRow(`SELECT att_seq FROM collab_joined WHERE room=?`, room).Scan(&v)
+	return v
+}
+
+func (s *Store) SetAttachmentCursor(room string, seq int64) error {
+	_, err := s.db.Exec(`UPDATE collab_joined SET att_seq=MAX(att_seq, ?) WHERE room=?`, seq, room)
+	return err
+}
+
+// StaleUploads 是超过 olderThan 还没传完的上传（断线、放弃），由调用方删临时文件后 AbortUpload。
+func (s *Store) StaleUploads(before time.Time) ([]Upload, error) {
+	return collect(s.db, scanUpload, `SELECT `+uploadCols+` FROM collab_uploads WHERE state='uploading' AND created_at<?`, ms(before))
+}
+
+// UnusedUploads 是这个人这些上传里已发布、没被消息用过的（同一条消息重发、房主按客户端 ID 去重之后要放掉）。
+func (s *Store) UnusedUploads(room, fp string, ids []string) []Upload {
+	var out []Upload
+	for _, id := range ids {
+		if u, err := scanUpload(s.db.QueryRow(`SELECT `+uploadCols+` FROM collab_uploads WHERE id=? AND room=? AND fp=? AND used=0`, id, room, fp)); err == nil {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+// DropUpload 删掉一份没用上的上传记录（文件由调用方删）。
+func (s *Store) DropUpload(id string) error {
+	_, err := s.db.Exec(`DELETE FROM collab_uploads WHERE id=? AND used=0`, id)
+	return err
+}
+
 // DropMirror 删掉一个从没加入成功的讨论缓存（申请被拒、邀请无效）：没有消息和成员才删。
 func (s *Store) DropMirror(room string) error {
 	return s.withTx(func(tx *sql.Tx) error {
@@ -1550,9 +1610,9 @@ func (s *Store) DropMirror(room string) error {
 
 // SaveIntent 在提交给房主之前记下本机授权意图：@ 自己的哪个 Agent、配置版本、请求摘要。
 // 领取时必须对上，房主不能伪造一条归属相同的请求让本机执行。
-func (s *Store) SaveIntent(room, clientID, member string, configVersion int64, dig string, at time.Time) error {
-	_, err := s.db.Exec(`INSERT INTO collab_intents(room,client_id,member,config_version,digest,created_at) VALUES(?,?,?,?,?,?)
-		ON CONFLICT(room,client_id) DO NOTHING`, room, clientID, member, configVersion, dig, ms(at))
+func (s *Store) SaveIntent(room, clientID, member string, configVersion int64, dig, config string, at time.Time) error {
+	_, err := s.db.Exec(`INSERT INTO collab_intents(room,client_id,member,config_version,digest,config,created_at) VALUES(?,?,?,?,?,?,?)
+		ON CONFLICT(room,client_id) DO NOTHING`, room, clientID, member, configVersion, dig, config, ms(at))
 	return err
 }
 
@@ -1561,11 +1621,12 @@ type Intent struct {
 	Member        string
 	ConfigVersion int64
 	Digest        string
+	Config        string // 发出时拥有者确认的配置内容（OwnConfigDigest）
 }
 
 func (s *Store) Intent(room, clientID string) (Intent, error) {
 	var in Intent
-	err := s.db.QueryRow(`SELECT member, config_version, digest FROM collab_intents WHERE room=? AND client_id=?`, room, clientID).Scan(&in.Member, &in.ConfigVersion, &in.Digest)
+	err := s.db.QueryRow(`SELECT member, config_version, digest, config FROM collab_intents WHERE room=? AND client_id=?`, room, clientID).Scan(&in.Member, &in.ConfigVersion, &in.Digest, &in.Config)
 	if errors.Is(err, sql.ErrNoRows) {
 		return in, ErrNotFound
 	}
@@ -1590,11 +1651,46 @@ func (s *Store) Accept(room, exec string, gen int64, state, reason string, at ti
 			return err
 		}
 		// 房主那边已经是 claimed（同步先到了）：本机队列里它还是排队，由本机调度
-		if state == AcceptAccepted {
+		if state == AcceptAccepted || state == AcceptFetching {
 			_, err = tx.Exec(`UPDATE disc_executions SET state='queued', reason='', rev=? WHERE id=? AND state='claimed'`, rev, exec)
 		}
 		return err
 	})
+}
+
+// MarkAccepted 把正在下载附件的领取转成 accepted（进本机队列）。
+func (s *Store) MarkAccepted(exec string) error {
+	return s.withTx(func(tx *sql.Tx) error {
+		var room string
+		if err := tx.QueryRow(`SELECT room FROM collab_accepts WHERE exec=? AND state='fetching'`, exec).Scan(&room); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil
+			}
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE collab_accepts SET state='accepted' WHERE exec=?`, exec); err != nil {
+			return err
+		}
+		_, err := bump(tx, room)
+		return err
+	})
+}
+
+// Fetching 是房间里领取了、附件还没下完的执行。
+func (s *Store) Fetching(room string) []string {
+	var out []string
+	rows, err := s.db.Query(`SELECT exec FROM collab_accepts WHERE room=? AND state='fetching'`, room)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var e string
+		if rows.Scan(&e) == nil {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // AcceptState 是本机账本里这一轮的状态，没有是空串。
@@ -1675,10 +1771,10 @@ func (s *Store) LocalRevoke(room, state, reason string, at time.Time) error {
 			return err
 		}
 		if _, err := tx.Exec(`UPDATE disc_executions SET state='revoked', reason=?, rev=? WHERE discussion=? AND owner=? AND state IN `+inList(pendingStates),
-			reason, rev, room, s.self); err != nil {
+			reason, rev, room, s.Self()); err != nil {
 			return err
 		}
-		_, err = tx.Exec(`UPDATE disc_members SET paused=?, rev=? WHERE discussion=? AND owner=? AND removed_at IS NULL`, reason, rev, room, s.self)
+		_, err = tx.Exec(`UPDATE disc_members SET paused=?, rev=? WHERE discussion=? AND owner=? AND removed_at IS NULL`, reason, rev, room, s.Self())
 		return err
 	})
 }
@@ -1688,7 +1784,7 @@ func (s *Store) PauseOwnQueues(room, reason string) (int, error) {
 	n := 0
 	err := s.withTx(func(tx *sql.Tx) error {
 		ms, err := collect(tx, scanMember, `SELECT `+memberCols+` FROM disc_members m WHERE discussion=? AND owner=? AND removed_at IS NULL AND paused=''
-			AND EXISTS (SELECT 1 FROM disc_executions x JOIN collab_accepts a ON a.exec=x.id WHERE x.member=m.id AND x.state='queued' AND a.state='accepted')`, room, s.self)
+			AND EXISTS (SELECT 1 FROM disc_executions x JOIN collab_accepts a ON a.exec=x.id WHERE x.member=m.id AND x.state='queued' AND a.state='accepted')`, room, s.Self())
 		if err != nil || len(ms) == 0 {
 			return err
 		}
@@ -1730,6 +1826,37 @@ func (s *Store) SetMemberPrivate(id, workspaceID, label string) error {
 	})
 }
 
+// ConfigConflict 是房主那份自己 Agent 的配置和本机拥有者设下的不一致时的暂停原因。
+const ConfigConflict = "the host's copy of this agent's settings differs from what you set on this computer; review and save its settings"
+
+// ownConfig 是拥有者确认过的公开配置内容（名字、职责、agent、模型、思考深度）。
+func ownConfig(m Member) string { return digest(m.Name, m.Role, m.Agent, m.Model, m.Effort) }
+
+// OwnConfigDigest 是授权意图里记的配置内容。
+func OwnConfigDigest(m Member) string { return digest(m.Role, m.Agent, m.Model, m.Effort) }
+
+// SetOwnConfig 记下拥有者在本机为自己的 Agent 设的公开配置和执行工作区（加、改成功之后）：之后同步来的房主那份
+// 不覆盖它，对不上就暂停。
+func (s *Store) SetOwnConfig(m Member) error {
+	return s.withTx(func(tx *sql.Tx) error {
+		old, err := scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE id=?`, m.ID))
+		if err != nil {
+			return err
+		}
+		rev, err := bump(tx, old.Discussion)
+		if err != nil {
+			return err
+		}
+		paused := old.Paused
+		if paused == ConfigConflict || paused == NeedsWorkspace && m.WorkspaceID != "" {
+			paused = ""
+		}
+		_, err = tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, workspace_id=?, workspace_label=?, own_config=?, paused=?, rev=? WHERE id=?`,
+			m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, ownConfig(m), paused, rev, m.ID)
+		return err
+	})
+}
+
 // NeedsWorkspace 是自己的 Agent 在本机还没有执行工作区时的暂停原因：拥有者配置之前不猜路径。
 const NeedsWorkspace = "choose a workspace on this computer"
 
@@ -1749,4 +1876,23 @@ func mimeType(name string) string {
 		return "text/plain"
 	}
 	return ""
+}
+
+// KnownMember 是这个身份是不是某个共享讨论的有效成员（协作连接用哪份名额）。
+func (s *Store) KnownMember(fp string) bool {
+	var n int
+	s.db.QueryRow(`SELECT COUNT(*) FROM collab_people p JOIN discussions d ON d.key=p.room WHERE p.fp=? AND p.state='active' AND p.host=0 AND d.shared=1`, fp).Scan(&n)
+	return n > 0
+}
+
+// PauseOwnMembers 暂停自己在这个讨论里的所有 Agent（退出中）：不改账本、不拒收 outbox。
+func (s *Store) PauseOwnMembers(room, reason string) error {
+	return s.withTx(func(tx *sql.Tx) error {
+		rev, err := bump(tx, room)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`UPDATE disc_members SET paused=?, rev=? WHERE discussion=? AND owner=? AND removed_at IS NULL`, reason, rev, room, s.Self())
+		return err
+	})
 }

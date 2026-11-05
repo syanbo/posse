@@ -1337,6 +1337,16 @@ func (a *app) discPausedBanner(c *ui.Context, d *discDetail) {
 				queued++
 			}
 		}
+		if mem.Paused == configConflict {
+			ui.Row(c.Key("paused-"+mem.ID)).Gap(8).Padding(8, 12).Radius(rControl).Background(soft(t, colors(t).honey)).AlignItems(ui.Center).Children(func() {
+				ui.Icon(c, iconHexAlert).FontSize(fsBody).TextColor(colors(t).honey)
+				ui.Text(c, m.CollabConfigConflict(mem.Name)).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
+				if pressable(accentButton(c, m.CollabReviewSettings())).Clicked() {
+					a.openMemberForm(d, mem.ID)
+				}
+			})
+			continue
+		}
 		if queued == 0 {
 			continue
 		}

@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -104,5 +105,67 @@ func TestCollabHostTransactions(t *testing.T) {
 	// 撤销后的执行不挡归档
 	if err := s.SetArchived(d.Key, true, time.Now()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// 增量被截断后，截断点之后只有成员改动：More 为真，下一批带上改动。
+func TestCollabSyncTrailingChange(t *testing.T) {
+	s := openTestStore(t)
+	d, _ := newDiscussion(t, s)
+	m := Member{ID: "dmb_t", Discussion: d.Key, Name: "Alice", Agent: "claude", CreatedAt: time.Now()}
+	if err := s.AddMember(m); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 200 {
+		if _, _, _, err := s.PostMessage(PostInput{Discussion: d.Key, Body: fmt.Sprintf("m%d", i), At: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.Name = "Alice renamed"
+	if _, err := s.UpdateMember(m); err != nil {
+		t.Fatal(err)
+	}
+	cur, _ := s.Discussion(d.Key)
+	b, err := s.SyncSince(d.Key, 0, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !b.More || b.Rev >= cur.Rev {
+		t.Fatalf("first batch more=%v rev=%d/%d", b.More, b.Rev, cur.Rev)
+	}
+	b2, err := s.SyncSince(d.Key, b.Rev, 200)
+	if err != nil || b2.More || b2.Rev != cur.Rev || len(b2.Members) != 1 || b2.Members[0].Name != "Alice renamed" {
+		t.Fatalf("second batch %+v %v", b2, err)
+	}
+}
+
+// 未发布的报告路径（房主本机文件）不同步给成员。
+func TestCollabSyncStripsReport(t *testing.T) {
+	s := openTestStore(t)
+	d, _ := newDiscussion(t, s)
+	_, _, _, err := s.PostMessage(PostInput{Discussion: d.Key, Body: "x", At: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.db.Exec(`UPDATE disc_messages SET report='/Users/host/secret.md' WHERE discussion=?`, d.Key)
+	s.db.Exec(`UPDATE discussions SET rev=rev+1 WHERE key=?`, d.Key)
+	b, _ := s.SyncSince(d.Key, 0, 0)
+	for _, m := range b.Messages {
+		if m.Report != "" {
+			t.Fatalf("report path synced: %q", m.Report)
+		}
+	}
+}
+
+// 配额把在传的也算进去：两个并发上传合计不能超额。
+func TestCollabQuotaReservesInFlight(t *testing.T) {
+	s := openTestStore(t)
+	d, _ := newDiscussion(t, s)
+	s.SetCollabQuota(150)
+	if err := s.BeginUpload(Upload{ID: "u1", Room: d.Key, FP: "fp", Name: "a", Size: 100, SHA: "x"}, 2, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginUpload(Upload{ID: "u2", Room: d.Key, FP: "fp", Name: "b", Size: 100, SHA: "y"}, 2, time.Now()); !errors.Is(err, ErrQuota) {
+		t.Fatalf("second in-flight upload over quota: %v", err)
 	}
 }

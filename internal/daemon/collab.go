@@ -54,6 +54,10 @@ type collabState struct {
 	kick      chan struct{}
 	cache     tls.ClientSessionCache
 	uploads   sync.Map // 上传 ID → *sync.Mutex（同一份上传的分块串行写）
+	// sessUploads 是连接开的、还没传完的上传：*collaboration.Session → *[]string
+	sessUploads sync.Map
+	// now 是测试换掉的时钟（心跳超时的显示）
+	now func() time.Time
 	// listen 测试里换成别的地址（端口 0）
 	listenAddr string
 }
@@ -118,6 +122,7 @@ func (d *Daemon) collabEnsure() {
 			break
 		}
 		srv := collaboration.NewServer(id, collabHost{d})
+		srv.Now = c.now
 		addr := c.listenAddr
 		if addr == "" {
 			addr = ":" + strconv.Itoa(d.collabPort())
@@ -138,7 +143,7 @@ func (d *Daemon) collabEnsure() {
 	}
 	joined, _ := d.store.JoinedRooms()
 	for _, j := range joined {
-		if j.State != store.RequestPending && j.State != store.JoinedActive {
+		if j.State != store.RequestPending && j.State != store.JoinedActive && j.State != joinedLeaving {
 			continue
 		}
 		if rc := c.rooms[j.Room]; rc != nil && !rc.stopped() {
@@ -246,7 +251,48 @@ func (d *Daemon) collabPushLoop(ctx context.Context) {
 
 type collabHost struct{ d *Daemon }
 
-func (h collabHost) Closed(s *collaboration.Session) {}
+// Closed：连接断了，它开的还没传完的上传作废（临时文件、记录、配额预留一起放掉）。
+func (h collabHost) Closed(s *collaboration.Session) {
+	d := h.d
+	v, ok := d.collab.sessUploads.LoadAndDelete(s)
+	if !ok {
+		return
+	}
+	for _, id := range *v.(*[]string) {
+		d.abortUpload(id)
+	}
+}
+
+// Known：这个身份是不是某个共享房间里的有效成员（只决定连接名额，进房间仍要凭据）。
+func (h collabHost) Known(fp string) bool {
+	return h.d.store.KnownMember(fp)
+}
+
+// abortUpload 删掉没传完的上传的临时文件和记录。
+func (d *Daemon) abortUpload(id string) {
+	u, err := d.store.Upload(id)
+	if err != nil || u.State != "uploading" {
+		return
+	}
+	if disc, err := d.store.Discussion(u.Room); err == nil {
+		if root, err := d.roomRoot(disc); err == nil {
+			os.Remove(filepath.Join(root, store.AttachmentDir(disc.LocalID), ".upload-"+id))
+		}
+	}
+	d.store.AbortUpload(id)
+	d.collab.uploads.Delete(id)
+}
+
+// cleanupUploads 清掉半小时还没传完的上传（连接异常断开、房主重启时 Closed 没机会跑）。
+func (d *Daemon) cleanupUploads() {
+	us, err := d.store.StaleUploads(time.Now().Add(-30 * time.Minute))
+	if err != nil {
+		return
+	}
+	for _, u := range us {
+		d.abortUpload(u.ID)
+	}
+}
 
 // cerr 把 store 的错误转成线上的错误代号；撤销、归属不符、冲突是终态，对方不会重试。
 func cerr(err error) error {
@@ -396,10 +442,8 @@ func (h collabHost) Serve(ctx context.Context, s *collaboration.Session, method 
 		// 顺带告诉对方谁在线（房主的时钟，只用于显示）
 		var online []string
 		if srv := d.collabServer(); srv != nil {
-			for fp, t := range srv.LastSeen(room) {
-				if time.Since(t) < collaboration.HeartbeatLost {
-					online = append(online, fp)
-				}
+			for fp := range srv.Online(room, collaboration.HeartbeatLost) {
+				online = append(online, fp)
 			}
 		}
 		return map[string]any{"online": online}, nil
@@ -615,6 +659,17 @@ func (h collabHost) post(s *collaboration.Session, room string, gen int64, raw j
 		}
 		return nil, cerr(err)
 	}
+	if dup && len(p.Uploads) > 0 {
+		// 同一条消息重发：这次又传的附件没用上，放掉（文件和配额）
+		disc, _ := d.store.Discussion(room)
+		root, _ := d.roomRoot(disc)
+		for _, u := range d.store.UnusedUploads(room, s.FP, p.Uploads) {
+			if root != "" {
+				os.RemoveAll(filepath.Join(root, filepath.Dir(u.Path)))
+			}
+			d.store.DropUpload(u.ID)
+		}
+	}
 	d.taskNotify()
 	res := map[string]any{"message": m.ID, "seq": m.Seq, "duplicate": dup}
 	if x != nil {
@@ -697,15 +752,18 @@ func (h collabHost) upload(s *collaboration.Session, room, method string, raw js
 		if b, err := hex.DecodeString(p.SHA); err != nil || len(b) != sha256.Size {
 			return nil, collaboration.Errorf(collaboration.CodeBadRequest, "bad attachment digest")
 		}
+		d.cleanupUploads()
 		id := store.NewID("a_") + store.NewID("")
 		rel := filepath.Join(store.AttachmentDir(disc.LocalID), id, name)
 		u := store.Upload{ID: id, Room: room, FP: s.FP, Name: name, Size: p.Size, SHA: p.SHA, Path: rel}
 		if err := d.store.BeginUpload(u, collabUploadConcurrency, time.Now()); err != nil {
 			return nil, cerr(err)
 		}
-		// 同样内容已经发布过：硬链接复用内容，附件记录照样独立
+		// 同样内容已经发布过：硬链接复用内容，附件记录照样独立。先按旧文件实际的长度和摘要核对，不信对方声称的
 		if old, err := d.store.PublishedBySHA(room, p.SHA); err == nil {
-			if os.MkdirAll(filepath.Join(dir, id), 0o755) == nil && os.Link(filepath.Join(root, old.Path), filepath.Join(root, rel)) == nil {
+			oldPath := filepath.Join(root, old.Path)
+			if sum, n, err := fileSHA(oldPath); err == nil && sum == p.SHA && n == p.Size &&
+				os.MkdirAll(filepath.Join(dir, id), 0o755) == nil && os.Link(oldPath, filepath.Join(root, rel)) == nil {
 				d.store.FinishUpload(id)
 				return map[string]any{"upload": id, "done": true}, nil
 			}
@@ -720,6 +778,11 @@ func (h collabHost) upload(s *collaboration.Session, room, method string, raw js
 			return nil, err
 		}
 		f.Close()
+		v, _ := d.collab.sessUploads.LoadOrStore(s, &[]string{})
+		lst := v.(*[]string)
+		d.collab.mu.Lock()
+		*lst = append(*lst, id)
+		d.collab.mu.Unlock()
 		return map[string]any{"upload": id, "done": false}, nil
 	}
 	u, err := d.store.Upload(p.Upload)

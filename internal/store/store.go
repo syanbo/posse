@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -19,15 +20,20 @@ var ErrNotFound = errors.New("not found")
 
 type Store struct {
 	db *sql.DB
-	// self 是本机安装身份的指纹（局域网协作分本机和别人的 Agent）；常驻进程打开库后马上设，之后只读
-	self string
+	// self 是本机安装身份的指纹（局域网协作分本机和别人的 Agent）；首次建讨论、加入时才生成，所以会在运行中设上
+	self atomic.Pointer[string]
 }
 
 // SetSelf 记下本机安装身份；没有身份（还没建过讨论）时为空。
-func (s *Store) SetSelf(fp string) { s.self = fp }
+func (s *Store) SetSelf(fp string) { s.self.Store(&fp) }
 
 // Self 是 SetSelf 记下的本机身份。
-func (s *Store) Self() string { return s.self }
+func (s *Store) Self() string {
+	if p := s.self.Load(); p != nil {
+		return *p
+	}
+	return ""
+}
 
 type Project struct {
 	ID          string    `json:"id"`
@@ -139,6 +145,7 @@ func Open(path string) (*Store, error) {
 		{"disc_messages", "author_id", "TEXT NOT NULL DEFAULT ''"}, {"disc_messages", "mention", "TEXT NOT NULL DEFAULT ''"},
 		{"disc_messages", "mention_name", "TEXT NOT NULL DEFAULT ''"}, {"disc_messages", "key_by", "TEXT NOT NULL DEFAULT ''"},
 		{"disc_executions", "owner", "TEXT NOT NULL DEFAULT ''"}, {"disc_executions", "generation", "INTEGER NOT NULL DEFAULT 0"},
+		{"disc_members", "own_config", "TEXT NOT NULL DEFAULT ''"},
 	} {
 		if err := addColumn(db, c[0], c[1], c[2]); err != nil {
 			db.Close()
@@ -149,6 +156,12 @@ func Open(path string) (*Store, error) {
 	if _, err := db.Exec(`DROP INDEX IF EXISTS disc_messages_answer;` + collabSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
+	}
+	for _, c := range [][3]string{{"collab_intents", "config", "TEXT NOT NULL DEFAULT ''"}, {"collab_joined", "att_seq", "INTEGER NOT NULL DEFAULT 0"}} {
+		if err := addColumn(db, c[0], c[1], c[2]); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("migrate: %w", err)
+		}
 	}
 	return &Store{db: db}, nil
 }

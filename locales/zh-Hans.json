@@ -1814,5 +1814,8 @@
   "collabStopSharingBody": "成员会断开连接，但保留成员资格；再次分享时不用重新批准就能重连，这期间你发的消息届时也会同步给他们。",
   "collabYouLabel": "你",
   "discExecClaimed": "拥有者电脑已接收",
-  "discExecRevoked": "访问已撤销"
+  "discExecRevoked": "访问已撤销",
+  "collabLeavingNote": "你正在退出这个讨论。你的 Agent 不再接收请求；本机已有的结果会在连上房主后交上去，随后房主撤销你的成员资格。",
+  "collabConfigConflict": "房主那里 {name} 的设置和你在本机设的不一致。检查并保存设置之前它不会执行请求。",
+  "collabReviewSettings": "检查设置…"
 }

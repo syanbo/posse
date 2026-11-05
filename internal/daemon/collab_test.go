@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +19,9 @@ import (
 
 // 两个常驻进程在同一台机器上冒充房主和成员：各自的 POSSE_HOME、各自的库，经回环地址上的协作端口相连。
 // 只证明协议和授权逻辑；局域网可达、系统权限要两台真实的 Mac。
+
+// collabClockOffset 把房主的时钟往后拨（心跳超时测试）
+var collabClockOffset atomic.Int64
 
 func fakeLaunch(d *Daemon) {
 	var mu sync.Mutex
@@ -48,6 +52,7 @@ func startCollab(t *testing.T, d *Daemon) context.CancelFunc {
 	}
 	d.collab.listenAddr = l.Addr().String()
 	l.Close()
+	d.collab.now = func() time.Time { return time.Now().Add(time.Duration(collabClockOffset.Load())) }
 	d.collabStart(ctx)
 	t.Cleanup(func() {
 		cancel()

@@ -9788,5 +9788,22 @@
   "discExecRevoked": "Access revoked",
   "@discExecRevoked": {
     "description": "Execution status: the owner's access was revoked (does not mean the remote process stopped)."
+  },
+  "collabLeavingNote": "You are leaving this discussion. Your agents no longer take requests; results already on this Mac are sent when the host is reachable, then the host revokes your access.",
+  "@collabLeavingNote": {
+    "description": "Banner while a leave started offline is pending."
+  },
+  "collabConfigConflict": "The host’s copy of {name}’s settings differs from what you set on this Mac. It does not run requests until you review and save its settings.",
+  "@collabConfigConflict": {
+    "description": "Banner: own agent's settings on the host were changed.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "collabReviewSettings": "Review settings…",
+  "@collabReviewSettings": {
+    "description": "Banner button."
   }
 }

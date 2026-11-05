@@ -105,8 +105,11 @@ func (d *Daemon) dispatchMember(m store.Member) {
 		return
 	}
 	if disc, err := d.store.Discussion(m.Discussion); err == nil && disc.Mirror {
-		// 加入的讨论：只做本机接受过的轮次；和房主断开时不开始新的一轮
+		// 加入的讨论：只做本机接受过的轮次；和房主断开、正在退出时不开始新的一轮
 		if !d.roomStatus(m.Discussion).Connected {
+			return
+		}
+		if j, err := d.store.Joined(m.Discussion); err != nil || j.State != store.JoinedActive {
 			return
 		}
 		acc := d.store.AcceptStates(m.Discussion)
@@ -982,7 +985,9 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 		if err := rc.call("member.add", map[string]string{"name": p.Name, "role": strings.TrimSpace(p.Role), "agent": p.Agent, "model": p.Model, "effort": p.Effort}, &res); err != nil {
 			return nil, err
 		}
-		if err := d.store.SetMemberPrivate(res.Member, w.ID, d.workspaceLabel(w)); err != nil {
+		own := store.Member{ID: res.Member, Name: p.Name, Role: strings.TrimSpace(p.Role), Agent: p.Agent, Model: p.Model, Effort: p.Effort,
+			WorkspaceID: w.ID, WorkspaceLabel: d.workspaceLabel(w)}
+		if err := d.store.SetOwnConfig(own); err != nil {
 			return nil, discError(err)
 		}
 		d.taskNotify()

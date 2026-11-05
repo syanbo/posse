@@ -530,7 +530,7 @@ func (s *Store) DiscussionSummaries() ([]DiscussionSummary, error) {
 		}
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_messages q WHERE q.discussion=? AND q.kind='question'
 			AND NOT EXISTS (SELECT 1 FROM disc_messages a WHERE a.question=q.question AND a.kind='answer')
-			AND EXISTS (SELECT 1 FROM disc_executions x WHERE x.id=q.execution AND x.state='waiting' AND x.owner IN ('', ?))`, d.Key, s.self).Scan(&x.Questions)
+			AND EXISTS (SELECT 1 FROM disc_executions x WHERE x.id=q.execution AND x.state='waiting' AND x.owner IN ('', ?))`, d.Key, s.Self()).Scan(&x.Questions)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE discussion=? AND state IN `+inList(activeStates), d.Key).Scan(&x.Active)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE discussion=? AND state IN `+inList(pendingStates), d.Key).Scan(&x.Pending)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_members WHERE discussion=? AND removed_at IS NULL`, d.Key).Scan(&x.Members)
@@ -623,7 +623,7 @@ func (s *Store) MemberByTask(taskID string) (Member, error) {
 // ActiveMembers 是所有没移除的成员（调度器逐个看队列）。
 func (s *Store) ActiveMembers() ([]Member, error) {
 	// 别人电脑上的 Agent 由它的拥有者领取执行，这里不调度
-	return collect(s.db, scanMember, `SELECT `+memberCols+` FROM disc_members WHERE removed_at IS NULL AND owner IN ('', ?) ORDER BY created_at`, s.self)
+	return collect(s.db, scanMember, `SELECT `+memberCols+` FROM disc_members WHERE removed_at IS NULL AND owner IN ('', ?) ORDER BY created_at`, s.Self())
 }
 
 // UpdateMember 改成员配置。名字、职责只影响之后的显示和新 worker 的提示；agent、模型、思考深度、工作区、职责
@@ -1874,6 +1874,10 @@ func (s *Store) EndTask(taskID, status string, msg *Message, execState, reason s
 
 // endRounds 把任务上进行中的轮次结束掉，并按 interrupt 暂停或解绑成员。
 func endRounds(tx querier, taskID, execState, reason string, interrupt bool, at time.Time) error {
+	// 别人电脑上的执行、还没拉起 worker 的执行在本机没有任务：空任务 ID 不能拿来批量匹配
+	if taskID == "" {
+		return nil
+	}
 	xs, err := collect(tx, scanExecution, `SELECT `+execCols+` FROM disc_executions WHERE task_id=? AND state IN `+inList(activeStates), taskID)
 	if err != nil {
 		return err
@@ -1928,8 +1932,10 @@ type ReconcileResult struct {
 // alive 判断 worker 终端是否还在这个进程里。
 func (s *Store) ReconcileExecutions(alive func(worker string) bool, restarted bool, at time.Time) (ReconcileResult, error) {
 	var r ReconcileResult
+	self := s.Self()
 	err := s.withTx(func(tx *sql.Tx) error {
-		xs, err := collect(tx, scanExecution, `SELECT `+execCols+` FROM disc_executions WHERE state IN `+inList(activeStates))
+		// 只对本机的执行对账：别人电脑上的轮次（房主那边的成员执行、成员缓存里房主的执行）由它的拥有者负责
+		xs, err := collect(tx, scanExecution, `SELECT `+execCols+` FROM disc_executions WHERE state IN `+inList(activeStates)+` AND owner IN ('', ?)`, self)
 		if err != nil {
 			return err
 		}
@@ -1972,8 +1978,8 @@ func (s *Store) ReconcileExecutions(alive func(worker string) bool, restarted bo
 		if !restarted {
 			return nil
 		}
-		members, err := collect(tx, scanMember, `SELECT `+memberCols+` FROM disc_members m WHERE removed_at IS NULL AND paused=''
-			AND EXISTS (SELECT 1 FROM disc_executions x WHERE x.member=m.id AND x.state='queued')`)
+		members, err := collect(tx, scanMember, `SELECT `+memberCols+` FROM disc_members m WHERE removed_at IS NULL AND paused='' AND owner IN ('', ?)
+			AND EXISTS (SELECT 1 FROM disc_executions x WHERE x.member=m.id AND x.state='queued')`, self)
 		if err != nil {
 			return err
 		}

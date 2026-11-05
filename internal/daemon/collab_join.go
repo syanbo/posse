@@ -27,6 +27,12 @@ import (
 // 断开时暂停已领取、还没开始的轮次的原因（界面认这个串，给「继续」）
 const collabLostReason = "connection to the host was lost; confirm to continue"
 
+// joinedLeaving 是离线时点了退出：本机已停用（不领取、不开始新轮次、不自动恢复），连上房主后交完已有结果再撤销
+const joinedLeaving = "leaving"
+
+// collabLeavingReason 是退出中自己 Agent 的暂停原因
+const collabLeavingReason = "leaving the discussion; results already on this computer are sent when the host is reachable"
+
 // collabUnreachable 是连不上房主时的提示：系统不一定能区分没给本地网络权限和网络不通，合在一起说。
 const collabUnreachable = "Could not reach the host. Check that both Macs are on the same network, Posse is running on the host with sharing turned on, and Local Network access is allowed for Posse on both Macs (System Settings › Privacy & Security › Local Network)."
 
@@ -49,6 +55,10 @@ type roomConn struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 
+	fetchCh chan struct{}
+	bmu     sync.Mutex // 附件连接
+	bulk    *collaboration.Client
+
 	stmu     sync.Mutex
 	status   roomStatus
 	presence map[string]time.Time // 房主告诉的在线的人（收到的时间）
@@ -56,7 +66,7 @@ type roomConn struct {
 }
 
 func newRoomConn(d *Daemon, room string) *roomConn {
-	return &roomConn{d: d, room: room, pokeCh: make(chan struct{}, 1), done: make(chan struct{}), failed: map[string]int{}}
+	return &roomConn{d: d, room: room, pokeCh: make(chan struct{}, 1), fetchCh: make(chan struct{}, 1), done: make(chan struct{}), failed: map[string]int{}}
 }
 
 func (rc *roomConn) stopped() bool {
@@ -124,6 +134,7 @@ func (rc *roomConn) run(parent context.Context) {
 	rc.ctx, rc.cancel = ctx, cancel
 	rc.mu.Unlock()
 	defer cancel()
+	go rc.fetchLoop(ctx)
 	backoff := time.Second
 	for ctx.Err() == nil {
 		j, err := rc.d.store.Joined(rc.room)
@@ -134,7 +145,7 @@ func (rc *roomConn) run(parent context.Context) {
 		switch j.State {
 		case store.RequestPending:
 			err = rc.pollJoin(ctx, j)
-		case store.JoinedActive:
+		case store.JoinedActive, joinedLeaving:
 			err = rc.session(ctx, j)
 		default:
 			return
@@ -151,6 +162,11 @@ func (rc *roomConn) run(parent context.Context) {
 				msg = collabUnreachable
 			}
 			rc.setStatus(false, "", msg)
+			// setStatus 自己会叫醒这个循环（经 taskNotify），清掉，按退避等
+			select {
+			case <-rc.pokeCh:
+			default:
+			}
 		}
 		if time.Since(start) > time.Minute {
 			backoff = time.Second
@@ -271,37 +287,37 @@ func (d *Daemon) loadCredential(room string) (credentialFile, error) {
 	return c, err
 }
 
-// session 用凭据连上房主，一直同步到断开。
+// session 用凭据连上房主，一直同步到断开。第一次补齐增量之后才算连上（才开始派发），
+// 交接、退出时断开不暂停已领取的轮次（新进程接上就接着做）。
 func (rc *roomConn) session(ctx context.Context, j store.Joined) error {
 	cred, err := rc.d.loadCredential(j.Room)
 	if err != nil {
-		rc.d.store.LocalRevoke(j.Room, store.PersonRemoved, "the room credential on this computer is missing; ask the host for a new invitation", time.Now())
-		rc.d.taskNotify()
-		return errStopRoom
+		if cred, err = rc.refetchCredential(ctx, j); err != nil {
+			return err
+		}
 	}
 	cli, err := rc.dial(ctx, j)
 	if err != nil {
 		return err
 	}
-	var hello struct {
-		Generation int64 `json:"generation"`
-	}
-	if err := cli.Call(ctx, "hello", collabHello{Room: j.Room, Credential: cred.Credential, Version: collaboration.ProtocolVersion}, &hello); err != nil {
+	if err := cli.Call(ctx, "hello", collabHello{Room: j.Room, Credential: cred.Credential, Version: collaboration.ProtocolVersion}, nil); err != nil {
 		cli.Close()
 		return rc.callFailed(err)
 	}
 	rc.mu.Lock()
 	rc.cli = cli
 	rc.mu.Unlock()
-	rc.setStatus(true, cli.Addr, "")
 	defer func() {
 		rc.mu.Lock()
 		rc.cli = nil
 		rc.mu.Unlock()
 		cli.Close()
-		// 已领取、还没开始的轮次等拥有者确认再开始；已经开始的照常做完，结果留在 outbox
-		if n, _ := rc.d.store.PauseOwnQueues(j.Room, collabLostReason); n > 0 {
-			rc.d.taskNotify()
+		rc.closeBulk()
+		// 和房主断开（不是交接、退出）：已领取、还没开始的轮次等拥有者确认再开始；已经开始的照常做完，结果留在 outbox
+		if ctx.Err() == nil {
+			if n, _ := rc.d.store.PauseOwnQueues(j.Room, collabLostReason); n > 0 {
+				rc.d.taskNotify()
+			}
 		}
 	}()
 	beat := time.NewTicker(collaboration.HeartbeatEvery)
@@ -309,11 +325,20 @@ func (rc *roomConn) session(ctx context.Context, j store.Joined) error {
 	if err := rc.heartbeat(ctx); err != nil {
 		return err
 	}
+	first := true
 	for {
 		if err := rc.step(ctx); err != nil {
 			return err
 		}
-		rc.fetchAttachments(ctx)
+		if first {
+			first = false
+			rc.setStatus(true, cli.Addr, "")
+			rc.d.discKick()
+		}
+		if cur, err := rc.d.store.Joined(j.Room); err == nil && cur.State == joinedLeaving {
+			return rc.finishLeave(ctx)
+		}
+		rc.kickFetch()
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -327,6 +352,56 @@ func (rc *roomConn) session(ctx context.Context, j store.Joined) error {
 			}
 		}
 	}
+}
+
+// refetchCredential：本机的凭据文件丢了。凭据由房主私钥派生，按本机记着的申请 ID 向房主重取
+// （房主核对 TLS 指纹就是申请人、成员资格仍是那一代）；取不回来才停在缓存上。
+func (rc *roomConn) refetchCredential(ctx context.Context, j store.Joined) (credentialFile, error) {
+	fail := func() (credentialFile, error) {
+		rc.d.revokeLocal(j.Room, store.PersonRemoved, "the room credential on this computer is missing; ask the host for a new invitation")
+		return credentialFile{}, errStopRoom
+	}
+	if j.Request == "" {
+		return fail()
+	}
+	cli, err := rc.dial(ctx, j)
+	if err != nil {
+		return credentialFile{}, err
+	}
+	defer cli.Close()
+	var st collabJoinStatus
+	if err := cli.Call(ctx, "join.status", collabJoinParams{Room: j.Room, Request: j.Request}, &st); err != nil {
+		var ce *collaboration.Error
+		if errors.As(err, &ce) {
+			return fail()
+		}
+		return credentialFile{}, err
+	}
+	if st.State != store.RequestApproved || st.Credential == "" {
+		return fail()
+	}
+	if err := rc.d.saveCredential(j.Room, j.Host, st.Generation, st.Credential); err != nil {
+		return credentialFile{}, err
+	}
+	log.Printf("collaboration %s: room credential fetched again", short(j.Room))
+	return rc.d.loadCredential(j.Room)
+}
+
+// finishLeave 是离线时点了退出、现在连上了：先把本机已有的结果交上去（step 里补发过），再请房主撤销，
+// 然后在本机停用。
+func (rc *roomConn) finishLeave(ctx context.Context) error {
+	rc.mu.Lock()
+	cli := rc.cli
+	var err error
+	if cli != nil {
+		err = cli.Call(ctx, "leave", map[string]any{}, nil)
+	}
+	rc.mu.Unlock()
+	if err != nil && !collaboration.IsCode(err, collaboration.CodeRevoked) {
+		return err
+	}
+	rc.d.revokeLocal(rc.room, store.PersonLeft, "you left the discussion")
+	return errStopRoom
 }
 
 // heartbeat 每 15 秒告诉房主还连着（房主据此显示在线、执行有没有失联），顺带拿回谁在线。
@@ -436,6 +511,9 @@ func (rc *roomConn) claimLocked(ctx context.Context) error {
 		return err
 	}
 	j, _ := d.store.Joined(rc.room)
+	if j.State == joinedLeaving {
+		return nil
+	}
 	for _, x := range xs {
 		if reason := d.intentMismatch(x); reason != "" {
 			d.store.Accept(rc.room, x.ID, j.Generation, store.AcceptRefused, reason, time.Now())
@@ -449,13 +527,12 @@ func (rc *roomConn) claimLocked(ctx context.Context) error {
 			}
 			return rc.callFailed(err)
 		}
-		// 先下载请求和引用里的附件，再进本机队列（上下文快照给本机缓存路径）
-		d.fetchMessageAttachments(ctx, rc, x.Message)
-		if err := d.store.Accept(rc.room, x.ID, j.Generation, store.AcceptAccepted, "", time.Now()); err != nil {
+		// 先记进账本（fetching），后台下完请求和引用里的附件才转 accepted 进本机队列（上下文快照给本机路径）
+		if err := d.store.Accept(rc.room, x.ID, j.Generation, store.AcceptFetching, "", time.Now()); err != nil {
 			return err
 		}
 		d.taskNotify()
-		d.discKick()
+		rc.kickFetch()
 	}
 	return nil
 }
@@ -480,13 +557,15 @@ func (d *Daemon) intentMismatch(x store.Execution) string {
 	if in.Member != x.Member {
 		return "the request targets a different agent than the one you asked"
 	}
-	if x.RetryOf == "" {
-		if in.Digest != store.IntentDigest(m.Body, m.Quote, m.Target, m.Attachments) {
-			return "the request content differs from what you sent"
-		}
-		if in.ConfigVersion != x.ConfigVersion {
-			return "the agent's configuration changed after you sent the request"
-		}
+	if x.RetryOf == "" && in.Digest != store.IntentDigest(m.Body, m.Quote, m.Target, m.Attachments) {
+		return "the request content differs from what you sent"
+	}
+	// 配置按内容核对，不只看房主给的版本号：房主那份执行快照、本机这份成员配置都要和发出时确认的一致
+	mem, err := d.store.Member(x.Member)
+	if err != nil || in.ConfigVersion != x.ConfigVersion || in.Config == "" ||
+		store.OwnConfigDigest(store.Member{Role: x.Role, Agent: x.Agent, Model: x.Model, Effort: x.Effort}) != in.Config ||
+		store.OwnConfigDigest(mem) != in.Config {
+		return "the agent's configuration changed after you sent the request"
 	}
 	return ""
 }
@@ -515,57 +594,144 @@ func (rc *roomConn) flushLocked(ctx context.Context) error {
 	return nil
 }
 
-// fetchAttachments 把缓存里还没下载的附件下下来（失败的最多试 3 次）。
-func (rc *roomConn) fetchAttachments(ctx context.Context) {
-	atts, err := rc.d.store.MirrorAttachments(rc.room)
-	if err != nil {
-		return
-	}
-	for _, a := range atts {
-		if ctx.Err() != nil {
-			return
-		}
-		rc.fetch(ctx, a)
+// kickFetch 叫醒后台的附件下载（不占用同步用的连接）。
+func (rc *roomConn) kickFetch() {
+	select {
+	case rc.fetchCh <- struct{}{}:
+	default:
 	}
 }
 
-func (d *Daemon) fetchMessageAttachments(ctx context.Context, rc *roomConn, msgID string) {
-	m, err := d.store.DiscMessage(msgID)
+// fetchLoop 在后台下载附件：先把已领取的请求要用的附件下完（下完才进本机队列），再按游标增量下载新消息的附件。
+// 走单独的连接，大文件不挡心跳、同步和领取。
+func (rc *roomConn) fetchLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-rc.fetchCh:
+		}
+		for _, exec := range rc.d.store.Fetching(rc.room) {
+			if x, err := rc.d.store.Execution(exec); err == nil {
+				rc.fetchMessage(ctx, x.Message)
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			rc.d.store.MarkAccepted(exec)
+			rc.d.taskNotify()
+			rc.d.discKick()
+		}
+		for ctx.Err() == nil {
+			cur := rc.d.store.AttachmentCursor(rc.room)
+			msgs, err := rc.d.store.AttachmentsAfter(rc.room, cur, 20)
+			if err != nil || len(msgs) == 0 {
+				break
+			}
+			stuck := false
+			for _, m := range msgs {
+				if !rc.fetchAll(ctx, m.Attachments) {
+					stuck = true
+					break
+				}
+				rc.d.store.SetAttachmentCursor(rc.room, m.Seq)
+			}
+			if stuck {
+				break
+			}
+		}
+	}
+}
+
+// fetchMessage 下载一条消息和它引用的消息上的附件（领取时：上下文快照要给本机路径）。
+func (rc *roomConn) fetchMessage(ctx context.Context, msgID string) {
+	m, err := rc.d.store.DiscMessage(msgID)
 	if err != nil {
 		return
 	}
 	atts := m.Attachments
 	if m.Quote != "" {
-		if q, err := d.store.DiscMessage(m.Quote); err == nil {
+		if q, err := rc.d.store.DiscMessage(m.Quote); err == nil {
 			atts = append(atts, q.Attachments...)
 		}
 	}
+	rc.fetchAll(ctx, atts)
+}
+
+// fetchAll 下载还没在缓存里的附件；报告有没有暂时下不了的（断线），下不了 3 次的跳过（显示不可用）。
+func (rc *roomConn) fetchAll(ctx context.Context, atts []store.Attachment) bool {
+	ok := true
 	for _, a := range atts {
-		rc.fetchLocked(ctx, a)
+		if a.Path == "" {
+			continue
+		}
+		dst := filepath.Join(rc.d.cfg.Home, a.Path)
+		if _, err := os.Stat(dst); err == nil {
+			continue
+		}
+		rc.stmu.Lock()
+		tries := rc.failed[a.ID]
+		rc.stmu.Unlock()
+		if tries >= 3 {
+			continue
+		}
+		if err := rc.downloadTo(ctx, a, dst); err != nil {
+			log.Printf("collaboration %s: attachment %s: %v", short(rc.room), a.ID, err)
+			var ce *collaboration.Error
+			rc.stmu.Lock()
+			if errors.As(err, &ce) {
+				rc.failed[a.ID] = 3 // 房主那边没有这个文件：不再试
+			} else {
+				rc.failed[a.ID]++
+			}
+			rc.stmu.Unlock()
+			ok = ok && errors.As(err, &ce)
+			continue
+		}
+		rc.d.taskNotify()
 	}
+	return ok
 }
 
-func (rc *roomConn) fetch(ctx context.Context, a store.Attachment) {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-	rc.fetchLocked(ctx, a)
+// bulkClient 是传附件用的单独连接（按需连上、hello），和同步用的连接分开。
+func (rc *roomConn) bulkClient(ctx context.Context) (*collaboration.Client, error) {
+	rc.bmu.Lock()
+	defer rc.bmu.Unlock()
+	if rc.bulk != nil {
+		select {
+		case <-rc.bulk.Done():
+			rc.bulk = nil
+		default:
+			return rc.bulk, nil
+		}
+	}
+	j, err := rc.d.store.Joined(rc.room)
+	if err != nil {
+		return nil, err
+	}
+	cred, err := rc.d.loadCredential(rc.room)
+	if err != nil {
+		return nil, err
+	}
+	cli, err := rc.dial(ctx, j)
+	if err != nil {
+		return nil, err
+	}
+	if err := cli.Call(ctx, "hello", collabHello{Room: rc.room, Credential: cred.Credential, Version: collaboration.ProtocolVersion}, nil); err != nil {
+		cli.Close()
+		return nil, err
+	}
+	rc.bulk = cli
+	return cli, nil
 }
 
-// fetchLocked 按附件 ID 分块下载到缓存：先写同目录的临时文件，长度和摘要对上再改名。
-func (rc *roomConn) fetchLocked(ctx context.Context, a store.Attachment) {
-	if rc.cli == nil || rc.failed[a.ID] >= 3 || a.Path == "" {
-		return
+func (rc *roomConn) closeBulk() {
+	rc.bmu.Lock()
+	defer rc.bmu.Unlock()
+	if rc.bulk != nil {
+		rc.bulk.Close()
+		rc.bulk = nil
 	}
-	dst := filepath.Join(rc.d.cfg.Home, a.Path)
-	if _, err := os.Stat(dst); err == nil {
-		return
-	}
-	if err := rc.downloadTo(ctx, a, dst); err != nil {
-		rc.failed[a.ID]++
-		log.Printf("collaboration %s: attachment %s: %v", short(rc.room), a.ID, err)
-		return
-	}
-	rc.d.taskNotify()
 }
 
 func (rc *roomConn) downloadTo(ctx context.Context, a store.Attachment, dst string) error {
@@ -588,7 +754,12 @@ func (rc *roomConn) downloadTo(ctx context.Context, a store.Attachment, dst stri
 			EOF  bool   `json:"eof"`
 			SHA  string `json:"sha"`
 		}
-		if err := rc.cli.Call(ctx, "download", map[string]any{"attachment": a.ID, "offset": off}, &r); err != nil {
+		cli, err := rc.bulkClient(ctx)
+		if err != nil {
+			f.Close()
+			return err
+		}
+		if err := cli.Call(ctx, "download", map[string]any{"attachment": a.ID, "offset": off}, &r); err != nil {
 			f.Close()
 			return err
 		}
@@ -640,6 +811,30 @@ func (rc *roomConn) call(method string, params, out any) error {
 	return nil
 }
 
+// flushNow 把还没交出去的事件补发一遍（退出前）。
+func (rc *roomConn) flushNow() {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	if rc.cli == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(rc.ctx, 15*time.Second)
+	defer cancel()
+	rc.flushLocked(ctx)
+}
+
+// syncNow 补齐一次增量（发消息前对账用）；没连着就算了。
+func (rc *roomConn) syncNow() {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	if rc.cli == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(rc.ctx, 15*time.Second)
+	defer cancel()
+	rc.syncLocked(ctx)
+}
+
 func hostOffline(rc *roomConn) error {
 	st := ""
 	if rc != nil {
@@ -675,18 +870,21 @@ func (rc *roomConn) upload(path, name string) (string, error) {
 	if name == "" {
 		name = filepath.Base(path)
 	}
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-	if rc.cli == nil {
+	if !rc.d.roomStatus(rc.room).Connected {
 		return "", hostOffline(rc)
 	}
+	// 走附件连接：大文件不挡心跳、同步和领取
 	ctx, cancel := context.WithTimeout(rc.ctx, 10*time.Minute)
 	defer cancel()
+	cli, err := rc.bulkClient(ctx)
+	if err != nil {
+		return "", wrapHostErr(err)
+	}
 	var begin struct {
 		Upload string `json:"upload"`
 		Done   bool   `json:"done"`
 	}
-	if err := rc.cli.Call(ctx, "upload.begin", map[string]any{"name": name, "size": st.Size(), "sha": sum}, &begin); err != nil {
+	if err := cli.Call(ctx, "upload.begin", map[string]any{"name": name, "size": st.Size(), "sha": sum}, &begin); err != nil {
 		return "", wrapHostErr(err)
 	}
 	if begin.Done {
@@ -697,7 +895,7 @@ func (rc *roomConn) upload(path, name string) (string, error) {
 	for {
 		n, err := f.ReadAt(buf, off)
 		if n > 0 {
-			if err := rc.cli.Call(ctx, "upload.chunk", map[string]any{"upload": begin.Upload, "offset": off, "data": buf[:n]}, nil); err != nil {
+			if err := cli.Call(ctx, "upload.chunk", map[string]any{"upload": begin.Upload, "offset": off, "data": buf[:n]}, nil); err != nil {
 				return "", wrapHostErr(err)
 			}
 			off += int64(n)
@@ -709,7 +907,7 @@ func (rc *roomConn) upload(path, name string) (string, error) {
 			return "", err
 		}
 	}
-	if err := rc.cli.Call(ctx, "upload.end", map[string]any{"upload": begin.Upload}, nil); err != nil {
+	if err := cli.Call(ctx, "upload.end", map[string]any{"upload": begin.Upload}, nil); err != nil {
 		return "", wrapHostErr(err)
 	}
 	return begin.Upload, nil
@@ -822,12 +1020,22 @@ func (d *Daemon) collabLeave(ctx context.Context, raw json.RawMessage) (any, err
 	rc := d.roomConnFor(disc.Key)
 	switch j.State {
 	case store.JoinedActive:
-		if rc == nil {
-			return nil, hostOffline(nil)
+		if rc == nil || !d.roomStatus(disc.Key).Connected {
+			// 房主不在线：本机先停用（不领取、不开始新的一轮，不会自动恢复），已有的结果留着，
+			// 连上房主后先交上去再请它撤销
+			if err := d.store.SetJoined(disc.Key, joinedLeaving, j.Generation, nil, ""); err != nil {
+				return nil, err
+			}
+			d.store.PauseOwnMembers(disc.Key, collabLeavingReason)
+			d.taskNotify()
+			return map[string]any{"left": disc.Key, "pending": true}, nil
 		}
+		rc.flushNow()
 		if err := rc.call("leave", map[string]any{}, nil); err != nil {
 			return nil, err
 		}
+	case joinedLeaving:
+		return map[string]any{"left": disc.Key, "pending": true}, nil
 	case store.RequestPending:
 	default:
 		return nil, rpc.Errorf(rpc.CodeConflict, "you are no longer in this discussion")
@@ -883,6 +1091,9 @@ func (d *Daemon) mirrorConn(disc store.Discussion) (*roomConn, error) {
 	j, err := d.store.Joined(disc.Key)
 	if err != nil {
 		return nil, err
+	}
+	if j.State == joinedLeaving {
+		return nil, rpc.Errorf(rpc.CodeConflict, "you are leaving this discussion; it finishes when the host is reachable")
 	}
 	if j.State != store.JoinedActive {
 		return nil, rpc.Errorf(rpc.CodeConflict, "you are no longer a member of this discussion; the history stays readable here")

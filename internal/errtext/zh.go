@@ -63,6 +63,10 @@ var zh = [][2]string{
 	{"the agent's configuration changed after you sent the request", "发出请求后这个 Agent 的配置变了"},
 	{"connection to the host was lost; confirm to continue", "和房主的连接断过，确认后继续"},
 	{"choose a workspace on this computer", "需要选择本机工作区"},
+	{"leaving the discussion; results already on this computer are sent when the host is reachable", "正在退出讨论：本机已有的结果会在连上房主后交上去"},
+	{"you are leaving this discussion; it finishes when the host is reachable", "你正在退出这个讨论，连上房主后完成"},
+	{"the host's copy of this agent's settings differs from what you set on this computer; review and save its settings", "房主那里这个 Agent 的设置和你在本机设的不一致，请检查后保存设置"},
+	{"the host's copy of %s's settings differs from yours; review and save its settings first", "房主那里 {1} 的设置和你的不一致，请先检查并保存设置"},
 
 	// 讨论（执行卡上的原因和操作的报错）
 	{"worker terminal exited (code %d) before reporting", "worker 终端在汇报前退出了（退出码 {1}）"},

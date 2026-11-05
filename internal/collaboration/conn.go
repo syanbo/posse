@@ -31,8 +31,14 @@ const (
 	ChunkSize       = 64 << 10
 	// MaxBody 是一条消息正文的上限
 	MaxBody = 256 << 10
-	// 还没绑定房间（只能提交、查询加入申请）的连接最多这么多
-	maxUnbound = 16
+	// 还没绑定房间的连接分开计数：陌生身份（只能提交、查询加入申请）总共 16 条、同一来源地址 4 条；
+	// 已是某个共享房间成员的身份另有名额（每个身份 8 条），陌生连接占满时成员照样能重连。名额只管连接，
+	// 进哪个房间仍要 hello 核对凭据
+	maxStrangers      = 16
+	maxStrangersPerIP = 4
+	maxKnownUnbound   = 8
+	// 没绑定的连接这么久没有请求就断开（加入申请轮询 3 秒一次）
+	unboundIdle = 15 * time.Second
 	// 一分钟里同一地址最多试这么多次加入申请（限流，防猜邀请）
 	joinPerMinute = 10
 	// 心跳：加入者 15 秒一次，房主 60 秒没收到当连接中断（只用于显示，不回收执行权）
@@ -100,18 +106,18 @@ type Session struct {
 	gen      int64
 	lastSeen time.Time
 	closed   bool
+	release  func() // 交还未绑定连接的名额（绑定或断开时，只交一次）
 }
 
 // Bind 把连接绑定到一个房间（hello 核对凭据之后）。
 func (s *Session) Bind(room string, gen int64) {
 	s.mu.Lock()
-	was := s.room
 	s.room, s.gen = room, gen
+	rel := s.release
+	s.release = nil
 	s.mu.Unlock()
-	if was == "" {
-		s.srv.mu.Lock()
-		s.srv.unbound--
-		s.srv.mu.Unlock()
+	if rel != nil {
+		rel()
 	}
 }
 
@@ -125,7 +131,7 @@ func (s *Session) Room() (string, int64) {
 // Touch 记下收到心跳的时间（房主的时钟）。
 func (s *Session) Touch() {
 	s.mu.Lock()
-	s.lastSeen = time.Now()
+	s.lastSeen = s.srv.now()
 	s.mu.Unlock()
 }
 
@@ -157,6 +163,8 @@ func (s *Session) Close(reason string) {
 type Handler interface {
 	Serve(ctx context.Context, s *Session, method string, params json.RawMessage) (any, error)
 	Closed(s *Session)
+	// Known 是这个身份是不是某个共享房间的有效成员（只决定用哪份连接名额，不给房间权限）
+	Known(fp string) bool
 }
 
 // Server 是房主的协作服务。
@@ -166,16 +174,72 @@ type Server struct {
 	ln  net.Listener
 	srv *http.Server
 
-	mu       sync.Mutex
-	sessions map[*Session]struct{}
-	unbound  int
-	joins    map[string][]time.Time // 地址 → 最近的加入申请时间（限流）
-	stopped  atomic.Bool
+	mu        sync.Mutex
+	sessions  map[*Session]struct{}
+	strangers int
+	byIP      map[string]int         // 来源地址 → 未绑定的陌生连接
+	known     map[string]int         // 成员身份 → 未绑定的连接
+	joins     map[string][]time.Time // 地址 → 最近的加入申请时间（限流）
+	stopped   atomic.Bool
+	// Now 是房主的时钟（测试里换掉，验证心跳超时只用于显示）
+	Now func() time.Time
 }
 
 // NewServer 用安装身份建服务；Listen 之后才接受连接。
 func NewServer(id Identity, h Handler) *Server {
-	return &Server{id: id, h: h, sessions: map[*Session]struct{}{}, joins: map[string][]time.Time{}}
+	return &Server{id: id, h: h, sessions: map[*Session]struct{}{}, joins: map[string][]time.Time{}, byIP: map[string]int{}, known: map[string]int{}}
+}
+
+func (s *Server) now() time.Time {
+	if s.Now != nil {
+		return s.Now()
+	}
+	return time.Now()
+}
+
+// admit 给一条还没绑定房间的连接分名额；满了返回 false。release 交还名额。
+func (s *Server) admit(fp, addr string) (release func(), ok bool) {
+	ip, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		ip = addr
+	}
+	known := s.h.Known(fp)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if known {
+		if s.known[fp] >= maxKnownUnbound {
+			return nil, false
+		}
+		s.known[fp]++
+		return s.once(func() {
+			if s.known[fp]--; s.known[fp] <= 0 {
+				delete(s.known, fp)
+			}
+		}), true
+	}
+	if s.strangers >= maxStrangers || s.byIP[ip] >= maxStrangersPerIP {
+		return nil, false
+	}
+	s.strangers++
+	s.byIP[ip]++
+	return s.once(func() {
+		s.strangers--
+		if s.byIP[ip]--; s.byIP[ip] <= 0 {
+			delete(s.byIP, ip)
+		}
+	}), true
+}
+
+// once 包一层：名额只交还一次，在 s.mu 下执行。
+func (s *Server) once(f func()) func() {
+	var done atomic.Bool
+	return func() {
+		if done.CompareAndSwap(false, true) {
+			s.mu.Lock()
+			f()
+			s.mu.Unlock()
+		}
+	}
 }
 
 // Listen 在 addr（如 ":6791"）上监听。端口被占用时返回明确的错误。
@@ -264,46 +328,41 @@ func (s *Server) accept(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "client certificate required", http.StatusUnauthorized)
 		return
 	}
-	s.mu.Lock()
-	if s.unbound >= maxUnbound {
-		s.mu.Unlock()
+	release, ok := s.admit(fp, r.RemoteAddr)
+	if !ok {
 		http.Error(w, "too many connections", http.StatusTooManyRequests)
 		return
 	}
-	s.unbound++
-	s.mu.Unlock()
 	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{Subprotocol}})
 	if err != nil {
-		s.mu.Lock()
-		s.unbound--
-		s.mu.Unlock()
+		release()
 		return
 	}
 	if ws.Subprotocol() != Subprotocol {
 		ws.Close(websocket.StatusPolicyViolation, "subprotocol "+Subprotocol+" required; update Posse")
-		s.mu.Lock()
-		s.unbound--
-		s.mu.Unlock()
+		release()
 		return
 	}
 	ws.SetReadLimit(MaxFrame)
-	sess := &Session{FP: fp, Addr: r.RemoteAddr, ws: ws, srv: s, lastSeen: time.Now()}
+	sess := &Session{FP: fp, Addr: r.RemoteAddr, ws: ws, srv: s, lastSeen: s.now(), release: release}
 	s.mu.Lock()
 	s.sessions[sess] = struct{}{}
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
 		delete(s.sessions, sess)
-		if room, _ := sess.Room(); room == "" {
-			s.unbound--
-		}
 		s.mu.Unlock()
+		release()
 		sess.Close("")
 		s.h.Closed(sess)
 	}()
 	ctx := r.Context()
 	for {
-		rctx, cancel := context.WithTimeout(ctx, idleTimeout)
+		wait := idleTimeout
+		if room, _ := sess.Room(); room == "" {
+			wait = unboundIdle
+		}
+		rctx, cancel := context.WithTimeout(ctx, wait)
 		_, b, err := ws.Read(rctx)
 		cancel()
 		if err != nil {
@@ -358,6 +417,18 @@ func (s *Server) Kick(room, fp, reason string) {
 	for _, x := range s.Sessions(room, fp) {
 		x.Close(reason)
 	}
+}
+
+// Online 是房间里 within 内有过心跳的人（房主的时钟）。
+func (s *Server) Online(room string, within time.Duration) map[string]bool {
+	out := map[string]bool{}
+	now := s.now()
+	for fp, t := range s.LastSeen(room) {
+		if now.Sub(t) < within {
+			out[fp] = true
+		}
+	}
+	return out
 }
 
 // LastSeen 是房间里每个人最近一次心跳（房主的时钟）。

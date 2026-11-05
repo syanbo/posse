@@ -19,6 +19,7 @@ import (
 const (
 	collabLostReason = "connection to the host was lost; confirm to continue"
 	needsWorkspace   = "choose a workspace on this computer"
+	configConflict   = "the host's copy of this agent's settings differs from what you set on this computer; review and save its settings"
 )
 
 type discCollab struct {
@@ -196,6 +197,9 @@ func (a *app) collabBanner(c *ui.Context, d *discDetail) (hide bool) {
 		return true
 	case "removed":
 		banner("collab-removed", iconHexAlert, t.Danger, m.CollabRemovedNote(), "", nil)
+		return true
+	case "leaving":
+		banner("collab-leaving", iconLeave, colors(t).honey, m.CollabLeavingNote(), "", nil)
 		return true
 	case "left":
 		banner("collab-left", iconLeave, t.TextMuted, m.CollabLeftNote(), "", nil)
