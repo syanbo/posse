@@ -1527,7 +1527,7 @@ func (s *Store) FinishExecution(in FinishInput) (DiscMessage, error) {
 				reply = old
 				return ErrAlreadyReported
 			}
-			return fmt.Errorf("%w: execution %s was already reported with a different reply", ErrConflict, x.ID)
+			return fmt.Errorf("%w: different reply for a reported execution", ErrConflict)
 		}
 		if err != nil {
 			return err

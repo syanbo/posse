@@ -41,6 +41,7 @@ var zh = [][2]string{
 	{"question %s already answered", "问题 {1} 已经回答过了"},
 	{"the request that asked this has ended; restart the member to continue", "提这个问题的那一轮已经结束了，重新启动成员后继续"},
 	{"this request was already retried", "这个请求已经重试过了"},
+	{"execution %s was already reported with a different reply", "这一轮已经汇报过，内容不同"},
 	{"terminal %s is a task worker; workers report with posse task done and cannot act as the user in a discussion", "终端 {1} 是任务 worker，不能以你的身份在讨论里操作"},
 	{"reply text required", "没有填回复"},
 	{"execution %s already started (%s); stop it instead", "这个请求已经开始了，改用停止"},
@@ -131,6 +132,7 @@ var zh = [][2]string{
 	{"question %s already answered", "问题 {1} 已经回答过了"},
 	{"the request that asked this has ended; restart the member to continue", "提这个问题的那一轮已经结束了，重新启动成员后继续"},
 	{"this request was already retried", "这个请求已经重试过了"},
+	{"execution %s was already reported with a different reply", "这一轮已经汇报过，内容不同"},
 	{"terminal %s is a task worker; workers report with posse task done and cannot act as the user in a discussion", "终端 {1} 是任务 worker，不能以你的身份在讨论里操作"},
 
 	// 会话历史

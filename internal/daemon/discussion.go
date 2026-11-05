@@ -1753,6 +1753,8 @@ func (d *Daemon) discDone(t store.Task, p taskDoneParams) (any, error) {
 		return d.taskInfo(t, nil, nil), nil
 	case errors.Is(err, store.ErrStaleRound):
 		return nil, discRoundErr(t, p.Execution)
+	case errors.Is(err, store.ErrConflict):
+		return nil, rpc.Errorf(rpc.CodeConflict, "execution %s was already reported with a different reply", p.Execution)
 	case errors.Is(err, store.ErrNotAcked):
 		return nil, rpc.Errorf(rpc.CodeConflict, "you have not read the whole request yet (%v); run: posse discussion read --execution %s", err, p.Execution)
 	case err != nil:
