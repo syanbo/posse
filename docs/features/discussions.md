@@ -72,7 +72,7 @@ tasks.discussion_id      讨论成员专用 worker 的任务属于哪个讨论�
 
 ## CLI
 
-`posse discussion list | create | show | add-member | remove-member | restart | post | answer | read | pending | search | key | cancel | stop | retry | confirm | archive | restore`，各自 `-h` 看用法。worker 用的是 `discussion read`、`discussion pending` 和带 `--execution` 的 `task ask/check/done`。
+`posse discussion list | create | show | add-member | update-member | remove-member | restart | post | answer | read | pending | search | key | cancel | stop | retry | confirm | isolate | archive | restore`，各自 `-h` 看用法。worker 用的是 `discussion read`、`discussion pending` 和带 `--execution` 的 `task ask/check/done`。
 
 ## 界面
 
