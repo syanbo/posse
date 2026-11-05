@@ -1,7 +1,7 @@
 {
   "name": "Posse",
   "identifier": "com.dengbo.posse",
-  "version": "0.1.25",
+  "version": "0.1.26",
   "main": "./cmd/posse",
   "icon": "design/icon.png",
   "out": "build",

@@ -3,6 +3,20 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.26
+
+- 支持 Intel 芯片的 Mac：下载 Posse-Intel.dmg 安装，之后同样自动更新。
+- 新增随处搜索：一个弹框分"所有""文件""符号""操作""文本"五页，⇥ 换页；⇧⌘P 打开"所有"，⌘P 打开"文件"，⇧⌘A 打开"操作"。设置「快捷键」里可以打开"双击 ⇧ 打开随处搜索"。
+- 文件栏的检索并入"文件"页：顶上是检索框，有字时显示结果、清空回到文件树；大小写、正则和筛选常驻在框里。选中目录按 ⇧⌘F，或在目录右键菜单点"在此目录中查找…"，只搜这个目录。
+- 终端标签的关闭按钮在标签变暗时不再凹出暗块，右边距加宽。
+
+### English
+
+- Posse now runs on Intel Macs: install from Posse-Intel.dmg, and it updates itself like the Apple silicon version.
+- New Search Everywhere: one dialog with All, Files, Symbols, Actions and Text pages, switched with ⇥. ⇧⌘P opens All, ⌘P opens Files and ⇧⌘A opens Actions. "Double-tap ⇧ for Search Everywhere" can be turned on in Settings › Shortcuts.
+- Search in the files panel moves into the Files page: a search box sits on top, showing results while it has text and the file tree once cleared, with case, regex and filter toggles inside the box. Select a folder and press ⇧⌘F, or choose "Find in Folder…" from its context menu, to search only that folder.
+- The close button on terminal tabs no longer leaves a dark patch over the fade, and has more room on the right.
+
 ## 0.1.25
 
 - 图片面板收录 Codex 查看图片、截图工具返回的图片，保留当时的快照；生成目录中的相同副本只显示一次，多次查看的记录仍保留。
