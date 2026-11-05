@@ -692,7 +692,12 @@ func cmdDiscussionLeave(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	return e.do("discussion.leave", map[string]any{"caller": caller(), "discussion": key}, nil, func() {
+	var r struct{ Pending bool }
+	return e.do("discussion.leave", map[string]any{"caller": caller(), "discussion": key}, &r, func() {
+		if r.Pending {
+			fmt.Fprintf(e.out, "leaving %s: your agents stopped taking requests; results already on this Mac are sent when the host is reachable, then the host revokes your access\n", key)
+			return
+		}
 		fmt.Fprintf(e.out, "left %s; what was synced stays readable here\n", key)
 	})
 }
