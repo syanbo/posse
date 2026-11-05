@@ -102,6 +102,7 @@ type discPoll struct {
 	view  *discView
 	key   string
 	since int64
+	gen   int64 // 发出时的意图代号（discGen）
 }
 
 // discDetail 是打开的讨论在窗口里的样子：只有读进来的那几页消息。
@@ -307,9 +308,28 @@ func (a *app) wantedDisc() (string, int64) {
 	return a.discWant, a.discWantRev
 }
 
+// discGen 是「要取什么」这个意图的代号：每次换讨论、跳到最新、离开页面都加一。
+// 轮询结果带着发出时的代号回来，代号变了就是过期的，不应用、也不把版本写回去。
+func (a *app) discGen() int64 {
+	a.discMu.Lock()
+	defer a.discMu.Unlock()
+	return a.discWantGen
+}
+
+// setWantedDisc 换一个新的意图（换讨论、跳到最新、离开页面）：之前发出的轮询结果都作废。
 func (a *app) setWantedDisc(key string, rev int64) {
 	a.discMu.Lock()
 	a.discWant, a.discWantRev = key, rev
+	a.discWantGen++
+	a.discMu.Unlock()
+}
+
+// advanceWantedDisc 是应用了一次轮询结果之后往前推版本：只在意图没换过时才推。
+func (a *app) advanceWantedDisc(key string, rev, gen int64) {
+	a.discMu.Lock()
+	if a.discWant == key && a.discWantGen == gen {
+		a.discWantRev = rev
+	}
 	a.discMu.Unlock()
 }
 
@@ -323,10 +343,13 @@ func (a *app) pollDiscussions(r *pollResult, call func(method string, params, ou
 	if l.Items != nil {
 		p.list = &l
 	}
-	if key, since := a.wantedDisc(); key != "" {
+	a.discMu.Lock()
+	key, since, gen := a.discWant, a.discWantRev, a.discWantGen
+	a.discMu.Unlock()
+	if key != "" {
 		var v discView
 		if call("discussion.show", map[string]any{"discussion": key, "since": since, "limit": discPage}, &v) == nil {
-			p.view, p.key, p.since = &v, key, since
+			p.view, p.key, p.since, p.gen = &v, key, since, gen
 		}
 	}
 	// 增量是空的也交上去：里面带着 worker 终端的实时状态；和上次一样时 samePoll 会跳过重建
@@ -360,7 +383,8 @@ func (a *app) applyDiscussions(p *discPoll) {
 			a.setWantedDisc("", 0)
 		}
 	}
-	if v := p.view; v != nil && p.key == b.sel {
+	// 发出之后意图换过了（跳到最新、换了讨论）：这份结果过期，丢掉，等下一次按新意图取
+	if v := p.view; v != nil && p.key == b.sel && p.gen == a.discGen() {
 		switch {
 		case !v.Delta:
 			b.d = newDiscDetail(*v)
@@ -373,7 +397,7 @@ func (a *app) applyDiscussions(p *discPoll) {
 			b.d.collab = v.Collab
 		}
 		if b.d != nil {
-			a.setWantedDisc(b.sel, b.d.rev)
+			a.advanceWantedDisc(b.sel, b.d.rev, p.gen)
 		}
 	}
 }
@@ -534,9 +558,10 @@ func (a *app) discSidebarItem(c *ui.Context) ui.Element {
 func (a *app) discBoard(c *ui.Context) {
 	b := &a.disc
 	m := L(c)
-	if b.sel != "" {
-		_, rev := a.wantedDisc()
-		if b.d != nil {
+	// 回到讨论页（离开时清掉了意图）才重新登记；不在每一帧写版本，免得盖掉跳到最新这类意图
+	if key, _ := a.wantedDisc(); b.sel != "" && key != b.sel {
+		var rev int64
+		if b.d != nil && b.d.key == b.sel {
 			rev = b.d.rev
 		}
 		a.setWantedDisc(b.sel, rev)
@@ -1650,13 +1675,15 @@ func (a *app) loadPage(key, mode string, params map[string]any, jump string) {
 	}
 	b.older = true
 	params["discussion"], params["limit"] = key, discPage
+	d0 := b.d
 	go func() {
 		var v discView
 		err := a.call("discussion.show", params, &v, 10*time.Second)
 		a.update(func() {
 			b.older = false
 			d := b.d
-			if err != nil || d == nil || d.key != key {
+			// 这期间整页换过了（跳到最新、换了讨论、重新打开）：这一页是按旧窗口取的，丢掉
+			if err != nil || d == nil || d != d0 {
 				return
 			}
 			for _, x := range v.Executions {

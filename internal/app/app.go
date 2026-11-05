@@ -156,6 +156,7 @@ type app struct {
 	discMu      sync.Mutex
 	discWant    string // 要取详情的讨论
 	discWantRev int64  // 它已有的版本，0 要全量
+	discWantGen int64  // 意图的代号，换讨论、跳到最新时加一（discGen）
 	discSeq     atomic.Int64
 	discLoaded  bool // 拿到过一次列表：之后的变化才发通知
 	// trashItem 把文件移到废纸篓，nil 时用 mygo.Shell.TrashItem（要主线程跑着）；测试里换掉
