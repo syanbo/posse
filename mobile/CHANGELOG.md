@@ -3,6 +3,20 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.16
+
+- 工作区和 Git 页面支持查看、搜索并切换分支，多仓库工作区可分别操作；切换结果记入电脑端 Git 操作记录，需要电脑端 0.1.25。
+- 工作区页的分段切换移到顶栏，统一页面间距；横屏避开刘海，底部面板内容可滚动。
+- 弹框统一字号与边距，确认框使用等宽按钮，并优化弹出和分层动画。
+- 配合电脑端 0.1.25，图片与视频页可查看 Codex 工具返回的图片快照，生成目录中的相同副本不再重复显示。
+
+### English
+
+- Browse, search and switch Git branches from workspace and Git pages, including individual repositories in multi-repository workspaces. Results appear in the desktop Git operation log. Requires Posse 0.1.25 on the Mac.
+- Workspace tabs move into the top bar with consistent page spacing. Landscape layouts respect display cutouts, and bottom-sheet content can scroll.
+- Dialogs use consistent typography and spacing, equal-width confirmation buttons, and improved entrance and layered animations.
+- With Posse 0.1.25 on the Mac, the media page shows snapshots returned by Codex tools without duplicate copies from the generated-images directory.
+
 ## 0.1.15
 
 - 工作区下有多个 Git 仓库时，改动页按仓库分组：每组标题写仓库名、文件数、正在进行的合并或变基、分支和领先落后数，点标题收起；从改动打开完整文件会打开对应仓库里的那个文件。
