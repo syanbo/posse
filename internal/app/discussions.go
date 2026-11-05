@@ -191,7 +191,7 @@ type discBoard struct {
 	revealed string
 	flash    string
 	flashAt  time.Time
-	older  bool // 正在取更早的一页
+	older    bool // 正在取更早的一页
 
 	// 输入区
 	text     string
