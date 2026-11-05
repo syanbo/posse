@@ -10,24 +10,24 @@ import (
 // Task 是派给一个 worker agent 的任务。派发方（coordinator）是另一个 agent 的终端，
 // 为空表示由用户在界面或 posse 终端之外派发。
 type Task struct {
-	ID          string     `json:"id"`
-	Title       string     `json:"title"`
-	Spec        string     `json:"spec"`
-	Coordinator string     `json:"coordinator,omitempty"`
-	WorkspaceID string     `json:"workspaceId"`
-	Worker      string     `json:"worker"`
-	Agent       string     `json:"agent,omitempty"`
-	Model       string     `json:"model,omitempty"` // 模型和思考深度，为空是 agent 自己的默认设置
-	Effort      string     `json:"effort,omitempty"`
-	Group       string     `json:"group,omitempty"` // 同一次派发给多个 agent 的任务共用
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Spec        string `json:"spec"`
+	Coordinator string `json:"coordinator,omitempty"`
+	WorkspaceID string `json:"workspaceId"`
+	Worker      string `json:"worker"`
+	Agent       string `json:"agent,omitempty"`
+	Model       string `json:"model,omitempty"` // 模型和思考深度，为空是 agent 自己的默认设置
+	Effort      string `json:"effort,omitempty"`
+	Group       string `json:"group,omitempty"` // 同一次派发给多个 agent 的任务共用
 	// DiscussionID 是讨论成员专用 worker 的任务所属的讨论（roomKey），普通任务为空。
 	// 不放进 Coordinator：那是派发方终端，讨论任务的派发方是用户
-	DiscussionID string `json:"discussionId,omitempty"`
-	Status      string     `json:"status"`          // running | done | failed | stopped | exited | lost
-	Summary     string     `json:"summary,omitempty"`
-	Report      string     `json:"report,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	EndedAt     *time.Time `json:"endedAt,omitempty"`
+	DiscussionID string     `json:"discussionId,omitempty"`
+	Status       string     `json:"status"` // running | done | failed | stopped | exited | lost
+	Summary      string     `json:"summary,omitempty"`
+	Report       string     `json:"report,omitempty"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	EndedAt      *time.Time `json:"endedAt,omitempty"`
 }
 
 // Message 是任务双方之间的一条消息。question、done、exit 发给派发方，answer、note 发给 worker。
