@@ -25720,3 +25720,47 @@ func DiscYouInitial() string { return In(i18n.Locale()).DiscYouInitial() }
 func (msgs Messages) DiscYouInitial() string {
 	return Catalog.Format(msgs.locale, "discYouInitial", nil)
 }
+
+// DiscLoadNewer says "Load newer messages"
+// in the language the app shows.
+//
+// Discussion: button below the loaded messages when newer ones are not
+// loaded.
+func DiscLoadNewer() string { return In(i18n.Locale()).DiscLoadNewer() }
+
+// DiscLoadNewer says "Load newer messages"
+// in the language of msgs.
+//
+// Discussion: button below the loaded messages when newer ones are not
+// loaded.
+func (msgs Messages) DiscLoadNewer() string {
+	return Catalog.Format(msgs.locale, "discLoadNewer", nil)
+}
+
+// DiscJumpLatest says "Jump to latest"
+// in the language the app shows.
+//
+// Discussion: pill shown while reading an earlier part of the discussion.
+func DiscJumpLatest() string { return In(i18n.Locale()).DiscJumpLatest() }
+
+// DiscJumpLatest says "Jump to latest"
+// in the language of msgs.
+//
+// Discussion: pill shown while reading an earlier part of the discussion.
+func (msgs Messages) DiscJumpLatest() string {
+	return Catalog.Format(msgs.locale, "discJumpLatest", nil)
+}
+
+// DiscMessageGone says "That message could not be found"
+// in the language the app shows.
+//
+// Error after jumping to a message that no longer loads.
+func DiscMessageGone() string { return In(i18n.Locale()).DiscMessageGone() }
+
+// DiscMessageGone says "That message could not be found"
+// in the language of msgs.
+//
+// Error after jumping to a message that no longer loads.
+func (msgs Messages) DiscMessageGone() string {
+	return Catalog.Format(msgs.locale, "discMessageGone", nil)
+}

@@ -39,6 +39,9 @@ var zh = [][2]string{
 	{"attachment %s is not a regular file", "附件 {1} 不是普通文件"},
 	{"the discussion's project was removed; attachments are unavailable", "讨论所属的项目已经移除，附件不可用"},
 	{"question %s already answered", "问题 {1} 已经回答过了"},
+	{"the request that asked this has ended; restart the member to continue", "提这个问题的那一轮已经结束了，重新启动成员后继续"},
+	{"this request was already retried", "这个请求已经重试过了"},
+	{"terminal %s is a task worker; workers report with posse task done and cannot act as the user in a discussion", "终端 {1} 是任务 worker，不能以你的身份在讨论里操作"},
 	{"reply text required", "没有填回复"},
 	{"execution %s already started (%s); stop it instead", "这个请求已经开始了，改用停止"},
 	{"execution %s is still starting; try again in a moment", "这个请求还在启动，稍后再试"},
@@ -126,6 +129,9 @@ var zh = [][2]string{
 	{"task %s is already %s", "任务 {1} 已经是 {2} 状态了"},
 	{"question %s not found", "找不到问题 {1}"},
 	{"question %s already answered", "问题 {1} 已经回答过了"},
+	{"the request that asked this has ended; restart the member to continue", "提这个问题的那一轮已经结束了，重新启动成员后继续"},
+	{"this request was already retried", "这个请求已经重试过了"},
+	{"terminal %s is a task worker; workers report with posse task done and cannot act as the user in a discussion", "终端 {1} 是任务 worker，不能以你的身份在讨论里操作"},
 
 	// 会话历史
 	{"session required", "没有指定会话"},

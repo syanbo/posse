@@ -68,6 +68,17 @@ func (d *Daemon) startAgent(w store.Workspace, name string, model agent.Model, p
 
 // startAgentIn 同 startAgent，dir 不为空时在这个目录启动（聊天工作区的子文件夹），否则在工作区目录。
 func (d *Daemon) startAgentIn(w store.Workspace, dir, name string, model agent.Model, prompt string, cols, rows int, env ...string) (*session, error) {
+	return d.startAgentWith(d.launchTerminal, w, dir, name, model, prompt, cols, rows, env...)
+}
+
+// startAgentLocked 同 startAgentIn，调用方已经持有 handoff.startMu 的读锁（读锁不可重入）。
+func (d *Daemon) startAgentLocked(w store.Workspace, dir, name string, model agent.Model, prompt string, cols, rows int, env ...string) (*session, error) {
+	return d.startAgentWith(d.launchTerminalLocked, w, dir, name, model, prompt, cols, rows, env...)
+}
+
+type launchFunc func(w store.Workspace, argv []string, agentName string, cols, rows int, revive store.Terminal, extraEnv ...string) (*session, error)
+
+func (d *Daemon) startAgentWith(launch launchFunc, w store.Workspace, dir, name string, model agent.Model, prompt string, cols, rows int, env ...string) (*session, error) {
 	if err := d.checkEnabled(name); err != nil {
 		return nil, err
 	}
@@ -75,7 +86,7 @@ func (d *Daemon) startAgentIn(w store.Workspace, dir, name string, model agent.M
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%v", err)
 	}
-	s, err := d.launchTerminal(w, l.Argv, name, cols, rows, store.Terminal{Cwd: dir}, env...)
+	s, err := launch(w, l.Argv, name, cols, rows, store.Terminal{Cwd: dir}, env...)
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +106,12 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 func (d *Daemon) launchTerminal(w store.Workspace, argv []string, agentName string, cols, rows int, revive store.Terminal, extraEnv ...string) (*session, error) {
 	d.handoff.startMu.RLock()
 	defer d.handoff.startMu.RUnlock()
+	return d.launchTerminalLocked(w, argv, agentName, cols, rows, revive, extraEnv...)
+}
+
+// launchTerminalLocked 是 launchTerminal 去掉加锁：调用方持有 handoff.startMu 的读锁，
+// 把拉起之后的登记（讨论 worker 的任务绑定）也放进同一段，交接取终端快照时不会只拿到终端没有任务。
+func (d *Daemon) launchTerminalLocked(w store.Workspace, argv []string, agentName string, cols, rows int, revive store.Terminal, extraEnv ...string) (*session, error) {
 	if d.handoff.active() {
 		return nil, rpc.Errorf(rpc.CodeConflict, "daemon is handing off to a new version, try again")
 	}

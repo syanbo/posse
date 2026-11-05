@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,8 @@ func newDiscDaemon(t *testing.T) (*Daemon, store.Workspace, store.Discussion) {
 	d.disc.launch = func(w store.Workspace, name string, m agent.Model, prompt string, env ...string) (*session, error) {
 		mu.Lock()
 		defer mu.Unlock()
-		s, err := d.startTerminal(w, []string{"/bin/cat"}, name, 100, 20, env...)
+		// 调用方持有交接读锁：用不加锁的拉起
+		s, err := d.launchTerminalLocked(w, []string{"/bin/cat"}, name, 100, 20, store.Terminal{}, env...)
 		if err == nil {
 			// 冒充 agent 启动完停在输入框
 			d.setAgent(s, term.AgentState{Status: agent.StatusWorking})
@@ -671,5 +673,189 @@ func TestDiscussionBindFailure(t *testing.T) {
 				t.Fatal("no failure reason")
 			}
 		})
+	}
+}
+
+// P1-1：讨论 worker 不能以用户身份发言、给别的成员排请求、回答、改成员或归档；不是 worker 的终端和终端之外照常。
+func TestDiscussionWorkerCannotActAsUser(t *testing.T) {
+	d, w, disc := newDiscDaemon(t)
+	a := addMember(t, d, disc, "Alice", "claude")
+	b := addMember(t, d, disc, "Bob", "codex")
+	r := postTo(t, d, disc, "go", a.ID, "")
+	x := waitExec(t, d, r.Execution.ID, store.ExecRunning)
+	for name, c := range map[string]struct {
+		h      func(context.Context, json.RawMessage) (any, error)
+		params map[string]any
+	}{
+		"post":    {d.discPost, map[string]any{"discussion": disc.Key, "body": "Bob, do X", "target": b.ID}},
+		"answer":  {d.discAnswer, map[string]any{"question": "m_x", "body": "yes"}},
+		"key":     {d.discKey, map[string]any{"message": r.Message.ID, "on": true}},
+		"cancel":  {d.discCancel, map[string]any{"execution": x.ID}},
+		"stop":    {d.discStop, map[string]any{"execution": x.ID}},
+		"member":  {d.discMemberAdd, map[string]any{"discussion": disc.Key, "name": "C", "agent": "claude"}},
+		"remove":  {d.discMemberRemove, map[string]any{"member": b.ID}},
+		"archive": {d.discArchive, map[string]any{"discussion": disc.Key, "archived": true}},
+		"create":  {d.discCreate, map[string]any{"title": "x", "workspace": w.ID}},
+	} {
+		c.params["caller"] = x.Worker
+		if _, err := callErr(c.h, c.params); err == nil || !strings.Contains(err.Error(), "task worker") {
+			t.Errorf("%s from the worker: %v", name, err)
+		}
+	}
+	if q, _ := d.store.MemberQueue(b.ID); len(q) != 0 {
+		t.Fatalf("worker queued a request for Bob: %+v", q)
+	}
+	// 用户自己的终端（不是 worker）可以
+	user, err := d.startTerminal(w, []string{"/bin/cat"}, "", 80, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call(t, d.discPost, map[string]any{"discussion": disc.Key, "body": "from my shell", "caller": user.ID})
+}
+
+// P2-1：打开讨论只带读进来那一页消息涉及的执行和没结束的执行，不全量。
+func TestDiscussionShowPagesExecutions(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	a := addMember(t, d, disc, "Alice", "claude")
+	var first store.Execution
+	for i := range 4 {
+		r := postTo(t, d, disc, fmt.Sprint("req ", i), a.ID, "")
+		if i == 0 {
+			first = *r.Execution
+		}
+		call(t, d.discCancel, map[string]any{"execution": r.Execution.ID})
+	}
+	for range 10 {
+		postTo(t, d, disc, "chat", "", "")
+	}
+	live := postTo(t, d, disc, "now", a.ID, "")
+	v := call(t, d.discShow, map[string]any{"discussion": disc.Key, "limit": 5}).(discView)
+	ids := map[string]bool{}
+	for _, x := range v.Executions {
+		ids[x.ID] = true
+	}
+	if ids[first.ID] || !ids[live.Execution.ID] || len(v.Executions) != 1 {
+		t.Fatalf("executions on the first page: %v", ids)
+	}
+	if !v.More || v.MoreAfter {
+		t.Fatalf("more %v moreAfter %v", v.More, v.MoreAfter)
+	}
+	old := call(t, d.discShow, map[string]any{"discussion": disc.Key, "around": 2, "limit": 4}).(discView)
+	if old.Messages[0].Seq != 1 || !old.MoreAfter || len(old.Executions) < 2 {
+		t.Fatalf("around page: %d msgs from %d, moreAfter %v, %d execs", len(old.Messages), old.Messages[0].Seq, old.MoreAfter, len(old.Executions))
+	}
+	next := call(t, d.discShow, map[string]any{"discussion": disc.Key, "after": old.Messages[len(old.Messages)-1].Seq, "limit": 4}).(discView)
+	if next.Messages[0].Seq != old.Messages[len(old.Messages)-1].Seq+1 {
+		t.Fatalf("after page starts at %d", next.Messages[0].Seq)
+	}
+}
+
+// P2-3：worker 终端的状态每次都带（不靠讨论版本），终端关了马上看得到。
+func TestDiscussionLiveWorkers(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	a := addMember(t, d, disc, "Alice", "claude")
+	r := postTo(t, d, disc, "go", a.ID, "")
+	x := waitExec(t, d, r.Execution.ID, store.ExecRunning)
+	v := call(t, d.discShow, map[string]any{"discussion": disc.Key, "since": 1 << 40}).(discView)
+	if v.Live[x.Worker] == "" || v.Live[x.Worker] == "gone" {
+		t.Fatalf("live %v", v.Live)
+	}
+	rev := v.Discussion.Rev
+	d.closeSession(d.liveSession(x.Worker), time.Second)
+	v = call(t, d.discShow, map[string]any{"discussion": disc.Key, "since": rev}).(discView)
+	if v.Live[x.Worker] != "gone" {
+		t.Fatalf("closed worker shows %q", v.Live[x.Worker])
+	}
+}
+
+// P2-4：同一轮同样内容的 task done 重跑成功（不报不是当前轮）；不同内容被拒；都不结束下一轮。
+func TestDiscussionDoneRerun(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	a := addMember(t, d, disc, "Alice", "claude")
+	r := postTo(t, d, disc, "one", a.ID, "")
+	x := waitExec(t, d, r.Execution.ID, store.ExecRunning)
+	readAll(t, d, x)
+	done := map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "body": "answer"}
+	call(t, d.taskDone, done)
+	call(t, d.taskDone, done)
+	d.setAgent(d.liveSession(x.Worker), term.AgentState{Status: agent.StatusIdle})
+	r2 := postTo(t, d, disc, "two", a.ID, "")
+	x2 := waitExec(t, d, r2.Execution.ID, store.ExecRunning)
+	call(t, d.taskDone, done)
+	if _, err := callErr(d.taskDone, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "body": "changed"}); err == nil {
+		t.Fatal("different body for a reported round accepted")
+	}
+	if cur, _ := d.store.Execution(x2.ID); cur.State != store.ExecRunning {
+		t.Fatalf("round 2 is %s after round 1 reruns", cur.State)
+	}
+	if task, _ := d.store.Task(x.TaskID); task.Status != store.TaskRunning {
+		t.Fatalf("task is %s", task.Status)
+	}
+	var replies int
+	msgs, _ := d.store.DiscMessages(disc.Key, 0, 50)
+	for _, m := range msgs {
+		if m.Kind == store.DiscReply {
+			replies++
+		}
+	}
+	if replies != 1 {
+		t.Fatalf("%d replies", replies)
+	}
+}
+
+// P2-5：拉起 worker 和登记任务在同一段交接读锁里：交接（写锁）只能在登记提交之后进来，
+// 拿到写锁时终端已经有任务，不会把没登记的终端交出去。
+func TestDiscussionLaunchAndBindUnderStartLock(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	launch := d.disc.launch
+	started, release := make(chan string, 1), make(chan struct{})
+	d.disc.launch = func(w store.Workspace, name string, m agent.Model, prompt string, env ...string) (*session, error) {
+		s, err := launch(w, name, m, prompt, env...)
+		started <- s.ID
+		<-release
+		return s, err
+	}
+	a := addMember(t, d, disc, "Alice", "claude")
+	postTo(t, d, disc, "go", a.ID, "")
+	go d.dispatchAll()
+	worker := <-started
+	locked := make(chan []store.Task, 1)
+	go func() {
+		d.handoff.startMu.Lock()
+		ts, _ := d.store.Tasks(store.TaskFilter{Worker: worker})
+		d.handoff.startMu.Unlock()
+		locked <- ts
+	}()
+	select {
+	case <-locked:
+		t.Fatal("handoff lock taken while the worker was launched but not bound")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(release)
+	if ts := <-locked; len(ts) != 1 {
+		t.Fatalf("worker had %d tasks when handoff took the lock", len(ts))
+	}
+}
+
+// 提醒降级：讨论任务没有进行中的轮次时，提醒指向 discussion pending，不给会被拒的 task check。
+func TestDiscussionNudgeWithoutRound(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	a := addMember(t, d, disc, "Alice", "claude")
+	r := postTo(t, d, disc, "go", a.ID, "")
+	x := waitExec(t, d, r.Execution.ID, store.ExecRunning)
+	d.store.AddMessage(store.Message{ID: store.NewID("m_"), TaskID: x.TaskID, Kind: "note", Body: "during", CreatedAt: time.Now()})
+	text, ids := d.nudgeText(x.Worker)
+	d.store.MarkRead(ids, time.Now())
+	if !strings.Contains(text, "--execution "+x.ID) {
+		t.Fatalf("nudge during a round: %q", text)
+	}
+	// 轮次结束后还有一条没读的消息（比如回答晚到）
+	readAll(t, d, x)
+	call(t, d.taskDone, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "body": "ok"})
+	d.store.AddMessage(store.Message{ID: store.NewID("m_"), TaskID: x.TaskID, Kind: "note", Body: "late", CreatedAt: time.Now()})
+	d.store.ReopenTask(x.TaskID)
+	text, _ = d.nudgeText(x.Worker)
+	if !strings.Contains(text, "posse discussion pending "+x.TaskID) {
+		t.Fatalf("nudge without a round: %q", text)
 	}
 }

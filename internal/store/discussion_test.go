@@ -169,9 +169,17 @@ func TestFinishChecksRoundAndContext(t *testing.T) {
 	if reply.Kind != DiscReply || reply.Body != "full answer\nwith detail" || reply.AuthorName != "A" {
 		t.Fatalf("reply %+v", reply)
 	}
-	// 重复汇报不产生第二条回复
-	if _, err := finish(s, r, "t_1", "again"); !errors.Is(err, ErrStaleRound) {
-		t.Fatalf("second finish: %v", err)
+	// 内容不同的重复汇报被拒；内容一样的重跑（响应丢了）幂等成功、返回原来那条，不产生第二条回复
+	if _, err := finish(s, r, "t_1", "again"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("second finish with another body: %v", err)
+	}
+	again, err := s.FinishExecution(FinishInput{RoundCheck: RoundCheck{Exec: r.ID, TaskID: r.TaskID, Worker: "t_1"}, Body: "full answer\nwith detail", Summary: "x",
+		TaskMsg: Message{ID: NewID("m_"), TaskID: r.TaskID, Kind: "done", Body: "x", Outcome: TaskDone, CreatedAt: time.Now()}, At: time.Now()})
+	if !errors.Is(err, ErrAlreadyReported) || again.ID != reply.ID {
+		t.Fatalf("same-body rerun: %v %+v", err, again)
+	}
+	if msgs, _ := s.DiscMessages(d.Key, 0, 10); len(msgs) != 2 {
+		t.Fatalf("%d messages after reruns", len(msgs))
 	}
 	mem, _ := s.Member(m.ID)
 	if mem.RecvSeq < 1 || mem.TaskID != "k_1" {
@@ -208,8 +216,18 @@ func TestReuseAndLateReport(t *testing.T) {
 		t.Fatalf("context %q", page.Text)
 	}
 	s.AckContext(r2.ID, 0, r2.ContextLen)
-	if _, err := finish(s, r1, "t_1", "late"); !errors.Is(err, ErrStaleRound) {
+	// 第一轮迟到的汇报（不同内容被拒，同样内容幂等成功）都不碰正在做第二轮的任务
+	if _, err := finish(s, r1, "t_1", "late"); !errors.Is(err, ErrConflict) {
 		t.Fatalf("late report of round 1: %v", err)
+	}
+	if _, err := finish(s, r1, "t_1", "r1"); !errors.Is(err, ErrAlreadyReported) {
+		t.Fatalf("rerun of round 1: %v", err)
+	}
+	if task, _ := s.Task("k_1"); task.Status != TaskRunning {
+		t.Fatalf("round 2 task ended by a round 1 report: %s", task.Status)
+	}
+	if x, _ := s.Execution(r2.ID); x.State != ExecRunning {
+		t.Fatalf("round 2 is %s", x.State)
 	}
 	if _, err := finish(s, r2, "t_1", "r2"); err != nil {
 		t.Fatal(err)
@@ -486,5 +504,44 @@ func TestReconcile(t *testing.T) {
 	}
 	if mm, _ := s.Member(m.ID); mm.Paused == "" {
 		t.Fatal("member with queue not paused")
+	}
+}
+
+// 一轮只能重试一次：重复点、CLI 重跑不会多排。
+func TestRetryOnce(t *testing.T) {
+	s := openTestStore(t)
+	d, m := newDiscussion(t, s)
+	_, x := post(t, s, d, "q", m.ID, "")
+	s.CancelExecution(x.ID)
+	if _, err := s.RetryExecution(x.ID, "x_r1", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RetryExecution(x.ID, "x_r2", time.Now()); !errors.Is(err, ErrRetried) {
+		t.Fatalf("second retry: %v", err)
+	}
+	if q, _ := s.MemberQueue(m.ID); len(q) != 1 {
+		t.Fatalf("%d queued after two retries", len(q))
+	}
+}
+
+// 立即应用：有请求时什么都不改；没有请求时改配置和解绑在一起。
+func TestUpdateMemberApplyNowAtomic(t *testing.T) {
+	s := openTestStore(t)
+	d, m := newDiscussion(t, s)
+	_, x := post(t, s, d, "q", m.ID, "")
+	r := startRound(t, s, x, "k_1", "t_1")
+	nm := m
+	nm.Model = "sonnet"
+	if _, _, err := s.UpdateMemberApplyNow(nm); !errors.Is(err, ErrBusyMember) {
+		t.Fatalf("apply now while running: %v", err)
+	}
+	if got, _ := s.Member(m.ID); got.Model != "" || got.ConfigVersion != 1 || got.TaskID != "k_1" {
+		t.Fatalf("member changed by a rejected apply: %+v", got)
+	}
+	s.AckContext(r.ID, 0, r.ContextLen)
+	finish(s, r, "t_1", "ok")
+	old, got, err := s.UpdateMemberApplyNow(nm)
+	if err != nil || old.TaskID != "k_1" || got.TaskID != "" || got.Model != "sonnet" || got.ConfigVersion != 2 {
+		t.Fatalf("apply now: %v old %+v new %+v", err, old, got)
 	}
 }

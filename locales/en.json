@@ -9385,5 +9385,17 @@
   "discYouInitial": "Y",
   "@discYouInitial": {
     "description": "Discussion: the letter in the user's avatar."
+  },
+  "discLoadNewer": "Load newer messages",
+  "@discLoadNewer": {
+    "description": "Discussion: button below the loaded messages when newer ones are not loaded."
+  },
+  "discJumpLatest": "Jump to latest",
+  "@discJumpLatest": {
+    "description": "Discussion: pill shown while reading an earlier part of the discussion."
+  },
+  "discMessageGone": "That message could not be found",
+  "@discMessageGone": {
+    "description": "Error after jumping to a message that no longer loads."
   }
 }

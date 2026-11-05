@@ -92,7 +92,7 @@ func cmdDiscussionCreate(e *env, args []string) error {
 		*ws = os.Getenv("POSSE_WORKSPACE_ID")
 	}
 	var d discussionInfo
-	return e.do("discussion.create", map[string]any{"title": *title, "description": *desc, "project": *project, "workspace": *ws}, &d, func() {
+	return e.do("discussion.create", map[string]any{"caller": caller(), "title": *title, "description": *desc, "project": *project, "workspace": *ws}, &d, func() {
 		fmt.Fprintf(e.out, "created discussion %s: %s\n", d.Key, d.Title)
 		fmt.Fprintf(e.out, "add members with: posse discussion add-member %s --name N --agent claude|codex|grok|cursor\n", d.Key)
 	})
@@ -193,7 +193,7 @@ func cmdDiscussionAddMember(e *env, args []string) error {
 		return err
 	}
 	var m discMember
-	return e.do("discussion.member.add", map[string]any{"discussion": key, "name": *name, "role": *role, "agent": *agentName, "model": *model, "effort": *effort,
+	return e.do("discussion.member.add", map[string]any{"caller": caller(), "discussion": key, "name": *name, "role": *role, "agent": *agentName, "model": *model, "effort": *effort,
 		"workspace": *ws, "worktree": *worktree}, &m, func() {
 		fmt.Fprintf(e.out, "added %s (%s) as %s in %s\n", m.Name, m.Agent, m.ID, m.WorkspaceLabel)
 	})
@@ -213,7 +213,7 @@ func cmdDiscussionUpdateMember(e *env, args []string) error {
 		return err
 	}
 	var m discMember
-	params := map[string]any{"member": pos[0], "applyNow": *applyNow}
+	params := map[string]any{"member": pos[0], "applyNow": *applyNow, "caller": caller()}
 	// 只带给了的旗标：没给的由常驻进程沿用原值
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name != "apply-now" {
@@ -239,7 +239,7 @@ func cmdDiscussionIsolate(e *env, args []string) error {
 		return err
 	}
 	var m discMember
-	return e.do("discussion.isolate", map[string]any{"execution": pos[0], "worktree": *worktree}, &m, func() {
+	return e.do("discussion.isolate", map[string]any{"caller": caller(), "execution": pos[0], "worktree": *worktree}, &m, func() {
 		fmt.Fprintf(e.out, "%s now works in %s; the request runs there\n", m.Name, m.WorkspaceLabel)
 	})
 }
@@ -253,7 +253,7 @@ func cmdDiscussionRemoveMember(e *env, args []string) error {
 	if err := need(pos, 1, "discussion remove-member"); err != nil {
 		return err
 	}
-	return e.do("discussion.member.remove", map[string]any{"member": pos[0]}, nil, func() {
+	return e.do("discussion.member.remove", map[string]any{"caller": caller(), "member": pos[0]}, nil, func() {
 		fmt.Fprintf(e.out, "removed %s; its messages keep its name\n", pos[0])
 	})
 }
@@ -267,7 +267,7 @@ func cmdDiscussionRestart(e *env, args []string) error {
 	if err := need(pos, 1, "discussion restart"); err != nil {
 		return err
 	}
-	return e.do("discussion.member.restart", map[string]any{"member": pos[0]}, nil, func() {
+	return e.do("discussion.member.restart", map[string]any{"caller": caller(), "member": pos[0]}, nil, func() {
 		fmt.Fprintf(e.out, "restarting %s; its queued requests continue in a new worker\n", pos[0])
 	})
 }
@@ -283,8 +283,9 @@ func cmdDiscussionPost(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 2, "discussion post"); err != nil {
-		return err
+	// 只发附件时可以没有正文
+	if err := need(pos, 1, "discussion post"); err != nil || len(pos) < 2 && len(attach) == 0 {
+		return need(pos, 2, "discussion post")
 	}
 	var atts []map[string]string
 	for _, a := range attach {
@@ -299,7 +300,7 @@ func cmdDiscussionPost(e *env, args []string) error {
 		Execution *discExec
 		Duplicate bool
 	}
-	params := map[string]any{"discussion": pos[0], "body": strings.Join(pos[1:], " "), "target": *to, "quote": *quote, "clientId": *client, "attachments": atts}
+	params := map[string]any{"discussion": pos[0], "body": strings.Join(pos[1:], " "), "target": *to, "quote": *quote, "clientId": *client, "attachments": atts, "caller": caller()}
 	return e.do("discussion.post", params, &r, func() {
 		if r.Duplicate {
 			fmt.Fprintf(e.out, "already sent as #%d (%s)\n", r.Message.Seq, r.Message.ID)
@@ -321,7 +322,7 @@ func cmdDiscussionAnswer(e *env, args []string) error {
 	if err := need(pos, 2, "discussion answer"); err != nil {
 		return err
 	}
-	return e.do("discussion.answer", map[string]any{"question": pos[0], "body": strings.Join(pos[1:], " ")}, nil, func() {
+	return e.do("discussion.answer", map[string]any{"caller": caller(), "question": pos[0], "body": strings.Join(pos[1:], " ")}, nil, func() {
 		fmt.Fprintf(e.out, "answered %s\n", pos[0])
 	})
 }
@@ -418,7 +419,7 @@ func discArchive(e *env, args []string, archived bool) error {
 		return err
 	}
 	var d discussionInfo
-	return e.do("discussion.archive", map[string]any{"discussion": pos[0], "archived": archived}, &d, func() {
+	return e.do("discussion.archive", map[string]any{"caller": caller(), "discussion": pos[0], "archived": archived}, &d, func() {
 		fmt.Fprintf(e.out, "%s is %s\n", d.Key, d.Status)
 	})
 }
@@ -462,7 +463,7 @@ func cmdDiscussionKey(e *env, args []string) error {
 	if err := need(pos, 1, "discussion key"); err != nil {
 		return err
 	}
-	return e.do("discussion.key", map[string]any{"message": pos[0], "on": !*off}, nil, func() {
+	return e.do("discussion.key", map[string]any{"caller": caller(), "message": pos[0], "on": !*off}, nil, func() {
 		if *off {
 			fmt.Fprintf(e.out, "%s is no longer a key message\n", pos[0])
 		} else {
@@ -483,7 +484,7 @@ func discExecCmd(method, verb string) func(e *env, args []string) error {
 			return err
 		}
 		var x discExec
-		return e.do(method, map[string]any{"execution": pos[0]}, &x, func() {
+		return e.do(method, map[string]any{"caller": caller(), "execution": pos[0]}, &x, func() {
 			fmt.Fprintf(e.out, "%s: %s\n", x.ID, x.State)
 		})
 	}

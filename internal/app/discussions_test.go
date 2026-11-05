@@ -29,6 +29,12 @@ type fakeCall struct {
 	params map[string]any
 }
 
+func (f *fakeDaemon) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
+}
+
 func (f *fakeDaemon) find(method string) (map[string]any, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -241,16 +247,33 @@ func TestDiscussionQuoteAndArchiveBlocked(t *testing.T) {
 	}
 }
 
-// olderPage 是假常驻进程给的更早一页：序号 1..n 的旧消息。
-func olderPage(n int) rpc.Handler {
+// msgPages 是假常驻进程的 discussion.show：总共 n 条旧消息（序号 1..n），按 before/after/around 给一页。
+func msgPages(n int) rpc.Handler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		var p struct{ Before, Limit int64 }
+		var p struct{ Before, After, Around, Limit int64 }
 		json.Unmarshal(raw, &p)
-		var msgs []discMessage
-		for seq := max(1, p.Before-p.Limit); seq < p.Before && seq <= int64(n); seq++ {
-			msgs = append(msgs, discMessage{ID: fmt.Sprintf("old%d", seq), Seq: seq, Kind: "user", Body: fmt.Sprintf("旧消息 %d", seq), CreatedAt: time.Now().Add(-48 * time.Hour)})
+		var lo, hi int64
+		switch {
+		case p.Before > 0:
+			lo, hi = max(1, p.Before-p.Limit), p.Before-1
+		case p.After > 0:
+			lo, hi = p.After+1, p.After+p.Limit
+		case p.Around > 0:
+			lo = max(1, p.Around-p.Limit/2)
+			hi = lo + p.Limit - 1
 		}
-		return discView{Messages: msgs, More: len(msgs) > 0 && msgs[0].Seq > 1}, nil
+		hi = min(hi, int64(n))
+		var msgs []discMessage
+		for seq := lo; seq <= hi; seq++ {
+			msgs = append(msgs, discMessage{ID: fmt.Sprintf("old%d", seq), Seq: seq, Kind: "reply", AuthorName: "Claude 方案", AuthorAgent: "claude",
+				Body: fmt.Sprintf("旧消息 %d\n\n- 第一点\n- 第二点", seq), CreatedAt: time.Now().Add(-48 * time.Hour)})
+		}
+		v := discView{Messages: msgs}
+		if len(msgs) > 0 {
+			v.More = msgs[0].Seq > 1
+			v.MoreAfter = msgs[len(msgs)-1].Seq < int64(n)
+		}
+		return v, nil
 	}
 }
 
@@ -267,7 +290,7 @@ func TestDiscussionSearchJumpsToOlder(t *testing.T) {
 	hit := discMessage{ID: "old20", Seq: 20, Kind: "user", Body: "旧消息 20", CreatedAt: time.Now().Add(-48 * time.Hour)}
 	a, tt, f := discTester(t, map[string]rpc.Handler{
 		"discussion.search": func(context.Context, json.RawMessage) (any, error) { return []discMessage{hit}, nil },
-		"discussion.show":   olderPage(100),
+		"discussion.show":   msgPages(100),
 	})
 	shiftSeqs(a)
 	tt.Frame()
@@ -288,8 +311,8 @@ func TestDiscussionSearchJumpsToOlder(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := waitCall(t, tt, f, "discussion.show")
-	if p["before"] != float64(101) || p["limit"].(float64) < 81 {
-		t.Fatalf("older page request %+v", p)
+	if p["around"] != float64(20) {
+		t.Fatalf("jump request %+v", p)
 	}
 	deadline := time.Now().Add(3 * time.Second)
 	for a.disc.d.msg("old20") == nil && time.Now().Before(deadline) {
@@ -308,7 +331,7 @@ func TestDiscussionSearchJumpsToOlder(t *testing.T) {
 
 // 「加载更早的消息」：取前一页插到前面，停在原来最上面那条（不跳到底）。
 func TestDiscussionLoadOlderKeepsPlace(t *testing.T) {
-	a, tt, f := discTester(t, map[string]rpc.Handler{"discussion.show": olderPage(100)})
+	a, tt, f := discTester(t, map[string]rpc.Handler{"discussion.show": msgPages(100)})
 	shiftSeqs(a)
 	tt.Frame()
 	first := a.disc.d.msgs[0].ID
@@ -339,10 +362,12 @@ func TestDiscussionLoadOlderKeepsPlace(t *testing.T) {
 
 // 已归档讨论清理附件：先列出文件和大小，取消不动文件；确认后移到废纸篓（只用这里建的临时文件），消息里的附件信息还在。
 func TestDiscussionCleanAttachments(t *testing.T) {
-	dir := t.TempDir()
+	// 照常驻进程的布局：attachments/<附件 ID>/<文件名>
+	dir := filepath.Join(t.TempDir(), "attachments")
 	var files []string
 	for i, body := range []string{"一", "二二"} {
-		p := filepath.Join(dir, fmt.Sprintf("posse-disc-clean-%d-%d.txt", time.Now().UnixNano(), i))
+		p := filepath.Join(dir, fmt.Sprint("a", i), fmt.Sprintf("posse-disc-clean-%d-%d.txt", time.Now().UnixNano(), i))
+		os.MkdirAll(filepath.Dir(p), 0o755)
 		os.WriteFile(p, []byte(body), 0o644)
 		files = append(files, p)
 	}
@@ -422,7 +447,115 @@ func TestDiscussionCleanAttachments(t *testing.T) {
 			t.Fatalf("%s still there: %s", p, a.err)
 		}
 	}
+	// 附件目录整个移走，attachments/ 空了也移走，不留空目录
+	if _, err := os.Stat(dir); err == nil {
+		t.Fatalf("attachments dir left behind: %s", a.err)
+	}
 	if len(a.disc.d.msgs[3].Attachments) != 1 {
 		t.Fatal("attachment info dropped from the message")
+	}
+}
+
+// 远处的搜索结果（1200 条里的第 5 条）：直接取以它为中心的一页，读进来的不超过窗口；给「跳到最新」。
+func TestDiscussionJumpFar(t *testing.T) {
+	a, tt, f := discTester(t, map[string]rpc.Handler{"discussion.show": msgPages(1200)})
+	for i := range a.disc.d.msgs {
+		a.disc.d.msgs[i].Seq += 1200
+	}
+	a.disc.d.more = true
+	tt.Frame()
+	a.discJump(a.disc.d, "old5", 5)
+	if p := waitCall(t, tt, f, "discussion.show"); p["around"] != float64(5) {
+		t.Fatalf("request %+v", p)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for a.disc.d.msg("old5") == nil && time.Now().Before(deadline) {
+		tt.Frame()
+		time.Sleep(10 * time.Millisecond)
+	}
+	tt.Frame()
+	d := a.disc.d
+	if d.msg("old5") == nil || a.disc.revealed != "old5" || !d.moreAfter || len(d.msgs) > discWindow {
+		t.Fatalf("far jump: loaded %v revealed %q moreAfter %v len %d", d.msg("old5") != nil, a.disc.revealed, d.moreAfter, len(d.msgs))
+	}
+	if !tt.HasText("跳到最新") || !tt.HasText("加载更新的消息") {
+		t.Fatal("no way back to the latest messages")
+	}
+	// 看着远处时来的新消息不接上来
+	d.merge(discView{Discussion: d.info, Messages: []discMessage{{ID: "new", Seq: 5000, Kind: "user", Body: "new"}}})
+	if d.msg("new") != nil {
+		t.Fatal("new message appended to an earlier window")
+	}
+}
+
+// 一直往前翻：读进来的消息不超过 discWindow，丢掉的那头的 Markdown 缓存一起放掉，之后能往后翻回来。
+func TestDiscussionWindowBounded(t *testing.T) {
+	a, tt, f := discTester(t, map[string]rpc.Handler{"discussion.show": msgPages(2000)})
+	for i := range a.disc.d.msgs {
+		a.disc.d.msgs[i].Seq += 2000
+	}
+	a.disc.d.more = true
+	tt.Frame()
+	for range 14 {
+		before := f.count()
+		a.loadOlder(a.disc.d.key)
+		deadline := time.Now().Add(3 * time.Second)
+		for (f.count() == before || a.disc.older) && time.Now().Before(deadline) {
+			tt.Frame()
+			time.Sleep(5 * time.Millisecond)
+		}
+		tt.Frame()
+	}
+	d := a.disc.d
+	if len(d.msgs) != discWindow || !d.moreAfter || !d.more {
+		t.Fatalf("window: %d msgs, more %v, moreAfter %v", len(d.msgs), d.more, d.moreAfter)
+	}
+	if len(d.md) > len(d.msgs) {
+		t.Fatalf("markdown cache kept %d entries for %d messages", len(d.md), len(d.msgs))
+	}
+	for id := range d.md {
+		if d.msg(id) == nil {
+			t.Fatalf("markdown cache kept a dropped message %s", id)
+		}
+	}
+	last := d.msgs[len(d.msgs)-1].Seq
+	a.loadNewer(d.key)
+	deadline := time.Now().Add(3 * time.Second)
+	for d.msgs[len(d.msgs)-1].Seq == last && time.Now().Before(deadline) {
+		tt.Frame()
+		time.Sleep(5 * time.Millisecond)
+	}
+	if d.msgs[len(d.msgs)-1].Seq != last+discPage || len(d.msgs) != discWindow {
+		t.Fatalf("after newer: last %d len %d", d.msgs[len(d.msgs)-1].Seq, len(d.msgs))
+	}
+}
+
+// 执行卡的「打开终端」按 worker 终端的实时状态：终端不在了就不给。
+func TestDiscussionLiveTerminal(t *testing.T) {
+	a, tt, _ := discTester(t)
+	n := countText(tt, "打开终端")
+	if n == 0 {
+		t.Fatal("no open-terminal button")
+	}
+	a.disc.d.live = map[string]string{"t9": "gone", "t5": "working"}
+	tt.Frame()
+	// 两张卡（t9、t5）各有一个按钮；关掉 t9 后只剩 t5 那张的
+	if m := countText(tt, "打开终端"); m != n/2 {
+		t.Fatalf("open-terminal buttons %d → %d after t9 closed", n, m)
+	}
+}
+
+// 粘贴图片写的临时文件：发出去或从草稿去掉后删掉；别的文件不碰。
+func TestRemovePasted(t *testing.T) {
+	pasted := filepath.Join(os.TempDir(), fmt.Sprintf("%s%d.png", pastePrefix, time.Now().UnixNano()))
+	other := filepath.Join(t.TempDir(), pastePrefix+"x.png")
+	os.WriteFile(pasted, []byte("x"), 0o600)
+	os.WriteFile(other, []byte("x"), 0o600)
+	removePasted([]string{pasted, other})
+	if _, err := os.Stat(pasted); err == nil {
+		t.Fatal("pasted temp file kept")
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Fatal("removed a file that was not pasted")
 	}
 }

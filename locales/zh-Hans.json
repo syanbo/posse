@@ -1738,5 +1738,8 @@
   "discWorkDir": "工作目录",
   "discWorktreeNote": "在这个项目里新建一个 git worktree，留着由你审阅和合并。",
   "discYou": "你",
-  "discYouInitial": "我"
+  "discYouInitial": "我",
+  "discLoadNewer": "加载更新的消息",
+  "discJumpLatest": "跳到最新",
+  "discMessageGone": "找不到那条消息"
 }

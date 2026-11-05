@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS disc_executions (
 	ended_at INTEGER
 );
 CREATE UNIQUE INDEX IF NOT EXISTS disc_executions_request ON disc_executions(message) WHERE retry_of = '';
+CREATE UNIQUE INDEX IF NOT EXISTS disc_executions_retry ON disc_executions(retry_of) WHERE retry_of != '';
 CREATE INDEX IF NOT EXISTS disc_executions_member ON disc_executions(member, state);
 CREATE INDEX IF NOT EXISTS disc_executions_task ON disc_executions(task_id);
 CREATE INDEX IF NOT EXISTS disc_executions_rev ON disc_executions(discussion, rev);
@@ -151,13 +152,16 @@ const (
 
 // 讨论数据的错误：常驻进程按这些转成 RPC 错误码，英文原文交给界面经 errtext 翻译。
 var (
-	ErrArchived    = errors.New("discussion is archived")
-	ErrConflict    = errors.New("conflict")
-	ErrStaleRound  = errors.New("stale execution")
-	ErrNotAcked    = errors.New("context not fully read")
-	ErrMemberGone  = errors.New("member removed")
-	ErrBusyMember  = errors.New("member has active or queued requests")
-	ErrBusyDiscuss = errors.New("discussion has active or queued requests")
+	ErrArchived   = errors.New("discussion is archived")
+	ErrConflict   = errors.New("conflict")
+	ErrStaleRound = errors.New("stale execution")
+	ErrNotAcked   = errors.New("context not fully read")
+	// ErrAlreadyReported 是同一轮、同样内容的重复汇报（响应丢了重跑）：调用方当作成功
+	ErrAlreadyReported = errors.New("already reported")
+	ErrRetried         = errors.New("execution already retried")
+	ErrMemberGone      = errors.New("member removed")
+	ErrBusyMember      = errors.New("member has active or queued requests")
+	ErrBusyDiscuss     = errors.New("discussion has active or queued requests")
 )
 
 // pendingStates 和 activeStates 合起来就是挡住归档、移除成员的状态。
@@ -640,6 +644,43 @@ func (s *Store) RemoveMember(id string, at time.Time) (Member, error) {
 	return old, err
 }
 
+// UpdateMemberApplyNow 在一个事务里：确认成员没有进行中、排队的请求，改配置，解开 worker 绑定。
+// 返回改之前的成员（调用方关掉它绑定的终端）和改之后的成员。有请求时什么都不改。
+func (s *Store) UpdateMemberApplyNow(m Member) (old, out Member, err error) {
+	err = s.withTx(func(tx *sql.Tx) error {
+		if old, err = scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE id=?`, m.ID)); err != nil {
+			return err
+		}
+		if old.RemovedAt != nil {
+			return ErrMemberGone
+		}
+		if err := activeDiscussion(tx, old.Discussion); err != nil {
+			return err
+		}
+		if busy, err := memberBusy(tx, m.ID); err != nil {
+			return err
+		} else if busy {
+			return ErrBusyMember
+		}
+		version := old.ConfigVersion
+		if old.Agent != m.Agent || old.Model != m.Model || old.Effort != m.Effort || old.WorkspaceID != m.WorkspaceID || old.Role != m.Role {
+			version++
+		}
+		rev, err := bump(tx, old.Discussion)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, workspace_id=?, workspace_label=?, config_version=?,
+			task_id='', worker='', worker_config=0, paused='', rev=? WHERE id=?`,
+			m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, version, rev, m.ID); err != nil {
+			return err
+		}
+		out, err = scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE id=?`, m.ID))
+		return err
+	})
+	return
+}
+
 // ReleaseWorker 解开成员和 worker 的绑定（立即应用新配置、重新启动前），要求没有进行中、排队的请求，
 // 除非 force（重新启动并继续：队列留着，接着由新 worker 做）。返回原来绑定的成员。
 func (s *Store) ReleaseWorker(id string, force bool) (Member, error) {
@@ -853,6 +894,23 @@ func (s *Store) DiscMessages(key string, before int64, limit int) ([]DiscMessage
 	return out, err
 }
 
+// DiscMessagesAround 取以 seq 为中心的一页（定位到远处的搜索结果、引用、关键消息），按序号升序。
+func (s *Store) DiscMessagesAround(key string, seq int64, limit int) ([]DiscMessage, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	lo := max(1, seq-int64(limit/2))
+	return collect(s.db, scanDiscMessage, `SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND seq>=? ORDER BY seq LIMIT ?`, key, lo, limit)
+}
+
+// DiscMessagesAfter 取序号大于 after 的一页（往后翻），按序号升序。
+func (s *Store) DiscMessagesAfter(key string, after int64, limit int) ([]DiscMessage, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	return collect(s.db, scanDiscMessage, `SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND seq>? ORDER BY seq LIMIT ?`, key, after, limit)
+}
+
 // DiscMessageRange 取序号在 [from, to] 的消息，最多 limit 条。
 func (s *Store) DiscMessageRange(key string, from, to int64, limit int) ([]DiscMessage, error) {
 	return collect(s.db, scanDiscMessage, `SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND seq>=? AND seq<=? ORDER BY seq LIMIT ?`, key, from, to, limit)
@@ -918,6 +976,38 @@ func (s *Store) SearchDiscussion(key, query string, limit int) ([]DiscMessage, e
 
 func (s *Store) Execution(id string) (Execution, error) {
 	return scanExecution(s.db.QueryRow(`SELECT `+execCols+` FROM disc_executions WHERE id=?`, id))
+}
+
+// ExecutionsFor 是这些消息上的执行，加上讨论里还没结束的（进行中、排队、等确认、受阻）：
+// 打开讨论只取读进来的那几页消息涉及的执行，不全量加载。
+func (s *Store) ExecutionsFor(key string, msgIDs []string) ([]Execution, error) {
+	q := `SELECT ` + execCols + ` FROM disc_executions WHERE discussion=? AND (state IN ` + inList(append(append([]string{}, activeStates...), pendingStates...))
+	args := []any{key}
+	if len(msgIDs) > 0 {
+		q += ` OR message IN (?` + strings.Repeat(",?", len(msgIDs)-1) + `)`
+		for _, id := range msgIDs {
+			args = append(args, id)
+		}
+	}
+	return collect(s.db, scanExecution, q+`) ORDER BY created_at, rowid`, args...)
+}
+
+// DiscWorkers 是讨论里出现过的 worker 终端：成员绑定的和执行记过的。
+func (s *Store) DiscWorkers(key string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT worker FROM disc_members WHERE discussion=? AND worker!='' UNION SELECT worker FROM disc_executions WHERE discussion=? AND worker!=''`, key, key)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var w string
+		if err := rows.Scan(&w); err != nil {
+			return nil, err
+		}
+		out = append(out, w)
+	}
+	return out, rows.Err()
 }
 
 // Executions 是讨论里的执行；ids 不为空时只取这些。
@@ -1081,7 +1171,12 @@ func (s *Store) RetryExecution(id, newID string, at time.Time) (Execution, error
 		nx = Execution{ID: newID, Discussion: x.Discussion, Member: m.ID, Message: x.Message, RetryOf: x.ID, State: ExecQueued,
 			Agent: m.Agent, Model: m.Model, Effort: m.Effort, Role: m.Role, WorkspaceID: m.WorkspaceID, WorkspaceLabel: m.WorkspaceLabel,
 			ConfigVersion: m.ConfigVersion, Rev: rev, CreatedAt: at}
-		return insertExecution(tx, nx)
+		// 一轮只能重试一次（retry_of 唯一）：重复点、CLI 重跑都不会多排
+		if err := insertExecution(tx, nx); errors.Is(err, ErrConflict) {
+			return ErrRetried
+		} else {
+			return err
+		}
 	})
 	return nx, err
 }
@@ -1417,6 +1512,23 @@ func (s *Store) FinishExecution(in FinishInput) (DiscMessage, error) {
 	var reply DiscMessage
 	err := s.withTx(func(tx *sql.Tx) error {
 		x, err := checkRound(tx, in.RoundCheck, ExecRunning, ExecWaiting)
+		if errors.Is(err, ErrStaleRound) && (x.State == ExecDone || x.State == ExecFailed) && x.TaskID == in.TaskID &&
+			(in.Worker == "" || x.Worker == in.Worker) && x.Reply != "" {
+			// 这一轮已经汇报过：内容一样是重跑（响应丢了），当作成功；不一样拒绝，不动任务（可能已在做下一轮）
+			old, err := scanDiscMessage(tx.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE id=?`, x.Reply))
+			if err != nil {
+				return err
+			}
+			outcome := TaskDone
+			if in.Failed {
+				outcome = TaskFailed
+			}
+			if old.Body == in.Body && old.Outcome == outcome && old.Report == in.Report {
+				reply = old
+				return ErrAlreadyReported
+			}
+			return fmt.Errorf("%w: execution %s was already reported with a different reply", ErrConflict, x.ID)
+		}
 		if err != nil {
 			return err
 		}

@@ -44,7 +44,9 @@ type discState struct {
 	// waitLock 是交接过来的新进程还没拿到 possed.lock：可以服务读取和汇报，不派发新轮次、不对账，
 	// 免得把旧进程还在启动的轮次判成失败
 	waitLock atomic.Bool
-	// launch 拉起成员的 worker；测试里换成普通命令
+	// idle 是上一遍派发时没有任何讨论成员：兜底轮询放慢到 30 秒，有 kick 时照常立刻派发
+	idle atomic.Bool
+	// launch 拉起成员的 worker；测试里换成普通命令。调用时已持有 handoff.startMu 的读锁，里面要用不加锁的拉起
 	launch func(w store.Workspace, name string, m agent.Model, prompt string, env ...string) (*session, error)
 }
 
@@ -56,7 +58,7 @@ func (d *Daemon) discLaunch(w store.Workspace, name string, m agent.Model, promp
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not installed on this Mac", name)
 	}
 	m.Worker = true
-	return d.startAgentIn(w, "", name, m, prompt, 0, 0, env...)
+	return d.startAgentLocked(w, "", name, m, prompt, 0, 0, env...)
 }
 
 // discKick 在可能有轮次能派发时（发了消息、上一轮结束、worker 空闲、用户确认）在后台跑一遍派发。
@@ -79,6 +81,7 @@ func (d *Daemon) dispatchAll() {
 		log.Printf("discussion dispatch: %v", err)
 		return
 	}
+	d.disc.idle.Store(len(ms) == 0)
 	for _, m := range ms {
 		// 每个成员前再看一次：这一遍跑的过程中交接可能开始了
 		if !d.canDispatch() {
@@ -221,26 +224,34 @@ func (d *Daemon) startRound(m store.Member, x store.Execution) {
 	t := store.Task{ID: taskID, Title: agent.Truncate(disc.Title+" · "+m.Name, 60), Spec: "", WorkspaceID: w.ID, Agent: m.Agent, Model: m.Model, Effort: m.Effort,
 		Status: store.TaskRunning, DiscussionID: disc.Key, CreatedAt: time.Now()}
 	t.Spec = discWorkerPrompt(disc, m, t, cx, w)
-	s, err := d.discLaunch(w, m.Agent, agent.Model{Name: m.Model, Effort: m.Effort}, t.Spec, "POSSE_TASK_ID="+t.ID, "POSSE_DISCUSSION="+disc.Key)
-	if err != nil {
+	// 拉起终端和登记任务在同一段交接读锁里：交接取终端快照时，要么还没拉起，要么任务已经登记好，
+	// 不会把一个没登记的终端交出去。读锁不可重入，里面用不加锁的拉起
+	d.handoff.startMu.RLock()
+	if d.handoff.active() {
+		d.handoff.startMu.RUnlock()
 		// 交接开始了：终端没拉起来，回到队列由接手的进程派发
-		if d.handoff.active() {
-			d.store.StartFailed(x.ID, "", true)
-			return
+		d.store.StartFailed(x.ID, "", true)
+		return
+	}
+	s, err := d.discLaunch(w, m.Agent, agent.Model{Name: m.Model, Effort: m.Effort}, t.Spec, "POSSE_TASK_ID="+t.ID, "POSSE_DISCUSSION="+disc.Key)
+	var bindErr error
+	if err == nil {
+		t.Worker = s.ID
+		if bindErr = d.store.BindWorker(x.ID, t); bindErr != nil {
+			// 读锁还拿着，交接没开始：刚拉起的终端还在这个进程里，关掉它，不留孤立的 worker
+			log.Printf("discussion %s: bind %s: %v", x.Discussion, x.ID, bindErr)
+			d.closeSession(s, 2*time.Second)
 		}
+	}
+	d.handoff.startMu.RUnlock()
+	switch {
+	case err != nil:
 		fail(errMessage(err))
-		return
+	case bindErr != nil && !errors.Is(bindErr, store.ErrStaleRound):
+		fail(errMessage(bindErr))
+	case bindErr == nil:
+		d.taskNotify()
 	}
-	t.Worker = s.ID
-	if err := d.store.BindWorker(x.ID, t); err != nil {
-		log.Printf("discussion %s: bind %s: %v", x.Discussion, x.ID, err)
-		d.closeSession(s, 2*time.Second)
-		if !errors.Is(err, store.ErrStaleRound) {
-			fail(errMessage(err))
-		}
-		return
-	}
-	d.taskNotify()
 }
 
 func errMessage(err error) string {
@@ -460,11 +471,17 @@ func (d *Daemon) reconcileDiscussions(restarted bool) {
 func (d *Daemon) discLoop(ctx context.Context) {
 	tick := time.NewTicker(3 * time.Second)
 	defer tick.Stop()
+	var last time.Time
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
+			// 没有讨论成员时 30 秒才看一次（发消息、加成员都会另外 kick）
+			if d.disc.idle.Load() && time.Since(last) < 30*time.Second {
+				continue
+			}
+			last = time.Now()
 			d.dispatchAll()
 		}
 	}
@@ -489,6 +506,8 @@ func discError(err error) error {
 		return rpc.Errorf(rpc.CodeConflict, "member has active or queued requests; finish, stop or cancel them first")
 	case errors.Is(err, store.ErrMemberGone):
 		return rpc.Errorf(rpc.CodeConflict, "member was removed from the discussion")
+	case errors.Is(err, store.ErrRetried):
+		return rpc.Errorf(rpc.CodeConflict, "this request was already retried")
 	case errors.Is(err, store.ErrConflict), errors.Is(err, store.ErrStaleRound), errors.Is(err, store.ErrNotAcked):
 		return rpc.Errorf(rpc.CodeConflict, "%v", err)
 	}
@@ -516,6 +535,9 @@ type discCreateParams struct {
 func (d *Daemon) discCreate(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p discCreateParams
 	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := d.userOnly(raw); err != nil {
 		return nil, err
 	}
 	if p.Title = strings.TrimSpace(p.Title); p.Title == "" {
@@ -585,20 +607,27 @@ func (d *Daemon) discList(ctx context.Context, raw json.RawMessage) (any, error)
 
 type discShowParams struct {
 	Discussion string `json:"discussion"`
-	Since      int64  `json:"since"`  // 只要这个版本之后的变化
-	Before     int64  `json:"before"` // 取这个序号之前的一页历史
+	Since      int64  `json:"since"`   // 只要这个版本之后的变化
+	Before     int64  `json:"before"`  // 取这个序号之前的一页历史
+	After      int64  `json:"after"`   // 取这个序号之后的一页（窗口没到最新时往后翻）
+	Around     int64  `json:"around"`  // 取以这个序号为中心的一页（定位远处的搜索结果、引用）
+	Message    string `json:"message"` // 同 around，按消息 ID（引用的原文还没读进来时）
 	Limit      int    `json:"limit"`
 }
 
-// discView 是讨论详情：讨论、成员、一页消息（或增量）和它们涉及的执行。
+// discView 是讨论详情：讨论、成员、一页消息（或增量）和这些消息涉及的执行（加上没结束的）。
 type discView struct {
 	Discussion store.Discussion    `json:"discussion"`
 	Members    []discMemberInfo    `json:"members"`
 	Messages   []store.DiscMessage `json:"messages"`
 	Executions []discExecInfo      `json:"executions"`
 	Key        []store.DiscMessage `json:"key,omitempty"`
-	More       bool                `json:"more"`  // 前面还有更早的消息
-	Delta      bool                `json:"delta"` // 是 since 之后的增量
+	More       bool                `json:"more"`      // 前面还有更早的消息
+	MoreAfter  bool                `json:"moreAfter"` // 后面还有更新的消息（这一页不是最新的）
+	Delta      bool                `json:"delta"`     // 是 since 之后的增量
+	// Live 是讨论里 worker 终端现在的状态（终端 ID → agent 状态，终端在但没有 agent 为 "shell"，不在为 "gone"），
+	// 每次都带：终端状态不推进讨论版本，增量里没有它
+	Live map[string]string `json:"live"`
 }
 
 // discMemberInfo 是成员加上 worker 终端现在的状态。
@@ -622,30 +651,68 @@ func (d *Daemon) discShow(ctx context.Context, raw json.RawMessage) (any, error)
 	if err != nil {
 		return nil, err
 	}
+	if p.Message != "" {
+		m, err := d.store.DiscMessage(p.Message)
+		if err != nil || m.Discussion != disc.Key {
+			return nil, rpc.Errorf(rpc.CodeNotFound, "message %s not found", p.Message)
+		}
+		p.Around = m.Seq
+	}
 	v := discView{Discussion: disc, Members: []discMemberInfo{}, Messages: []store.DiscMessage{}, Executions: []discExecInfo{}}
 	var xs []store.Execution
 	var members []store.Member
+	page := func(msgs []store.DiscMessage) error {
+		v.Messages = msgs
+		if len(msgs) > 0 {
+			v.More = msgs[0].Seq > 1
+			v.MoreAfter = msgs[len(msgs)-1].Seq < disc.MsgSeq
+		}
+		ids := make([]string, len(msgs))
+		for i, m := range msgs {
+			ids[i] = m.ID
+		}
+		var err error
+		xs, err = d.store.ExecutionsFor(disc.Key, ids)
+		return err
+	}
 	switch {
 	case p.Before > 0:
-		if v.Messages, err = d.store.DiscMessages(disc.Key, p.Before, p.Limit); err != nil {
+		msgs, err := d.store.DiscMessages(disc.Key, p.Before, p.Limit)
+		if err == nil {
+			err = page(msgs)
+		}
+		if err != nil {
 			return nil, err
 		}
-		v.More = len(v.Messages) > 0 && v.Messages[0].Seq > 1
-		return v, nil
+	case p.After > 0:
+		msgs, err := d.store.DiscMessagesAfter(disc.Key, p.After, p.Limit)
+		if err == nil {
+			err = page(msgs)
+		}
+		if err != nil {
+			return nil, err
+		}
+	case p.Around > 0:
+		msgs, err := d.store.DiscMessagesAround(disc.Key, p.Around, p.Limit)
+		if err == nil {
+			err = page(msgs)
+		}
+		if err != nil {
+			return nil, err
+		}
 	case p.Since > 0:
 		v.Delta = true
-		if p.Since >= disc.Rev {
-			return v, nil
-		}
-		if v.Messages, xs, members, err = d.store.DiscChanges(disc.Key, p.Since); err != nil {
-			return nil, err
+		if p.Since < disc.Rev {
+			if v.Messages, xs, members, err = d.store.DiscChanges(disc.Key, p.Since); err != nil {
+				return nil, err
+			}
 		}
 	default:
-		if v.Messages, err = d.store.DiscMessages(disc.Key, 0, p.Limit); err != nil {
-			return nil, err
+		msgs, err := d.store.DiscMessages(disc.Key, 0, p.Limit)
+		if err == nil {
+			err = page(msgs)
 		}
-		v.More = len(v.Messages) > 0 && v.Messages[0].Seq > 1
-		if xs, err = d.store.Executions(disc.Key); err != nil {
+		if err != nil {
 			return nil, err
 		}
 		if members, err = d.store.Members(disc.Key); err != nil {
@@ -673,11 +740,29 @@ func (d *Daemon) discShow(ctx context.Context, raw json.RawMessage) (any, error)
 		s := d.liveSession(x.Worker)
 		v.Executions = append(v.Executions, discExecInfo{Execution: x, Terminal: x.Worker != "" && s != nil && s.Running()})
 	}
-	if p.Since > 0 {
-		// 增量里关键消息的增减随消息一起到，界面自己维护列表
-		return v, nil
-	}
+	v.Live = d.discLive(disc.Key)
 	return v, nil
+}
+
+// discLive 是讨论里各个 worker 终端现在的状态：成员当前绑定的，和执行记过的。
+func (d *Daemon) discLive(key string) map[string]string {
+	out := map[string]string{}
+	workers, err := d.store.DiscWorkers(key)
+	if err != nil {
+		return out
+	}
+	for _, w := range workers {
+		s := d.liveSession(w)
+		switch {
+		case s == nil || !s.Running():
+			out[w] = "gone"
+		case s.agentName() == "":
+			out[w] = "shell"
+		default:
+			out[w] = cmpOr(s.Agent().Status, "idle")
+		}
+	}
+	return out
 }
 
 type discUpdateParams struct {
@@ -690,6 +775,9 @@ type discUpdateParams struct {
 func (d *Daemon) discUpdate(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p discUpdateParams
 	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := d.userOnly(raw); err != nil {
 		return nil, err
 	}
 	disc, err := d.discussion(p.Discussion)
@@ -711,6 +799,23 @@ func (d *Daemon) discUpdate(ctx context.Context, raw json.RawMessage) (any, erro
 		return nil, discError(err)
 	}
 	return d.store.Discussion(disc.Key)
+}
+
+// userOnly 挡住任务 worker 终端里的调用：讨论里发言、@ 成员、回答、改成员、归档这些是用户的操作，
+// 讨论 worker 只用 posse task done/ask 汇报，不能以用户身份发言或给别的成员排请求（成员之间不互相唤醒）。
+// 窗口、终端之外的 CLI 和不是 worker 的终端照常可用。调用方 ID 由本机进程报、可以伪造：这是防误用，不是安全隔离。
+func (d *Daemon) userOnly(raw json.RawMessage) error {
+	var p struct {
+		Caller string `json:"caller"`
+	}
+	json.Unmarshal(raw, &p)
+	if p.Caller == "" {
+		return nil
+	}
+	if ts, err := d.store.Tasks(store.TaskFilter{Worker: p.Caller}); err == nil && len(ts) > 0 {
+		return rpc.Errorf(rpc.CodeConflict, "terminal %s is a task worker; workers report with posse task done and cannot act as the user in a discussion", p.Caller)
+	}
+	return nil
 }
 
 // discWorkspace 找工作区并要求它属于讨论的项目：成员执行工作区限定在项目内。
@@ -790,6 +895,9 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
+	if err := d.userOnly(raw); err != nil {
+		return nil, err
+	}
 	disc, err := d.discussion(p.Discussion)
 	if err != nil {
 		return nil, err
@@ -832,6 +940,9 @@ func (d *Daemon) discMemberUpdate(ctx context.Context, raw json.RawMessage) (any
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
+	if err := d.userOnly(raw); err != nil {
+		return nil, err
+	}
 	old, err := d.memberSel(p.Member)
 	if err != nil {
 		return nil, err
@@ -870,24 +981,20 @@ func (d *Daemon) discMemberUpdate(ctx context.Context, raw json.RawMessage) (any
 		}
 		label = d.workspaceLabel(w)
 	}
+	nm := store.Member{ID: old.ID, Name: p.Name, Role: strings.TrimSpace(p.Role), Agent: p.Agent, Model: p.Model, Effort: p.Effort,
+		WorkspaceID: w.ID, WorkspaceLabel: label}
 	if p.ApplyNow {
-		// 先确认能马上应用（没有进行中、排队的请求），免得改了配置却关不掉旧 worker
-		if busy, _ := d.store.MemberQueue(old.ID); len(busy) > 0 {
-			return nil, discError(store.ErrBusyMember)
+		// 检查没有请求、改配置、解开旧 worker 在一个事务里：有请求时什么都不改
+		was, _, err := d.store.UpdateMemberApplyNow(nm)
+		if err != nil {
+			return nil, discError(err)
 		}
-	}
-	m, err := d.store.UpdateMember(store.Member{ID: old.ID, Name: p.Name, Role: strings.TrimSpace(p.Role), Agent: p.Agent, Model: p.Model, Effort: p.Effort,
-		WorkspaceID: w.ID, WorkspaceLabel: label})
-	if err != nil {
+		d.closeDiscWorker(was.TaskID, was.Worker)
+	} else if _, err := d.store.UpdateMember(nm); err != nil {
 		return nil, discError(err)
 	}
-	if p.ApplyNow && m.TaskID != "" {
-		if err := d.releaseWorker(m.ID, false); err != nil {
-			return nil, err
-		}
-	}
 	d.taskNotify()
-	return d.store.Member(m.ID)
+	return d.store.Member(old.ID)
 }
 
 // releaseWorker 解开成员的 worker 并关掉它的终端（专用 worker，关掉会丢掉它的上下文）。
@@ -915,6 +1022,9 @@ func (d *Daemon) discMemberRemove(ctx context.Context, raw json.RawMessage) (any
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
+	if err := d.userOnly(raw); err != nil {
+		return nil, err
+	}
 	if _, err := d.memberSel(p.Member); err != nil {
 		return nil, err
 	}
@@ -930,6 +1040,9 @@ func (d *Daemon) discMemberRemove(ctx context.Context, raw json.RawMessage) (any
 func (d *Daemon) discMemberRestart(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p discMemberParams
 	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := d.userOnly(raw); err != nil {
 		return nil, err
 	}
 	if _, err := d.memberSel(p.Member); err != nil {
@@ -965,6 +1078,9 @@ type discPostResult struct {
 func (d *Daemon) discPost(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p discPostParams
 	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := d.userOnly(raw); err != nil {
 		return nil, err
 	}
 	disc, err := d.discussion(p.Discussion)
@@ -1134,6 +1250,9 @@ func (d *Daemon) discCancel(ctx context.Context, raw json.RawMessage) (any, erro
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
+	if err := d.userOnly(raw); err != nil {
+		return nil, err
+	}
 	x, err := d.execSel(p.Execution)
 	if err != nil {
 		return nil, err
@@ -1154,6 +1273,9 @@ func (d *Daemon) discCancel(ctx context.Context, raw json.RawMessage) (any, erro
 func (d *Daemon) discStop(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p discExecParams
 	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := d.userOnly(raw); err != nil {
 		return nil, err
 	}
 	x, err := d.execSel(p.Execution)
@@ -1179,6 +1301,9 @@ func (d *Daemon) discRetry(ctx context.Context, raw json.RawMessage) (any, error
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
+	if err := d.userOnly(raw); err != nil {
+		return nil, err
+	}
 	x, err := d.execSel(p.Execution)
 	if err != nil {
 		return nil, err
@@ -1196,6 +1321,9 @@ func (d *Daemon) discRetry(ctx context.Context, raw json.RawMessage) (any, error
 func (d *Daemon) discConfirm(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p discExecParams
 	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := d.userOnly(raw); err != nil {
 		return nil, err
 	}
 	x, err := d.execSel(p.Execution)
@@ -1219,6 +1347,9 @@ func (d *Daemon) discConfirm(ctx context.Context, raw json.RawMessage) (any, err
 func (d *Daemon) discIsolate(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p discExecParams
 	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := d.userOnly(raw); err != nil {
 		return nil, err
 	}
 	x, err := d.execSel(p.Execution)
@@ -1275,6 +1406,9 @@ func (d *Daemon) discAnswer(ctx context.Context, raw json.RawMessage) (any, erro
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
+	if err := d.userOnly(raw); err != nil {
+		return nil, err
+	}
 	a, err := d.answerDiscussion(p.Question, p.Body, p.ClientID)
 	if err != nil {
 		return nil, err
@@ -1301,6 +1435,9 @@ func (d *Daemon) answerDiscussion(question, body, clientID string) (store.DiscMe
 		if errors.Is(err, store.ErrConflict) {
 			return a, rpc.Errorf(rpc.CodeConflict, "question %s already answered", q.ID)
 		}
+		if errors.Is(err, store.ErrStaleRound) {
+			return a, rpc.Errorf(rpc.CodeConflict, "the request that asked this has ended; restart the member to continue")
+		}
 		return a, discError(err)
 	}
 	d.taskNotify()
@@ -1316,6 +1453,9 @@ type discKeyParams struct {
 func (d *Daemon) discKey(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p discKeyParams
 	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := d.userOnly(raw); err != nil {
 		return nil, err
 	}
 	if err := d.store.SetKeyMessage(p.Message, p.On, time.Now()); err != nil {
@@ -1361,6 +1501,9 @@ type discArchiveParams struct {
 func (d *Daemon) discArchive(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p discArchiveParams
 	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := d.userOnly(raw); err != nil {
 		return nil, err
 	}
 	disc, err := d.discussion(p.Discussion)
@@ -1604,6 +1747,10 @@ func (d *Daemon) discDone(t store.Task, p taskDoneParams) (any, error) {
 	_, err := d.store.FinishExecution(store.FinishInput{RoundCheck: store.RoundCheck{Exec: p.Execution, TaskID: t.ID, Worker: p.Caller},
 		Failed: p.Failed, Body: body, Summary: summary, Report: p.Report, TaskMsg: msg, At: time.Now()})
 	switch {
+	case errors.Is(err, store.ErrAlreadyReported):
+		// 同一轮同样内容的重跑（上次的响应丢了）：当作成功，不动任务
+		t, _ = d.store.Task(t.ID)
+		return d.taskInfo(t, nil, nil), nil
 	case errors.Is(err, store.ErrStaleRound):
 		return nil, discRoundErr(t, p.Execution)
 	case errors.Is(err, store.ErrNotAcked):

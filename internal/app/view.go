@@ -323,6 +323,7 @@ func (a *app) closeBoard() {
 		a.detail, a.taskSel, a.taskHome, a.taskScroll = nil, "", false, ""
 	case discBoardID:
 		// 放掉读进来的消息，再打开时重读；草稿跟着讨论走，关页面时不留
+		removePasted(a.disc.atts)
 		a.disc = discBoard{list: a.disc.list}
 		a.setWantedDisc("", 0)
 	case mobileBoardID:

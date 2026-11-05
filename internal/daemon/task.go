@@ -915,6 +915,8 @@ func (d *Daemon) nudgeText(terminalID string) (text string, ids []string) {
 			}
 			text = fmt.Sprintf("Posse: your coordinator sent a message for task %s. Run `posse task check %s`.", t.ID, t.ID)
 			if t.DiscussionID != "" {
+				// 讨论任务的 check 要带当前轮次；没有进行中的轮次时让它去领取，不给会被拒的命令
+				text = fmt.Sprintf("Posse: discussion message for task %s. Run `posse discussion pending %s`.", t.ID, t.ID)
 				if x, err := d.store.ActiveExecutionForTask(t.ID); err == nil {
 					text = fmt.Sprintf("Posse: discussion message for task %s, execution %s. Run `posse task check %s --execution %s`.", t.ID, x.ID, t.ID, x.ID)
 				}

@@ -25,8 +25,11 @@ import (
 // discBoardID 是侧栏「讨论」一项的 ID；工作区 ID 都以 w_ 开头，不会冲突。
 const discBoardID = "discussions"
 
-// 一页消息
-const discPage = 50
+// 一页消息；读进来的消息最多 discWindow 条，再往前（后）翻时从另一头丢掉，内存不随翻过的页数一直涨
+const (
+	discPage   = 50
+	discWindow = 10 * discPage
+)
 
 // --- 数据
 
@@ -80,7 +83,9 @@ type discView struct {
 	Executions []discExec
 	Key        []discMessage
 	More       bool
+	MoreAfter  bool
 	Delta      bool
+	Live       map[string]string // worker 终端 ID → agent 状态，"gone" 是终端不在了
 }
 
 // discPoll 是一次轮询拿到的讨论数据：列表（序号没变时 Items 为空）和打开的讨论（全量或增量）。
@@ -99,9 +104,50 @@ type discDetail struct {
 	msgs    []discMessage // 按序号升序
 	execs   map[string]discExec
 	keyMsgs []discMessage
-	more    bool
-	rev     int64
-	md      map[string][]mdBlock // 消息 ID → 解析好的 Markdown（正文不会改，解析一次）
+	more    bool // 前面还有没读进来的消息
+	// moreAfter 是读进来的不是最新的一段（定位到远处、往前翻丢掉了后面）：新消息不接上来，给「跳到最新」
+	moreAfter bool
+	rev       int64
+	md        map[string][]mdBlock // 消息 ID → 解析好的 Markdown（正文不会改，解析一次），跟着窗口回收
+	live      map[string]string    // worker 终端的实时状态，每次轮询都换
+}
+
+// alive 报告执行卡上的 worker 终端现在还在不在：按实时状态，没有时用执行记录带来的。
+func (d *discDetail) alive(x discExec) bool {
+	if st, ok := d.live[x.Worker]; ok {
+		return st != "gone"
+	}
+	return x.Terminal
+}
+
+// trim 把读进来的消息限制在 discWindow 条：keepNewest 时丢最早的，否则丢最新的；
+// 同时放掉丢掉的消息的 Markdown 缓存和不再用到的已结束执行。
+func (d *discDetail) trim(keepNewest bool) {
+	if extra := len(d.msgs) - discWindow; extra > 0 {
+		if keepNewest {
+			d.msgs, d.more = slices.Clone(d.msgs[extra:]), true
+		} else {
+			d.msgs, d.moreAfter = slices.Clone(d.msgs[:discWindow]), true
+		}
+	}
+	shown := make(map[string]bool, len(d.msgs))
+	for _, m := range d.msgs {
+		shown[m.ID] = true
+	}
+	for id := range d.md {
+		if !shown[id] {
+			delete(d.md, id)
+		}
+	}
+	for id, x := range d.execs {
+		switch x.State {
+		case "queued", "held", "blocked", "starting", "running", "waiting":
+			continue
+		}
+		if !shown[x.Message] {
+			delete(d.execs, id)
+		}
+	}
 }
 
 func (d *discDetail) msg(id string) *discMessage {
@@ -140,7 +186,8 @@ func (d *discDetail) merge(v discView) {
 	for _, m := range v.Messages {
 		if i := slices.IndexFunc(d.msgs, func(x discMessage) bool { return x.ID == m.ID }); i >= 0 {
 			d.msgs[i] = m
-		} else if len(d.msgs) == 0 || m.Seq > d.msgs[0].Seq || !d.more {
+		} else if !d.moreAfter && (len(d.msgs) == 0 || m.Seq > d.msgs[len(d.msgs)-1].Seq) {
+			// 停在最新的一段时新消息接上来；看着更早的一段时不接，由「跳到最新」重新取
 			d.msgs = append(d.msgs, m)
 		}
 		k := slices.IndexFunc(d.keyMsgs, func(x discMessage) bool { return x.ID == m.ID })
@@ -166,11 +213,12 @@ func (d *discDetail) merge(v discView) {
 		}
 	}
 	d.rev = v.Discussion.Rev
+	d.trim(true)
 }
 
 func newDiscDetail(v discView) *discDetail {
 	d := &discDetail{key: v.Discussion.Key, info: v.Discussion, msgs: v.Messages, members: v.Members, keyMsgs: v.Key, more: v.More,
-		rev: v.Discussion.Rev, execs: map[string]discExec{}, md: map[string][]mdBlock{}}
+		moreAfter: v.MoreAfter, rev: v.Discussion.Rev, execs: map[string]discExec{}, md: map[string][]mdBlock{}, live: v.Live}
 	for _, x := range v.Executions {
 		d.execs[x.ID] = x
 	}
@@ -268,7 +316,8 @@ func (a *app) pollDiscussions(r *pollResult, call func(method string, params, ou
 			p.view, p.key, p.since = &v, key, since
 		}
 	}
-	if p.list != nil || p.view != nil && (!p.view.Delta || len(p.view.Messages)+len(p.view.Executions)+len(p.view.Members) > 0) {
+	// 增量是空的也交上去：里面带着 worker 终端的实时状态；和上次一样时 samePoll 会跳过重建
+	if p.list != nil || p.view != nil {
 		r.disc = &p
 	}
 }
@@ -304,6 +353,9 @@ func (a *app) applyDiscussions(p *discPoll) {
 			b.follow = true
 		case b.d != nil && b.d.key == p.key && b.d.rev == p.since:
 			b.d.merge(*v)
+		}
+		if b.d != nil && b.d.key == p.key && v.Live != nil {
+			b.d.live = v.Live
 		}
 		if b.d != nil {
 			a.setWantedDisc(b.sel, b.d.rev)
@@ -402,6 +454,7 @@ func (a *app) selectDiscussion(key string) {
 	if b.sel == key && b.d != nil {
 		return
 	}
+	removePasted(b.atts)
 	*b = discBoard{list: b.list, panel: b.panel, newOpen: b.newOpen}
 	b.sel = key
 	a.setWantedDisc(key, 0)
@@ -688,13 +741,13 @@ func (a *app) discMessages(c *ui.Context, d *discDetail) {
 	if b.follow && b.reveal == "" {
 		s.Y = math.MaxFloat32
 	}
-	if atBottom && last > 0 {
+	if atBottom && last > 0 && !d.moreAfter {
 		b.seen = max(b.seen, last)
 		if a.win != nil && a.win.IsFocused() {
 			a.markDiscRead(d.key, d.info.MsgSeq)
 		}
 	}
-	b.follow = atBottom
+	b.follow = atBottom && !d.moreAfter
 	box := ui.Box(c).Grow(1).MinHeight(0)
 	box.Children(func() {
 		ui.Scroll(c).Fill().TrackScroll(s).Children(func() {
@@ -706,7 +759,7 @@ func (a *app) discMessages(c *ui.Context, d *discDetail) {
 							label = m.CommonLoading()
 						}
 						if pressable(textButton(c, label)).Clicked() && !b.older {
-							a.loadOlder(d.key, 0, "")
+							a.loadOlder(d.key)
 						}
 					})
 				}
@@ -716,9 +769,33 @@ func (a *app) discMessages(c *ui.Context, d *discDetail) {
 				for _, msg := range d.msgs {
 					a.discMessageRow(c, d, msg)
 				}
+				if d.moreAfter {
+					ui.Row(c.Key("newer")).Justify(ui.Center).Children(func() {
+						label := m.DiscLoadNewer()
+						if b.older {
+							label = m.CommonLoading()
+						}
+						if pressable(textButton(c, label)).Clicked() && !b.older {
+							a.loadNewer(d.key)
+						}
+					})
+				}
 			})
 		})
-		if fresh := countAfter(d.msgs, b.seen); fresh > 0 && !atBottom {
+		if d.moreAfter {
+			// 看着更早的一段：新消息没接上来，给回到最新的入口
+			ui.Row(c).Absolute().Bottom(12).Left(0).Right(0).Justify(ui.Center).Children(func() {
+				pill := ui.Row(c.Key("latest-pill")).Gap(6).Padding(6, 12).Radius(full(28)).Background(t.Accent).AlignItems(ui.Center).Role(ui.RoleButton)
+				pill.Children(func() {
+					ui.Icon(c, iconArrowDown).FontSize(fsSmall).TextColor(white)
+					ui.Text(c, m.DiscJumpLatest()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(white)
+				})
+				elevFloat(c, pill)
+				if pill.Clicked() {
+					a.jumpLatest()
+				}
+			})
+		} else if fresh := countAfter(d.msgs, b.seen); fresh > 0 && !atBottom {
 			ui.Row(c).Absolute().Bottom(12).Left(0).Right(0).Justify(ui.Center).Children(func() {
 				pill := ui.Row(c.Key("new-pill")).Gap(6).Padding(6, 12).Radius(full(28)).Background(t.Accent).AlignItems(ui.Center).Role(ui.RoleButton)
 				pill.Children(func() {
@@ -1071,7 +1148,7 @@ func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
 			return
 		}
 		ui.Row(c).Gap(8).Wrap().Children(func() {
-			if x.Terminal && pressable(textButton(c, m.DiscOpenTerminal())).Clicked() {
+			if d.alive(x) && pressable(textButton(c, m.DiscOpenTerminal())).Clicked() {
 				a.openTerminal(x.WorkspaceID, x.Worker)
 			}
 			if x.TaskID != "" && a.task(x.TaskID) != nil && pressable(textButton(c, m.DiscViewTask())).Clicked() {
@@ -1230,6 +1307,7 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 						fileGlyph(c, p, fsSmall)
 						ui.Text(c, filepath.Base(p)).FontSize(fsSmall).MaxLines(1)
 						if iconButtonSized(c.Key(fmt.Sprint("rm-att-", i)), iconClose, m.CommonRemove(), miniBox(), fsSmall).Clicked() {
+							removePasted(b.atts[i : i+1])
 							b.atts = slices.Delete(slices.Clone(b.atts), i, i+1)
 						}
 					})
@@ -1309,6 +1387,8 @@ func (a *app) sendDiscMessage(key string, params map[string]any) {
 		if err != nil || b.sel != key {
 			return
 		}
+		// 常驻进程已经把附件复制成快照：粘贴图片时写的临时文件可以删了
+		removePasted(b.atts)
 		b.text, b.quote, b.atts, b.clientID = "", "", nil, ""
 		b.follow = true
 		a.markDiscRead(key, r.Message.Seq)
@@ -1347,8 +1427,19 @@ func (a *app) pickAttachments(m locales.Messages) {
 	}
 }
 
+// pastePrefix 是粘贴图片写的临时文件名开头：发出去、从草稿里去掉、离开讨论时删掉。
+const pastePrefix = "posse-disc-paste-"
+
+func removePasted(paths []string) {
+	for _, p := range paths {
+		if filepath.Dir(p) == filepath.Clean(os.TempDir()) && strings.HasPrefix(filepath.Base(p), pastePrefix) {
+			os.Remove(p)
+		}
+	}
+}
+
 func (a *app) pasteDiscImage(png []byte) {
-	path := filepath.Join(os.TempDir(), fmt.Sprintf("posse-paste-%d.png", time.Now().UnixNano()))
+	path := filepath.Join(os.TempDir(), fmt.Sprintf("%s%d.png", pastePrefix, time.Now().UnixNano()))
 	if err := os.WriteFile(path, png, 0o600); err != nil {
 		a.update(func() { a.err = appL().AppPasteImageError(errtext.Text(err)) })
 		return
@@ -1362,46 +1453,102 @@ func (a *app) discCall(method string, params map[string]any) {
 	a.refresh()
 }
 
-// loadOlder 往前取一页历史；until 不为 0 时一直取到这个序号（跳到搜索结果、关键消息），取完跳到 jump。
-func (a *app) loadOlder(key string, until int64, jump string) {
+// loadPage 取一页消息并按 mode 放进窗口：older 插到前面（停在原来最上面那条），newer 接到后面，
+// around 整段换成以目标为中心的一页（定位远处的搜索结果、引用、关键消息）。读进来的总数受 discWindow 限制。
+func (a *app) loadPage(key, mode string, params map[string]any, jump string) {
 	b := &a.disc
-	if b.d == nil || b.d.key != key || len(b.d.msgs) == 0 {
+	if b.d == nil || b.d.key != key || b.older {
 		return
 	}
 	b.older = true
-	first := b.d.msgs[0].Seq
-	limit := discPage
-	if until > 0 {
-		limit = int(min(500, first-until+10))
-	}
+	params["discussion"], params["limit"] = key, discPage
 	go func() {
 		var v discView
-		err := a.call("discussion.show", map[string]any{"discussion": key, "before": first, "limit": limit}, &v, 10*time.Second)
+		err := a.call("discussion.show", params, &v, 10*time.Second)
 		a.update(func() {
 			b.older = false
-			if err != nil || b.d == nil || b.d.key != key {
+			d := b.d
+			if err != nil || d == nil || d.key != key {
 				return
 			}
-			var add []discMessage
-			for _, m := range v.Messages {
-				if b.d.msg(m.ID) == nil {
-					add = append(add, m)
-				}
+			for _, x := range v.Executions {
+				d.execs[x.ID] = x
 			}
-			b.d.msgs = append(add, b.d.msgs...)
-			b.d.more = v.More
+			if v.Live != nil {
+				d.live = v.Live
+			}
 			b.follow = false
-			if jump != "" {
-				b.reveal, b.flash, b.flashAt = jump, jump, time.Now()
-			} else if len(add) > 0 {
+			switch mode {
+			case "older":
+				var add []discMessage
+				for _, m := range v.Messages {
+					if d.msg(m.ID) == nil {
+						add = append(add, m)
+					}
+				}
+				top := ""
+				if len(d.msgs) > 0 {
+					top = d.msgs[0].ID
+				}
+				d.msgs, d.more = append(add, d.msgs...), v.More
+				d.trim(false)
 				// 留在原来看的地方：原来最上面那条滚回视野，不高亮
-				b.reveal = b.d.msgs[len(add)].ID
+				if jump == "" && len(add) > 0 {
+					b.reveal = top
+				}
+			case "newer":
+				for _, m := range v.Messages {
+					if d.msg(m.ID) == nil {
+						d.msgs = append(d.msgs, m)
+					}
+				}
+				d.moreAfter = v.MoreAfter
+				d.trim(true)
+			case "around":
+				d.msgs, d.more, d.moreAfter = v.Messages, v.More, v.MoreAfter
+				d.trim(true)
+			}
+			if jump != "" {
+				if d.msg(jump) != nil {
+					b.reveal, b.flash, b.flashAt = jump, jump, time.Now()
+				} else {
+					a.err = appL().DiscMessageGone()
+				}
 			}
 		})
 	}()
 }
 
-// discJump 定位到一条消息：不在读进来的几页里时先往前取到它。
+// loadOlder 往前取一页。
+func (a *app) loadOlder(key string) {
+	if d := a.disc.d; d != nil && d.key == key && len(d.msgs) > 0 {
+		a.loadPage(key, "older", map[string]any{"before": d.msgs[0].Seq}, "")
+	}
+}
+
+// loadNewer 往后取一页（看着更早的一段时）。
+func (a *app) loadNewer(key string) {
+	if d := a.disc.d; d != nil && d.key == key && len(d.msgs) > 0 {
+		a.loadPage(key, "newer", map[string]any{"after": d.msgs[len(d.msgs)-1].Seq}, "")
+	}
+}
+
+// jumpLatest 回到最新的一段：下一次轮询取全量。
+func (a *app) jumpLatest() {
+	b := &a.disc
+	if b.d == nil {
+		return
+	}
+	a.setWantedDisc(b.d.key, 0)
+	b.follow, b.scroll.Y = true, math.MaxFloat32
+	a.pollForce.Store(true)
+	if !a.refreshQueued.Swap(true) {
+		go a.refresh()
+	}
+}
+
+// discJump 定位到一条消息：读进来的窗口里有就滚过去；没有时取以它为中心的一页（不管多远）。
+// seq 为 0（引用里还没读进来的原文）时按消息 ID 定位。
 func (a *app) discJump(d *discDetail, id string, seq int64) {
 	b := &a.disc
 	b.follow = false
@@ -1409,9 +1556,11 @@ func (a *app) discJump(d *discDetail, id string, seq int64) {
 		b.reveal, b.flash, b.flashAt = id, id, time.Now()
 		return
 	}
+	params := map[string]any{"message": id}
 	if seq > 0 {
-		a.loadOlder(d.key, seq, id)
+		params = map[string]any{"around": seq}
 	}
+	a.loadPage(d.key, "around", params, id)
 }
 
 func (a *app) discArchive(key string, archived bool) {
@@ -1455,12 +1604,18 @@ func (a *app) askCleanAttachments(m locales.Messages, key string) {
 	if a.call("discussion.attachments", map[string]any{"discussion": key}, &r, 10*time.Second) != nil {
 		return
 	}
-	var files []string
+	// 每个附件在自己的 <附件 ID>/ 目录里：整个目录移走，不留空目录；目录名对不上时只移文件
+	var files, targets []string
 	var total int64
 	for _, it := range r.Items {
 		if it.Exists {
 			files = append(files, it.Abs)
 			total += it.Size
+			target := it.Abs
+			if dir := filepath.Dir(it.Abs); filepath.Base(dir) == it.ID && it.ID != "" {
+				target = dir
+			}
+			targets = append(targets, target)
 		}
 	}
 	a.update(func() {
@@ -1481,9 +1636,18 @@ func (a *app) askCleanAttachments(m locales.Messages, key string) {
 			if trash == nil {
 				trash = mygo.Shell.TrashItem
 			}
-			for _, f := range files {
+			for _, f := range targets {
 				if err := trash(f); err != nil {
 					failed = err
+				}
+			}
+			// attachments/ 空了也移走（只在里面什么都不剩时）
+			if failed == nil && len(targets) > 0 && targets[0] != files[0] {
+				dir := filepath.Dir(targets[0])
+				if ents, err := os.ReadDir(dir); err == nil && len(ents) == 0 && filepath.Base(dir) == "attachments" {
+					if err := trash(dir); err != nil {
+						failed = err
+					}
 				}
 			}
 			if failed != nil {
@@ -1579,13 +1743,18 @@ func (a *app) memberRow(c *ui.Context, d *discDetail, mem discMember) {
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, mem.Name).FontSize(fsBody).FontWeight(fwMedium).MaxLines(1).Shrink(1)
 				status := ""
+				live, hasLive := d.live[mem.Worker]
 				switch {
 				case mem.Paused != "":
 					status = m.DiscMemberPaused()
-				case mem.Terminal != nil && mem.Terminal.AgentState != nil:
-					status = sessionStatusText(m, mem.Terminal.AgentState.Status)
 				case mem.TaskID == "":
 					status = m.DiscMemberNotStarted()
+				case hasLive && live == "gone":
+					status = m.DiscExecBlocked()
+				case hasLive:
+					status = sessionStatusText(m, live)
+				case mem.Terminal != nil && mem.Terminal.AgentState != nil:
+					status = sessionStatusText(m, mem.Terminal.AgentState.Status)
 				}
 				if status != "" {
 					ui.Text(c, status).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
@@ -1615,7 +1784,7 @@ func (a *app) memberRow(c *ui.Context, d *discDetail, mem discMember) {
 		if pm.Item(m.DiscMention()).Icon(iconAt).Chosen() {
 			a.disc.target, a.disc.answerQ = mem.ID, ""
 		}
-		if mem.Terminal != nil && pm.Item(m.DiscOpenTerminal()).Icon(iconTerminal).Chosen() {
+		if mem.Terminal != nil && d.live[mem.Worker] != "gone" && pm.Item(m.DiscOpenTerminal()).Icon(iconTerminal).Chosen() {
 			a.openTerminal(mem.Terminal.WorkspaceID, mem.Worker)
 		}
 		if pm.Item(m.DiscEditMemberEllipsis()).Icon(iconPencil).Chosen() {
