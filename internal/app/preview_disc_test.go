@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"posse/internal/collaboration"
 )
 
 // previewDiscussion 打开一个有两位成员的讨论：发言、请求、完整回复、等你回答的问题、失败和中断的轮次、关键消息都有。
@@ -127,4 +129,88 @@ func renderDiscussionPreviews(t *testing.T, dark bool, suffix string) {
 	a.indexTasks()
 	a.detail.DiscussionID = "fp/d_1"
 	savePNG(t, newPreviewTester(a, dark), "task-discussion-"+suffix+".png")
+}
+
+// previewCollab 把预览的讨论变成局域网协作：host 为真时本机是房主、开着分享、有一个待批准的申请；
+// 否则本机是加入者，Codex 审查是房主的 Agent，本机只有 Claude 方案，连接断了。
+func previewCollab(a *app, host bool) {
+	d := a.disc.d
+	self, other := strings.Repeat("a1", 32), strings.Repeat("b2", 32)
+	if !host {
+		self, other = other, self
+	}
+	a.disc.self = self
+	cb := &discCollab{Self: self, SelfName: "Mo", HostID: strings.Repeat("a1", 32), HostName: "Hana", Host: host, Shared: true, Listening: true, State: "active", Connected: host,
+		People: []discPerson{
+			{FP: strings.Repeat("a1", 32), Name: "Hana", State: "active", Host: true, Online: true, Generation: 0},
+			{FP: strings.Repeat("b2", 32), Name: "Mo", State: "active", Online: host, Generation: 1},
+			{FP: strings.Repeat("c3", 32), Name: "Lin", State: "left", Generation: 1},
+		}}
+	d.collab = cb
+	d.info.Shared = true
+	// Codex 审查在 Mo 的电脑上
+	d.members[1].Owner = strings.Repeat("b2", 32)
+	for id, x := range d.execs {
+		if x.Member == "mb2" {
+			x.Owner = strings.Repeat("b2", 32)
+			d.execs[id] = x
+		}
+	}
+	for i := range d.msgs {
+		if d.msgs[i].ID == "m4" {
+			d.msgs[i].AuthorID, d.msgs[i].AuthorName = strings.Repeat("b2", 32), "Mo"
+		}
+	}
+	d.msgs = append(d.msgs, discMessage{ID: "m10", Seq: 10, Kind: "user", AuthorID: strings.Repeat("b2", 32), AuthorName: "Mo", Mention: strings.Repeat("a1", 32), MentionName: "Hana",
+		Body: "我这边的 Codex 在改登录页，Hana 你的 Claude 先别动 LoginView。", CreatedAt: time.Now()})
+	if host {
+		cb.Requests = []discJoinRequest{{ID: "rq_1", FP: strings.Repeat("d4", 32), Name: "Qiao", Addr: "192.168.1.23:52011", State: "pending", CreatedAt: time.Now()}}
+		a.disc.list[0].Shared, a.disc.list[0].Requests = true, 1
+		return
+	}
+	d.info.Mirror = true
+	d.info.ProjectName = "Hana"
+	cb.Error = "Could not reach the host. Check that both Macs are on the same network, Posse is running on the host with sharing turned on, and Local Network access is allowed for Posse on both Macs (System Settings › Privacy & Security › Local Network)."
+	cb.Outbox = 1
+	cb.Accepts = map[string]string{}
+	// 本机是 Mo：Claude 方案是房主 Hana 的
+	d.members[0].Owner = strings.Repeat("a1", 32)
+	for id, x := range d.execs {
+		if x.Member == "mb1" {
+			x.Owner = strings.Repeat("a1", 32)
+			d.execs[id] = x
+		} else {
+			cb.Accepts[id] = "accepted"
+		}
+	}
+	a.disc.list[0].Mirror, a.disc.list[0].ProjectName, a.disc.list[0].Joined = true, "Hana", "active"
+	a.disc.target = ""
+}
+
+func renderCollabPreviews(t *testing.T, dark bool, suffix string) {
+	a := previewApp(t)
+	previewDiscussion(a)
+	previewCollab(a, true)
+	a.disc.quote = ""
+	savePNG(t, newPreviewTester(a, dark), "discussions-collab-host-"+suffix+".png")
+
+	a = previewApp(t)
+	previewDiscussion(a)
+	previewCollab(a, false)
+	a.disc.quote = ""
+	savePNG(t, newPreviewTester(a, dark), "discussions-collab-member-"+suffix+".png")
+
+	a = previewApp(t)
+	previewDiscussion(a)
+	previewCollab(a, true)
+	a.disc.invite = inviteView{open: true, text: "posse-invite:v1:eyJ2IjoxLCJob3N0IjoiYTFhMWExYTFhMWExYTFhMWExYTFhMWExYTFhMWExYTFhMWExYTFhMWExYTFhMWExYTFhMWExYTFhMWExIiwicm9vbSI6ImExIn0",
+		expires: time.Now().Add(10 * time.Minute), addrs: []string{"192.168.1.8:6791", "10.0.0.4:6791"}, fp: strings.Repeat("a1", 32)}
+	savePNG(t, newPreviewTester(a, dark), "discussions-invite-"+suffix+".png")
+
+	a = previewApp(t)
+	previewDiscussion(a)
+	inv := collaboration.Invite{V: 1, Host: strings.Repeat("a1", 32), HostName: "Hana", Room: strings.Repeat("a1", 32) + "/d_1", Title: "重做登录流程",
+		Addrs: []string{"192.168.1.8:6791"}, Secret: "s"}
+	a.disc.join = joinForm{open: true, text: inv.Encode()}
+	savePNG(t, newPreviewTester(a, dark), "discussions-join-"+suffix+".png")
 }

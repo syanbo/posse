@@ -624,7 +624,7 @@ func (d *Daemon) discList(ctx context.Context, raw json.RawMessage) (any, error)
 	if err != nil {
 		return nil, err
 	}
-	res := map[string]any{"seq": seq}
+	res := map[string]any{"seq": seq, "self": d.store.Self()}
 	if p.Since > 0 && p.Since == seq {
 		return res, nil
 	}
@@ -1207,6 +1207,13 @@ func (d *Daemon) discPost(ctx context.Context, raw json.RawMessage) (any, error)
 		if m, x, err := d.store.MessageByClientID(disc.Key, p.ClientID); err == nil {
 			return discPostResult{Message: m, Execution: x, Duplicate: true}, nil
 		}
+	}
+	if p.Mention != "" {
+		fp, err := d.personSel(disc.Key, p.Mention)
+		if err != nil {
+			return nil, err
+		}
+		p.Mention = fp
 	}
 	if disc.Mirror {
 		return d.mirrorPost(disc, p)

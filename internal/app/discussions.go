@@ -40,6 +40,9 @@ type discSummary struct {
 	ArchivedAt                                                                                       *time.Time
 	Last                                                                                             *discMessage
 	Questions, Active, Pending, Members                                                              int
+	Mirror, Shared                                                                                   bool
+	Joined                                                                                           string // 加入的讨论：pending、active、rejected、removed、left
+	Requests                                                                                         int    // 房主：待批准的加入申请
 }
 
 type discMember struct {
@@ -47,6 +50,7 @@ type discMember struct {
 	ConfigVersion, WorkerConfig, RecvSeq, Rev                                                                   int64
 	RemovedAt                                                                                                   *time.Time
 	Terminal                                                                                                    *terminalInfo
+	Owner                                                                                                       string // 拥有者的安装身份（局域网协作），空是房主自己的
 }
 
 type discAttachment struct {
@@ -60,6 +64,7 @@ type discMessage struct {
 	Attachments                                                                                                                        []discAttachment
 	KeyAt                                                                                                                              *time.Time
 	CreatedAt                                                                                                                          time.Time
+	AuthorID, Mention, MentionName, KeyBy                                                                                              string
 }
 
 type discExec struct {
@@ -69,11 +74,13 @@ type discExec struct {
 	ContextLen, Acked                                                                                                                       int
 	CreatedAt                                                                                                                               time.Time
 	StartedAt, EndedAt                                                                                                                      *time.Time
+	Owner                                                                                                                                   string
 }
 
 type discList struct {
 	Seq   int64
 	Items []discSummary
+	Self  string // 本机安装身份：别人 @ 了你时发通知
 }
 
 type discView struct {
@@ -86,6 +93,7 @@ type discView struct {
 	MoreAfter  bool
 	Delta      bool
 	Live       map[string]string // worker 终端 ID → agent 状态，"gone" 是终端不在了
+	Collab     *discCollab       // 局域网协作的状态：分享的、加入的讨论才有，每次都带
 }
 
 // discPoll 是一次轮询拿到的讨论数据：列表（序号没变时 Items 为空）和打开的讨论（全量或增量）。
@@ -110,6 +118,7 @@ type discDetail struct {
 	rev       int64
 	md        map[string][]mdBlock // 消息 ID → 解析好的 Markdown（正文不会改，解析一次），跟着窗口回收
 	live      map[string]string    // worker 终端的实时状态，每次轮询都换
+	collab    *discCollab          // 局域网协作的状态，每次轮询都换
 }
 
 // alive 报告执行卡上的 worker 终端现在还在不在：按实时状态，没有时用执行记录带来的。
@@ -218,7 +227,7 @@ func (d *discDetail) merge(v discView) {
 
 func newDiscDetail(v discView) *discDetail {
 	d := &discDetail{key: v.Discussion.Key, info: v.Discussion, msgs: v.Messages, members: v.Members, keyMsgs: v.Key, more: v.More,
-		moreAfter: v.MoreAfter, rev: v.Discussion.Rev, execs: map[string]discExec{}, md: map[string][]mdBlock{}, live: v.Live}
+		moreAfter: v.MoreAfter, rev: v.Discussion.Rev, execs: map[string]discExec{}, md: map[string][]mdBlock{}, live: v.Live, collab: v.Collab}
 	for _, x := range v.Executions {
 		d.execs[x.ID] = x
 	}
@@ -247,6 +256,7 @@ type discBoard struct {
 	quote    string // 引用的消息 ID
 	atts     []string
 	answerQ  string // 正在回答的问题（任务消息 ID）
+	mention  string // @ 的人（局域网协作，指纹）：只提醒，不调用他的 Agent
 	clientID string // 这条草稿的请求 ID：发送失败重试时沿用，常驻进程据此去重
 	sending  bool
 
@@ -261,8 +271,11 @@ type discBoard struct {
 	newProj  string
 	newWS    string
 
-	form memberForm
-	edit discEditForm
+	form   memberForm
+	edit   discEditForm
+	join   joinForm
+	invite inviteView
+	self   string // 本机安装身份（列表带回来）
 }
 
 type memberForm struct {
@@ -330,6 +343,7 @@ func (a *app) applyDiscussions(p *discPoll) {
 	b := &a.disc
 	if p.list != nil {
 		a.discSeq.Store(p.list.Seq)
+		b.self = p.list.Self
 		old := map[string]discSummary{}
 		for _, s := range b.list {
 			old[s.Key] = s
@@ -356,6 +370,7 @@ func (a *app) applyDiscussions(p *discPoll) {
 		}
 		if b.d != nil && b.d.key == p.key && v.Live != nil {
 			b.d.live = v.Live
+			b.d.collab = v.Collab
 		}
 		if b.d != nil {
 			a.setWantedDisc(b.sel, b.d.rev)
@@ -365,15 +380,24 @@ func (a *app) applyDiscussions(p *discPoll) {
 
 // discNotice 发系统通知：成员提了问题、回复了，你没在看这个讨论时。同一次汇报不再经任务发第二次。
 func (a *app) discNotice(prev, cur discSummary) {
-	if prev.Key == "" || a.state.NotifyOff || cur.Last == nil || prev.MsgSeq == cur.MsgSeq {
+	if prev.Key == "" || a.state.NotifyOff {
 		return
 	}
 	if a.win != nil && a.win.IsFocused() && a.selected == discBoardID && a.disc.sel == cur.Key {
 		return
 	}
 	m := appL()
+	if cur.Requests > prev.Requests {
+		a.showDiscNotice(cur, m.CollabNoticeRequestAny())
+		return
+	}
+	if cur.Last == nil || prev.MsgSeq == cur.MsgSeq {
+		return
+	}
 	var title string
 	switch {
+	case cur.Last.Mention != "" && cur.Last.Mention == a.disc.self:
+		title = m.CollabNoticeMention(cur.Last.AuthorName)
 	case cur.Last.Kind == "question" && cur.Questions > prev.Questions:
 		title = m.DiscNoticeQuestion(cur.Last.AuthorName)
 	case cur.Last.Kind == "reply" && cur.Last.Outcome == "failed":
@@ -383,6 +407,10 @@ func (a *app) discNotice(prev, cur discSummary) {
 	default:
 		return
 	}
+	a.showDiscNotice(cur, title)
+}
+
+func (a *app) showDiscNotice(cur discSummary, title string) {
 	n := mygo.NewNotification(mygo.NotificationOptions{ID: "posse-disc:" + cur.Key, Title: title, Body: cur.Title, Group: "discussions"})
 	go func() {
 		if err := n.Show(); err != nil {
@@ -455,7 +483,7 @@ func (a *app) selectDiscussion(key string) {
 		return
 	}
 	removePasted(b.atts)
-	*b = discBoard{list: b.list, panel: b.panel, newOpen: b.newOpen}
+	*b = discBoard{list: b.list, panel: b.panel, newOpen: b.newOpen, self: b.self, join: b.join, invite: b.invite}
 	b.sel = key
 	a.setWantedDisc(key, 0)
 	a.pollForce.Store(true)
@@ -470,7 +498,7 @@ func (a *app) discCounts() (questions, unread int) {
 		if s.Status == "archived" {
 			continue
 		}
-		questions += s.Questions
+		questions += s.Questions + s.Requests
 		if a.discUnread(s) > 0 {
 			unread++
 		}
@@ -516,6 +544,9 @@ func (a *app) discBoard(c *ui.Context) {
 	a.band(c, func() {
 		titleText(c, m.DiscTitle(), fsTitle)
 		ui.Spacer(c)
+		if len(b.list) > 0 && pressable(textButton(c.Key("disc-join"), m.CollabJoinEllipsis())).Clicked() {
+			a.openJoin()
+		}
 		if len(a.projects) > 0 && len(b.list) > 0 && pressable(accentButton(c, m.DiscNewEllipsis())).Clicked() {
 			a.openNewDiscussion()
 		}
@@ -563,6 +594,9 @@ func (a *app) discEmpty(c *ui.Context) {
 				if pressable(btn).Clicked() && len(a.projects) > 0 {
 					a.openNewDiscussion()
 				}
+				if pressable(textButton(c.Key("disc-join"), m.CollabJoinEllipsis())).Clicked() {
+					a.openJoin()
+				}
 			})
 		})
 	})
@@ -598,8 +632,18 @@ func (a *app) discRow(c *ui.Context, s discSummary) {
 				ui.Text(c, elapsed(m, at)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			})
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, iconFolder).FontSize(fsSmall).TextColor(t.TextMuted)
-				ui.Text(c, s.ProjectName).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
+				switch {
+				case s.Mirror:
+					// 加入的讨论：ProjectName 存的是房主的名字
+					ui.Icon(c, iconPeople).FontSize(fsSmall).TextColor(t.TextMuted)
+					ui.Text(c, m.CollabHostedBy(s.ProjectName)).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
+				default:
+					ui.Icon(c, iconFolder).FontSize(fsSmall).TextColor(t.TextMuted)
+					ui.Text(c, s.ProjectName).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
+					if s.Shared {
+						ui.Icon(c, iconShare).FontSize(fsSmall).TextColor(t.Accent).Tooltip(m.CollabSharedBadge())
+					}
+				}
 				ui.Spacer(c)
 				switch {
 				case s.Questions > 0:
@@ -613,10 +657,17 @@ func (a *app) discRow(c *ui.Context, s discSummary) {
 			})
 			preview, color := m.DiscNoMessages(), t.TextMuted
 			if s.Last != nil {
-				preview = discPreview(m, *s.Last)
+				preview = discPreview(m, *s.Last, a.disc.self)
 			}
-			if s.Questions > 0 {
+			switch {
+			case s.Questions > 0:
 				preview, color = m.DiscQuestionsWaiting(s.Questions), colors(t).honey
+			case s.Requests > 0:
+				preview, color = m.CollabRequestsBadge(s.Requests), colors(t).honey
+			case s.Joined == "pending":
+				preview, color = m.CollabListPending(), colors(t).honey
+			case s.Joined == "rejected" || s.Joined == "removed" || s.Joined == "left":
+				preview = m.CollabListLeft()
 			}
 			ui.Text(c, preview).FontSize(fsSmall).TextColor(color).MaxLines(2).LineHeight(1.35)
 		})
@@ -626,13 +677,15 @@ func (a *app) discRow(c *ui.Context, s discSummary) {
 	}
 }
 
-func discPreview(m locales.Messages, msg discMessage) string {
+func discPreview(m locales.Messages, msg discMessage, self string) string {
 	body := strings.Join(strings.Fields(msg.Body), " ")
 	if body == "" && len(msg.Attachments) > 0 {
 		body = msg.Attachments[0].Name
 	}
-	switch msg.Kind {
-	case "reply", "question":
+	switch {
+	case msg.Kind == "reply" || msg.Kind == "question":
+		return msg.AuthorName + m.DiscColon() + body
+	case msg.AuthorName != "" && msg.AuthorID != "" && msg.AuthorID != self:
 		return msg.AuthorName + m.DiscColon() + body
 	}
 	return m.DiscYou() + m.DiscColon() + body
@@ -644,6 +697,7 @@ func (a *app) discDetailView(c *ui.Context, d *discDetail) {
 	t, m := c.Theme(), L(c)
 	b := &a.disc
 	archived := d.info.Status == "archived"
+	host := d.hostRole()
 	ui.Column(c).Grow(1).MinHeight(0).Gap(pageGap).Children(func() {
 		// 顶栏：标题、项目、搜索、更多
 		card(c).Padding(12, cardPad).Gap(8).Children(func() {
@@ -656,7 +710,14 @@ func (a *app) discDetailView(c *ui.Context, d *discDetail) {
 								Padding(2, 6).Radius(rSmall).Background(colors(t).fill).Shrink(0)
 						}
 					})
-					metaRow(c, metaMono(c, iconFolder, d.info.ProjectName, d.info.ProjectPath), meta(c, m.DiscMemberCount(len(activeMembers(d)))))
+					items := []func(){meta(c, m.DiscMemberCount(len(activeMembers(d))))}
+					if host {
+						items = append([]func(){metaMono(c, iconFolder, d.info.ProjectName, d.info.ProjectPath)}, items...)
+					}
+					if cm := a.collabMeta(c, d); cm != nil {
+						items = append(items, cm)
+					}
+					metaRow(c, items...)
 				})
 				if iconButton(c.Key("disc-search"), iconSearch, m.DiscSearch()).Clicked() {
 					b.panel = true
@@ -672,13 +733,28 @@ func (a *app) discDetailView(c *ui.Context, d *discDetail) {
 				}
 				more := iconButton(c.Key("disc-more"), iconMore, m.DiscMore())
 				menuButton(c, more, func(pm *popMenu) {
-					if !archived && pm.Item(m.DiscEditEllipsis()).Icon(iconPencil).Chosen() {
+					if host && !archived && pm.Item(m.DiscEditEllipsis()).Icon(iconPencil).Chosen() {
 						b.edit = discEditForm{open: true, title: d.info.Title, desc: d.info.Description, ws: a.wsLabel(d.info.WorkspaceID)}
 					}
-					if !archived && pm.Item(m.DiscAddMemberEllipsis()).Icon(iconPlus).Chosen() {
+					if d.writable() && pm.Item(m.DiscAddMemberEllipsis()).Icon(iconPlus).Chosen() {
 						a.openMemberForm(d, "")
 					}
+					if host && !archived {
+						shared := d.collab != nil && d.collab.Shared
+						if !shared && pm.Item(m.CollabShareEllipsis()).Icon(iconShare).Chosen() {
+							a.askShare(m, d)
+						}
+						if shared && pm.Item(m.CollabInviteEllipsis()).Icon(iconLink).Chosen() {
+							go a.createInvite(d.key)
+						}
+					}
 					pm.Separator()
+					if !host {
+						if d.writable() && pm.Item(m.CollabLeaveEllipsis()).Icon(iconLeave).Danger().Chosen() {
+							a.askLeave(m, d)
+						}
+						return
+					}
 					if archived {
 						if pm.Item(m.CommonRestore()).Icon(iconRollback).Chosen() {
 							a.discArchive(d.key, false)
@@ -704,6 +780,9 @@ func (a *app) discDetailView(c *ui.Context, d *discDetail) {
 					}
 				})
 			})
+			return
+		}
+		if a.collabBanner(c, d) {
 			return
 		}
 		a.discPausedBanner(c, d)
@@ -830,7 +909,9 @@ func countAfter(msgs []discMessage, seq int64) int {
 func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 	t, m := c.Theme(), L(c)
 	b := &a.disc
-	archived := d.info.Status == "archived"
+	archived := !d.writable()
+	// 别人发的消息写他的名字；自己（或第一阶段房主本机）的写「你」
+	other := msg.AuthorName != "" && msg.AuthorID != "" && (d.collab == nil || msg.AuthorID != d.collab.Self)
 	row := ui.Row(c.Key(msg.ID)).Gap(12).AlignItems(ui.Start).Padding(6, 8).Radius(rControl)
 	if b.reveal == msg.ID {
 		row.ScrollIntoView()
@@ -849,17 +930,26 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 			agentTile(c, msg.AuthorAgent, tileMedium())
 		default:
 			ui.Box(c).Size(tileMedium(), tileMedium()).Radius(full(tileMedium())).Background(colors(t).tint).Center().Shrink(0).Children(func() {
-				ui.Text(c, m.DiscYouInitial()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.Accent)
+				mark := m.DiscYouInitial()
+				if other {
+					mark = initial(msg.AuthorName)
+				}
+				ui.Text(c, mark).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.Accent)
 			})
 		}
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Gap(6).Children(func() {
 			// 行高按悬停按钮定好：按钮出现、消失时不跳
 			ui.Row(c).Gap(8).AlignItems(ui.Center).MinHeight(compactBox()).Children(func() {
 				name := m.DiscYou()
-				if msg.Kind == "reply" || msg.Kind == "question" {
+				if msg.Kind == "reply" || msg.Kind == "question" || other {
 					name = msg.AuthorName
 				}
 				ui.Text(c, name).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
+				if msg.Kind == "reply" || msg.Kind == "question" {
+					if mem := d.member(msg.AuthorMember); mem != nil && !d.mine(mem.Owner) {
+						ui.Text(c, m.CollabOwnedBy(d.ownerName(mem.Owner))).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
+					}
+				}
 				switch {
 				case msg.Kind == "question":
 					x := d.execs[msg.Execution]
@@ -876,6 +966,10 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 				if msg.TargetName != "" {
 					ui.Text(c, "@"+msg.TargetName).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.Accent).
 						Padding(2, 6).Radius(rSmall).Background(colors(t).tint).Shrink(0)
+				}
+				if msg.MentionName != "" {
+					ui.Text(c, "@"+msg.MentionName).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).
+						Padding(2, 6).Radius(rSmall).Background(colors(t).fill).Shrink(0).Tooltip(m.CollabMentionNote())
 				}
 				if msg.KeyAt != nil {
 					ui.Icon(c, iconStar).FontSize(fsSmall).TextColor(colors(t).honey).Tooltip(m.DiscKeyMessage())
@@ -927,7 +1021,7 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 			if len(msg.Attachments) > 0 {
 				a.attachmentChips(c, d, msg)
 			}
-			if msg.Kind == "question" && !archived && d.execs[msg.Execution].State == "waiting" && !answered(d, msg) {
+			if msg.Kind == "question" && !archived && d.execs[msg.Execution].State == "waiting" && !answered(d, msg) && d.mine(d.execs[msg.Execution].Owner) {
 				ui.Row(c).Gap(8).Children(func() {
 					if pressable(textButton(c.Key("answer-"+msg.ID), m.DiscAnswerEllipsis())).Clicked() {
 						b.answerQ, b.quote, b.target = msg.Question, "", ""
@@ -1092,6 +1186,10 @@ func execStatus(m locales.Messages, x discExec) (string, string) {
 		return m.TasksStatusStopped(), "ended"
 	case "cancelled":
 		return m.DiscExecCancelled(), "ended"
+	case "claimed":
+		return m.DiscExecClaimed(), "ended"
+	case "revoked":
+		return m.DiscExecRevoked(), "failed"
 	}
 	return x.State, "ended"
 }
@@ -1111,6 +1209,17 @@ func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
 	name := x.Member
 	if member != nil {
 		name = member.Name
+	}
+	mine := d.mine(x.Owner)
+	accept := ""
+	if d.info.Mirror && mine && d.collab != nil {
+		accept = d.collab.Accepts[x.ID]
+		switch {
+		case accept == "" && x.State == "queued":
+			text = m.CollabAwaitingHere()
+		case accept == "refused":
+			text = m.CollabRefusedHere()
+		}
 	}
 	box := ui.Column(c.Key("exec-"+x.ID)).Gap(8).Padding(8, 12).Radius(rControl).Background(colors(t).wash)
 	box.Children(func() {
@@ -1133,6 +1242,9 @@ func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
 			ui.Text(c, text).FontSize(fsSmall).FontWeight(fwMedium).TextColor(color).Shrink(0)
 			agentTile(c, x.Agent, smallIcon())
 			ui.Text(c, name).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+			if !mine {
+				ui.Text(c, m.CollabOwnedBy(d.ownerName(x.Owner))).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
+			}
 			if x.WorkspaceLabel != "" {
 				ui.Icon(c, iconBranch).FontSize(fsSmall).TextColor(t.TextMuted)
 				ui.Text(c, x.WorkspaceLabel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
@@ -1144,7 +1256,22 @@ func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
 		if x.Reason != "" && x.State != "done" {
 			ui.Text(c, execReason(m, x)).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45).Selectable()
 		}
-		if d.info.Status == "archived" {
+		// 别人电脑上的执行：拥有者没连着时照实写，不判成完成或失败
+		if !mine && x.Owner != "" && !d.online(x.Owner) && (x.State == "claimed" || x.State == "starting" || x.State == "running" || x.State == "waiting") {
+			ui.Text(c, m.CollabExecLost()).FontSize(fsSmall).TextColor(colors(t).honey).LineHeight(1.45)
+		}
+		if !d.writable() || !mine {
+			return
+		}
+		if d.info.Mirror && accept == "" && (x.State == "claimed" || x.State == "starting" || x.State == "running" || x.State == "waiting") {
+			// 房主那边记着已领取，本机账本里却没有：核实副作用后放弃这一轮、重新发起
+			ui.Row(c).Gap(8).Children(func() {
+				if pressable(textButton(c, m.CollabAbandonRetry())).Clicked() {
+					a.confirm(m.CollabAbandonTitle(), m.CollabAbandonBody(), m.CommonRetry(), func() {
+						a.discCall("discussion.retry", map[string]any{"execution": x.ID, "abandon": true})
+					})
+				}
+			})
 			return
 		}
 		ui.Row(c).Gap(8).Wrap().Children(func() {
@@ -1201,7 +1328,7 @@ func retried(d *discDetail, x discExec) bool {
 func (a *app) discPausedBanner(c *ui.Context, d *discDetail) {
 	t, m := c.Theme(), L(c)
 	for _, mem := range activeMembers(d) {
-		if mem.Paused == "" {
+		if mem.Paused == "" || !d.mine(mem.Owner) {
 			continue
 		}
 		queued := 0
@@ -1211,6 +1338,23 @@ func (a *app) discPausedBanner(c *ui.Context, d *discDetail) {
 			}
 		}
 		if queued == 0 {
+			continue
+		}
+		if mem.Paused == collabLostReason || mem.Paused == needsWorkspace {
+			ui.Row(c.Key("paused-"+mem.ID)).Gap(8).Padding(8, 12).Radius(rControl).Background(soft(t, colors(t).honey)).AlignItems(ui.Center).Children(func() {
+				ui.Icon(c, iconPause).FontSize(fsBody).TextColor(colors(t).honey)
+				if mem.Paused == needsWorkspace {
+					ui.Text(c, m.CollabChooseWorkspace(mem.Name)).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
+					if pressable(accentButton(c, m.CollabChooseWorkspaceVerb())).Clicked() {
+						a.openMemberForm(d, mem.ID)
+					}
+					return
+				}
+				ui.Text(c, m.CollabPausedLost(mem.Name, queued)).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
+				if pressable(accentButton(c, m.CollabResume())).Clicked() {
+					go a.discCall("discussion.member.resume", map[string]any{"member": mem.ID})
+				}
+			})
 			continue
 		}
 		ui.Row(c.Key("paused-"+mem.ID)).Gap(8).Padding(8, 12).Radius(rControl).Background(soft(t, colors(t).honey)).AlignItems(ui.Center).Children(func() {
@@ -1228,8 +1372,11 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 	t, m := c.Theme(), L(c)
 	b := &a.disc
 	members := activeMembers(d)
-	if b.target != "" && !slices.ContainsFunc(members, func(x discMember) bool { return x.ID == b.target }) {
+	if b.target != "" && !slices.ContainsFunc(members, func(x discMember) bool { return x.ID == b.target && d.mine(x.Owner) }) {
 		b.target = ""
+	}
+	if b.mention != "" && d.person(b.mention) == nil {
+		b.mention = ""
 	}
 	var question *discMessage
 	if b.answerQ != "" {
@@ -1261,6 +1408,8 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 			label := m.DiscEveryone()
 			if mem := d.member(b.target); mem != nil {
 				label = "@" + mem.Name
+			} else if p := d.person(b.mention); p != nil {
+				label = m.CollabMentionLabel(p.Name)
 			}
 			btn := ui.Row(c.Key("target")).Gap(4).Padding(2, 8).Shrink(0).Radius(rSmall).Background(colors(t).fill).AlignItems(ui.Center).Role(ui.RoleButton)
 			btn.Children(func() {
@@ -1271,16 +1420,37 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 				ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted)
 			})
 			menuButton(c, btn, func(pm *popMenu) {
-				if pm.Item(m.DiscEveryoneHint()).Checked(b.target == "").Chosen() {
-					b.target = ""
+				if pm.Item(m.DiscEveryoneHint()).Checked(b.target == "" && b.mention == "").Chosen() {
+					b.target, b.mention = "", ""
 				}
 				if len(members) > 0 {
 					pm.Separator()
 				}
+				// 只能 @ 自己的 Agent；别人的列出来但点不了，要请它的拥有者安排
 				for _, mem := range members {
-					it := pm.Item("@" + mem.Name).Checked(b.target == mem.ID).Lead(func() { agentTile(c, mem.Agent, smallIcon()) })
+					label := "@" + mem.Name
+					if !d.mine(mem.Owner) {
+						label = m.CollabOthersAgent(mem.Name, d.ownerName(mem.Owner))
+					}
+					it := pm.Item(label).Checked(b.target == mem.ID).Lead(func() { agentTile(c, mem.Agent, smallIcon()) }).Disabled(!d.mine(mem.Owner))
 					if it.Chosen() {
-						b.target = mem.ID
+						b.target, b.mention = mem.ID, ""
+					}
+				}
+				if d.collab != nil {
+					var people []discPerson
+					for _, p := range d.collab.People {
+						if p.State == "active" && p.FP != d.collab.Self {
+							people = append(people, p)
+						}
+					}
+					if len(people) > 0 {
+						pm.Separator()
+					}
+					for _, p := range people {
+						if pm.Item(m.CollabMentionPerson(p.Name)).Icon(iconAt).Checked(b.mention == p.FP).Chosen() {
+							b.mention, b.target = p.FP, ""
+						}
 					}
 				}
 				pm.Separator()
@@ -1290,6 +1460,8 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 			})
 			if b.target != "" {
 				ui.Text(c, m.DiscTargetNote()).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
+			} else if b.mention != "" {
+				ui.Text(c, m.CollabMentionNote()).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
 			}
 		})
 		if b.quote != "" {
@@ -1369,7 +1541,7 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 		b.clientID = fmt.Sprintf("c_%x", time.Now().UnixNano())
 	}
 	b.sending = true
-	params := map[string]any{"discussion": d.key, "body": strings.TrimSpace(b.text), "target": b.target, "quote": b.quote, "clientId": b.clientID}
+	params := map[string]any{"discussion": d.key, "body": strings.TrimSpace(b.text), "target": b.target, "mention": b.mention, "quote": b.quote, "clientId": b.clientID}
 	var atts []map[string]string
 	for _, p := range b.atts {
 		atts = append(atts, map[string]string{"path": p})
@@ -1389,7 +1561,7 @@ func (a *app) sendDiscMessage(key string, params map[string]any) {
 		}
 		// 常驻进程已经把附件复制成快照：粘贴图片时写的临时文件可以删了
 		removePasted(b.atts)
-		b.text, b.quote, b.atts, b.clientID = "", "", nil, ""
+		b.text, b.quote, b.atts, b.clientID, b.mention = "", "", nil, "", ""
 		b.follow = true
 		a.markDiscRead(key, r.Message.Seq)
 	})
@@ -1667,13 +1839,13 @@ func (a *app) discPanel(c *ui.Context, d *discDetail) {
 		a.discSearchPanel(c, d)
 		return
 	}
-	archived := d.info.Status == "archived"
+	archived := !d.writable()
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Padding(cardPad).Gap(20).Children(func() {
 			ui.Column(c).Gap(6).Children(func() {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					cardTitle(c, m.DiscDetails()).Grow(1)
-					if !archived && iconButtonSized(c.Key("edit-disc"), iconPencil, m.DiscEditEllipsis(), compactBox(), smallIcon()).Clicked() {
+					if !archived && d.hostRole() && iconButtonSized(c.Key("edit-disc"), iconPencil, m.DiscEditEllipsis(), compactBox(), smallIcon()).Clicked() {
 						b.edit = discEditForm{open: true, title: d.info.Title, desc: d.info.Description, ws: a.wsLabel(d.info.WorkspaceID)}
 					}
 				})
@@ -1698,6 +1870,7 @@ func (a *app) discPanel(c *ui.Context, d *discDetail) {
 					a.memberRow(c, d, mem)
 				}
 			})
+			a.collabSection(c, d)
 			ui.Column(c).Gap(6).Children(func() {
 				cardTitle(c, m.DiscKeyMessages())
 				if len(d.keyMsgs) == 0 {
@@ -1712,13 +1885,14 @@ func (a *app) discPanel(c *ui.Context, d *discDetail) {
 						ui.Icon(c, iconStar).FontSize(fsSmall).TextColor(colors(t).honey)
 						ui.Column(c).Gap(2).Grow(1).Shrink(1).MinWidth(0).Children(func() {
 							who := m.DiscYou()
-							if k.AuthorName != "" {
+							if k.AuthorName != "" && (d.collab == nil || k.AuthorID != d.collab.Self) {
 								who = k.AuthorName
 							}
 							ui.Text(c, who).FontSize(fsSmall).FontWeight(fwMedium)
 							ui.Text(c, firstLineText(k.Body)).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2)
 						})
-						if !archived && iconButtonSized(c.Key("unkey-"+k.ID), iconClose, m.DiscUnmarkKey(), miniBox(), fsSmall).Clicked() {
+						canUnmark := d.collab == nil || d.hostRole() || k.KeyBy == "" || k.KeyBy == d.collab.Self
+						if !archived && canUnmark && iconButtonSized(c.Key("unkey-"+k.ID), iconClose, m.DiscUnmarkKey(), miniBox(), fsSmall).Clicked() {
 							go a.discCall("discussion.key", map[string]any{"message": k.ID, "on": false})
 						}
 					})
@@ -1745,6 +1919,11 @@ func (a *app) memberRow(c *ui.Context, d *discDetail, mem discMember) {
 				status := ""
 				live, hasLive := d.live[mem.Worker]
 				switch {
+				case !d.mine(mem.Owner):
+					status = m.CollabOffline()
+					if d.online(mem.Owner) {
+						status = m.CollabOnline()
+					}
 				case mem.Paused != "":
 					status = m.DiscMemberPaused()
 				case mem.TaskID == "":
@@ -1771,18 +1950,31 @@ func (a *app) memberRow(c *ui.Context, d *discDetail, mem discMember) {
 				model += " · " + mem.Effort
 			}
 			ui.Text(c, model).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1)
-			ui.Text(c, mem.WorkspaceLabel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(1)
-			if mem.TaskID != "" && mem.WorkerConfig != 0 && mem.WorkerConfig != mem.ConfigVersion {
+			if !d.mine(mem.Owner) {
+				ui.Text(c, m.CollabOwnedBy(d.ownerName(mem.Owner))).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1)
+			} else {
+				ui.Text(c, mem.WorkspaceLabel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(1)
+			}
+			if d.mine(mem.Owner) && mem.TaskID != "" && mem.WorkerConfig != 0 && mem.WorkerConfig != mem.ConfigVersion {
 				ui.Text(c, m.DiscConfigPending()).FontSize(fsSmall).TextColor(colors(t).honey).LineHeight(1.45)
 			}
 		})
 	})
-	if d.info.Status == "archived" {
+	if !d.writable() {
+		return
+	}
+	if !d.mine(mem.Owner) {
+		// 别人的 Agent：只能 @ 它的拥有者请他安排
+		contextMenu(c, row, func(pm *popMenu) {
+			if p := d.person(mem.Owner); p != nil && p.State == "active" && pm.Item(m.CollabMentionPerson(p.Name)).Icon(iconAt).Chosen() {
+				a.disc.mention, a.disc.target, a.disc.answerQ = p.FP, "", ""
+			}
+		})
 		return
 	}
 	contextMenu(c, row, func(pm *popMenu) {
 		if pm.Item(m.DiscMention()).Icon(iconAt).Chosen() {
-			a.disc.target, a.disc.answerQ = mem.ID, ""
+			a.disc.target, a.disc.mention, a.disc.answerQ = mem.ID, "", ""
 		}
 		if mem.Terminal != nil && d.live[mem.Worker] != "gone" && pm.Item(m.DiscOpenTerminal()).Icon(iconTerminal).Chosen() {
 			a.openTerminal(mem.Terminal.WorkspaceID, mem.Worker)
@@ -2089,6 +2281,17 @@ func (a *app) memberDialog(c *ui.Context) {
 					isGit = true
 				}
 			}
+			wsChoices := a.projectWorkspaces(d.info.ProjectID)
+			if d.info.Mirror {
+				// 加入的讨论：工作区在这台电脑上任选，只存本机
+				wsChoices = nil
+				for _, p := range a.projects {
+					wsChoices = append(wsChoices, a.projectWorkspaces(p.ID)...)
+				}
+				if f.ws == "" && len(wsChoices) > 0 {
+					f.ws = wsChoices[0]
+				}
+			}
 			ui.Column(c).Gap(6).Children(func() {
 				if isGit {
 					segmented(c, &f.mode, m.DiscWorkDir(), m.DiscExistingWorkspace(), m.DiscNewWorktree())
@@ -2097,9 +2300,12 @@ func (a *app) memberDialog(c *ui.Context) {
 					fieldInput(c, &f.worktree, m.TasksBranchPlaceholder())
 					ui.Text(c, m.DiscWorktreeNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 				} else {
-					ui.Select(c, &f.ws, a.projectWorkspaces(d.info.ProjectID))
+					ui.Select(c, &f.ws, wsChoices)
 					note := m.DiscSharedDirNote()
-					if !isGit {
+					switch {
+					case d.info.Mirror:
+						note = m.CollabLocalWorkspaceNote()
+					case !isGit:
 						note = m.DiscNoGitNote()
 					}
 					ui.Text(c, note).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)

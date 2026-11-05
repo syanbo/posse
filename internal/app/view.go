@@ -135,6 +135,8 @@ func (a *app) build(c *ui.Context) {
 	a.newDiscussionDialog(c)
 	a.editDiscussionDialog(c)
 	a.memberDialog(c)
+	a.joinDialog(c)
+	a.inviteDialog(c)
 	a.quickDialog(c)
 	a.defDialog(c)
 	a.pushDialog(c)

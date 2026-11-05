@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,16 +30,16 @@ type discSummary struct {
 }
 
 type discMember struct {
-	ID, Name, Role, Agent, Model, Effort, WorkspaceLabel, TaskID, Worker, Paused string
-	RemovedAt                                                                    *time.Time
+	ID, Name, Role, Agent, Model, Effort, WorkspaceLabel, TaskID, Worker, Paused, Owner string
+	RemovedAt                                                                           *time.Time
 }
 
 type discMsg struct {
-	ID, Kind, AuthorName, AuthorAgent, Body, Quote, Target, TargetName, Execution, Question, Outcome string
-	Seq                                                                                              int64
-	Attachments                                                                                      []struct{ Name, Path string }
-	KeyAt                                                                                            *time.Time
-	CreatedAt                                                                                        time.Time
+	ID, Kind, AuthorName, AuthorAgent, AuthorID, MentionName, Body, Quote, Target, TargetName, Execution, Question, Outcome string
+	Seq                                                                                                                     int64
+	Attachments                                                                                                             []struct{ Name, Path string }
+	KeyAt                                                                                                                   *time.Time
+	CreatedAt                                                                                                               time.Time
 }
 
 type discExec struct {
@@ -170,7 +171,13 @@ func discAuthor(m discMsg) string {
 	case "question":
 		return m.AuthorName + " asked"
 	case "answer":
+		if m.AuthorName != "" {
+			return m.AuthorName + " answered"
+		}
 		return "you answered"
+	}
+	if m.AuthorName != "" {
+		return m.AuthorName
 	}
 	return "you"
 }
@@ -275,6 +282,7 @@ func cmdDiscussionRestart(e *env, args []string) error {
 func cmdDiscussionPost(e *env, args []string) error {
 	fs := flag.NewFlagSet("discussion post", flag.ContinueOnError)
 	to := fs.String("to", "", "")
+	mention := fs.String("mention", "", "")
 	quote := fs.String("quote", "", "")
 	client := fs.String("client-id", "", "")
 	var attach multiFlag
@@ -300,7 +308,7 @@ func cmdDiscussionPost(e *env, args []string) error {
 		Execution *discExec
 		Duplicate bool
 	}
-	params := map[string]any{"discussion": pos[0], "body": strings.Join(pos[1:], " "), "target": *to, "quote": *quote, "clientId": *client, "attachments": atts, "caller": caller()}
+	params := map[string]any{"discussion": pos[0], "body": strings.Join(pos[1:], " "), "target": *to, "mention": *mention, "quote": *quote, "clientId": *client, "attachments": atts, "caller": caller()}
 	return e.do("discussion.post", params, &r, func() {
 		if r.Duplicate {
 			fmt.Fprintf(e.out, "already sent as #%d (%s)\n", r.Message.Seq, r.Message.ID)
@@ -488,4 +496,303 @@ func discExecCmd(method, verb string) func(e *env, args []string) error {
 			fmt.Fprintf(e.out, "%s: %s\n", x.ID, x.State)
 		})
 	}
+}
+
+// --- 局域网协作
+
+type discPerson struct {
+	FP, Name, State string
+	Host, Online    bool
+	Generation      int64
+}
+
+type discRequest struct {
+	ID, FP, Name, Addr, State string
+	CreatedAt                 time.Time
+}
+
+type discCollab struct {
+	Self, SelfName, HostName, State, Error, ListenError string
+	Host, Shared, Listening, Connected                  bool
+	People                                              []discPerson
+	Requests                                            []discRequest
+	Outbox, Rejected                                    int
+}
+
+func cmdDiscussionShare(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion share", flag.ContinueOnError)
+	off := fs.Bool("off", false, "")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	key, err := discKey(pos, "discussion share")
+	if err != nil {
+		return err
+	}
+	var d discussionInfo
+	return e.do("discussion.share", map[string]any{"caller": caller(), "discussion": key, "on": !*off}, &d, func() {
+		if *off {
+			fmt.Fprintf(e.out, "stopped sharing %s; members keep their access and reconnect when you share it again\n", d.Key)
+			return
+		}
+		fmt.Fprintf(e.out, "sharing %s on the local network.\napproved people can read its whole history, key messages and attachments.\n", d.Key)
+		fmt.Fprintf(e.out, "invite someone with: posse discussion invite %s\n", d.Key)
+	})
+}
+
+func cmdDiscussionInvite(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion invite", flag.ContinueOnError)
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	key, err := discKey(pos, "discussion invite")
+	if err != nil {
+		return err
+	}
+	var r struct {
+		Invite      string
+		Expires     time.Time
+		Addrs       []string
+		Fingerprint string
+	}
+	return e.do("discussion.invite", map[string]any{"caller": caller(), "discussion": key}, &r, func() {
+		fmt.Fprintln(e.out, r.Invite)
+		fmt.Fprintf(e.out, "\nsingle use, valid until %s; send it yourself (Posse does not send it).\nhost fingerprint %s, addresses %s\n",
+			r.Expires.Format("15:04"), r.Fingerprint, strings.Join(r.Addrs, ", "))
+	})
+}
+
+func cmdDiscussionPeople(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion people", flag.ContinueOnError)
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	key, err := discKey(pos, "discussion people")
+	if err != nil {
+		return err
+	}
+	var v struct {
+		Discussion discussionInfo
+		Collab     *discCollab
+	}
+	return e.do("discussion.show", map[string]any{"discussion": key, "limit": 1}, &v, func() {
+		c := v.Collab
+		if c == nil {
+			fmt.Fprintln(e.out, "not shared")
+			return
+		}
+		switch {
+		case c.Host && c.Listening:
+			fmt.Fprintln(e.out, "you host this discussion; sharing on")
+		case c.Host:
+			fmt.Fprintf(e.out, "you host this discussion; sharing %s %s\n", map[bool]string{true: "on but not listening:", false: "off"}[c.Shared], c.ListenError)
+		default:
+			conn := "offline"
+			if c.Connected {
+				conn = "connected"
+			}
+			fmt.Fprintf(e.out, "hosted by %s; you are %s, %s\n", c.HostName, c.State, conn)
+			if c.Error != "" {
+				fmt.Fprintf(e.out, "  %s\n", c.Error)
+			}
+			if c.Outbox > 0 || c.Rejected > 0 {
+				fmt.Fprintf(e.out, "  %d results waiting to reach the host, %d rejected by it\n", c.Outbox, c.Rejected)
+			}
+		}
+		w := e.table()
+		fmt.Fprintln(w, "\nPERSON\tNAME\tSTATE\tONLINE")
+		for _, p := range c.People {
+			name := p.Name
+			if p.Host {
+				name += " (host)"
+			}
+			if p.FP == c.Self {
+				name += " (you)"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%v\n", p.FP[:16], name, p.State, p.Online)
+		}
+		w.Flush()
+		for _, r := range c.Requests {
+			fmt.Fprintf(e.out, "\nrequest %s from %s (%s, fingerprint %s) — posse discussion approve %s | reject %s\n", r.ID, r.Name, r.Addr, r.FP[:16], r.ID, r.ID)
+		}
+	})
+}
+
+func cmdDiscussionDecide(approve bool) func(e *env, args []string) error {
+	verb := map[bool]string{true: "approve", false: "reject"}[approve]
+	return func(e *env, args []string) error {
+		fs := flag.NewFlagSet("discussion "+verb, flag.ContinueOnError)
+		pos, err := parse(fs, args)
+		if err != nil {
+			return err
+		}
+		if err := need(pos, 1, "discussion "+verb); err != nil {
+			return err
+		}
+		var r discRequest
+		return e.do("discussion.decide", map[string]any{"caller": caller(), "request": pos[0], "approve": approve}, &r, func() {
+			fmt.Fprintf(e.out, "%s: %s (%s)\n", r.ID, r.State, r.Name)
+		})
+	}
+}
+
+func cmdDiscussionRemovePerson(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion remove-person", flag.ContinueOnError)
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := need(pos, 2, "discussion remove-person"); err != nil {
+		return err
+	}
+	var p discPerson
+	return e.do("discussion.person.remove", map[string]any{"caller": caller(), "discussion": pos[0], "person": pos[1]}, &p, func() {
+		fmt.Fprintf(e.out, "removed %s; their agents left the discussion and unfinished requests are marked access revoked.\n", p.Name)
+		fmt.Fprintln(e.out, "what they already downloaded stays on their computer; joining again needs a new invitation.")
+	})
+}
+
+func cmdDiscussionJoin(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion join", flag.ContinueOnError)
+	var addrs multiFlag
+	fs.Var(&addrs, "addr", "")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	text := strings.Join(pos, " ")
+	if text == "" || text == "-" {
+		b, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return err
+		}
+		text = string(b)
+	}
+	var r struct {
+		Discussion, State, Host, Fingerprint, Title, Error string
+	}
+	return e.do("discussion.join", map[string]any{"caller": caller(), "invite": text, "addrs": []string(addrs)}, &r, func() {
+		fmt.Fprintf(e.out, "asked %s (fingerprint %s) to join %s; waiting for approval\n", r.Host, r.Fingerprint, r.Discussion)
+		if r.Error != "" {
+			fmt.Fprintf(e.out, "%s\nPosse keeps trying in the background.\n", r.Error)
+		}
+	})
+}
+
+func cmdDiscussionLeave(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion leave", flag.ContinueOnError)
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	key, err := discKey(pos, "discussion leave")
+	if err != nil {
+		return err
+	}
+	return e.do("discussion.leave", map[string]any{"caller": caller(), "discussion": key}, nil, func() {
+		fmt.Fprintf(e.out, "left %s; what was synced stays readable here\n", key)
+	})
+}
+
+func cmdDiscussionResume(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion resume", flag.ContinueOnError)
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := need(pos, 1, "discussion resume"); err != nil {
+		return err
+	}
+	return e.do("discussion.member.resume", map[string]any{"caller": caller(), "member": pos[0]}, nil, func() {
+		fmt.Fprintf(e.out, "%s continues with its queued requests\n", pos[0])
+	})
+}
+
+func cmdDiscussionRetry(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion retry", flag.ContinueOnError)
+	abandon := fs.Bool("abandon", false, "")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := need(pos, 1, "discussion retry"); err != nil {
+		return err
+	}
+	var x discExec
+	return e.do("discussion.retry", map[string]any{"caller": caller(), "execution": pos[0], "abandon": *abandon}, &x, func() {
+		fmt.Fprintf(e.out, "%s: %s\n", x.ID, x.State)
+	})
+}
+
+func cmdCollabStatus(e *env, args []string) error {
+	fs := flag.NewFlagSet("collab status", flag.ContinueOnError)
+	if _, err := parse(fs, args); err != nil {
+		return err
+	}
+	var r struct {
+		ID, Name, Addr, Error string
+		Port                  int
+		Listening             bool
+		Quota, Used           int64
+		Joined                []struct {
+			Room, State, Host, Error string
+			Connected                bool
+		}
+	}
+	return e.do("collab.status", nil, &r, func() {
+		if r.ID == "" {
+			fmt.Fprintln(e.out, "no installation identity yet (created with the first discussion or join)")
+		} else {
+			fmt.Fprintf(e.out, "you are %s (fingerprint %s)\n", r.Name, r.ID)
+		}
+		if r.Listening {
+			fmt.Fprintf(e.out, "collaboration service on %s\n", r.Addr)
+		} else {
+			fmt.Fprintf(e.out, "collaboration service off (port %d)%s\n", r.Port, map[bool]string{true: ": " + r.Error, false: ""}[r.Error != ""])
+		}
+		fmt.Fprintf(e.out, "shared attachments: %d of %d MiB\n", r.Used>>20, r.Quota>>20)
+		for _, j := range r.Joined {
+			conn := "offline"
+			if j.Connected {
+				conn = "connected"
+			}
+			fmt.Fprintf(e.out, "joined %s from %s: %s, %s %s\n", j.Room, j.Host, j.State, conn, j.Error)
+		}
+	})
+}
+
+func cmdCollabName(e *env, args []string) error {
+	fs := flag.NewFlagSet("collab name", flag.ContinueOnError)
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := need(pos, 1, "collab name"); err != nil {
+		return err
+	}
+	var r struct{ ID, Name string }
+	return e.do("collab.rename", map[string]any{"caller": caller(), "name": strings.Join(pos, " ")}, &r, func() {
+		fmt.Fprintf(e.out, "other people now see you as %s\n", r.Name)
+	})
+}
+
+func cmdCollabQuota(e *env, args []string) error {
+	fs := flag.NewFlagSet("collab quota", flag.ContinueOnError)
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	var mib int64
+	if len(pos) > 0 {
+		if _, err := fmt.Sscan(pos[0], &mib); err != nil || mib <= 0 {
+			return fmt.Errorf("quota is a number of MiB")
+		}
+	}
+	var r struct{ Quota, Used int64 }
+	return e.do("collab.quota", map[string]any{"bytes": mib << 20}, &r, func() {
+		fmt.Fprintf(e.out, "shared attachments from members: %d of %d MiB\n", r.Used>>20, r.Quota>>20)
+	})
 }

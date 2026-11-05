@@ -93,6 +93,15 @@ func NewSecret() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
+// NewRequestID 是加入申请的 ID（十六进制，CLI 里不会被当成旗标）。
+func NewRequestID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	return "rq_" + hex.EncodeToString(b)
+}
+
 // HashSecret 是邀请凭据在房主库里存的样子：只存哈希。
 func HashSecret(secret string) string {
 	sum := sha256.Sum256([]byte("posse-invite-v1:" + secret))

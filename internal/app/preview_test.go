@@ -1021,6 +1021,7 @@ func TestPreview(t *testing.T) {
 
 		// 讨论页：列表、消息、执行卡、输入区、右边一栏，窄窗口、回答和搜索、长消息、归档、对话框（preview_disc_test.go）
 		renderDiscussionPreviews(t, dark, suffix)
+		renderCollabPreviews(t, dark, suffix)
 
 		a = previewApp(t)
 		previewHistory(a, "")

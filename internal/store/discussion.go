@@ -512,6 +512,9 @@ type DiscussionSummary struct {
 	Active    int          `json:"active"`
 	Pending   int          `json:"pending"`
 	Members   int          `json:"members"`
+	// 局域网协作：加入的讨论的状态（pending、active、rejected、removed、left），房主待批准的申请数
+	Joined   string `json:"joined,omitempty"`
+	Requests int    `json:"requests,omitempty"`
 }
 
 func (s *Store) DiscussionSummaries() ([]DiscussionSummary, error) {
@@ -531,6 +534,11 @@ func (s *Store) DiscussionSummaries() ([]DiscussionSummary, error) {
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE discussion=? AND state IN `+inList(activeStates), d.Key).Scan(&x.Active)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE discussion=? AND state IN `+inList(pendingStates), d.Key).Scan(&x.Pending)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_members WHERE discussion=? AND removed_at IS NULL`, d.Key).Scan(&x.Members)
+		if d.Mirror {
+			s.db.QueryRow(`SELECT state FROM collab_joined WHERE room=?`, d.Key).Scan(&x.Joined)
+		} else if d.Shared {
+			s.db.QueryRow(`SELECT COUNT(*) FROM collab_requests WHERE room=? AND state='pending'`, d.Key).Scan(&x.Requests)
+		}
 		out = append(out, x)
 	}
 	return out, nil

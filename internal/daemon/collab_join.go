@@ -761,7 +761,7 @@ func (d *Daemon) collabJoin(ctx context.Context, raw json.RawMessage) (any, erro
 	_, local, _ := collaboration.SplitRoomKey(inv.Room)
 	now := time.Now()
 	disc := store.Discussion{Key: inv.Room, Host: inv.Host, LocalID: local, Title: cmpOr(inv.Title, local), ProjectName: inv.HostName, ProjectPath: d.cfg.Home, CreatedAt: now}
-	j := store.Joined{Room: inv.Room, Host: inv.Host, HostName: inv.HostName, Addrs: inv.Addrs, Request: collaboration.NewSecret()[:32], State: store.RequestPending,
+	j := store.Joined{Room: inv.Room, Host: inv.Host, HostName: inv.HostName, Addrs: inv.Addrs, Request: collaboration.NewRequestID(), State: store.RequestPending,
 		Secret: inv.Secret, JoinedAt: now}
 	if err := d.store.CreateMirror(disc, j); err != nil {
 		return nil, discError(err)

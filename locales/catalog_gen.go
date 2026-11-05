@@ -25764,3 +25764,1049 @@ func DiscMessageGone() string { return In(i18n.Locale()).DiscMessageGone() }
 func (msgs Messages) DiscMessageGone() string {
 	return Catalog.Format(msgs.locale, "discMessageGone", nil)
 }
+
+// CollabAbandonBody says "Posse cannot tell whether this round already changed files or ran commands on this Mac; check first. The old round st…"
+// in the language the app shows.
+//
+// Confirm dialog body before abandoning a claimed round whose local record
+// is missing.
+func CollabAbandonBody() string { return In(i18n.Locale()).CollabAbandonBody() }
+
+// CollabAbandonBody says "Posse cannot tell whether this round already changed files or ran commands on this Mac; check first. The old round st…"
+// in the language of msgs.
+//
+// Confirm dialog body before abandoning a claimed round whose local record
+// is missing.
+func (msgs Messages) CollabAbandonBody() string {
+	return Catalog.Format(msgs.locale, "collabAbandonBody", nil)
+}
+
+// CollabAbandonRetry says "Give up and start again…"
+// in the language the app shows.
+//
+// Execution card button (joined discussion): abandon a claimed round and
+// start a new one.
+func CollabAbandonRetry() string { return In(i18n.Locale()).CollabAbandonRetry() }
+
+// CollabAbandonRetry says "Give up and start again…"
+// in the language of msgs.
+//
+// Execution card button (joined discussion): abandon a claimed round and
+// start a new one.
+func (msgs Messages) CollabAbandonRetry() string {
+	return Catalog.Format(msgs.locale, "collabAbandonRetry", nil)
+}
+
+// CollabAbandonTitle says "Give up this round and start a new one?"
+// in the language the app shows.
+//
+// Confirm dialog title.
+func CollabAbandonTitle() string { return In(i18n.Locale()).CollabAbandonTitle() }
+
+// CollabAbandonTitle says "Give up this round and start a new one?"
+// in the language of msgs.
+//
+// Confirm dialog title.
+func (msgs Messages) CollabAbandonTitle() string {
+	return Catalog.Format(msgs.locale, "collabAbandonTitle", nil)
+}
+
+// CollabAddresses says "Addresses"
+// in the language the app shows.
+//
+// Invite and join dialogs: label for the host's LAN addresses.
+func CollabAddresses() string { return In(i18n.Locale()).CollabAddresses() }
+
+// CollabAddresses says "Addresses"
+// in the language of msgs.
+//
+// Invite and join dialogs: label for the host's LAN addresses.
+func (msgs Messages) CollabAddresses() string {
+	return Catalog.Format(msgs.locale, "collabAddresses", nil)
+}
+
+// CollabApprove says "Approve"
+// in the language the app shows.
+//
+// Join request: approve button.
+func CollabApprove() string { return In(i18n.Locale()).CollabApprove() }
+
+// CollabApprove says "Approve"
+// in the language of msgs.
+//
+// Join request: approve button.
+func (msgs Messages) CollabApprove() string {
+	return Catalog.Format(msgs.locale, "collabApprove", nil)
+}
+
+// CollabAwaitingHere says "Waiting for this Mac to receive it"
+// in the language the app shows.
+//
+// Execution status: request to your agent not yet received by this
+// computer.
+func CollabAwaitingHere() string { return In(i18n.Locale()).CollabAwaitingHere() }
+
+// CollabAwaitingHere says "Waiting for this Mac to receive it"
+// in the language of msgs.
+//
+// Execution status: request to your agent not yet received by this
+// computer.
+func (msgs Messages) CollabAwaitingHere() string {
+	return Catalog.Format(msgs.locale, "collabAwaitingHere", nil)
+}
+
+// CollabChooseWorkspace says "Choose a workspace on this Mac for {name} before it can run requests."
+// in the language the app shows.
+//
+// Banner: the member's agent has no local workspace yet. name is the agent.
+func CollabChooseWorkspace(name string) string { return In(i18n.Locale()).CollabChooseWorkspace(name) }
+
+// CollabChooseWorkspace says "Choose a workspace on this Mac for {name} before it can run requests."
+// in the language of msgs.
+//
+// Banner: the member's agent has no local workspace yet. name is the agent.
+func (msgs Messages) CollabChooseWorkspace(name string) string {
+	return Catalog.Format(msgs.locale, "collabChooseWorkspace", map[string]any{"name": name})
+}
+
+// CollabChooseWorkspaceVerb says "Choose workspace…"
+// in the language the app shows.
+//
+// Banner button.
+func CollabChooseWorkspaceVerb() string { return In(i18n.Locale()).CollabChooseWorkspaceVerb() }
+
+// CollabChooseWorkspaceVerb says "Choose workspace…"
+// in the language of msgs.
+//
+// Banner button.
+func (msgs Messages) CollabChooseWorkspaceVerb() string {
+	return Catalog.Format(msgs.locale, "collabChooseWorkspaceVerb", nil)
+}
+
+// CollabCopyInvite says "Copy invitation"
+// in the language the app shows.
+//
+// Invite dialog button.
+func CollabCopyInvite() string { return In(i18n.Locale()).CollabCopyInvite() }
+
+// CollabCopyInvite says "Copy invitation"
+// in the language of msgs.
+//
+// Invite dialog button.
+func (msgs Messages) CollabCopyInvite() string {
+	return Catalog.Format(msgs.locale, "collabCopyInvite", nil)
+}
+
+// CollabExecLost says "The owner’s Mac is not connected; the request keeps its last known state."
+// in the language the app shows.
+//
+// Execution card note for another person's running request whose computer
+// stopped sending heartbeats.
+func CollabExecLost() string { return In(i18n.Locale()).CollabExecLost() }
+
+// CollabExecLost says "The owner’s Mac is not connected; the request keeps its last known state."
+// in the language of msgs.
+//
+// Execution card note for another person's running request whose computer
+// stopped sending heartbeats.
+func (msgs Messages) CollabExecLost() string {
+	return Catalog.Format(msgs.locale, "collabExecLost", nil)
+}
+
+// CollabFingerprint says "Host fingerprint"
+// in the language the app shows.
+//
+// Label of the host identity fingerprint.
+func CollabFingerprint() string { return In(i18n.Locale()).CollabFingerprint() }
+
+// CollabFingerprint says "Host fingerprint"
+// in the language of msgs.
+//
+// Label of the host identity fingerprint.
+func (msgs Messages) CollabFingerprint() string {
+	return Catalog.Format(msgs.locale, "collabFingerprint", nil)
+}
+
+// CollabHostedBy says "Hosted by {name}"
+// in the language the app shows.
+//
+// Joined discussion: who hosts it.
+func CollabHostedBy(name string) string { return In(i18n.Locale()).CollabHostedBy(name) }
+
+// CollabHostedBy says "Hosted by {name}"
+// in the language of msgs.
+//
+// Joined discussion: who hosts it.
+func (msgs Messages) CollabHostedBy(name string) string {
+	return Catalog.Format(msgs.locale, "collabHostedBy", map[string]any{"name": name})
+}
+
+// CollabHostLabel says "host"
+// in the language the app shows.
+//
+// Tag next to the host in the people list.
+func CollabHostLabel() string { return In(i18n.Locale()).CollabHostLabel() }
+
+// CollabHostLabel says "host"
+// in the language of msgs.
+//
+// Tag next to the host in the people list.
+func (msgs Messages) CollabHostLabel() string {
+	return Catalog.Format(msgs.locale, "collabHostLabel", nil)
+}
+
+// CollabInviteEllipsis says "Invite…"
+// in the language the app shows.
+//
+// Create an invitation for a shared discussion.
+func CollabInviteEllipsis() string { return In(i18n.Locale()).CollabInviteEllipsis() }
+
+// CollabInviteEllipsis says "Invite…"
+// in the language of msgs.
+//
+// Create an invitation for a shared discussion.
+func (msgs Messages) CollabInviteEllipsis() string {
+	return Catalog.Format(msgs.locale, "collabInviteEllipsis", nil)
+}
+
+// CollabInviteNote says "Single use, valid until {at, date, ::jm}. Posse does not send it: copy it and send it with your own chat tool. You st…"
+// in the language the app shows.
+//
+// Invite dialog explanation. at is the expiry time.
+func CollabInviteNote(at time.Time) string { return In(i18n.Locale()).CollabInviteNote(at) }
+
+// CollabInviteNote says "Single use, valid until {at, date, ::jm}. Posse does not send it: copy it and send it with your own chat tool. You st…"
+// in the language of msgs.
+//
+// Invite dialog explanation. at is the expiry time.
+func (msgs Messages) CollabInviteNote(at time.Time) string {
+	return Catalog.Format(msgs.locale, "collabInviteNote", map[string]any{"at": at})
+}
+
+// CollabInviteTitle says "Invitation"
+// in the language the app shows.
+//
+// Invite dialog title.
+func CollabInviteTitle() string { return In(i18n.Locale()).CollabInviteTitle() }
+
+// CollabInviteTitle says "Invitation"
+// in the language of msgs.
+//
+// Invite dialog title.
+func (msgs Messages) CollabInviteTitle() string {
+	return Catalog.Format(msgs.locale, "collabInviteTitle", nil)
+}
+
+// CollabJoinAddrsNote says "If the host’s address changed or the network blocks discovery, edit the addresses (host:port, separated by commas)."
+// in the language the app shows.
+//
+// Join dialog note under the addresses field.
+func CollabJoinAddrsNote() string { return In(i18n.Locale()).CollabJoinAddrsNote() }
+
+// CollabJoinAddrsNote says "If the host’s address changed or the network blocks discovery, edit the addresses (host:port, separated by commas)."
+// in the language of msgs.
+//
+// Join dialog note under the addresses field.
+func (msgs Messages) CollabJoinAddrsNote() string {
+	return Catalog.Format(msgs.locale, "collabJoinAddrsNote", nil)
+}
+
+// CollabJoinCheck says "Check with the host that this fingerprint matches the one they see."
+// in the language the app shows.
+//
+// Join dialog: verify the fingerprint out of band.
+func CollabJoinCheck() string { return In(i18n.Locale()).CollabJoinCheck() }
+
+// CollabJoinCheck says "Check with the host that this fingerprint matches the one they see."
+// in the language of msgs.
+//
+// Join dialog: verify the fingerprint out of band.
+func (msgs Messages) CollabJoinCheck() string {
+	return Catalog.Format(msgs.locale, "collabJoinCheck", nil)
+}
+
+// CollabJoinEllipsis says "Join…"
+// in the language the app shows.
+//
+// Discussions page button: join a discussion hosted on another Mac.
+func CollabJoinEllipsis() string { return In(i18n.Locale()).CollabJoinEllipsis() }
+
+// CollabJoinEllipsis says "Join…"
+// in the language of msgs.
+//
+// Discussions page button: join a discussion hosted on another Mac.
+func (msgs Messages) CollabJoinEllipsis() string {
+	return Catalog.Format(msgs.locale, "collabJoinEllipsis", nil)
+}
+
+// CollabJoinFrom says "“{title}” hosted by {host}"
+// in the language the app shows.
+//
+// Join dialog: which discussion the invitation is for.
+func CollabJoinFrom(title string, host string) string {
+	return In(i18n.Locale()).CollabJoinFrom(title, host)
+}
+
+// CollabJoinFrom says "“{title}” hosted by {host}"
+// in the language of msgs.
+//
+// Join dialog: which discussion the invitation is for.
+func (msgs Messages) CollabJoinFrom(title string, host string) string {
+	return Catalog.Format(msgs.locale, "collabJoinFrom", map[string]any{"title": title, "host": host})
+}
+
+// CollabJoinPaste says "Paste the invitation you received"
+// in the language the app shows.
+//
+// Join dialog text area placeholder.
+func CollabJoinPaste() string { return In(i18n.Locale()).CollabJoinPaste() }
+
+// CollabJoinPaste says "Paste the invitation you received"
+// in the language of msgs.
+//
+// Join dialog text area placeholder.
+func (msgs Messages) CollabJoinPaste() string {
+	return Catalog.Format(msgs.locale, "collabJoinPaste", nil)
+}
+
+// CollabJoinSend says "Ask to join"
+// in the language the app shows.
+//
+// Join dialog submit button.
+func CollabJoinSend() string { return In(i18n.Locale()).CollabJoinSend() }
+
+// CollabJoinSend says "Ask to join"
+// in the language of msgs.
+//
+// Join dialog submit button.
+func (msgs Messages) CollabJoinSend() string {
+	return Catalog.Format(msgs.locale, "collabJoinSend", nil)
+}
+
+// CollabJoinTitle says "Join a discussion"
+// in the language the app shows.
+//
+// Join dialog title.
+func CollabJoinTitle() string { return In(i18n.Locale()).CollabJoinTitle() }
+
+// CollabJoinTitle says "Join a discussion"
+// in the language of msgs.
+//
+// Join dialog title.
+func (msgs Messages) CollabJoinTitle() string {
+	return Catalog.Format(msgs.locale, "collabJoinTitle", nil)
+}
+
+// CollabLeave says "Leave"
+// in the language the app shows.
+//
+// Leave button.
+func CollabLeave() string { return In(i18n.Locale()).CollabLeave() }
+
+// CollabLeave says "Leave"
+// in the language of msgs.
+//
+// Leave button.
+func (msgs Messages) CollabLeave() string {
+	return Catalog.Format(msgs.locale, "collabLeave", nil)
+}
+
+// CollabLeaveBody says "The host revokes your access. Your agents leave the discussion; what was synced and results on this Mac stay here. Jo…"
+// in the language the app shows.
+//
+// Leave confirm body.
+func CollabLeaveBody() string { return In(i18n.Locale()).CollabLeaveBody() }
+
+// CollabLeaveBody says "The host revokes your access. Your agents leave the discussion; what was synced and results on this Mac stay here. Jo…"
+// in the language of msgs.
+//
+// Leave confirm body.
+func (msgs Messages) CollabLeaveBody() string {
+	return Catalog.Format(msgs.locale, "collabLeaveBody", nil)
+}
+
+// CollabLeaveEllipsis says "Leave discussion…"
+// in the language the app shows.
+//
+// Menu item in a joined discussion.
+func CollabLeaveEllipsis() string { return In(i18n.Locale()).CollabLeaveEllipsis() }
+
+// CollabLeaveEllipsis says "Leave discussion…"
+// in the language of msgs.
+//
+// Menu item in a joined discussion.
+func (msgs Messages) CollabLeaveEllipsis() string {
+	return Catalog.Format(msgs.locale, "collabLeaveEllipsis", nil)
+}
+
+// CollabLeaveTitle says "Leave this discussion?"
+// in the language the app shows.
+//
+// Leave confirm title.
+func CollabLeaveTitle() string { return In(i18n.Locale()).CollabLeaveTitle() }
+
+// CollabLeaveTitle says "Leave this discussion?"
+// in the language of msgs.
+//
+// Leave confirm title.
+func (msgs Messages) CollabLeaveTitle() string {
+	return Catalog.Format(msgs.locale, "collabLeaveTitle", nil)
+}
+
+// CollabLeftLabel says "left"
+// in the language the app shows.
+//
+// Person status: left the discussion.
+func CollabLeftLabel() string { return In(i18n.Locale()).CollabLeftLabel() }
+
+// CollabLeftLabel says "left"
+// in the language of msgs.
+//
+// Person status: left the discussion.
+func (msgs Messages) CollabLeftLabel() string {
+	return Catalog.Format(msgs.locale, "collabLeftLabel", nil)
+}
+
+// CollabLeftNote says "You left this discussion. What was synced stays readable here."
+// in the language the app shows.
+//
+// Banner in a discussion you left.
+func CollabLeftNote() string { return In(i18n.Locale()).CollabLeftNote() }
+
+// CollabLeftNote says "You left this discussion. What was synced stays readable here."
+// in the language of msgs.
+//
+// Banner in a discussion you left.
+func (msgs Messages) CollabLeftNote() string {
+	return Catalog.Format(msgs.locale, "collabLeftNote", nil)
+}
+
+// CollabListLeft says "No longer a member"
+// in the language the app shows.
+//
+// Discussion list preview for a joined discussion you were removed from or
+// left.
+func CollabListLeft() string { return In(i18n.Locale()).CollabListLeft() }
+
+// CollabListLeft says "No longer a member"
+// in the language of msgs.
+//
+// Discussion list preview for a joined discussion you were removed from or
+// left.
+func (msgs Messages) CollabListLeft() string {
+	return Catalog.Format(msgs.locale, "collabListLeft", nil)
+}
+
+// CollabListPending says "Waiting for approval"
+// in the language the app shows.
+//
+// Discussion list preview while the join request is pending.
+func CollabListPending() string { return In(i18n.Locale()).CollabListPending() }
+
+// CollabListPending says "Waiting for approval"
+// in the language of msgs.
+//
+// Discussion list preview while the join request is pending.
+func (msgs Messages) CollabListPending() string {
+	return Catalog.Format(msgs.locale, "collabListPending", nil)
+}
+
+// CollabLocalWorkspaceNote says "The workspace stays on this Mac; other people only see that the agent runs on your computer."
+// in the language the app shows.
+//
+// Member dialog note in a joined discussion.
+func CollabLocalWorkspaceNote() string { return In(i18n.Locale()).CollabLocalWorkspaceNote() }
+
+// CollabLocalWorkspaceNote says "The workspace stays on this Mac; other people only see that the agent runs on your computer."
+// in the language of msgs.
+//
+// Member dialog note in a joined discussion.
+func (msgs Messages) CollabLocalWorkspaceNote() string {
+	return Catalog.Format(msgs.locale, "collabLocalWorkspaceNote", nil)
+}
+
+// CollabMentionLabel says "@{name} (notify)"
+// in the language the app shows.
+//
+// Composer receiver label when mentioning a person.
+func CollabMentionLabel(name string) string { return In(i18n.Locale()).CollabMentionLabel(name) }
+
+// CollabMentionLabel says "@{name} (notify)"
+// in the language of msgs.
+//
+// Composer receiver label when mentioning a person.
+func (msgs Messages) CollabMentionLabel(name string) string {
+	return Catalog.Format(msgs.locale, "collabMentionLabel", map[string]any{"name": name})
+}
+
+// CollabMentionNote says "Only notifies them; their agents are not called"
+// in the language the app shows.
+//
+// Composer note when a person is mentioned.
+func CollabMentionNote() string { return In(i18n.Locale()).CollabMentionNote() }
+
+// CollabMentionNote says "Only notifies them; their agents are not called"
+// in the language of msgs.
+//
+// Composer note when a person is mentioned.
+func (msgs Messages) CollabMentionNote() string {
+	return Catalog.Format(msgs.locale, "collabMentionNote", nil)
+}
+
+// CollabMentionPerson says "Mention {name}"
+// in the language the app shows.
+//
+// Menu item: @ a person (notify only).
+func CollabMentionPerson(name string) string { return In(i18n.Locale()).CollabMentionPerson(name) }
+
+// CollabMentionPerson says "Mention {name}"
+// in the language of msgs.
+//
+// Menu item: @ a person (notify only).
+func (msgs Messages) CollabMentionPerson(name string) string {
+	return Catalog.Format(msgs.locale, "collabMentionPerson", map[string]any{"name": name})
+}
+
+// CollabNoticeMention says "{name} mentioned you"
+// in the language the app shows.
+//
+// System notification title.
+func CollabNoticeMention(name string) string { return In(i18n.Locale()).CollabNoticeMention(name) }
+
+// CollabNoticeMention says "{name} mentioned you"
+// in the language of msgs.
+//
+// System notification title.
+func (msgs Messages) CollabNoticeMention(name string) string {
+	return Catalog.Format(msgs.locale, "collabNoticeMention", map[string]any{"name": name})
+}
+
+// CollabNoticeRequest says "{name} asks to join"
+// in the language the app shows.
+//
+// Join request card title in the people panel.
+func CollabNoticeRequest(name string) string { return In(i18n.Locale()).CollabNoticeRequest(name) }
+
+// CollabNoticeRequest says "{name} asks to join"
+// in the language of msgs.
+//
+// Join request card title in the people panel.
+func (msgs Messages) CollabNoticeRequest(name string) string {
+	return Catalog.Format(msgs.locale, "collabNoticeRequest", map[string]any{"name": name})
+}
+
+// CollabNoticeRequestAny says "Someone asks to join"
+// in the language the app shows.
+//
+// System notification title for a new join request.
+func CollabNoticeRequestAny() string { return In(i18n.Locale()).CollabNoticeRequestAny() }
+
+// CollabNoticeRequestAny says "Someone asks to join"
+// in the language of msgs.
+//
+// System notification title for a new join request.
+func (msgs Messages) CollabNoticeRequestAny() string {
+	return Catalog.Format(msgs.locale, "collabNoticeRequestAny", nil)
+}
+
+// CollabNotListening says "Sharing is on but the collaboration service is not running"
+// in the language the app shows.
+//
+// Banner when the host could not open the collaboration port.
+func CollabNotListening() string { return In(i18n.Locale()).CollabNotListening() }
+
+// CollabNotListening says "Sharing is on but the collaboration service is not running"
+// in the language of msgs.
+//
+// Banner when the host could not open the collaboration port.
+func (msgs Messages) CollabNotListening() string {
+	return Catalog.Format(msgs.locale, "collabNotListening", nil)
+}
+
+// CollabOffline says "Offline"
+// in the language the app shows.
+//
+// Person/agent status.
+func CollabOffline() string { return In(i18n.Locale()).CollabOffline() }
+
+// CollabOffline says "Offline"
+// in the language of msgs.
+//
+// Person/agent status.
+func (msgs Messages) CollabOffline() string {
+	return Catalog.Format(msgs.locale, "collabOffline", nil)
+}
+
+// CollabOfflineBody says "You can read what was synced and keep drafts. Requests already running on this Mac finish; their results are sent whe…"
+// in the language the app shows.
+//
+// Banner body when a joined discussion lost its connection.
+func CollabOfflineBody() string { return In(i18n.Locale()).CollabOfflineBody() }
+
+// CollabOfflineBody says "You can read what was synced and keep drafts. Requests already running on this Mac finish; their results are sent whe…"
+// in the language of msgs.
+//
+// Banner body when a joined discussion lost its connection.
+func (msgs Messages) CollabOfflineBody() string {
+	return Catalog.Format(msgs.locale, "collabOfflineBody", nil)
+}
+
+// CollabOfflineTitle says "Not connected to the host"
+// in the language the app shows.
+//
+// Banner title.
+func CollabOfflineTitle() string { return In(i18n.Locale()).CollabOfflineTitle() }
+
+// CollabOfflineTitle says "Not connected to the host"
+// in the language of msgs.
+//
+// Banner title.
+func (msgs Messages) CollabOfflineTitle() string {
+	return Catalog.Format(msgs.locale, "collabOfflineTitle", nil)
+}
+
+// CollabOnline says "Online"
+// in the language the app shows.
+//
+// Person/agent status.
+func CollabOnline() string { return In(i18n.Locale()).CollabOnline() }
+
+// CollabOnline says "Online"
+// in the language of msgs.
+//
+// Person/agent status.
+func (msgs Messages) CollabOnline() string {
+	return Catalog.Format(msgs.locale, "collabOnline", nil)
+}
+
+// CollabOthersAgent says "@{name} · {owner}’s"
+// in the language the app shows.
+//
+// Receiver menu: another person's agent (disabled).
+func CollabOthersAgent(name string, owner string) string {
+	return In(i18n.Locale()).CollabOthersAgent(name, owner)
+}
+
+// CollabOthersAgent says "@{name} · {owner}’s"
+// in the language of msgs.
+//
+// Receiver menu: another person's agent (disabled).
+func (msgs Messages) CollabOthersAgent(name string, owner string) string {
+	return Catalog.Format(msgs.locale, "collabOthersAgent", map[string]any{"name": name, "owner": owner})
+}
+
+// CollabOutboxPending says "{count, plural, one {# result} other {# results}} waiting to reach the host"
+// in the language the app shows.
+//
+// Joined discussion note.
+func CollabOutboxPending(count int) string { return In(i18n.Locale()).CollabOutboxPending(count) }
+
+// CollabOutboxPending says "{count, plural, one {# result} other {# results}} waiting to reach the host"
+// in the language of msgs.
+//
+// Joined discussion note.
+func (msgs Messages) CollabOutboxPending(count int) string {
+	return Catalog.Format(msgs.locale, "collabOutboxPending", map[string]any{"count": count})
+}
+
+// CollabOutboxRejected says "{count, plural, one {# result} other {# results}} rejected by the host (kept on this Mac)"
+// in the language the app shows.
+//
+// Joined discussion note.
+func CollabOutboxRejected(count int) string { return In(i18n.Locale()).CollabOutboxRejected(count) }
+
+// CollabOutboxRejected says "{count, plural, one {# result} other {# results}} rejected by the host (kept on this Mac)"
+// in the language of msgs.
+//
+// Joined discussion note.
+func (msgs Messages) CollabOutboxRejected(count int) string {
+	return Catalog.Format(msgs.locale, "collabOutboxRejected", map[string]any{"count": count})
+}
+
+// CollabOwnedBy says "on {name}’s Mac"
+// in the language the app shows.
+//
+// Agent or execution owned by another person.
+func CollabOwnedBy(name string) string { return In(i18n.Locale()).CollabOwnedBy(name) }
+
+// CollabOwnedBy says "on {name}’s Mac"
+// in the language of msgs.
+//
+// Agent or execution owned by another person.
+func (msgs Messages) CollabOwnedBy(name string) string {
+	return Catalog.Format(msgs.locale, "collabOwnedBy", map[string]any{"name": name})
+}
+
+// CollabPausedLost says "{name} paused after the connection to the host dropped ({count, plural, one {# received request} other {# received re…"
+// in the language the app shows.
+//
+// Banner. name is the agent.
+func CollabPausedLost(name string, count int) string {
+	return In(i18n.Locale()).CollabPausedLost(name, count)
+}
+
+// CollabPausedLost says "{name} paused after the connection to the host dropped ({count, plural, one {# received request} other {# received re…"
+// in the language of msgs.
+//
+// Banner. name is the agent.
+func (msgs Messages) CollabPausedLost(name string, count int) string {
+	return Catalog.Format(msgs.locale, "collabPausedLost", map[string]any{"name": name, "count": count})
+}
+
+// CollabPendingBody says "Host fingerprint {fp}. Posse keeps the request open in the background."
+// in the language the app shows.
+//
+// Banner while waiting for approval.
+func CollabPendingBody(fp string) string { return In(i18n.Locale()).CollabPendingBody(fp) }
+
+// CollabPendingBody says "Host fingerprint {fp}. Posse keeps the request open in the background."
+// in the language of msgs.
+//
+// Banner while waiting for approval.
+func (msgs Messages) CollabPendingBody(fp string) string {
+	return Catalog.Format(msgs.locale, "collabPendingBody", map[string]any{"fp": fp})
+}
+
+// CollabPendingTitle says "Waiting for {name} to approve your request"
+// in the language the app shows.
+//
+// Banner title.
+func CollabPendingTitle(name string) string { return In(i18n.Locale()).CollabPendingTitle(name) }
+
+// CollabPendingTitle says "Waiting for {name} to approve your request"
+// in the language of msgs.
+//
+// Banner title.
+func (msgs Messages) CollabPendingTitle(name string) string {
+	return Catalog.Format(msgs.locale, "collabPendingTitle", map[string]any{"name": name})
+}
+
+// CollabPeople says "People"
+// in the language the app shows.
+//
+// Panel section title: people in a shared discussion.
+func CollabPeople() string { return In(i18n.Locale()).CollabPeople() }
+
+// CollabPeople says "People"
+// in the language of msgs.
+//
+// Panel section title: people in a shared discussion.
+func (msgs Messages) CollabPeople() string {
+	return Catalog.Format(msgs.locale, "collabPeople", nil)
+}
+
+// CollabPersonFP says "Fingerprint {fp}"
+// in the language the app shows.
+//
+// Join request card.
+func CollabPersonFP(fp string) string { return In(i18n.Locale()).CollabPersonFP(fp) }
+
+// CollabPersonFP says "Fingerprint {fp}"
+// in the language of msgs.
+//
+// Join request card.
+func (msgs Messages) CollabPersonFP(fp string) string {
+	return Catalog.Format(msgs.locale, "collabPersonFP", map[string]any{"fp": fp})
+}
+
+// CollabRefusedHere says "Not sent from this Mac; it will not run here"
+// in the language the app shows.
+//
+// Execution status: request to your agent that this computer did not
+// authorize.
+func CollabRefusedHere() string { return In(i18n.Locale()).CollabRefusedHere() }
+
+// CollabRefusedHere says "Not sent from this Mac; it will not run here"
+// in the language of msgs.
+//
+// Execution status: request to your agent that this computer did not
+// authorize.
+func (msgs Messages) CollabRefusedHere() string {
+	return Catalog.Format(msgs.locale, "collabRefusedHere", nil)
+}
+
+// CollabReject says "Decline"
+// in the language the app shows.
+//
+// Join request: decline button.
+func CollabReject() string { return In(i18n.Locale()).CollabReject() }
+
+// CollabReject says "Decline"
+// in the language of msgs.
+//
+// Join request: decline button.
+func (msgs Messages) CollabReject() string {
+	return Catalog.Format(msgs.locale, "collabReject", nil)
+}
+
+// CollabRejected says "Joining did not succeed"
+// in the language the app shows.
+//
+// Banner title in a joined discussion whose request was declined or
+// invalid.
+func CollabRejected() string { return In(i18n.Locale()).CollabRejected() }
+
+// CollabRejected says "Joining did not succeed"
+// in the language of msgs.
+//
+// Banner title in a joined discussion whose request was declined or
+// invalid.
+func (msgs Messages) CollabRejected() string {
+	return Catalog.Format(msgs.locale, "collabRejected", nil)
+}
+
+// CollabRemovedLabel says "removed"
+// in the language the app shows.
+//
+// Person status.
+func CollabRemovedLabel() string { return In(i18n.Locale()).CollabRemovedLabel() }
+
+// CollabRemovedLabel says "removed"
+// in the language of msgs.
+//
+// Person status.
+func (msgs Messages) CollabRemovedLabel() string {
+	return Catalog.Format(msgs.locale, "collabRemovedLabel", nil)
+}
+
+// CollabRemovedNote says "You are no longer a member of this discussion. What was synced stays readable here; joining again needs a new invitat…"
+// in the language the app shows.
+//
+// Banner after removal.
+func CollabRemovedNote() string { return In(i18n.Locale()).CollabRemovedNote() }
+
+// CollabRemovedNote says "You are no longer a member of this discussion. What was synced stays readable here; joining again needs a new invitat…"
+// in the language of msgs.
+//
+// Banner after removal.
+func (msgs Messages) CollabRemovedNote() string {
+	return Catalog.Format(msgs.locale, "collabRemovedNote", nil)
+}
+
+// CollabRemovePersonBody says "They can no longer read new messages, download attachments or report results. Their agents leave the discussion and u…"
+// in the language the app shows.
+//
+// Remove person confirm body.
+func CollabRemovePersonBody() string { return In(i18n.Locale()).CollabRemovePersonBody() }
+
+// CollabRemovePersonBody says "They can no longer read new messages, download attachments or report results. Their agents leave the discussion and u…"
+// in the language of msgs.
+//
+// Remove person confirm body.
+func (msgs Messages) CollabRemovePersonBody() string {
+	return Catalog.Format(msgs.locale, "collabRemovePersonBody", nil)
+}
+
+// CollabRemovePersonEllipsis says "Remove from discussion…"
+// in the language the app shows.
+//
+// People list menu item (host).
+func CollabRemovePersonEllipsis() string { return In(i18n.Locale()).CollabRemovePersonEllipsis() }
+
+// CollabRemovePersonEllipsis says "Remove from discussion…"
+// in the language of msgs.
+//
+// People list menu item (host).
+func (msgs Messages) CollabRemovePersonEllipsis() string {
+	return Catalog.Format(msgs.locale, "collabRemovePersonEllipsis", nil)
+}
+
+// CollabRemovePersonTitle says "Remove {name}?"
+// in the language the app shows.
+//
+// Remove person confirm title.
+func CollabRemovePersonTitle(name string) string {
+	return In(i18n.Locale()).CollabRemovePersonTitle(name)
+}
+
+// CollabRemovePersonTitle says "Remove {name}?"
+// in the language of msgs.
+//
+// Remove person confirm title.
+func (msgs Messages) CollabRemovePersonTitle(name string) string {
+	return Catalog.Format(msgs.locale, "collabRemovePersonTitle", map[string]any{"name": name})
+}
+
+// CollabRequestsBadge says "{count, plural, one {# join request} other {# join requests}} waiting"
+// in the language the app shows.
+//
+// Discussion list preview.
+func CollabRequestsBadge(count int) string { return In(i18n.Locale()).CollabRequestsBadge(count) }
+
+// CollabRequestsBadge says "{count, plural, one {# join request} other {# join requests}} waiting"
+// in the language of msgs.
+//
+// Discussion list preview.
+func (msgs Messages) CollabRequestsBadge(count int) string {
+	return Catalog.Format(msgs.locale, "collabRequestsBadge", map[string]any{"count": count})
+}
+
+// CollabResume says "Continue"
+// in the language the app shows.
+//
+// Banner button after reconnecting.
+func CollabResume() string { return In(i18n.Locale()).CollabResume() }
+
+// CollabResume says "Continue"
+// in the language of msgs.
+//
+// Banner button after reconnecting.
+func (msgs Messages) CollabResume() string {
+	return Catalog.Format(msgs.locale, "collabResume", nil)
+}
+
+// CollabShareBody says "People you approve can read this discussion’s whole history, key messages and published attachments, and add their …"
+// in the language the app shows.
+//
+// Share confirm body.
+func CollabShareBody() string { return In(i18n.Locale()).CollabShareBody() }
+
+// CollabShareBody says "People you approve can read this discussion’s whole history, key messages and published attachments, and add their …"
+// in the language of msgs.
+//
+// Share confirm body.
+func (msgs Messages) CollabShareBody() string {
+	return Catalog.Format(msgs.locale, "collabShareBody", nil)
+}
+
+// CollabSharedBadge says "Shared on LAN"
+// in the language the app shows.
+//
+// Header/list marker of a shared discussion.
+func CollabSharedBadge() string { return In(i18n.Locale()).CollabSharedBadge() }
+
+// CollabSharedBadge says "Shared on LAN"
+// in the language of msgs.
+//
+// Header/list marker of a shared discussion.
+func (msgs Messages) CollabSharedBadge() string {
+	return Catalog.Format(msgs.locale, "collabSharedBadge", nil)
+}
+
+// CollabShareEllipsis says "Share on LAN…"
+// in the language the app shows.
+//
+// Menu/panel action.
+func CollabShareEllipsis() string { return In(i18n.Locale()).CollabShareEllipsis() }
+
+// CollabShareEllipsis says "Share on LAN…"
+// in the language of msgs.
+//
+// Menu/panel action.
+func (msgs Messages) CollabShareEllipsis() string {
+	return Catalog.Format(msgs.locale, "collabShareEllipsis", nil)
+}
+
+// CollabShareHint says "Share on the local network to let people on other Macs join with their own agents."
+// in the language the app shows.
+//
+// Panel hint when not shared.
+func CollabShareHint() string { return In(i18n.Locale()).CollabShareHint() }
+
+// CollabShareHint says "Share on the local network to let people on other Macs join with their own agents."
+// in the language of msgs.
+//
+// Panel hint when not shared.
+func (msgs Messages) CollabShareHint() string {
+	return Catalog.Format(msgs.locale, "collabShareHint", nil)
+}
+
+// CollabShareTitle says "Share this discussion on the local network?"
+// in the language the app shows.
+//
+// Share confirm title.
+func CollabShareTitle() string { return In(i18n.Locale()).CollabShareTitle() }
+
+// CollabShareTitle says "Share this discussion on the local network?"
+// in the language of msgs.
+//
+// Share confirm title.
+func (msgs Messages) CollabShareTitle() string {
+	return Catalog.Format(msgs.locale, "collabShareTitle", nil)
+}
+
+// CollabShareVerb says "Share"
+// in the language the app shows.
+//
+// Share confirm button.
+func CollabShareVerb() string { return In(i18n.Locale()).CollabShareVerb() }
+
+// CollabShareVerb says "Share"
+// in the language of msgs.
+//
+// Share confirm button.
+func (msgs Messages) CollabShareVerb() string {
+	return Catalog.Format(msgs.locale, "collabShareVerb", nil)
+}
+
+// CollabStopSharing says "Stop sharing"
+// in the language the app shows.
+//
+// Panel action and confirm title/button.
+func CollabStopSharing() string { return In(i18n.Locale()).CollabStopSharing() }
+
+// CollabStopSharing says "Stop sharing"
+// in the language of msgs.
+//
+// Panel action and confirm title/button.
+func (msgs Messages) CollabStopSharing() string {
+	return Catalog.Format(msgs.locale, "collabStopSharing", nil)
+}
+
+// CollabStopSharingBody says "Members are disconnected but keep their access; when you share again they reconnect without a new approval, and messa…"
+// in the language the app shows.
+//
+// Stop sharing confirm body.
+func CollabStopSharingBody() string { return In(i18n.Locale()).CollabStopSharingBody() }
+
+// CollabStopSharingBody says "Members are disconnected but keep their access; when you share again they reconnect without a new approval, and messa…"
+// in the language of msgs.
+//
+// Stop sharing confirm body.
+func (msgs Messages) CollabStopSharingBody() string {
+	return Catalog.Format(msgs.locale, "collabStopSharingBody", nil)
+}
+
+// CollabYouLabel says "you"
+// in the language the app shows.
+//
+// Tag next to yourself in the people list.
+func CollabYouLabel() string { return In(i18n.Locale()).CollabYouLabel() }
+
+// CollabYouLabel says "you"
+// in the language of msgs.
+//
+// Tag next to yourself in the people list.
+func (msgs Messages) CollabYouLabel() string {
+	return Catalog.Format(msgs.locale, "collabYouLabel", nil)
+}
+
+// DiscExecClaimed says "Received by the owner’s Mac"
+// in the language the app shows.
+//
+// Execution status: the owner's computer claimed it but has not started.
+func DiscExecClaimed() string { return In(i18n.Locale()).DiscExecClaimed() }
+
+// DiscExecClaimed says "Received by the owner’s Mac"
+// in the language of msgs.
+//
+// Execution status: the owner's computer claimed it but has not started.
+func (msgs Messages) DiscExecClaimed() string {
+	return Catalog.Format(msgs.locale, "discExecClaimed", nil)
+}
+
+// DiscExecRevoked says "Access revoked"
+// in the language the app shows.
+//
+// Execution status: the owner's access was revoked (does not mean the
+// remote process stopped).
+func DiscExecRevoked() string { return In(i18n.Locale()).DiscExecRevoked() }
+
+// DiscExecRevoked says "Access revoked"
+// in the language of msgs.
+//
+// Execution status: the owner's access was revoked (does not mean the
+// remote process stopped).
+func (msgs Messages) DiscExecRevoked() string {
+	return Catalog.Format(msgs.locale, "discExecRevoked", nil)
+}

@@ -9397,5 +9397,396 @@
   "discMessageGone": "That message could not be found",
   "@discMessageGone": {
     "description": "Error after jumping to a message that no longer loads."
+  },
+  "collabAbandonBody": "Posse cannot tell whether this round already changed files or ran commands on this Mac; check first. The old round stays in the history, and a late result is recorded on it without completing the new one.",
+  "@collabAbandonBody": {
+    "description": "Confirm dialog body before abandoning a claimed round whose local record is missing."
+  },
+  "collabAbandonRetry": "Give up and start again…",
+  "@collabAbandonRetry": {
+    "description": "Execution card button (joined discussion): abandon a claimed round and start a new one."
+  },
+  "collabAbandonTitle": "Give up this round and start a new one?",
+  "@collabAbandonTitle": {
+    "description": "Confirm dialog title."
+  },
+  "collabAddresses": "Addresses",
+  "@collabAddresses": {
+    "description": "Invite and join dialogs: label for the host's LAN addresses."
+  },
+  "collabApprove": "Approve",
+  "@collabApprove": {
+    "description": "Join request: approve button."
+  },
+  "collabAwaitingHere": "Waiting for this Mac to receive it",
+  "@collabAwaitingHere": {
+    "description": "Execution status: request to your agent not yet received by this computer."
+  },
+  "collabChooseWorkspace": "Choose a workspace on this Mac for {name} before it can run requests.",
+  "@collabChooseWorkspace": {
+    "description": "Banner: the member's agent has no local workspace yet. name is the agent.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "collabChooseWorkspaceVerb": "Choose workspace…",
+  "@collabChooseWorkspaceVerb": {
+    "description": "Banner button."
+  },
+  "collabCopyInvite": "Copy invitation",
+  "@collabCopyInvite": {
+    "description": "Invite dialog button."
+  },
+  "collabExecLost": "The owner’s Mac is not connected; the request keeps its last known state.",
+  "@collabExecLost": {
+    "description": "Execution card note for another person's running request whose computer stopped sending heartbeats."
+  },
+  "collabFingerprint": "Host fingerprint",
+  "@collabFingerprint": {
+    "description": "Label of the host identity fingerprint."
+  },
+  "collabHostedBy": "Hosted by {name}",
+  "@collabHostedBy": {
+    "description": "Joined discussion: who hosts it.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "collabHostLabel": "host",
+  "@collabHostLabel": {
+    "description": "Tag next to the host in the people list."
+  },
+  "collabInviteEllipsis": "Invite…",
+  "@collabInviteEllipsis": {
+    "description": "Create an invitation for a shared discussion."
+  },
+  "collabInviteNote": "Single use, valid until {at, date, ::jm}. Posse does not send it: copy it and send it with your own chat tool. You still approve each request.",
+  "@collabInviteNote": {
+    "description": "Invite dialog explanation. at is the expiry time.",
+    "placeholders": {
+      "at": {
+        "type": "DateTime"
+      }
+    }
+  },
+  "collabInviteTitle": "Invitation",
+  "@collabInviteTitle": {
+    "description": "Invite dialog title."
+  },
+  "collabJoinAddrsNote": "If the host’s address changed or the network blocks discovery, edit the addresses (host:port, separated by commas).",
+  "@collabJoinAddrsNote": {
+    "description": "Join dialog note under the addresses field."
+  },
+  "collabJoinCheck": "Check with the host that this fingerprint matches the one they see.",
+  "@collabJoinCheck": {
+    "description": "Join dialog: verify the fingerprint out of band."
+  },
+  "collabJoinEllipsis": "Join…",
+  "@collabJoinEllipsis": {
+    "description": "Discussions page button: join a discussion hosted on another Mac."
+  },
+  "collabJoinFrom": "“{title}” hosted by {host}",
+  "@collabJoinFrom": {
+    "description": "Join dialog: which discussion the invitation is for.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "collabJoinPaste": "Paste the invitation you received",
+  "@collabJoinPaste": {
+    "description": "Join dialog text area placeholder."
+  },
+  "collabJoinSend": "Ask to join",
+  "@collabJoinSend": {
+    "description": "Join dialog submit button."
+  },
+  "collabJoinTitle": "Join a discussion",
+  "@collabJoinTitle": {
+    "description": "Join dialog title."
+  },
+  "collabLeave": "Leave",
+  "@collabLeave": {
+    "description": "Leave button."
+  },
+  "collabLeaveBody": "The host revokes your access. Your agents leave the discussion; what was synced and results on this Mac stay here. Joining again needs a new invitation.",
+  "@collabLeaveBody": {
+    "description": "Leave confirm body."
+  },
+  "collabLeaveEllipsis": "Leave discussion…",
+  "@collabLeaveEllipsis": {
+    "description": "Menu item in a joined discussion."
+  },
+  "collabLeaveTitle": "Leave this discussion?",
+  "@collabLeaveTitle": {
+    "description": "Leave confirm title."
+  },
+  "collabLeftLabel": "left",
+  "@collabLeftLabel": {
+    "description": "Person status: left the discussion."
+  },
+  "collabLeftNote": "You left this discussion. What was synced stays readable here.",
+  "@collabLeftNote": {
+    "description": "Banner in a discussion you left."
+  },
+  "collabListLeft": "No longer a member",
+  "@collabListLeft": {
+    "description": "Discussion list preview for a joined discussion you were removed from or left."
+  },
+  "collabListPending": "Waiting for approval",
+  "@collabListPending": {
+    "description": "Discussion list preview while the join request is pending."
+  },
+  "collabLocalWorkspaceNote": "The workspace stays on this Mac; other people only see that the agent runs on your computer.",
+  "@collabLocalWorkspaceNote": {
+    "description": "Member dialog note in a joined discussion."
+  },
+  "collabMentionLabel": "@{name} (notify)",
+  "@collabMentionLabel": {
+    "description": "Composer receiver label when mentioning a person.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "collabMentionNote": "Only notifies them; their agents are not called",
+  "@collabMentionNote": {
+    "description": "Composer note when a person is mentioned."
+  },
+  "collabMentionPerson": "Mention {name}",
+  "@collabMentionPerson": {
+    "description": "Menu item: @ a person (notify only).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "collabNoticeMention": "{name} mentioned you",
+  "@collabNoticeMention": {
+    "description": "System notification title.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "collabNoticeRequest": "{name} asks to join",
+  "@collabNoticeRequest": {
+    "description": "Join request card title in the people panel.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "collabNoticeRequestAny": "Someone asks to join",
+  "@collabNoticeRequestAny": {
+    "description": "System notification title for a new join request."
+  },
+  "collabNotListening": "Sharing is on but the collaboration service is not running",
+  "@collabNotListening": {
+    "description": "Banner when the host could not open the collaboration port."
+  },
+  "collabOffline": "Offline",
+  "@collabOffline": {
+    "description": "Person/agent status."
+  },
+  "collabOfflineBody": "You can read what was synced and keep drafts. Requests already running on this Mac finish; their results are sent when the connection is back.",
+  "@collabOfflineBody": {
+    "description": "Banner body when a joined discussion lost its connection."
+  },
+  "collabOfflineTitle": "Not connected to the host",
+  "@collabOfflineTitle": {
+    "description": "Banner title."
+  },
+  "collabOnline": "Online",
+  "@collabOnline": {
+    "description": "Person/agent status."
+  },
+  "collabOthersAgent": "@{name} · {owner}’s",
+  "@collabOthersAgent": {
+    "description": "Receiver menu: another person's agent (disabled).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "collabOutboxPending": "{count, plural, one {# result} other {# results}} waiting to reach the host",
+  "@collabOutboxPending": {
+    "description": "Joined discussion note.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "collabOutboxRejected": "{count, plural, one {# result} other {# results}} rejected by the host (kept on this Mac)",
+  "@collabOutboxRejected": {
+    "description": "Joined discussion note.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "collabOwnedBy": "on {name}’s Mac",
+  "@collabOwnedBy": {
+    "description": "Agent or execution owned by another person.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "collabPausedLost": "{name} paused after the connection to the host dropped ({count, plural, one {# received request} other {# received requests}} waiting). Continue when you are ready.",
+  "@collabPausedLost": {
+    "description": "Banner. name is the agent.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "collabPendingBody": "Host fingerprint {fp}. Posse keeps the request open in the background.",
+  "@collabPendingBody": {
+    "description": "Banner while waiting for approval.",
+    "placeholders": {
+      "fp": {
+        "type": "String"
+      }
+    }
+  },
+  "collabPendingTitle": "Waiting for {name} to approve your request",
+  "@collabPendingTitle": {
+    "description": "Banner title.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "collabPeople": "People",
+  "@collabPeople": {
+    "description": "Panel section title: people in a shared discussion."
+  },
+  "collabPersonFP": "Fingerprint {fp}",
+  "@collabPersonFP": {
+    "description": "Join request card.",
+    "placeholders": {
+      "fp": {
+        "type": "String"
+      }
+    }
+  },
+  "collabRefusedHere": "Not sent from this Mac; it will not run here",
+  "@collabRefusedHere": {
+    "description": "Execution status: request to your agent that this computer did not authorize."
+  },
+  "collabReject": "Decline",
+  "@collabReject": {
+    "description": "Join request: decline button."
+  },
+  "collabRejected": "Joining did not succeed",
+  "@collabRejected": {
+    "description": "Banner title in a joined discussion whose request was declined or invalid."
+  },
+  "collabRemovedLabel": "removed",
+  "@collabRemovedLabel": {
+    "description": "Person status."
+  },
+  "collabRemovedNote": "You are no longer a member of this discussion. What was synced stays readable here; joining again needs a new invitation.",
+  "@collabRemovedNote": {
+    "description": "Banner after removal."
+  },
+  "collabRemovePersonBody": "They can no longer read new messages, download attachments or report results. Their agents leave the discussion and unfinished requests are marked access revoked; this does not stop anything already running on their computer. What they downloaded stays with them. Joining again needs a new invitation.",
+  "@collabRemovePersonBody": {
+    "description": "Remove person confirm body."
+  },
+  "collabRemovePersonEllipsis": "Remove from discussion…",
+  "@collabRemovePersonEllipsis": {
+    "description": "People list menu item (host)."
+  },
+  "collabRemovePersonTitle": "Remove {name}?",
+  "@collabRemovePersonTitle": {
+    "description": "Remove person confirm title.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "collabRequestsBadge": "{count, plural, one {# join request} other {# join requests}} waiting",
+  "@collabRequestsBadge": {
+    "description": "Discussion list preview.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "collabResume": "Continue",
+  "@collabResume": {
+    "description": "Banner button after reconnecting."
+  },
+  "collabShareBody": "People you approve can read this discussion’s whole history, key messages and published attachments, and add their own agents. Your workspaces, terminals and files are not shared. Joining needs an invitation you send yourself.",
+  "@collabShareBody": {
+    "description": "Share confirm body."
+  },
+  "collabSharedBadge": "Shared on LAN",
+  "@collabSharedBadge": {
+    "description": "Header/list marker of a shared discussion."
+  },
+  "collabShareEllipsis": "Share on LAN…",
+  "@collabShareEllipsis": {
+    "description": "Menu/panel action."
+  },
+  "collabShareHint": "Share on the local network to let people on other Macs join with their own agents.",
+  "@collabShareHint": {
+    "description": "Panel hint when not shared."
+  },
+  "collabShareTitle": "Share this discussion on the local network?",
+  "@collabShareTitle": {
+    "description": "Share confirm title."
+  },
+  "collabShareVerb": "Share",
+  "@collabShareVerb": {
+    "description": "Share confirm button."
+  },
+  "collabStopSharing": "Stop sharing",
+  "@collabStopSharing": {
+    "description": "Panel action and confirm title/button."
+  },
+  "collabStopSharingBody": "Members are disconnected but keep their access; when you share again they reconnect without a new approval, and messages you post meanwhile sync then too.",
+  "@collabStopSharingBody": {
+    "description": "Stop sharing confirm body."
+  },
+  "collabYouLabel": "you",
+  "@collabYouLabel": {
+    "description": "Tag next to yourself in the people list."
+  },
+  "discExecClaimed": "Received by the owner’s Mac",
+  "@discExecClaimed": {
+    "description": "Execution status: the owner's computer claimed it but has not started."
+  },
+  "discExecRevoked": "Access revoked",
+  "@discExecRevoked": {
+    "description": "Execution status: the owner's access was revoked (does not mean the remote process stopped)."
   }
 }
