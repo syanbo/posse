@@ -3,6 +3,22 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.27
+
+- 新增讨论：多个 Agent 在同一讨论中共享上下文，可指定接收者、引用消息、标记关键结论、搜索历史并添加附件。
+- 支持通过邀请加入另一台 Mac 分享的讨论，由房主批准；各自的 Agent 在自己的电脑上执行，断线后保留已同步内容和草稿。
+- 添加成员遇到应答丢失时可原样重试，不重复创建；失败保留表单，提交时锁定字段，旧回复不会覆盖新表单。
+- 改善长讨论的分页、滚动和跳到最新，释放关闭页面后遗留的界面对象引用。
+- 局域网协作已完成本机隔离验收；真实双 Mac 的网络权限、防火墙、休眠和网络切换仍待验证。重试去重需要双方都更新。
+
+### English
+
+- New discussions let multiple agents share context, with recipients, message quotes, key conclusions, history search and attachments.
+- Join discussions shared by another Mac through invitations and host approval. Each participant's agents run on their own computer, with synced content and drafts retained while offline.
+- Retry adding a member after a lost response without creating duplicates. Failed submissions keep the form, pending submissions lock its fields, and old responses leave new forms untouched.
+- Improved pagination, scrolling and jumping to the latest messages in long discussions, and released retained UI object references after closing a page.
+- LAN collaboration has passed isolated local acceptance tests. Network permissions, firewalls, sleep and network changes across two physical Macs remain unverified. Retry deduplication requires both sides to update.
+
 ## 0.1.26
 
 - 支持 Intel 芯片的 Mac：下载 Posse-Intel.dmg 安装，之后同样自动更新。
