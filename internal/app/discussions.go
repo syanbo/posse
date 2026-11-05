@@ -850,9 +850,12 @@ func (a *app) discMessages(c *ui.Context, d *discDetail) {
 	if len(d.msgs) > 0 {
 		last = d.msgs[len(d.msgs)-1].Seq
 	}
+	// 跟随只看是不是正好在底：跟随时布局把 MaxFloat32 夹成正好 MaxY，离开一点就是用户滚了
+	// （慢慢滚的触控板一帧只动一两像素，滚轮刚起步的一帧也不到 4 像素，借底部容差会被拉回去）
+	atEnd := s.MaxY <= 0 || s.Y >= s.MaxY
 	// 用户往上滚了（滚轮、触控板、滚动条在事件里就改了 s.Y）：先停止跟随，再决定要不要拉到底；
 	// 否则这一帧会按上一帧的跟随把用户的滚动拉回底部。新消息到来不受影响：MaxY 要到下一次布局才变，这时仍在底部
-	if !atBottom {
+	if !atEnd {
 		b.follow = false
 	}
 	if b.follow && b.reveal == "" {
@@ -864,7 +867,7 @@ func (a *app) discMessages(c *ui.Context, d *discDetail) {
 			a.markDiscRead(d.key, d.info.MsgSeq)
 		}
 	}
-	b.follow = atBottom && !d.moreAfter
+	b.follow = atEnd && !d.moreAfter
 	box := ui.Box(c).Grow(1).MinHeight(0)
 	box.Children(func() {
 		ui.Scroll(c).Fill().TrackScroll(s).Children(func() {

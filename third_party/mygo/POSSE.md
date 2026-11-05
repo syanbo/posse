@@ -25,6 +25,8 @@ github.com/egoist/mygo v0.7.4 的副本，go.mod 用 replace 指向这里。去�
 
 `locale.go`：加 `App.ChosenLocale`，读出应用选的语言（`SetLocale` 存下的，跟随系统时为空串）；上游只能设、读不出，Posse 的设置页要显示选中的那项。
 
+`ui/scroll.go`：`adoptScroll` 在鼠标滚轮的一格正在途中、应用把位置写成「到头」（跟随末尾的日志每帧写 `math.MaxFloat32`）而内容已经在头上时，不算应用接管、不清掉滚轮；内容这一帧变长时照常由布局放到新的末尾。上游这样会吞掉停在底部时往上滚的第一格：事件后的第一帧滚轮还没走（或不到容差），应用照常跟随写了一次。应用写别的位置仍然接管。测试见 `ui/posse_scroll_test.go`（`go test github.com/egoist/mygo/ui`）。
+
 `ui/headless.go`：加 `Tester.MoveWith`、`Tester.ScrollWith`，带修饰键移动指针、滚动（平台每个指针事件都带当前修饰键，`Move` 不带会把修饰键清掉）。
 
 `ui/widgets.go`：对话框（`coreModal`）打开时遮罩淡入、对话框淡入并从 96% 放大，弹出面板（`stylePanel`：Popover、Select、ComboBox、日期、取色）淡入并下落 4 DIP，都用 `Keyframes` 播 160 ms，只在出现时播一次。

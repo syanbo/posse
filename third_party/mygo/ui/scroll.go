@@ -104,6 +104,18 @@ func (e *node) adoptScroll() bool {
 	if t == nil || t.X == float32(st.scrollX) && t.Y == float32(st.scrollY) {
 		return false
 	}
+	if st.wheel != nil && t.X == float32(st.scrollX) {
+		// The app asks for the end where the content already is, as a log
+		// following its end does each frame: that is no move, and the
+		// wheel's notches on their way go on. The content growing this
+		// frame still takes it to the new end, as layout keeps the offset
+		// within the content.
+		if my := max(0, st.contentH-float64(st.h)); float64(t.Y) >= my && st.scrollY >= my {
+			st.beginMove(e.c.rt.frame)
+			st.scrollY = float64(t.Y)
+			return false
+		}
+	}
 	st.beginMove(e.c.rt.frame)
 	st.wheel = nil // the app takes over from the wheel
 	if t.X != float32(st.scrollX) {

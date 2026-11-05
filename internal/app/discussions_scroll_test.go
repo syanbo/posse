@@ -83,6 +83,33 @@ func TestDiscussionScrollLeavesBottom(t *testing.T) {
 	}
 }
 
+// 停在底部时第一下就是鼠标滚轮：滚轮分帧缓出，事件后的第一帧还没动多少（无头测试里一点没动），
+// 那一帧照常跟随也不能把这一格滚轮清掉。
+func TestDiscussionScrollWheelFromBottom(t *testing.T) {
+	a, tt, x, y := scrollTester(t)
+	s := &a.disc.scroll
+	bottom := s.MaxY
+	tt.Wheel(x, y, 0, -300)
+	tt.Advance(time.Second)
+	settle(tt)
+	if s.Y > bottom-250 || a.disc.follow {
+		t.Fatalf("wheel from the bottom was swallowed: Y=%v of %v follow=%v", s.Y, bottom, a.disc.follow)
+	}
+}
+
+// 触控板慢慢滚，每帧只动几像素，也能离开底部。
+func TestDiscussionScrollSlowTrackpad(t *testing.T) {
+	a, tt, x, y := scrollTester(t)
+	s := &a.disc.scroll
+	bottom := s.MaxY
+	for range 8 {
+		tt.Scroll(x, y, 0, -3)
+	}
+	if s.Y != bottom-24 || a.disc.follow {
+		t.Fatalf("slow trackpad was pulled back: Y=%v of %v follow=%v", s.Y, bottom, a.disc.follow)
+	}
+}
+
 // 停在底部时新消息照常跟上。
 func TestDiscussionScrollFollowsAtBottom(t *testing.T) {
 	a, tt, _, _ := scrollTester(t)
