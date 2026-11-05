@@ -9,14 +9,16 @@ cd "$(dirname "$0")/.."
 export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
 
 main=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
-base=$main/build/darwin-arm64/Posse.app
+# 基础包按本机架构取：Intel Mac 上是 darwin-amd64
+arch=$(go env GOARCH)
+base=$main/build/darwin-$arch/Posse.app
 dir=$main/build/dev
 dev=$dir/PosseDev.app
 new=$dir/PosseDev.app.new
 old=$dir/PosseDev.app.old
 
 if [ ! -d "$base" ]; then
-	echo "缺 $base（图标、libghostty 从它复制）：先跑 go tool mygo build -platform darwin/arm64 -skip-dmg" >&2
+	echo "缺 $base（图标、libghostty 从它复制）：先跑 go tool mygo build -platform darwin/$arch -skip-dmg" >&2
 	exit 1
 fi
 identity=$(plutil -extract macos.signingIdentity raw mygo.json)

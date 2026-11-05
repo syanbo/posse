@@ -3,7 +3,10 @@
 package desk
 
 import (
+	"encoding/binary"
 	"math"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -88,4 +91,43 @@ func TestAccessibilitySymbol(t *testing.T) {
 	var trusted bool
 	mac.withPool(func() { trusted = mac.axTrusted() })
 	t.Logf("accessibility trusted=%v", trusted)
+}
+
+// 时长按值返回 24 字节的 CMTime：x86_64 上走错消息入口会崩，用 GOARCH=amd64 在 Rosetta 下也跑一遍。
+func TestMediaDuration(t *testing.T) {
+	mac, err := loadMac()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 1 秒 8 kHz 单声道 8 位静音 WAV
+	const rate = 8000
+	wav := make([]byte, 44+rate)
+	copy(wav, "RIFF")
+	binary.LittleEndian.PutUint32(wav[4:], uint32(36+rate))
+	copy(wav[8:], "WAVEfmt ")
+	binary.LittleEndian.PutUint32(wav[16:], 16)
+	binary.LittleEndian.PutUint16(wav[20:], 1)
+	binary.LittleEndian.PutUint16(wav[22:], 1)
+	binary.LittleEndian.PutUint32(wav[24:], rate)
+	binary.LittleEndian.PutUint32(wav[28:], rate)
+	binary.LittleEndian.PutUint16(wav[32:], 1)
+	binary.LittleEndian.PutUint16(wav[34:], 8)
+	copy(wav[36:], "data")
+	binary.LittleEndian.PutUint32(wav[40:], rate)
+	for i := 44; i < len(wav); i++ {
+		wav[i] = 0x80
+	}
+	path := filepath.Join(t.TempDir(), "silence.wav")
+	if err := os.WriteFile(path, wav, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mac.withPool(func() {
+		d := mac.mediaDuration(mac.fileURL(mac.clsURL, mac.sel("fileURLWithPath:"), mac.string(path)))
+		if d.Timescale <= 0 {
+			t.Fatalf("duration %+v", d)
+		}
+		if s := float64(d.Value) / float64(d.Timescale); math.Abs(s-1) > 0.01 {
+			t.Fatalf("duration %.3fs, want 1s", s)
+		}
+	})
 }

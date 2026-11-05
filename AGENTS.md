@@ -8,7 +8,7 @@
 export GOPROXY=https://goproxy.cn,direct   # 本机直连 proxy.golang.org / storage.googleapis.com 会超时
 go build -o bin/posse ./cmd/posse
 go vet ./... && go test ./... && go tool mygo vet && go tool mygo i18n check
-go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm64/Posse.app
+go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm64/Posse.app（Intel 机器用 darwin/amd64）
 ```
 
 - go.mod 要求 Go 1.27.3（MyGo 的要求），本机 Go 1.26 会通过 GOTOOLCHAIN=auto 自动下载。

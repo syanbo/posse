@@ -71,7 +71,6 @@ type macAPI struct {
 	addOutput      func(objc.ID, objc.SEL, objc.ID, int, uintptr, *objc.ID) bool
 	startCapture   func(objc.ID, objc.SEL, uintptr)
 	stopCapture    func(objc.ID, objc.SEL, uintptr)
-	assetDuration  func(objc.ID, objc.SEL) cmTime
 	urlAsset       func(objc.ID, objc.SEL, objc.ID) objc.ID
 
 	poolPush func() unsafe.Pointer
@@ -234,7 +233,6 @@ func loadMac() (*macAPI, error) {
 	bind(&m.addOutput, msg)
 	bind(&m.startCapture, msg)
 	bind(&m.stopCapture, msg)
-	bind(&m.assetDuration, msg)
 	bind(&m.urlAsset, msg)
 	bind(&m.sendObj, msg)
 	bind(&m.updateConfig, msg)

@@ -91,7 +91,7 @@ Posse 自己的大部分功能，就是作者在手机上随时随地给 agent �
 
 ## 安装
 
-**Mac**：下载 [Posse.dmg](https://posse.shaoyan.uk/Posse.dmg)，拖进「应用程序」，之后自动更新。
+**Mac**（macOS 13 起）：Apple 芯片下载 [Posse.dmg](https://posse.shaoyan.uk/Posse.dmg)，Intel 芯片下载 [Posse-Intel.dmg](https://posse.shaoyan.uk/Posse-Intel.dmg)，拖进「应用程序」，之后自动更新。
 
 **安卓**：手机浏览器打开 <https://posse.shaoyan.uk/android/index.html> 下载安装。
 
@@ -151,7 +151,7 @@ flowchart LR
 ```sh
 git clone https://github.com/syanbo/posse.git && cd posse
 go build -o bin/posse ./cmd/posse
-go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # 临时签名打包 Posse.app
+go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # 临时签名打包 Posse.app（Intel 芯片换成 darwin/amd64）
 ```
 
 临时签名的包不检查更新，装进「应用程序」也不会被官方版本换掉。手机端的构建见 [`mobile/README.md`](mobile/README.md)。

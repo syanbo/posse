@@ -999,13 +999,19 @@ func (e *engine) logStats(final bool) {
 	e.logf("%s %s low-latency=%v async=%d%% n=%d fps=%d p50=%s p95=%s", e.phaseLabel(), tag, e.wantLow, async, len(samples), fps, samples[len(samples)*50/100], samples[min(len(samples)*95/100, len(samples)-1)])
 }
 
+// mediaDuration 读 url 处媒体文件的时长。
+func (m *macAPI) mediaDuration(url objc.ID) cmTime {
+	asset := m.urlAsset(objc.ID(objc.GetClass("AVURLAsset")), m.sel("assetWithURL:"), url)
+	// CMTime 有 24 字节：x86_64 上要走 objc_msgSend_stret，objc.Send 按架构选
+	return objc.Send[cmTime](asset, m.sel("duration"))
+}
+
 func (e *engine) summary() {
 	e.logStats(true)
 	if e.mov == nil {
 		return
 	}
-	asset := e.mac.urlAsset(objc.ID(objc.GetClass("AVURLAsset")), e.mac.sel("assetWithURL:"), e.mov.url)
-	d := e.mac.assetDuration(asset, e.mac.sel("duration"))
+	d := e.mac.mediaDuration(e.mov.url)
 	if d.Timescale > 0 {
 		e.logf("mov %s duration %.2fs", e.mov.path, float64(d.Value)/float64(d.Timescale))
 	}

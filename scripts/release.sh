@@ -54,13 +54,38 @@ if ! grep -q "^## $version\$" CHANGELOG.md; then
 	echo "CHANGELOG.md 里没有 \"## $version\" 一节：它是更新时显示的更新内容" >&2
 	exit 1
 fi
-published=$(curl -fsS "$url/update-darwin-arm64.json" 2>/dev/null | plutil -extract version raw - 2>/dev/null || true)
-if [ -n "$published" ]; then
-	newest=$(printf '%s\n%s\n' "$published" "$version" | sort -V | tail -1)
-	if [ "$published" = "$version" ] || [ "$newest" != "$version" ]; then
-		echo "线上已经是 ${published}，$version 要比它新" >&2
+# Apple 芯片和 Intel 各一个包、各一份清单。清单最后传，线上清单已是这个版本的平台已经发完：
+# 重试时跳过它，不重新打包覆盖清单签过的文件，只补没发完的平台
+archs=
+manifest=$(mktemp)
+trap 'rm -f "$manifest"' EXIT
+for arch in arm64 amd64; do
+	# 只有 404 算没发布过：网络出错时当成没发布，会把已发布的平台重新打包、覆盖清单签过的文件
+	code=$(curl -sS -o "$manifest" -w '%{http_code}' "$url/update-darwin-$arch.json" || true)
+	case $code in
+	200) published=$(plutil -extract version raw "$manifest") ;;
+	404) published= ;;
+	*)
+		echo "读不到线上的 update-darwin-$arch.json（HTTP $code）" >&2
 		exit 1
+		;;
+	esac
+	if [ -n "$published" ]; then
+		newest=$(printf '%s\n%s\n' "$published" "$version" | sort -V | tail -1)
+		if [ "$newest" != "$version" ] || { [ "$published" = "$version" ] && [ -n "$bump" ]; }; then
+			echo "darwin-$arch 线上已经是 ${published}，$version 要比它新" >&2
+			exit 1
+		fi
+		if [ "$published" = "$version" ]; then
+			echo "darwin-$arch 已经发布了 ${version}，跳过"
+			continue
+		fi
 	fi
+	archs="$archs $arch"
+done
+if [ -z "$archs" ]; then
+	echo "$version 两个平台都已发布" >&2
+	exit 1
 fi
 # 打包、公证要一分钟，先确认能上传
 if ! wrangler whoami >/dev/null 2>&1; then
@@ -83,25 +108,39 @@ fi
 
 out=build/release/$version
 rm -rf "$out"
-MYGO_UPDATER_PRIVATE_KEY=$(cat "$key") go tool mygo build -platform darwin/arm64 -o "$out"
-dir=$out/darwin-arm64
+# 更新清单的地址按平台写进包里，已装的 arm64 版照旧读 update-darwin-arm64.json
+platforms=$(for arch in $archs; do printf 'darwin/%s,' "$arch"; done)
+MYGO_UPDATER_PRIVATE_KEY=$(cat "$key") go tool mygo build -platform "${platforms%,}" -o "$out"
 
 put() { # put <键> <文件> <类型> [缓存]
 	wrangler r2 object put "$bucket/$1" --file "$2" --content-type "$3" ${4:+--cache-control "$4"} --remote
 }
 
 # 先传清单指向的包，最后传清单：客户端看到新清单时，它要下载的东西一定已经在了
-for f in "$dir"/*.tar.gz; do
-	put "$(basename "$f")" "$f" application/gzip
+for arch in $archs; do
+	dir=$out/darwin-$arch
+	for f in "$dir"/*.tar.gz; do
+		put "$(basename "$f")" "$f" application/gzip
+	done
+	for f in "$dir"/*; do
+		case $f in *.tar.gz | *.json | *.dmg | *.app | *.sh) continue ;; esac
+		put "$(basename "$f")" "$f" application/octet-stream
+	done
 done
-for f in "$dir"/*; do
-	case $f in *.tar.gz | *.json | *.dmg | *.app) continue ;; esac
-	put "$(basename "$f")" "$f" application/octet-stream
+for arch in $archs; do
+	dmg=$(ls "$out/darwin-$arch"/*.dmg)
+	put "Posse-$version-$arch.dmg" "$dmg" application/x-apple-diskimage
+	case $arch in
+	arm64) put Posse.dmg "$dmg" application/x-apple-diskimage no-cache ;;
+	amd64) put Posse-Intel.dmg "$dmg" application/x-apple-diskimage no-cache ;;
+	esac
 done
-dmg=$(ls "$dir"/*.dmg)
-put "Posse-$version-arm64.dmg" "$dmg" application/x-apple-diskimage
-put Posse.dmg "$dmg" application/x-apple-diskimage no-cache
-put update-darwin-arm64.json "$dir/update-darwin-arm64.json" application/json no-cache
+# install.sh 只由 mygo.json 生成，各平台的一样；它按本机架构读清单
+set -- $archs
+put install.sh "$out/darwin-$1/install.sh" application/octet-stream
+for arch in $archs; do
+	put "update-darwin-$arch.json" "$out/darwin-$arch/update-darwin-$arch.json" application/json no-cache
+done
 
-echo "已发布 ${version}：$url/Posse.dmg"
+echo "已发布 ${version}：$url/Posse.dmg（Intel：$url/Posse-Intel.dmg）"
 echo "推送提交和标签：git push && git push origin v$version"

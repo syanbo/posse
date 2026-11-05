@@ -91,7 +91,7 @@ Also: arbitrarily nested split panes, completion alerts and Dock badges, quick c
 
 ## Install
 
-**Mac**: download [Posse.dmg](https://posse.shaoyan.uk/Posse.dmg) and drag it into Applications; it updates itself from then on.
+**Mac** (macOS 13 or later): download [Posse.dmg](https://posse.shaoyan.uk/Posse.dmg) for Apple silicon or [Posse-Intel.dmg](https://posse.shaoyan.uk/Posse-Intel.dmg) for Intel, and drag it into Applications; it updates itself from then on.
 
 **Android**: open <https://posse.shaoyan.uk/android/index.html> in your phone’s browser to download and install.
 
@@ -151,7 +151,7 @@ You need Go (version in `go.mod`, downloaded automatically) and Xcode. In mainla
 ```sh
 git clone https://github.com/syanbo/posse.git && cd posse
 go build -o bin/posse ./cmd/posse
-go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # package Posse.app with an ad-hoc signature
+go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # package Posse.app with an ad-hoc signature (darwin/amd64 on Intel)
 ```
 
 Ad-hoc signed builds don’t check for updates, and the official release won’t replace them in Applications. For the phone app, see [`mobile/README.md`](mobile/README.md).
