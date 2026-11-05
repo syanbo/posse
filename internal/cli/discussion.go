@@ -209,14 +209,23 @@ func cmdDiscussionAddMember(e *env, args []string) error {
 		"workspace": *ws, "worktree": *worktree, "clientId": *client}, &m, func() {
 		fmt.Fprintf(e.out, "added %s (%s) as %s in %s\n", m.Name, m.Agent, m.ID, m.WorkspaceLabel)
 	})
-	// 加入的讨论里房主没回应：可能已经加上了。用同一个请求 ID 重试，加上了就拿回那个，不会加出两个
+	// 加入的讨论里：房主没回应（可能已经加上了），或者这次已经在本机建了 worktree。用同一个请求 ID 重试：
+	// 加上了就拿回那个，不会加出两个；建好的 worktree 接着用
 	var re *rpc.Error
 	if errors.As(err, &re) && len(re.Data) > 0 {
 		var data struct {
 			ClientID string `json:"clientId"`
+			Unknown  bool   `json:"unknown"`
+			Worktree string `json:"worktree"`
 		}
 		if json.Unmarshal(re.Data, &data) == nil && data.ClientID != "" {
-			fmt.Fprintf(e.errOut, "the host may already have added it; retry the same command with --client-id %s so it is not added twice\n", data.ClientID)
+			if data.Unknown {
+				fmt.Fprintln(e.errOut, "the host may already have added it.")
+			}
+			if data.Worktree != "" {
+				fmt.Fprintf(e.errOut, "worktree %s was already created on this computer for this add.\n", data.Worktree)
+			}
+			fmt.Fprintf(e.errOut, "retry the same command with --client-id %s so it is not added twice\n", data.ClientID)
 		}
 	}
 	return err

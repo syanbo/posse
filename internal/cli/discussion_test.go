@@ -54,3 +54,35 @@ func TestDiscussionAddMemberUnknownResult(t *testing.T) {
 		t.Fatalf("client ids sent %q", got)
 	}
 }
+
+// 没发出去、但这次已经在本机建了 worktree：只说 worktree 和重试参数，不说房主可能加上了。
+func TestDiscussionAddMemberLocalWorktreeHint(t *testing.T) {
+	home, err := os.MkdirTemp("/tmp", "pa")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(home) })
+	sock := filepath.Join(home, "possed.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := rpc.NewServer()
+	s.Handle("discussion.member.add", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		e := rpc.Errorf(rpc.CodeBadRequest, "name required; name, role, model or effort too long")
+		e.Data = json.RawMessage(`{"clientId":"c-8","worktree":"bob-wt"}`)
+		return nil, e
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go s.Serve(ctx, ln)
+	var errOut bytes.Buffer
+	e := &env{home: home, socket: sock, out: &bytes.Buffer{}, errOut: &errOut}
+	if err := cmdDiscussionAddMember(e, []string{"fp/d_1", "--name", "Bob", "--agent", "codex", "--worktree", "bob-wt"}); err == nil {
+		t.Fatal("no error")
+	}
+	out := errOut.String()
+	if !strings.Contains(out, "worktree bob-wt was already created") || !strings.Contains(out, "--client-id c-8") || strings.Contains(out, "may already have added") {
+		t.Fatalf("hint %q", out)
+	}
+}

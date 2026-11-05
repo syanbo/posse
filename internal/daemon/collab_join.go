@@ -820,6 +820,13 @@ func (rc *roomConn) downloadTo(ctx context.Context, a store.Attachment, dst stri
 }
 
 // call 在连着的时候发一个请求给房主，然后补齐增量（让本机缓存马上有结果）。没连着报房主离线。
+// online 报告现在连着房主（call 能发出去）。
+func (rc *roomConn) online() bool {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	return rc.cli != nil
+}
+
 func (rc *roomConn) call(method string, params, out any) error {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()

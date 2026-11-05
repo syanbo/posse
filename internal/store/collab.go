@@ -1919,10 +1919,13 @@ func (s *Store) OwnConfirmed(id string) bool {
 	return s.db.QueryRow(`SELECT own_config FROM disc_members WHERE id=?`, id).Scan(&own) == nil && own != ""
 }
 
-// AddRequestWorkspace 返回这次添加（请求 ID）先前为 Agent 新建的 worktree 工作区和名字。
-func (s *Store) AddRequestWorkspace(room, client string) (workspace, worktree string, ok bool) {
-	err := s.db.QueryRow(`SELECT workspace_id, worktree FROM collab_add_workspaces WHERE room=? AND client=?`, room, client).Scan(&workspace, &worktree)
-	return workspace, worktree, err == nil
+// AddRequestWorkspace 返回这次添加（请求 ID）先前为 Agent 新建的 worktree 工作区和名字；没有记录时是 ErrNotFound。
+func (s *Store) AddRequestWorkspace(room, client string) (workspace, worktree string, err error) {
+	err = s.db.QueryRow(`SELECT workspace_id, worktree FROM collab_add_workspaces WHERE room=? AND client=?`, room, client).Scan(&workspace, &worktree)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return workspace, worktree, err
 }
 
 // SetAddRequestWorkspace 记下这次添加新建的 worktree 工作区；workspace 为空时删掉记录（工作区已经没了）。

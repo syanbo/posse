@@ -25,6 +25,7 @@ var zh = [][2]string{
 	{"the agent this request added was removed since; add it again from a new form", "这次添加的 Agent 后来已经移除了；要的话关掉表单重新添加"},
 	{"this request already added an agent with other settings; edit that agent instead", "这次添加已经用别的设置加上了一个 Agent；请改那个 Agent 的设置"},
 	{"this request already created worktree %s; retry it with the same options", "这次添加已经新建了 worktree {1}；请用同样的选项重试"},
+	{"the worktree %s this request created was removed; choose a workspace in the agent's settings, or add it again from a new form", "这次添加新建的 worktree {1} 已经删了；请在这个 Agent 的设置里选一个工作区，或者关掉表单重新添加"},
 	{"the host did not answer (%v); your draft is kept, try again", "房主没有回应（{1}），草稿已保留，请重试"},
 	{"the host turned off sharing for this discussion; you can read what was already synced", "房主关掉了这个讨论的分享，已同步的内容仍可阅读"},
 	{"the host turned off sharing for this discussion", "房主关掉了这个讨论的分享"},

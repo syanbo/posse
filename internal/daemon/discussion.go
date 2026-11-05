@@ -895,29 +895,35 @@ type discMemberParams struct {
 
 // addWorkspace 是添加成员时的执行工作区。加入的讨论里要新建 worktree 时，记下它属于这次请求（请求 ID）：
 // 房主没回应、用同一个请求 ID 重试时用回这个 worktree，不再建一次（同名目录已经在了会失败）；
-// 重试换了 worktree 名字报错，不接受别的同名目录。
-func (d *Daemon) addWorkspace(ctx context.Context, disc store.Discussion, p discMemberParams) (store.Workspace, error) {
+// 重试换了 worktree 名字报错，不接受别的同名目录；用户后来删了它，重试报错，不重建。
+// tree 是这次请求在本机已经有的 worktree 名字（出错时调用方据此告诉用户可以用同一个请求 ID 接着用它）。
+func (d *Daemon) addWorkspace(ctx context.Context, disc store.Discussion, p discMemberParams) (w store.Workspace, tree string, err error) {
 	name := strings.TrimSpace(p.Worktree)
 	if !disc.Mirror || name == "" {
-		return d.memberWorkspace(ctx, disc, p)
+		w, err = d.memberWorkspace(ctx, disc, p)
+		return w, "", err
 	}
-	if id, tree, ok := d.store.AddRequestWorkspace(disc.Key, p.ClientID); ok {
-		if tree != name {
-			return store.Workspace{}, rpc.Errorf(rpc.CodeConflict, "this request already created worktree %s; retry it with the same options", tree)
+	id, old, err := d.store.AddRequestWorkspace(disc.Key, p.ClientID)
+	switch {
+	case err == nil:
+		if old != name {
+			return w, old, rpc.Errorf(rpc.CodeConflict, "this request already created worktree %s; retry it with the same options", old)
 		}
-		if w, err := d.store.Workspace(id); err == nil {
-			return w, nil
+		w, err = d.store.Workspace(id)
+		if errors.Is(err, store.ErrNotFound) {
+			return w, "", rpc.Errorf(rpc.CodeConflict, "the worktree %s this request created was removed; choose a workspace in the agent's settings, or add it again from a new form", name)
 		}
-		d.store.SetAddRequestWorkspace(disc.Key, p.ClientID, "", "", time.Now()) // 工作区后来删了：照常新建
+		return w, name, err
+	case !errors.Is(err, store.ErrNotFound):
+		return w, "", err
 	}
-	w, err := d.memberWorkspace(ctx, disc, p)
-	if err != nil {
-		return w, err
+	if w, err = d.memberWorkspace(ctx, disc, p); err != nil {
+		return w, "", err
 	}
 	if err := d.store.SetAddRequestWorkspace(disc.Key, p.ClientID, w.ID, name, time.Now()); err != nil {
-		return w, err
+		return w, "", err
 	}
-	return w, nil
+	return w, name, nil
 }
 
 // memberWorkspace 定下成员的执行工作区：要新建 worktree 时在讨论的项目里建。
@@ -998,25 +1004,31 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 	if err := d.checkMemberAgent(p.Agent); err != nil {
 		return nil, err
 	}
-	if disc.Mirror && p.ClientID == "" {
-		p.ClientID = store.NewID("c_") + store.NewID("")
+	var rc *roomConn
+	if disc.Mirror {
+		if p.ClientID == "" {
+			p.ClientID = store.NewID("c_") + store.NewID("")
+		}
+		// 先确认连着房主再动本机：连不上时什么都不建
+		if rc, err = d.mirrorConn(disc); err != nil {
+			return nil, err
+		}
+		if !rc.online() {
+			return nil, hostOffline(rc)
+		}
 	}
-	w, err := d.addWorkspace(ctx, disc, p)
+	w, tree, err := d.addWorkspace(ctx, disc, p)
 	if err != nil {
-		return nil, withClientID(err, p.ClientID)
+		return nil, addError(err, p.ClientID, tree)
 	}
 	if disc.Mirror {
 		// 公开配置交给房主登记，执行工作区只记在这台电脑上
-		rc, err := d.mirrorConn(disc)
-		if err != nil {
-			return nil, err
-		}
 		var res struct {
 			Member    string `json:"member"`
 			Duplicate bool   `json:"duplicate"`
 		}
 		if err := rc.call("member.add", map[string]string{"name": p.Name, "role": strings.TrimSpace(p.Role), "agent": p.Agent, "model": p.Model, "effort": p.Effort, "client": p.ClientID}, &res); err != nil {
-			return nil, withClientID(err, p.ClientID)
+			return nil, addError(err, p.ClientID, tree)
 		}
 		// 房主早就加好了、这台电脑也确认过（上次的应答其实收到了，或者之后改过设置）：旧请求的重试不改本机后来的设置
 		if res.Duplicate && d.store.OwnConfirmed(res.Member) {
@@ -1025,7 +1037,7 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 		own := store.Member{ID: res.Member, Name: p.Name, Role: strings.TrimSpace(p.Role), Agent: p.Agent, Model: p.Model, Effort: p.Effort,
 			WorkspaceID: w.ID, WorkspaceLabel: d.workspaceLabel(w)}
 		if err := d.store.SetOwnConfig(own); err != nil {
-			return nil, discError(err)
+			return nil, addError(discError(err), p.ClientID, tree)
 		}
 		d.taskNotify()
 		return d.store.Member(res.Member)
@@ -1043,17 +1055,25 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 	return d.store.Member(m.ID)
 }
 
-// withClientID 给「结果未知」的错误带上请求 ID：调用方用它重试同一次添加（CLI 的 --client-id）。
-func withClientID(err error, client string) error {
+// addError 给添加失败的错误带上能接着重试的信息（Data）：房主结果未知（unknown，来自 rc.call）时，
+// 或者这次请求已经在本机建了 worktree（worktree）时，带上请求 ID（clientId）。用同一个 ID 重试不会加出两个，
+// 也用回那个 worktree。两件事分开写，不为了带 ID 把没发出去的说成结果未知。
+func addError(err error, client, worktree string) error {
 	var re *rpc.Error
-	if !errors.As(err, &re) || len(re.Data) == 0 {
+	if !errors.As(err, &re) {
 		return err
 	}
-	var data map[string]any
-	if json.Unmarshal(re.Data, &data) != nil || data["unknown"] != true {
+	data := map[string]any{}
+	if len(re.Data) > 0 {
+		json.Unmarshal(re.Data, &data)
+	}
+	if data["unknown"] != true && worktree == "" {
 		return err
 	}
 	data["clientId"] = client
+	if worktree != "" {
+		data["worktree"] = worktree
+	}
 	out := *re
 	out.Data, _ = json.Marshal(data)
 	return &out

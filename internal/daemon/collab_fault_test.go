@@ -696,15 +696,19 @@ func TestCollabAddMemberLostReply(t *testing.T) {
 	if n := bobs(); n != 2 {
 		t.Fatalf("host has %d Bobs after a new add", n)
 	}
-	// 结果未知的错误带上请求 ID；其他错误不动
+	// 结果未知、或本机已有这次请求的 worktree 时带上请求 ID；两件事分开写；其他错误不动
 	unknown := rpc.Errorf(rpc.CodeConflict, "the host did not answer (x); it may or may not have done this")
 	unknown.Data = json.RawMessage(`{"unknown":true}`)
 	var re *rpc.Error
-	if err := withClientID(unknown, "c-9"); !errors.As(err, &re) || !strings.Contains(string(re.Data), `"clientId":"c-9"`) {
+	if err := addError(unknown, "c-9", ""); !errors.As(err, &re) || string(re.Data) != `{"clientId":"c-9","unknown":true}` {
 		t.Fatalf("unknown result: %v %s", err, re.Data)
 	}
+	sent := rpc.Errorf(rpc.CodeConflict, "not connected to the host: x. Nothing was sent.")
+	if err := addError(sent, "c-9", "wt"); !errors.As(err, &re) || string(re.Data) != `{"clientId":"c-9","worktree":"wt"}` {
+		t.Fatalf("local worktree: %v %s", err, re.Data)
+	}
 	plain := rpc.Errorf(rpc.CodeConflict, "busy")
-	if err := withClientID(plain, "c-9"); err != error(plain) {
+	if err := addError(plain, "c-9", ""); err != error(plain) {
 		t.Fatalf("plain error changed: %v", err)
 	}
 }
@@ -728,11 +732,10 @@ func TestCollabAddRetryKeepsLaterLocalSettings(t *testing.T) {
 	}
 }
 
-// 带 --worktree 的添加：第一次在本机建好 worktree 后没交到房主（房主没在分享），
-// 同一个命令（同一个请求 ID、同一个 worktree 名）重试用回这个 worktree，房主只加一个；换了名字报错，不接受别的目录。
-func TestCollabAddRetryReusesItsWorktree(t *testing.T) {
-	p := newCollabPair(t)
-	h, m := p.host, p.member
+// gitMemberProject 把成员这边测试项目变成 git 仓库，好让添加成员时新建 worktree。
+func gitMemberProject(t *testing.T, p *collabPair) {
+	t.Helper()
+	m := p.member
 	proj, err := m.store.FindProject(p.mw.ProjectID)
 	if err != nil {
 		t.Fatal(err)
@@ -748,6 +751,77 @@ func TestCollabAddRetryReusesItsWorktree(t *testing.T) {
 	if err := m.store.UpdateProject(proj); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// 不带请求 ID 的添加（CLI 默认）：连不上房主时本机什么都不建，恢复后同一个命令照常加上；
+// 本机建好 worktree 后房主拒绝了（这里是职责太长），报错带着请求 ID 和 worktree，用这个 ID 改好再试就接着用它。
+func TestCollabAddAutoIDLocalWorktree(t *testing.T) {
+	p := newCollabPair(t)
+	h, m := p.host, p.member
+	gitMemberProject(t, p)
+	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": false})
+	waitFor(t, "member offline", func() bool { return !m.roomStatus(p.disc.Key).Connected })
+	add := map[string]any{"discussion": p.disc.Key, "name": "Bob", "agent": "codex", "workspace": p.mw.ID, "worktree": "auto-wt"}
+	if _, err := callErr(m.discMemberAdd, add); err == nil {
+		t.Fatal("added while the host was not sharing")
+	}
+	if ws, _ := m.store.FindWorkspaces("auto-wt"); len(ws) != 0 {
+		t.Fatalf("offline add created %+v", ws)
+	}
+	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": true})
+	waitFor(t, "member back", func() bool { return m.roomStatus(p.disc.Key).Connected })
+	if got := call(t, m.discMemberAdd, add).(store.Member); got.Paused != "" {
+		t.Fatalf("added after reconnecting: %+v", got)
+	}
+
+	long := map[string]any{"discussion": p.disc.Key, "name": "Carol", "agent": "codex", "workspace": p.mw.ID, "worktree": "carol-wt", "role": strings.Repeat("r", 4001)}
+	_, err := callErr(m.discMemberAdd, long)
+	var re *rpc.Error
+	if !errors.As(err, &re) {
+		t.Fatalf("host accepted a too long role: %v", err)
+	}
+	var data struct {
+		ClientID string `json:"clientId"`
+		Unknown  bool   `json:"unknown"`
+		Worktree string `json:"worktree"`
+	}
+	json.Unmarshal(re.Data, &data)
+	if data.ClientID == "" || data.Worktree != "carol-wt" || data.Unknown {
+		t.Fatalf("error data %s, want the request id and its worktree, not an unknown result", re.Data)
+	}
+	long["role"], long["clientId"] = "review", data.ClientID
+	got := call(t, m.discMemberAdd, long).(store.Member)
+	if w, err := m.store.Workspace(got.WorkspaceID); err != nil || filepath.Base(w.Path) != "carol-wt" {
+		t.Fatalf("retry got workspace %+v %v, want carol-wt", w, err)
+	}
+}
+
+// 加好之后用户删了这次请求建的 worktree，再重试最初那次：报错，不重建工作区，成员不变。
+func TestCollabAddRetryAfterWorktreeRemoved(t *testing.T) {
+	p := newCollabPair(t)
+	m := p.member
+	gitMemberProject(t, p)
+	add := map[string]any{"discussion": p.disc.Key, "name": "Bob", "agent": "codex", "workspace": p.mw.ID, "worktree": "gone-wt", "clientId": "c-gone"}
+	first := call(t, m.discMemberAdd, add).(store.Member)
+	call(t, m.workspaceRm, map[string]any{"workspace": first.WorkspaceID, "force": true})
+	before, _ := m.store.Workspaces(p.mw.ProjectID)
+	if _, err := callErr(m.discMemberAdd, add); err == nil || !strings.Contains(err.Error(), "gone-wt this request created was removed") {
+		t.Fatalf("retry after the worktree was removed: %v", err)
+	}
+	if after, _ := m.store.Workspaces(p.mw.ProjectID); len(after) != len(before) {
+		t.Fatalf("retry created a workspace: %d -> %d", len(before), len(after))
+	}
+	if mm, _ := m.store.Member(first.ID); mm.WorkspaceID != first.WorkspaceID {
+		t.Fatalf("member changed: %+v", mm)
+	}
+}
+
+// 带 --worktree 的添加（同一个请求 ID）：房主没在分享时不建也不发；恢复后加上，
+// 再重试用回这次建的 worktree，房主只加一个；换了名字报错，不接受别的目录。
+func TestCollabAddRetryReusesItsWorktree(t *testing.T) {
+	p := newCollabPair(t)
+	h, m := p.host, p.member
+	gitMemberProject(t, p)
 	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": false})
 	waitFor(t, "member offline", func() bool { return !m.roomStatus(p.disc.Key).Connected })
 	add := map[string]any{"discussion": p.disc.Key, "name": "Bob", "agent": "codex", "workspace": p.mw.ID, "worktree": "bob-wt", "clientId": "c-wt"}
