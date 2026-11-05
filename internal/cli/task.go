@@ -25,6 +25,7 @@ type taskMessage struct {
 
 type taskInfo struct {
 	ID, Title, Spec, Coordinator, WorkspaceID, Worker, Agent, Model, Effort, Group, Status, Summary, Report string
+	DiscussionID                                                                                            string
 	Workspace, WorkspaceKind, Branch, BaseRef                                                               string
 	CreatedAt                                                                                               time.Time
 	EndedAt                                                                                                 *time.Time
@@ -136,6 +137,10 @@ func cmdTaskRetry(e *env, args []string) error {
 	var old taskInfo
 	if err := e.call("task.show", map[string]any{"task": pos[0], "caller": caller()}, &old); err != nil {
 		return err
+	}
+	if old.DiscussionID != "" {
+		// 讨论 worker 的请求按成员排队：在讨论里重试那一轮，或重新启动成员
+		return fmt.Errorf("task %s is a discussion worker; retry its request in the discussion (posse discussion retry <execution>, or posse discussion restart <member>; see posse discussion show %s)", old.ID, old.DiscussionID)
 	}
 	params, err := retryParams(old, *model, *effort, *spec, *specFile)
 	if err != nil {
@@ -383,6 +388,9 @@ func cmdTaskDone(e *env, args []string) error {
 	summary := fs.String("summary", "", "")
 	report := fs.String("report", "", "")
 	failed := fs.Bool("failed", false, "")
+	exec := fs.String("execution", "", "")
+	body := fs.String("body", "", "")
+	bodyFile := fs.String("body-file", "", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -391,15 +399,26 @@ func cmdTaskDone(e *env, args []string) error {
 	if *summary == "" {
 		*summary = strings.Join(pos, " ")
 	}
+	if *bodyFile != "" {
+		text, err := readSpec("", *bodyFile)
+		if err != nil {
+			return err
+		}
+		*body = text
+	}
 	if *report != "" {
 		if abs, err := filepath.Abs(*report); err == nil {
 			*report = abs
 		}
 	}
-	params := map[string]any{"task": task, "caller": caller(), "summary": *summary, "report": *report, "failed": *failed}
+	params := map[string]any{"task": task, "caller": caller(), "summary": *summary, "report": *report, "failed": *failed, "execution": *exec, "body": *body}
 	var t taskInfo
 	return e.do("task.done", params, &t, func() {
 		fmt.Fprintf(e.out, "reported %s as %s\n", t.ID, t.Status)
+		if t.DiscussionID != "" {
+			fmt.Fprintln(e.out, "your reply is in the discussion; now stop and wait at the prompt. Posse reminds you with the execution ID of the next request")
+			return
+		}
 		fmt.Fprintf(e.out, "now stop and wait at the prompt; if follow-up work arrives, Posse gives you a reminder: run posse task check %s, then report again\n", t.ID)
 	})
 }
@@ -416,25 +435,27 @@ func cmdTaskAsk(e *env, args []string) error {
 	fs := flag.NewFlagSet("task ask", flag.ContinueOnError)
 	resume := fs.String("resume", "", "")
 	timeout := fs.Duration("timeout", 9*time.Minute, "")
+	exec := fs.String("execution", "", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
 	task, pos := splitTaskArg(pos)
 	params := map[string]any{"task": task, "caller": caller(), "question": strings.Join(pos, " "), "resume": *resume,
-		"timeoutMs": timeout.Milliseconds()}
+		"timeoutMs": timeout.Milliseconds(), "execution": *exec}
 	var r struct{ Answer string }
 	return e.doWait("task.ask", params, &r, func() { fmt.Fprintln(e.out, r.Answer) })
 }
 
 func cmdTaskCheck(e *env, args []string) error {
 	fs := flag.NewFlagSet("task check", flag.ContinueOnError)
+	exec := fs.String("execution", "", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
 	var msgs []taskMessage
-	return e.do("task.check", map[string]any{"task": first(pos), "caller": caller()}, &msgs, func() {
+	return e.do("task.check", map[string]any{"task": first(pos), "caller": caller(), "execution": *exec}, &msgs, func() {
 		if len(msgs) == 0 {
 			fmt.Fprintln(e.out, "no new messages from the coordinator")
 			return
@@ -445,6 +466,10 @@ func cmdTaskCheck(e *env, args []string) error {
 				label = "answer to " + m.ReplyTo
 			}
 			fmt.Fprintf(e.out, "%s:\n%s\n", label, indent(m.Body))
+		}
+		if *exec != "" {
+			fmt.Fprintf(e.out, "when you finish, report with: posse task done %s --execution %s --body-file <file>\n", msgs[0].TaskID, *exec)
+			return
 		}
 		fmt.Fprintf(e.out, "when you finish, report with: posse task done %s --summary \"<what you did, found, left>\"\n", msgs[0].TaskID)
 	})

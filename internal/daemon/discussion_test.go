@@ -382,7 +382,20 @@ func TestDiscussionConcurrentDirectory(t *testing.T) {
 		t.Fatalf("reason %q", xb.Reason)
 	}
 	call(t, d.discConfirm, map[string]any{"execution": xb.ID})
-	waitExec(t, d, xb.ID, store.ExecRunning)
+	xb = waitExec(t, d, xb.ID, store.ExecRunning)
+	// B 后面的一条在 A、B 都在执行时又停下；两边都结束后不再需要确认，自动回到队列
+	rb2 := postTo(t, d, disc, "later", b.ID, "")
+	ra2 := postTo(t, d, disc, "later", a.ID, "")
+	xa := waitExec(t, d, ra.Execution.ID, store.ExecRunning)
+	readAll(t, d, xa)
+	call(t, d.taskDone, map[string]any{"task": xa.TaskID, "caller": xa.Worker, "execution": xa.ID, "body": "a"})
+	readAll(t, d, xb)
+	call(t, d.taskDone, map[string]any{"task": xb.TaskID, "caller": xb.Worker, "execution": xb.ID, "body": "b"})
+	d.setAgent(d.liveSession(xa.Worker), term.AgentState{Status: agent.StatusIdle})
+	waitExec(t, d, ra2.Execution.ID, store.ExecRunning)
+	if x, _ := d.store.Execution(rb2.Execution.ID); x.State != store.ExecHeld && x.State != store.ExecQueued {
+		t.Fatalf("b2 %s", x.State)
+	}
 }
 
 // 交接过来、还没拿到锁的新进程不派发、不对账；拿到锁后对账保留交接过来的 worker。

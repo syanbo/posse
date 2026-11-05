@@ -108,6 +108,12 @@ func (d *Daemon) dispatchMember(m store.Member) {
 	}
 	// 严格按入队顺序：排在最前的在等确认或受阻时，后面的也等着
 	x := q[0]
+	if x.State == store.ExecHeld {
+		d.releaseHold(m, x)
+		if x, _ = d.store.Execution(x.ID); x.State != store.ExecQueued {
+			return
+		}
+	}
 	if x.State != store.ExecQueued {
 		return
 	}
@@ -251,9 +257,22 @@ func (d *Daemon) holdConcurrent(m store.Member, x store.Execution, w store.Works
 	if x.Confirmed {
 		return false
 	}
+	name := d.concurrentWith(m, w)
+	if name == "" {
+		return false
+	}
+	if _, err := d.store.HoldExecution(x.ID, "concurrent:"+name); err != nil {
+		log.Printf("discussion %s: hold %s: %v", x.Discussion, x.ID, err)
+	}
+	d.taskNotify()
+	return true
+}
+
+// concurrentWith 是同一真实目录（按路径解析符号链接比较，不按工作区 ID）里正在执行的别的讨论成员的名字。
+func (d *Daemon) concurrentWith(m store.Member, w store.Workspace) string {
 	active, err := d.store.ActiveExecutions()
 	if err != nil {
-		return false
+		return ""
 	}
 	for _, o := range active {
 		if o.Member == m.ID {
@@ -263,17 +282,32 @@ func (d *Daemon) holdConcurrent(m store.Member, x store.Execution, w store.Works
 		if err != nil || !samePath(ow.Path, w.Path) {
 			continue
 		}
-		name := o.Member
 		if om, err := d.store.Member(o.Member); err == nil {
-			name = om.Name
+			return om.Name
 		}
-		if _, err := d.store.HoldExecution(x.ID, fmt.Sprintf("concurrent:%s", name)); err != nil {
-			log.Printf("discussion %s: hold %s: %v", x.Discussion, x.ID, err)
-		}
-		d.taskNotify()
-		return true
+		return o.Member
 	}
-	return false
+	return ""
+}
+
+// releaseHold：等确认的请求在冲突的那一轮结束后不再需要确认，回到队列。
+func (d *Daemon) releaseHold(m store.Member, x store.Execution) {
+	if !strings.HasPrefix(x.Reason, "concurrent:") {
+		return
+	}
+	wsID := m.WorkspaceID
+	if m.TaskID != "" {
+		if t, err := d.store.Task(m.TaskID); err == nil {
+			wsID = t.WorkspaceID
+		}
+	}
+	w, err := d.store.Workspace(wsID)
+	if err != nil || d.concurrentWith(m, w) != "" {
+		return
+	}
+	if ok, err := d.store.ReleaseHold(x.ID); err == nil && ok {
+		d.taskNotify()
+	}
 }
 
 // discWorkerPrompt 是专用 worker 的启动提示：只带身份、轮次和领取指令，请求正文统一经 discussion read 领取。

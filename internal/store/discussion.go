@@ -1023,6 +1023,11 @@ func (s *Store) ConfirmExecution(id string) (bool, error) {
 	return changed, err
 }
 
+// ReleaseHold 让等确认的请求回到队列（冲突已经没有了），不记成用户确认过。
+func (s *Store) ReleaseHold(id string) (bool, error) {
+	return s.changeExec(id, []string{ExecHeld}, ExecQueued, "", true)
+}
+
 // BlockExecution 上一轮的 worker 已不在：标成受阻，暂停成员队列，等用户「重新启动并继续」。
 func (s *Store) BlockExecution(id, memberID, reason string) (bool, error) {
 	changed := false
