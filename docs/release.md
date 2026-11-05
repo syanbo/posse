@@ -6,7 +6,7 @@
 
 ## Mac
 
-先在 `CHANGELOG.md` 加 `## <版本>` 一节（更新时显示的更新内容，可以不提交），再跑 `scripts/release.sh <版本>`：它把版本号写进 `mygo.json` 和 `internal/daemon/daemon.go`（`TestVersionMatchesPackage` 保证两处一致），连同 CHANGELOG 提交成 `chore(release): 发布 <版本>`、打标签 `v<版本>`（不推送），再打包、公证到 `build/release/<版本>`，传到 R2。Apple 芯片和 Intel 各打一个包（`darwin-arm64`、`darwin-amd64`），各有自己的更新清单；下载链接 `Posse.dmg` 是 Apple 芯片的，`Posse-Intel.dmg` 是 Intel 的，`install.sh` 按本机架构选。打包或上传失败后不带参数重跑，发布 `mygo.json` 里现在的版本：线上清单已是这个版本的平台跳过，只重新打包、上传没发完的平台。更新包的签名私钥在 `~/Library/Application Support/mygo/update-keys/`，丢了已装的 Posse 就收不到更新；只有 `release.sh` 把它交给 mygo，日常打包不做更新包（会提示 Not signing an update）。方案和换包时机见 `docs/plans/mac-update.md`。
+先在 `CHANGELOG.md` 加 `## <版本>` 一节（更新时显示的更新内容，可以不提交），再跑 `scripts/release.sh <版本>`：它把版本号写进 `mygo.json` 和 `internal/daemon/daemon.go`（`TestVersionMatchesPackage` 保证两处一致），连同 CHANGELOG 提交成 `chore(release): 发布 <版本>`、打标签 `v<版本>`（不推送），再打包、公证到 `build/release/<版本>`，传到 R2。Apple 芯片和 Intel 各打一个包（`darwin-arm64`、`darwin-amd64`），各有自己的更新清单；下载链接 `Posse.dmg` 是 Apple 芯片的，`Posse-Intel.dmg` 是 Intel 的，`install.sh` 按本机架构选。打包或上传失败后不带参数重跑，发布 `mygo.json` 里现在的版本：线上清单已是这个版本的平台跳过，只重新打包、上传没发完的平台。更新包的签名私钥在 `~/Library/Application Support/mygo/update-keys/`，丢了已装的 Posse 就收不到更新；只有 `release.sh` 把它交给 mygo，日常打包不做更新包（会提示 Not signing an update）。方案和换包时机见 `docs/plans/mac-update.md`。推送提交和标签后跑 `scripts/github-release.sh`（不带参数是 `mygo.json` 里的版本），在 GitHub 上建这一版的 Release：说明取 CHANGELOG 这一节，附两个平台的 dmg（从 `build/release/<版本>` 取，要在发布的那台机器上跑）；重跑只更新说明、覆盖附件。
 
 ## iOS（Ad Hoc）
 

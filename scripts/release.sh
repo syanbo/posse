@@ -143,4 +143,4 @@ for arch in $archs; do
 done
 
 echo "已发布 ${version}：$url/Posse.dmg（Intel：$url/Posse-Intel.dmg）"
-echo "推送提交和标签：git push && git push origin v$version"
+echo "推送提交和标签，再发 GitHub Release：git push && git push origin v$version && scripts/github-release.sh"
