@@ -17,7 +17,17 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db *sql.DB
+	// self 是本机安装身份的指纹（局域网协作分本机和别人的 Agent）；常驻进程打开库后马上设，之后只读
+	self string
+}
+
+// SetSelf 记下本机安装身份；没有身份（还没建过讨论）时为空。
+func (s *Store) SetSelf(fp string) { s.self = fp }
+
+// Self 是 SetSelf 记下的本机身份。
+func (s *Store) Self() string { return s.self }
 
 type Project struct {
 	ID          string    `json:"id"`
@@ -122,6 +132,23 @@ func Open(path string) (*Store, error) {
 			db.Close()
 			return nil, fmt.Errorf("migrate: %w", err)
 		}
+	}
+	for _, c := range [][3]string{
+		{"discussions", "mirror", "INTEGER NOT NULL DEFAULT 0"}, {"discussions", "shared", "INTEGER NOT NULL DEFAULT 0"},
+		{"disc_members", "owner", "TEXT NOT NULL DEFAULT ''"}, {"disc_members", "generation", "INTEGER NOT NULL DEFAULT 0"},
+		{"disc_messages", "author_id", "TEXT NOT NULL DEFAULT ''"}, {"disc_messages", "mention", "TEXT NOT NULL DEFAULT ''"},
+		{"disc_messages", "mention_name", "TEXT NOT NULL DEFAULT ''"}, {"disc_messages", "key_by", "TEXT NOT NULL DEFAULT ''"},
+		{"disc_executions", "owner", "TEXT NOT NULL DEFAULT ''"}, {"disc_executions", "generation", "INTEGER NOT NULL DEFAULT 0"},
+	} {
+		if err := addColumn(db, c[0], c[1], c[2]); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("migrate: %w", err)
+		}
+	}
+	// 回答的唯一约束改成讨论内唯一（加入者的问题 ID 来自别的电脑），新索引在 collabSchema 里
+	if _, err := db.Exec(`DROP INDEX IF EXISTS disc_messages_answer;` + collabSchema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	return &Store{db: db}, nil
 }

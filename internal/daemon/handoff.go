@@ -212,6 +212,8 @@ func (d *Daemon) daemonHandoff(ctx context.Context, raw json.RawMessage, stop co
 	if busy {
 		return nil, rpc.Errorf(rpc.CodeConflict, "handoff already in progress")
 	}
+	// 协作端口和到房主的连接先停：新进程拿到锁之后再接上，免得两代进程同时接受写入
+	d.collabPause(false)
 
 	n, pid, err := d.handOver(exe)
 	h.mu.Lock()
@@ -229,7 +231,8 @@ func (d *Daemon) daemonHandoff(ctx context.Context, raw json.RawMessage, stop co
 		for _, e := range exits {
 			d.onExit(e.id, e.code)
 		}
-		// 交接期间暂停的讨论派发恢复
+		// 交接期间暂停的讨论派发、协作恢复
+		d.collabPause(true)
 		d.discKick()
 		return nil, rpc.Errorf(rpc.CodeInternal, "handoff: %v", err)
 	}

@@ -1,0 +1,213 @@
+package daemon
+
+// 加入的讨论里用户的操作：发言、@ 自己的 Agent、改自己的 Agent、重试，都交给房主做；
+// 本机先记下授权意图，房主的结果经同步回到本机缓存。
+
+import (
+	"time"
+
+	"posse/internal/collaboration"
+	"posse/internal/rpc"
+	"posse/internal/store"
+)
+
+// mirrorPost 在加入的讨论里发言：附件先分块传给房主，@ 自己的 Agent 时先存授权意图，再提交房主。
+// 房主按客户端请求 ID 去重：响应丢了重发不会多一条。离线时报错，草稿留在窗口里，不自动补发。
+func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error) {
+	rc, err := d.mirrorConn(disc)
+	if err != nil {
+		return nil, err
+	}
+	if p.ClientID == "" {
+		p.ClientID = store.NewID("c_") + store.NewID("")
+	}
+	var target store.Member
+	if p.Target != "" {
+		if target, err = d.memberSel(p.Target); err != nil {
+			return nil, err
+		}
+		if target.Discussion != disc.Key || target.RemovedAt != nil {
+			return nil, discError(store.ErrMemberGone)
+		}
+		if !d.mine(target.Owner) {
+			return nil, notYours(target.Name)
+		}
+		if target.WorkspaceID == "" {
+			return nil, rpc.Errorf(rpc.CodeConflict, "choose a workspace on this computer for %s first", target.Name)
+		}
+	}
+	if len(p.Attachments) > discMaxAttachments {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "at most %d attachments per message", discMaxAttachments)
+	}
+	var uploads []string
+	var atts []store.Attachment
+	for _, a := range p.Attachments {
+		name := safeFileName(a.Name)
+		id, err := rc.upload(a.Path, name)
+		if err != nil {
+			return nil, err
+		}
+		uploads = append(uploads, id)
+		atts = append(atts, store.Attachment{ID: id})
+	}
+	if target.ID != "" {
+		dig := store.IntentDigest(p.Body, p.Quote, target.ID, atts)
+		if err := d.store.SaveIntent(disc.Key, p.ClientID, target.ID, target.ConfigVersion, dig, time.Now()); err != nil {
+			return nil, err
+		}
+	}
+	var res struct {
+		Message   string `json:"message"`
+		Execution string `json:"execution"`
+		Duplicate bool   `json:"duplicate"`
+	}
+	if err := rc.call("post", collabPostParams{ClientID: p.ClientID, Body: p.Body, Quote: p.Quote, Target: p.Target, Mention: p.Mention, Uploads: uploads}, &res); err != nil {
+		return nil, err
+	}
+	d.taskNotify()
+	m, err := d.store.DiscMessage(res.Message)
+	if err != nil {
+		return nil, rpc.Errorf(rpc.CodeConflict, "the host accepted the message but it has not synced yet; it will appear shortly")
+	}
+	out := discPostResult{Message: m, Duplicate: res.Duplicate}
+	if res.Execution != "" {
+		if x, err := d.store.Execution(res.Execution); err == nil {
+			out.Execution = &x
+		}
+	}
+	return out, nil
+}
+
+// mirrorRetry 在加入的讨论里为自己的一轮另发起新的一轮：先记授权意图（retry:<旧轮次>），再交给房主。
+func (d *Daemon) mirrorRetry(disc store.Discussion, x store.Execution, abandon bool) (any, error) {
+	rc, err := d.mirrorConn(disc)
+	if err != nil {
+		return nil, err
+	}
+	if abandon && d.store.AcceptState(x.ID) == store.AcceptAccepted && store.ExecActive(x.State) {
+		return nil, rpc.Errorf(rpc.CodeConflict, "execution %s is still running on this computer; stop it first", x.ID)
+	}
+	if err := d.store.SaveIntent(disc.Key, "retry:"+x.ID, x.Member, x.ConfigVersion, "", time.Now()); err != nil {
+		return nil, err
+	}
+	var res struct {
+		Execution string `json:"execution"`
+	}
+	if err := rc.call("retry", map[string]any{"execution": x.ID, "abandon": abandon}, &res); err != nil {
+		return nil, err
+	}
+	d.taskNotify()
+	return d.store.Execution(res.Execution)
+}
+
+// mirrorMemberUpdate 改自己 Agent 的配置：公开的部分交给房主，执行工作区只改本机。
+func (d *Daemon) mirrorMemberUpdate(disc store.Discussion, old, nm store.Member, applyNow bool) (any, error) {
+	rc, err := d.mirrorConn(disc)
+	if err != nil {
+		return nil, err
+	}
+	if applyNow {
+		if q, _ := d.store.MemberQueue(old.ID); len(q) > 0 {
+			return nil, discError(store.ErrBusyMember)
+		}
+	}
+	if nm.Name != old.Name || nm.Role != old.Role || nm.Agent != old.Agent || nm.Model != old.Model || nm.Effort != old.Effort {
+		if err := rc.call("member.update", map[string]string{"member": old.ID, "name": nm.Name, "role": nm.Role, "agent": nm.Agent, "model": nm.Model, "effort": nm.Effort}, nil); err != nil {
+			return nil, err
+		}
+	}
+	if nm.WorkspaceID != old.WorkspaceID {
+		if err := d.store.SetMemberPrivate(old.ID, nm.WorkspaceID, nm.WorkspaceLabel); err != nil {
+			return nil, discError(err)
+		}
+	}
+	if applyNow {
+		was, err := d.store.ReleaseWorker(old.ID, false)
+		if err != nil {
+			return nil, discError(err)
+		}
+		d.closeDiscWorker(was.TaskID, was.Worker)
+	}
+	d.taskNotify()
+	d.discKick()
+	return d.store.Member(old.ID)
+}
+
+// discCollabInfo 是讨论详情里的协作部分：每次都带（在线状态、连接状态不推进讨论版本）。
+type discCollabInfo struct {
+	Self        string              `json:"self"`
+	SelfName    string              `json:"selfName,omitempty"`
+	Host        bool                `json:"host"` // 本机是房主
+	HostID      string              `json:"hostId"`
+	HostName    string              `json:"hostName,omitempty"`
+	Shared      bool                `json:"shared"`
+	Listening   bool                `json:"listening"`
+	ListenError string              `json:"listenError,omitempty"`
+	State       string              `json:"state,omitempty"` // 加入者：pending、active、rejected、removed、left
+	Connected   bool                `json:"connected"`
+	Error       string              `json:"error,omitempty"`
+	People      []discPersonInfo    `json:"people"`
+	Requests    []store.JoinRequest `json:"requests,omitempty"`
+	Accepts     map[string]string   `json:"accepts,omitempty"` // 本机账本：执行 → accepted/refused/revoked
+	Outbox      int                 `json:"outbox,omitempty"`  // 还没交给房主的执行事件
+	Rejected    int                 `json:"rejected,omitempty"`
+}
+
+type discPersonInfo struct {
+	store.Person
+	Online bool `json:"online"`
+}
+
+func (d *Daemon) collabInfo(disc store.Discussion) *discCollabInfo {
+	self := d.store.Self()
+	if !disc.Shared && !disc.Mirror {
+		return nil
+	}
+	info := &discCollabInfo{Self: self, Host: !disc.Mirror, HostID: disc.Host, Shared: disc.Shared, People: []discPersonInfo{}}
+	if id, err := collaboration.Load(d.cfg.Home); err == nil {
+		info.SelfName = id.Name
+	}
+	people, _ := d.store.People(disc.Key)
+	online := map[string]bool{self: true}
+	if disc.Mirror {
+		j, _ := d.store.Joined(disc.Key)
+		info.State, info.HostName, info.Error = j.State, j.HostName, j.Error
+		st := d.roomStatus(disc.Key)
+		info.Connected = st.Connected
+		if st.Error != "" {
+			info.Error = st.Error
+		}
+		online[disc.Host] = st.Connected
+		if rc := d.roomConnFor(disc.Key); rc != nil {
+			rc.stmu.Lock()
+			for fp, t := range rc.presence {
+				if st.Connected && time.Since(t) < collaboration.HeartbeatLost {
+					online[fp] = true
+				}
+			}
+			rc.stmu.Unlock()
+		}
+		info.Accepts = d.store.AcceptStates(disc.Key)
+		info.Outbox, info.Rejected = d.store.OutboxCount(disc.Key)
+	} else {
+		d.collab.mu.Lock()
+		info.Listening, info.ListenError = d.collab.srv != nil, d.collab.listenErr
+		srv := d.collab.srv
+		d.collab.mu.Unlock()
+		if srv != nil {
+			for fp, t := range srv.LastSeen(disc.Key) {
+				if time.Since(t) < collaboration.HeartbeatLost {
+					online[fp] = true
+				}
+			}
+		}
+		info.Requests, _ = d.store.JoinRequests(disc.Key, true)
+	}
+	for _, p := range people {
+		if p.Host {
+			info.HostName = p.Name
+		}
+		info.People = append(info.People, discPersonInfo{Person: p, Online: online[p.FP] && p.State == store.PersonActive})
+	}
+	return info
+}

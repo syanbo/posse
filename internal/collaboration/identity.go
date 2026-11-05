@@ -162,3 +162,55 @@ func writeAtomic(path string, b []byte) error {
 	}
 	return nil
 }
+
+// SetName 改显示名（其他人看到的名字）；私钥和指纹不变。改名是覆盖写：先写临时文件再改名。
+func SetName(home, name string) (Identity, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	path := filepath.Join(home, FileName)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return Identity{}, err
+	}
+	var f identityFile
+	if err := json.Unmarshal(b, &f); err != nil {
+		return Identity{}, fmt.Errorf("read %s: %w", FileName, err)
+	}
+	f.Name = name
+	if b, err = json.MarshalIndent(f, "", "  "); err != nil {
+		return Identity{}, err
+	}
+	if err := WriteFile(path, b); err != nil {
+		return Identity{}, err
+	}
+	return fromFile(f)
+}
+
+// WriteFile 原子地覆盖写一个私有文件（0600）：临时文件、fsync、改名。房间凭据也用它。
+func WriteFile(path string, b []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp)
+	if err := f.Chmod(0o600); err != nil {
+		f.Close()
+		return err
+	}
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}

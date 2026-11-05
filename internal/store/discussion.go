@@ -34,7 +34,9 @@ CREATE TABLE IF NOT EXISTS discussions (
 	msg_seq INTEGER NOT NULL DEFAULT 0,
 	changed INTEGER NOT NULL DEFAULT 0,
 	created_at INTEGER NOT NULL,
-	archived_at INTEGER
+	archived_at INTEGER,
+	mirror INTEGER NOT NULL DEFAULT 0,
+	shared INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS disc_members (
 	id TEXT PRIMARY KEY,
@@ -54,7 +56,9 @@ CREATE TABLE IF NOT EXISTS disc_members (
 	recv_seq INTEGER NOT NULL DEFAULT 0,
 	removed_at INTEGER,
 	rev INTEGER NOT NULL DEFAULT 0,
-	created_at INTEGER NOT NULL
+	created_at INTEGER NOT NULL,
+	owner TEXT NOT NULL DEFAULT '',
+	generation INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS disc_members_discussion ON disc_members(discussion);
 CREATE TABLE IF NOT EXISTS disc_messages (
@@ -79,11 +83,15 @@ CREATE TABLE IF NOT EXISTS disc_messages (
 	key_at INTEGER,
 	rev INTEGER NOT NULL DEFAULT 0,
 	created_at INTEGER NOT NULL,
+	author_id TEXT NOT NULL DEFAULT '',
+	mention TEXT NOT NULL DEFAULT '',
+	mention_name TEXT NOT NULL DEFAULT '',
+	key_by TEXT NOT NULL DEFAULT '',
 	UNIQUE(discussion, seq)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS disc_messages_client ON disc_messages(discussion, client_id) WHERE client_id != '';
 CREATE UNIQUE INDEX IF NOT EXISTS disc_messages_source ON disc_messages(source) WHERE source != '';
-CREATE UNIQUE INDEX IF NOT EXISTS disc_messages_answer ON disc_messages(question) WHERE kind = 'answer';
+CREATE UNIQUE INDEX IF NOT EXISTS disc_messages_answer2 ON disc_messages(discussion, question) WHERE kind = 'answer';
 CREATE INDEX IF NOT EXISTS disc_messages_rev ON disc_messages(discussion, rev);
 CREATE TABLE IF NOT EXISTS disc_executions (
 	id TEXT PRIMARY KEY,
@@ -112,7 +120,9 @@ CREATE TABLE IF NOT EXISTS disc_executions (
 	rev INTEGER NOT NULL DEFAULT 0,
 	created_at INTEGER NOT NULL,
 	started_at INTEGER,
-	ended_at INTEGER
+	ended_at INTEGER,
+	owner TEXT NOT NULL DEFAULT '',
+	generation INTEGER NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX IF NOT EXISTS disc_executions_request ON disc_executions(message) WHERE retry_of = '';
 CREATE UNIQUE INDEX IF NOT EXISTS disc_executions_retry ON disc_executions(retry_of) WHERE retry_of != '';
@@ -148,6 +158,9 @@ const (
 	ExecInterrupted = "interrupted" // 这一轮进行中 worker 退出、常驻进程重启
 	ExecStopped     = "stopped"     // 用户停止
 	ExecCancelled   = "cancelled"   // 用户在开始前取消
+	// 局域网协作（房主一侧）：成员电脑上的 Agent 的请求
+	ExecClaimed = "claimed" // 拥有者的电脑已领取，在它本机的队列里，还没开始
+	ExecRevoked = "revoked" // 拥有者的访问被撤销（移除、退出）：共享侧终态，不代表对方电脑上的进程已停止
 )
 
 // 讨论数据的错误：常驻进程按这些转成 RPC 错误码，英文原文交给界面经 errtext 翻译。
@@ -162,10 +175,12 @@ var (
 	ErrMemberGone      = errors.New("member removed")
 	ErrBusyMember      = errors.New("member has active or queued requests")
 	ErrBusyDiscuss     = errors.New("discussion has active or queued requests")
+	ErrNotOwner        = errors.New("not the owner")
+	ErrRevoked         = errors.New("access revoked")
 )
 
 // pendingStates 和 activeStates 合起来就是挡住归档、移除成员的状态。
-var pendingStates = []string{ExecQueued, ExecHeld, ExecBlocked}
+var pendingStates = []string{ExecQueued, ExecHeld, ExecBlocked, ExecClaimed}
 var activeStates = []string{ExecStarting, ExecRunning, ExecWaiting}
 
 // ExecActive 报告执行是不是正在进行的轮次。
@@ -175,7 +190,7 @@ func ExecActive(state string) bool {
 
 // ExecPending 报告执行是不是还没开始。
 func ExecPending(state string) bool {
-	return state == ExecQueued || state == ExecHeld || state == ExecBlocked
+	return state == ExecQueued || state == ExecHeld || state == ExecBlocked || state == ExecClaimed
 }
 
 func inList(states []string) string {
@@ -198,6 +213,9 @@ type Discussion struct {
 	Changed     int64      `json:"changed"`
 	CreatedAt   time.Time  `json:"createdAt"`
 	ArchivedAt  *time.Time `json:"archivedAt,omitempty"`
+	// Mirror 是加入的别人的讨论：这里是房主权威记录的缓存，只有自己 Agent 的执行和私有配置在本机写
+	Mirror bool `json:"mirror,omitempty"`
+	Shared bool `json:"shared,omitempty"` // 房主开着局域网共享
 }
 
 type Member struct {
@@ -219,6 +237,9 @@ type Member struct {
 	RemovedAt      *time.Time `json:"removedAt,omitempty"`
 	Rev            int64      `json:"rev"`
 	CreatedAt      time.Time  `json:"createdAt"`
+	// Owner 是 Agent 拥有者的安装身份指纹，空是讨论房主（第一阶段的成员）；只有拥有者能调用、配置它
+	Owner      string `json:"owner,omitempty"`
+	Generation int64  `json:"generation,omitempty"` // 拥有者加入讨论的代际（房主自己为 0）
 }
 
 // Attachment 是消息附件的快照：文件复制在项目的 .posse/discussions/<讨论>/attachments/ 下，Path 相对项目目录。
@@ -228,6 +249,7 @@ type Attachment struct {
 	Path string `json:"path"`
 	Size int64  `json:"size"`
 	Type string `json:"type,omitempty"`
+	SHA  string `json:"sha,omitempty"` // 内容的 SHA-256（跨机下载时校验）
 }
 
 type DiscMessage struct {
@@ -251,6 +273,11 @@ type DiscMessage struct {
 	KeyAt        *time.Time   `json:"keyAt,omitempty"`
 	Rev          int64        `json:"rev"`
 	CreatedAt    time.Time    `json:"createdAt"`
+	// AuthorID 是发言的人（安装身份指纹）；空是讨论房主本机的用户（第一阶段的消息）
+	AuthorID    string `json:"authorId,omitempty"`
+	Mention     string `json:"mention,omitempty"` // @ 的人（指纹）：只是提醒，不触发 Agent
+	MentionName string `json:"mentionName,omitempty"`
+	KeyBy       string `json:"keyBy,omitempty"` // 标关键的人
 }
 
 type Execution struct {
@@ -278,18 +305,20 @@ type Execution struct {
 	CreatedAt      time.Time  `json:"createdAt"`
 	StartedAt      *time.Time `json:"startedAt,omitempty"`
 	EndedAt        *time.Time `json:"endedAt,omitempty"`
+	Owner          string     `json:"owner,omitempty"` // 执行设备（拥有者的安装身份），空是房主
+	Generation     int64      `json:"generation,omitempty"`
 }
 
 // --- 扫描
 
-const discCols = `key,host,local_id,title,description,project_id,project_name,project_path,workspace_id,status,rev,msg_seq,changed,created_at,archived_at`
+const discCols = `key,host,local_id,title,description,project_id,project_name,project_path,workspace_id,status,rev,msg_seq,changed,created_at,archived_at,mirror,shared`
 
 func scanDiscussion(row interface{ Scan(...any) error }) (Discussion, error) {
 	var d Discussion
 	var created int64
 	var archived sql.NullInt64
 	err := row.Scan(&d.Key, &d.Host, &d.LocalID, &d.Title, &d.Description, &d.ProjectID, &d.ProjectName, &d.ProjectPath, &d.WorkspaceID,
-		&d.Status, &d.Rev, &d.MsgSeq, &d.Changed, &created, &archived)
+		&d.Status, &d.Rev, &d.MsgSeq, &d.Changed, &created, &archived, &d.Mirror, &d.Shared)
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, ErrNotFound
 	}
@@ -298,14 +327,14 @@ func scanDiscussion(row interface{ Scan(...any) error }) (Discussion, error) {
 	return d, err
 }
 
-const memberCols = `id,discussion,name,role,agent,model,effort,workspace_id,workspace_label,config_version,task_id,worker,worker_config,paused,recv_seq,removed_at,rev,created_at`
+const memberCols = `id,discussion,name,role,agent,model,effort,workspace_id,workspace_label,config_version,task_id,worker,worker_config,paused,recv_seq,removed_at,rev,created_at,owner,generation`
 
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	var m Member
 	var created int64
 	var removed sql.NullInt64
 	err := row.Scan(&m.ID, &m.Discussion, &m.Name, &m.Role, &m.Agent, &m.Model, &m.Effort, &m.WorkspaceID, &m.WorkspaceLabel, &m.ConfigVersion,
-		&m.TaskID, &m.Worker, &m.WorkerConfig, &m.Paused, &m.RecvSeq, &removed, &m.Rev, &created)
+		&m.TaskID, &m.Worker, &m.WorkerConfig, &m.Paused, &m.RecvSeq, &removed, &m.Rev, &created, &m.Owner, &m.Generation)
 	if errors.Is(err, sql.ErrNoRows) {
 		return m, ErrNotFound
 	}
@@ -314,7 +343,7 @@ func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	return m, err
 }
 
-const dmsgCols = `id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,key_at,rev,created_at`
+const dmsgCols = `id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,key_at,rev,created_at,author_id,mention,mention_name,key_by`
 
 func scanDiscMessage(row interface{ Scan(...any) error }) (DiscMessage, error) {
 	var m DiscMessage
@@ -322,7 +351,7 @@ func scanDiscMessage(row interface{ Scan(...any) error }) (DiscMessage, error) {
 	var key sql.NullInt64
 	var atts string
 	err := row.Scan(&m.ID, &m.Discussion, &m.Seq, &m.Kind, &m.AuthorMember, &m.AuthorName, &m.AuthorAgent, &m.Body, &m.Quote, &m.Target, &m.TargetName,
-		&m.Execution, &m.Question, &m.Report, &m.Outcome, &atts, &m.ClientID, &key, &m.Rev, &created)
+		&m.Execution, &m.Question, &m.Report, &m.Outcome, &atts, &m.ClientID, &key, &m.Rev, &created, &m.AuthorID, &m.Mention, &m.MentionName, &m.KeyBy)
 	if errors.Is(err, sql.ErrNoRows) {
 		return m, ErrNotFound
 	}
@@ -334,14 +363,14 @@ func scanDiscMessage(row interface{ Scan(...any) error }) (DiscMessage, error) {
 	return m, err
 }
 
-const execCols = `id,discussion,member,message,retry_of,state,reason,task_id,worker,agent,model,effort,role,workspace_id,workspace_label,config_version,confirmed,length(CAST(context AS BLOB)),acked,reply,rev,created_at,started_at,ended_at`
+const execCols = `id,discussion,member,message,retry_of,state,reason,task_id,worker,agent,model,effort,role,workspace_id,workspace_label,config_version,confirmed,length(CAST(context AS BLOB)),acked,reply,rev,created_at,started_at,ended_at,owner,generation`
 
 func scanExecution(row interface{ Scan(...any) error }) (Execution, error) {
 	var x Execution
 	var created int64
 	var started, ended sql.NullInt64
 	err := row.Scan(&x.ID, &x.Discussion, &x.Member, &x.Message, &x.RetryOf, &x.State, &x.Reason, &x.TaskID, &x.Worker, &x.Agent, &x.Model, &x.Effort, &x.Role,
-		&x.WorkspaceID, &x.WorkspaceLabel, &x.ConfigVersion, &x.Confirmed, &x.ContextLen, &x.Acked, &x.Reply, &x.Rev, &created, &started, &ended)
+		&x.WorkspaceID, &x.WorkspaceLabel, &x.ConfigVersion, &x.Confirmed, &x.ContextLen, &x.Acked, &x.Reply, &x.Rev, &created, &started, &ended, &x.Owner, &x.Generation)
 	if errors.Is(err, sql.ErrNoRows) {
 		return x, ErrNotFound
 	}
@@ -498,7 +527,7 @@ func (s *Store) DiscussionSummaries() ([]DiscussionSummary, error) {
 		}
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_messages q WHERE q.discussion=? AND q.kind='question'
 			AND NOT EXISTS (SELECT 1 FROM disc_messages a WHERE a.question=q.question AND a.kind='answer')
-			AND EXISTS (SELECT 1 FROM disc_executions x WHERE x.id=q.execution AND x.state='waiting')`, d.Key).Scan(&x.Questions)
+			AND EXISTS (SELECT 1 FROM disc_executions x WHERE x.id=q.execution AND x.state='waiting' AND x.owner IN ('', ?))`, d.Key, s.self).Scan(&x.Questions)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE discussion=? AND state IN `+inList(activeStates), d.Key).Scan(&x.Active)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE discussion=? AND state IN `+inList(pendingStates), d.Key).Scan(&x.Pending)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_members WHERE discussion=? AND removed_at IS NULL`, d.Key).Scan(&x.Members)
@@ -548,12 +577,24 @@ func (s *Store) AddMember(m Member) error {
 		if err := activeDiscussion(tx, m.Discussion); err != nil {
 			return err
 		}
+		d, err := scanDiscussion(tx.QueryRow(`SELECT `+discCols+` FROM discussions WHERE key=?`, m.Discussion))
+		if err != nil {
+			return err
+		}
+		if d.Mirror {
+			return fmt.Errorf("%w: agents in a joined discussion are added through its host", ErrConflict)
+		}
+		if m.Owner != "" && m.Owner != d.Host {
+			if err := checkPerson(tx, d.Key, m.Owner, m.Generation); err != nil {
+				return err
+			}
+		}
 		rev, err := bump(tx, m.Discussion)
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(`INSERT INTO disc_members(id,discussion,name,role,agent,model,effort,workspace_id,workspace_label,config_version,rev,created_at) VALUES(?,?,?,?,?,?,?,?,?,1,?,?)`,
-			m.ID, m.Discussion, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, rev, ms(m.CreatedAt))
+		_, err = tx.Exec(`INSERT INTO disc_members(id,discussion,name,role,agent,model,effort,workspace_id,workspace_label,config_version,rev,created_at,owner,generation) VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?,?)`,
+			m.ID, m.Discussion, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, rev, ms(m.CreatedAt), m.Owner, m.Generation)
 		return err
 	})
 }
@@ -573,7 +614,8 @@ func (s *Store) MemberByTask(taskID string) (Member, error) {
 
 // ActiveMembers 是所有没移除的成员（调度器逐个看队列）。
 func (s *Store) ActiveMembers() ([]Member, error) {
-	return collect(s.db, scanMember, `SELECT `+memberCols+` FROM disc_members WHERE removed_at IS NULL ORDER BY created_at`)
+	// 别人电脑上的 Agent 由它的拥有者领取执行，这里不调度
+	return collect(s.db, scanMember, `SELECT `+memberCols+` FROM disc_members WHERE removed_at IS NULL AND owner IN ('', ?) ORDER BY created_at`, s.self)
 }
 
 // UpdateMember 改成员配置。名字、职责只影响之后的显示和新 worker 的提示；agent、模型、思考深度、工作区、职责
@@ -752,11 +794,21 @@ type PostInput struct {
 	Attachments []Attachment
 	At          time.Time
 	ExecID      string
+	// 局域网协作：发言的人（指纹，空是房主本机的用户）、他的名字和成员代际，@ 的人（只提醒）
+	Author     string
+	AuthorName string
+	Generation int64
+	Mention    string
+	Uploads    []string // 成员上传好的附件 ID（房主一侧）
 }
 
 // PostMessage 保存消息，Target 不为空时同时建一轮排队的执行。ClientID 重复时返回已有的消息和执行，dup 为 true。
 func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup bool, err error) {
 	err = s.withTx(func(tx *sql.Tx) error {
+		if in.Author != "" && in.ClientID != "" && !strings.HasPrefix(in.ClientID, in.Author+":") {
+			// 别人的客户端请求 ID 按人分开：两个人用了同一个 ID 也不会拿到对方的消息
+			in.ClientID = in.Author + ":" + in.ClientID
+		}
 		if in.ClientID != "" {
 			old, err := scanDiscMessage(tx.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND client_id=?`, in.Discussion, in.ClientID))
 			if err == nil {
@@ -773,6 +825,35 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 		}
 		if err := activeDiscussion(tx, in.Discussion); err != nil {
 			return err
+		}
+		d, err := scanDiscussion(tx.QueryRow(`SELECT `+discCols+` FROM discussions WHERE key=?`, in.Discussion))
+		if err != nil {
+			return err
+		}
+		if d.Mirror {
+			return fmt.Errorf("%w: messages in a joined discussion are sent to its host", ErrConflict)
+		}
+		author := in.Author
+		if author == "" {
+			author = d.Host
+		}
+		if author != d.Host {
+			if err := checkPerson(tx, d.Key, author, in.Generation); err != nil {
+				return err
+			}
+		}
+		if len(in.Uploads) > 0 {
+			atts, err := takeUploads(tx, d.Key, author, in.Uploads)
+			if err != nil {
+				return err
+			}
+			in.Attachments = append(in.Attachments, atts...)
+		}
+		var mentionName string
+		if in.Mention != "" {
+			if mentionName, err = personName(tx, d, in.Mention); err != nil {
+				return err
+			}
 		}
 		if in.Quote != "" {
 			var n int
@@ -793,17 +874,23 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 			if target.RemovedAt != nil {
 				return ErrMemberGone
 			}
+			// 只能 @ 自己的 Agent：别人的 Agent 由它的拥有者安排
+			if cmpOr(target.Owner, d.Host) != author {
+				return ErrNotOwner
+			}
 		}
 		rev, err := bump(tx, in.Discussion)
 		if err != nil {
 			return err
 		}
 		msg = DiscMessage{ID: NewID("dm_") + NewID(""), Discussion: in.Discussion, Kind: DiscUser, Body: in.Body, Quote: in.Quote,
-			Target: target.ID, TargetName: target.Name, Attachments: in.Attachments, ClientID: in.ClientID, Rev: rev, CreatedAt: in.At}
+			Target: target.ID, TargetName: target.Name, Attachments: in.Attachments, ClientID: in.ClientID, Rev: rev, CreatedAt: in.At,
+			AuthorID: author, AuthorName: in.AuthorName, Mention: in.Mention, MentionName: mentionName}
 		if target.ID != "" {
 			x := Execution{ID: in.ExecID, Discussion: in.Discussion, Member: target.ID, Message: msg.ID, State: ExecQueued,
 				Agent: target.Agent, Model: target.Model, Effort: target.Effort, Role: target.Role, WorkspaceID: target.WorkspaceID,
-				WorkspaceLabel: target.WorkspaceLabel, ConfigVersion: target.ConfigVersion, Rev: rev, CreatedAt: in.At}
+				WorkspaceLabel: target.WorkspaceLabel, ConfigVersion: target.ConfigVersion, Rev: rev, CreatedAt: in.At,
+				Owner: target.Owner, Generation: target.Generation}
 			if x.ID == "" {
 				x.ID = NewID("x_") + NewID("")
 			}
@@ -819,9 +906,9 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 }
 
 func insertExecution(tx querier, x Execution) error {
-	_, err := tx.Exec(`INSERT INTO disc_executions(id,discussion,member,message,retry_of,state,reason,agent,model,effort,role,workspace_id,workspace_label,config_version,rev,created_at)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		x.ID, x.Discussion, x.Member, x.Message, x.RetryOf, x.State, x.Reason, x.Agent, x.Model, x.Effort, x.Role, x.WorkspaceID, x.WorkspaceLabel, x.ConfigVersion, x.Rev, ms(x.CreatedAt))
+	_, err := tx.Exec(`INSERT INTO disc_executions(id,discussion,member,message,retry_of,state,reason,agent,model,effort,role,workspace_id,workspace_label,config_version,rev,created_at,owner,generation)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		x.ID, x.Discussion, x.Member, x.Message, x.RetryOf, x.State, x.Reason, x.Agent, x.Model, x.Effort, x.Role, x.WorkspaceID, x.WorkspaceLabel, x.ConfigVersion, x.Rev, ms(x.CreatedAt), x.Owner, x.Generation)
 	if isUnique(err) {
 		return fmt.Errorf("%w: execution for this message exists", ErrConflict)
 	}
@@ -837,15 +924,24 @@ func insertDiscMessageSrc(tx querier, m *DiscMessage, source string) error {
 	if err := tx.QueryRow(`UPDATE discussions SET msg_seq=msg_seq+1 WHERE key=? RETURNING msg_seq`, m.Discussion).Scan(&m.Seq); err != nil {
 		return err
 	}
+	return insertDiscMessageAt(tx, m, source)
+}
+
+// insertDiscMessageAt 按 m.Seq 写入（加入者缓存房主的消息时用房主分配的序号）。
+func insertDiscMessageAt(tx querier, m *DiscMessage, source string) error {
 	var atts string
 	if len(m.Attachments) > 0 {
 		b, _ := json.Marshal(m.Attachments)
 		atts = string(b)
 	}
-	_, err := tx.Exec(`INSERT INTO disc_messages(id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,source,rev,created_at)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	var key any
+	if m.KeyAt != nil {
+		key = ms(*m.KeyAt)
+	}
+	_, err := tx.Exec(`INSERT INTO disc_messages(id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,source,rev,created_at,author_id,mention,mention_name,key_at,key_by)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		m.ID, m.Discussion, m.Seq, m.Kind, m.AuthorMember, m.AuthorName, m.AuthorAgent, m.Body, m.Quote, m.Target, m.TargetName, m.Execution, m.Question,
-		m.Report, m.Outcome, atts, m.ClientID, source, m.Rev, ms(m.CreatedAt))
+		m.Report, m.Outcome, atts, m.ClientID, source, m.Rev, ms(m.CreatedAt), m.AuthorID, m.Mention, m.MentionName, key, m.KeyBy)
 	if isUnique(err) {
 		return fmt.Errorf("%w: duplicate message", ErrConflict)
 	}
@@ -935,8 +1031,14 @@ func (s *Store) KeyMessages(key string) ([]DiscMessage, error) {
 	return collect(s.db, scanDiscMessage, `SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND key_at IS NOT NULL ORDER BY seq`, key)
 }
 
-// SetKeyMessage 标记或取消关键消息；归档后只读。
+// SetKeyMessage 是房主本机的用户标记或取消关键消息；归档后只读。
 func (s *Store) SetKeyMessage(id string, on bool, at time.Time) error {
+	return s.SetKeyMessageBy(id, on, "", 0, at)
+}
+
+// SetKeyMessageBy 标记或取消关键消息并记下操作的人（by 为空是房主本机的用户）。群成员都能标记；
+// 取消只由标记的人或房主做。别人的请求在同一事务里复核成员资格。
+func (s *Store) SetKeyMessageBy(id string, on bool, by string, gen int64, at time.Time) error {
 	return s.withTx(func(tx *sql.Tx) error {
 		m, err := scanDiscMessage(tx.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE id=?`, id))
 		if err != nil {
@@ -945,18 +1047,37 @@ func (s *Store) SetKeyMessage(id string, on bool, at time.Time) error {
 		if err := activeDiscussion(tx, m.Discussion); err != nil {
 			return err
 		}
+		d, err := scanDiscussion(tx.QueryRow(`SELECT `+discCols+` FROM discussions WHERE key=?`, m.Discussion))
+		if err != nil {
+			return err
+		}
+		if d.Mirror {
+			return fmt.Errorf("%w: key marks in a joined discussion are set on its host", ErrConflict)
+		}
+		if by == "" {
+			by = d.Host
+		}
+		if by != d.Host {
+			if err := checkPerson(tx, d.Key, by, gen); err != nil {
+				return err
+			}
+		}
 		if (m.KeyAt != nil) == on {
 			return nil
+		}
+		if !on && by != d.Host && m.KeyBy != "" && m.KeyBy != by {
+			return fmt.Errorf("%w: only the person who marked it or the host can unmark it", ErrNotOwner)
 		}
 		rev, err := bump(tx, m.Discussion)
 		if err != nil {
 			return err
 		}
 		var v any
+		keyBy := ""
 		if on {
-			v = ms(at)
+			v, keyBy = ms(at), by
 		}
-		_, err = tx.Exec(`UPDATE disc_messages SET key_at=?, rev=? WHERE id=?`, v, rev, id)
+		_, err = tx.Exec(`UPDATE disc_messages SET key_at=?, key_by=?, rev=? WHERE id=?`, v, keyBy, rev, id)
 		return err
 	})
 }
@@ -1046,7 +1167,11 @@ func setExec(tx querier, key, id, from string, sets string, args ...any) (bool, 
 		return false, err
 	}
 	n, err := res.RowsAffected()
-	return n > 0, err
+	if err != nil || n == 0 {
+		return false, err
+	}
+	// 加入的讨论里自己 Agent 的执行：状态变化写进 outbox，由协作连接补发给房主
+	return true, emitExecState(tx, key, id)
 }
 
 // changeExec 在讨论没归档时把执行从 from 中的状态改成 to；返回是否改了。
@@ -1170,7 +1295,7 @@ func (s *Store) RetryExecution(id, newID string, at time.Time) (Execution, error
 		}
 		nx = Execution{ID: newID, Discussion: x.Discussion, Member: m.ID, Message: x.Message, RetryOf: x.ID, State: ExecQueued,
 			Agent: m.Agent, Model: m.Model, Effort: m.Effort, Role: m.Role, WorkspaceID: m.WorkspaceID, WorkspaceLabel: m.WorkspaceLabel,
-			ConfigVersion: m.ConfigVersion, Rev: rev, CreatedAt: at}
+			ConfigVersion: m.ConfigVersion, Rev: rev, CreatedAt: at, Owner: m.Owner, Generation: m.Generation}
 		// 一轮只能重试一次（retry_of 唯一）：重复点、CLI 重跑都不会多排
 		if err := insertExecution(tx, nx); errors.Is(err, ErrConflict) {
 			return ErrRetried
@@ -1512,16 +1637,24 @@ func (s *Store) FinishExecution(in FinishInput) (DiscMessage, error) {
 	var reply DiscMessage
 	err := s.withTx(func(tx *sql.Tx) error {
 		x, err := checkRound(tx, in.RoundCheck, ExecRunning, ExecWaiting)
+		outcome := TaskDone
+		if in.Failed {
+			outcome = TaskFailed
+		}
+		if errors.Is(err, ErrStaleRound) && (x.State == ExecDone || x.State == ExecFailed) && x.TaskID == in.TaskID &&
+			(in.Worker == "" || x.Worker == in.Worker) && strings.HasPrefix(x.Reply, "sha256:") {
+			// 加入的讨论：回复在 outbox 里等房主，执行记的是内容摘要
+			if x.Reply == replyDigest(in.Body, outcome) {
+				return ErrAlreadyReported
+			}
+			return fmt.Errorf("%w: different reply for a reported execution", ErrConflict)
+		}
 		if errors.Is(err, ErrStaleRound) && (x.State == ExecDone || x.State == ExecFailed) && x.TaskID == in.TaskID &&
 			(in.Worker == "" || x.Worker == in.Worker) && x.Reply != "" {
 			// 这一轮已经汇报过：内容一样是重跑（响应丢了），当作成功；不一样拒绝，不动任务（可能已在做下一轮）
 			old, err := scanDiscMessage(tx.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE id=?`, x.Reply))
 			if err != nil {
 				return err
-			}
-			outcome := TaskDone
-			if in.Failed {
-				outcome = TaskFailed
 			}
 			if old.Body == in.Body && old.Outcome == outcome && old.Report == in.Report {
 				reply = old
@@ -1556,6 +1689,19 @@ func (s *Store) FinishExecution(in FinishInput) (DiscMessage, error) {
 		rev, err := bump(tx, x.Discussion)
 		if err != nil {
 			return err
+		}
+		if mirror, err := isMirror(tx, x.Discussion); err != nil {
+			return err
+		} else if mirror {
+			// 加入的讨论：回复交给房主分配序号、写进讨论，本机只记执行结束和内容摘要（重跑时比对）
+			state := ExecDone
+			if in.Failed {
+				state = ExecFailed
+			}
+			if _, err := tx.Exec(`UPDATE disc_executions SET state=?, reply=?, ended_at=?, rev=? WHERE id=?`, state, replyDigest(in.Body, status), ms(in.At), rev, x.ID); err != nil {
+				return err
+			}
+			return addOutbox(tx, x.Discussion, x.ID, OwnerEvent{Kind: EventReply, Body: in.Body, Outcome: status, At: ms(in.At)})
 		}
 		reply = DiscMessage{ID: NewID("dm_") + NewID(""), Discussion: x.Discussion, Kind: DiscReply, AuthorMember: m.ID, AuthorName: m.Name, AuthorAgent: m.Agent,
 			Body: in.Body, Execution: x.ID, Report: in.Report, Outcome: status, Rev: rev, CreatedAt: in.At}
@@ -1602,6 +1748,14 @@ func (s *Store) AskExecution(in AskInput) (DiscMessage, error) {
 		if err != nil {
 			return err
 		}
+		if mirror, err := isMirror(tx, x.Discussion); err != nil {
+			return err
+		} else if mirror {
+			if _, err := tx.Exec(`UPDATE disc_executions SET state='waiting', rev=? WHERE id=?`, rev, x.ID); err != nil {
+				return err
+			}
+			return addOutbox(tx, x.Discussion, x.ID, OwnerEvent{Kind: EventQuestion, Question: in.TaskMsg.ID, Body: in.TaskMsg.Body, At: ms(in.At)})
+		}
 		q = DiscMessage{ID: NewID("dm_") + NewID(""), Discussion: x.Discussion, Kind: DiscQuestion, AuthorMember: m.ID, AuthorName: m.Name, AuthorAgent: m.Agent,
 			Body: in.TaskMsg.Body, Execution: x.ID, Question: in.TaskMsg.ID, Rev: rev, CreatedAt: in.At}
 		if err := insertDiscMessageSrc(tx, &q, in.TaskMsg.ID); err != nil {
@@ -1632,6 +1786,9 @@ type AnswerInput struct {
 func (s *Store) AnswerQuestion(in AnswerInput) (DiscMessage, error) {
 	var a DiscMessage
 	err := s.withTx(func(tx *sql.Tx) error {
+		if handled, err := answerMirror(tx, in); handled || err != nil {
+			return err
+		}
 		q, err := scanDiscMessage(tx.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE question=? AND kind='question'`, in.Question))
 		if err != nil {
 			return err

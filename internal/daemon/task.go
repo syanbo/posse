@@ -104,6 +104,7 @@ func (d *Daemon) taskNotify() {
 	close(d.tchanged)
 	d.tchanged = make(chan struct{})
 	d.tmu.Unlock()
+	d.collabNotify()
 }
 
 // --- 派发

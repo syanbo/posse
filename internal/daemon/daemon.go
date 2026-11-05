@@ -215,8 +215,9 @@ type Daemon struct {
 	gitTrace *gitTrace // 终端里的 git 命令，测试里为空
 	ln       *gateListener
 	handoff  handoffState
-	agents   agentScan // 本机装了哪些 agent（agents.go）
-	disc     discState // 讨论的调度（discussion.go）
+	agents   agentScan   // 本机装了哪些 agent（agents.go）
+	disc     discState   // 讨论的调度（discussion.go）
+	collab   collabState // 讨论的局域网协作（collab.go、collab_join.go）
 
 	// zsh 集成和同名脚本（agent.WriteShellFiles）：写成功一次就不再写
 	shellMu     sync.Mutex
@@ -356,6 +357,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	// 讨论的轮次对账：普通启动马上做（进行中的轮次中断、排队的暂停等用户确认）；交接过来的等拿到锁再做，
 	// 旧进程可能还在启动某一轮的 worker
+	d.loadSelf()
 	if in == nil {
 		d.reconcileDiscussions(true)
 	} else {
@@ -398,6 +400,7 @@ func Run(ctx context.Context, cfg Config) error {
 	go d.discLoop(ctx)
 	if in == nil {
 		d.startMobile()
+		d.collabStart(ctx)
 	} else {
 		// 交接过来的不等锁就开始服务（hook 只等 2 秒），旧进程退出放锁之后才开手机服务：端口在它手里。
 		// 一直等下去，等不到也不退出，终端都在这个进程里
@@ -416,6 +419,8 @@ func Run(ctx context.Context, cfg Config) error {
 				d.reconcileDiscussions(false)
 				d.disc.waitLock.Store(false)
 				d.disc.mu.Unlock()
+				// 协作端口和到房主的连接也在拿到锁之后：两代进程不会同时接受写入
+				d.collabStart(ctx)
 				d.discKick()
 				return
 			}
@@ -429,6 +434,7 @@ func Run(ctx context.Context, cfg Config) error {
 	d.register(srv, cancel)
 	log.Printf("posse daemon %s (%s) listening on %s (pid %d)", Version, Build, sock, os.Getpid())
 	err = srv.Serve(ctx, d.ln)
+	d.collabStop()
 	if d.mobile != nil {
 		d.mobile.Close()
 	}
@@ -560,6 +566,16 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("discussion.read", d.discRead)
 	srv.Handle("discussion.ack", d.discAck)
 	srv.Handle("discussion.pending", d.discPending)
+	srv.Handle("discussion.share", d.collabShare)
+	srv.Handle("discussion.invite", d.collabInvite)
+	srv.Handle("discussion.decide", d.collabDecide)
+	srv.Handle("discussion.person.remove", d.collabRemovePerson)
+	srv.Handle("discussion.join", d.collabJoin)
+	srv.Handle("discussion.leave", d.collabLeave)
+	srv.Handle("discussion.member.resume", d.collabResume)
+	srv.Handle("collab.status", d.collabStatus)
+	srv.Handle("collab.quota", d.collabQuota)
+	srv.Handle("collab.rename", d.collabRename)
 	srv.HandleStream("terminal.attach", d.terminalAttach)
 }
 
