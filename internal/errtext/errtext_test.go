@@ -84,6 +84,8 @@ func TestText(t *testing.T) {
 		zh, en string
 	}{
 		{rpc.Errorf(rpc.CodeNotFound, "project %q not found", "demo"), "找不到项目 demo", `Project "demo" not found`},
+		// 房主拒绝成员加、改 Agent（字段超长），成员常驻进程原样透传给窗口
+		{rpc.Errorf(rpc.CodeConflict, "%s", "name required; name, role, model or effort too long"), "名字不能为空；名字、职责、模型或思考深度太长", "Name required; name, role, model or effort too long"},
 		{rpc.Errorf(rpc.CodeConflict, "something new"), "something new", "Something new"},
 		{rpc.Errorf(rpc.CodeUnknown, "unknown method x"), "常驻进程是旧版，不认识这个操作：到设置 › 关于 更新常驻进程，终端不会断开", capitalize(srcOldDaemon)},
 		{fmt.Errorf("call: %w", context.DeadlineExceeded), "常驻进程没有及时回应，稍后再试", capitalize(srcTimeout)},

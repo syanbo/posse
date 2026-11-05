@@ -24,6 +24,7 @@ var zh = [][2]string{
 	{"the host did not answer (%v); it may or may not have done this", "房主没有回应（{1}），不确定房主做了没有"},
 	{"the agent this request added was removed since; add it again from a new form", "这次添加的 Agent 后来已经移除了；要的话关掉表单重新添加"},
 	{"this request already added an agent with other settings; edit that agent instead", "这次添加已经用别的设置加上了一个 Agent；请改那个 Agent 的设置"},
+	{"name required; name, role, model or effort too long", "名字不能为空；名字、职责、模型或思考深度太长"},
 	{"this request already created worktree %s; retry it with the same options", "这次添加已经新建了 worktree {1}；请用同样的选项重试"},
 	{"the worktree %s this request created was removed; choose a workspace in the agent's settings, or add it again from a new form", "这次添加新建的 worktree {1} 已经删了；请在这个 Agent 的设置里选一个工作区，或者关掉表单重新添加"},
 	{"the host did not answer (%v); your draft is kept, try again", "房主没有回应（{1}），草稿已保留，请重试"},
