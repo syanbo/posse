@@ -229,6 +229,8 @@ func (d *Daemon) daemonHandoff(ctx context.Context, raw json.RawMessage, stop co
 		for _, e := range exits {
 			d.onExit(e.id, e.code)
 		}
+		// 交接期间暂停的讨论派发恢复
+		d.discKick()
 		return nil, rpc.Errorf(rpc.CodeInternal, "handoff: %v", err)
 	}
 	log.Printf("handed off %d terminals to pid %d", n, pid)

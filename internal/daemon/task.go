@@ -393,6 +393,9 @@ type taskDoneParams struct {
 	Summary string `json:"summary"`
 	Report  string `json:"report"`
 	Failed  bool   `json:"failed"`
+	// 讨论任务必带：这一轮的 execution ID 和完整回复正文
+	Execution string `json:"execution"`
+	Body      string `json:"body"`
 }
 
 func (d *Daemon) taskDone(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -406,6 +409,9 @@ func (d *Daemon) taskDone(ctx context.Context, raw json.RawMessage) (any, error)
 	}
 	if err := authorizeWorker(t, p.Caller); err != nil {
 		return nil, err
+	}
+	if t.DiscussionID != "" {
+		return d.discDone(t, p)
 	}
 	if p.Summary = strings.TrimSpace(p.Summary); p.Summary == "" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "summary required")
@@ -435,6 +441,7 @@ type taskAskParams struct {
 	Question  string `json:"question"`
 	Resume    string `json:"resume"` // 接着等之前提过的问题
 	TimeoutMs int    `json:"timeoutMs"`
+	Execution string `json:"execution"` // 讨论任务必带
 }
 
 type taskAskResult struct {
@@ -461,6 +468,21 @@ func (d *Daemon) taskAsk(ctx context.Context, raw json.RawMessage) (any, error) 
 		q, err = d.store.Message(p.Resume)
 		if err != nil || q.TaskID != t.ID || q.Kind != "question" {
 			return nil, rpc.Errorf(rpc.CodeNotFound, "question %s not found in task %s", p.Resume, t.ID)
+		}
+		if t.DiscussionID != "" {
+			if dq, err := d.store.QuestionByTaskMessage(q.ID); err != nil || dq.Execution != p.Execution {
+				return nil, discRoundErr(t, p.Execution)
+			}
+		}
+	} else if t.DiscussionID != "" {
+		if t.Status != store.TaskRunning {
+			return nil, rpc.Errorf(rpc.CodeConflict, "task %s is already %s", t.ID, t.Status)
+		}
+		if p.Question = strings.TrimSpace(p.Question); p.Question == "" {
+			return nil, rpc.Errorf(rpc.CodeBadRequest, "question required")
+		}
+		if q, err = d.discAsk(t, p); err != nil {
+			return nil, err
 		}
 	} else {
 		if t.Status != store.TaskRunning {
@@ -504,9 +526,14 @@ func (d *Daemon) taskAsk(ctx context.Context, raw json.RawMessage) (any, error) 
 	}
 }
 
+type taskCheckParams struct {
+	taskSel
+	Execution string `json:"execution"` // 讨论任务必带
+}
+
 // taskCheck 取出派发方发给 worker 的未读回复和补充说明。
 func (d *Daemon) taskCheck(ctx context.Context, raw json.RawMessage) (any, error) {
-	var p taskSel
+	var p taskCheckParams
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
@@ -516,6 +543,11 @@ func (d *Daemon) taskCheck(ctx context.Context, raw json.RawMessage) (any, error
 	}
 	if err := authorizeWorker(t, p.Caller); err != nil {
 		return nil, err
+	}
+	if t.DiscussionID != "" {
+		if err := d.checkDiscRound(t, p.Execution); err != nil {
+			return nil, err
+		}
 	}
 	msgs, err := d.store.Inbox(store.Inbox{TaskID: t.ID, Unread: true})
 	if err != nil {
@@ -635,6 +667,13 @@ func (d *Daemon) taskReply(ctx context.Context, raw json.RawMessage) (any, error
 	if err := authorizeCoordinator(t, p.Caller); err != nil {
 		return nil, err
 	}
+	if t.DiscussionID != "" {
+		// 任务页和讨论里回答的是同一个问题：走同一个事务，只接受一次
+		if _, err := d.answerDiscussion(q.ID, p.Body, ""); err != nil {
+			return nil, err
+		}
+		return map[string]string{"task": t.ID, "question": q.ID}, nil
+	}
 	if p.Body = strings.TrimSpace(p.Body); p.Body == "" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "reply text required")
 	}
@@ -666,6 +705,10 @@ func (d *Daemon) taskSend(ctx context.Context, raw json.RawMessage) (any, error)
 	}
 	if err := authorizeCoordinator(t, p.Caller); err != nil {
 		return nil, err
+	}
+	if t.DiscussionID != "" {
+		// 讨论的请求按成员排队，一轮一个执行：不能绕过队列往同一轮里追加
+		return nil, rpc.Errorf(rpc.CodeConflict, "task %s is a discussion worker; send it a request in the discussion (posse discussion post %s --to <member>)", t.ID, t.DiscussionID)
 	}
 	if p.Body = strings.TrimSpace(p.Body); p.Body == "" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "message text required")
@@ -741,8 +784,17 @@ func (d *Daemon) taskClose(ctx context.Context, raw json.RawMessage) (any, error
 	if err := authorizeCoordinator(t, p.Caller); err != nil {
 		return nil, err
 	}
-	// 先改状态，worker 终端退出时就不会再当作意外退出通知派发方
-	if t.Status == store.TaskRunning {
+	// 先改状态，worker 终端退出时就不会再当作意外退出通知派发方。讨论任务的轮次一起记成停止、解开成员绑定，
+	// 下一轮重新启动 worker
+	if t.DiscussionID != "" {
+		if _, err := d.store.EndTask(t.ID, store.TaskStopped, nil, store.ExecStopped, "stopped by the user", false, time.Now()); err != nil {
+			return nil, err
+		}
+		if err := d.store.UnbindTask(t.ID); err != nil {
+			return nil, err
+		}
+		defer d.discKick()
+	} else if t.Status == store.TaskRunning {
 		if _, err := d.store.FinishTask(t.ID, store.TaskStopped, "", "", time.Now()); err != nil {
 			return nil, err
 		}
@@ -789,8 +841,11 @@ func (d *Daemon) workerGone(terminalID, reason string) {
 		return
 	}
 	for _, t := range ts {
-		if ok, err := d.store.FinishTask(t.ID, store.TaskExited, "", "", time.Now()); err == nil && ok {
-			d.addMessage(t, "exit", reason, "")
+		// 讨论任务：任务、exit 消息和进行中的轮次在一个事务里记成中断，成员队列暂停等「重新启动并继续」
+		exit := store.Message{ID: store.NewID("m_"), TaskID: t.ID, Kind: "exit", Body: reason, CreatedAt: time.Now()}
+		if ok, err := d.store.EndTask(t.ID, store.TaskExited, &exit, store.ExecInterrupted, reason, true, time.Now()); err == nil && ok {
+			d.taskNotify()
+			go d.deliver(t.Coordinator)
 		}
 	}
 }
@@ -855,8 +910,14 @@ func (d *Daemon) nudgeText(terminalID string) (text string, ids []string) {
 			for _, m := range msgs {
 				ids = append(ids, m.ID)
 			}
-			if len(msgs) > 0 {
-				text = fmt.Sprintf("Posse: your coordinator sent a message for task %s. Run `posse task check %s`.", t.ID, t.ID)
+			if len(msgs) == 0 {
+				continue
+			}
+			text = fmt.Sprintf("Posse: your coordinator sent a message for task %s. Run `posse task check %s`.", t.ID, t.ID)
+			if t.DiscussionID != "" {
+				if x, err := d.store.ActiveExecutionForTask(t.ID); err == nil {
+					text = fmt.Sprintf("Posse: discussion message for task %s, execution %s. Run `posse task check %s --execution %s`.", t.ID, x.ID, t.ID, x.ID)
+				}
 			}
 		}
 	}

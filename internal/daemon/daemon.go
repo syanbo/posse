@@ -216,6 +216,7 @@ type Daemon struct {
 	ln       *gateListener
 	handoff  handoffState
 	agents   agentScan // 本机装了哪些 agent（agents.go）
+	disc     discState // 讨论的调度（discussion.go）
 
 	// zsh 集成和同名脚本（agent.WriteShellFiles）：写成功一次就不再写
 	shellMu     sync.Mutex
@@ -353,6 +354,13 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := st.MarkRunningTasksLost(time.Now(), keep); err != nil {
 		return err
 	}
+	// 讨论的轮次对账：普通启动马上做（进行中的轮次中断、排队的暂停等用户确认）；交接过来的等拿到锁再做，
+	// 旧进程可能还在启动某一轮的 worker
+	if in == nil {
+		d.reconcileDiscussions(true)
+	} else {
+		d.disc.waitLock.Store(true)
+	}
 	// 交接过来的终端还用着旧进程的副本，上一个常驻进程崩溃时留下的登记在这里去掉
 	go d.collectRuntimes("")
 
@@ -387,6 +395,7 @@ func Run(ctx context.Context, cfg Config) error {
 	d.newMobile()
 	go d.agentLoop(ctx)
 	go d.detectLoop(ctx)
+	go d.discLoop(ctx)
 	if in == nil {
 		d.startMobile()
 	} else {
@@ -403,6 +412,11 @@ func Run(ctx context.Context, cfg Config) error {
 				unlock = u
 				lockMu.Unlock()
 				d.startMobile()
+				d.disc.mu.Lock()
+				d.reconcileDiscussions(false)
+				d.disc.waitLock.Store(false)
+				d.disc.mu.Unlock()
+				d.discKick()
 				return
 			}
 		}()
@@ -524,6 +538,28 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("relay.set", d.relaySet)
 	srv.Handle("relay.clear", d.relayClear)
 	srv.Handle("relay.invite", d.relayInvite)
+	srv.Handle("discussion.create", d.discCreate)
+	srv.Handle("discussion.list", d.discList)
+	srv.Handle("discussion.show", d.discShow)
+	srv.Handle("discussion.update", d.discUpdate)
+	srv.Handle("discussion.archive", d.discArchive)
+	srv.Handle("discussion.attachments", d.discAttachments)
+	srv.Handle("discussion.member.add", d.discMemberAdd)
+	srv.Handle("discussion.member.update", d.discMemberUpdate)
+	srv.Handle("discussion.member.remove", d.discMemberRemove)
+	srv.Handle("discussion.member.restart", d.discMemberRestart)
+	srv.Handle("discussion.post", d.discPost)
+	srv.Handle("discussion.answer", d.discAnswer)
+	srv.Handle("discussion.key", d.discKey)
+	srv.Handle("discussion.search", d.discSearch)
+	srv.Handle("discussion.cancel", d.discCancel)
+	srv.Handle("discussion.stop", d.discStop)
+	srv.Handle("discussion.retry", d.discRetry)
+	srv.Handle("discussion.confirm", d.discConfirm)
+	srv.Handle("discussion.isolate", d.discIsolate)
+	srv.Handle("discussion.read", d.discRead)
+	srv.Handle("discussion.ack", d.discAck)
+	srv.Handle("discussion.pending", d.discPending)
 	srv.HandleStream("terminal.attach", d.terminalAttach)
 }
 

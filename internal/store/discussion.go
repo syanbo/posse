@@ -815,6 +815,22 @@ func isUnique(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }
 
+// MessageByClientID 找这个客户端请求 ID 已经写下的消息和它的执行。
+func (s *Store) MessageByClientID(key, clientID string) (DiscMessage, *Execution, error) {
+	m, err := scanDiscMessage(s.db.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND client_id=?`, key, clientID))
+	if err != nil {
+		return m, nil, err
+	}
+	if m.Execution == "" {
+		return m, nil, nil
+	}
+	x, err := s.Execution(m.Execution)
+	if err != nil {
+		return m, nil, nil
+	}
+	return m, &x, nil
+}
+
 func (s *Store) DiscMessage(id string) (DiscMessage, error) {
 	return scanDiscMessage(s.db.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE id=?`, id))
 }
@@ -1594,6 +1610,25 @@ func endRounds(tx querier, taskID, execState, reason string, interrupt bool, at 
 		}
 	}
 	return nil
+}
+
+// UnbindTask 解开绑定着这个任务的成员（用户关了 worker）：下一轮新开 worker，不算受阻。
+func (s *Store) UnbindTask(taskID string) error {
+	return s.withTx(func(tx *sql.Tx) error {
+		m, err := scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE task_id=? AND task_id!=''`, taskID))
+		if errors.Is(err, ErrNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		rev, err := bump(tx, m.Discussion)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`UPDATE disc_members SET task_id='', worker='', worker_config=0, rev=? WHERE id=?`, rev, m.ID)
+		return err
+	})
 }
 
 // ReconcileResult 是启动对账的结果。

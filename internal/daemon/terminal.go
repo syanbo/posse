@@ -750,6 +750,8 @@ func (d *Daemon) afterAgent(s *session, prev string, st host.AgentState) {
 	switch st.Status {
 	case agent.StatusIdle:
 		go d.deliver(s.ID)
+		// 讨论 worker 汇报后停到输入框，下一轮这时才能派
+		d.discKick()
 	case agent.StatusExited:
 		s.clearAgent(0)
 		go d.workerGone(s.ID, "worker agent exited before reporting")
