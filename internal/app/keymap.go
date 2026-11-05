@@ -90,6 +90,8 @@ var posseKeys = []keyAction{
 	{id: "webMobile", group: keyGroupWeb, groupLabel: locales.Messages.KeysGroupWeb, label: locales.Messages.KeysWebMobileLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyM)}, note: locales.Messages.KeysWebMobileNote},
 
 	{id: "quickOpen", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysQuickOpenLabel, def: []keyCombo{k(ui.Cmd, ui.KeyP)}},
+	{id: "searchEverywhere", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysSearchEverywhereLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyP)}},
+	{id: "findAction", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysFindActionLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyA)}},
 	{id: "searchFiles", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysSearchFilesLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyF)}},
 	{id: "filesPanel", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysFilesPanelLabel, def: []keyCombo{k(ui.Cmd, ui.KeyL)}},
 	{id: "fileTree", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysFileTreeLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyE)}},

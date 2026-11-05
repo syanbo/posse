@@ -25,6 +25,12 @@ type Query struct {
 	Regex     bool
 	Include   string
 	Exclude   string
+	Dir       string // 只搜这个目录（相对 Root）下的文件，为空时搜整个清单
+}
+
+// InDir 报告 rel 是否在 q.Dir 下面；Dir 为空时都算。
+func (q Query) InDir(rel string) bool {
+	return q.Dir == "" || rel == q.Dir || strings.HasPrefix(rel, q.Dir+string(filepath.Separator))
 }
 
 // Hit 是一行里的命中：Line 从 0 起；Spans 是命中在 Text 里的字节范围。
@@ -75,7 +81,7 @@ func Search(ctx context.Context, l *List, q Query, overlay map[string]string, em
 		if ctx.Err() != nil {
 			return false, ctx.Err()
 		}
-		if len(include) > 0 && !anyGlob(include, rel) || anyGlob(exclude, rel) {
+		if !q.InDir(rel) || len(include) > 0 && !anyGlob(include, rel) || anyGlob(exclude, rel) {
 			continue
 		}
 		text, ok := overlay[rel]

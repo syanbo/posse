@@ -176,6 +176,22 @@ type fileSearch struct {
 // active 报告检索框里有字：文件页这时显示检索结果，不显示文件树。
 func (s *fileSearch) active() bool { return strings.TrimSpace(s.query.Text) != "" }
 
+// searchIn 让文件栏的检索框只搜 dir（工作区里的绝对路径，为空时搜整个工作区），焦点给检索框（⇧⌘F、「在此目录中查找…」）。
+func (a *app) searchIn(w *workspace, dir string) {
+	v := a.openFilesPanel(w, sideFiles)
+	rel := ""
+	if dir != "" {
+		if r, ok := relInside(v.root, dir); ok && r != "." {
+			rel = r
+		}
+	}
+	v.search.focus = true
+	if v.search.query.Dir != rel {
+		v.search.query.Dir = rel
+		a.startSearch(v, 0)
+	}
+}
+
 // clearSearch 清空检索框，文件页回到文件树；大小写、正则和筛选的设置留着。
 func (a *app) clearSearch(v *filesView) {
 	if v.search.query.Text == "" {
@@ -201,6 +217,13 @@ type filesView struct {
 	realRoot string
 	tree     *files.Tree
 	treeList ui.ListState
+	recent   []string // 最近打开的文件（绝对路径，新的在前），随处搜索查询为空时先列
+	treeRef  ui.Ref
+	// treeSel 是文件树里点选的那一行（文件或目录），⇧⌘F 按它限定目录；当前文件换了（treeSelCur 不再是它）就不算，
+	// 改为高亮当前文件
+	treeSel    string
+	treeSelDir bool
+	treeSelCur *fileDoc
 	// reveal 是"在文件栏中显示"选中的路径：当前文件没换、也没在树上点别的之前，树上选中它而不是当前文件
 	reveal       string
 	revealCur    *fileDoc
@@ -454,6 +477,8 @@ func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview 
 	}
 	v.cur = d
 	d.focus = true
+	v.recent = slices.Insert(slices.DeleteFunc(v.recent, func(p string) bool { return p == path }), 0, path)
+	v.recent = v.recent[:min(len(v.recent), 30)]
 	if line > 0 {
 		// 跳到某一行（检索结果、路径:行号）要看源码，Markdown 也切到编辑器
 		d.gotoLine, d.gotoSpan, d.preview = line, span, false
@@ -926,14 +951,22 @@ func (a *app) startSearch(v *filesView, delay time.Duration) {
 				s.hits, s.rows, s.truncated = nil, nil, false
 				l := v.list
 				go func() {
-					trunc, err := files.Search(ctx, l, q, overlay, func(hs []files.Hit) {
-						a.update(func() {
-							if s.gen == gen {
-								s.hits = append(s.hits, hs...)
-								s.rows = searchRows(s.hits)
-							}
+					var err error
+					// 限定的目录被 git 忽略时不在清单里，现列一遍那个目录
+					if q.Dir != "" && l.Ignored(filepath.Join(l.Root, q.Dir), true) {
+						l, err = files.ListDir(ctx, l.Root, q.Dir)
+					}
+					trunc := false
+					if err == nil {
+						trunc, err = files.Search(ctx, l, q, overlay, func(hs []files.Hit) {
+							a.update(func() {
+								if s.gen == gen {
+									s.hits = append(s.hits, hs...)
+									s.rows = searchRows(s.hits)
+								}
+							})
 						})
-					})
+					}
 					a.update(func() {
 						if s.gen != gen {
 							return

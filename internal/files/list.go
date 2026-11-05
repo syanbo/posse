@@ -155,6 +155,57 @@ func (l *List) walkOutside(ctx context.Context, isRepo map[string]bool) error {
 	})
 }
 
+// ListAll 遍历 root 下的全部文件，被 git 忽略的也算（随处搜索的「包括非项目条目」）；依赖、构建产物目录（skipDirs）照旧跳过，
+// 这些目录动辄几十万个文件，要搜里面的用 ListDir 点名。
+func ListAll(ctx context.Context, root string) (*List, error) {
+	l := &List{Root: filepath.Clean(root)}
+	if err := l.walk(ctx); err != nil {
+		return nil, err
+	}
+	slices.Sort(l.Files)
+	return l, nil
+}
+
+// ListDir 遍历 root 下的 dir（相对 root）里的全部文件，路径照旧相对 root：用户限定在被 git 忽略的目录里检索时用，
+// 这种目录不在 ListFiles 的清单里。是用户点名要搜的，依赖、构建产物目录也照搜，只跳过版本库目录。
+func ListDir(ctx context.Context, root, dir string) (*List, error) {
+	root = filepath.Clean(root)
+	l := &List{Root: root}
+	base := filepath.Join(root, dir)
+	err := filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if p == base {
+				return err
+			}
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if d.IsDir() {
+			if p != base && (d.Name() == ".git" || d.Name() == ".hg" || d.Name() == ".svn") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if hidden(d.Name()) || !d.Type().IsRegular() && d.Type()&fs.ModeSymlink == 0 {
+			return nil
+		}
+		if len(l.Files) == MaxFiles {
+			l.Truncated = true
+			return filepath.SkipAll
+		}
+		rel, _ := filepath.Rel(root, p)
+		l.Files = append(l.Files, rel)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	slices.Sort(l.Files)
+	return l, nil
+}
+
 func (l *List) walk(ctx context.Context) error {
 	return filepath.WalkDir(l.Root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {

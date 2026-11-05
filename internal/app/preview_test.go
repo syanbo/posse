@@ -1128,12 +1128,21 @@ func TestPreview(t *testing.T) {
 		a.startSearch(v, 0)
 		until(t, newTester(a.build, 1200, 760), "search", func() bool { return !v.search.running && len(v.search.hits) > 0 })
 		savePNG(t, newPreviewTester(a, dark), "files-search-"+suffix+".png")
+		// 限定在某个目录里检索：选项一行最前面是目录标签
+		v.search.query.Dir = "internal"
+		a.startSearch(v, 0)
+		until(t, newTester(a.build, 1200, 760), "scoped", func() bool { return !v.search.running })
+		savePNG(t, newPreviewTester(a, dark), "files-search-scoped-"+suffix+".png")
 
 		a = previewApp(t)
 		previewFiles(t, a, "main.go")
-		a.openQuick(&a.workspaces[0])
+		a.openQuick(&a.workspaces[0], quickFiles)
 		a.quick.query = "view"
 		savePNG(t, newPreviewTester(a, dark), "quick-open-"+suffix+".png")
+		// 随处搜索的"所有"页：文件和操作各一组
+		a.openQuick(&a.workspaces[0], quickAll)
+		a.quick.query = "f"
+		savePNG(t, newPreviewTester(a, dark), "quick-all-"+suffix+".png")
 
 		// 跳到定义时几处同名的声明：选择列表
 		a = previewApp(t)

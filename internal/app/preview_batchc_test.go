@@ -49,7 +49,7 @@ func TestPreviewBatchC(t *testing.T) {
 		}},
 		{name: "c-quick-open", setup: func(t *testing.T, a *app) {
 			previewFiles(t, a, "main.go")
-			a.openQuick(&a.workspaces[0])
+			a.openQuick(&a.workspaces[0], quickFiles)
 			a.quick.query = "nothing-matches"
 		}},
 		{name: "c-definition-pick", setup: func(t *testing.T, a *app) {

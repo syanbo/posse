@@ -1165,3 +1165,111 @@ func TestTrashFromTree(t *testing.T) {
 		t.Fatalf("docs left: %d", len(v.docs))
 	}
 }
+
+// 照 WebStorm：文件树里选中目录后按 ⇧⌘F 只搜这个目录；点掉范围回到整个工作区，焦点在别处时按下也是整个工作区
+func TestSearchInSelectedDir(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	v := a.openFilesPanel(w, sideFiles)
+	tt := newTester(a.build, 1200, 760)
+	for range 20 {
+		tt.Frame()
+		pass(tt, 20*time.Millisecond)
+	}
+	until(t, tt, "tree", func() bool { return tt.HasText("internal") })
+	if err := tt.Click("internal"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if v.treeSelected() != filepath.Join(root, "internal") {
+		t.Fatalf("selection %q", v.treeSel)
+	}
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyF)
+	tt.Frame()
+	tt.Frame()
+	tt.Type("package")
+	until(t, tt, "scoped", func() bool { return !v.search.running && len(v.search.hits) == 3 })
+	if v.search.query.Dir != "internal" || !tt.HasText("在 internal 中") {
+		t.Fatalf("scope %q", v.search.query.Dir)
+	}
+	if err := tt.Click("搜索整个工作区"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "whole", func() bool { return v.search.query.Dir == "" && !v.search.running && len(v.search.hits) == 4 })
+
+	// 焦点不在文件树上时按 ⇧⌘F 搜整个工作区
+	v.search.query.Dir = "internal"
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyF)
+	until(t, tt, "unscoped", func() bool { return v.search.query.Dir == "" && !v.search.running && len(v.search.hits) == 4 })
+
+	// 右键目录「在此目录中查找…」
+	a.clearSearch(v)
+	tt.Frame()
+	until(t, tt, "files row", func() bool { return tt.HasText("files") }) // 上面点 internal 时展开了
+	if err := tt.RightClick("files"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("在此目录中查找…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	tt.Type("package")
+	until(t, tt, "menu scope", func() bool {
+		return v.search.query.Dir == filepath.Join("internal", "files") && !v.search.running && len(v.search.hits) == 2
+	})
+}
+
+// 随处搜索：⇧⌘A 在"操作"页按名字找到操作，回车直接做；⇥ 换页；查询为空时文件页先列最近打开的
+func TestSearchEverywhere(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	tt := newTester(a.build, 1200, 760)
+	tt.Frame()
+	sidebar := a.state.SidebarHidden
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyA)
+	tt.Frame()
+	if !a.quick.open || a.quick.tab != quickActions {
+		t.Fatalf("⇧⌘A: open %v tab %d", a.quick.open, a.quick.tab)
+	}
+	tt.Frame()
+	tt.Type("侧栏")
+	tt.Frame()
+	if !tt.HasText("收起 / 展开侧栏") || tt.HasText("文件树") {
+		t.Fatalf("actions: %v", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if a.quick.open || a.state.SidebarHidden == sidebar {
+		t.Fatal("enter should run the action and close")
+	}
+
+	// 打开过的文件在空查询时排最前
+	v := a.filesFor(w)
+	a.openFile(w, filepath.Join(root, "docs", "plan.md"), 0, [2]int{})
+	tt.Frame()
+	a.openQuick(w, quickAll)
+	until(t, tt, "list", func() bool { return v.list != nil && len(a.quick.matches) > 0 })
+	if a.quick.matches[0].Path != filepath.Join("docs", "plan.md") {
+		t.Fatalf("recent first: %v", a.quick.matches[0].Path)
+	}
+	tt.Frame()
+	tt.Key(0, ui.KeyTab)
+	tt.Frame()
+	if a.quick.tab != quickFiles {
+		t.Fatalf("tab: %d", a.quick.tab)
+	}
+	tt.Type("search")
+	until(t, tt, "match", func() bool {
+		return len(a.quick.matches) > 0 && a.quick.matches[0].Path == filepath.Join("internal", "files", "search.go")
+	})
+	tt.Key(0, ui.KeyEnter)
+	until(t, tt, "opened", func() bool {
+		return v.cur != nil && v.cur.path == filepath.Join(root, "internal", "files", "search.go")
+	})
+}

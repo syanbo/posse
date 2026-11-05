@@ -4349,6 +4349,52 @@ func (msgs Messages) FilesFileHistory() string {
 	return Catalog.Format(msgs.locale, "filesFileHistory", nil)
 }
 
+// FilesFindInDir says "Find in Folder…"
+// in the language the app shows.
+//
+// Context menu item on a folder in the file tree: full-text search limited
+// to that folder.
+func FilesFindInDir() string { return In(i18n.Locale()).FilesFindInDir() }
+
+// FilesFindInDir says "Find in Folder…"
+// in the language of msgs.
+//
+// Context menu item on a folder in the file tree: full-text search limited
+// to that folder.
+func (msgs Messages) FilesFindInDir() string {
+	return Catalog.Format(msgs.locale, "filesFindInDir", nil)
+}
+
+// FilesSearchScope says "In {dir}"
+// in the language the app shows.
+//
+// Chip before the search options showing the folder the search is limited
+// to; dir is the folder path relative to the workspace.
+func FilesSearchScope(dir string) string { return In(i18n.Locale()).FilesSearchScope(dir) }
+
+// FilesSearchScope says "In {dir}"
+// in the language of msgs.
+//
+// Chip before the search options showing the folder the search is limited
+// to; dir is the folder path relative to the workspace.
+func (msgs Messages) FilesSearchScope(dir string) string {
+	return Catalog.Format(msgs.locale, "filesSearchScope", map[string]any{"dir": dir})
+}
+
+// FilesSearchScopeClear says "Search the whole workspace"
+// in the language the app shows.
+//
+// Tooltip of the × on the folder chip: removes the folder limit.
+func FilesSearchScopeClear() string { return In(i18n.Locale()).FilesSearchScopeClear() }
+
+// FilesSearchScopeClear says "Search the whole workspace"
+// in the language of msgs.
+//
+// Tooltip of the × on the folder chip: removes the folder limit.
+func (msgs Messages) FilesSearchScopeClear() string {
+	return Catalog.Format(msgs.locale, "filesSearchScopeClear", nil)
+}
+
 // FilesFilter says "Filter"
 // in the language the app shows.
 //
@@ -11265,6 +11311,168 @@ func KeysPushLabel() string { return In(i18n.Locale()).KeysPushLabel() }
 // Keyboard Shortcuts settings: label for PushLabel.
 func (msgs Messages) KeysPushLabel() string {
 	return Catalog.Format(msgs.locale, "keysPushLabel", nil)
+}
+
+// KeysFindActionLabel says "Find Action"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: opens Search Everywhere on the Actions tab.
+func KeysFindActionLabel() string { return In(i18n.Locale()).KeysFindActionLabel() }
+
+// KeysFindActionLabel says "Find Action"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: opens Search Everywhere on the Actions tab.
+func (msgs Messages) KeysFindActionLabel() string {
+	return Catalog.Format(msgs.locale, "keysFindActionLabel", nil)
+}
+
+// KeysSearchEverywhereLabel says "Search Everywhere"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: opens Search Everywhere (files and actions
+// in one popup).
+func KeysSearchEverywhereLabel() string { return In(i18n.Locale()).KeysSearchEverywhereLabel() }
+
+// KeysSearchEverywhereLabel says "Search Everywhere"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: opens Search Everywhere (files and actions
+// in one popup).
+func (msgs Messages) KeysSearchEverywhereLabel() string {
+	return Catalog.Format(msgs.locale, "keysSearchEverywhereLabel", nil)
+}
+
+// QuickIncludeIgnored says "Include non-project items"
+// in the language the app shows.
+//
+// Search Everywhere: toggle that also matches files ignored by git.
+func QuickIncludeIgnored() string { return In(i18n.Locale()).QuickIncludeIgnored() }
+
+// QuickIncludeIgnored says "Include non-project items"
+// in the language of msgs.
+//
+// Search Everywhere: toggle that also matches files ignored by git.
+func (msgs Messages) QuickIncludeIgnored() string {
+	return Catalog.Format(msgs.locale, "quickIncludeIgnored", nil)
+}
+
+// QuickIncludeIgnoredTip says "Also match files ignored by git; dependency folders such as node_modules are still skipped"
+// in the language the app shows.
+//
+// Search Everywhere: tooltip of the include non-project items toggle.
+func QuickIncludeIgnoredTip() string { return In(i18n.Locale()).QuickIncludeIgnoredTip() }
+
+// QuickIncludeIgnoredTip says "Also match files ignored by git; dependency folders such as node_modules are still skipped"
+// in the language of msgs.
+//
+// Search Everywhere: tooltip of the include non-project items toggle.
+func (msgs Messages) QuickIncludeIgnoredTip() string {
+	return Catalog.Format(msgs.locale, "quickIncludeIgnoredTip", nil)
+}
+
+// QuickMore says "More"
+// in the language the app shows.
+//
+// Search Everywhere, All tab: link at the right of a group title that
+// switches to that tab.
+func QuickMore() string { return In(i18n.Locale()).QuickMore() }
+
+// QuickMore says "More"
+// in the language of msgs.
+//
+// Search Everywhere, All tab: link at the right of a group title that
+// switches to that tab.
+func (msgs Messages) QuickMore() string {
+	return Catalog.Format(msgs.locale, "quickMore", nil)
+}
+
+// QuickPlaceholderActions says "Find an action by name"
+// in the language the app shows.
+//
+// Search Everywhere: placeholder of the search field on the Actions tab.
+func QuickPlaceholderActions() string { return In(i18n.Locale()).QuickPlaceholderActions() }
+
+// QuickPlaceholderActions says "Find an action by name"
+// in the language of msgs.
+//
+// Search Everywhere: placeholder of the search field on the Actions tab.
+func (msgs Messages) QuickPlaceholderActions() string {
+	return Catalog.Format(msgs.locale, "quickPlaceholderActions", nil)
+}
+
+// QuickPlaceholderAll says "Search files and actions"
+// in the language the app shows.
+//
+// Search Everywhere: placeholder of the search field on the All tab.
+func QuickPlaceholderAll() string { return In(i18n.Locale()).QuickPlaceholderAll() }
+
+// QuickPlaceholderAll says "Search files and actions"
+// in the language of msgs.
+//
+// Search Everywhere: placeholder of the search field on the All tab.
+func (msgs Messages) QuickPlaceholderAll() string {
+	return Catalog.Format(msgs.locale, "quickPlaceholderAll", nil)
+}
+
+// QuickTabActions says "Actions"
+// in the language the app shows.
+//
+// Search Everywhere: tab listing window actions with their shortcuts; also
+// the group title on the All tab.
+func QuickTabActions() string { return In(i18n.Locale()).QuickTabActions() }
+
+// QuickTabActions says "Actions"
+// in the language of msgs.
+//
+// Search Everywhere: tab listing window actions with their shortcuts; also
+// the group title on the All tab.
+func (msgs Messages) QuickTabActions() string {
+	return Catalog.Format(msgs.locale, "quickTabActions", nil)
+}
+
+// QuickTabAll says "All"
+// in the language the app shows.
+//
+// Search Everywhere: tab mixing files and actions.
+func QuickTabAll() string { return In(i18n.Locale()).QuickTabAll() }
+
+// QuickTabAll says "All"
+// in the language of msgs.
+//
+// Search Everywhere: tab mixing files and actions.
+func (msgs Messages) QuickTabAll() string {
+	return Catalog.Format(msgs.locale, "quickTabAll", nil)
+}
+
+// QuickTabFiles says "Files"
+// in the language the app shows.
+//
+// Search Everywhere: tab matching file names; also the group title on the
+// All tab.
+func QuickTabFiles() string { return In(i18n.Locale()).QuickTabFiles() }
+
+// QuickTabFiles says "Files"
+// in the language of msgs.
+//
+// Search Everywhere: tab matching file names; also the group title on the
+// All tab.
+func (msgs Messages) QuickTabFiles() string {
+	return Catalog.Format(msgs.locale, "quickTabFiles", nil)
+}
+
+// QuickTitle says "Search Everywhere"
+// in the language the app shows.
+//
+// Search Everywhere: accessibility label of the tab group.
+func QuickTitle() string { return In(i18n.Locale()).QuickTitle() }
+
+// QuickTitle says "Search Everywhere"
+// in the language of msgs.
+//
+// Search Everywhere: accessibility label of the tab group.
+func (msgs Messages) QuickTitle() string {
+	return Catalog.Format(msgs.locale, "quickTitle", nil)
 }
 
 // KeysQuickOpenLabel says "Quick Open File"

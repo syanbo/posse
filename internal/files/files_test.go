@@ -333,6 +333,45 @@ func BenchmarkFuzzy100k(b *testing.B) {
 	}
 }
 
+// 限定目录：清单里的只搜那个目录；被忽略的目录不在清单里，用 ListDir 现列，依赖目录也照搜
+func TestSearchDir(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "a.go"), "Hello")
+	write(t, filepath.Join(root, "app", "b.go"), "Hello")
+	write(t, filepath.Join(root, "apple", "c.go"), "Hello")
+	write(t, filepath.Join(root, "dist", "node_modules", "d.js"), "Hello")
+	write(t, filepath.Join(root, "dist", ".git", "e"), "Hello")
+	paths := func(l *List, q Query) []string {
+		var out []string
+		if _, err := Search(context.Background(), l, q, nil, func(h []Hit) {
+			for _, x := range h {
+				out = append(out, filepath.ToSlash(x.Path))
+			}
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	l, _ := ListFiles(context.Background(), root)
+	if got := paths(l, Query{Text: "hello", Dir: "app"}); !slices.Equal(got, []string{"app/b.go"}) {
+		t.Fatalf("dir app: %q", got)
+	}
+	d, err := ListDir(context.Background(), root, "dist")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := paths(d, Query{Text: "hello", Dir: "dist"}); !slices.Equal(got, []string{"dist/node_modules/d.js"}) {
+		t.Fatalf("ignored dir: %q", got)
+	}
+	all, _ := ListAll(context.Background(), root)
+	if got := paths(all, Query{Text: "hello"}); !slices.Equal(got, []string{"a.go", "app/b.go", "apple/c.go"}) {
+		t.Fatalf("all: %q", got) // dist 下只有依赖目录和 .git，都跳过
+	}
+	if _, err := ListDir(context.Background(), root, "gone"); err == nil {
+		t.Fatal("missing dir should fail")
+	}
+}
+
 func TestSearch(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "a.go"), "package a\n\nfunc Hello() {}\n// hello again, hello\n")

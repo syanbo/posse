@@ -33,6 +33,7 @@ const hexPath = `M12 2.75 20 7.375v9.25L12 21.25 4 16.625v-9.25z`
 var (
 	iconPlus       = icon(`<path d="M12 4v16M4 12h16"/>`)
 	iconClose      = icon(`<path d="M17 7 7 17M7 7l10 10"/>`)
+	iconSearch     = icon(`<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>`)
 	iconTerminal   = icon(`<g transform="translate(0 -0.5)"><path d="m5 16 5-4-5-4M12 17h7"/></g>`)
 	iconFolder     = icon(folderShape)
 	iconBranch     = icon(branchShape)

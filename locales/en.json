@@ -1767,6 +1767,23 @@
   "@filesFileHistory": {
     "description": "Tooltip of the button in a file tab that opens the Git log of the file."
   },
+  "filesFindInDir": "Find in Folder…",
+  "@filesFindInDir": {
+    "description": "Context menu item on a folder in the file tree: full-text search limited to that folder."
+  },
+  "filesSearchScope": "In {dir}",
+  "@filesSearchScope": {
+    "description": "Chip before the search options showing the folder the search is limited to; dir is the folder path relative to the workspace.",
+    "placeholders": {
+      "dir": {
+        "type": "String"
+      }
+    }
+  },
+  "filesSearchScopeClear": "Search the whole workspace",
+  "@filesSearchScopeClear": {
+    "description": "Tooltip of the × on the folder chip: removes the folder limit."
+  },
   "filesFilter": "Filter",
   "@filesFilter": {
     "description": "Short toggle chip in the Files Panel search that shows the include/exclude fields."
@@ -4227,6 +4244,50 @@
   "keysPushLabel": "Push",
   "@keysPushLabel": {
     "description": "Keyboard Shortcuts settings: label for PushLabel."
+  },
+  "keysFindActionLabel": "Find Action",
+  "@keysFindActionLabel": {
+    "description": "Keyboard Shortcuts settings: opens Search Everywhere on the Actions tab."
+  },
+  "keysSearchEverywhereLabel": "Search Everywhere",
+  "@keysSearchEverywhereLabel": {
+    "description": "Keyboard Shortcuts settings: opens Search Everywhere (files and actions in one popup)."
+  },
+  "quickIncludeIgnored": "Include non-project items",
+  "@quickIncludeIgnored": {
+    "description": "Search Everywhere: toggle that also matches files ignored by git."
+  },
+  "quickIncludeIgnoredTip": "Also match files ignored by git; dependency folders such as node_modules are still skipped",
+  "@quickIncludeIgnoredTip": {
+    "description": "Search Everywhere: tooltip of the include non-project items toggle."
+  },
+  "quickMore": "More",
+  "@quickMore": {
+    "description": "Search Everywhere, All tab: link at the right of a group title that switches to that tab."
+  },
+  "quickPlaceholderActions": "Find an action by name",
+  "@quickPlaceholderActions": {
+    "description": "Search Everywhere: placeholder of the search field on the Actions tab."
+  },
+  "quickPlaceholderAll": "Search files and actions",
+  "@quickPlaceholderAll": {
+    "description": "Search Everywhere: placeholder of the search field on the All tab."
+  },
+  "quickTabActions": "Actions",
+  "@quickTabActions": {
+    "description": "Search Everywhere: tab listing window actions with their shortcuts; also the group title on the All tab."
+  },
+  "quickTabAll": "All",
+  "@quickTabAll": {
+    "description": "Search Everywhere: tab mixing files and actions."
+  },
+  "quickTabFiles": "Files",
+  "@quickTabFiles": {
+    "description": "Search Everywhere: tab matching file names; also the group title on the All tab."
+  },
+  "quickTitle": "Search Everywhere",
+  "@quickTitle": {
+    "description": "Search Everywhere: accessibility label of the tab group."
   },
   "keysQuickOpenLabel": "Quick Open File",
   "@keysQuickOpenLabel": {

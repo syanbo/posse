@@ -38,6 +38,9 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 	if v.cur != nil {
 		curPath = v.cur.path
 	}
+	if sel := v.treeSelected(); sel != "" {
+		curPath = sel
+	}
 	if v.reveal != "" && v.cur != v.revealCur {
 		v.reveal = ""
 	}
@@ -58,71 +61,76 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 	}
 	marks := v.treeMarks()
 	v.treeList.Key = func(i int) any { return rows[i].Path }
-	ui.List(c, &v.treeList, len(rows), func(i int) {
-		r := rows[i]
-		// 尺寸照 WebStorm 的项目树（界面字号 13、行高 24、每层缩进约 18）量出来的
-		row := ui.Row(c.Key(r.Path)).Height(sz(24)).Margin(2, 6, 0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*treeIndent).Gap(6).Radius(rRow).
-			AlignItems(ui.Center).Role(ui.RoleButton).Label(r.Name)
-		selectedBg(c, row, r.Path == curPath)
-		ignored := v.list.Ignored(r.Path, r.Dir)
-		row.Children(func() {
-			if r.Dir {
-				turn := float32(0)
-				if v.tree.Expanded(r.Path) {
-					turn = 90
-				}
-				ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted).Rotate(turn).Shrink(0)
-				icon, color := dirIcon(t, r.Name)
-				if r.Link != "" {
-					icon, color = iconFolderLink, t.Accent
-				}
-				ui.Icon(c, icon).FontSize(iconSize).TextColor(color).Shrink(0)
-			} else {
-				ui.Box(c).Width(12).Shrink(0)
-				if r.Link != "" {
-					ui.Icon(c, iconFileLink).FontSize(iconSize).TextColor(t.TextMuted).Shrink(0)
+	// 外面包一层能聚焦的：点过文件树后焦点在它上面，⇧⌘F 凭此判断是在文件树上按的
+	ui.Column(c).Grow(1).MinHeight(0).Focusable().FocusRing(false).Ref(&v.treeRef).Children(func() {
+		ui.List(c, &v.treeList, len(rows), func(i int) {
+			r := rows[i]
+			// 尺寸照 WebStorm 的项目树（界面字号 13、行高 24、每层缩进约 18）量出来的
+			row := ui.Row(c.Key(r.Path)).Height(sz(24)).Margin(2, 6, 0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*treeIndent).Gap(6).Radius(rRow).
+				AlignItems(ui.Center).Role(ui.RoleButton).Label(r.Name)
+			selectedBg(c, row, r.Path == curPath)
+			ignored := v.list.Ignored(r.Path, r.Dir)
+			row.Children(func() {
+				if r.Dir {
+					turn := float32(0)
+					if v.tree.Expanded(r.Path) {
+						turn = 90
+					}
+					ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted).Rotate(turn).Shrink(0)
+					icon, color := dirIcon(t, r.Name)
+					if r.Link != "" {
+						icon, color = iconFolderLink, t.Accent
+					}
+					ui.Icon(c, icon).FontSize(iconSize).TextColor(color).Shrink(0)
 				} else {
-					fileGlyph(c, r.Name, iconSize)
+					ui.Box(c).Width(12).Shrink(0)
+					if r.Link != "" {
+						ui.Icon(c, iconFileLink).FontSize(iconSize).TextColor(t.TextMuted).Shrink(0)
+					} else {
+						fileGlyph(c, r.Name, iconSize)
+					}
 				}
-			}
-			name := ui.Text(c, r.Name).FontSize(fsBody).SingleLine().Shrink(1).Grow(1)
-			if mark, ok := marks[r.Path]; ok && !ignored {
-				name.TextColor(letterColor(c, mark))
-				if !r.Dir {
-					name.Tooltip(gitStatusText(L(c), mark))
+				name := ui.Text(c, r.Name).FontSize(fsBody).SingleLine().Shrink(1).Grow(1)
+				if mark, ok := marks[r.Path]; ok && !ignored {
+					name.TextColor(letterColor(c, mark))
+					if !r.Dir {
+						name.Tooltip(gitStatusText(L(c), mark))
+					}
 				}
-			}
+				if ignored {
+					name.TextColor(t.TextMuted)
+				}
+				if modified[r.Path] {
+					dot(c, t.Accent).Tooltip(L(c).FilesUnsavedTip())
+				}
+			})
 			if ignored {
-				name.TextColor(t.TextMuted)
+				row.Opacity(0.7)
 			}
-			if modified[r.Path] {
-				dot(c, t.Accent).Tooltip(L(c).FilesUnsavedTip())
+			if r.Link != "" {
+				link := r.Link
+				if link == files.LinkUnreadable {
+					link = errtext.Message(link)
+				}
+				row.Tooltip(L(c).FilesSymlinkTip(link))
 			}
-		})
-		if ignored {
-			row.Opacity(0.7)
-		}
-		if r.Link != "" {
-			link := r.Link
-			if link == files.LinkUnreadable {
-				link = errtext.Message(link)
+			if row.Clicked() {
+				v.reveal = ""
+				switch {
+				case r.Dir:
+					a.toggleDir(v, r.Path)
+				case row.DoubleClicked():
+					a.openFile(w, r.Path, 0, [2]int{})
+				default:
+					a.previewFile(w, r.Path)
+				}
+				// 点文件会换当前文件，选中行记在换过之后，免得马上被当成"当前文件换了"
+				v.treeSel, v.treeSelDir, v.treeSelCur = r.Path, r.Dir, v.cur
 			}
-			row.Tooltip(L(c).FilesSymlinkTip(link))
-		}
-		if row.Clicked() {
-			v.reveal = ""
-			switch {
-			case r.Dir:
-				a.toggleDir(v, r.Path)
-			case row.DoubleClicked():
-				a.openFile(w, r.Path, 0, [2]int{})
-			default:
-				a.previewFile(w, r.Path)
-			}
-		}
-		a.pathMenu(c, row, w, v, r.Path, r.Dir)
-		a.dragPath(row, r.Path)
-	}).Grow(1).Padding(0, 0, 8, 0)
+			a.pathMenu(c, row, w, v, r.Path, r.Dir)
+			a.dragPath(row, r.Path)
+		}).Grow(1).Padding(0, 0, 8, 0)
+	})
 }
 
 // pathMenu 是文件树和检索结果里一行的右键菜单；在 git 仓库里的文件多了文件历史和 Annotate。
@@ -142,6 +150,9 @@ func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, 
 			if err := mygo.Shell.OpenPath(path); err != nil {
 				a.err = errtext.Text(err)
 			}
+		}
+		if dir && m.Item(L(c).FilesFindInDir()).Icon(iconSearch).Keys(a.keyText("searchFiles")).Chosen() {
+			a.searchIn(w, path)
 		}
 		if !dir {
 			a.gitFileMenu(L(c), m, w, v, path)
@@ -193,6 +204,29 @@ func (a *app) forgetTrashed(v *filesView, path string, dir bool) {
 
 // --- 检索
 
+// treeSelected 返回文件树里点选的那一行；点选之后当前文件换了就不算了。
+func (v *filesView) treeSelected() string {
+	if v.treeSel != "" && v.cur != v.treeSelCur {
+		v.treeSel = ""
+	}
+	return v.treeSel
+}
+
+// scopeChip 是检索限定的目录：文件夹图标、目录名和 ×，点了返回 true（回到整个工作区）。
+func scopeChip(c *ui.Context, dir string) bool {
+	t := c.Theme()
+	chip := ui.Row(c.Key("search-scope")).Height(sz(22)).Padding(0, 2, 0, 6).Gap(2).Radius(rRow).
+		Background(colors(t).tint).AlignItems(ui.Center).Shrink(1).MinWidth(0)
+	clicked := false
+	chip.Children(func() {
+		ui.Icon(c, iconFolder).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, L(c).FilesSearchScope(dir)).FontSize(fsSmall).SingleLine().Shrink(1).Margin(0, 0, 2*cjkLift, 0)
+		clicked = iconButtonSized(c.Key("scope-clear"), iconClose, L(c).FilesSearchScopeClear(), miniBox(), fsSmall).Shrink(0).Clicked()
+	})
+	chip.Tooltip(dir)
+	return clicked
+}
+
 // searchView 是文件页：顶上检索框，框里有字时列检索结果，没字时是文件树。
 func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
@@ -219,11 +253,15 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 		case in.Submitted():
 			a.startSearch(v, 0)
 		}
-		// 检索选项只在检索时露出来，平时文件树顶上只有检索框
-		if !s.active() && !s.showFilter && !filtered {
+		// 检索选项只在检索时露出来，平时文件树顶上只有检索框；限定了目录时一直显示，看得出范围
+		if !s.active() && !s.showFilter && !filtered && s.query.Dir == "" {
 			return
 		}
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+			if s.query.Dir != "" && scopeChip(c, filepath.ToSlash(s.query.Dir)) {
+				s.query.Dir = ""
+				a.startSearch(v, 0)
+			}
 			if toggleChip(c, "Aa", L(c).FilesMatchCase(), s.query.MatchCase) {
 				s.query.MatchCase = !s.query.MatchCase
 				a.startSearch(v, 0)
@@ -813,77 +851,6 @@ func (a *app) openWiki(m locales.Messages, w *workspace, from, target string) {
 }
 
 // --- 快速打开
-
-type quickOpen struct {
-	open    bool
-	ws      string
-	query   string
-	sel     int
-	matches []files.Match
-	key     string      // matches 对应的查询
-	list    *files.List // matches 对应的清单
-	moved   bool        // 这一帧用方向键换了选中项，要滚到它
-}
-
-// openQuick 打开快速打开，清单不新鲜就重列；选中文件后才切到文件标签。
-func (a *app) openQuick(w *workspace) {
-	v := a.filesFor(w)
-	a.quick = quickOpen{open: true, ws: w.ID}
-	a.refreshList(v, false, nil)
-}
-
-func (a *app) quickDialog(c *ui.Context) {
-	q := &a.quick
-	if !q.open {
-		return
-	}
-	w := a.workspace(q.ws)
-	if w == nil {
-		q.open = false
-		return
-	}
-	v := a.filesFor(w)
-	a.reportListErr(c, v)
-	t := c.Theme()
-	ui.Modal(c, &q.open, func() {
-		ui.Column(c).Width(560).Gap(8).Children(func() {
-			in := fieldInput(c, &q.query, L(c).FilesQuickOpenPlaceholder()).AutoFocus()
-			path, line := files.SplitLine(q.query)
-			if v.list != nil && (q.list != v.list || q.key != path) {
-				q.matches, q.key, q.list, q.sel = files.Fuzzy(v.list.Files, path, 50), path, v.list, 0
-			}
-			n := len(q.matches)
-			switch {
-			case n > 0 && in.Shortcut(0, ui.KeyDown):
-				q.sel, q.moved = (q.sel+1)%n, true
-			case n > 0 && in.Shortcut(0, ui.KeyUp):
-				q.sel, q.moved = (q.sel+n-1)%n, true
-			}
-			submitted := in.Submitted()
-			switch {
-			case v.list == nil:
-				ui.Text(c, L(c).FilesListing()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
-			case n == 0:
-				ui.Text(c, L(c).FilesNoMatches()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
-			default:
-				ui.Scroll(c).MaxHeight(380).Children(func() {
-					ui.Column(c).Gap(2).Children(func() {
-						for i, m := range q.matches {
-							if quickRow(c, m, i == q.sel, q.moved) {
-								q.sel, submitted = i, true
-							}
-						}
-					})
-				})
-			}
-			q.moved = false
-			if submitted && n > 0 {
-				q.open = false
-				a.openFile(w, filepath.Join(v.root, q.matches[q.sel].Path), line, [2]int{})
-			}
-		})
-	})
-}
 
 // quickRow 是快速打开的一条结果：文件名在前，目录在后，命中的字母铺底色。返回是否被点了。
 func quickRow(c *ui.Context, m files.Match, selected, reveal bool) bool {

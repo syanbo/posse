@@ -156,10 +156,22 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 	if w != nil {
 		if a.pressed(c, "quickOpen") {
-			a.openQuick(w)
+			a.openQuick(w, quickFiles)
+		}
+		if a.pressed(c, "searchEverywhere") {
+			a.openQuick(w, quickAll)
+		}
+		if a.pressed(c, "findAction") {
+			a.openQuick(w, quickActions)
 		}
 		if a.pressed(c, "searchFiles") {
-			a.openFilesPanel(w, sideFiles).search.focus = true
+			// 照 WebStorm：焦点在文件树上、选中的是目录时只搜这个目录，别处按下搜整个工作区
+			v := a.filesFor(w)
+			dir := ""
+			if a.filesPanelOpen() && c.FocusWithin(v.treeRef) && v.treeSelected() != "" && v.treeSelDir {
+				dir = v.treeSel
+			}
+			a.searchIn(w, dir)
 		}
 		// 窗口的快捷键先于焦点拿到按键。⌘L 照旧开关文件栏（编辑器的"选中整行"让出），
 		// ⇧⌘G 在编辑器有焦点、Markdown 预览、Annotate 或终端开着查找栏时让给它们的"查找上一个"
