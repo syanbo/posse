@@ -694,7 +694,7 @@ func (a *app) refresh() {
 	}
 	prevErr := a.lastPoll != nil && a.lastPoll.err != ""
 	a.lastPoll = &r
-	a.win.Update(func() {
+	a.update(func() {
 		a.pollDown = r.err != ""
 		if r.err != "" {
 			a.err = r.err
@@ -1225,7 +1225,7 @@ func (a *app) call(method string, params any, out any, timeout time.Duration) er
 	defer cancel()
 	err := a.c.Call(ctx, method, params, out)
 	if err != nil {
-		a.win.Update(func() { a.err = errtext.Text(err) })
+		a.update(func() { a.err = errtext.Text(err) })
 	}
 	return err
 }

@@ -312,7 +312,7 @@ func (a *app) discNotice(prev, cur discSummary) {
 	if prev.Key == "" || a.state.NotifyOff || cur.Last == nil || prev.MsgSeq == cur.MsgSeq {
 		return
 	}
-	if a.win.IsFocused() && a.selected == discBoardID && a.disc.sel == cur.Key {
+	if a.win != nil && a.win.IsFocused() && a.selected == discBoardID && a.disc.sel == cur.Key {
 		return
 	}
 	m := appL()
@@ -804,14 +804,15 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 					if archived {
 						return
 					}
-					if iconButtonSized(c.Key("quote-"+msg.ID), iconQuote, m.DiscQuote(), compactBox(), smallIcon()).Clicked() {
+					// 没悬停时按钮是透明的：只在看得见时才接点击
+					if iconButtonSized(c.Key("quote-"+msg.ID), iconQuote, m.DiscQuote(), compactBox(), smallIcon()).Clicked() && hovered {
 						b.quote = msg.ID
 					}
 					tip := m.DiscMarkKey()
 					if msg.KeyAt != nil {
 						tip = m.DiscUnmarkKey()
 					}
-					if iconButtonSized(c.Key("key-"+msg.ID), iconStar, tip, compactBox(), smallIcon()).Clicked() {
+					if iconButtonSized(c.Key("key-"+msg.ID), iconStar, tip, compactBox(), smallIcon()).Clicked() && hovered {
 						go a.discCall("discussion.key", map[string]any{"message": msg.ID, "on": msg.KeyAt == nil})
 					}
 				})
