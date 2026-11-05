@@ -4395,22 +4395,6 @@ func (msgs Messages) FilesSearchScopeClear() string {
 	return Catalog.Format(msgs.locale, "filesSearchScopeClear", nil)
 }
 
-// FilesFilter says "Filter"
-// in the language the app shows.
-//
-// Short toggle chip in the Files Panel search that shows the
-// include/exclude fields.
-func FilesFilter() string { return In(i18n.Locale()).FilesFilter() }
-
-// FilesFilter says "Filter"
-// in the language of msgs.
-//
-// Short toggle chip in the Files Panel search that shows the
-// include/exclude fields.
-func (msgs Messages) FilesFilter() string {
-	return Catalog.Format(msgs.locale, "filesFilter", nil)
-}
-
 // FilesFilterTip says "Search only some files, or skip some"
 // in the language the app shows.
 //

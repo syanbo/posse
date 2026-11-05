@@ -281,7 +281,6 @@
   "filesFindInDir": "在此目录中查找…",
   "filesSearchScope": "在 {dir} 中",
   "filesSearchScopeClear": "搜索整个工作区",
-  "filesFilter": "筛选",
   "filesFilterTip": "只搜或不搜某些文件",
   "filesFind": "查找",
   "filesFindClose": "关闭 Esc",

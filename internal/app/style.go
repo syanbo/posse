@@ -321,17 +321,22 @@ func fieldInputWidth(c *ui.Context, value *string, placeholder string, width flo
 
 // fieldInputSized 平时 width 宽，一行放不下时最窄缩到 minWidth，让同一行里的标题不被挤得折行。
 func fieldInputSized(c *ui.Context, value *string, placeholder string, width, minWidth float32) ui.Element {
-	in, _ := fieldBox(c, value, placeholder, width, minWidth, false)
+	in, _ := fieldBox(c, value, placeholder, width, minWidth, false, nil)
 	return in
 }
 
 // clearableField 是有内容时尾部带清空按钮的 fieldInput（检索框）；cleared 报告这一帧点了清空，
 // 值已经清掉、焦点放回输入框，调用方照按 Esc 清空那样处理。
 func clearableField(c *ui.Context, value *string, placeholder string) (in ui.Element, cleared bool) {
-	return fieldBox(c, value, placeholder, 0, 0, true)
+	return fieldBox(c, value, placeholder, 0, 0, true, nil)
 }
 
-func fieldBox(c *ui.Context, value *string, placeholder string, width, minWidth float32, clearable bool) (ui.Element, bool) {
+// searchField 是 clearableField 在 × 后面再放几个常驻的小按钮（检索框的大小写、正则、筛选），trailing 画它们。
+func searchField(c *ui.Context, value *string, placeholder string, trailing func()) (in ui.Element, cleared bool) {
+	return fieldBox(c, value, placeholder, 0, 0, true, trailing)
+}
+
+func fieldBox(c *ui.Context, value *string, placeholder string, width, minWidth float32, clearable bool, trailing func()) (ui.Element, bool) {
 	t := c.Theme()
 	box := ui.Row(c).Height(sz(30)).Padding(0, 12).Radius(rControl).Background(colors(t).fill).AlignItems(ui.Center)
 	if clearable {
@@ -349,11 +354,14 @@ func fieldBox(c *ui.Context, value *string, placeholder string, width, minWidth 
 	var in ui.Element
 	cleared := false
 	box.Children(func() {
-		in = ui.TextInputBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(fsBody).Grow(1)
+		in = ui.TextInputBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(fsBody).Grow(1).Shrink(1).MinWidth(0)
 		if clearable && *value != "" && iconButtonSized(c.Key("field-clear"), iconClose, L(c).FieldClear(), compactBox(), smallIcon()).Shrink(0).Clicked() {
 			*value = ""
 			cleared = true
 			in.Focus()
+		}
+		if trailing != nil {
+			trailing()
 		}
 	})
 	// 边框算在高度里。聚焦才加上时框会高 2px，包着它的对话框跟着居中，整块跳一下。

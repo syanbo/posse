@@ -1133,7 +1133,7 @@ func TestPreview(t *testing.T) {
 		a.startSearch(v, 0)
 		until(t, newTester(a.build, 1200, 760), "search", func() bool { return !v.search.running && len(v.search.hits) > 0 })
 		savePNG(t, newPreviewTester(a, dark), "files-search-"+suffix+".png")
-		// 限定在某个目录里检索：选项一行最前面是目录标签
+		// 限定在某个目录里检索：检索框下面一行是目录标签
 		v.search.query.Dir = "internal"
 		a.startSearch(v, 0)
 		until(t, newTester(a.build, 1200, 760), "scoped", func() bool { return !v.search.running })

@@ -233,7 +233,20 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 	s := &v.search
 	filtered := s.query.Include != "" || s.query.Exclude != ""
 	ui.Column(c).Padding(0, 12, 8, 12).Gap(6).Shrink(0).Children(func() {
-		in, cleared := clearableField(c, &s.query.Text, L(c).FilesSearchPlaceholder())
+		// 大小写、正则、筛选常驻在框里的右端（照 WebStorm），输入前就能设，也不多占一行
+		in, cleared := searchField(c, &s.query.Text, L(c).FilesSearchPlaceholder(), func() {
+			if toggleChipPad(c, "Aa", L(c).FilesMatchCase(), s.query.MatchCase, 5) {
+				s.query.MatchCase = !s.query.MatchCase
+				a.startSearch(v, 0)
+			}
+			if toggleChipPad(c, ".*", L(c).FilesRegex(), s.query.Regex, 5) {
+				s.query.Regex = !s.query.Regex
+				a.startSearch(v, 0)
+			}
+			if toggleIconButtonSized(c, "search-filter", iconFilter, L(c).FilesFilterTip(), s.showFilter || filtered, sz(22), smallIcon(), rSmall) {
+				s.showFilter = !s.showFilter
+			}
+		})
 		if s.focus {
 			in.Focus()
 			s.focus = false
@@ -253,27 +266,15 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 		case in.Submitted():
 			a.startSearch(v, 0)
 		}
-		// 检索选项只在检索时露出来，平时文件树顶上只有检索框；限定了目录时一直显示，看得出范围
-		if !s.active() && !s.showFilter && !filtered && s.query.Dir == "" {
-			return
+		// 限定了目录时框下面一行是范围
+		if s.query.Dir != "" {
+			ui.Row(c).AlignItems(ui.Center).Children(func() {
+				if scopeChip(c, filepath.ToSlash(s.query.Dir)) {
+					s.query.Dir = ""
+					a.startSearch(v, 0)
+				}
+			})
 		}
-		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-			if s.query.Dir != "" && scopeChip(c, filepath.ToSlash(s.query.Dir)) {
-				s.query.Dir = ""
-				a.startSearch(v, 0)
-			}
-			if toggleChip(c, "Aa", L(c).FilesMatchCase(), s.query.MatchCase) {
-				s.query.MatchCase = !s.query.MatchCase
-				a.startSearch(v, 0)
-			}
-			if toggleChip(c, ".*", L(c).FilesRegex(), s.query.Regex) {
-				s.query.Regex = !s.query.Regex
-				a.startSearch(v, 0)
-			}
-			if toggleChip(c, L(c).FilesFilter(), L(c).FilesFilterTip(), s.showFilter || filtered) {
-				s.showFilter = !s.showFilter
-			}
-		})
 		if s.showFilter {
 			if fieldInput(c.Key("include"), &s.query.Include, L(c).FilesIncludePlaceholder()).Changed() {
 				a.startSearch(v, 300*time.Millisecond)
@@ -377,8 +378,13 @@ func searchStatus(m locales.Messages, s *fileSearch) string {
 
 // toggleChip 是检索选项的小开关，开着时垫强调色淡底；返回这一帧是否被点了。
 func toggleChip(c *ui.Context, label, tip string, on bool) bool {
+	return toggleChipPad(c, label, tip, on, 8)
+}
+
+// toggleChipPad 是 toggleChip，两侧留白自定（放进输入框里的收窄些）。
+func toggleChipPad(c *ui.Context, label, tip string, on bool, pad float32) bool {
 	t := c.Theme()
-	b := ui.Box(c.Key("chip-"+label)).Height(sz(22)).Padding(0, 8).Radius(rSmall).Center().Shrink(0).
+	b := ui.Box(c.Key("chip-"+label)).Height(sz(22)).Padding(0, pad).Radius(rSmall).Center().Shrink(0).
 		Role(ui.RoleButton).Label(tip).Tooltip(tip).Checked(on)
 	bg, fg := ui.Transparent, t.TextMuted
 	switch {

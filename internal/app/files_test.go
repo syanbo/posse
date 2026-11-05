@@ -311,7 +311,7 @@ func TestQuickOpenAndSearch(t *testing.T) {
 		return d != nil && d.kind == docText && d.gotoLine == 0 && d.ed.SelectedText() == "func"
 	})
 
-	// 检索和文件树在同一页：有字时树让给结果，点 × 清空回到树，结果跟着清掉
+	// 检索和文件树在同一页：有字时树让给结果，点 × 清空回到树，结果跟着清掉；大小写、正则常驻在框里
 	tt.Frame()
 	if tt.HasText("README.md") || !tt.HasText("Aa") {
 		t.Fatalf("searching should replace the tree: %v", tt.Texts())
@@ -320,9 +320,18 @@ func TestQuickOpenAndSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if v.search.active() || len(v.search.hits) != 0 || !tt.HasText("README.md") || tt.HasText("Aa") {
+	if v.search.active() || len(v.search.hits) != 0 || !tt.HasText("README.md") || !tt.HasText("Aa") {
 		t.Fatalf("clear should return to the tree: %q %v", v.search.query.Text, tt.Texts())
 	}
+	// 没输入时也能先设大小写
+	if err := tt.Click("区分大小写"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !v.search.query.MatchCase {
+		t.Fatal("match case before typing")
+	}
+	v.search.query.MatchCase = false
 	// ⇧⌘E 在检索时先回到树，不关文件栏
 	v.search.query.Text = "func"
 	a.startSearch(v, 0)

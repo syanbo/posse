@@ -1784,10 +1784,6 @@
   "@filesSearchScopeClear": {
     "description": "Tooltip of the × on the folder chip: removes the folder limit."
   },
-  "filesFilter": "Filter",
-  "@filesFilter": {
-    "description": "Short toggle chip in the Files Panel search that shows the include/exclude fields."
-  },
   "filesFilterTip": "Search only some files, or skip some",
   "@filesFilterTip": {
     "description": "Tooltip of the Filter chip in the Files Panel search."
