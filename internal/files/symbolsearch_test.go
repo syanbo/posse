@@ -8,6 +8,34 @@ import (
 	"testing"
 )
 
+// 工作区里有几个仓库（根目录和嵌套的各是一个）时，嵌套仓库里的声明也搜得到
+func TestFindSymbolsNestedRepo(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "a.go"), "package a\nfunc RootNeedle() {}\n")
+	write(t, filepath.Join(root, "nested", "lib.go"), "package lib\nfunc NestedNeedle() {}\n")
+	for _, d := range []string{root, filepath.Join(root, "nested")} {
+		if out, err := exec.Command("git", "init", "-q", d).CombinedOutput(); err != nil {
+			t.Skipf("git unavailable: %v %s", err, out)
+		}
+	}
+	l, err := ListRepos(context.Background(), root, []string{root, filepath.Join(root, "nested")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	syms, _, err := FindSymbols(context.Background(), l, nil, SymbolQuery{Text: "needle"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, s := range syms {
+		got = append(got, s.Name)
+	}
+	slices.Sort(got)
+	if !slices.Equal(got, []string{"NestedNeedle", "RootNeedle"}) {
+		t.Fatalf("symbols %q (files %q)", got, l.Files)
+	}
+}
+
 // 符号搜索：名字含查询（不分大小写）的声明，调用和注释里的不算；名字一样的排最前，只要类型时只留类型
 func TestFindSymbols(t *testing.T) {
 	root := t.TempDir()

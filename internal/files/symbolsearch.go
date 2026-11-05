@@ -91,7 +91,8 @@ func FindSymbols(ctx context.Context, l *List, overlay map[string]string, q Symb
 	}
 	err := error(nil)
 	done := false
-	if l.Git {
+	// 工作区里有几个仓库时（ListRepos）根目录的 git grep 搜不到嵌套仓库，逐个读清单
+	if l.Git && l.repos == nil {
 		err = gitGrepFold(ctx, l.Root, text, func(rel string, h lineHit) bool {
 			if _, ok := overlay[rel]; ok {
 				return true
@@ -102,7 +103,7 @@ func FindSymbols(ctx context.Context, l *List, overlay map[string]string, q Symb
 	}
 	if !done {
 		// git 没跑成（不在 PATH、仓库坏了）：丢掉跑了一半的结果，逐个读
-		if l.Git {
+		if l.Git && l.repos == nil {
 			out, lines, truncated = out[:0], 0, false
 			for rel, body := range overlay {
 				for _, h := range linesWithFold(body, lower) {

@@ -289,6 +289,7 @@ type app struct {
 	traceLoaded   bool
 	filesPanelRef ui.Ref
 	doubleTaps    uint64             // 上一帧看到的 mygo 双击修饰键计数（c.DoubleTap）
+	quickGen      int                // 随处搜索里文本、符号检索的编号（nextQuickGen）
 	termAreaRef   [maxColumns]ui.Ref // 每一栏的终端内容区（终端和它上面的查找栏）
 	// 文件栏展开的进度：0 收起，1 打开，中间是动画
 	filesPanelShown float32

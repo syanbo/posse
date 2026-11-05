@@ -154,6 +154,14 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if a.pressed(c, "newChat") {
 		a.openChat(L(c), true)
 	}
+	// 双击 ⇧（设置里打开）：mygo 数着单独连按两下修饰键的次数，这一帧比上次多了就是又按了一次。
+	// 每帧都把计数读掉，开不了（没有工作区、别的对话框开着）时这一下作废，不留到之后
+	if mods, n := c.DoubleTap(); n != a.doubleTaps {
+		a.doubleTaps = n
+		if a.state.DoubleShift && mods == ui.Shift && w != nil && !a.quick.open && a.keyRec == nil && !c.ModalOpen() {
+			a.openQuick(w, quickAll)
+		}
+	}
 	if w != nil {
 		if a.pressed(c, "quickOpen") {
 			a.openQuick(w, quickFiles)
@@ -163,13 +171,6 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		}
 		if a.pressed(c, "findAction") {
 			a.openQuick(w, quickActions)
-		}
-		// 双击 ⇧（设置里打开）：mygo 数着单独连按两下修饰键的次数，这一帧比上次多了就是又按了一次
-		if mods, n := c.DoubleTap(); n != a.doubleTaps {
-			a.doubleTaps = n
-			if a.state.DoubleShift && mods == ui.Shift && !a.quick.open && a.keyRec == nil {
-				a.openQuick(w, quickAll)
-			}
 		}
 		if a.pressed(c, "searchFiles") {
 			// 照 WebStorm：焦点在文件树上、选中的是目录时只搜这个目录，别处按下搜整个工作区

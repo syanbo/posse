@@ -80,6 +80,13 @@ func (a *app) openQuick(w *workspace, tab int) {
 	a.refreshList(v, false, nil)
 }
 
+// nextQuickGen 给弹框里的一次文本、符号检索编号。整个窗口共用一个、只增不减：关掉重开弹框时状态清空，
+// 各自从 0 数的话，旧弹框排在队列里的结果会对上新弹框的编号。
+func (a *app) nextQuickGen() int {
+	a.quickGen++
+	return a.quickGen
+}
+
 func (a *app) closeQuick() {
 	if a.quick.allCancel != nil {
 		a.quick.allCancel()
@@ -187,8 +194,8 @@ func (a *app) syncQuickSymbols(v *filesView, query string, typesOnly bool) {
 		return
 	}
 	s.key = key
-	s.gen++
-	gen := s.gen
+	gen := a.nextQuickGen()
+	s.gen = gen
 	if s.cancel != nil {
 		s.cancel()
 		s.cancel = nil
@@ -213,9 +220,7 @@ func (a *app) syncQuickSymbols(v *filesView, query string, typesOnly bool) {
 				go func() {
 					var err error
 					var syms []files.Symbol
-					if q.Dir != "" && l.Ignored(filepath.Join(l.Root, q.Dir), true) {
-						l, err = files.ListDir(ctx, l.Root, q.Dir)
-					}
+					l, err = files.ScopedList(ctx, l, q.Dir)
 					if err == nil {
 						syms, _, err = files.FindSymbols(ctx, l, overlay, q)
 					}
@@ -244,8 +249,8 @@ func (a *app) syncQuickText(v *filesView, query string) {
 		return
 	}
 	t.key = key
-	t.gen++
-	gen := t.gen
+	gen := a.nextQuickGen()
+	t.gen = gen
 	if t.cancel != nil {
 		t.cancel()
 		t.cancel = nil
@@ -269,9 +274,7 @@ func (a *app) syncQuickText(v *filesView, query string) {
 				l, overlay := v.list, editorOverlay(v)
 				go func() {
 					var err error
-					if q.Dir != "" && l.Ignored(filepath.Join(l.Root, q.Dir), true) {
-						l, err = files.ListDir(ctx, l.Root, q.Dir)
-					}
+					l, err = files.ScopedList(ctx, l, q.Dir)
 					if err == nil {
 						_, err = files.Search(ctx, l, q, overlay, func(hs []files.Hit) {
 							a.update(func() {

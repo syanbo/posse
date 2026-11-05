@@ -952,10 +952,8 @@ func (a *app) startSearch(v *filesView, delay time.Duration) {
 				l := v.list
 				go func() {
 					var err error
-					// 限定的目录被 git 忽略时不在清单里，现列一遍那个目录
-					if q.Dir != "" && l.Ignored(filepath.Join(l.Root, q.Dir), true) {
-						l, err = files.ListDir(ctx, l.Root, q.Dir)
-					}
+					// 限定的目录不在清单里（被 git 忽略、遍历时跳过的依赖目录）时现列一遍那个目录
+					l, err = files.ScopedList(ctx, l, q.Dir)
 					trunc := false
 					if err == nil {
 						trunc, err = files.Search(ctx, l, q, overlay, func(hs []files.Hit) {

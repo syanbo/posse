@@ -363,6 +363,20 @@ func TestSearchDir(t *testing.T) {
 	if got := paths(d, Query{Text: "hello", Dir: "dist"}); !slices.Equal(got, []string{"dist/node_modules/d.js"}) {
 		t.Fatalf("ignored dir: %q", got)
 	}
+	// 不是 git 仓库时遍历跳过 node_modules，点名要搜它时现列
+	if slices.Contains(l.Files, filepath.Join("dist", "node_modules", "d.js")) {
+		t.Fatal("walk should skip node_modules")
+	}
+	nm, err := ScopedList(context.Background(), l, filepath.Join("dist", "node_modules"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := paths(nm, Query{Text: "hello", Dir: filepath.Join("dist", "node_modules")}); !slices.Equal(got, []string{"dist/node_modules/d.js"}) {
+		t.Fatalf("scoped dependency dir: %q", got)
+	}
+	if same, _ := ScopedList(context.Background(), l, "app"); same != l {
+		t.Fatal("a listed dir should reuse the list")
+	}
 	all, _ := ListAll(context.Background(), root)
 	if got := paths(all, Query{Text: "hello"}); !slices.Equal(got, []string{"a.go", "app/b.go", "apple/c.go"}) {
 		t.Fatalf("all: %q", got) // dist 下只有依赖目录和 .git，都跳过

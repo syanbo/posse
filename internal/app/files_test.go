@@ -1389,10 +1389,35 @@ func TestDoubleShift(t *testing.T) {
 	if a.quick.open {
 		t.Fatal("a key between the taps should not count")
 	}
+	// 别的对话框开着时不叠一个随处搜索上去，这一下也作废
+	a.confirm("确认", "", "好", func() {})
+	tt.Frame()
+	tap()
+	tap()
+	tt.Frame()
+	if a.quick.open {
+		t.Fatal("double shift should not open over another dialog")
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+	tt.Frame()
+	if a.quick.open {
+		t.Fatal("a double tap swallowed by a dialog should not fire later")
+	}
 	tap()
 	tap()
 	tt.Frame()
 	if !a.quick.open || a.quick.tab != quickAll {
 		t.Fatalf("double shift: open %v tab %d", a.quick.open, a.quick.tab)
+	}
+
+	// 关掉重开弹框：检索编号不从头数，旧弹框排着队的结果对不上新的
+	a.syncQuickText(a.filesFor(w), "old")
+	old := a.quick.text.gen
+	a.closeQuick()
+	a.openQuick(w, quickText)
+	a.syncQuickText(a.filesFor(w), "new")
+	if a.quick.text.gen == old {
+		t.Fatalf("generation reused after reopening: %d", old)
 	}
 }
