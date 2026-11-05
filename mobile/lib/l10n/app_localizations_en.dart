@@ -1016,6 +1016,59 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get gitBranchesTitle => 'Switch Branch';
+
+  @override
+  String get gitBranchesPickRepo => 'Switch Branch In';
+
+  @override
+  String get gitBranchesSearch => 'Search branches';
+
+  @override
+  String get gitBranchesLocal => 'Local';
+
+  @override
+  String get gitBranchesRemote => 'Remote';
+
+  @override
+  String get gitBranchesNoMatch => 'No matching branches';
+
+  @override
+  String get gitBranchCurrent => 'Current branch';
+
+  @override
+  String gitBranchInWorkspace(String workspace) {
+    return 'Checked out in $workspace';
+  }
+
+  @override
+  String gitBranchInWorktree(String dir) {
+    return 'Checked out in worktree $dir';
+  }
+
+  @override
+  String gitBranchesBusy(String operation) {
+    return 'Finish the $operation before switching branches';
+  }
+
+  @override
+  String gitCheckoutAgentTitle(String agent) {
+    return '$agent Is Working in This Workspace';
+  }
+
+  @override
+  String get gitCheckoutAgentBody =>
+      'Switching branches changes files in the working directory and may overwrite or disrupt what the agent is editing. Switch anyway?';
+
+  @override
+  String get gitCheckoutAnyway => 'Switch Anyway';
+
+  @override
+  String gitSwitchedTo(String branch) {
+    return 'Switched to $branch';
+  }
+
+  @override
   String get gitBinaryDiff =>
       'Binary file; the diff can’t be shown on the phone';
 

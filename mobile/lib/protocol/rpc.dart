@@ -13,6 +13,7 @@ const posseCapabilities = [
   'posse.permission.v1',
   'posse.git.v1',
   'posse.git.v2',
+  'posse.git.v3',
   'posse.history.v1',
   'posse.status.v1',
   'posse.draft.v1',

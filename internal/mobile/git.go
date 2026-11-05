@@ -245,20 +245,9 @@ func (c *conn) gitDiff(id string, p json.RawMessage) error {
 	}
 	ctx, cancel := context.WithTimeout(c.ctx, 20*time.Second)
 	defer cancel()
-	root := w.Path
-	if repos := c.srv.repos.get(ctx, w.Path, !projectSingleRepo(st, w.ProjectID)); len(repos) > 0 {
-		root = repos[0].Root
-		if a.Repo != nil {
-			root = ""
-			for _, r := range repos {
-				if repoKey(w.Path, r.Root) == *a.Repo {
-					root = r.Root
-				}
-			}
-			if root == "" {
-				return errorf("not_found", "repository %s not found", *a.Repo)
-			}
-		}
+	root, err := c.repoRoot(ctx, st, w, a.Repo)
+	if err != nil {
+		return err
 	}
 	text, truncated, err := gitx.DiffText(ctx, root, rel)
 	if err != nil {
@@ -274,6 +263,24 @@ func (c *conn) gitDiff(id string, p json.RawMessage) error {
 	}
 	c.replyBulk(id, reply, nil)
 	return nil
+}
+
+// repoRoot 按 git.status 给的仓库键找到仓库根目录；repo 为空（旧版 App）时用第一个仓库，
+// 工作区不在任何仓库里时是工作区目录（git 自己报错）。
+func (c *conn) repoRoot(ctx context.Context, st State, w Workspace, repo *string) (string, error) {
+	repos := c.srv.repos.get(ctx, w.Path, !projectSingleRepo(st, w.ProjectID))
+	if len(repos) == 0 {
+		return w.Path, nil
+	}
+	if repo == nil {
+		return repos[0].Root, nil
+	}
+	for _, r := range repos {
+		if repoKey(w.Path, r.Root) == *repo {
+			return r.Root, nil
+		}
+	}
+	return "", errorf("not_found", "repository %s not found", *repo)
 }
 
 // imageMime 是手机能画出来的图片：diff 时把改之前（HEAD）和现在（工作区）两张图都带上。

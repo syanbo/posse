@@ -957,6 +957,59 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get gitBranchesTitle => '切换分支';
+
+  @override
+  String get gitBranchesPickRepo => '在哪个仓库切换分支';
+
+  @override
+  String get gitBranchesSearch => '搜索分支';
+
+  @override
+  String get gitBranchesLocal => '本地';
+
+  @override
+  String get gitBranchesRemote => '远程';
+
+  @override
+  String get gitBranchesNoMatch => '没有匹配的分支';
+
+  @override
+  String get gitBranchCurrent => '当前分支';
+
+  @override
+  String gitBranchInWorkspace(String workspace) {
+    return '在 $workspace 里检出着';
+  }
+
+  @override
+  String gitBranchInWorktree(String dir) {
+    return '在 worktree $dir 里检出着';
+  }
+
+  @override
+  String gitBranchesBusy(String operation) {
+    return '$operation 还没做完，不能切换分支';
+  }
+
+  @override
+  String gitCheckoutAgentTitle(String agent) {
+    return '$agent 正在这个工作区里工作';
+  }
+
+  @override
+  String get gitCheckoutAgentBody =>
+      '切换分支会改动工作目录里的文件，agent 正在改的内容可能被覆盖或打乱。仍然要切换吗？';
+
+  @override
+  String get gitCheckoutAnyway => '仍然切换';
+
+  @override
+  String gitSwitchedTo(String branch) {
+    return '已切换到 $branch';
+  }
+
+  @override
   String get gitBinaryDiff => '二进制文件，手机上看不了差异';
 
   @override

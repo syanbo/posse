@@ -1754,6 +1754,90 @@ abstract class AppLocalizations {
   /// **'{count} behind'**
   String gitBehind(int count);
 
+  /// Git changes: title of the bottom sheet listing branches to switch to.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch Branch'**
+  String get gitBranchesTitle;
+
+  /// Git changes: title of the sheet choosing which repository to switch branches in, when the workspace has several.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch Branch In'**
+  String get gitBranchesPickRepo;
+
+  /// Git changes: placeholder of the search box in the branch sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Search branches'**
+  String get gitBranchesSearch;
+
+  /// Git changes: branch sheet section of local branches.
+  ///
+  /// In en, this message translates to:
+  /// **'Local'**
+  String get gitBranchesLocal;
+
+  /// Git changes: branch sheet section of remote branches.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote'**
+  String get gitBranchesRemote;
+
+  /// Git changes: branch sheet text when the search matches nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching branches'**
+  String get gitBranchesNoMatch;
+
+  /// Git changes: branch sheet row subtitle of the checked-out branch.
+  ///
+  /// In en, this message translates to:
+  /// **'Current branch'**
+  String get gitBranchCurrent;
+
+  /// Git changes: branch sheet row subtitle when another Posse workspace has the branch checked out; tapping opens that workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked out in {workspace}'**
+  String gitBranchInWorkspace(String workspace);
+
+  /// Git changes: branch sheet row subtitle when a worktree outside Posse has the branch checked out; it can't be switched to. dir is the folder name.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked out in worktree {dir}'**
+  String gitBranchInWorktree(String dir);
+
+  /// Git changes: branch sheet notice while a merge or rebase is in progress. operation is a git word like rebase.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish the {operation} before switching branches'**
+  String gitBranchesBusy(String operation);
+
+  /// Git changes: title of the confirmation before switching branches while an agent is working.
+  ///
+  /// In en, this message translates to:
+  /// **'{agent} Is Working in This Workspace'**
+  String gitCheckoutAgentTitle(String agent);
+
+  /// Git changes: body of the confirmation before switching branches while an agent is working.
+  ///
+  /// In en, this message translates to:
+  /// **'Switching branches changes files in the working directory and may overwrite or disrupt what the agent is editing. Switch anyway?'**
+  String get gitCheckoutAgentBody;
+
+  /// Git changes: confirm button to switch branches while an agent is working.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch Anyway'**
+  String get gitCheckoutAnyway;
+
+  /// Git changes: snack bar after switching branches.
+  ///
+  /// In en, this message translates to:
+  /// **'Switched to {branch}'**
+  String gitSwitchedTo(String branch);
+
   /// Git diff: shown for a binary file.
   ///
   /// In en, this message translates to:

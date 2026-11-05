@@ -13,6 +13,7 @@ import '../chat/chat.dart';
 import '../desk/desk_page.dart';
 import '../desk/plugin.dart';
 import '../files/files.dart';
+import '../git/branches.dart';
 import '../git/git.dart';
 import '../pair/scan.dart';
 import '../protocol/pairing.dart';
@@ -1614,6 +1615,19 @@ class _TabScreenState extends State<TabScreen> {
     return widget.worktree;
   }
 
+  /// 分支在另一个工作区里检出着：换成那个工作区的改动页。
+  void _openWorkspace(String id) {
+    for (final w in widget.model.worktrees) {
+      if (w.id != id) continue;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => TabScreen(model: widget.model, worktree: w),
+        ),
+      );
+      return;
+    }
+  }
+
   Future<T> _git<T>(Future<T> Function(PhoneRpc rpc) run) {
     final rpc = widget.model.rpc;
     if (rpc == null) {
@@ -1664,6 +1678,28 @@ class _TabScreenState extends State<TabScreen> {
                           _git((rpc) => loadGitStatus(rpc, row.id)),
                       loadDiff: (file) =>
                           _git((rpc) => loadGitDiff(rpc, row.id, file)),
+                      branches: GitBranchActions(
+                        load: (repo) =>
+                            _git((rpc) => loadGitBranches(rpc, row.id, repo)),
+                        checkout: (repo, branch, force) => _git(
+                          (rpc) => gitCheckout(
+                            rpc,
+                            row.id,
+                            repo,
+                            branch,
+                            force: force,
+                          ),
+                        ),
+                        workspaceName: (id) {
+                          for (final w in widget.model.worktrees) {
+                            if (w.id == id) return worktreeLabel(w);
+                          }
+                          return null;
+                        },
+                        openWorkspace: _openWorkspace,
+                        onSwitched: () =>
+                            unawaited(widget.model.refreshWorktrees()),
+                      ),
                       onOpenFile: (path) => Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => FileViewer(

@@ -2580,6 +2580,15 @@
   "@gitConsoleSuccess": {
     "description": "Status of a successful operation in the Console."
   },
+  "gitConsolePhone": "Phone · {device}",
+  "@gitConsolePhone": {
+    "description": "Operation name in the Console for a git operation done from the Posse phone app, such as switching branches. device is the phone's name.",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
   "gitConsoleTerminal": "Terminal",
   "@gitConsoleTerminal": {
     "description": "Operation name in the Console for git commands typed in a Posse terminal."

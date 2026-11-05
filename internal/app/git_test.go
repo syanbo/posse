@@ -2021,9 +2021,16 @@ func TestGitConsolePersist(t *testing.T) {
 		t.Fatalf("later failure %d %v", len(b.gitRuns), b.consoleErr)
 	}
 
+	// 手机切换分支：操作名写手机名，报错用 git 的原话
+	b.addTermRuns([]termGitRun{{Seq: 10, Source: "mobile", Device: "iPhone", Dir: "/r", Args: []string{"switch", "main"}, Start: time.Now(), Code: 1, Err: "error: would be overwritten"}}, true)
+	last := b.gitRuns[len(b.gitRuns)-1]
+	if last.Err != "error: would be overwritten" || consoleOpName(locales.In("zh-Hans"), last.Op) != "手机 · iPhone" {
+		t.Fatalf("phone run %+v", last)
+	}
+
 	b.state.GitConsoleCleared = time.Now()
 	b.addTermRuns([]termGitRun{{Seq: 3, Args: []string{"commit"}, Start: t0}}, false)
-	if len(b.gitRuns) != 4 {
+	if len(b.gitRuns) != 5 {
 		t.Fatalf("a run older than the clear was added: %d", len(b.gitRuns))
 	}
 	c := &app{home: home, state: uiState{GitConsoleCleared: b.state.GitConsoleCleared}}

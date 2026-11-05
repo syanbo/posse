@@ -9,9 +9,11 @@ import '../protocol/rpc.dart';
 import '../ui/code.dart';
 import '../ui/file_icons.dart';
 import '../ui/highlight.dart';
+import '../ui/line_icons.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
+import 'branches.dart';
 import 'status.dart';
 
 String gitWorktree(String id) => id.startsWith('id:') ? id : 'id:$id';
@@ -35,6 +37,37 @@ Future<GitDiffView> loadGitDiff(
         if (file.repo != null) 'repo': file.repo,
       })
       .then(parseGitDiff);
+}
+
+Future<GitBranchList> loadGitBranches(
+  PhoneRpc rpc,
+  String worktree,
+  String? repo,
+) {
+  return rpc
+      .call('git.branches', {'worktree': gitWorktree(worktree), 'repo': ?repo})
+      .then(parseGitBranches);
+}
+
+/// 切换分支最多等多久：电脑上 git switch 最长 2 分钟（检出大仓库、LFS、hook），再留些网络的余量。
+const gitCheckoutTimeout = Duration(seconds: 150);
+
+Future<GitCheckoutResult> gitCheckout(
+  PhoneRpc rpc,
+  String worktree,
+  String? repo,
+  GitBranch branch, {
+  bool force = false,
+}) {
+  return rpc
+      .call('git.checkout', {
+        'worktree': gitWorktree(worktree),
+        'repo': ?repo,
+        'name': branch.name,
+        'remote': branch.remote,
+        'force': force,
+      }, timeout: gitCheckoutTimeout)
+      .then(parseGitCheckout);
 }
 
 /// 单独打开的改动页。工作区页里用的是不带顶栏的 GitPane。
@@ -83,7 +116,11 @@ class GitPane extends StatefulWidget {
     this.active = true,
     this.title,
     this.path,
+    this.branches,
   });
+
+  /// 点分支卡切换分支；为空时分支卡点不了。
+  final GitBranchActions? branches;
 
   /// 工作区名和路径，写在分支卡上（工作区页的顶栏放了分段，没地方写）；为空时分支卡只写分支。
   final String? title;
@@ -174,6 +211,75 @@ class _GitPaneState extends State<GitPane> {
     }
   }
 
+  /// 切换 [repo] 的分支；多个仓库时 [repoName] 写在面板标题下面。切过去了马上重读改动。
+  Future<void> _pickBranch(GitStatusView repo, {String? repoName}) async {
+    final actions = widget.branches;
+    if (actions == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final l = context.l10n;
+    final head = await showBranchSheet(
+      context,
+      repoName: repoName,
+      load: () => actions.load(repo.repo),
+      checkout: (b, force) => actions.checkout(repo.repo, b, force),
+      workspaceName: actions.workspaceName,
+      onOpenWorkspace: actions.openWorkspace,
+    );
+    if (head == null || !mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(l.gitSwitchedTo(head))));
+    actions.onSwitched?.call();
+    while (_busy) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    await _tick();
+  }
+
+  /// 多个仓库：先选在哪个仓库切换。列出所有仓库（不只是有改动的），读失败的不列。
+  Future<void> _pickRepo(GitStatusView status) async {
+    final picked = await showModalBottomSheet<GitStatusView>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (sheet) {
+        final c = PosseColors.of(sheet);
+        return SizedBox(
+          height: MediaQuery.sizeOf(sheet).height * 0.6,
+          child: ListView(
+            children: [
+              Section(
+                title: sheet.l10n.gitBranchesPickRepo,
+                inset: 48,
+                children: [
+                  for (final r in status.repos)
+                    if (r.error.isEmpty)
+                      RowTile(
+                        leading: FileIconView(
+                          r.name,
+                          size: Ic.button,
+                          dir: true,
+                        ),
+                        title: Text(r.name),
+                        subtitle: Text(
+                          r.branch.isEmpty
+                              ? sheet.l10n.gitDetachedHead
+                              : r.branch,
+                          style: mono(Fs.small, color: c.muted),
+                        ),
+                        onTap: () => Navigator.of(sheet).pop(r),
+                      ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked != null && mounted) {
+      await _pickBranch(picked, repoName: picked.name);
+    }
+  }
+
   void _open(GitFileChange file) {
     final status = _status;
     var repo = status;
@@ -220,7 +326,15 @@ class _GitPaneState extends State<GitPane> {
           children: [
             if (_error != null) NoticeBar(_error!),
             if (status != null)
-              _BranchCard(status: status, title: widget.title),
+              _BranchCard(
+                status: status,
+                title: widget.title,
+                onTap: widget.branches == null
+                    ? null
+                    : () => _pickBranch(
+                        status.repos.length == 1 ? status.repos.first : status,
+                      ),
+              ),
             if (files.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 32),
@@ -260,7 +374,11 @@ class _GitPaneState extends State<GitPane> {
           children: [
             if (_error != null) NoticeBar(_error!),
             if (widget.title != null)
-              _NameCard(title: widget.title!, path: widget.path),
+              _NameCard(
+                title: widget.title!,
+                path: widget.path,
+                onTap: widget.branches == null ? null : () => _pickRepo(status),
+              ),
             if (shown.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 32),
@@ -761,10 +879,13 @@ class _Stats extends StatelessWidget {
 }
 
 class _BranchCard extends StatelessWidget {
-  const _BranchCard({required this.status, this.title});
+  const _BranchCard({required this.status, this.title, this.onTap});
 
   final GitStatusView status;
   final String? title;
+
+  /// 点卡片切换分支。
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -782,62 +903,79 @@ class _BranchCard extends StatelessWidget {
     return Section(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (title != null) ...[
-                _CardTitle(title!),
-                const SizedBox(height: 6),
-              ],
-              Row(
-                children: [
-                  Icon(
-                    Icons.call_split_rounded,
-                    size: Ic.medium,
-                    color: c.accent,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      status.branch.isEmpty ? l.gitDetachedHead : status.branch,
-                      overflow: TextOverflow.ellipsis,
-                      style: mono(
-                        Fs.body,
-                        color: c.text,
-                      ).copyWith(fontWeight: Fw.medium),
-                    ),
-                  ),
+        InkWell(
+          onTap: onTap,
+          highlightColor: c.wash,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (title != null) ...[
+                  _CardTitle(title!),
+                  const SizedBox(height: 6),
                 ],
-              ),
-              if (status.upstream.isNotEmpty || chips.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 4,
+                Row(
                   children: [
-                    if (status.upstream.isNotEmpty)
-                      Text(
-                        l.gitTracking(status.upstream),
-                        style: TextStyle(fontSize: Fs.small, color: c.muted),
+                    Icon(
+                      Icons.call_split_rounded,
+                      size: Ic.medium,
+                      color: c.accent,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        status.branch.isEmpty
+                            ? l.gitDetachedHead
+                            : status.branch,
+                        overflow: TextOverflow.ellipsis,
+                        style: mono(
+                          Fs.body,
+                          color: c.text,
+                        ).copyWith(fontWeight: Fw.medium),
                       ),
-                    for (final (icon, text, color) in chips)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(icon, size: Ic.inline, color: color),
-                          const SizedBox(width: 4),
-                          Text(
-                            text,
-                            style: TextStyle(fontSize: Fs.small, color: color),
-                          ),
-                        ],
+                    ),
+                    if (onTap != null) ...[
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.unfold_more_rounded,
+                        size: Ic.medium,
+                        color: c.faint,
                       ),
+                    ],
                   ],
                 ),
+                if (status.upstream.isNotEmpty || chips.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    children: [
+                      if (status.upstream.isNotEmpty)
+                        Text(
+                          l.gitTracking(status.upstream),
+                          style: TextStyle(fontSize: Fs.small, color: c.muted),
+                        ),
+                      for (final (icon, text, color) in chips)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(icon, size: Ic.inline, color: color),
+                            const SizedBox(width: 4),
+                            Text(
+                              text,
+                              style: TextStyle(
+                                fontSize: Fs.small,
+                                color: color,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ],
@@ -864,10 +1002,13 @@ class _CardTitle extends StatelessWidget {
 
 /// 多个仓库时没有单一的分支，卡片只写工作区名和路径，分支写在各仓库的标题行。
 class _NameCard extends StatelessWidget {
-  const _NameCard({required this.title, this.path});
+  const _NameCard({required this.title, this.path, this.onTap});
 
   final String title;
   final String? path;
+
+  /// 点卡片选一个仓库切换分支。
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -875,22 +1016,40 @@ class _NameCard extends StatelessWidget {
     return Section(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _CardTitle(title),
-              if (path != null && path!.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  path!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: mono(Fs.small, color: c.muted),
+        InkWell(
+          onTap: onTap,
+          highlightColor: c.wash,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _CardTitle(title),
+                      if (path != null && path!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          path!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: mono(Fs.small, color: c.muted),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
+                if (onTap != null) ...[
+                  const SizedBox(width: 8),
+                  LineIconView(
+                    LineIcon.branch,
+                    size: Ic.medium,
+                    color: c.faint,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ],

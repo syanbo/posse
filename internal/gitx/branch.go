@@ -155,18 +155,23 @@ func Fetch(ctx context.Context, dir string) error {
 
 // Checkout 切换到分支：远端分支检出成同名的本地跟踪分支，本地已经有同名分支时直接切过去。
 func Checkout(ctx context.Context, dir string, b Branch) error {
-	if !b.Remote {
-		_, err := runRaw(ctx, dir, nil, nil, "switch", b.Name)
-		return err
-	}
-	local := remoteShort(b.Name)
-	if BranchExists(ctx, dir, local) {
-		_, err := runRaw(ctx, dir, nil, nil, "switch", local)
-		return err
-	}
-	_, err := runRaw(ctx, dir, nil, nil, "switch", "--track", b.Name)
+	_, err := runRaw(ctx, dir, nil, nil, CheckoutArgs(ctx, dir, b)...)
 	return err
 }
+
+// CheckoutArgs 是 Checkout 要执行的 git 参数：常驻进程替手机切换时照它记进操作记录。
+func CheckoutArgs(ctx context.Context, dir string, b Branch) []string {
+	if !b.Remote {
+		return []string{"switch", b.Name}
+	}
+	if local := remoteShort(b.Name); BranchExists(ctx, dir, local) {
+		return []string{"switch", local}
+	}
+	return []string{"switch", "--track", b.Name}
+}
+
+// LocalOf 是远端分支检出时对应的本地分支名：origin/feat/x → feat/x。
+func LocalOf(remote string) string { return remoteShort(remote) }
 
 // remoteShort 去掉远端名：origin/feat/x → feat/x。
 func remoteShort(name string) string {

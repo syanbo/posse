@@ -413,6 +413,7 @@
   "gitConsoleRepeat": "{start} 到 {end} 之间 {count, plural, other {# 次}}",
   "gitConsoleRunning": "进行中…",
   "gitConsoleSuccess": "成功",
+  "gitConsolePhone": "手机 · {device}",
   "gitConsoleTerminal": "终端",
   "gitConsoleTitle": "操作记录",
   "gitConsoleWorkspaces": "{project} 的所有工作区",

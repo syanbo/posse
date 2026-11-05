@@ -41,6 +41,10 @@ type gitTraceRecord struct {
 	Start    time.Time `json:"start"`
 	TookMs   int64     `json:"tookMs"`
 	Code     int       `json:"code"` // 退出码；没等到 exit 事件（被杀）是 -1
+	// 手机做的操作（切换分支）也记在这里：Source 是 mobile，Device 是手机名，Err 是 git 的报错
+	Source string `json:"source,omitempty"`
+	Device string `json:"device,omitempty"`
+	Err    string `json:"err,omitempty"`
 }
 
 type gitTrace struct {

@@ -42,6 +42,8 @@ type Host interface {
 	// 期间经 notify 推状态，结束时恰好推一次 Type 为 end 的事件（ctx 结束也推）。
 	// 错误用 DeskError 带上错误码。
 	Desk(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error)
+	// RecordGit 把手机做的 git 操作记进桌面 Git 日志的操作记录
+	RecordGit(r GitRecord)
 }
 
 // ResumeResult 是在电脑上继续一个历史会话的结果：会话所在的终端和工作区（手机上的 ID）。
@@ -661,6 +663,10 @@ func (c *conn) dispatch(req request) error {
 		return c.async(req.ID, func() error { return c.gitStatus(req.ID, p) })
 	case "git.diff":
 		return c.async(req.ID, func() error { return c.gitDiff(req.ID, p) })
+	case "git.branches":
+		return c.async(req.ID, func() error { return c.gitBranches(req.ID, p) })
+	case "git.checkout":
+		return c.async(req.ID, func() error { return c.gitCheckout(req.ID, p) })
 	case "terminal.close", "session.tabs.close":
 		var a struct {
 			termParams

@@ -6423,6 +6423,22 @@ func (msgs Messages) GitConsoleSuccess() string {
 	return Catalog.Format(msgs.locale, "gitConsoleSuccess", nil)
 }
 
+// GitConsolePhone says "Phone · {device}"
+// in the language the app shows.
+//
+// Operation name in the Console for a git operation done from the Posse
+// phone app, such as switching branches. device is the phone's name.
+func GitConsolePhone(device string) string { return In(i18n.Locale()).GitConsolePhone(device) }
+
+// GitConsolePhone says "Phone · {device}"
+// in the language of msgs.
+//
+// Operation name in the Console for a git operation done from the Posse
+// phone app, such as switching branches. device is the phone's name.
+func (msgs Messages) GitConsolePhone(device string) string {
+	return Catalog.Format(msgs.locale, "gitConsolePhone", map[string]any{"device": device})
+}
+
 // GitConsoleTerminal says "Terminal"
 // in the language the app shows.
 //

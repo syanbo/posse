@@ -37,6 +37,11 @@ type fakeHost struct {
 	desk  func(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error)
 	// historyGate 不为空时历史查询等它关上才返回，模拟等索引
 	historyGate chan struct{}
+	gitRecs     []GitRecord
+	// working 不为空时工作区里多一个正在工作的这个 agent
+	working string
+	// extra 是 w1 之外的工作区
+	extra []Workspace
 }
 
 func (h *fakeHost) Desk(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error) {
@@ -73,7 +78,10 @@ func (h *fakeHost) State() State {
 		}
 		w.Terminals = append(w.Terminals, row)
 	}
-	return State{Projects: []Project{{ID: "p1", Name: "demo", Path: "/tmp"}}, Workspaces: []Workspace{w}}
+	if h.working != "" {
+		w.Terminals = append(w.Terminals, Terminal{ID: "busy", Agent: h.working, Status: "working", Running: true})
+	}
+	return State{Projects: []Project{{ID: "p1", Name: "demo", Path: "/tmp"}}, Workspaces: append([]Workspace{w}, h.extra...)}
 }
 
 func (h *fakeHost) Terminal(id string) host.Terminal {
@@ -89,7 +97,12 @@ func (h *fakeHost) CreateTerminal(wid, agent, prompt, command string) (string, e
 	return "", errors.New("not supported")
 }
 
-func (h *fakeHost) CloseTerminal(id string) error             { return nil }
+func (h *fakeHost) CloseTerminal(id string) error { return nil }
+func (h *fakeHost) RecordGit(r GitRecord) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.gitRecs = append(h.gitRecs, r)
+}
 func (h *fakeHost) Restore(id string) host.Terminal           { return nil }
 func (h *fakeHost) View(id string) func()                     { return func() {} }
 func (h *fakeHost) Agents() []string                          { return []string{"claude"} }

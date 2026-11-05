@@ -213,6 +213,20 @@ func (h mobileHost) Usage() any {
 	return usageStatus{Usages: []usage.Usage{}}
 }
 
+func (h mobileHost) RecordGit(r mobile.GitRecord) {
+	rec := gitTraceRecord{Source: "mobile", Device: r.Device, Dir: r.Dir, Args: r.Args, Start: r.Start,
+		TookMs: r.Took.Milliseconds(), Err: r.Err}
+	if r.Err != "" {
+		rec.Code = 1
+	}
+	if w, err := h.d.store.Workspace(r.WorkspaceID); err == nil {
+		rec.Project = w.ProjectID
+	}
+	if h.d.gitTrace != nil {
+		h.d.gitTrace.add(rec)
+	}
+}
+
 func (h mobileHost) RefreshUsage(ctx context.Context) (any, error) {
 	return h.d.usageRefresh(ctx, nil)
 }

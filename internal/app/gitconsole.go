@@ -158,6 +158,8 @@ type termGitRun struct {
 	Start                time.Time
 	TookMs               int64
 	Code                 int
+	// 手机做的操作：Source 是 mobile，Device 是手机名，Err 是 git 的报错
+	Source, Device, Err string
 }
 
 // addTermRuns 把终端里的命令按时间排进记录。编号取负的序号，和界面的不撞；
@@ -169,7 +171,12 @@ func (a *app) addTermRuns(recs []termGitRun, initial bool) {
 		}
 		r := gitx.Run{ID: -x.Seq, Op: termRunOp + x.Agent, Dir: x.Dir, Args: x.Args, Start: x.Start,
 			Took: time.Duration(x.TookMs) * time.Millisecond, Done: true}
+		if x.Source == "mobile" {
+			r.Op = phoneRunOp + x.Device
+		}
 		switch {
+		case x.Err != "":
+			r.Err = x.Err
 		case x.Code == -1:
 			r.Err = "did not exit normally"
 		case x.Code != 0:
@@ -530,6 +537,9 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord, day string) {
 // termRunOp 是终端里的 git 命令的操作名前缀，后面接 agent 的代号（用户自己敲的为空），显示时才换成文字。
 const termRunOp = "\x00terminal:"
 
+// phoneRunOp 是手机做的 git 操作的操作名前缀，后面接手机名。
+const phoneRunOp = "\x00phone:"
+
 func consoleOpName(m locales.Messages, name string) string {
 	if name == "" {
 		return m.GitConsoleBackground()
@@ -539,6 +549,9 @@ func consoleOpName(m locales.Messages, name string) string {
 			return m.GitConsoleTerminal()
 		}
 		return m.GitConsoleAgentTerminal(agentTitle(agent))
+	}
+	if device, ok := strings.CutPrefix(name, phoneRunOp); ok {
+		return m.GitConsolePhone(device)
 	}
 	return name
 }

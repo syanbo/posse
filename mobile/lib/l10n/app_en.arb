@@ -1365,6 +1365,87 @@
       }
     }
   },
+  "gitBranchesTitle": "Switch Branch",
+  "@gitBranchesTitle": {
+    "description": "Git changes: title of the bottom sheet listing branches to switch to."
+  },
+  "gitBranchesPickRepo": "Switch Branch In",
+  "@gitBranchesPickRepo": {
+    "description": "Git changes: title of the sheet choosing which repository to switch branches in, when the workspace has several."
+  },
+  "gitBranchesSearch": "Search branches",
+  "@gitBranchesSearch": {
+    "description": "Git changes: placeholder of the search box in the branch sheet."
+  },
+  "gitBranchesLocal": "Local",
+  "@gitBranchesLocal": {
+    "description": "Git changes: branch sheet section of local branches."
+  },
+  "gitBranchesRemote": "Remote",
+  "@gitBranchesRemote": {
+    "description": "Git changes: branch sheet section of remote branches."
+  },
+  "gitBranchesNoMatch": "No matching branches",
+  "@gitBranchesNoMatch": {
+    "description": "Git changes: branch sheet text when the search matches nothing."
+  },
+  "gitBranchCurrent": "Current branch",
+  "@gitBranchCurrent": {
+    "description": "Git changes: branch sheet row subtitle of the checked-out branch."
+  },
+  "gitBranchInWorkspace": "Checked out in {workspace}",
+  "@gitBranchInWorkspace": {
+    "description": "Git changes: branch sheet row subtitle when another Posse workspace has the branch checked out; tapping opens that workspace.",
+    "placeholders": {
+      "workspace": {
+        "type": "String"
+      }
+    }
+  },
+  "gitBranchInWorktree": "Checked out in worktree {dir}",
+  "@gitBranchInWorktree": {
+    "description": "Git changes: branch sheet row subtitle when a worktree outside Posse has the branch checked out; it can't be switched to. dir is the folder name.",
+    "placeholders": {
+      "dir": {
+        "type": "String"
+      }
+    }
+  },
+  "gitBranchesBusy": "Finish the {operation} before switching branches",
+  "@gitBranchesBusy": {
+    "description": "Git changes: branch sheet notice while a merge or rebase is in progress. operation is a git word like rebase.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "gitCheckoutAgentTitle": "{agent} Is Working in This Workspace",
+  "@gitCheckoutAgentTitle": {
+    "description": "Git changes: title of the confirmation before switching branches while an agent is working.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "gitCheckoutAgentBody": "Switching branches changes files in the working directory and may overwrite or disrupt what the agent is editing. Switch anyway?",
+  "@gitCheckoutAgentBody": {
+    "description": "Git changes: body of the confirmation before switching branches while an agent is working."
+  },
+  "gitCheckoutAnyway": "Switch Anyway",
+  "@gitCheckoutAnyway": {
+    "description": "Git changes: confirm button to switch branches while an agent is working."
+  },
+  "gitSwitchedTo": "Switched to {branch}",
+  "@gitSwitchedTo": {
+    "description": "Git changes: snack bar after switching branches.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
   "gitBinaryDiff": "Binary file; the diff can’t be shown on the phone",
   "@gitBinaryDiff": {
     "description": "Git diff: shown for a binary file."
