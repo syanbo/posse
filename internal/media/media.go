@@ -2,7 +2,7 @@
 //   - 粘贴的：终端里显示成 [Image #N]。Claude 存在会话的图片目录里，Codex 内嵌在会话文件里，
 //     Grok、Cursor 存在自己的 assets 目录、会话文件里列出路径；
 //   - agent 生成的：Claude、Grok 工具返回的图片（截图、读进来的图片文件），内嵌在会话文件里；
-//     Codex 图像生成和跑代码产出的图片，存在 ~/.codex/generated_images/<会话 ID>/；
+//     Codex 工具返回的内嵌图片，以及 ~/.codex/generated_images/<会话 ID>/ 中没有内嵌副本的图片；
 //     Claude、Codex、Grok 工具输出里提到的视频文件（录屏工具返回的路径等），缩略图由 Quick Look 取第一帧。
 package media
 
@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	"image/png"
+	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -95,6 +97,7 @@ type Scanner struct {
 	dir                    string // Claude 会话的图片目录，找到后不再找
 	images                 *history.ImageScanner
 	videos                 *history.VideoScanner
+	digests                map[string]fileDigest
 }
 
 func NewScanner(agent, sid, transcript string) *Scanner {
@@ -125,6 +128,9 @@ func (s *Scanner) Scan() (pasted, made []Item) {
 	}
 	if s.images != nil {
 		if imgs, err := s.images.Scan(); err == nil {
+			if s.agent == "codex" {
+				made = s.withoutEmbeddedCopies(made, imgs)
+			}
 			p, m := SessionItems(s.images.Path(), imgs)
 			pasted = append(pasted, p...)
 			made = append(made, m...)
@@ -142,6 +148,57 @@ func (s *Scanner) Scan() (pasted, made []Item) {
 	}
 	slices.SortStableFunc(made, func(a, b Item) int { return b.At.Compare(a.At) })
 	return pasted, made
+}
+
+// 目录图片是内嵌结果的副本时只隐藏目录项；两次工具查看仍各自保留快照。
+type fileDigest struct {
+	info os.FileInfo
+	sum  [sha256.Size]byte
+}
+
+func (s *Scanner) withoutEmbeddedCopies(items []Item, images []history.ToolImage) []Item {
+	embedded := map[[sha256.Size]byte]bool{}
+	for _, im := range images {
+		if !im.Pasted && im.Digest != ([sha256.Size]byte{}) {
+			embedded[im.Digest] = true
+		}
+	}
+	if len(embedded) == 0 {
+		s.digests = nil
+		return items
+	}
+	cache := make(map[string]fileDigest, len(items))
+	out := items[:0]
+	for _, it := range items {
+		d, ok := s.digests[it.Path]
+		fi, err := os.Stat(it.Path)
+		if err != nil {
+			out = append(out, it)
+			continue
+		}
+		if !ok || !os.SameFile(d.info, fi) || d.info.Size() != fi.Size() || !d.info.ModTime().Equal(fi.ModTime()) {
+			f, err := os.Open(it.Path)
+			if err != nil {
+				out = append(out, it)
+				continue
+			}
+			h := sha256.New()
+			_, err = io.Copy(h, f)
+			f.Close()
+			if err != nil {
+				out = append(out, it)
+				continue
+			}
+			d = fileDigest{info: fi}
+			copy(d.sum[:], h.Sum(nil))
+		}
+		cache[it.Path] = d
+		if !embedded[d.sum] {
+			out = append(out, it)
+		}
+	}
+	s.digests = cache
+	return out
 }
 
 // ClaudeImageDir 找 Claude 会话保存粘贴图片的目录：/private/tmp/claude-<uid>/<项目目录编码>/<会话 ID>/images。
@@ -256,6 +313,10 @@ func SessionItems(src string, imgs []history.ToolImage) (pasted, made []Item) {
 	for i := len(imgs) - 1; i >= 0; i-- {
 		im := imgs[i]
 		it := Item{Key: fmt.Sprintf("%s:%d:%d", src, im.Offset, im.Index), At: im.At, Tool: &im, Src: src}
+		if im.Digest != ([sha256.Size]byte{}) {
+			// 相同偏移换了内容时，桌面缩略图和手机缓存都必须重新读取。
+			it.Key += fmt.Sprintf(":%x", im.Digest)
+		}
 		if im.OnDisk {
 			it.Key, it.Path, it.Tool, it.Src = im.Path, im.Path, nil, ""
 		}

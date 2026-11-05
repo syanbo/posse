@@ -1,6 +1,7 @@
 package history
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -76,7 +77,7 @@ func TestCodexImageScanner(t *testing.T) {
 			`{"type":"input_text","text":"</image>"},{"type":"input_text","text":"[Image #2] 核实"}]}}`,
 		// 新格式里同一条消息的完成事件只带路径，不重复算
 		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"type":"local_image","path":"/tmp/posse-paste-1.png"}]}}}`,
-		// 工具输出里的图片另有 generated_images，不算粘贴的
+		// 工具输出也收录，但不算粘贴的
 		`{"type":"response_item","payload":{"type":"function_call_output","output":[{"type":"input_image","image_url":"` + url + `"}]}}`,
 	}
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
@@ -86,7 +87,7 @@ func TestCodexImageScanner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].N != 2 || got[0].Path != "/tmp/posse-paste-1.png" || got[0].Media != "image/png" || got[0].At.IsZero() {
+	if len(got) != 2 || got[1].Pasted || got[0].N != 2 || got[0].Path != "/tmp/posse-paste-1.png" || got[0].Media != "image/png" || got[0].At.IsZero() {
 		t.Fatalf("got %+v", got)
 	}
 	b, err := ReadToolImage(path, got[0])
@@ -151,5 +152,75 @@ func TestCursorImageScanner(t *testing.T) {
 	}
 	if data, err := ReadToolImage(path, got[0]); err != nil || string(data) != "a" {
 		t.Fatalf("read %q %v", data, err)
+	}
+}
+
+func TestCodexToolImages(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rollout.jsonl")
+	imageBlock := func(data string) string {
+		return `{"type":"input_image","image_url":"data:image/png;base64,` + base64.StdEncoding.EncodeToString([]byte(data)) + `"}`
+	}
+	output := func(id, typ, data string) string {
+		return `{"type":"response_item","timestamp":"2026-11-05T01:00:00Z","payload":{"type":"` + typ + `","call_id":"` + id + `","output":[{"type":"input_text","text":"/tmp/not-an-artifact.png"},` + imageBlock(data) + `]}}`
+	}
+	lines := []string{
+		`{"type":"response_item","payload":{"type":"custom_tool_call","call_id":"a","name":"exec","input":"dynamic JS"}}`,
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"ImageView","path":"file:///tmp/wrong.png"}}}`,
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"McpToolCall","result":{"content":[{"type":"image","data":"b25l","mimeType":"image/png"}]}}}}`,
+		output("a", "custom_tool_call_output", "one"),
+		`{"type":"response_item","payload":{"type":"function_call","call_id":"b","name":"view_image","arguments":"{}"}}`,
+		output("b", "function_call_output", "two"),
+		`{"type":"response_item","payload":{"type":"function_call","call_id":"fail","name":"view_image","arguments":"{}"}}`,
+		`{"type":"response_item","payload":{"type":"function_call_output","call_id":"fail","output":"failed /tmp/missing.png"}}`,
+		`{"type":"response_item","payload":{"type":"custom_tool_call","call_id":"text","name":"exec","input":"ls"}}`,
+		`{"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"text","output":[{"type":"input_text","text":"/tmp/another.png"}]}}`,
+	}
+	os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
+	s := NewImageScanner("codex", path)
+	got, err := s.Scan()
+	if err != nil || len(got) != 2 {
+		t.Fatalf("images=%+v err=%v", got, err)
+	}
+	for i, want := range []string{"one", "two"} {
+		im := got[i]
+		raw, err := ReadToolImage(path, im)
+		if err != nil || string(raw) != want || im.Pasted || im.OnDisk || im.Path != "" || im.At.IsZero() {
+			t.Fatalf("image=%+v raw=%q err=%v", im, raw, err)
+		}
+		if im.Digest != sha256.Sum256(raw) {
+			t.Fatal("digest differs from embedded bytes")
+		}
+	}
+	if got[0].Tool != "exec" || got[1].Tool != "view_image" || len(s.tools) != 0 {
+		t.Fatalf("tool metadata: %+v pending=%v", got, s.tools)
+	}
+	oldOffset := s.offset
+	if again, err := s.Scan(); err != nil || len(again) != 2 || s.offset != oldOffset {
+		t.Fatal("unchanged scan duplicated images")
+	}
+	// 一行多张图，Index 只数图片；相同内容的另一次查看也保留。
+	next := `{"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"unknown","output":[` + imageBlock("one") + `,{"type":"input_text","text":"between"},` + imageBlock("three") + `]}}`
+	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	f.WriteString(next) // 未完整写入的行留到下次。
+	f.Close()
+	if got, _ = s.Scan(); len(got) != 2 {
+		t.Fatal("partial line was consumed")
+	}
+	f, _ = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	f.WriteString("\n")
+	f.Close()
+	got, err = s.Scan()
+	if err != nil || len(got) != 4 || got[3].Index != 1 || got[2].Tool != "tool" {
+		t.Fatalf("append=%+v %v", got, err)
+	}
+	if raw, err := ReadToolImage(path, got[3]); err != nil || string(raw) != "three" {
+		t.Fatalf("second image=%q %v", raw, err)
+	}
+	// 同长度以上的重写也清掉旧快照和调用映射。
+	rewritten := `{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"input_text","text":"` + strings.Repeat("x", int(s.offset)) + `"}]}}` + "\n" + output("a", "custom_tool_call_output", "replacement") + "\n"
+	os.WriteFile(path, []byte(rewritten), 0o600)
+	got, err = s.Scan()
+	if err != nil || len(got) != 1 || got[0].Tool != "tool" {
+		t.Fatalf("rewritten=%+v %v", got, err)
 	}
 }

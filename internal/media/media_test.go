@@ -153,3 +153,97 @@ func TestPNGBytes(t *testing.T) {
 		t.Fatal("文件不在时要报错")
 	}
 }
+
+func TestCodexEmbeddedCopies(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".codex", "generated_images", "session")
+	os.MkdirAll(dir, 0o700)
+	encoded, raw := pngBase64(t, 12, 8)
+	duplicate := filepath.Join(dir, "exec-copy.png")
+	os.WriteFile(duplicate, raw, 0o600)
+	other := filepath.Join(dir, "ig-other.png")
+	writePNG(t, other, 4, 2)
+	transcript := filepath.Join(home, "rollout.jsonl")
+	line := `{"type":"response_item","payload":{"type":"custom_tool_call_output","output":[{"type":"input_image","image_url":"data:image/png;base64,` + encoded + `"}]}}` + "\n"
+	os.WriteFile(transcript, []byte(line+line), 0o600)
+	s := NewScanner("codex", "session", transcript)
+	check := func(want int) []Item {
+		t.Helper()
+		pasted, made := s.Scan()
+		if len(pasted) != 0 || len(made) != want {
+			t.Fatalf("pasted=%d made=%+v", len(pasted), made)
+		}
+		return made
+	}
+	made := check(3) // 两次查看都留着，只隐藏目录副本。
+	var snapshot Item
+	count := 0
+	for _, it := range made {
+		if it.Path == duplicate {
+			t.Fatal("directory duplicate kept")
+		}
+		if it.Tool != nil {
+			snapshot = it
+			count++
+		}
+	}
+	if count != 2 {
+		t.Fatal("repeated views were merged")
+	}
+	check(3)
+	if len(s.digests) != 2 {
+		t.Fatal("directory hashes not cached")
+	}
+	// 原文件被覆盖或删除后，仍能读回当时的图片；目录内容改变后重新参与列表。
+	writePNG(t, duplicate, 17, 19)
+	check(4)
+	os.Remove(duplicate)
+	check(3)
+	if b, err := ReadImage(snapshot); err != nil || !bytes.Equal(b, raw) {
+		t.Fatalf("snapshot changed: %v", err)
+	}
+	img, err := Decode(snapshot, 512)
+	if err != nil || img.Bounds().Dx() != 12 || img.Bounds().Dy() != 8 {
+		t.Fatalf("decode failed: %v", err)
+	}
+	// 会话重写后旧摘要不能继续隐藏目录中的文件。
+	os.WriteFile(duplicate, raw, 0o600)
+	os.WriteFile(transcript, []byte("{}\n"), 0o600)
+	check(2)
+}
+
+func TestCodexSnapshotRewrite(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	path := filepath.Join(t.TempDir(), "rollout.jsonl")
+	first, _ := pngBase64(t, 12, 8)
+	second, raw := pngBase64(t, 8, 12)
+	write := func(data string) {
+		t.Helper()
+		line := `{"type":"response_item","payload":{"type":"custom_tool_call_output","output":[{"type":"input_image","image_url":"data:image/png;base64,` + data + `"}]}}` + "\n"
+		if err := os.WriteFile(path, []byte(line), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(first)
+	s := NewScanner("codex", "test", path)
+	_, made := s.Scan()
+	if len(made) != 1 {
+		t.Fatalf("images=%d", len(made))
+	}
+	old := made[0]
+	write(second)
+	if _, err := ReadImage(old); err == nil {
+		t.Error("stale snapshot read a replacement image at the same offset")
+	}
+	_, made = s.Scan()
+	if len(made) != 1 {
+		t.Fatalf("images after rewrite=%d", len(made))
+	}
+	if made[0].Key == old.Key {
+		t.Error("replacement reused the old thumbnail cache key")
+	}
+	if got, err := ReadImage(made[0]); err != nil || !bytes.Equal(got, raw) {
+		t.Fatalf("replacement read: %v", err)
+	}
+}

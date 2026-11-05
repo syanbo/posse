@@ -2,6 +2,7 @@ package history
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -17,21 +18,21 @@ import (
 // 内嵌在会话文件里的只记位置，用到时按 Offset 读回那一行（ReadToolImage）；
 // OnDisk 的是 agent 自己存下的文件，内容就是 Path。
 type ToolImage struct {
-	Offset int64     // 所在行在会话文件里的起点
-	Index  int       // 这一行里的第几张
-	At     time.Time // 那一行的时间；grok、cursor 的会话文件没有时间
-	Tool   string    // 返回它的工具，如 Read、mcp__iphone-use__phone_screenshot
-	Path   string    // 读的文件、粘贴的图片的文件；截图之类没有
-	Media  string    // 如 image/png
-	Pasted bool      // 用户粘贴的
-	N      int       // 粘贴的图片的序号（[Image #N]），不知道时是 0
-	OnDisk bool      // 内容在 Path，不在会话文件里
+	Offset int64             // 所在行在会话文件里的起点
+	Index  int               // 这一行里的第几张
+	At     time.Time         // 那一行的时间；grok、cursor 的会话文件没有时间
+	Tool   string            // 返回它的工具，如 Read、mcp__iphone-use__phone_screenshot
+	Path   string            // 读的文件、粘贴的图片的文件；截图之类没有
+	Media  string            // 如 image/png
+	Pasted bool              // 用户粘贴的
+	N      int               // 粘贴的图片的序号（[Image #N]），不知道时是 0
+	OnDisk bool              // 内容在 Path，不在会话文件里
+	Digest [sha256.Size]byte // Codex 工具图片的内容摘要，用来排除生成目录中的副本
 }
 
 // ImageScanner 增量读会话文件收集图片，不是并发安全的。各家记下的不同：
 //   - claude：工具返回的（粘贴的另在会话的图片目录里）
-//   - codex：粘贴的，连同 base64 写在用户消息里，当时的临时文件之后可能没了
-//     （生成的另在 ~/.codex/generated_images）
+//   - codex：用户粘贴和工具返回的内嵌图片；生成目录里的图片由 media 合并
 //   - grok：工具返回的，和粘贴的（存在会话目录的 assets 里，用户消息的 <image_files> 列出路径）
 //   - cursor：只有粘贴的（存在项目的 assets 里，同样列在 <image_files>）；工具输出不进会话文件
 type ImageScanner struct {
@@ -55,7 +56,7 @@ func (s *ImageScanner) Path() string { return s.path }
 
 var imageMarkers = map[string][][]byte{
 	"claude": {[]byte(`"type":"image"`), []byte(`"type": "image"`), []byte(`"tool_use"`)},
-	"codex":  {[]byte(`"input_image"`)},
+	"codex":  {[]byte(`"input_image"`), []byte(`"custom_tool_call"`), []byte(`"function_call"`), []byte(`"custom_tool_call_output"`), []byte(`"function_call_output"`)},
 	"grok":   {[]byte(`"tool_calls"`), []byte(`"tool_result"`), []byte(`"type":"image"`), []byte(`<image_files>`)},
 	"cursor": {[]byte(`<image_files>`)},
 }
@@ -168,42 +169,65 @@ func (s *ImageScanner) line(b []byte, offset int64) {
 	}
 }
 
-// codexImageLine 是 Codex 会话里一条用户消息：粘贴的图片是 input_image 的 data URL，
-// 前面一段 input_text 写着它的序号和临时文件 <image name=[Image #1] path="...">。
-// 同一条消息在新格式里另有 event_msg 的 item_completed，只带路径，不认它。
+// Codex 只取 response_item 中的图片；item_completed 可能重复记录同一份工具结果。
+type codexImageBlock struct {
+	Type     string `json:"type"`
+	Text     string `json:"text"`
+	ImageURL string `json:"image_url"`
+}
+
 type codexImageLine struct {
 	Type      string    `json:"type"`
 	Timestamp time.Time `json:"timestamp"`
 	Payload   struct {
-		Type    string `json:"type"`
-		Role    string `json:"role"`
-		Content []struct {
-			Type     string `json:"type"`
-			Text     string `json:"text"`
-			ImageURL string `json:"image_url"`
-		} `json:"content"`
+		Type    string            `json:"type"`
+		Role    string            `json:"role"`
+		Name    string            `json:"name"`
+		CallID  string            `json:"call_id"`
+		Content []codexImageBlock `json:"content"`
+		Output  json.RawMessage   `json:"output"`
 	} `json:"payload"`
 }
 
 var codexImageTag = regexp.MustCompile(`^<image name=\[Image #(\d+)\] path="(.*)">$`)
 
-// codexImages 列出一条 Codex 用户消息里的图片和它们的 data URL，ok 为假表示不是用户消息。
 func codexImages(b []byte) (urls []string, imgs []ToolImage, ok bool) {
 	var l codexImageLine
-	if json.Unmarshal(b, &l) != nil || l.Type != "response_item" || l.Payload.Type != "message" || l.Payload.Role != "user" {
+	if json.Unmarshal(b, &l) != nil {
+		return nil, nil, false
+	}
+	return l.images()
+}
+
+func (l codexImageLine) images() (urls []string, imgs []ToolImage, ok bool) {
+	if l.Type != "response_item" {
+		return nil, nil, false
+	}
+	blocks := l.Payload.Content
+	pasted := l.Payload.Type == "message" && l.Payload.Role == "user"
+	switch {
+	case pasted:
+	case l.Payload.Type == "function_call_output" || l.Payload.Type == "custom_tool_call_output":
+		// 旧格式的纯文本输出不含图片，不从文本路径或 JS 推断产物。
+		if json.Unmarshal(l.Payload.Output, &blocks) != nil {
+			return nil, nil, true
+		}
+	default:
 		return nil, nil, false
 	}
 	var n int
 	var path string
-	for _, c := range l.Payload.Content {
+	for _, c := range blocks {
 		switch c.Type {
 		case "input_text":
-			if m := codexImageTag.FindStringSubmatch(c.Text); m != nil {
-				n, _ = strconv.Atoi(m[1])
-				path = m[2]
+			if pasted {
+				if m := codexImageTag.FindStringSubmatch(c.Text); m != nil {
+					n, _ = strconv.Atoi(m[1])
+					path = m[2]
+				}
 			}
 		case "input_image":
-			imgs = append(imgs, ToolImage{Index: len(imgs), At: l.Timestamp, Path: path, Media: dataMedia(c.ImageURL), Pasted: true, N: n})
+			imgs = append(imgs, ToolImage{Index: len(imgs), At: l.Timestamp, Path: path, Media: dataMedia(c.ImageURL), Pasted: pasted, N: n})
 			urls = append(urls, c.ImageURL)
 			n, path = 0, ""
 		}
@@ -212,7 +236,33 @@ func codexImages(b []byte) (urls []string, imgs []ToolImage, ok bool) {
 }
 
 func (s *ImageScanner) codexLine(b []byte, offset int64) {
-	_, imgs, _ := codexImages(b)
+	var l codexImageLine
+	if json.Unmarshal(b, &l) != nil || l.Type != "response_item" {
+		return
+	}
+	switch l.Payload.Type {
+	case "custom_tool_call", "function_call":
+		s.tools[l.Payload.CallID] = toolRef{name: l.Payload.Name}
+		return
+	}
+	urls, imgs, _ := l.images()
+	for i := range imgs {
+		if imgs[i].Pasted {
+			continue
+		}
+		imgs[i].Tool = s.tools[l.Payload.CallID].name
+		if imgs[i].Tool == "" {
+			imgs[i].Tool = "tool"
+		}
+		// 摘要只在增量扫描时计算，不保留解码后的原图，也不在每次刷新时重读历史。
+		if _, data, ok := strings.Cut(urls[i], ";base64,"); ok {
+			h := sha256.New()
+			if _, err := io.Copy(h, base64.NewDecoder(base64.StdEncoding, strings.NewReader(data))); err == nil {
+				copy(imgs[i].Digest[:], h.Sum(nil))
+			}
+		}
+	}
+	delete(s.tools, l.Payload.CallID)
 	s.add(imgs, offset)
 }
 
@@ -393,7 +443,15 @@ func ReadToolImage(path string, img ToolImage) ([]byte, error) {
 		if img.Index >= len(urls) {
 			return nil, errImageGone
 		}
-		return decodeDataURL(urls[img.Index])
+		data, err := decodeDataURL(urls[img.Index])
+		if err != nil {
+			return nil, err
+		}
+		// 会话重写后同一偏移可能还是图片，需确认读到的仍是这份快照。
+		if img.Digest != ([sha256.Size]byte{}) && sha256.Sum256(data) != img.Digest {
+			return nil, errImageGone
+		}
+		return data, nil
 	}
 	var g grokImageLine
 	if json.Unmarshal(b, &g) == nil && (g.Type == "tool_result" || g.Synthetic != "") {

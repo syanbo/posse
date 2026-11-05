@@ -96,3 +96,46 @@ func TestSessionMedia(t *testing.T) {
 		t.Fatalf("unlisted id accepted: %v", m)
 	}
 }
+
+func TestCodexSessionMediaSnapshots(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 12, 8))); err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.Bytes()
+	line := `{"type":"response_item","payload":{"type":"custom_tool_call_output","output":[{"type":"input_image","image_url":"data:image/png;base64,` + base64.StdEncoding.EncodeToString(raw) + `"}]}}` + "\n"
+	path := filepath.Join(t.TempDir(), "rollout.jsonl")
+	os.WriteFile(path, []byte(strings.Repeat(line, 45)), 0o600)
+	s := &Server{}
+	a := mediaParams{Agent: "codex", SessionID: "test", TranscriptPath: path}
+	res, err := s.mediaList(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := res.(map[string]any)
+	rows := list["made"].([]map[string]any)
+	if list["madeAll"] != 45 || len(rows) != mediaMadeMax || len(list["pasted"].([]map[string]any)) != 0 {
+		t.Fatalf("unexpected counts: %v", list)
+	}
+	a.ID = rows[0]["id"].(string)
+	thumb, err := s.mediaThumb(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if thumb.(map[string]any)["width"] != 12 {
+		t.Fatal("wrong thumbnail")
+	}
+	a.Offset, a.Limit = 3, 7
+	part, err := s.mediaRead(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(part.(map[string]any)["content"].([]byte), raw[3:10]) {
+		t.Fatal("range read did not return snapshot bytes")
+	}
+	again, err := s.mediaList(a)
+	if err != nil || again.(map[string]any)["made"].([]map[string]any)[0]["id"] != a.ID {
+		t.Fatal("snapshot ID changed on refresh")
+	}
+}
