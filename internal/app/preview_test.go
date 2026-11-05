@@ -1153,6 +1153,10 @@ func TestPreview(t *testing.T) {
 		a.quick.tab, a.quick.query = quickText, "config"
 		until(t, newTester(a.build, 1200, 760), "quick text page", func() bool { return a.quick.text.key != "" && !a.quick.text.running && len(a.quick.text.hits) > 0 })
 		savePNG(t, newPreviewTester(a, dark), "quick-text-"+suffix+".png")
+		// 符号页：名字、种类、文件名和行号
+		a.quick.tab, a.quick.query = quickSymbols, "config"
+		until(t, newTester(a.build, 1200, 760), "quick symbols", func() bool { return a.quick.sym.key != "" && !a.quick.sym.running && len(a.quick.sym.syms) > 0 })
+		savePNG(t, newPreviewTester(a, dark), "quick-symbols-"+suffix+".png")
 
 		// 跳到定义时几处同名的声明：选择列表
 		a = previewApp(t)

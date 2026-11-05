@@ -144,7 +144,11 @@ const (
 
 // patternsFor 返回一类语言里 word 的声明模式，强的在前；一行只记第一个匹配到的。
 func patternsFor(f family, word string) []pattern {
-	w := "(" + regexp.QuoteMeta(word) + ")"
+	return patternsWith(f, "("+regexp.QuoteMeta(word)+")")
+}
+
+// patternsWith 是 patternsFor 的实现，w 是匹配名字的分组（符号搜索用"含有查询的任意标识符"）。
+func patternsWith(f family, w string) []pattern {
 	mk := func(kind string, weight int, expr string) pattern {
 		return pattern{regexp.MustCompile(expr), kind, weight}
 	}

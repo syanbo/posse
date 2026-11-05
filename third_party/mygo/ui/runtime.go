@@ -309,7 +309,8 @@ type engine struct {
 	toastFrame   uint64
 	toastPass    int
 	// mods are the modifiers of the last pointer event.
-	mods Modifiers
+	mods   Modifiers
+	modTap modTap
 
 	consumed bool
 	// animating is set as a frame builds when something moves, for another

@@ -325,6 +325,17 @@ func (_handle *Context) DisableAnimations() {
 	_ctx.DisableAnimations()
 }
 
+// DoubleTap returns the modifier tapped twice on its own last, and how many
+// such double taps there have been: a view reads the count each frame and
+// acts when it grew. (Posse)
+func (_handle *Context) DoubleTap() (Modifiers, uint64) {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return 0, 0
+	}
+	return _ctx.DoubleTap()
+}
+
 // Instant reports whether this frame shows animated values at once
 // (DisableAnimations). Views read it to render a change settled in the same
 // frames where its animations are disabled.

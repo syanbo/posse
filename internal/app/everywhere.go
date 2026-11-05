@@ -15,12 +15,13 @@ import (
 	"posse/locales"
 )
 
-// 随处搜索（照 WebStorm 的双击 Shift）：一个弹框分"所有""文件""操作""文本"几页，⇥ 换页。
+// 随处搜索（照 WebStorm 的双击 Shift）：一个弹框分"所有""文件""符号""操作""文本"几页，⇥ 换页。
 // ⌘P 打开在"文件"页（原来的快速打开），⇧⌘A 打开在"操作"页。
 
 const (
 	quickAll = iota
 	quickFiles
+	quickSymbols
 	quickActions
 	quickText
 	quickTabs
@@ -44,6 +45,18 @@ type quickOpen struct {
 	allListing bool
 	// 文本页（和"所有"页的文本一组）：全文检索的前 quickTextMax 条，按文件栏检索限定的目录搜
 	text quickTextSearch
+	// 符号页（和"所有"页的符号一组）：按名字找声明，typesOnly 只要类型（WebStorm 的"类"页）
+	sym       quickSymSearch
+	typesOnly bool
+}
+
+type quickSymSearch struct {
+	key     string // syms 对应的查询（查询词、只看类型、限定的目录）
+	gen     int
+	cancel  context.CancelFunc
+	running bool
+	syms    []files.Symbol
+	err     string
 }
 
 // quickTextMax 是随处搜索里全文检索最多列的条数，看全部到文件栏的检索页。
@@ -74,7 +87,10 @@ func (a *app) closeQuick() {
 	if a.quick.text.cancel != nil {
 		a.quick.text.cancel()
 	}
-	a.quick.text = quickTextSearch{}
+	if a.quick.sym.cancel != nil {
+		a.quick.sym.cancel()
+	}
+	a.quick.text, a.quick.sym = quickTextSearch{}, quickSymSearch{}
 	a.quick.open, a.quick.allList, a.quick.allCancel = false, nil, nil
 }
 
@@ -157,8 +173,66 @@ type quickItem struct {
 	file   *files.Match
 	act    *paletteAction
 	hit    *files.Hit
+	sym    *files.Symbol
 	header string
 	tab    int
+}
+
+// syncQuickSymbols 让符号搜索跟上查询：变了就取消旧的，停顿 150ms 后在后台现查（files.FindSymbols，不建索引）。
+func (a *app) syncQuickSymbols(v *filesView, query string, typesOnly bool) {
+	s := &a.quick.sym
+	dir := v.search.query.Dir
+	key := fmt.Sprint(dir, "\x00", typesOnly, "\x00", query)
+	if s.key == key {
+		return
+	}
+	s.key = key
+	s.gen++
+	gen := s.gen
+	if s.cancel != nil {
+		s.cancel()
+		s.cancel = nil
+	}
+	s.syms, s.err, s.running = nil, "", false
+	if strings.TrimSpace(query) == "" {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel, s.running = cancel, true
+	q := files.SymbolQuery{Text: query, TypesOnly: typesOnly, Dir: dir}
+	time.AfterFunc(150*time.Millisecond, func() {
+		a.update(func() {
+			if a.quick.sym.gen != gen {
+				return
+			}
+			a.refreshList(v, false, func() {
+				if a.quick.sym.gen != gen || v.list == nil {
+					return
+				}
+				l, overlay := v.list, editorOverlay(v)
+				go func() {
+					var err error
+					var syms []files.Symbol
+					if q.Dir != "" && l.Ignored(filepath.Join(l.Root, q.Dir), true) {
+						l, err = files.ListDir(ctx, l.Root, q.Dir)
+					}
+					if err == nil {
+						syms, _, err = files.FindSymbols(ctx, l, overlay, q)
+					}
+					a.update(func() {
+						s := &a.quick.sym
+						if s.gen != gen {
+							return
+						}
+						s.running, s.syms = false, syms
+						if err != nil && ctx.Err() == nil {
+							s.err = errtext.Text(err)
+						}
+					})
+				}()
+			})
+		})
+	})
 }
 
 // syncQuickText 让文本检索跟上查询：变了就取消旧的，停顿 150ms 后在后台重搜，攒够 quickTextMax 条就停。
@@ -276,10 +350,13 @@ func (a *app) quickDialog(c *ui.Context) {
 	ui.Modal(c, &open, func() {
 		ui.Column(c).Width(600).Gap(8).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				segmentedBadges(c, &q.tab, m.QuickTitle(), nil, m.QuickTabAll(), m.QuickTabFiles(), m.QuickTabActions(), m.QuickTabText())
+				segmentedBadges(c, &q.tab, m.QuickTitle(), nil, m.QuickTabAll(), m.QuickTabFiles(), m.QuickTabSymbols(), m.QuickTabActions(), m.QuickTabText())
 				ui.Spacer(c)
 				if (q.tab == quickAll || q.tab == quickFiles) && toggleChip(c, m.QuickIncludeIgnored(), m.QuickIncludeIgnoredTip(), q.all) {
 					a.toggleQuickAll(v)
+				}
+				if q.tab == quickSymbols && toggleChip(c, m.QuickTypesOnly(), m.QuickTypesOnlyTip(), q.typesOnly) {
+					q.typesOnly, q.sel = !q.typesOnly, 0
 				}
 			})
 			placeholder := m.QuickPlaceholderAll()
@@ -290,6 +367,8 @@ func (a *app) quickDialog(c *ui.Context) {
 				placeholder = m.QuickPlaceholderActions()
 			case quickText:
 				placeholder = m.FilesSearchPlaceholder()
+			case quickSymbols:
+				placeholder = m.QuickPlaceholderSymbols()
 			}
 			in, _ := clearableField(c, &q.query, placeholder)
 			in.AutoFocus()
@@ -327,6 +406,16 @@ func (a *app) quickDialog(c *ui.Context) {
 			if q.tab == quickAll || q.tab == quickText {
 				a.syncQuickText(v, q.query)
 			}
+			if q.tab == quickAll || q.tab == quickSymbols {
+				// "所有"页里的符号一组不分类型，只看类型是符号页自己的开关
+				a.syncQuickSymbols(v, path, q.typesOnly && q.tab == quickSymbols)
+			}
+			syms := q.sym.syms
+			addSyms := func(n int) {
+				for i := range min(n, len(syms)) {
+					items = append(items, quickItem{sym: &syms[i]})
+				}
+			}
 			hits := q.text.hits
 			addHits := func(n int) {
 				for i := range min(n, len(hits)) {
@@ -345,11 +434,17 @@ func (a *app) quickDialog(c *ui.Context) {
 				addActs(len(acts))
 			case quickText:
 				addHits(quickTextMax)
+			case quickSymbols:
+				addSyms(len(syms))
 			default:
 				// 每组只列前几条，标题点了换到那一页看全部
 				if len(q.matches) > 0 {
 					items = append(items, quickItem{header: m.QuickTabFiles(), tab: quickFiles})
 					addFiles(5)
+				}
+				if len(syms) > 0 {
+					items = append(items, quickItem{header: m.QuickTabSymbols(), tab: quickSymbols})
+					addSyms(5)
 				}
 				if len(acts) > 0 {
 					items = append(items, quickItem{header: m.QuickTabActions(), tab: quickActions})
@@ -382,7 +477,11 @@ func (a *app) quickDialog(c *ui.Context) {
 				ui.Text(c, q.text.err).FontSize(fsSmall).TextColor(t.Danger).Padding(4, 2)
 			case q.tab == quickText && strings.TrimSpace(q.query) == "":
 				ui.Text(c, m.QuickTextHint()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
-			case n == 0 && q.text.running && (q.tab == quickText || q.tab == quickAll):
+			case q.tab == quickSymbols && q.sym.err != "":
+				ui.Text(c, q.sym.err).FontSize(fsSmall).TextColor(t.Danger).Padding(4, 2)
+			case q.tab == quickSymbols && strings.TrimSpace(q.query) == "":
+				ui.Text(c, m.QuickSymbolsHint()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
+			case n == 0 && (q.sym.running && (q.tab == quickSymbols || q.tab == quickAll) || q.text.running && (q.tab == quickText || q.tab == quickAll)):
 				ui.Text(c, m.FilesSearching()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
 			case n == 0:
 				ui.Text(c, m.FilesNoMatches()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
@@ -404,6 +503,8 @@ func (a *app) quickDialog(c *ui.Context) {
 								clicked = quickRow(c, *it.file, selected, q.moved)
 							case it.hit != nil:
 								clicked = quickHitRow(c, *it.hit, selected, q.moved)
+							case it.sym != nil:
+								clicked = quickSymRow(c, *it.sym, strings.TrimSpace(path), selected, q.moved)
 							default:
 								clicked = a.actionRow(c, m, *it.act, selected, q.moved)
 							}
@@ -427,6 +528,8 @@ func (a *app) quickDialog(c *ui.Context) {
 							footer = shortPath(filepath.Join(l.Root, it.file.Path))
 						case it.hit != nil:
 							footer = shortPath(filepath.Join(v.root, it.hit.Path))
+						case it.sym != nil:
+							footer = shortPath(filepath.Join(v.root, it.sym.Path))
 						}
 					}
 					if dir := v.search.query.Dir; showAll && dir != "" && footer == "" {
@@ -463,6 +566,8 @@ func (a *app) quickDialog(c *ui.Context) {
 						span = it.hit.Spans[0]
 					}
 					a.openFile(w, filepath.Join(v.root, it.hit.Path), it.hit.Line+1, span)
+				case it.sym != nil:
+					a.openFile(w, filepath.Join(v.root, it.sym.Path), it.sym.Line+1, it.sym.Span)
 				default:
 					it.act.run(a, m, w)
 				}
@@ -562,4 +667,47 @@ func quickHitRow(c *ui.Context, h files.Hit, selected, reveal bool) bool {
 		})
 	})
 	return row.Clicked()
+}
+
+// quickSymRow 是符号页的一条声明：名字（查询的那段铺底色）和种类在左，文件名和行号在右。返回是否被点了。
+func quickSymRow(c *ui.Context, s files.Symbol, query string, selected, reveal bool) bool {
+	t := c.Theme()
+	row := ui.Row(c.Key(fmt.Sprint(s.Path, ":", s.Line))).Height(sz(30)).Margin(2, 0, 0, 0).Padding(0, 12).Gap(8).Radius(rRow).AlignItems(ui.Center).Role(ui.RoleButton).Label(s.Name)
+	selectedBg(c, row, selected)
+	if selected && reveal {
+		row.ScrollIntoView()
+	}
+	var marks [][2]int
+	if i := strings.Index(strings.ToLower(s.Name), strings.ToLower(query)); i >= 0 && query != "" {
+		marks = [][2]int{{i, i + len(query)}}
+	}
+	row.Children(func() {
+		ui.RichText(c, markSpans(s.Name, marks, ui.Span{Size: fsBody, Font: monoFont}, colors(t).mark)...).SingleLine().Shrink(0)
+		ui.Text(c, symbolKindText(L(c), s.Kind)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(0)
+		ui.Spacer(c)
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(1).Children(func() {
+			fileGlyph(c, s.Path, fsBody)
+			ui.Text(c, fmt.Sprintf("%s:%d", filepath.Base(s.Path), s.Line+1)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		})
+	})
+	return row.Clicked()
+}
+
+// symbolKindText 是声明种类的界面叫法；files 给的是代号。
+func symbolKindText(m locales.Messages, kind string) string {
+	switch kind {
+	case "type":
+		return m.QuickSymbolKindType()
+	case "func":
+		return m.QuickSymbolKindFunc()
+	case "method":
+		return m.QuickSymbolKindMethod()
+	case "macro":
+		return m.QuickSymbolKindMacro()
+	case "mod":
+		return m.QuickSymbolKindModule()
+	case "field":
+		return m.QuickSymbolKindField()
+	}
+	return m.QuickSymbolKindVar()
 }

@@ -11313,6 +11313,22 @@ func (msgs Messages) KeysPushLabel() string {
 	return Catalog.Format(msgs.locale, "keysPushLabel", nil)
 }
 
+// KeysDoubleShift says "Double-tap ⇧ for Search Everywhere"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings, Files group: switch that opens Search
+// Everywhere when Shift is tapped twice on its own. Off by default.
+func KeysDoubleShift() string { return In(i18n.Locale()).KeysDoubleShift() }
+
+// KeysDoubleShift says "Double-tap ⇧ for Search Everywhere"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings, Files group: switch that opens Search
+// Everywhere when Shift is tapped twice on its own. Off by default.
+func (msgs Messages) KeysDoubleShift() string {
+	return Catalog.Format(msgs.locale, "keysDoubleShift", nil)
+}
+
 // KeysFindActionLabel says "Find Action"
 // in the language the app shows.
 //
@@ -11459,6 +11475,184 @@ func QuickTabFiles() string { return In(i18n.Locale()).QuickTabFiles() }
 // All tab.
 func (msgs Messages) QuickTabFiles() string {
 	return Catalog.Format(msgs.locale, "quickTabFiles", nil)
+}
+
+// QuickPlaceholderSymbols says "Find a class, function or method by name"
+// in the language the app shows.
+//
+// Search Everywhere: placeholder of the search field on the Symbols tab.
+func QuickPlaceholderSymbols() string { return In(i18n.Locale()).QuickPlaceholderSymbols() }
+
+// QuickPlaceholderSymbols says "Find a class, function or method by name"
+// in the language of msgs.
+//
+// Search Everywhere: placeholder of the search field on the Symbols tab.
+func (msgs Messages) QuickPlaceholderSymbols() string {
+	return Catalog.Format(msgs.locale, "quickPlaceholderSymbols", nil)
+}
+
+// QuickSymbolKindField says "field"
+// in the language the app shows.
+//
+// Search Everywhere, Symbols tab: kind shown after a field or attribute
+// declaration.
+func QuickSymbolKindField() string { return In(i18n.Locale()).QuickSymbolKindField() }
+
+// QuickSymbolKindField says "field"
+// in the language of msgs.
+//
+// Search Everywhere, Symbols tab: kind shown after a field or attribute
+// declaration.
+func (msgs Messages) QuickSymbolKindField() string {
+	return Catalog.Format(msgs.locale, "quickSymbolKindField", nil)
+}
+
+// QuickSymbolKindFunc says "function"
+// in the language the app shows.
+//
+// Search Everywhere, Symbols tab: kind shown after a function declaration.
+func QuickSymbolKindFunc() string { return In(i18n.Locale()).QuickSymbolKindFunc() }
+
+// QuickSymbolKindFunc says "function"
+// in the language of msgs.
+//
+// Search Everywhere, Symbols tab: kind shown after a function declaration.
+func (msgs Messages) QuickSymbolKindFunc() string {
+	return Catalog.Format(msgs.locale, "quickSymbolKindFunc", nil)
+}
+
+// QuickSymbolKindMacro says "macro"
+// in the language the app shows.
+//
+// Search Everywhere, Symbols tab: kind shown after a macro declaration.
+func QuickSymbolKindMacro() string { return In(i18n.Locale()).QuickSymbolKindMacro() }
+
+// QuickSymbolKindMacro says "macro"
+// in the language of msgs.
+//
+// Search Everywhere, Symbols tab: kind shown after a macro declaration.
+func (msgs Messages) QuickSymbolKindMacro() string {
+	return Catalog.Format(msgs.locale, "quickSymbolKindMacro", nil)
+}
+
+// QuickSymbolKindMethod says "method"
+// in the language the app shows.
+//
+// Search Everywhere, Symbols tab: kind shown after a method declaration.
+func QuickSymbolKindMethod() string { return In(i18n.Locale()).QuickSymbolKindMethod() }
+
+// QuickSymbolKindMethod says "method"
+// in the language of msgs.
+//
+// Search Everywhere, Symbols tab: kind shown after a method declaration.
+func (msgs Messages) QuickSymbolKindMethod() string {
+	return Catalog.Format(msgs.locale, "quickSymbolKindMethod", nil)
+}
+
+// QuickSymbolKindModule says "module"
+// in the language the app shows.
+//
+// Search Everywhere, Symbols tab: kind shown after a module declaration.
+func QuickSymbolKindModule() string { return In(i18n.Locale()).QuickSymbolKindModule() }
+
+// QuickSymbolKindModule says "module"
+// in the language of msgs.
+//
+// Search Everywhere, Symbols tab: kind shown after a module declaration.
+func (msgs Messages) QuickSymbolKindModule() string {
+	return Catalog.Format(msgs.locale, "quickSymbolKindModule", nil)
+}
+
+// QuickSymbolKindType says "type"
+// in the language the app shows.
+//
+// Search Everywhere, Symbols tab: kind shown after a class, struct,
+// interface or enum declaration.
+func QuickSymbolKindType() string { return In(i18n.Locale()).QuickSymbolKindType() }
+
+// QuickSymbolKindType says "type"
+// in the language of msgs.
+//
+// Search Everywhere, Symbols tab: kind shown after a class, struct,
+// interface or enum declaration.
+func (msgs Messages) QuickSymbolKindType() string {
+	return Catalog.Format(msgs.locale, "quickSymbolKindType", nil)
+}
+
+// QuickSymbolKindVar says "variable"
+// in the language the app shows.
+//
+// Search Everywhere, Symbols tab: kind shown after a constant or variable
+// declaration.
+func QuickSymbolKindVar() string { return In(i18n.Locale()).QuickSymbolKindVar() }
+
+// QuickSymbolKindVar says "variable"
+// in the language of msgs.
+//
+// Search Everywhere, Symbols tab: kind shown after a constant or variable
+// declaration.
+func (msgs Messages) QuickSymbolKindVar() string {
+	return Catalog.Format(msgs.locale, "quickSymbolKindVar", nil)
+}
+
+// QuickSymbolsHint says "Type a name to find its declarations"
+// in the language the app shows.
+//
+// Search Everywhere, Symbols tab: shown while the search field is empty.
+func QuickSymbolsHint() string { return In(i18n.Locale()).QuickSymbolsHint() }
+
+// QuickSymbolsHint says "Type a name to find its declarations"
+// in the language of msgs.
+//
+// Search Everywhere, Symbols tab: shown while the search field is empty.
+func (msgs Messages) QuickSymbolsHint() string {
+	return Catalog.Format(msgs.locale, "quickSymbolsHint", nil)
+}
+
+// QuickTabSymbols says "Symbols"
+// in the language the app shows.
+//
+// Search Everywhere: tab with declarations (classes, functions, methods)
+// whose names match; also the group title on the All tab.
+func QuickTabSymbols() string { return In(i18n.Locale()).QuickTabSymbols() }
+
+// QuickTabSymbols says "Symbols"
+// in the language of msgs.
+//
+// Search Everywhere: tab with declarations (classes, functions, methods)
+// whose names match; also the group title on the All tab.
+func (msgs Messages) QuickTabSymbols() string {
+	return Catalog.Format(msgs.locale, "quickTabSymbols", nil)
+}
+
+// QuickTypesOnly says "Types only"
+// in the language the app shows.
+//
+// Search Everywhere, Symbols tab: toggle that keeps only type declarations
+// (classes, structs, interfaces, enums).
+func QuickTypesOnly() string { return In(i18n.Locale()).QuickTypesOnly() }
+
+// QuickTypesOnly says "Types only"
+// in the language of msgs.
+//
+// Search Everywhere, Symbols tab: toggle that keeps only type declarations
+// (classes, structs, interfaces, enums).
+func (msgs Messages) QuickTypesOnly() string {
+	return Catalog.Format(msgs.locale, "quickTypesOnly", nil)
+}
+
+// QuickTypesOnlyTip says "Only list classes, structs, interfaces, enums and other types"
+// in the language the app shows.
+//
+// Search Everywhere, Symbols tab: tooltip of the types only toggle.
+func QuickTypesOnlyTip() string { return In(i18n.Locale()).QuickTypesOnlyTip() }
+
+// QuickTypesOnlyTip says "Only list classes, structs, interfaces, enums and other types"
+// in the language of msgs.
+//
+// Search Everywhere, Symbols tab: tooltip of the types only toggle.
+func (msgs Messages) QuickTypesOnlyTip() string {
+	return Catalog.Format(msgs.locale, "quickTypesOnlyTip", nil)
 }
 
 // QuickTabText says "Text"

@@ -29,6 +29,7 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 	rt.fromWindow(&ev)
 	x, y := float32(ev.X), float32(ev.Y)
 	if ev.Kind == platform.PointerDown || ev.Kind == platform.WebViewPress {
+		rt.modTapCancel()
 		// A press is of no element until countPress finds it one.
 		rt.lastPress.prev, rt.lastPress.id = rt.lastPress.id, 0
 	}
@@ -709,6 +710,7 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 	} else if !repeat {
 		delete(rt.byPosition, physical)
 	}
+	rt.modTapCancel()
 	if rt.inspectKey(mods, key) {
 		return true
 	}
@@ -1628,6 +1630,7 @@ func (rt *engine) focusChanged() {
 // changed, for views that show what a held key would do.
 func (rt *engine) modsChanged(mods Modifiers) {
 	if rt.mods != mods {
+		rt.modTapChange(rt.mods, mods)
 		rt.mods = mods
 		rt.requestFrame()
 	}

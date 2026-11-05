@@ -288,6 +288,7 @@ type app struct {
 	traceSeq      int64 // 已经取到的终端 git 命令序号（git.trace），只在轮询协程里用
 	traceLoaded   bool
 	filesPanelRef ui.Ref
+	doubleTaps    uint64             // 上一帧看到的 mygo 双击修饰键计数（c.DoubleTap）
 	termAreaRef   [maxColumns]ui.Ref // 每一栏的终端内容区（终端和它上面的查找栏）
 	// 文件栏展开的进度：0 收起，1 打开，中间是动画
 	filesPanelShown float32

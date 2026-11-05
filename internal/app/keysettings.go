@@ -56,6 +56,19 @@ func (a *app) keySettings(c *ui.Context) {
 				for _, ka := range byGroup[g] {
 					a.keyRow(c, ka)
 				}
+				// 双击 ⇧ 不是一组键，录不进上面的表，单独一个开关；默认关：用 ⇧ 切中英文的输入法会撞上
+				if g == keyGroupFiles {
+					settingsRow(c, L(c).KeysDoubleShift(), func() {
+						sel := 0
+						if a.state.DoubleShift {
+							sel = 1
+						}
+						if segmented(c, &sel, L(c).KeysDoubleShift(), L(c).CommonOff(), L(c).CommonOn()) {
+							a.state.DoubleShift = sel == 1
+							a.saveState()
+						}
+					})
+				}
 			})
 		})
 	}

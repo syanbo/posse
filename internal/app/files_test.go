@@ -1317,3 +1317,73 @@ func TestSearchEverywhereText(t *testing.T) {
 		return !a.quick.open && a.filesPanelOpen() && v.search.query.Text == "package" && !v.search.running && len(v.search.hits) == 4
 	})
 }
+
+// 随处搜索的符号页：按名字找声明，回车跳到声明并选中名字；「只看类型」只留类型
+func TestSearchEverywhereSymbols(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	v := a.filesFor(w)
+	tt := newTester(a.build, 1200, 760)
+	tt.Frame()
+	a.openQuick(w, quickSymbols)
+	tt.Frame()
+	tt.Type("search")
+	until(t, tt, "symbols", func() bool { return !a.quick.sym.running && len(a.quick.sym.syms) == 1 })
+	if s := a.quick.sym.syms[0]; s.Name != "Search" || !tt.HasText("函数") || !tt.HasText("search.go:3") {
+		t.Fatalf("symbol %+v %v", s, tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	sp := filepath.Join(root, "internal", "files", "search.go")
+	until(t, tt, "jump", func() bool {
+		d := v.doc(sp)
+		return !a.quick.open && d != nil && d.gotoLine == 0 && d.ed.SelectedText() == "Search"
+	})
+
+	a.openQuick(w, quickSymbols)
+	tt.Frame()
+	tt.Type("tree")
+	until(t, tt, "tree", func() bool { return !a.quick.sym.running && len(a.quick.sym.syms) > 0 })
+	if err := tt.Click("只列类、结构体、接口、枚举这类类型"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "types", func() bool {
+		s := a.quick.sym.syms
+		return a.quick.typesOnly && !a.quick.sym.running && len(s) == 1 && s[0].Name == "Tree" && s[0].Kind == "type"
+	})
+}
+
+// 双击 ⇧（设置里打开后）：单独连按两下 ⇧ 打开随处搜索；中间按了别的键不算，没打开设置也不算
+func TestDoubleShift(t *testing.T) {
+	a := previewApp(t)
+	filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	tt := newTester(a.build, 1200, 760)
+	tt.Frame()
+	tap := func() {
+		tt.HoldModifiers(ui.Shift)
+		tt.HoldModifiers(0)
+	}
+	tap()
+	tap()
+	tt.Frame()
+	if a.quick.open {
+		t.Fatal("double shift should be off by default")
+	}
+	a.state.DoubleShift = true
+	tap()
+	tt.Key(ui.Shift, ui.KeyA) // 中间打了一个大写字母
+	tap()
+	tt.Frame()
+	if a.quick.open {
+		t.Fatal("a key between the taps should not count")
+	}
+	tap()
+	tap()
+	tt.Frame()
+	if !a.quick.open || a.quick.tab != quickAll {
+		t.Fatalf("double shift: open %v tab %d", a.quick.open, a.quick.tab)
+	}
+}

@@ -22,6 +22,7 @@ type uiState struct {
 	FilesPanelHistory    bool      `json:"filesPanelHistory,omitempty"`    // 旧版：文件栏顶上选的是"历史"，读到后换成 FilesPanelTab
 	FilesPanelTab        string    `json:"filesPanelTab,omitempty"`        // 文件栏顶上选的页签：tabHistory、tabSkills，空是"文件"
 	FilesPanelShared     bool      `json:"filesPanelShared,omitempty"`     // 文件栏开关所有项目共用（记在 FilesPanelOn），不按项目记
+	DoubleShift          bool      `json:"doubleShift,omitempty"`          // 双击 ⇧ 打开随处搜索
 	FilesPanelOn         bool      `json:"filesPanelOn,omitempty"`         // 共用时文件栏开着
 	SidebarHidden        bool      `json:"sidebarHidden,omitempty"`        // 左边的侧栏收起了
 	SessionButtonsHidden bool      `json:"sessionButtonsHidden,omitempty"` // 终端右上角的会话按钮收成了右边缘的把手

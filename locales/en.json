@@ -4245,6 +4245,10 @@
   "@keysPushLabel": {
     "description": "Keyboard Shortcuts settings: label for PushLabel."
   },
+  "keysDoubleShift": "Double-tap ⇧ for Search Everywhere",
+  "@keysDoubleShift": {
+    "description": "Keyboard Shortcuts settings, Files group: switch that opens Search Everywhere when Shift is tapped twice on its own. Off by default."
+  },
   "keysFindActionLabel": "Find Action",
   "@keysFindActionLabel": {
     "description": "Keyboard Shortcuts settings: opens Search Everywhere on the Actions tab."
@@ -4284,6 +4288,54 @@
   "quickTabFiles": "Files",
   "@quickTabFiles": {
     "description": "Search Everywhere: tab matching file names; also the group title on the All tab."
+  },
+  "quickPlaceholderSymbols": "Find a class, function or method by name",
+  "@quickPlaceholderSymbols": {
+    "description": "Search Everywhere: placeholder of the search field on the Symbols tab."
+  },
+  "quickSymbolKindField": "field",
+  "@quickSymbolKindField": {
+    "description": "Search Everywhere, Symbols tab: kind shown after a field or attribute declaration."
+  },
+  "quickSymbolKindFunc": "function",
+  "@quickSymbolKindFunc": {
+    "description": "Search Everywhere, Symbols tab: kind shown after a function declaration."
+  },
+  "quickSymbolKindMacro": "macro",
+  "@quickSymbolKindMacro": {
+    "description": "Search Everywhere, Symbols tab: kind shown after a macro declaration."
+  },
+  "quickSymbolKindMethod": "method",
+  "@quickSymbolKindMethod": {
+    "description": "Search Everywhere, Symbols tab: kind shown after a method declaration."
+  },
+  "quickSymbolKindModule": "module",
+  "@quickSymbolKindModule": {
+    "description": "Search Everywhere, Symbols tab: kind shown after a module declaration."
+  },
+  "quickSymbolKindType": "type",
+  "@quickSymbolKindType": {
+    "description": "Search Everywhere, Symbols tab: kind shown after a class, struct, interface or enum declaration."
+  },
+  "quickSymbolKindVar": "variable",
+  "@quickSymbolKindVar": {
+    "description": "Search Everywhere, Symbols tab: kind shown after a constant or variable declaration."
+  },
+  "quickSymbolsHint": "Type a name to find its declarations",
+  "@quickSymbolsHint": {
+    "description": "Search Everywhere, Symbols tab: shown while the search field is empty."
+  },
+  "quickTabSymbols": "Symbols",
+  "@quickTabSymbols": {
+    "description": "Search Everywhere: tab with declarations (classes, functions, methods) whose names match; also the group title on the All tab."
+  },
+  "quickTypesOnly": "Types only",
+  "@quickTypesOnly": {
+    "description": "Search Everywhere, Symbols tab: toggle that keeps only type declarations (classes, structs, interfaces, enums)."
+  },
+  "quickTypesOnlyTip": "Only list classes, structs, interfaces, enums and other types",
+  "@quickTypesOnlyTip": {
+    "description": "Search Everywhere, Symbols tab: tooltip of the types only toggle."
   },
   "quickTabText": "Text",
   "@quickTabText": {

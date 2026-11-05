@@ -47,6 +47,8 @@ github.com/egoist/mygo v0.7.4 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/text_layout.go`：加 `TextGeneration`，导出文本系统的代数：字体超过 512 个时整批释放、代数加一，之前 `ShapeText` 排好的 `TextLayout` 不能再画（Core Text 的字体已释放，画了会崩）。Posse 的 Mermaid 图按缩放缓存标签的排版，用它判断要不要重排。
 
+`ui/modtap.go`：加 `Context.DoubleTap`，认出单独连按两下同一个修饰键（每下按住不超过 350ms、两下间隔不超过 450ms，中间没按别的键、没按鼠标），返回那个修饰键和累计次数。`input.go` 的 `modsChanged` 喂给它，`keyDownPhysical` 和按下鼠标时清掉进行中的；`api_gen.go` 的包装是手加的（`go generate ./ui` 会冲掉其他手改的包装）。Posse 的双击 ⇧ 打开随处搜索用它：界面只能逐帧读 `Modifiers`，两下按松可能落在同一帧之间，也看不到交给焦点元素的按键。
+
 `ui/frame.go`：加 `Context.ModalOpen`，报告上一帧有没有对话框在最上层；Posse 的菜单项（⌘W 关闭标签）在帧外触发，用它和快捷键一样在对话框打开时不动作。
 
 `internal/gpu/metal/metal.go`：窗口的 drawable 最多 2 个（上游是 3 个）。上游在窗口 2 秒没画东西后才还掉多的那个，Posse 的窗口一直在画（终端光标闪烁、状态栏每秒刷新），第三个一直占着，约 30 MB。
