@@ -173,6 +173,76 @@ void main() {
       model.dispose();
     },
   );
+  for (final more in [false, true]) {
+    testWidgets('poll keeps bottom stable with earlier row=$more', (t) async {
+      t.view.physicalSize = const Size(360, 780);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final rpc = DiscRpc();
+      var count = 4;
+      rpc.handler = (_, params) async => {
+        'discussion': {
+          'key': 'room',
+          'title': 'Review',
+          'rev': count,
+          'msgSeq': count,
+        },
+        'messages': [
+          for (var i = 1; i <= count; i++)
+            {
+              'id': 'm$i',
+              'seq': i,
+              'authorName': 'Reviewer',
+              'body': List.filled(i * 3, 'Message $i content').join('\n\n'),
+            },
+        ],
+        'more': more,
+      };
+      final model = DiscModel(rpc);
+      await t.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.dark),
+          home: DiscussionRoom(
+            api: DiscussionApi(model),
+            room: 'room',
+            self: 'self',
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      final controller = t.widget<ListView>(find.byType(ListView)).controller!;
+      expect(controller.position.extentAfter, 0);
+      final initial = controller.offset;
+      final offsets = <double>[];
+      void record() => offsets.add(controller.offset);
+      controller.addListener(record);
+      for (var i = 0; i < 3; i++) {
+        await t.pump(const Duration(seconds: 2));
+        await t.pumpAndSettle();
+      }
+      expect(
+        offsets.where((offset) => (offset - initial).abs() > 0.01),
+        isEmpty,
+      );
+      controller.removeListener(record);
+      count++;
+      await t.pump(const Duration(seconds: 2));
+      await t.pumpAndSettle();
+      expect(controller.position.extentAfter, 0);
+      expect(controller.offset, greaterThan(initial));
+      controller.jumpTo(controller.offset - 200);
+      await t.pumpAndSettle();
+      final reading = controller.offset;
+      count++;
+      await t.pump(const Duration(seconds: 2));
+      await t.pumpAndSettle();
+      expect(controller.offset, reading);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+      await t.pumpAndSettle();
+      model.dispose();
+    });
+  }
   testWidgets('old desktop gives upgrade message', (t) async {
     final model = DiscModel(DiscRpc()..old = true);
     await t.pumpWidget(MaterialApp(home: DiscussionsScreen(model: model)));

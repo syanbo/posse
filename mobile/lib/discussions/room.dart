@@ -182,10 +182,16 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted || !scroll.hasClients) return;
     if (state.messages.isNotEmpty) {
-      await observer.jumpTo(index: state.messages.length - 1);
+      final index = state.messages.length - 1 + (state.more ? 1 : 0);
+      // 尾项已布局时直接对齐底部，避免轮询先跳到消息顶部再跳回来。
+      if (observer.observeItem(index: index) == null) {
+        await observer.jumpTo(index: index);
+      }
     }
     if (!mounted || !scroll.hasClients) return;
-    scroll.jumpTo(scroll.position.maxScrollExtent);
+    if (scroll.offset != scroll.position.maxScrollExtent) {
+      scroll.jumpTo(scroll.position.maxScrollExtent);
+    }
     scrolled();
   }
 
