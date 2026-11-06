@@ -3,6 +3,20 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.18
+
+- 手机端新增群聊讨论：创建和加入讨论，发送消息、引用、标记关键内容、搜索历史及分享附件。
+- 可在讨论中添加自己的 Agent、发起任务、回答提问、取消排队或停止执行，并打开对应终端。
+- 支持协作成员权限、归档恢复和离线阅读；断线保留草稿，发送重试避免重复消息。
+- 群聊需要电脑端支持手机讨论协议；连接旧版电脑时会提示升级。
+
+### English
+
+- Discussions are now available on mobile: create and join rooms, send and quote messages, mark key content, search history, and share attachments.
+- Add your own agents, start tasks, answer questions, cancel queued requests or stop executions, and open their terminals.
+- Includes collaboration permissions, archiving and restoring, and offline reading. Drafts survive disconnects, and retries avoid duplicate messages.
+- Discussions require a Mac version with mobile discussion support; older versions show an upgrade prompt.
+
 ## 0.1.17
 
 - iOS 切到别的 App 后连接留约 30 秒，这期间回来不用重连。
