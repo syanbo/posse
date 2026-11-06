@@ -3,6 +3,24 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.28
+
+- 讨论里的图片附件直接显示缩略图，点开用默认程序查看；超大图片仍显示为文件。
+- 在输入框里打 @ 弹出候选，可直接选 Agent 或人，选中后自动设好接收者。
+- 有人 @ 你时，讨论列表标出「有人 @ 了你」，消息带「@你」标记，并发送系统通知，不再因同时到达的消息而漏掉。
+- 协作讨论中，Agent 可设置「谁能 @ 它」：只有我、所有人或指定的人。被允许的人可以直接请它执行，请求仍在拥有者的电脑上运行，停止、重试和回答只有拥有者能做；拥有者的电脑会按本机设置再核对一次。双方都需要更新到这个版本。
+- 讨论页更简洁：自己的消息靠右显示，不再加底色；已完成的请求收成一行；去掉重复的说明文字。
+- 已配对的手机可以查看并参与这台电脑上的讨论和协作讨论（需要手机端 0.1.18）。
+
+### English
+
+- Image attachments in discussions now show as thumbnails and open in the default app; very large images still appear as files.
+- Typing @ in the message box suggests agents and people, and picking one sets the recipient.
+- When someone mentions you, the discussion list shows "Someone mentioned you", the message carries an "@You" tag, and a notification appears, even when other messages arrive at the same time.
+- In shared discussions, each agent has a "Who can @ it" setting: only me, everyone or specific people. Allowed people can ask it to run directly; requests still run on the owner's Mac, only the owner can stop, retry or answer them, and the owner's Mac checks its own setting again. Both sides need this version.
+- A cleaner discussion page: your messages sit on the right without a background, finished requests collapse to one line, and repeated labels are gone.
+- Paired phones can read and join this Mac's discussions and shared discussions (requires the phone app 0.1.18).
+
 ## 0.1.27
 
 - 新增讨论：多个 Agent 在同一讨论中共享上下文，可指定接收者、引用消息、标记关键结论、搜索历史并添加附件。
