@@ -4,6 +4,24 @@ package errtext
 // 只收界面上会出现的；只有 agent 经 CLI 才碰得到的（task 编排的提示等）不收。
 // 按顺序匹配、第一条匹配上的生效，越具体的放越前面。
 var zh = [][2]string{
+	// 手机端讨论
+	{"invalid discussion report range", "汇报文件读取范围无效，文件必须不超过 20 MiB"},
+	{"discussion report not found", "讨论汇报文件不存在或已移除"},
+	{"discussion attachment is being sent", "附件正在发送，请稍后再移除"},
+	{"invalid discussion parameters", "讨论参数无效"},
+	{"invalid discussion workspace", "请选择这台电脑上的有效工作区"},
+	{"discussion attachment not found", "讨论附件不存在或已被清理"},
+	{"invalid discussion attachment path", "讨论附件路径无效"},
+	{"discussion attachment is not downloaded yet", "讨论附件尚未下载，请稍后重试"},
+	{"invalid discussion attachment range", "讨论附件读取范围无效"},
+	{"discussion upload expired; upload the file again", "附件暂存已过期，请重新上传"},
+	{"invalid discussion upload", "附件上传参数无效，单个文件不能超过 20 MiB"},
+	{"too many discussion uploads; remove unused attachments first", "暂存附件过多，请先移除不用的附件"},
+	{"discussion upload offset does not match", "附件上传进度不一致，请重新上传"},
+	{"discussion upload is incomplete", "附件尚未上传完整"},
+	{"invalid discussion post", "消息参数无效"},
+	{"discussion attachments require an upload token", "讨论附件需要先上传"},
+
 	// 本包自己给出的说明
 	{srcOldDaemon, "常驻进程是旧版，不认识这个操作：到设置 › 关于 更新常驻进程，终端不会断开"},
 	{srcTimeout, "常驻进程没有及时回应，稍后再试"},

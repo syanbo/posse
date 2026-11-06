@@ -1,3 +1,4 @@
+import '../discussions/discussions.dart';
 import '../history/history.dart';
 import '../l10n/l10n.dart';
 import '../ui/loading.dart';
@@ -483,6 +484,16 @@ class WorkspaceScreen extends StatelessWidget {
                             size: Ic.inline,
                           ),
                         ),
+                      IconButton(
+                        tooltip: l.discTitle,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => DiscussionsScreen(model: model),
+                          ),
+                        ),
+                        icon: const Icon(Icons.forum_rounded),
+                      ),
                       IconButton(
                         tooltip: l.homeHistoryTip,
                         visualDensity: VisualDensity.compact,

@@ -2980,5 +2980,397 @@
   "workspaceTabHistory": "History",
   "@workspaceTabHistory": {
     "description": "Workspace page: segment for session history."
+  },
+  "discTitle": "Discussions",
+  "@discTitle": {
+    "description": "Mobile discussions: Discussions"
+  },
+  "discNew": "New discussion",
+  "@discNew": {
+    "description": "Mobile discussions: New discussion"
+  },
+  "discJoin": "Join discussion",
+  "@discJoin": {
+    "description": "Mobile discussions: Join discussion"
+  },
+  "discEmpty": "No discussions yet",
+  "@discEmpty": {
+    "description": "Mobile discussions: No discussions yet"
+  },
+  "discArchived": "Archived",
+  "@discArchived": {
+    "description": "Mobile discussions: Archived"
+  },
+  "discActive": "Active",
+  "@discActive": {
+    "description": "Mobile discussions: Active"
+  },
+  "discName": "Name",
+  "@discName": {
+    "description": "Mobile discussions: Name"
+  },
+  "discDescription": "Description",
+  "@discDescription": {
+    "description": "Mobile discussions: Description"
+  },
+  "discWorkspace": "Workspace on this computer",
+  "@discWorkspace": {
+    "description": "Mobile discussions: Workspace on this computer"
+  },
+  "discSave": "Save",
+  "@discSave": {
+    "description": "Mobile discussions: Save"
+  },
+  "discCancel": "Cancel",
+  "@discCancel": {
+    "description": "Mobile discussions: Cancel"
+  },
+  "discRetry": "Retry",
+  "@discRetry": {
+    "description": "Mobile discussions: Retry"
+  },
+  "discClose": "Close",
+  "@discClose": {
+    "description": "Mobile discussions: Close"
+  },
+  "discInviteCode": "Invitation",
+  "@discInviteCode": {
+    "description": "Mobile discussions: Invitation"
+  },
+  "discSearch": "Search messages",
+  "@discSearch": {
+    "description": "Mobile discussions: Search messages"
+  },
+  "discDetails": "Discussion details",
+  "@discDetails": {
+    "description": "Mobile discussions: Discussion details"
+  },
+  "discMembers": "Agents",
+  "@discMembers": {
+    "description": "Mobile discussions: Agents"
+  },
+  "discAddMember": "Add agent",
+  "@discAddMember": {
+    "description": "Mobile discussions: Add agent"
+  },
+  "discRole": "Role",
+  "@discRole": {
+    "description": "Mobile discussions: Role"
+  },
+  "discAgent": "Agent",
+  "@discAgent": {
+    "description": "Mobile discussions: Agent"
+  },
+  "discModel": "Model (blank for default)",
+  "@discModel": {
+    "description": "Mobile discussions: Model (blank for default)"
+  },
+  "discEffort": "Reasoning effort (blank for default)",
+  "@discEffort": {
+    "description": "Mobile discussions: Reasoning effort (blank for default)"
+  },
+  "discNewWorktree": "New worktree name (optional)",
+  "@discNewWorktree": {
+    "description": "Mobile discussions: New worktree name (optional)"
+  },
+  "discBase": "Base branch (optional)",
+  "@discBase": {
+    "description": "Mobile discussions: Base branch (optional)"
+  },
+  "discApplyNow": "Restart worker with these settings",
+  "@discApplyNow": {
+    "description": "Mobile discussions: Restart worker with these settings"
+  },
+  "discRemove": "Remove",
+  "@discRemove": {
+    "description": "Mobile discussions: Remove"
+  },
+  "discRestart": "Restart and continue",
+  "@discRestart": {
+    "description": "Mobile discussions: Restart and continue"
+  },
+  "discResume": "Continue queued requests",
+  "@discResume": {
+    "description": "Mobile discussions: Continue queued requests"
+  },
+  "discOwner": "Owner",
+  "@discOwner": {
+    "description": "Mobile discussions: Owner"
+  },
+  "discKey": "Key messages",
+  "@discKey": {
+    "description": "Mobile discussions: Key messages"
+  },
+  "discMarkKey": "Mark as key",
+  "@discMarkKey": {
+    "description": "Mobile discussions: Mark as key"
+  },
+  "discUnmarkKey": "Unmark as key",
+  "@discUnmarkKey": {
+    "description": "Mobile discussions: Unmark as key"
+  },
+  "discQuote": "Quote",
+  "@discQuote": {
+    "description": "Mobile discussions: Quote"
+  },
+  "discAnswer": "Answer",
+  "@discAnswer": {
+    "description": "Mobile discussions: Answer"
+  },
+  "discSend": "Send",
+  "@discSend": {
+    "description": "Mobile discussions: Send"
+  },
+  "discMessageHint": "Message the discussion…",
+  "@discMessageHint": {
+    "description": "Mobile discussions: Message the discussion…"
+  },
+  "discNoTarget": "Message only",
+  "@discNoTarget": {
+    "description": "Mobile discussions: Message only"
+  },
+  "discTarget": "Ask an agent",
+  "@discTarget": {
+    "description": "Mobile discussions: Ask an agent"
+  },
+  "discMention": "Mention a person",
+  "@discMention": {
+    "description": "Mobile discussions: Mention a person"
+  },
+  "discEarlier": "Load earlier messages",
+  "@discEarlier": {
+    "description": "Mobile discussions: Load earlier messages"
+  },
+  "discLater": "Load newer messages",
+  "@discLater": {
+    "description": "Mobile discussions: Load newer messages"
+  },
+  "discLatest": "Jump to latest",
+  "@discLatest": {
+    "description": "Mobile discussions: Jump to latest"
+  },
+  "discNewMessages": "New messages",
+  "@discNewMessages": {
+    "description": "Mobile discussions: New messages"
+  },
+  "discReadOnly": "This discussion is archived",
+  "@discReadOnly": {
+    "description": "Mobile discussions: This discussion is archived"
+  },
+  "discOffline": "Disconnected. Your draft is kept.",
+  "@discOffline": {
+    "description": "Mobile discussions: Disconnected. Your draft is kept."
+  },
+  "discPending": "Waiting for the host to approve",
+  "@discPending": {
+    "description": "Mobile discussions: Waiting for the host to approve"
+  },
+  "discRevoked": "You no longer have access to this discussion",
+  "@discRevoked": {
+    "description": "Mobile discussions: You no longer have access to this discussion"
+  },
+  "discPeople": "People",
+  "@discPeople": {
+    "description": "Mobile discussions: People"
+  },
+  "discShare": "Share on LAN",
+  "@discShare": {
+    "description": "Mobile discussions: Share on LAN"
+  },
+  "discUnshare": "Stop LAN sharing",
+  "@discUnshare": {
+    "description": "Mobile discussions: Stop LAN sharing"
+  },
+  "discInvite": "Create invitation",
+  "@discInvite": {
+    "description": "Mobile discussions: Create invitation"
+  },
+  "discLeave": "Leave discussion",
+  "@discLeave": {
+    "description": "Mobile discussions: Leave discussion"
+  },
+  "discApprove": "Approve",
+  "@discApprove": {
+    "description": "Mobile discussions: Approve"
+  },
+  "discReject": "Reject",
+  "@discReject": {
+    "description": "Mobile discussions: Reject"
+  },
+  "discRename": "Edit discussion",
+  "@discRename": {
+    "description": "Mobile discussions: Edit discussion"
+  },
+  "discArchive": "Archive",
+  "@discArchive": {
+    "description": "Mobile discussions: Archive"
+  },
+  "discRestore": "Restore",
+  "@discRestore": {
+    "description": "Mobile discussions: Restore"
+  },
+  "discConfirmAction": "Confirm this operation?",
+  "@discConfirmAction": {
+    "description": "Mobile discussions: Confirm this operation?"
+  },
+  "discStop": "Stop execution",
+  "@discStop": {
+    "description": "Mobile discussions: Stop execution"
+  },
+  "discConfirm": "Run in the same directory",
+  "@discConfirm": {
+    "description": "Mobile discussions: Run in the same directory"
+  },
+  "discIsolate": "Use an independent worktree",
+  "@discIsolate": {
+    "description": "Mobile discussions: Use an independent worktree"
+  },
+  "discAbandon": "Abandon and retry",
+  "@discAbandon": {
+    "description": "Mobile discussions: Abandon and retry"
+  },
+  "discAbandonWarning": "This request may already have changed files. Check its effects before starting it again.",
+  "@discAbandonWarning": {
+    "description": "Mobile discussions: This request may already have changed files. Check its effects before starting it again."
+  },
+  "discConcurrentWarning": "Another agent may be changing files in this directory. Continue only after checking for conflicts.",
+  "@discConcurrentWarning": {
+    "description": "Mobile discussions: Another agent may be changing files in this directory. Continue only after checking for conflicts."
+  },
+  "discOpenWorker": "Open worker terminal",
+  "@discOpenWorker": {
+    "description": "Mobile discussions: Open worker terminal"
+  },
+  "discAttachments": "Attachments",
+  "@discAttachments": {
+    "description": "Mobile discussions: Attachments"
+  },
+  "discAddFile": "Add a file",
+  "@discAddFile": {
+    "description": "Mobile discussions: Add a file"
+  },
+  "discAddPhoto": "Add a photo",
+  "@discAddPhoto": {
+    "description": "Mobile discussions: Add a photo"
+  },
+  "discFileLarge": "Each attachment must be 20 MiB or smaller",
+  "@discFileLarge": {
+    "description": "Mobile discussions: Each attachment must be 20 MiB or smaller"
+  },
+  "discFileLimit": "Up to 10 attachments per message",
+  "@discFileLimit": {
+    "description": "Mobile discussions: Up to 10 attachments per message"
+  },
+  "discDownloadError": "The attachment download was incomplete",
+  "@discDownloadError": {
+    "description": "Mobile discussions: The attachment download was incomplete"
+  },
+  "discUnknown": "The result is not confirmed. Retry the same request to avoid duplicates.",
+  "@discUnknown": {
+    "description": "Mobile discussions: The result is not confirmed. Retry the same request to avoid duplicates."
+  },
+  "discEditDraft": "Edit as a new message",
+  "@discEditDraft": {
+    "description": "Mobile discussions: Edit as a new message"
+  },
+  "discEditDraftWarning": "The previous message may already have been sent. Check the discussion before sending a new message.",
+  "@discEditDraftWarning": {
+    "description": "Mobile discussions: The previous message may already have been sent. Check the discussion before sending a new message."
+  },
+  "discUploading": "Uploading attachment…",
+  "@discUploading": {
+    "description": "Mobile discussions: Uploading attachment…"
+  },
+  "discSending": "Sending…",
+  "@discSending": {
+    "description": "Mobile discussions: Sending…"
+  },
+  "discOnline": "Online",
+  "@discOnline": {
+    "description": "Mobile discussions: Online"
+  },
+  "discPersonOffline": "Offline",
+  "@discPersonOffline": {
+    "description": "Mobile discussions: Offline"
+  },
+  "discNoMessages": "No messages yet",
+  "@discNoMessages": {
+    "description": "Mobile discussions: No messages yet"
+  },
+  "discUnread": "Unread",
+  "@discUnread": {
+    "description": "Mobile discussions: Unread"
+  },
+  "discWaiting": "Needs your answer",
+  "@discWaiting": {
+    "description": "Mobile discussions: Needs your answer"
+  },
+  "discStateQueued": "Queued",
+  "@discStateQueued": {
+    "description": "Mobile discussions: Queued"
+  },
+  "discStateHeld": "Needs confirmation",
+  "@discStateHeld": {
+    "description": "Mobile discussions: Needs confirmation"
+  },
+  "discStateBlocked": "Blocked",
+  "@discStateBlocked": {
+    "description": "Mobile discussions: Blocked"
+  },
+  "discStateStarting": "Starting",
+  "@discStateStarting": {
+    "description": "Mobile discussions: Starting"
+  },
+  "discStateRunning": "Running",
+  "@discStateRunning": {
+    "description": "Mobile discussions: Running"
+  },
+  "discStateWaiting": "Waiting for an answer",
+  "@discStateWaiting": {
+    "description": "Mobile discussions: Waiting for an answer"
+  },
+  "discStateDone": "Done",
+  "@discStateDone": {
+    "description": "Mobile discussions: Done"
+  },
+  "discStateFailed": "Failed",
+  "@discStateFailed": {
+    "description": "Mobile discussions: Failed"
+  },
+  "discStateInterrupted": "Interrupted",
+  "@discStateInterrupted": {
+    "description": "Mobile discussions: Interrupted"
+  },
+  "discStateStopped": "Stopped",
+  "@discStateStopped": {
+    "description": "Mobile discussions: Stopped"
+  },
+  "discStateCancelled": "Cancelled",
+  "@discStateCancelled": {
+    "description": "Mobile discussions: Cancelled"
+  },
+  "discStateClaimed": "Claimed",
+  "@discStateClaimed": {
+    "description": "Mobile discussions: Claimed"
+  },
+  "discStateRevoked": "Revoked",
+  "@discStateRevoked": {
+    "description": "Mobile discussions: Revoked"
+  },
+  "discDraftFilesExpired": "Select the attachment again to retry this message. Its request ID will be kept.",
+  "@discDraftFilesExpired": {
+    "description": "Mobile discussions: Select the attachment again to retry this message. Its request ID will be kept."
+  },
+  "discReport": "Read report",
+  "@discReport": {
+    "description": "Open the report attached to a discussion reply"
+  },
+  "discNewRequest": "Start a new request",
+  "discNewRequestWarning": "The previous request may already have added an agent or created a worktree. Check its result before starting again.",
+  "@discNewRequest": {
+    "description": "Discard an uncertain member form and explicitly start a new request"
+  },
+  "@discNewRequestWarning": {
+    "description": "Confirmation before replacing an uncertain member request"
   }
 }

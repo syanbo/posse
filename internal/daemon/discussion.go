@@ -545,7 +545,7 @@ func discError(err error) error {
 		return rpc.Errorf(rpc.CodeConflict, "you can only send requests to your own agents; @ the owner to ask them")
 	case errors.Is(err, store.ErrRevoked):
 		return rpc.Errorf(rpc.CodeConflict, "your access to this discussion was revoked")
-	case errors.Is(err, store.ErrConflict), errors.Is(err, store.ErrStaleRound), errors.Is(err, store.ErrNotAcked):
+	case errors.Is(err, store.ErrAddGone), errors.Is(err, store.ErrAddChanged), errors.Is(err, store.ErrConflict), errors.Is(err, store.ErrStaleRound), errors.Is(err, store.ErrNotAcked):
 		return rpc.Errorf(rpc.CodeConflict, "%v", err)
 	}
 	return err
@@ -893,13 +893,13 @@ type discMemberParams struct {
 	ClientID string `json:"clientId"`
 }
 
-// addWorkspace 是添加成员时的执行工作区。加入的讨论里要新建 worktree 时，记下它属于这次请求（请求 ID）：
+// addWorkspace 是添加成员时的执行工作区。带请求 ID 新建 worktree 时，记下它属于这次请求：
 // 房主没回应、用同一个请求 ID 重试时用回这个 worktree，不再建一次（同名目录已经在了会失败）；
 // 重试换了 worktree 名字报错，不接受别的同名目录；用户后来删了它，重试报错，不重建。
 // tree 是这次请求在本机已经有的 worktree 名字（出错时调用方据此告诉用户可以用同一个请求 ID 接着用它）。
 func (d *Daemon) addWorkspace(ctx context.Context, disc store.Discussion, p discMemberParams) (w store.Workspace, tree string, err error) {
 	name := strings.TrimSpace(p.Worktree)
-	if !disc.Mirror || name == "" {
+	if p.ClientID == "" || name == "" {
 		w, err = d.memberWorkspace(ctx, disc, p)
 		return w, "", err
 	}
@@ -1048,11 +1048,12 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 	}
 	m := store.Member{ID: store.NewID("dmb_") + store.NewID(""), Discussion: disc.Key, Name: p.Name, Role: strings.TrimSpace(p.Role), Agent: p.Agent,
 		Model: p.Model, Effort: p.Effort, WorkspaceID: w.ID, WorkspaceLabel: d.workspaceLabel(w), CreatedAt: time.Now(), Owner: id.ID}
-	if err := d.store.AddMember(m); err != nil {
-		return nil, discError(err)
+	memberID, _, err := d.store.AddMemberOnce(m, p.ClientID)
+	if err != nil {
+		return nil, addError(discError(err), p.ClientID, tree)
 	}
 	d.taskNotify()
-	return d.store.Member(m.ID)
+	return d.store.Member(memberID)
 }
 
 // addError 给添加失败的错误带上能接着重试的信息（Data）：房主结果未知（unknown，来自 rc.call）时，

@@ -15,6 +15,7 @@ const posseCapabilities = [
   'posse.git.v2',
   'posse.git.v3',
   'posse.history.v1',
+  'posse.discussions.v1',
   'posse.status.v1',
   'posse.draft.v1',
   'posse.usage.v1',
@@ -57,7 +58,8 @@ Uint8List rpcBytes(Object? value) {
 }
 
 class RpcException implements Exception {
-  RpcException(this.code, this.message);
+  RpcException(this.code, this.message, [this.data]);
+  final Object? data;
   final String code;
   final String message;
   @override
@@ -386,7 +388,7 @@ class PhoneRpc {
     final text = error is Map && error['message'] is String
         ? error['message'] as String
         : 'rpc failed';
-    return RpcException(code, text);
+    return RpcException(code, text, error is Map ? error['data'] : null);
   }
 
   void _closeBinary() {

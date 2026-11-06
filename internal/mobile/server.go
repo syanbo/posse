@@ -24,6 +24,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/projicon"
+	"posse/internal/rpc"
 )
 
 // DefaultPort 避开 Orca 的 6768：两边可以同时开着。
@@ -490,7 +491,14 @@ func (c *conn) replyOrFail(id string, res any, err error) {
 		return
 	}
 	var re *rpcError
+	var de *rpc.Error
 	switch {
+	case errors.As(err, &de):
+		if len(de.Data) > 0 {
+			c.failData(id, de.Code, de.Message, de.Data)
+		} else {
+			c.fail(id, de.Code, de.Message)
+		}
 	case errors.As(err, &re):
 		c.fail(id, re.code, re.msg)
 	case errors.Is(err, fs.ErrNotExist):
@@ -506,8 +514,16 @@ func (c *conn) stream(id string, result any) error {
 
 // fail 回一个失败的应答：错误码照旧给程序判断，说明按这条连接的语言给人看。
 func (c *conn) fail(id, code, msg string) error {
+	return c.failData(id, code, msg, nil)
+}
+
+func (c *conn) failData(id, code, msg string, data any) error {
 	msg = errtext.MessageIn(c.language(), msg)
-	return c.sendJSON(map[string]any{"id": id, "ok": false, "error": map[string]string{"code": code, "message": msg}})
+	detail := map[string]any{"code": code, "message": msg}
+	if data != nil {
+		detail["data"] = data
+	}
+	return c.sendJSON(map[string]any{"id": id, "ok": false, "error": detail})
 }
 
 func (c *conn) serve() {

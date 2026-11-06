@@ -398,6 +398,7 @@ func Run(ctx context.Context, cfg Config) error {
 	go d.agentLoop(ctx)
 	go d.detectLoop(ctx)
 	go d.discLoop(ctx)
+	go d.mobileStageLoop(ctx)
 	if in == nil {
 		d.startMobile()
 		d.collabStart(ctx)

@@ -42,6 +42,10 @@ String friendlyError(Object error, AppLocalizations l) {
     // 新版电脑端已经按手机的语言给说明；旧版只给英文，常见的错误码在这里认
     return switch (error.code) {
       'closed' => l.errorConnectionLost,
+      'discussion_file_large' => l.discFileLarge,
+      'discussion_download' => l.discDownloadError,
+      'discussion_reselect' => l.discDraftFilesExpired,
+      'discussion_file_limit' => l.discFileLimit,
       'method_not_found' || 'unknown_method' => l.errorOldDesktop,
       'binary_file' => l.errorBinaryFile,
       'file_too_large' => l.errorFileTooLarge,

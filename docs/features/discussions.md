@@ -117,3 +117,7 @@ tasks.discussion_id      讨论成员专用 worker 的任务属于哪个讨论�
 - 权限说明：连不上时系统不一定能区分没给「本地网络」权限和网络不通，界面给合并的排查提示，不猜原因。Bonjour 发现没有做（等两台真实 Mac 的权限试验），只靠粘贴邀请。
 
 CLI：`posse discussion share | invite | people | approve | reject | remove-person | join | leave | resume`、`discussion post --mention`、`discussion retry --abandon`、`posse collab status | name | quota`。界面：讨论页顶栏「加入讨论…」，更多菜单「在局域网分享…」「邀请…」「退出讨论…」，右栏「参与的人」（申请的批准、拒绝，在线状态，房主右键移出），加入的讨论在输入区上面写明等批准、离线、被移除。
+
+## 手机端
+
+已配对的手机可从首页「讨论」操作这台电脑的本机及多人讨论，身份与这台电脑相同，沿用拥有者和房主权限。消息、成员、执行及协作操作复用原有处理函数，不增加调度器或手机协作身份。手机附件通过按设备隔离的暂存凭据接入；消息分页、草稿、已读和断线重试的行为见 [手机端说明](mobile.md#讨论)。

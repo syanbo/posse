@@ -2101,4 +2101,298 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get workspaceTabHistory => '历史';
+
+  @override
+  String get discTitle => '讨论';
+
+  @override
+  String get discNew => '新建讨论';
+
+  @override
+  String get discJoin => '加入讨论';
+
+  @override
+  String get discEmpty => '还没有讨论';
+
+  @override
+  String get discArchived => '已归档';
+
+  @override
+  String get discActive => '进行中';
+
+  @override
+  String get discName => '名称';
+
+  @override
+  String get discDescription => '说明';
+
+  @override
+  String get discWorkspace => '这台电脑的工作区';
+
+  @override
+  String get discSave => '保存';
+
+  @override
+  String get discCancel => '取消';
+
+  @override
+  String get discRetry => '重试';
+
+  @override
+  String get discClose => '关闭';
+
+  @override
+  String get discInviteCode => '邀请';
+
+  @override
+  String get discSearch => '搜索消息';
+
+  @override
+  String get discDetails => '讨论详情';
+
+  @override
+  String get discMembers => 'Agent 成员';
+
+  @override
+  String get discAddMember => '添加 Agent';
+
+  @override
+  String get discRole => '职责';
+
+  @override
+  String get discAgent => 'Agent';
+
+  @override
+  String get discModel => '模型（留空用默认）';
+
+  @override
+  String get discEffort => '思考深度（留空用默认）';
+
+  @override
+  String get discNewWorktree => '新建 worktree 名称（可选）';
+
+  @override
+  String get discBase => '基准分支（可选）';
+
+  @override
+  String get discApplyNow => '用这些设置重启 worker';
+
+  @override
+  String get discRemove => '移除';
+
+  @override
+  String get discRestart => '重新启动并继续';
+
+  @override
+  String get discResume => '继续已领取的请求';
+
+  @override
+  String get discOwner => '拥有者';
+
+  @override
+  String get discKey => '关键消息';
+
+  @override
+  String get discMarkKey => '标为关键';
+
+  @override
+  String get discUnmarkKey => '取消关键标记';
+
+  @override
+  String get discQuote => '引用';
+
+  @override
+  String get discAnswer => '回答';
+
+  @override
+  String get discSend => '发送';
+
+  @override
+  String get discMessageHint => '在讨论中发言…';
+
+  @override
+  String get discNoTarget => '普通发言';
+
+  @override
+  String get discTarget => '@ Agent 执行';
+
+  @override
+  String get discMention => '提醒参与者';
+
+  @override
+  String get discEarlier => '加载更早的消息';
+
+  @override
+  String get discLater => '加载更新的消息';
+
+  @override
+  String get discLatest => '跳到最新';
+
+  @override
+  String get discNewMessages => '有新消息';
+
+  @override
+  String get discReadOnly => '此讨论已归档，只能阅读';
+
+  @override
+  String get discOffline => '连接已断开，草稿已保留。';
+
+  @override
+  String get discPending => '等待房主批准';
+
+  @override
+  String get discRevoked => '你已无法参与此讨论';
+
+  @override
+  String get discPeople => '参与的人';
+
+  @override
+  String get discShare => '在局域网分享';
+
+  @override
+  String get discUnshare => '停止局域网分享';
+
+  @override
+  String get discInvite => '生成邀请';
+
+  @override
+  String get discLeave => '退出讨论';
+
+  @override
+  String get discApprove => '批准';
+
+  @override
+  String get discReject => '拒绝';
+
+  @override
+  String get discRename => '编辑讨论';
+
+  @override
+  String get discArchive => '归档';
+
+  @override
+  String get discRestore => '恢复';
+
+  @override
+  String get discConfirmAction => '确认执行此操作？';
+
+  @override
+  String get discStop => '停止执行';
+
+  @override
+  String get discConfirm => '仍在同一目录执行';
+
+  @override
+  String get discIsolate => '改用独立 worktree';
+
+  @override
+  String get discAbandon => '放弃并重新发起';
+
+  @override
+  String get discAbandonWarning => '这一轮可能已修改文件。请核实已有影响，再重新发起。';
+
+  @override
+  String get discConcurrentWarning => '其他 Agent 可能正在修改此目录的文件，请确认不会冲突后继续。';
+
+  @override
+  String get discOpenWorker => '打开 worker 终端';
+
+  @override
+  String get discAttachments => '附件';
+
+  @override
+  String get discAddFile => '添加文件';
+
+  @override
+  String get discAddPhoto => '添加图片';
+
+  @override
+  String get discFileLarge => '每个附件不能超过 20 MiB';
+
+  @override
+  String get discFileLimit => '每条消息最多 10 个附件';
+
+  @override
+  String get discDownloadError => '附件未下载完整';
+
+  @override
+  String get discUnknown => '结果尚未确认。请重试同一请求，避免重复操作。';
+
+  @override
+  String get discEditDraft => '作为新消息编辑';
+
+  @override
+  String get discEditDraftWarning => '上一条消息可能已经发出。请先查看讨论，再发送新消息。';
+
+  @override
+  String get discUploading => '正在上传附件…';
+
+  @override
+  String get discSending => '正在发送…';
+
+  @override
+  String get discOnline => '在线';
+
+  @override
+  String get discPersonOffline => '离线';
+
+  @override
+  String get discNoMessages => '还没有消息';
+
+  @override
+  String get discUnread => '未读';
+
+  @override
+  String get discWaiting => '等待你回答';
+
+  @override
+  String get discStateQueued => '排队中';
+
+  @override
+  String get discStateHeld => '等待确认';
+
+  @override
+  String get discStateBlocked => '受阻';
+
+  @override
+  String get discStateStarting => '启动中';
+
+  @override
+  String get discStateRunning => '执行中';
+
+  @override
+  String get discStateWaiting => '等待回答';
+
+  @override
+  String get discStateDone => '已完成';
+
+  @override
+  String get discStateFailed => '失败';
+
+  @override
+  String get discStateInterrupted => '已中断';
+
+  @override
+  String get discStateStopped => '已停止';
+
+  @override
+  String get discStateCancelled => '已取消';
+
+  @override
+  String get discStateClaimed => '已领取';
+
+  @override
+  String get discStateRevoked => '资格已撤销';
+
+  @override
+  String get discDraftFilesExpired => '请重新选择附件后重试，消息请求 ID 会保留。';
+
+  @override
+  String get discReport => '查看汇报文件';
+
+  @override
+  String get discNewRequest => '重新填写';
+
+  @override
+  String get discNewRequestWarning => '上一次请求可能已经添加成员或创建 worktree。请核实结果后再发起新请求。';
 }

@@ -2230,4 +2230,304 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get workspaceTabHistory => 'History';
+
+  @override
+  String get discTitle => 'Discussions';
+
+  @override
+  String get discNew => 'New discussion';
+
+  @override
+  String get discJoin => 'Join discussion';
+
+  @override
+  String get discEmpty => 'No discussions yet';
+
+  @override
+  String get discArchived => 'Archived';
+
+  @override
+  String get discActive => 'Active';
+
+  @override
+  String get discName => 'Name';
+
+  @override
+  String get discDescription => 'Description';
+
+  @override
+  String get discWorkspace => 'Workspace on this computer';
+
+  @override
+  String get discSave => 'Save';
+
+  @override
+  String get discCancel => 'Cancel';
+
+  @override
+  String get discRetry => 'Retry';
+
+  @override
+  String get discClose => 'Close';
+
+  @override
+  String get discInviteCode => 'Invitation';
+
+  @override
+  String get discSearch => 'Search messages';
+
+  @override
+  String get discDetails => 'Discussion details';
+
+  @override
+  String get discMembers => 'Agents';
+
+  @override
+  String get discAddMember => 'Add agent';
+
+  @override
+  String get discRole => 'Role';
+
+  @override
+  String get discAgent => 'Agent';
+
+  @override
+  String get discModel => 'Model (blank for default)';
+
+  @override
+  String get discEffort => 'Reasoning effort (blank for default)';
+
+  @override
+  String get discNewWorktree => 'New worktree name (optional)';
+
+  @override
+  String get discBase => 'Base branch (optional)';
+
+  @override
+  String get discApplyNow => 'Restart worker with these settings';
+
+  @override
+  String get discRemove => 'Remove';
+
+  @override
+  String get discRestart => 'Restart and continue';
+
+  @override
+  String get discResume => 'Continue queued requests';
+
+  @override
+  String get discOwner => 'Owner';
+
+  @override
+  String get discKey => 'Key messages';
+
+  @override
+  String get discMarkKey => 'Mark as key';
+
+  @override
+  String get discUnmarkKey => 'Unmark as key';
+
+  @override
+  String get discQuote => 'Quote';
+
+  @override
+  String get discAnswer => 'Answer';
+
+  @override
+  String get discSend => 'Send';
+
+  @override
+  String get discMessageHint => 'Message the discussion…';
+
+  @override
+  String get discNoTarget => 'Message only';
+
+  @override
+  String get discTarget => 'Ask an agent';
+
+  @override
+  String get discMention => 'Mention a person';
+
+  @override
+  String get discEarlier => 'Load earlier messages';
+
+  @override
+  String get discLater => 'Load newer messages';
+
+  @override
+  String get discLatest => 'Jump to latest';
+
+  @override
+  String get discNewMessages => 'New messages';
+
+  @override
+  String get discReadOnly => 'This discussion is archived';
+
+  @override
+  String get discOffline => 'Disconnected. Your draft is kept.';
+
+  @override
+  String get discPending => 'Waiting for the host to approve';
+
+  @override
+  String get discRevoked => 'You no longer have access to this discussion';
+
+  @override
+  String get discPeople => 'People';
+
+  @override
+  String get discShare => 'Share on LAN';
+
+  @override
+  String get discUnshare => 'Stop LAN sharing';
+
+  @override
+  String get discInvite => 'Create invitation';
+
+  @override
+  String get discLeave => 'Leave discussion';
+
+  @override
+  String get discApprove => 'Approve';
+
+  @override
+  String get discReject => 'Reject';
+
+  @override
+  String get discRename => 'Edit discussion';
+
+  @override
+  String get discArchive => 'Archive';
+
+  @override
+  String get discRestore => 'Restore';
+
+  @override
+  String get discConfirmAction => 'Confirm this operation?';
+
+  @override
+  String get discStop => 'Stop execution';
+
+  @override
+  String get discConfirm => 'Run in the same directory';
+
+  @override
+  String get discIsolate => 'Use an independent worktree';
+
+  @override
+  String get discAbandon => 'Abandon and retry';
+
+  @override
+  String get discAbandonWarning =>
+      'This request may already have changed files. Check its effects before starting it again.';
+
+  @override
+  String get discConcurrentWarning =>
+      'Another agent may be changing files in this directory. Continue only after checking for conflicts.';
+
+  @override
+  String get discOpenWorker => 'Open worker terminal';
+
+  @override
+  String get discAttachments => 'Attachments';
+
+  @override
+  String get discAddFile => 'Add a file';
+
+  @override
+  String get discAddPhoto => 'Add a photo';
+
+  @override
+  String get discFileLarge => 'Each attachment must be 20 MiB or smaller';
+
+  @override
+  String get discFileLimit => 'Up to 10 attachments per message';
+
+  @override
+  String get discDownloadError => 'The attachment download was incomplete';
+
+  @override
+  String get discUnknown =>
+      'The result is not confirmed. Retry the same request to avoid duplicates.';
+
+  @override
+  String get discEditDraft => 'Edit as a new message';
+
+  @override
+  String get discEditDraftWarning =>
+      'The previous message may already have been sent. Check the discussion before sending a new message.';
+
+  @override
+  String get discUploading => 'Uploading attachment…';
+
+  @override
+  String get discSending => 'Sending…';
+
+  @override
+  String get discOnline => 'Online';
+
+  @override
+  String get discPersonOffline => 'Offline';
+
+  @override
+  String get discNoMessages => 'No messages yet';
+
+  @override
+  String get discUnread => 'Unread';
+
+  @override
+  String get discWaiting => 'Needs your answer';
+
+  @override
+  String get discStateQueued => 'Queued';
+
+  @override
+  String get discStateHeld => 'Needs confirmation';
+
+  @override
+  String get discStateBlocked => 'Blocked';
+
+  @override
+  String get discStateStarting => 'Starting';
+
+  @override
+  String get discStateRunning => 'Running';
+
+  @override
+  String get discStateWaiting => 'Waiting for an answer';
+
+  @override
+  String get discStateDone => 'Done';
+
+  @override
+  String get discStateFailed => 'Failed';
+
+  @override
+  String get discStateInterrupted => 'Interrupted';
+
+  @override
+  String get discStateStopped => 'Stopped';
+
+  @override
+  String get discStateCancelled => 'Cancelled';
+
+  @override
+  String get discStateClaimed => 'Claimed';
+
+  @override
+  String get discStateRevoked => 'Revoked';
+
+  @override
+  String get discDraftFilesExpired =>
+      'Select the attachment again to retry this message. Its request ID will be kept.';
+
+  @override
+  String get discReport => 'Read report';
+
+  @override
+  String get discNewRequest => 'Start a new request';
+
+  @override
+  String get discNewRequestWarning =>
+      'The previous request may already have added an agent or created a worktree. Check its result before starting again.';
 }

@@ -3661,6 +3661,594 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'History'**
   String get workspaceTabHistory;
+
+  /// Mobile discussions: Discussions
+  ///
+  /// In en, this message translates to:
+  /// **'Discussions'**
+  String get discTitle;
+
+  /// Mobile discussions: New discussion
+  ///
+  /// In en, this message translates to:
+  /// **'New discussion'**
+  String get discNew;
+
+  /// Mobile discussions: Join discussion
+  ///
+  /// In en, this message translates to:
+  /// **'Join discussion'**
+  String get discJoin;
+
+  /// Mobile discussions: No discussions yet
+  ///
+  /// In en, this message translates to:
+  /// **'No discussions yet'**
+  String get discEmpty;
+
+  /// Mobile discussions: Archived
+  ///
+  /// In en, this message translates to:
+  /// **'Archived'**
+  String get discArchived;
+
+  /// Mobile discussions: Active
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get discActive;
+
+  /// Mobile discussions: Name
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get discName;
+
+  /// Mobile discussions: Description
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get discDescription;
+
+  /// Mobile discussions: Workspace on this computer
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace on this computer'**
+  String get discWorkspace;
+
+  /// Mobile discussions: Save
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get discSave;
+
+  /// Mobile discussions: Cancel
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get discCancel;
+
+  /// Mobile discussions: Retry
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get discRetry;
+
+  /// Mobile discussions: Close
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get discClose;
+
+  /// Mobile discussions: Invitation
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation'**
+  String get discInviteCode;
+
+  /// Mobile discussions: Search messages
+  ///
+  /// In en, this message translates to:
+  /// **'Search messages'**
+  String get discSearch;
+
+  /// Mobile discussions: Discussion details
+  ///
+  /// In en, this message translates to:
+  /// **'Discussion details'**
+  String get discDetails;
+
+  /// Mobile discussions: Agents
+  ///
+  /// In en, this message translates to:
+  /// **'Agents'**
+  String get discMembers;
+
+  /// Mobile discussions: Add agent
+  ///
+  /// In en, this message translates to:
+  /// **'Add agent'**
+  String get discAddMember;
+
+  /// Mobile discussions: Role
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get discRole;
+
+  /// Mobile discussions: Agent
+  ///
+  /// In en, this message translates to:
+  /// **'Agent'**
+  String get discAgent;
+
+  /// Mobile discussions: Model (blank for default)
+  ///
+  /// In en, this message translates to:
+  /// **'Model (blank for default)'**
+  String get discModel;
+
+  /// Mobile discussions: Reasoning effort (blank for default)
+  ///
+  /// In en, this message translates to:
+  /// **'Reasoning effort (blank for default)'**
+  String get discEffort;
+
+  /// Mobile discussions: New worktree name (optional)
+  ///
+  /// In en, this message translates to:
+  /// **'New worktree name (optional)'**
+  String get discNewWorktree;
+
+  /// Mobile discussions: Base branch (optional)
+  ///
+  /// In en, this message translates to:
+  /// **'Base branch (optional)'**
+  String get discBase;
+
+  /// Mobile discussions: Restart worker with these settings
+  ///
+  /// In en, this message translates to:
+  /// **'Restart worker with these settings'**
+  String get discApplyNow;
+
+  /// Mobile discussions: Remove
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get discRemove;
+
+  /// Mobile discussions: Restart and continue
+  ///
+  /// In en, this message translates to:
+  /// **'Restart and continue'**
+  String get discRestart;
+
+  /// Mobile discussions: Continue queued requests
+  ///
+  /// In en, this message translates to:
+  /// **'Continue queued requests'**
+  String get discResume;
+
+  /// Mobile discussions: Owner
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get discOwner;
+
+  /// Mobile discussions: Key messages
+  ///
+  /// In en, this message translates to:
+  /// **'Key messages'**
+  String get discKey;
+
+  /// Mobile discussions: Mark as key
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as key'**
+  String get discMarkKey;
+
+  /// Mobile discussions: Unmark as key
+  ///
+  /// In en, this message translates to:
+  /// **'Unmark as key'**
+  String get discUnmarkKey;
+
+  /// Mobile discussions: Quote
+  ///
+  /// In en, this message translates to:
+  /// **'Quote'**
+  String get discQuote;
+
+  /// Mobile discussions: Answer
+  ///
+  /// In en, this message translates to:
+  /// **'Answer'**
+  String get discAnswer;
+
+  /// Mobile discussions: Send
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get discSend;
+
+  /// Mobile discussions: Message the discussion…
+  ///
+  /// In en, this message translates to:
+  /// **'Message the discussion…'**
+  String get discMessageHint;
+
+  /// Mobile discussions: Message only
+  ///
+  /// In en, this message translates to:
+  /// **'Message only'**
+  String get discNoTarget;
+
+  /// Mobile discussions: Ask an agent
+  ///
+  /// In en, this message translates to:
+  /// **'Ask an agent'**
+  String get discTarget;
+
+  /// Mobile discussions: Mention a person
+  ///
+  /// In en, this message translates to:
+  /// **'Mention a person'**
+  String get discMention;
+
+  /// Mobile discussions: Load earlier messages
+  ///
+  /// In en, this message translates to:
+  /// **'Load earlier messages'**
+  String get discEarlier;
+
+  /// Mobile discussions: Load newer messages
+  ///
+  /// In en, this message translates to:
+  /// **'Load newer messages'**
+  String get discLater;
+
+  /// Mobile discussions: Jump to latest
+  ///
+  /// In en, this message translates to:
+  /// **'Jump to latest'**
+  String get discLatest;
+
+  /// Mobile discussions: New messages
+  ///
+  /// In en, this message translates to:
+  /// **'New messages'**
+  String get discNewMessages;
+
+  /// Mobile discussions: This discussion is archived
+  ///
+  /// In en, this message translates to:
+  /// **'This discussion is archived'**
+  String get discReadOnly;
+
+  /// Mobile discussions: Disconnected. Your draft is kept.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected. Your draft is kept.'**
+  String get discOffline;
+
+  /// Mobile discussions: Waiting for the host to approve
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the host to approve'**
+  String get discPending;
+
+  /// Mobile discussions: You no longer have access to this discussion
+  ///
+  /// In en, this message translates to:
+  /// **'You no longer have access to this discussion'**
+  String get discRevoked;
+
+  /// Mobile discussions: People
+  ///
+  /// In en, this message translates to:
+  /// **'People'**
+  String get discPeople;
+
+  /// Mobile discussions: Share on LAN
+  ///
+  /// In en, this message translates to:
+  /// **'Share on LAN'**
+  String get discShare;
+
+  /// Mobile discussions: Stop LAN sharing
+  ///
+  /// In en, this message translates to:
+  /// **'Stop LAN sharing'**
+  String get discUnshare;
+
+  /// Mobile discussions: Create invitation
+  ///
+  /// In en, this message translates to:
+  /// **'Create invitation'**
+  String get discInvite;
+
+  /// Mobile discussions: Leave discussion
+  ///
+  /// In en, this message translates to:
+  /// **'Leave discussion'**
+  String get discLeave;
+
+  /// Mobile discussions: Approve
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get discApprove;
+
+  /// Mobile discussions: Reject
+  ///
+  /// In en, this message translates to:
+  /// **'Reject'**
+  String get discReject;
+
+  /// Mobile discussions: Edit discussion
+  ///
+  /// In en, this message translates to:
+  /// **'Edit discussion'**
+  String get discRename;
+
+  /// Mobile discussions: Archive
+  ///
+  /// In en, this message translates to:
+  /// **'Archive'**
+  String get discArchive;
+
+  /// Mobile discussions: Restore
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get discRestore;
+
+  /// Mobile discussions: Confirm this operation?
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm this operation?'**
+  String get discConfirmAction;
+
+  /// Mobile discussions: Stop execution
+  ///
+  /// In en, this message translates to:
+  /// **'Stop execution'**
+  String get discStop;
+
+  /// Mobile discussions: Run in the same directory
+  ///
+  /// In en, this message translates to:
+  /// **'Run in the same directory'**
+  String get discConfirm;
+
+  /// Mobile discussions: Use an independent worktree
+  ///
+  /// In en, this message translates to:
+  /// **'Use an independent worktree'**
+  String get discIsolate;
+
+  /// Mobile discussions: Abandon and retry
+  ///
+  /// In en, this message translates to:
+  /// **'Abandon and retry'**
+  String get discAbandon;
+
+  /// Mobile discussions: This request may already have changed files. Check its effects before starting it again.
+  ///
+  /// In en, this message translates to:
+  /// **'This request may already have changed files. Check its effects before starting it again.'**
+  String get discAbandonWarning;
+
+  /// Mobile discussions: Another agent may be changing files in this directory. Continue only after checking for conflicts.
+  ///
+  /// In en, this message translates to:
+  /// **'Another agent may be changing files in this directory. Continue only after checking for conflicts.'**
+  String get discConcurrentWarning;
+
+  /// Mobile discussions: Open worker terminal
+  ///
+  /// In en, this message translates to:
+  /// **'Open worker terminal'**
+  String get discOpenWorker;
+
+  /// Mobile discussions: Attachments
+  ///
+  /// In en, this message translates to:
+  /// **'Attachments'**
+  String get discAttachments;
+
+  /// Mobile discussions: Add a file
+  ///
+  /// In en, this message translates to:
+  /// **'Add a file'**
+  String get discAddFile;
+
+  /// Mobile discussions: Add a photo
+  ///
+  /// In en, this message translates to:
+  /// **'Add a photo'**
+  String get discAddPhoto;
+
+  /// Mobile discussions: Each attachment must be 20 MiB or smaller
+  ///
+  /// In en, this message translates to:
+  /// **'Each attachment must be 20 MiB or smaller'**
+  String get discFileLarge;
+
+  /// Mobile discussions: Up to 10 attachments per message
+  ///
+  /// In en, this message translates to:
+  /// **'Up to 10 attachments per message'**
+  String get discFileLimit;
+
+  /// Mobile discussions: The attachment download was incomplete
+  ///
+  /// In en, this message translates to:
+  /// **'The attachment download was incomplete'**
+  String get discDownloadError;
+
+  /// Mobile discussions: The result is not confirmed. Retry the same request to avoid duplicates.
+  ///
+  /// In en, this message translates to:
+  /// **'The result is not confirmed. Retry the same request to avoid duplicates.'**
+  String get discUnknown;
+
+  /// Mobile discussions: Edit as a new message
+  ///
+  /// In en, this message translates to:
+  /// **'Edit as a new message'**
+  String get discEditDraft;
+
+  /// Mobile discussions: The previous message may already have been sent. Check the discussion before sending a new message.
+  ///
+  /// In en, this message translates to:
+  /// **'The previous message may already have been sent. Check the discussion before sending a new message.'**
+  String get discEditDraftWarning;
+
+  /// Mobile discussions: Uploading attachment…
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading attachment…'**
+  String get discUploading;
+
+  /// Mobile discussions: Sending…
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get discSending;
+
+  /// Mobile discussions: Online
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get discOnline;
+
+  /// Mobile discussions: Offline
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get discPersonOffline;
+
+  /// Mobile discussions: No messages yet
+  ///
+  /// In en, this message translates to:
+  /// **'No messages yet'**
+  String get discNoMessages;
+
+  /// Mobile discussions: Unread
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get discUnread;
+
+  /// Mobile discussions: Needs your answer
+  ///
+  /// In en, this message translates to:
+  /// **'Needs your answer'**
+  String get discWaiting;
+
+  /// Mobile discussions: Queued
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get discStateQueued;
+
+  /// Mobile discussions: Needs confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Needs confirmation'**
+  String get discStateHeld;
+
+  /// Mobile discussions: Blocked
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked'**
+  String get discStateBlocked;
+
+  /// Mobile discussions: Starting
+  ///
+  /// In en, this message translates to:
+  /// **'Starting'**
+  String get discStateStarting;
+
+  /// Mobile discussions: Running
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get discStateRunning;
+
+  /// Mobile discussions: Waiting for an answer
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for an answer'**
+  String get discStateWaiting;
+
+  /// Mobile discussions: Done
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get discStateDone;
+
+  /// Mobile discussions: Failed
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get discStateFailed;
+
+  /// Mobile discussions: Interrupted
+  ///
+  /// In en, this message translates to:
+  /// **'Interrupted'**
+  String get discStateInterrupted;
+
+  /// Mobile discussions: Stopped
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get discStateStopped;
+
+  /// Mobile discussions: Cancelled
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get discStateCancelled;
+
+  /// Mobile discussions: Claimed
+  ///
+  /// In en, this message translates to:
+  /// **'Claimed'**
+  String get discStateClaimed;
+
+  /// Mobile discussions: Revoked
+  ///
+  /// In en, this message translates to:
+  /// **'Revoked'**
+  String get discStateRevoked;
+
+  /// Mobile discussions: Select the attachment again to retry this message. Its request ID will be kept.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the attachment again to retry this message. Its request ID will be kept.'**
+  String get discDraftFilesExpired;
+
+  /// Open the report attached to a discussion reply
+  ///
+  /// In en, this message translates to:
+  /// **'Read report'**
+  String get discReport;
+
+  /// Discard an uncertain member form and explicitly start a new request
+  ///
+  /// In en, this message translates to:
+  /// **'Start a new request'**
+  String get discNewRequest;
+
+  /// Confirmation before replacing an uncertain member request
+  ///
+  /// In en, this message translates to:
+  /// **'The previous request may already have added an agent or created a worktree. Check its result before starting again.'**
+  String get discNewRequestWarning;
 }
 
 class _AppLocalizationsDelegate
