@@ -651,7 +651,6 @@
   "discRename": "编辑讨论",
   "discArchive": "归档",
   "discRestore": "恢复",
-  "discConfirmAction": "确认执行此操作？",
   "discStop": "停止执行",
   "discConfirm": "仍在同一目录执行",
   "discIsolate": "改用独立 worktree",
@@ -691,5 +690,19 @@
   "discDraftFilesExpired": "请重新选择附件后重试，消息请求 ID 会保留。",
   "discReport": "查看汇报文件",
   "discNewRequest": "重新填写",
-  "discNewRequestWarning": "上一次请求可能已经添加成员或创建 worktree。请核实结果后再发起新请求。"
+  "discNewRequestWarning": "上一次请求可能已经添加成员或创建 worktree。请核实结果后再发起新请求。",
+  "discAtOthersAgent": "提醒 {owner} 安排",
+  "discAtYou": "@你",
+  "discAccessLabel": "谁能 @ 它",
+  "discAccessOnlyMe": "只有我",
+  "discAccessAll": "所有人",
+  "discAccessSome": "指定的人",
+  "discAccessNobody": "还没有别人加入。",
+  "discAccessEveryone": "所有人都能 @ 它",
+  "discAccessPeople": "{names} 能 @ 它",
+  "discYou": "你",
+  "discHost": "房主",
+  "discCopy": "复制",
+  "discEdit": "编辑",
+  "discOnComputer": "在 {name} 的电脑上"
 }

@@ -4004,12 +4004,6 @@ abstract class AppLocalizations {
   /// **'Restore'**
   String get discRestore;
 
-  /// Mobile discussions: Confirm this operation?
-  ///
-  /// In en, this message translates to:
-  /// **'Confirm this operation?'**
-  String get discConfirmAction;
-
   /// Mobile discussions: Stop execution
   ///
   /// In en, this message translates to:
@@ -4249,6 +4243,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The previous request may already have added an agent or created a worktree. Check its result before starting again.'**
   String get discNewRequestWarning;
+
+  /// Mobile discussions: @ candidate for someone else's agent you can't use; picking it reminds its owner
+  ///
+  /// In en, this message translates to:
+  /// **'Asks {owner}'**
+  String discAtOthersAgent(String owner);
+
+  /// Mobile discussions: list badge when someone mentioned you
+  ///
+  /// In en, this message translates to:
+  /// **'@You'**
+  String get discAtYou;
+
+  /// Mobile discussions: member form, who may send requests to this agent
+  ///
+  /// In en, this message translates to:
+  /// **'Who can @ it'**
+  String get discAccessLabel;
+
+  /// Mobile discussions: access option
+  ///
+  /// In en, this message translates to:
+  /// **'Only me'**
+  String get discAccessOnlyMe;
+
+  /// Mobile discussions: access option
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get discAccessAll;
+
+  /// Mobile discussions: access option
+  ///
+  /// In en, this message translates to:
+  /// **'Specific people'**
+  String get discAccessSome;
+
+  /// Mobile discussions: access option has no people to pick
+  ///
+  /// In en, this message translates to:
+  /// **'No one else has joined yet.'**
+  String get discAccessNobody;
+
+  /// Mobile discussions: member subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone can @ it'**
+  String get discAccessEveryone;
+
+  /// Mobile discussions: member subtitle listing people allowed to use the agent
+  ///
+  /// In en, this message translates to:
+  /// **'{names} can @ it'**
+  String discAccessPeople(String names);
+
+  /// Mobile discussions: marks yourself in the people list
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get discYou;
+
+  /// Mobile discussions: marks the host in the people list
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get discHost;
+
+  /// Mobile discussions: copy a message's text
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get discCopy;
+
+  /// Mobile discussions: edit an agent member
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get discEdit;
+
+  /// Mobile discussions: member subtitle for someone else's agent
+  ///
+  /// In en, this message translates to:
+  /// **'On {name}\'s computer'**
+  String discOnComputer(String name);
 }
 
 class _AppLocalizationsDelegate

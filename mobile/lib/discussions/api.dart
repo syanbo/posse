@@ -128,3 +128,53 @@ class DiscussionStorage {
     await prefs.setString(key, jsonEncode(value));
   }
 }
+
+class DiscThumb {
+  DiscThumb(this.bytes, this.width, this.height);
+  final Uint8List bytes;
+  final int width, height;
+}
+
+/// 讨论页里图片附件的缩略图：只留最近的几十张，同一张只要一次。
+/// 旧电脑没有缩略图接口、图片还没同步到、解不开时给 null，消息里换成文件条。
+class DiscThumbs {
+  DiscThumbs(this.api);
+  final DiscussionApi api;
+  static const keep = 40;
+  final _cache = <String, Future<DiscThumb?>>{};
+
+  Future<DiscThumb?> get(String room, String message, String attachment) {
+    final key = '$message/$attachment';
+    final hit = _cache.remove(key);
+    if (hit != null) return _cache[key] = hit;
+    final next = _load(room, message, attachment);
+    _cache[key] = next;
+    while (_cache.length > keep) {
+      _cache.remove(_cache.keys.first);
+    }
+    // 一时没取到（断线、还没同步）的不留，下次进来再试
+    next.then((v) {
+      if (v == null) _cache.remove(key);
+    });
+    return next;
+  }
+
+  Future<DiscThumb?> _load(
+    String room,
+    String message,
+    String attachment,
+  ) async {
+    try {
+      final r = await api.call('attachment.thumb', {
+        'discussion': room,
+        'message': message,
+        'attachment': attachment,
+      });
+      final bytes = rpcBytes(r['content']);
+      if (bytes.isEmpty) return null;
+      return DiscThumb(bytes, discInt(r, 'width'), discInt(r, 'height'));
+    } catch (_) {
+      return null;
+    }
+  }
+}

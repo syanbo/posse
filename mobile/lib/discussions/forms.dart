@@ -7,6 +7,7 @@ import '../workspace/models.dart';
 import '../app_state.dart';
 import '../protocol/rpc.dart';
 import '../l10n/l10n.dart';
+import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/workspace.dart';
 import 'api.dart';
@@ -23,6 +24,7 @@ Future<DiscJson?> discussionForm(
   bool agent = false,
   bool applyNow = false,
   String? project,
+  List<DiscJson>? people,
 }) => showPosseDialog<DiscJson>(
   context: context,
   builder: (_) => _DiscussionForm(
@@ -35,6 +37,7 @@ Future<DiscJson?> discussionForm(
     agent: agent,
     applyNow: applyNow,
     project: project,
+    people: people,
   ),
 );
 
@@ -49,6 +52,7 @@ class _DiscussionForm extends StatefulWidget {
     required this.agent,
     required this.applyNow,
     this.project,
+    this.people,
   });
   final DiscussionApi api;
   final String title, method;
@@ -56,6 +60,9 @@ class _DiscussionForm extends StatefulWidget {
   final DiscJson params;
   final Map<String, String> fields;
   final bool workspace, agent, applyNow;
+
+  /// 不为空时（协作讨论里的 Agent）表单里有「谁能 @ 它」，可选的是讨论里的别人。
+  final List<DiscJson>? people;
   @override
   State<_DiscussionForm> createState() => _DiscussionFormState();
 }
@@ -68,6 +75,16 @@ class _DiscussionFormState extends State<_DiscussionForm> {
   late String workspace = discText(widget.params, 'workspace');
   late String agent = discText(widget.params, 'agent');
   bool applyNow = false;
+  late String accessValue = discText(widget.params, 'access');
+  late int access = switch (accessValue) {
+    '' => 0,
+    'all' => 1,
+    _ => 2,
+  };
+  late final picked = {
+    for (final fp in accessValue.split(','))
+      if (fp.isNotEmpty && fp != 'all') fp,
+  };
   bool busy = false;
   DiscJson? request;
   Object? error;
@@ -112,6 +129,15 @@ class _DiscussionFormState extends State<_DiscussionForm> {
         workspace = discText(request!, 'workspace');
         agent = discText(request!, 'agent');
         applyNow = request!['applyNow'] == true;
+        final was = discText(request!, 'access');
+        access = was.isEmpty
+            ? 0
+            : was == 'all'
+            ? 1
+            : 2;
+        picked
+          ..clear()
+          ..addAll(was.split(',').where((fp) => fp.isNotEmpty && fp != 'all'));
         uncertain = true;
         errorData = discMap(saved['data']);
       }
@@ -138,6 +164,12 @@ class _DiscussionFormState extends State<_DiscussionForm> {
       if (widget.workspace) 'workspace': workspace,
       if (widget.agent) 'agent': agent,
       if (widget.applyNow) 'applyNow': applyNow,
+      if (widget.people != null)
+        'access': switch (access) {
+          1 => 'all',
+          2 => picked.join(','),
+          _ => '',
+        },
       'clientId': discRequestId(),
     };
     try {
@@ -163,6 +195,70 @@ class _DiscussionFormState extends State<_DiscussionForm> {
         });
       }
     }
+  }
+
+  /// 谁能 @ 它：只有我、所有人、指定的人（勾选讨论里的人）。
+  Widget accessField(AppLocalizations l, bool locked) {
+    final c = PosseColors.of(context);
+    final people = widget.people!;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l.discAccessLabel,
+            style: TextStyle(fontSize: Fs.small, color: c.muted),
+          ),
+          const SizedBox(height: 6),
+          IgnorePointer(
+            ignoring: locked,
+            child: Segmented(
+              labels: [l.discAccessOnlyMe, l.discAccessAll, l.discAccessSome],
+              selected: access,
+              onChanged: (i) => setState(() => access = i),
+            ),
+          ),
+          if (access == 2) ...[
+            const SizedBox(height: 8),
+            if (people.isEmpty)
+              Text(
+                l.discAccessNobody,
+                style: TextStyle(fontSize: Fs.small, color: c.muted),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final p in people)
+                    FilterChip(
+                      label: Text(discText(p, 'name')),
+                      showCheckmark: false,
+                      side: BorderSide.none,
+                      backgroundColor: c.fill,
+                      selectedColor: c.tint,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(Rd.button),
+                      ),
+                      labelStyle: TextStyle(
+                        fontSize: Fs.body,
+                        color: picked.contains(p['fp']) ? c.accent : c.text,
+                      ),
+                      selected: picked.contains(p['fp']),
+                      onSelected: locked
+                          ? null
+                          : (on) => setState(() {
+                              final fp = discText(p, 'fp');
+                              on ? picked.add(fp) : picked.remove(fp);
+                            }),
+                    ),
+                ],
+              ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -235,6 +331,7 @@ class _DiscussionFormState extends State<_DiscussionForm> {
                       ? null
                       : (v) => setState(() => agent = v ?? ''),
                 ),
+              if (widget.people != null) accessField(l, locked),
               if (widget.applyNow)
                 CheckboxListTile(
                   value: applyNow,

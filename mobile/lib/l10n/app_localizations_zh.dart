@@ -2274,9 +2274,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discRestore => '恢复';
 
   @override
-  String get discConfirmAction => '确认执行此操作？';
-
-  @override
   String get discStop => '停止执行';
 
   @override
@@ -2395,4 +2392,52 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get discNewRequestWarning => '上一次请求可能已经添加成员或创建 worktree。请核实结果后再发起新请求。';
+
+  @override
+  String discAtOthersAgent(String owner) {
+    return '提醒 $owner 安排';
+  }
+
+  @override
+  String get discAtYou => '@你';
+
+  @override
+  String get discAccessLabel => '谁能 @ 它';
+
+  @override
+  String get discAccessOnlyMe => '只有我';
+
+  @override
+  String get discAccessAll => '所有人';
+
+  @override
+  String get discAccessSome => '指定的人';
+
+  @override
+  String get discAccessNobody => '还没有别人加入。';
+
+  @override
+  String get discAccessEveryone => '所有人都能 @ 它';
+
+  @override
+  String discAccessPeople(String names) {
+    return '$names 能 @ 它';
+  }
+
+  @override
+  String get discYou => '你';
+
+  @override
+  String get discHost => '房主';
+
+  @override
+  String get discCopy => '复制';
+
+  @override
+  String get discEdit => '编辑';
+
+  @override
+  String discOnComputer(String name) {
+    return '在 $name 的电脑上';
+  }
 }

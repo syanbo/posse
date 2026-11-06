@@ -2403,9 +2403,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discRestore => 'Restore';
 
   @override
-  String get discConfirmAction => 'Confirm this operation?';
-
-  @override
   String get discStop => 'Stop execution';
 
   @override
@@ -2530,4 +2527,52 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get discNewRequestWarning =>
       'The previous request may already have added an agent or created a worktree. Check its result before starting again.';
+
+  @override
+  String discAtOthersAgent(String owner) {
+    return 'Asks $owner';
+  }
+
+  @override
+  String get discAtYou => '@You';
+
+  @override
+  String get discAccessLabel => 'Who can @ it';
+
+  @override
+  String get discAccessOnlyMe => 'Only me';
+
+  @override
+  String get discAccessAll => 'Everyone';
+
+  @override
+  String get discAccessSome => 'Specific people';
+
+  @override
+  String get discAccessNobody => 'No one else has joined yet.';
+
+  @override
+  String get discAccessEveryone => 'Everyone can @ it';
+
+  @override
+  String discAccessPeople(String names) {
+    return '$names can @ it';
+  }
+
+  @override
+  String get discYou => 'You';
+
+  @override
+  String get discHost => 'Host';
+
+  @override
+  String get discCopy => 'Copy';
+
+  @override
+  String get discEdit => 'Edit';
+
+  @override
+  String discOnComputer(String name) {
+    return 'On $name\'s computer';
+  }
 }

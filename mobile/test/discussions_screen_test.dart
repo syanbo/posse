@@ -136,7 +136,7 @@ void main() {
     },
   );
   testWidgets(
-    'send retry keeps its request ID and only own agents can be selected',
+    'send retry keeps its request ID and @ only offers usable agents',
     (t) async {
       final rpc = DiscRpc()..failPost = true;
       final model = DiscModel(rpc);
@@ -150,13 +150,14 @@ void main() {
         ),
       );
       await t.pumpAndSettle();
-      await t.tap(find.byType(DropdownButton<String>));
+      await t.enterText(find.byType(TextField), '@');
       await t.pumpAndSettle();
-      expect(find.text('@Reviewer'), findsWidgets);
-      expect(find.text('@Other agent'), findsNothing);
-      await t.tap(find.text('@Reviewer').last);
+      expect(find.text('Other agent'), findsNothing);
+      await t.tap(find.text('Reviewer').last);
       await t.pumpAndSettle();
+      expect(find.text('@Reviewer'), findsOneWidget);
       await t.enterText(find.byType(TextField), 'Please review');
+      await t.pump();
       await t.tap(find.byTooltip('发送'));
       await t.pumpAndSettle();
       await t.tap(find.byTooltip('重试'));
@@ -344,16 +345,7 @@ void main() {
         expect(t.takeException(), isNull);
         final l = lookupAppLocalizations(Locale(language));
         expect(find.text(l.discReadOnly), findsOneWidget);
-        expect(
-          t
-              .widget<IconButton>(
-                find.byWidgetPredicate(
-                  (w) => w is IconButton && w.tooltip == l.discSend,
-                ),
-              )
-              .onPressed,
-          isNull,
-        );
+        expect(find.byType(TextField), findsNothing);
         final dir = Platform.environment['POSSE_MOBILE_PREVIEW_DIR'];
         if (dir != null) {
           await t.runAsync(() async {
