@@ -30,12 +30,13 @@ func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error
 			return nil, discError(store.ErrMemberGone)
 		}
 		if !d.mine(target.Owner) {
-			return nil, notYours(target.Name)
-		}
-		if store.ConfigUntrusted(target.Paused) {
+			// 别人的 Agent：它的拥有者放开给你才能 @（房主和拥有者的电脑都会再核对）；授权意图只记自己 Agent 的
+			if !target.Allows(d.store.Self(), disc.Host) {
+				return nil, notYours(target.Name)
+			}
+		} else if store.ConfigUntrusted(target.Paused) {
 			return nil, rpc.Errorf(rpc.CodeConflict, "%s's settings on this computer need your review; open its settings and save them first", target.Name)
-		}
-		if target.WorkspaceID == "" {
+		} else if target.WorkspaceID == "" {
 			return nil, rpc.Errorf(rpc.CodeConflict, "choose a workspace on this computer for %s first", target.Name)
 		}
 	}
@@ -60,7 +61,7 @@ func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error
 		uploads = append(uploads, id)
 		atts = append(atts, store.Attachment{ID: id})
 	}
-	if target.ID != "" {
+	if target.ID != "" && d.mine(target.Owner) {
 		dig := store.IntentDigest(p.Body, p.Quote, target.ID, atts)
 		if err := d.store.SaveIntent(disc.Key, p.ClientID, target.ID, target.ConfigVersion, dig, store.OwnConfigDigest(target), time.Now()); err != nil {
 			return nil, err
@@ -129,7 +130,7 @@ func (d *Daemon) mirrorMemberUpdate(disc store.Discussion, old, nm store.Member,
 		}
 	}
 	// 每次保存都把本机这份公开配置交给房主（房主那份被改过时，保存一次就对齐），再记成本机确认的配置
-	if err := rc.call("member.update", map[string]string{"member": old.ID, "name": nm.Name, "role": nm.Role, "agent": nm.Agent, "model": nm.Model, "effort": nm.Effort}, nil); err != nil {
+	if err := rc.call("member.update", map[string]string{"member": old.ID, "name": nm.Name, "role": nm.Role, "agent": nm.Agent, "model": nm.Model, "effort": nm.Effort, "access": nm.Access}, nil); err != nil {
 		return nil, err
 	}
 	if err := d.store.SetOwnConfig(nm); err != nil {

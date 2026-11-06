@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -243,6 +244,38 @@ type Member struct {
 	// Owner 是 Agent 拥有者的安装身份指纹，空是讨论房主（第一阶段的成员）；只有拥有者能调用、配置它
 	Owner      string `json:"owner,omitempty"`
 	Generation int64  `json:"generation,omitempty"` // 拥有者加入讨论的代际（房主自己为 0）
+	// Access 是除了拥有者还有谁能 @ 它、让它执行：空是只有拥有者，AccessAll 是讨论里所有人，
+	// 否则是逗号分隔、排好序的指纹。只有拥有者能改；拥有者的电脑按本机确认过的这份核对，不信房主那份
+	Access string `json:"access,omitempty"`
+}
+
+// AccessAll 是 Member.Access 的「讨论里所有人」。
+const AccessAll = "all"
+
+// Allows 报告 fp 能不能 @ 这个 Agent、让它执行。host 是讨论房主的指纹（房主自己的 Agent Owner 为空）。
+func (m Member) Allows(fp, host string) bool {
+	if fp == cmpOr(m.Owner, host) {
+		return true
+	}
+	if m.Access == AccessAll {
+		return fp != ""
+	}
+	return fp != "" && slices.Contains(strings.Split(m.Access, ","), fp)
+}
+
+// NormalizeAccess 把访问设置整理成存的样子：所有人、空（只有拥有者），或者去重、排好序的指纹（去掉拥有者自己）。
+func NormalizeAccess(access, owner string) string {
+	if access == AccessAll || access == "" {
+		return access
+	}
+	var fps []string
+	for _, fp := range strings.Split(access, ",") {
+		if fp = strings.TrimSpace(fp); fp != "" && fp != owner && fp != AccessAll && !slices.Contains(fps, fp) {
+			fps = append(fps, fp)
+		}
+	}
+	slices.Sort(fps)
+	return strings.Join(fps, ",")
 }
 
 // Attachment 是消息附件的快照：文件复制在项目的 .posse/discussions/<讨论>/attachments/ 下，Path 相对项目目录。
@@ -330,14 +363,14 @@ func scanDiscussion(row interface{ Scan(...any) error }) (Discussion, error) {
 	return d, err
 }
 
-const memberCols = `id,discussion,name,role,agent,model,effort,workspace_id,workspace_label,config_version,task_id,worker,worker_config,paused,recv_seq,removed_at,rev,created_at,owner,generation`
+const memberCols = `id,discussion,name,role,agent,model,effort,workspace_id,workspace_label,config_version,task_id,worker,worker_config,paused,recv_seq,removed_at,rev,created_at,owner,generation,access`
 
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	var m Member
 	var created int64
 	var removed sql.NullInt64
 	err := row.Scan(&m.ID, &m.Discussion, &m.Name, &m.Role, &m.Agent, &m.Model, &m.Effort, &m.WorkspaceID, &m.WorkspaceLabel, &m.ConfigVersion,
-		&m.TaskID, &m.Worker, &m.WorkerConfig, &m.Paused, &m.RecvSeq, &removed, &m.Rev, &created, &m.Owner, &m.Generation)
+		&m.TaskID, &m.Worker, &m.WorkerConfig, &m.Paused, &m.RecvSeq, &removed, &m.Rev, &created, &m.Owner, &m.Generation, &m.Access)
 	if errors.Is(err, sql.ErrNoRows) {
 		return m, ErrNotFound
 	}
@@ -518,6 +551,8 @@ type DiscussionSummary struct {
 	// 局域网协作：加入的讨论的状态（pending、active、rejected、removed、left），房主待批准的申请数
 	Joined   string `json:"joined,omitempty"`
 	Requests int    `json:"requests,omitempty"`
+	// MentionSeq 是最近一条 @ 本机这个人的消息的序号：窗口据此在列表里标「有人 @ 你」、发通知，不只看最后一条
+	MentionSeq int64 `json:"mentionSeq,omitempty"`
 }
 
 func (s *Store) DiscussionSummaries() ([]DiscussionSummary, error) {
@@ -537,6 +572,9 @@ func (s *Store) DiscussionSummaries() ([]DiscussionSummary, error) {
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE discussion=? AND state IN `+inList(activeStates), d.Key).Scan(&x.Active)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE discussion=? AND state IN `+inList(pendingStates), d.Key).Scan(&x.Pending)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_members WHERE discussion=? AND removed_at IS NULL`, d.Key).Scan(&x.Members)
+		if self := s.Self(); self != "" {
+			s.db.QueryRow(`SELECT COALESCE(MAX(seq), 0) FROM disc_messages WHERE discussion=? AND mention=?`, d.Key, self).Scan(&x.MentionSeq)
+		}
 		if d.Mirror {
 			s.db.QueryRow(`SELECT state FROM collab_joined WHERE room=?`, d.Key).Scan(&x.Joined)
 		} else if d.Shared {
@@ -640,12 +678,15 @@ func addMember(tx *sql.Tx, m Member, client string) error {
 			return err
 		}
 	}
+	if err := checkAccess(tx, m.Discussion, m.Access); err != nil {
+		return err
+	}
 	rev, err := bump(tx, m.Discussion)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(`INSERT INTO disc_members(id,discussion,name,role,agent,model,effort,workspace_id,workspace_label,config_version,rev,created_at,owner,generation,client_id) VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?)`,
-		m.ID, m.Discussion, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, rev, ms(m.CreatedAt), m.Owner, m.Generation, client)
+	_, err = tx.Exec(`INSERT INTO disc_members(id,discussion,name,role,agent,model,effort,workspace_id,workspace_label,config_version,rev,created_at,owner,generation,client_id,access) VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?,?)`,
+		m.ID, m.Discussion, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, rev, ms(m.CreatedAt), m.Owner, m.Generation, client, m.Access)
 	return err
 }
 
@@ -664,8 +705,9 @@ func (s *Store) MemberByTask(taskID string) (Member, error) {
 
 // ActiveMembers 是所有没移除的成员（调度器逐个看队列）。
 func (s *Store) ActiveMembers() ([]Member, error) {
-	// 别人电脑上的 Agent 由它的拥有者领取执行，这里不调度
-	return collect(s.db, scanMember, `SELECT `+memberCols+` FROM disc_members WHERE removed_at IS NULL AND owner IN ('', ?) ORDER BY created_at`, s.Self())
+	// 别人电脑上的 Agent 由它的拥有者领取执行，这里不调度；加入的讨论里拥有者为空的是房主的，也不调度
+	return collect(s.db, scanMember, `SELECT `+memberCols+` FROM disc_members WHERE removed_at IS NULL
+		AND (owner = ? OR owner = '' AND discussion NOT IN (SELECT key FROM discussions WHERE mirror=1)) ORDER BY created_at`, s.Self())
 }
 
 // UpdateMember 改成员配置。名字、职责只影响之后的显示和新 worker 的提示；agent、模型、思考深度、工作区、职责
@@ -691,8 +733,8 @@ func (s *Store) UpdateMember(m Member) (Member, error) {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, workspace_id=?, workspace_label=?, config_version=?, rev=? WHERE id=?`,
-			m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, version, rev, m.ID); err != nil {
+		if _, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, workspace_id=?, workspace_label=?, config_version=?, access=?, rev=? WHERE id=?`,
+			m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, version, m.Access, rev, m.ID); err != nil {
 			return err
 		}
 		out, err = scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE id=?`, m.ID))
@@ -762,9 +804,9 @@ func (s *Store) UpdateMemberApplyNow(m Member) (old, out Member, err error) {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, workspace_id=?, workspace_label=?, config_version=?,
+		if _, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, workspace_id=?, workspace_label=?, config_version=?, access=?,
 			task_id='', worker='', worker_config=0, paused='', rev=? WHERE id=?`,
-			m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, version, rev, m.ID); err != nil {
+			m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, version, m.Access, rev, m.ID); err != nil {
 			return err
 		}
 		out, err = scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE id=?`, m.ID))
@@ -926,8 +968,8 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 			if target.RemovedAt != nil {
 				return ErrMemberGone
 			}
-			// 只能 @ 自己的 Agent：别人的 Agent 由它的拥有者安排
-			if cmpOr(target.Owner, d.Host) != author {
+			// 只能 @ 自己的 Agent，和拥有者在访问设置里放开给你的
+			if !target.Allows(author, d.Host) {
 				return ErrNotOwner
 			}
 		}

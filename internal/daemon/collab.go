@@ -489,6 +489,7 @@ func (h collabHost) Serve(ctx context.Context, s *collaboration.Session, method 
 			Effort string `json:"effort"`
 			// Client 是这次添加的请求 ID：应答丢了重发时不再加一个（AddMemberOnce）
 			Client string `json:"client"`
+			Access string `json:"access"` // 还有谁能 @ 它（旧版成员不带：只有拥有者）
 		}
 		json.Unmarshal(raw, &p)
 		p.Name, p.Role = strings.TrimSpace(p.Name), strings.TrimSpace(p.Role)
@@ -498,8 +499,11 @@ func (h collabHost) Serve(ctx context.Context, s *collaboration.Session, method 
 		if !slices.Contains(agent.Known, p.Agent) {
 			return nil, collaboration.Errorf(collaboration.CodeBadRequest, "unknown agent %s", p.Agent)
 		}
+		if len(p.Access) > 64*1024 || store.NormalizeAccess(p.Access, s.FP) != p.Access {
+			return nil, collaboration.Errorf(collaboration.CodeBadRequest, "invalid access")
+		}
 		m := store.Member{ID: p.Member, Discussion: room, Name: p.Name, Role: p.Role, Agent: p.Agent, Model: p.Model, Effort: p.Effort,
-			Owner: s.FP, Generation: gen, CreatedAt: time.Now()}
+			Owner: s.FP, Generation: gen, CreatedAt: time.Now(), Access: p.Access}
 		if method == "member.add" {
 			m.ID = store.NewID("dmb_") + store.NewID("")
 			id, dup, err := d.store.AddMemberOnce(m, p.Client)
@@ -665,7 +669,7 @@ func (h collabHost) post(s *collaboration.Session, room string, gen int64, raw j
 		Mention: p.Mention, Uploads: p.Uploads, At: time.Now(), Author: s.FP, AuthorName: person.Name, Generation: gen})
 	if err != nil {
 		if errors.Is(err, store.ErrNotOwner) {
-			return nil, collaboration.Errorf(collaboration.CodeUnauthorized, "you can only send requests to your own agents; @ the owner to ask them")
+			return nil, collaboration.Errorf(collaboration.CodeUnauthorized, "you can only send requests to your own agents and those their owners let you use; @ the owner to ask them")
 		}
 		return nil, cerr(err)
 	}

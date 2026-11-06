@@ -34,8 +34,8 @@ type discSummary struct {
 }
 
 type discMember struct {
-	ID, Name, Role, Agent, Model, Effort, WorkspaceLabel, TaskID, Worker, Paused, Owner string
-	RemovedAt                                                                           *time.Time
+	ID, Name, Role, Agent, Model, Effort, WorkspaceLabel, TaskID, Worker, Paused, Owner, Access string
+	RemovedAt                                                                                   *time.Time
 }
 
 type discMsg struct {
@@ -134,6 +134,13 @@ func cmdDiscussionShow(e *env, args []string) error {
 			} else if m.Paused != "" {
 				state = " (paused: " + m.Paused + ")"
 			}
+			switch m.Access {
+			case "":
+			case "all":
+				state += " (anyone can @ it)"
+			default:
+				state += " (also usable by " + m.Access + ")"
+			}
 			fmt.Fprintf(e.out, "  %s  %s  %s  %s%s\n", m.ID, m.Name, m.Agent, m.WorkspaceLabel, state)
 		}
 		execs := map[string]discExec{}
@@ -196,6 +203,7 @@ func cmdDiscussionAddMember(e *env, args []string) error {
 	ws := fs.String("workspace", "", "")
 	worktree := fs.String("worktree", "", "")
 	client := fs.String("client-id", "", "")
+	access := fs.String("access", "", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -206,7 +214,7 @@ func cmdDiscussionAddMember(e *env, args []string) error {
 	}
 	var m discMember
 	err = e.do("discussion.member.add", map[string]any{"caller": caller(), "discussion": key, "name": *name, "role": *role, "agent": *agentName, "model": *model, "effort": *effort,
-		"workspace": *ws, "worktree": *worktree, "clientId": *client}, &m, func() {
+		"workspace": *ws, "worktree": *worktree, "clientId": *client, "access": *access}, &m, func() {
 		fmt.Fprintf(e.out, "added %s (%s) as %s in %s\n", m.Name, m.Agent, m.ID, m.WorkspaceLabel)
 	})
 	// 加入的讨论里：房主没回应（可能已经加上了），或者这次已经在本机建了 worktree。用同一个请求 ID 重试：
@@ -233,7 +241,7 @@ func cmdDiscussionAddMember(e *env, args []string) error {
 
 func cmdDiscussionUpdateMember(e *env, args []string) error {
 	fs := flag.NewFlagSet("discussion update-member", flag.ContinueOnError)
-	for _, f := range []string{"name", "role", "agent", "model", "effort", "workspace", "worktree"} {
+	for _, f := range []string{"name", "role", "agent", "model", "effort", "workspace", "worktree", "access"} {
 		fs.String(f, "", "")
 	}
 	applyNow := fs.Bool("apply-now", false, "")

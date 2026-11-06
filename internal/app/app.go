@@ -153,6 +153,7 @@ type app struct {
 
 	// 讨论页（discussions.go）：轮询在后台协程里读 discWant、discSeq
 	disc        discBoard
+	discThumbs  discThumbs // 讨论里图片附件的缩略图：整个窗口一份，换讨论不清空，后台解码的并发按它算
 	discMu      sync.Mutex
 	discWant    string // 要取详情的讨论
 	discWantRev int64  // 它已有的版本，0 要全量

@@ -880,7 +880,27 @@ func (s *Store) OwnerRetry(room, fp string, gen int64, execID, newID string, aba
 
 const abandonedReason = "abandoned by the owner; a late result is still recorded here"
 
-// OwnerMemberUpdate 是拥有者改自己 Agent 的公开配置（名字、职责、agent、模型、思考深度）。
+// checkAccess 核对访问设置里的人都是这个讨论里出现过的人（指纹），不收拼错、乱填的。
+func checkAccess(tx querier, room, access string) error {
+	if access == "" || access == AccessAll {
+		return nil
+	}
+	if NormalizeAccess(access, "") != access {
+		return fmt.Errorf("%w: access is not normalized", ErrConflict)
+	}
+	for _, fp := range strings.Split(access, ",") {
+		var n int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM collab_people WHERE room=? AND fp=?`, room, fp).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("%w: person %s", ErrNotFound, short(fp))
+		}
+	}
+	return nil
+}
+
+// OwnerMemberUpdate 是拥有者改自己 Agent 的公开配置（名字、职责、agent、模型、思考深度、访问）。
 func (s *Store) OwnerMemberUpdate(room, fp string, gen int64, m Member) (Member, error) {
 	var out Member
 	err := s.withTx(func(tx *sql.Tx) error {
@@ -908,8 +928,11 @@ func (s *Store) OwnerMemberUpdate(room, fp string, gen int64, m Member) (Member,
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, config_version=?, rev=? WHERE id=?`,
-			m.Name, m.Role, m.Agent, m.Model, m.Effort, version, rev, m.ID); err != nil {
+		if err := checkAccess(tx, room, m.Access); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, config_version=?, access=?, rev=? WHERE id=?`,
+			m.Name, m.Role, m.Agent, m.Model, m.Effort, version, m.Access, rev, m.ID); err != nil {
 			return err
 		}
 		out, err = scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE id=?`, m.ID))
@@ -1435,15 +1458,28 @@ func (s *Store) ApplySync(room, self string, b SyncBatch) (bool, error) {
 			if m.RemovedAt != nil {
 				removed = ms(*m.RemovedAt)
 			}
-			var own, paused string
-			found := tx.QueryRow(`SELECT own_config, paused FROM disc_members WHERE id=? AND discussion=?`, m.ID, room).Scan(&own, &paused) == nil
+			var own, paused, owner string
+			var gen int64
+			found := tx.QueryRow(`SELECT own_config, paused, owner, generation FROM disc_members WHERE id=? AND discussion=?`, m.ID, room).
+				Scan(&own, &paused, &owner, &gen) == nil
+			if found && owner == self && (m.Owner != self || m.Generation != gen) {
+				// 房主想把本机的 Agent 改成别人的（或空）、换代际：拥有者和代际都不会变，不接受，暂停到拥有者检查设置；
+				// 否则改了归属的那份就绕开了本机确认过的配置和访问设置
+				if paused == "" {
+					paused = ConfigConflict
+				}
+				if _, err := tx.Exec(`UPDATE disc_members SET paused=?, rev=? WHERE id=?`, paused, rev, m.ID); err != nil {
+					return err
+				}
+				continue
+			}
 			if found && own == "" && m.Owner == self {
 				// 自己的 Agent 在本机没有确认过的配置（旧版本加的）：不猜哪份可信，照房主那份显示，但暂停到拥有者确认保存
 				if paused == "" {
 					paused = NeedsConfirm
 				}
-				if _, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, config_version=?, removed_at=?, owner=?, generation=?, paused=?, rev=? WHERE id=?`,
-					m.Name, m.Role, m.Agent, m.Model, m.Effort, m.ConfigVersion, removed, m.Owner, m.Generation, paused, rev, m.ID); err != nil {
+				if _, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, config_version=?, removed_at=COALESCE(removed_at, ?), owner=?, generation=?, access=?, paused=?, rev=? WHERE id=?`,
+					m.Name, m.Role, m.Agent, m.Model, m.Effort, m.ConfigVersion, removed, m.Owner, m.Generation, m.Access, paused, rev, m.ID); err != nil {
 					return err
 				}
 				continue
@@ -1457,14 +1493,15 @@ func (s *Store) ApplySync(room, self string, b SyncBatch) (bool, error) {
 				} else if paused == ConfigConflict {
 					paused = ""
 				}
-				if _, err := tx.Exec(`UPDATE disc_members SET config_version=?, removed_at=?, owner=?, generation=?, paused=?, rev=? WHERE id=?`,
-					m.ConfigVersion, removed, m.Owner, m.Generation, paused, rev, m.ID); err != nil {
+				// 本机的 Agent 删了就是删了：同步不能把删除标记清掉让它复活（重新添加是新的 ID）
+				if _, err := tx.Exec(`UPDATE disc_members SET config_version=?, removed_at=COALESCE(removed_at, ?), paused=?, rev=? WHERE id=?`,
+					m.ConfigVersion, removed, paused, rev, m.ID); err != nil {
 					return err
 				}
 				continue
 			}
-			res, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, config_version=?, removed_at=?, owner=?, generation=?, rev=?
-				WHERE id=? AND discussion=?`, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.ConfigVersion, removed, m.Owner, m.Generation, rev, m.ID, room)
+			res, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, config_version=?, removed_at=?, owner=?, generation=?, access=?, rev=?
+				WHERE id=? AND discussion=?`, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.ConfigVersion, removed, m.Owner, m.Generation, m.Access, rev, m.ID, room)
 			if err != nil {
 				return err
 			}
@@ -1474,8 +1511,8 @@ func (s *Store) ApplySync(room, self string, b SyncBatch) (bool, error) {
 				if m.Owner == self {
 					paused = NeedsConfirm
 				}
-				if _, err := tx.Exec(`INSERT INTO disc_members(id,discussion,name,role,agent,model,effort,workspace_id,config_version,removed_at,rev,created_at,owner,generation,paused)
-					VALUES(?,?,?,?,?,?,?,'',?,?,?,?,?,?,?)`, m.ID, room, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.ConfigVersion, removed, rev, ms(m.CreatedAt), m.Owner, m.Generation, paused); err != nil {
+				if _, err := tx.Exec(`INSERT INTO disc_members(id,discussion,name,role,agent,model,effort,workspace_id,config_version,removed_at,rev,created_at,owner,generation,paused,access)
+					VALUES(?,?,?,?,?,?,?,'',?,?,?,?,?,?,?,?)`, m.ID, room, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.ConfigVersion, removed, rev, ms(m.CreatedAt), m.Owner, m.Generation, paused, m.Access); err != nil {
 					return err
 				}
 			}
@@ -1885,8 +1922,14 @@ func ConfigUntrusted(paused string) bool { return paused == ConfigConflict || pa
 // ConfigConflict 是房主那份自己 Agent 的配置和本机拥有者设下的不一致时的暂停原因。
 const ConfigConflict = "the host's copy of this agent's settings differs from what you set on this computer; review and save its settings"
 
-// ownConfig 是拥有者确认过的公开配置内容（名字、职责、agent、模型、思考深度）。
-func ownConfig(m Member) string { return digest(m.Name, m.Role, m.Agent, m.Model, m.Effort) }
+// ownConfig 是拥有者确认过的公开配置内容（名字、职责、agent、模型、思考深度、访问）。
+// 访问是空（只有拥有者）时和加访问设置之前的算法一样，已经确认过的 Agent 不会因为升级被判成对不上。
+func ownConfig(m Member) string {
+	if m.Access == "" {
+		return digest(m.Name, m.Role, m.Agent, m.Model, m.Effort)
+	}
+	return digest(m.Name, m.Role, m.Agent, m.Model, m.Effort, "access", m.Access)
+}
 
 // OwnConfigDigest 是授权意图里记的配置内容。
 func OwnConfigDigest(m Member) string { return digest(m.Role, m.Agent, m.Model, m.Effort) }
@@ -1907,10 +1950,45 @@ func (s *Store) SetOwnConfig(m Member) error {
 		if paused == ConfigConflict || paused == NeedsConfirm || paused == NeedsWorkspace && m.WorkspaceID != "" {
 			paused = ""
 		}
-		_, err = tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, workspace_id=?, workspace_label=?, own_config=?, paused=?, rev=? WHERE id=?`,
-			m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, ownConfig(m), paused, rev, m.ID)
+		_, err = tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, workspace_id=?, workspace_label=?, access=?, own_config=?, paused=?, rev=? WHERE id=?`,
+			m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, m.Access, ownConfig(m), paused, rev, m.ID)
 		return err
 	})
+}
+
+// MarkOwnRemoved 在本机记下自己的 Agent 已删除（加入的讨论里经房主删除之后）：不等房主同步下来，
+// 房主应答了删除却不下发删除标记时，它也不再领取、调度别人的请求。
+func (s *Store) MarkOwnRemoved(id string, at time.Time) error {
+	return s.withTx(func(tx *sql.Tx) error {
+		m, err := scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE id=?`, id))
+		if err != nil {
+			return err
+		}
+		if m.Owner == "" || m.Owner != s.Self() {
+			return ErrNotOwner
+		}
+		rev, err := bump(tx, m.Discussion)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`UPDATE disc_members SET removed_at=COALESCE(removed_at, ?), task_id='', worker='', worker_config=0, rev=? WHERE id=?`, ms(at), rev, id)
+		return err
+	})
+}
+
+// OwnConfigHolds 报告这个 Agent 现在归本机这个人、确认过配置，而且库里当前的公开配置（含访问设置）
+// 就是确认过的那份：别人凭访问设置发来的请求，领取前按它核对，不信同步来的字段。
+func (s *Store) OwnConfigHolds(id string) bool {
+	m, err := s.Member(id)
+	if err != nil || m.Owner == "" || m.Owner != s.Self() || m.RemovedAt != nil {
+		return false
+	}
+	var joined int64
+	if s.db.QueryRow(`SELECT generation FROM collab_joined WHERE room=?`, m.Discussion).Scan(&joined) != nil || joined != m.Generation {
+		return false
+	}
+	var own string
+	return s.db.QueryRow(`SELECT own_config FROM disc_members WHERE id=?`, id).Scan(&own) == nil && own != "" && own == ownConfig(m)
 }
 
 // OwnConfirmed 报告这台电脑是否确认过自己这个 Agent 的配置（SetOwnConfig 记过）。

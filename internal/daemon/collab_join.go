@@ -553,7 +553,13 @@ func (d *Daemon) intentMismatch(x store.Execution) string {
 		key = "retry:" + x.RetryOf
 	} else {
 		var err error
-		if m, err = d.store.DiscMessage(x.Message); err != nil || m.ClientID == "" {
+		if m, err = d.store.DiscMessage(x.Message); err != nil {
+			return "this request was not sent from this computer"
+		}
+		if m.AuthorID != "" && m.AuthorID != d.store.Self() {
+			return d.accessMismatch(x, m)
+		}
+		if m.ClientID == "" {
 			return "this request was not sent from this computer"
 		}
 		key = m.ClientID
@@ -561,6 +567,9 @@ func (d *Daemon) intentMismatch(x store.Execution) string {
 	in, err := d.store.Intent(x.Discussion, key)
 	if err != nil {
 		return "this request was not sent from this computer"
+	}
+	if mem, err := d.store.Member(x.Member); err != nil || mem.RemovedAt != nil {
+		return "the agent was removed"
 	}
 	if in.Member != x.Member {
 		return "the request targets a different agent than the one you asked"
@@ -574,6 +583,33 @@ func (d *Daemon) intentMismatch(x store.Execution) string {
 		store.OwnConfigDigest(store.Member{Role: x.Role, Agent: x.Agent, Model: x.Model, Effort: x.Effort}) != in.Config ||
 		store.OwnConfigDigest(mem) != in.Config {
 		return "the agent's configuration changed after you sent the request"
+	}
+	return ""
+}
+
+// accessMismatch 核对别人 @ 本机 Agent 的一轮：按本机确认过的访问设置（不信房主那份）这个人能 @ 它，
+// 请求确实是发给它的，房主那份执行快照的配置和本机确认的一致。对得上为空。
+// 发言人是房主记的：房主能冒充一个被放开的人发请求，访问设置防不了这一点。
+func (d *Daemon) accessMismatch(x store.Execution, m store.DiscMessage) string {
+	mem, err := d.store.Member(x.Member)
+	if err != nil || m.Target != x.Member {
+		return "the request targets a different agent"
+	}
+	if self := d.store.Self(); x.Owner != self || mem.Owner != self {
+		return "this agent is not yours"
+	}
+	disc, err := d.store.Discussion(x.Discussion)
+	if err != nil {
+		return "the discussion is gone"
+	}
+	if !d.store.OwnConfigHolds(mem.ID) || store.ConfigUntrusted(mem.Paused) {
+		return "the agent's settings on this computer need your review"
+	}
+	if !mem.Allows(m.AuthorID, disc.Host) {
+		return "you have not allowed this person to use this agent"
+	}
+	if store.OwnConfigDigest(store.Member{Role: x.Role, Agent: x.Agent, Model: x.Model, Effort: x.Effort}) != store.OwnConfigDigest(mem) {
+		return "the request's agent settings differ from yours"
 	}
 	return ""
 }

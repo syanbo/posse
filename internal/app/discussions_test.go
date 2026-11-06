@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -540,8 +541,8 @@ func TestDiscussionLiveTerminal(t *testing.T) {
 	}
 	a.disc.d.live = map[string]string{"t9": "gone", "t5": "working"}
 	tt.Frame()
-	// 两张卡（t9、t5）各有一个按钮；关掉 t9 后只剩 t5 那张的
-	if m := countText(tt, "打开终端"); m != n/2 {
+	// t9（已完成，一行里的链接）和 t5（进行中，卡片上的按钮）各有一个；关掉 t9 后只剩 t5 那张的
+	if m := countText(tt, "打开终端"); m == 0 || m >= n {
 		t.Fatalf("open-terminal buttons %d → %d after t9 closed", n, m)
 	}
 }
@@ -649,5 +650,99 @@ func TestDiscussionMemberFormLockedWhileSubmitting(t *testing.T) {
 	}
 	if !a.disc.form.open || a.disc.form.role != "changed after sending" {
 		t.Fatalf("late success closed a form holding unsent changes: open=%v role=%q", a.disc.form.open, a.disc.form.role)
+	}
+}
+
+// 在输入框里打 @ 弹出候选：上下选、回车选中自己的 Agent，@ 和打的字从正文里去掉、接收者换成它；Esc 关掉后不再弹。
+func TestDiscussionAtSuggestions(t *testing.T) {
+	a, tt, f := discTester(t)
+	if err := tt.Click("消息（⌘↩ 发送）"); err != nil {
+		t.Fatal(err)
+	}
+	// 候选弹出来时名字比平时多出现一次
+	base := map[string]int{"Claude 方案": countText(tt, "Claude 方案"), "Codex 复核": countText(tt, "Codex 复核")}
+	tt.Type("请 @co")
+	tt.Frame()
+	if countText(tt, "Codex 复核") != base["Codex 复核"]+1 || countText(tt, "Claude 方案") != base["Claude 方案"] {
+		t.Fatalf("suggestions after @co: %v", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	for range 3 {
+		tt.Frame()
+	}
+	if a.disc.target != "mb2" || a.disc.text != "请 " {
+		t.Fatalf("after pick: target %q text %q", a.disc.target, a.disc.text)
+	}
+	tt.Type("看下")
+	tt.Key(ui.Cmd, ui.KeyEnter)
+	if p := waitCall(t, tt, f, "discussion.post"); p["target"] != "mb2" || p["body"] != "请 看下" {
+		t.Fatalf("post params %+v", p)
+	}
+	for range 3 {
+		tt.Frame()
+	}
+	// Esc 关掉这一次 @，接着打字也不再弹；新打一个 @ 又弹
+	tt.Type("@")
+	tt.Frame()
+	if countText(tt, "Claude 方案") != base["Claude 方案"]+1 {
+		t.Fatalf("suggestions after @: %v", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Type("c")
+	tt.Frame()
+	if countText(tt, "Claude 方案") != base["Claude 方案"] {
+		t.Fatal("suggestions reopened after Esc")
+	}
+	tt.Type(" @")
+	tt.Frame()
+	if countText(tt, "Claude 方案") != base["Claude 方案"]+1 {
+		t.Fatalf("suggestions after new @: %v", tt.Texts())
+	}
+}
+
+// 别人的 Agent：拥有者放开给你时 @ 候选里作为请求执行；没放开时选它只提醒拥有者，名字留在正文里。
+func TestDiscussionAtOthersAgent(t *testing.T) {
+	a, tt, f := discTester(t)
+	previewCollab(a, true)
+	for range 2 {
+		tt.Frame()
+	}
+	if err := tt.Click("消息（⌘↩ 发送）"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("@Codex")
+	tt.Frame()
+	if tt.HasText("提醒 Mo 安排") {
+		t.Fatalf("allowed agent shown as owner-only: %v", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	for range 3 {
+		tt.Frame()
+	}
+	if a.disc.target != "mb2" {
+		t.Fatalf("target %q", a.disc.target)
+	}
+	tt.Type("看下")
+	tt.Key(ui.Cmd, ui.KeyEnter)
+	if p := waitCall(t, tt, f, "discussion.post"); p["target"] != "mb2" {
+		t.Fatalf("post %+v", p)
+	}
+	for range 3 {
+		tt.Frame()
+	}
+
+	// 收回之后：提示提醒拥有者，选中后 @ 拥有者，名字留在正文里
+	a.disc.d.members[1].Access = ""
+	tt.Type("@Codex")
+	tt.Frame()
+	if !tt.HasText("提醒 Mo 安排") {
+		t.Fatalf("owner hint missing: %v", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	for range 3 {
+		tt.Frame()
+	}
+	if a.disc.target != "" || a.disc.mention != strings.Repeat("b2", 32) || a.disc.text != "@Codex 复核 " {
+		t.Fatalf("after pick: target %q mention %q text %q", a.disc.target, a.disc.mention, a.disc.text)
 	}
 }

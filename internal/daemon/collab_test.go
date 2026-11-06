@@ -526,3 +526,95 @@ func TestCollabArchiveRules(t *testing.T) {
 	call(t, h.collabRemovePerson, map[string]any{"discussion": p.disc.Key, "person": m.store.Self()})
 	call(t, h.discArchive, map[string]any{"discussion": p.disc.Key, "archived": true})
 }
+
+// 访问设置：拥有者放开给某人后，那个人能 @ 他的 Agent，在拥有者电脑上执行；房主改了访问设置（冒充放开），
+// 拥有者按本机确认过的那份核对，不领取。房主自己的 Agent 放开给所有人，成员也能 @ 它。
+func TestCollabAgentAccess(t *testing.T) {
+	p := newCollabPair(t)
+	h, m := p.host, p.member
+	hostFP, memberFP := h.store.Self(), m.store.Self()
+	bob := call(t, m.discMemberAdd, map[string]any{"discussion": p.disc.Key, "name": "Bob", "agent": "codex", "workspace": p.mw.ID}).(store.Member)
+	if _, err := callErr(h.discPost, map[string]any{"discussion": p.disc.Key, "body": "hi", "target": bob.ID}); err == nil {
+		t.Fatal("host invoked the member's agent before it was allowed")
+	}
+
+	// 成员把 Bob 放开给房主
+	up := call(t, m.discMemberUpdate, map[string]any{"member": bob.ID, "access": hostFP}).(store.Member)
+	if up.Access != hostFP {
+		t.Fatalf("member's copy access %q", up.Access)
+	}
+	waitFor(t, "host sees access", func() bool {
+		hb, _ := h.store.Member(bob.ID)
+		return hb.Access == hostFP
+	})
+	r := call(t, h.discPost, map[string]any{"discussion": p.disc.Key, "body": "please check", "target": bob.ID}).(discPostResult)
+	if r.Execution == nil || r.Execution.Owner != memberFP {
+		t.Fatalf("execution %+v", r.Execution)
+	}
+	waitFor(t, "member runs the host's request", func() bool {
+		m.dispatchAll()
+		x, _ := m.store.Execution(r.Execution.ID)
+		return x.State == store.ExecRunning
+	})
+	// 房主仍然不能停止、重试、配置它
+	if _, err := callErr(h.discStop, map[string]any{"execution": r.Execution.ID}); err == nil {
+		t.Fatal("host stopped the member's agent")
+	}
+	x, _ := m.store.Execution(r.Execution.ID)
+	if ctxText := readAll(t, m, x); !strings.Contains(ctxText, "please check") {
+		t.Fatalf("context:\n%s", ctxText)
+	}
+	call(t, m.taskDone, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "body": "checked"})
+	waitFor(t, "reply on host", func() bool {
+		hx, _ := h.store.Execution(x.ID)
+		return hx.State == store.ExecDone
+	})
+
+	// 成员收回；房主在自己的库里把访问改回放开（冒充拥有者的修改）：房主收下请求，拥有者不领取
+	call(t, m.discMemberUpdate, map[string]any{"member": bob.ID, "access": "owner"})
+	waitFor(t, "host sees access revoked", func() bool {
+		hb, _ := h.store.Member(bob.ID)
+		return hb.Access == ""
+	})
+	if _, err := callErr(h.discPost, map[string]any{"discussion": p.disc.Key, "body": "again", "target": bob.ID}); err == nil {
+		t.Fatal("host invoked the member's agent after access was revoked")
+	}
+	person, _ := h.store.Person(p.disc.Key, memberFP)
+	hb, _ := h.store.Member(bob.ID)
+	hb.Access = hostFP
+	if _, err := h.store.OwnerMemberUpdate(p.disc.Key, memberFP, person.Generation, hb); err != nil {
+		t.Fatal(err)
+	}
+	fr := call(t, h.discPost, map[string]any{"discussion": p.disc.Key, "body": "forged access", "target": bob.ID}).(discPostResult)
+	h.taskNotify()
+	waitFor(t, "member refuses forged access", func() bool {
+		return m.store.AcceptState(fr.Execution.ID) == store.AcceptRefused
+	})
+	m.dispatchAll()
+	if x, _ := m.store.Execution(fr.Execution.ID); x.TaskID != "" {
+		t.Fatalf("forged-access request ran: %+v", x)
+	}
+
+	// 房主自己的 Agent 放开给所有人：成员 @ 它，房主执行
+	alice := addMember(t, h, p.disc, "Alice", "claude")
+	if _, err := callErr(m.discPost, map[string]any{"discussion": p.disc.Key, "body": "hi", "target": alice.ID, "clientId": "c-a0"}); err == nil {
+		t.Fatal("member invoked the host's agent before it was allowed")
+	}
+	call(t, h.discMemberUpdate, map[string]any{"member": alice.ID, "access": "all"})
+	waitFor(t, "member sees host agent access", func() bool {
+		ma, _ := m.store.Member(alice.ID)
+		return ma.Access == store.AccessAll
+	})
+	ra := call(t, m.discPost, map[string]any{"discussion": p.disc.Key, "body": "alice, look", "target": alice.ID, "clientId": "c-a1"}).(discPostResult)
+	if ra.Execution == nil {
+		t.Fatal("no execution for the host's agent")
+	}
+	if n, _ := m.store.Intent(p.disc.Key, "c-a1"); n.Member != "" {
+		t.Fatalf("intent saved for another person's agent: %+v", n)
+	}
+	waitFor(t, "host runs the member's request", func() bool {
+		h.dispatchAll()
+		x, _ := h.store.Execution(ra.Execution.ID)
+		return x.State == store.ExecRunning
+	})
+}

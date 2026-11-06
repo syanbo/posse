@@ -245,7 +245,6 @@ func (a *app) collabSection(c *ui.Context, d *discDetail) {
 			}
 		})
 		if d.hostRole() && (cb == nil || !cb.Shared) {
-			ui.Text(c, m.CollabShareHint()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5)
 			if !archived && pressable(textButton(c.Key("collab-share"), m.CollabShareEllipsis())).Clicked() {
 				a.askShare(m, d)
 			}

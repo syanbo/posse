@@ -1,6 +1,14 @@
 package app
 
 import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/png"
+	"math"
+	"os"
+	"path/filepath"
+
 	"strings"
 	"testing"
 	"time"
@@ -99,6 +107,18 @@ func renderDiscussionPreviews(t *testing.T, dark bool, suffix string) {
 	a.disc.d.msgs = append(a.disc.d.msgs, long)
 	savePNG(t, newPreviewTester(a, dark), "discussions-long-"+suffix+".png")
 
+	// 图片附件直接显示：一张横的设计稿、一张竖的长截图，再带一个普通文件
+	a = previewApp(t)
+	previewDiscussion(a)
+	previewDiscImages(t, a)
+	a.disc.panel, a.state.SidebarHidden = false, true
+	a.disc.follow, a.disc.scroll.Y = true, math.MaxFloat32
+	tt = newPreviewTester(a, dark)
+	for range 3 {
+		tt.Frame()
+	}
+	savePNG(t, tt, "discussions-images-"+suffix+".png")
+
 	// 归档的讨论
 	a = previewApp(t)
 	previewDiscussion(a)
@@ -148,8 +168,9 @@ func previewCollab(a *app, host bool) {
 		}}
 	d.collab = cb
 	d.info.Shared = true
-	// Codex 审查在 Mo 的电脑上
+	// Codex 审查在 Mo 的电脑上，Mo 放开给了 Hana
 	d.members[1].Owner = strings.Repeat("b2", 32)
+	d.members[1].Access = strings.Repeat("a1", 32)
 	for id, x := range d.execs {
 		if x.Member == "mb2" {
 			x.Owner = strings.Repeat("b2", 32)
@@ -188,7 +209,34 @@ func previewCollab(a *app, host bool) {
 }
 
 func renderCollabPreviews(t *testing.T, dark bool, suffix string) {
+	// 有人 @ 了你（列表标出、消息高亮），输入框里打 @ 弹出候选
 	a := previewApp(t)
+	previewDiscussion(a)
+	previewCollab(a, true)
+	a.disc.list[0].Questions, a.disc.list[0].MentionSeq = 0, 10
+	a.state.DiscRead[a.disc.list[0].Key] = 9
+	a.disc.panel, a.disc.target, a.disc.quote = false, "", ""
+	a.disc.follow, a.disc.scroll.Y = true, math.MaxFloat32
+	tt := newPreviewTester(a, dark)
+	if err := tt.Click("消息（⌘↩ 发送）"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("@")
+	for range 4 {
+		tt.Frame()
+		pass(tt, 80*time.Millisecond)
+	}
+	savePNG(t, tt, "discussions-mention-"+suffix+".png")
+
+	// 加入者改自己的 Agent：谁能 @ 它
+	a = previewApp(t)
+	previewDiscussion(a)
+	previewCollab(a, false)
+	a.openMemberForm(a.disc.d, "mb2")
+	a.disc.form.access, a.disc.form.people = 2, map[string]bool{strings.Repeat("a1", 32): true}
+	savePNG(t, newPreviewTester(a, dark), "discussions-member-access-"+suffix+".png")
+
+	a = previewApp(t)
 	previewDiscussion(a)
 	previewCollab(a, true)
 	a.disc.quote = ""
@@ -213,4 +261,49 @@ func renderCollabPreviews(t *testing.T, dark bool, suffix string) {
 		Addrs: []string{"192.168.1.8:6791"}, Secret: "s"}
 	a.disc.join = joinForm{open: true, text: inv.Encode()}
 	savePNG(t, newPreviewTester(a, dark), "discussions-join-"+suffix+".png")
+}
+
+// previewDiscImages 在临时目录里放两张图片当附件，缩略图预先解好（预览不等后台解码）。
+func previewDiscImages(t *testing.T, a *app) {
+	dir := t.TempDir()
+	d := a.disc.d
+	d.info.ProjectID, d.info.ProjectPath = "", dir
+	write := func(name string, w, h int, top, bottom color.RGBA) discAttachment {
+		img := image.NewRGBA(image.Rect(0, 0, w, h))
+		for y := range h {
+			k := float64(y) / float64(h)
+			c := color.RGBA{uint8(float64(top.R)*(1-k) + float64(bottom.R)*k), uint8(float64(top.G)*(1-k) + float64(bottom.G)*k), uint8(float64(top.B)*(1-k) + float64(bottom.B)*k), 255}
+			for x := range w {
+				img.SetRGBA(x, y, c)
+			}
+		}
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), buf.Bytes(), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		img, err := decodeDiscThumb(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a.discThumbs.m == nil {
+			a.discThumbs.m = map[string]*discThumb{}
+		}
+		th := &discThumb{}
+		th.set(img)
+		a.discThumbs.m[filepath.Join(dir, name)] = th
+		return discAttachment{ID: name, Name: name, Path: name, Size: int64(buf.Len())}
+	}
+	atts := []discAttachment{
+		write("design.png", 1600, 1000, color.RGBA{243, 242, 239, 255}, color.RGBA{217, 119, 87, 255}),
+		write("screenshot.png", 590, 1280, color.RGBA{40, 44, 52, 255}, color.RGBA{91, 141, 239, 255}),
+		{ID: "notes", Name: "notes.md", Path: "notes.md", Size: 2048},
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("# notes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d.msgs = append(d.msgs, discMessage{ID: "m10", Seq: 10, Kind: "user", Body: "图片不直接显示", Attachments: atts, CreatedAt: time.Now()})
+	a.disc.quote = ""
 }

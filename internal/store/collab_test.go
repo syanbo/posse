@@ -351,3 +351,134 @@ func TestCollabAddMemberOnceMigrationAndConcurrency(t *testing.T) {
 		}
 	}
 }
+
+// 列表带着最近一条 @ 本机这个人的消息的序号：后面又来了别的消息也不丢。
+func TestSummaryMentionSeq(t *testing.T) {
+	s := openTestStore(t)
+	s.SetSelf("me")
+	d, _ := newDiscussion(t, s)
+	for i, mention := range []string{"", "me", "other", ""} {
+		msg, _, _, err := s.PostMessage(PostInput{Discussion: d.Key, Body: fmt.Sprint(i), At: time.Now()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// 加入者的缓存里 @ 本机的消息由同步写入，这里直接改 mention
+		s.db.Exec(`UPDATE disc_messages SET mention=? WHERE id=?`, mention, msg.ID)
+	}
+	ss, err := s.DiscussionSummaries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ss) != 1 || ss[0].MentionSeq != 2 || ss[0].MsgSeq != 4 {
+		t.Fatalf("summary %+v", ss)
+	}
+}
+
+func TestMemberAccess(t *testing.T) {
+	if got := NormalizeAccess(" b , a,owner,a,all", "owner"); got != "a,b" {
+		t.Fatalf("normalize %q", got)
+	}
+	m := Member{Owner: "o"}
+	if !m.Allows("o", "h") || m.Allows("a", "h") || m.Allows("", "h") {
+		t.Fatal("only owner")
+	}
+	if !(Member{}).Allows("h", "h") {
+		t.Fatal("host's own agent")
+	}
+	m.Access = "a,b"
+	if !m.Allows("b", "h") || m.Allows("c", "h") {
+		t.Fatal("specific people")
+	}
+	m.Access = AccessAll
+	if !m.Allows("c", "h") || m.Allows("", "h") {
+		t.Fatal("everyone")
+	}
+	// 访问是空时确认过的配置摘要和加访问设置之前一样
+	if ownConfig(Member{Name: "n", Role: "r", Agent: "codex"}) != digest("n", "r", "codex", "", "") {
+		t.Fatal("ownConfig changed for agents without access")
+	}
+}
+
+// 房主在同步里把本机的 Agent 改成没有拥有者、放开给所有人：不接受归属变化，暂停，核对不通过；不调度。
+func TestSyncCannotTakeOwnAgent(t *testing.T) {
+	s := openTestStore(t)
+	s.SetSelf("me")
+	room := "hostfp/d_x"
+	if err := s.CreateMirror(Discussion{Key: room, Host: "hostfp", LocalID: "d_x", Title: "t", CreatedAt: time.Now()},
+		Joined{Room: room, Host: "hostfp", State: JoinedActive, Generation: 1, JoinedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetJoined(room, JoinedActive, 1, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	m := Member{ID: "dmb_me", Name: "Bob", Agent: "codex", Owner: "me", Generation: 1, ConfigVersion: 1, CreatedAt: time.Now()}
+	b := SyncBatch{Rev: 1, Discussion: SyncDiscussion{Title: "t", Status: DiscussionActive, Shared: true}, Members: []Member{m}}
+	if _, err := s.ApplySync(room, "me", b); err != nil {
+		t.Fatal(err)
+	}
+	m.WorkspaceID = "w1"
+	if err := s.SetOwnConfig(m); err != nil {
+		t.Fatal(err)
+	}
+	if !s.OwnConfigHolds(m.ID) {
+		t.Fatal("confirmed agent does not hold")
+	}
+	forged := m
+	forged.Owner, forged.Access = "", AccessAll
+	b = SyncBatch{Rev: 2, Discussion: b.Discussion, Members: []Member{forged}}
+	if _, err := s.ApplySync(room, "me", b); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Member(m.ID)
+	if got.Owner != "me" || got.Access != "" || got.Paused != ConfigConflict {
+		t.Fatalf("forged ownership applied: %+v", got)
+	}
+	// 换代际、删了又被房主恢复：都不接受
+	regen := m
+	regen.Generation = 2
+	if _, err := s.ApplySync(room, "me", SyncBatch{Rev: 3, Discussion: b.Discussion, Members: []Member{regen}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Member(m.ID); got.Generation != 1 || got.Paused != ConfigConflict {
+		t.Fatalf("generation rewritten: %+v", got)
+	}
+	gone := time.Now()
+	removed := m
+	removed.RemovedAt = &gone
+	if _, err := s.ApplySync(room, "me", SyncBatch{Rev: 4, Discussion: b.Discussion, Members: []Member{removed}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ApplySync(room, "me", SyncBatch{Rev: 5, Discussion: b.Discussion, Members: []Member{m}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Member(m.ID); got.RemovedAt == nil || s.OwnConfigHolds(m.ID) {
+		t.Fatalf("removed agent resurrected: %+v", got)
+	}
+	// 本机经房主删除后马上记下：房主不下发删除标记、照旧同步它，也不复活
+	other0 := Member{ID: "dmb_me2", Name: "Bob2", Agent: "codex", Owner: "me", Generation: 1, ConfigVersion: 1, CreatedAt: time.Now()}
+	if _, err := s.ApplySync(room, "me", SyncBatch{Rev: 5, Discussion: b.Discussion, Members: []Member{other0}}); err != nil {
+		t.Fatal(err)
+	}
+	other0.WorkspaceID = "w1"
+	s.SetOwnConfig(other0)
+	if err := s.MarkOwnRemoved(other0.ID, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ApplySync(room, "me", SyncBatch{Rev: 6, Discussion: b.Discussion, Members: []Member{other0}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Member(other0.ID); got.RemovedAt == nil || s.OwnConfigHolds(other0.ID) {
+		t.Fatalf("locally removed agent revived: %+v", got)
+	}
+	// 拥有者为空的成员在加入的讨论里不调度（那是房主的）
+	other := Member{ID: "dmb_host", Name: "Alice", Agent: "claude", ConfigVersion: 1, CreatedAt: time.Now()}
+	if _, err := s.ApplySync(room, "me", SyncBatch{Rev: 7, Discussion: b.Discussion, Members: []Member{other}}); err != nil {
+		t.Fatal(err)
+	}
+	ms, _ := s.ActiveMembers()
+	for _, x := range ms {
+		if x.ID == other.ID {
+			t.Fatal("host's agent with empty owner scheduled on a member's computer")
+		}
+	}
+}

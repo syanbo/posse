@@ -25045,20 +25045,6 @@ func (msgs Messages) DiscNewWorktree() string {
 	return Catalog.Format(msgs.locale, "discNewWorktree", nil)
 }
 
-// DiscNoDescription says "No description"
-// in the language the app shows.
-//
-// Discussion details when it has no description.
-func DiscNoDescription() string { return In(i18n.Locale()).DiscNoDescription() }
-
-// DiscNoDescription says "No description"
-// in the language of msgs.
-//
-// Discussion details when it has no description.
-func (msgs Messages) DiscNoDescription() string {
-	return Catalog.Format(msgs.locale, "discNoDescription", nil)
-}
-
 // DiscNoGitNote says "This project is not a git repository: members share the directory without worktree isolation."
 // in the language the app shows.
 //
@@ -25071,20 +25057,6 @@ func DiscNoGitNote() string { return In(i18n.Locale()).DiscNoGitNote() }
 // Member dialog note for non-git projects.
 func (msgs Messages) DiscNoGitNote() string {
 	return Catalog.Format(msgs.locale, "discNoGitNote", nil)
-}
-
-// DiscNoKeyMessages says "Mark messages with the star to keep conclusions at hand; they are also given to members as context."
-// in the language the app shows.
-//
-// Discussion side panel: empty key message list.
-func DiscNoKeyMessages() string { return In(i18n.Locale()).DiscNoKeyMessages() }
-
-// DiscNoKeyMessages says "Mark messages with the star to keep conclusions at hand; they are also given to members as context."
-// in the language of msgs.
-//
-// Discussion side panel: empty key message list.
-func (msgs Messages) DiscNoKeyMessages() string {
-	return Catalog.Format(msgs.locale, "discNoKeyMessages", nil)
 }
 
 // DiscNoMatches says "No matches"
@@ -25483,20 +25455,6 @@ func (msgs Messages) DiscSend() string {
 	return Catalog.Format(msgs.locale, "discSend", nil)
 }
 
-// DiscSendTo says "To"
-// in the language the app shows.
-//
-// Discussion input: label before the recipient.
-func DiscSendTo() string { return In(i18n.Locale()).DiscSendTo() }
-
-// DiscSendTo says "To"
-// in the language of msgs.
-//
-// Discussion input: label before the recipient.
-func (msgs Messages) DiscSendTo() string {
-	return Catalog.Format(msgs.locale, "discSendTo", nil)
-}
-
 // DiscSharedDirNote says "Members in the same directory may overwrite each other; Posse asks before running two at once there."
 // in the language the app shows.
 //
@@ -25565,20 +25523,6 @@ func DiscStopConfirm(name string) string { return In(i18n.Locale()).DiscStopConf
 // Stop request confirmation title.
 func (msgs Messages) DiscStopConfirm(name string) string {
 	return Catalog.Format(msgs.locale, "discStopConfirm", map[string]any{"name": name})
-}
-
-// DiscTargetNote says "runs as a request"
-// in the language the app shows.
-//
-// Discussion input: note after the @-mentioned recipient.
-func DiscTargetNote() string { return In(i18n.Locale()).DiscTargetNote() }
-
-// DiscTargetNote says "runs as a request"
-// in the language of msgs.
-//
-// Discussion input: note after the @-mentioned recipient.
-func (msgs Messages) DiscTargetNote() string {
-	return Catalog.Format(msgs.locale, "discTargetNote", nil)
 }
 
 // DiscTitle says "Discussions"
@@ -25705,20 +25649,6 @@ func DiscYou() string { return In(i18n.Locale()).DiscYou() }
 // Discussion: the user's name on their messages.
 func (msgs Messages) DiscYou() string {
 	return Catalog.Format(msgs.locale, "discYou", nil)
-}
-
-// DiscYouInitial says "Y"
-// in the language the app shows.
-//
-// Discussion: the letter in the user's avatar.
-func DiscYouInitial() string { return In(i18n.Locale()).DiscYouInitial() }
-
-// DiscYouInitial says "Y"
-// in the language of msgs.
-//
-// Discussion: the letter in the user's avatar.
-func (msgs Messages) DiscYouInitial() string {
-	return Catalog.Format(msgs.locale, "discYouInitial", nil)
 }
 
 // DiscLoadNewer says "Load newer messages"
@@ -26697,20 +26627,6 @@ func (msgs Messages) CollabShareEllipsis() string {
 	return Catalog.Format(msgs.locale, "collabShareEllipsis", nil)
 }
 
-// CollabShareHint says "Share on the local network to let people on other Macs join with their own agents."
-// in the language the app shows.
-//
-// Panel hint when not shared.
-func CollabShareHint() string { return In(i18n.Locale()).CollabShareHint() }
-
-// CollabShareHint says "Share on the local network to let people on other Macs join with their own agents."
-// in the language of msgs.
-//
-// Panel hint when not shared.
-func (msgs Messages) CollabShareHint() string {
-	return Catalog.Format(msgs.locale, "collabShareHint", nil)
-}
-
 // CollabShareTitle says "Share this discussion on the local network?"
 // in the language the app shows.
 //
@@ -26879,4 +26795,164 @@ func CollabListLeaving() string { return In(i18n.Locale()).CollabListLeaving() }
 // Discussion list preview while a leave is pending.
 func (msgs Messages) CollabListLeaving() string {
 	return Catalog.Format(msgs.locale, "collabListLeaving", nil)
+}
+
+// DiscAtOthersAgent says "Asks {owner}"
+// in the language the app shows.
+//
+// Discussion @ suggestions: hint on another person's agent; only its owner
+// can run it, so the owner is notified.
+func DiscAtOthersAgent(owner string) string { return In(i18n.Locale()).DiscAtOthersAgent(owner) }
+
+// DiscAtOthersAgent says "Asks {owner}"
+// in the language of msgs.
+//
+// Discussion @ suggestions: hint on another person's agent; only its owner
+// can run it, so the owner is notified.
+func (msgs Messages) DiscAtOthersAgent(owner string) string {
+	return Catalog.Format(msgs.locale, "discAtOthersAgent", map[string]any{"owner": owner})
+}
+
+// DiscSomeone says "Someone"
+// in the language the app shows.
+//
+// Discussion notification: author when the message that mentioned you is
+// not the latest one.
+func DiscSomeone() string { return In(i18n.Locale()).DiscSomeone() }
+
+// DiscSomeone says "Someone"
+// in the language of msgs.
+//
+// Discussion notification: author when the message that mentioned you is
+// not the latest one.
+func (msgs Messages) DiscSomeone() string {
+	return Catalog.Format(msgs.locale, "discSomeone", nil)
+}
+
+// DiscMentionedYou says "Someone mentioned you"
+// in the language the app shows.
+//
+// Discussion list: preview line when an unread message mentions you.
+func DiscMentionedYou() string { return In(i18n.Locale()).DiscMentionedYou() }
+
+// DiscMentionedYou says "Someone mentioned you"
+// in the language of msgs.
+//
+// Discussion list: preview line when an unread message mentions you.
+func (msgs Messages) DiscMentionedYou() string {
+	return Catalog.Format(msgs.locale, "discMentionedYou", nil)
+}
+
+// DiscAtYou says "@You"
+// in the language the app shows.
+//
+// Discussion message tag: this message mentions you.
+func DiscAtYou() string { return In(i18n.Locale()).DiscAtYou() }
+
+// DiscAtYou says "@You"
+// in the language of msgs.
+//
+// Discussion message tag: this message mentions you.
+func (msgs Messages) DiscAtYou() string {
+	return Catalog.Format(msgs.locale, "discAtYou", nil)
+}
+
+// DiscAccessLabel says "Who can @ it"
+// in the language the app shows.
+//
+// Member form: label of the access setting (who besides the owner can @
+// this agent to run it).
+func DiscAccessLabel() string { return In(i18n.Locale()).DiscAccessLabel() }
+
+// DiscAccessLabel says "Who can @ it"
+// in the language of msgs.
+//
+// Member form: label of the access setting (who besides the owner can @
+// this agent to run it).
+func (msgs Messages) DiscAccessLabel() string {
+	return Catalog.Format(msgs.locale, "discAccessLabel", nil)
+}
+
+// DiscAccessOnlyMe says "Only me"
+// in the language the app shows.
+//
+// Member form access option: only the owner.
+func DiscAccessOnlyMe() string { return In(i18n.Locale()).DiscAccessOnlyMe() }
+
+// DiscAccessOnlyMe says "Only me"
+// in the language of msgs.
+//
+// Member form access option: only the owner.
+func (msgs Messages) DiscAccessOnlyMe() string {
+	return Catalog.Format(msgs.locale, "discAccessOnlyMe", nil)
+}
+
+// DiscAccessAll says "Everyone"
+// in the language the app shows.
+//
+// Member form access option: everyone in the discussion.
+func DiscAccessAll() string { return In(i18n.Locale()).DiscAccessAll() }
+
+// DiscAccessAll says "Everyone"
+// in the language of msgs.
+//
+// Member form access option: everyone in the discussion.
+func (msgs Messages) DiscAccessAll() string {
+	return Catalog.Format(msgs.locale, "discAccessAll", nil)
+}
+
+// DiscAccessSome says "Specific people"
+// in the language the app shows.
+//
+// Member form access option: the owner and selected people.
+func DiscAccessSome() string { return In(i18n.Locale()).DiscAccessSome() }
+
+// DiscAccessSome says "Specific people"
+// in the language of msgs.
+//
+// Member form access option: the owner and selected people.
+func (msgs Messages) DiscAccessSome() string {
+	return Catalog.Format(msgs.locale, "discAccessSome", nil)
+}
+
+// DiscAccessNobody says "No one else has joined yet."
+// in the language the app shows.
+//
+// Member form: shown under 'Specific people' when there is nobody to pick.
+func DiscAccessNobody() string { return In(i18n.Locale()).DiscAccessNobody() }
+
+// DiscAccessNobody says "No one else has joined yet."
+// in the language of msgs.
+//
+// Member form: shown under 'Specific people' when there is nobody to pick.
+func (msgs Messages) DiscAccessNobody() string {
+	return Catalog.Format(msgs.locale, "discAccessNobody", nil)
+}
+
+// DiscAccessEveryone says "Everyone can @ it"
+// in the language the app shows.
+//
+// Member list: this agent's access is open to everyone.
+func DiscAccessEveryone() string { return In(i18n.Locale()).DiscAccessEveryone() }
+
+// DiscAccessEveryone says "Everyone can @ it"
+// in the language of msgs.
+//
+// Member list: this agent's access is open to everyone.
+func (msgs Messages) DiscAccessEveryone() string {
+	return Catalog.Format(msgs.locale, "discAccessEveryone", nil)
+}
+
+// DiscAccessPeople says "{names} can @ it"
+// in the language the app shows.
+//
+// Member list: people the owner allowed to @ this agent.
+func DiscAccessPeople(names string) string { return In(i18n.Locale()).DiscAccessPeople(names) }
+
+// DiscAccessPeople says "{names} can @ it"
+// in the language of msgs.
+//
+// Member list: people the owner allowed to @ this agent.
+func (msgs Messages) DiscAccessPeople(names string) string {
+	return Catalog.Format(msgs.locale, "discAccessPeople", map[string]any{"names": names})
 }

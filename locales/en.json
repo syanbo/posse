@@ -9141,17 +9141,9 @@
   "@discNewWorktree": {
     "description": "Member dialog: choice to create a worktree for the member."
   },
-  "discNoDescription": "No description",
-  "@discNoDescription": {
-    "description": "Discussion details when it has no description."
-  },
   "discNoGitNote": "This project is not a git repository: members share the directory without worktree isolation.",
   "@discNoGitNote": {
     "description": "Member dialog note for non-git projects."
-  },
-  "discNoKeyMessages": "Mark messages with the star to keep conclusions at hand; they are also given to members as context.",
-  "@discNoKeyMessages": {
-    "description": "Discussion side panel: empty key message list."
   },
   "discNoMatches": "No matches",
   "@discNoMatches": {
@@ -9303,10 +9295,6 @@
   "@discSend": {
     "description": "Discussion input: send button."
   },
-  "discSendTo": "To",
-  "@discSendTo": {
-    "description": "Discussion input: label before the recipient."
-  },
   "discSharedDirNote": "Members in the same directory may overwrite each other; Posse asks before running two at once there.",
   "@discSharedDirNote": {
     "description": "Member dialog note under the workspace choice."
@@ -9331,10 +9319,6 @@
         "type": "String"
       }
     }
-  },
-  "discTargetNote": "runs as a request",
-  "@discTargetNote": {
-    "description": "Discussion input: note after the @-mentioned recipient."
   },
   "discTitle": "Discussions",
   "@discTitle": {
@@ -9381,10 +9365,6 @@
   "discYou": "You",
   "@discYou": {
     "description": "Discussion: the user's name on their messages."
-  },
-  "discYouInitial": "Y",
-  "@discYouInitial": {
-    "description": "Discussion: the letter in the user's avatar."
   },
   "discLoadNewer": "Load newer messages",
   "@discLoadNewer": {
@@ -9757,10 +9737,6 @@
   "@collabShareEllipsis": {
     "description": "Menu/panel action."
   },
-  "collabShareHint": "Share on the local network to let people on other Macs join with their own agents.",
-  "@collabShareHint": {
-    "description": "Panel hint when not shared."
-  },
   "collabShareTitle": "Share this discussion on the local network?",
   "@collabShareTitle": {
     "description": "Share confirm title."
@@ -9818,5 +9794,59 @@
   "collabListLeaving": "Leaving: finishes when the host is reachable",
   "@collabListLeaving": {
     "description": "Discussion list preview while a leave is pending."
+  },
+  "discAtOthersAgent": "Asks {owner}",
+  "@discAtOthersAgent": {
+    "description": "Discussion @ suggestions: hint on another person's agent; only its owner can run it, so the owner is notified.",
+    "placeholders": {
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "discSomeone": "Someone",
+  "@discSomeone": {
+    "description": "Discussion notification: author when the message that mentioned you is not the latest one."
+  },
+  "discMentionedYou": "Someone mentioned you",
+  "@discMentionedYou": {
+    "description": "Discussion list: preview line when an unread message mentions you."
+  },
+  "discAtYou": "@You",
+  "@discAtYou": {
+    "description": "Discussion message tag: this message mentions you."
+  },
+  "discAccessLabel": "Who can @ it",
+  "@discAccessLabel": {
+    "description": "Member form: label of the access setting (who besides the owner can @ this agent to run it)."
+  },
+  "discAccessOnlyMe": "Only me",
+  "@discAccessOnlyMe": {
+    "description": "Member form access option: only the owner."
+  },
+  "discAccessAll": "Everyone",
+  "@discAccessAll": {
+    "description": "Member form access option: everyone in the discussion."
+  },
+  "discAccessSome": "Specific people",
+  "@discAccessSome": {
+    "description": "Member form access option: the owner and selected people."
+  },
+  "discAccessNobody": "No one else has joined yet.",
+  "@discAccessNobody": {
+    "description": "Member form: shown under 'Specific people' when there is nobody to pick."
+  },
+  "discAccessEveryone": "Everyone can @ it",
+  "@discAccessEveryone": {
+    "description": "Member list: this agent's access is open to everyone."
+  },
+  "discAccessPeople": "{names} can @ it",
+  "@discAccessPeople": {
+    "description": "Member list: people the owner allowed to @ this agent.",
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
   }
 }

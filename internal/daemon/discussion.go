@@ -542,7 +542,7 @@ func discError(err error) error {
 	case errors.Is(err, store.ErrRetried):
 		return rpc.Errorf(rpc.CodeConflict, "this request was already retried")
 	case errors.Is(err, store.ErrNotOwner):
-		return rpc.Errorf(rpc.CodeConflict, "you can only send requests to your own agents; @ the owner to ask them")
+		return rpc.Errorf(rpc.CodeConflict, "you can only send requests to your own agents and those their owners let you use; @ the owner to ask them")
 	case errors.Is(err, store.ErrRevoked):
 		return rpc.Errorf(rpc.CodeConflict, "your access to this discussion was revoked")
 	case errors.Is(err, store.ErrAddGone), errors.Is(err, store.ErrAddChanged), errors.Is(err, store.ErrConflict), errors.Is(err, store.ErrStaleRound), errors.Is(err, store.ErrNotAcked):
@@ -891,6 +891,31 @@ type discMemberParams struct {
 	ApplyNow   bool   `json:"applyNow"` // 改配置后马上关掉旧 worker，下一轮按新配置启动
 	// ClientID 是这次添加的请求 ID：加入的讨论里经房主加，应答丢了用同一个 ID 重试不会加出两个
 	ClientID string `json:"clientId"`
+	// Access 是除了自己还有谁能 @ 它：空或 owner 是只有自己，all 是讨论里所有人，否则是逗号分隔的人（名字或指纹）
+	Access string `json:"access"`
+}
+
+// memberAccess 把访问设置解析成存的样子：人按名字或指纹认，去重排序。
+func (d *Daemon) memberAccess(disc store.Discussion, sel, owner string) (string, error) {
+	sel = strings.TrimSpace(sel)
+	switch sel {
+	case "", "owner", "me":
+		return "", nil
+	case store.AccessAll:
+		return store.AccessAll, nil
+	}
+	var fps []string
+	for _, s := range strings.Split(sel, ",") {
+		if s = strings.TrimSpace(s); s == "" {
+			continue
+		}
+		fp, err := d.personSel(disc.Key, s)
+		if err != nil {
+			return "", err
+		}
+		fps = append(fps, fp)
+	}
+	return store.NormalizeAccess(strings.Join(fps, ","), owner), nil
 }
 
 // addWorkspace 是添加成员时的执行工作区。带请求 ID 新建 worktree 时，记下它属于这次请求：
@@ -1004,6 +1029,14 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 	if err := d.checkMemberAgent(p.Agent); err != nil {
 		return nil, err
 	}
+	self, err := d.identity()
+	if err != nil {
+		return nil, err
+	}
+	access, err := d.memberAccess(disc, p.Access, self.ID)
+	if err != nil {
+		return nil, err
+	}
 	var rc *roomConn
 	if disc.Mirror {
 		if p.ClientID == "" {
@@ -1027,7 +1060,7 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 			Member    string `json:"member"`
 			Duplicate bool   `json:"duplicate"`
 		}
-		if err := rc.call("member.add", map[string]string{"name": p.Name, "role": strings.TrimSpace(p.Role), "agent": p.Agent, "model": p.Model, "effort": p.Effort, "client": p.ClientID}, &res); err != nil {
+		if err := rc.call("member.add", map[string]string{"name": p.Name, "role": strings.TrimSpace(p.Role), "agent": p.Agent, "model": p.Model, "effort": p.Effort, "client": p.ClientID, "access": access}, &res); err != nil {
 			return nil, addError(err, p.ClientID, tree)
 		}
 		// 房主早就加好了、这台电脑也确认过（上次的应答其实收到了，或者之后改过设置）：旧请求的重试不改本机后来的设置
@@ -1035,19 +1068,15 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 			return d.store.Member(res.Member)
 		}
 		own := store.Member{ID: res.Member, Name: p.Name, Role: strings.TrimSpace(p.Role), Agent: p.Agent, Model: p.Model, Effort: p.Effort,
-			WorkspaceID: w.ID, WorkspaceLabel: d.workspaceLabel(w)}
+			WorkspaceID: w.ID, WorkspaceLabel: d.workspaceLabel(w), Access: access}
 		if err := d.store.SetOwnConfig(own); err != nil {
 			return nil, addError(discError(err), p.ClientID, tree)
 		}
 		d.taskNotify()
 		return d.store.Member(res.Member)
 	}
-	id, err := d.identity()
-	if err != nil {
-		return nil, err
-	}
 	m := store.Member{ID: store.NewID("dmb_") + store.NewID(""), Discussion: disc.Key, Name: p.Name, Role: strings.TrimSpace(p.Role), Agent: p.Agent,
-		Model: p.Model, Effort: p.Effort, WorkspaceID: w.ID, WorkspaceLabel: d.workspaceLabel(w), CreatedAt: time.Now(), Owner: id.ID}
+		Model: p.Model, Effort: p.Effort, WorkspaceID: w.ID, WorkspaceLabel: d.workspaceLabel(w), CreatedAt: time.Now(), Owner: self.ID, Access: access}
 	memberID, _, err := d.store.AddMemberOnce(m, p.ClientID)
 	if err != nil {
 		return nil, addError(discError(err), p.ClientID, tree)
@@ -1121,6 +1150,12 @@ func (d *Daemon) discMemberUpdate(ctx context.Context, raw json.RawMessage) (any
 	keep("role", &p.Role, old.Role)
 	keep("model", &p.Model, old.Model)
 	keep("effort", &p.Effort, old.Effort)
+	access := old.Access
+	if _, ok := present["access"]; ok {
+		if access, err = d.memberAccess(disc, p.Access, cmpOr(old.Owner, disc.Host)); err != nil {
+			return nil, err
+		}
+	}
 	if p.Name = strings.TrimSpace(p.Name); p.Name == "" {
 		p.Name = old.Name
 	}
@@ -1141,7 +1176,7 @@ func (d *Daemon) discMemberUpdate(ctx context.Context, raw json.RawMessage) (any
 		label = d.workspaceLabel(w)
 	}
 	nm := store.Member{ID: old.ID, Name: p.Name, Role: strings.TrimSpace(p.Role), Agent: p.Agent, Model: p.Model, Effort: p.Effort,
-		WorkspaceID: w.ID, WorkspaceLabel: label}
+		WorkspaceID: w.ID, WorkspaceLabel: label, Access: access}
 	if disc.Mirror {
 		return d.mirrorMemberUpdate(disc, old, nm, p.ApplyNow)
 	}
@@ -1205,7 +1240,10 @@ func (d *Daemon) discMemberRemove(ctx context.Context, raw json.RawMessage) (any
 		if err := rc.call("member.remove", map[string]string{"member": cur.ID}, nil); err != nil {
 			return nil, err
 		}
-		d.store.ReleaseWorker(cur.ID, true)
+		// 本机马上记成已删除，不等房主同步：之后谁的请求都不再领取（同步也清不掉这个标记）
+		if err := d.store.MarkOwnRemoved(cur.ID, time.Now()); err != nil {
+			return nil, discError(err)
+		}
 		d.closeDiscWorker(cur.TaskID, cur.Worker)
 		return map[string]string{"removed": cur.ID}, nil
 	}
@@ -1298,7 +1336,7 @@ func (d *Daemon) discPost(ctx context.Context, raw json.RawMessage) (any, error)
 		return d.mirrorPost(disc, p)
 	}
 	if p.Target != "" {
-		if t, err := d.store.Member(p.Target); err == nil && !d.mine(t.Owner) {
+		if t, err := d.store.Member(p.Target); err == nil && !t.Allows(d.store.Self(), disc.Host) && !d.mine(t.Owner) {
 			return nil, notYours(t.Name)
 		}
 	}

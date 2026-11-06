@@ -83,7 +83,9 @@ func TestCollabReceiverMenu(t *testing.T) {
 
 // 别人的执行只显示，不给停止、确认、取消；自己的照常。
 func TestCollabExecCardsByOwner(t *testing.T) {
-	_, _, frames := collabTester(t, true)
+	a, _, frames := collabTester(t, true)
+	// 谁的 Agent 写在右栏的成员里，执行卡上不重复
+	a.disc.panel = true
 	tt := frames()
 	texts := "\n" + strings.Join(tt.Texts(), "\n") + "\n"
 	if !strings.Contains(texts, "在 Mo 的电脑上") {
