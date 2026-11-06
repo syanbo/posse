@@ -1,8 +1,12 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/jpeg"
+	pngenc "image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,6 +93,9 @@ func TestMobileDiscussionUploads(t *testing.T) {
 	if string(read["content"].([]byte)) != "hello" {
 		t.Fatal(read)
 	}
+	if _, err := mobileDiscCall(d, "phone-a", "attachment.thumb", map[string]any{"discussion": disc.Key, "message": m["id"], "attachment": a["id"]}); err == nil {
+		t.Fatal("thumb of a text file")
+	}
 	other := call(t, d.discCreate, map[string]any{"title": "other", "project": disc.ProjectID}).(store.Discussion)
 	if _, err := mobileDiscCall(d, "phone-a", "attachment.read", map[string]any{"discussion": other.Key, "message": m["id"], "attachment": a["id"]}); err == nil {
 		t.Fatal("cross-room attachment")
@@ -106,6 +113,29 @@ func TestMobileDiscussionUploads(t *testing.T) {
 	}
 	if _, err := mobileDiscCall(d, "phone-a", "attachment.read", map[string]any{"discussion": disc.Key, "message": m["id"], "attachment": a["id"]}); err == nil {
 		t.Fatal("symlink escape")
+	}
+}
+
+func TestMobileDiscussionThumb(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	var png bytes.Buffer
+	img := image.NewRGBA(image.Rect(0, 0, 1600, 800))
+	if err := pngenc.Encode(&png, img); err != nil {
+		t.Fatal(err)
+	}
+	stage := mustMobileDisc(t, d, "phone-a", "upload.begin", map[string]any{"name": "shot.png", "size": png.Len()})["staged"].(string)
+	mustMobileDisc(t, d, "phone-a", "upload.chunk", map[string]any{"staged": stage, "offset": 0, "content": png.Bytes()})
+	mustMobileDisc(t, d, "phone-a", "upload.commit", map[string]any{"staged": stage})
+	res := mustMobileDisc(t, d, "phone-a", "post", map[string]any{"discussion": disc.Key, "body": "", "clientId": "thumb", "attachments": []any{map[string]any{"staged": stage}}})
+	m := res["message"].(map[string]any)
+	a := m["attachments"].([]any)[0].(map[string]any)
+	th := mustMobileDisc(t, d, "phone-a", "attachment.thumb", map[string]any{"discussion": disc.Key, "message": m["id"], "attachment": a["id"]})
+	if th["width"] != 1600 || th["height"] != 800 {
+		t.Fatal(th["width"], th["height"])
+	}
+	got, err := jpeg.Decode(bytes.NewReader(th["content"].([]byte)))
+	if err != nil || got.Bounds().Dx() != discThumbWidth {
+		t.Fatal(err, got.Bounds())
 	}
 }
 

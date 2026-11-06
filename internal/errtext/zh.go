@@ -14,6 +14,7 @@ var zh = [][2]string{
 	{"invalid discussion attachment path", "讨论附件路径无效"},
 	{"discussion attachment is not downloaded yet", "讨论附件尚未下载，请稍后重试"},
 	{"invalid discussion attachment range", "讨论附件读取范围无效"},
+	{"image is too large to preview", "图片太大，无法预览"},
 	{"discussion upload expired; upload the file again", "附件暂存已过期，请重新上传"},
 	{"invalid discussion upload", "附件上传参数无效，单个文件不能超过 20 MiB"},
 	{"too many discussion uploads; remove unused attachments first", "暂存附件过多，请先移除不用的附件"},

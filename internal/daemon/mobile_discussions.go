@@ -1,15 +1,19 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/jpeg"
 	"io"
 	"mime"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"posse/internal/media"
 	"posse/internal/rpc"
 	"posse/internal/store"
 )
@@ -49,6 +53,9 @@ func (h mobileHost) Discussions(ctx context.Context, device, method string, raw 
 	}
 	if method == "discussion.attachment.read" {
 		return d.mobileDiscAttachment(marshal())
+	}
+	if method == "discussion.attachment.thumb" {
+		return d.mobileDiscThumb(marshal())
 	}
 	if method == "discussion.answer" {
 		var answer discAnswerParams
@@ -170,16 +177,79 @@ func (d *Daemon) mobileDiscAttachment(raw json.RawMessage) (any, error) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return nil, err
 	}
-	disc, err := d.discussion(p.Discussion)
+	f, a, err := d.mobileDiscAttachmentFile(p.Discussion, p.Message, p.Attachment)
 	if err != nil {
 		return nil, err
 	}
-	msg, err := d.store.DiscMessage(p.Message)
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if p.Offset < 0 || p.Offset > st.Size() {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid discussion attachment range")
+	}
+	buf := make([]byte, min(int64(1<<20), st.Size()-p.Offset))
+	n, err := f.ReadAt(buf, p.Offset)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	return map[string]any{"content": buf[:n], "size": st.Size(), "name": a.Name, "type": a.Type}, nil
+}
+
+// discThumbWidth 是手机消息里图片缩略图的宽：消息宽约 300pt，3 倍屏下够用。
+const discThumbWidth = 720
+
+// discThumbs 一次只解一张图：解码后的大图一张几十 MB，手机翻得快时常驻进程不该因此涨上去。
+var discThumbs = make(chan struct{}, 1)
+
+// mobileDiscThumb 给手机消息里的图片附件一张 JPEG 缩略图；先只读尺寸，像素过多的图不解。
+func (d *Daemon) mobileDiscThumb(raw json.RawMessage) (any, error) {
+	var p struct{ Discussion, Message, Attachment string }
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, err
+	}
+	f, _, err := d.mobileDiscAttachmentFile(p.Discussion, p.Message, p.Attachment)
+	if err != nil {
+		return nil, err
+	}
+	b, err := io.ReadAll(f)
+	f.Close()
+	if err != nil {
+		return nil, err
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(b))
+	if err != nil {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "not an image")
+	}
+	if cfg.Width*cfg.Height > 24<<20 {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "image is too large to preview")
+	}
+	discThumbs <- struct{}{}
+	defer func() { <-discThumbs }()
+	img, size, err := media.ScaledImageBytes(b, discThumbWidth)
+	if err != nil {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "not an image")
+	}
+	var out bytes.Buffer
+	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: 82}); err != nil {
+		return nil, err
+	}
+	return map[string]any{"content": out.Bytes(), "width": size.X, "height": size.Y}, nil
+}
+
+// mobileDiscAttachmentFile 打开讨论附件的文件：只认附件目录里的普通文件，软链不能把读取导向目录外。
+func (d *Daemon) mobileDiscAttachmentFile(discussion, message, attachment string) (*os.File, store.Attachment, error) {
+	disc, err := d.discussion(discussion)
+	if err != nil {
+		return nil, store.Attachment{}, err
+	}
+	msg, err := d.store.DiscMessage(message)
 	if err != nil || msg.Discussion != disc.Key {
-		return nil, rpc.Errorf(rpc.CodeNotFound, "discussion attachment not found")
+		return nil, store.Attachment{}, rpc.Errorf(rpc.CodeNotFound, "discussion attachment not found")
 	}
 	for _, a := range msg.Attachments {
-		if a.ID != p.Attachment {
+		if a.ID != attachment {
 			continue
 		}
 		root := disc.ProjectPath
@@ -193,7 +263,7 @@ func (d *Daemon) mobileDiscAttachment(raw json.RawMessage) (any, error) {
 		}
 		// 库里的路径不能越过附件目录，软链也不能把读取导向目录外。
 		if filepath.Clean(a.Path) != rel {
-			return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid discussion attachment path")
+			return nil, a, rpc.Errorf(rpc.CodeBadRequest, "invalid discussion attachment path")
 		}
 		dir := filepath.Join(root, filepath.Dir(rel))
 		realDir, e := filepath.EvalSymlinks(dir)
@@ -204,7 +274,7 @@ func (d *Daemon) mobileDiscAttachment(raw json.RawMessage) (any, error) {
 			return e == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator))
 		}
 		if e == nil && e2 == nil && e3 == nil && (realDir != filepath.Join(realRoot, filepath.Dir(rel)) || !contained(realDir, name)) {
-			return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid discussion attachment path")
+			return nil, a, rpc.Errorf(rpc.CodeBadRequest, "invalid discussion attachment path")
 		}
 		if e != nil || e2 != nil || e3 != nil {
 			if disc.Mirror {
@@ -215,31 +285,23 @@ func (d *Daemon) mobileDiscAttachment(raw json.RawMessage) (any, error) {
 					rc.stmu.Unlock()
 				}
 				if !missing {
-					return nil, rpc.Errorf("attachment_pending", "discussion attachment is not downloaded yet")
+					return nil, a, rpc.Errorf("attachment_pending", "discussion attachment is not downloaded yet")
 				}
 			}
-			return nil, rpc.Errorf(rpc.CodeNotFound, "discussion attachment not found")
+			return nil, a, rpc.Errorf(rpc.CodeNotFound, "discussion attachment not found")
 		}
 		f, err := os.Open(name)
 		if err != nil {
-			return nil, err
+			return nil, a, err
 		}
-		defer f.Close()
 		st, err := f.Stat()
-		if err != nil {
-			return nil, err
+		if err != nil || !st.Mode().IsRegular() || st.Size() > discMaxAttachSize {
+			f.Close()
+			return nil, a, rpc.Errorf(rpc.CodeBadRequest, "invalid discussion attachment range")
 		}
-		if !st.Mode().IsRegular() || p.Offset < 0 || p.Offset > st.Size() || st.Size() > discMaxAttachSize {
-			return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid discussion attachment range")
-		}
-		buf := make([]byte, min(int64(1<<20), st.Size()-p.Offset))
-		n, err := f.ReadAt(buf, p.Offset)
-		if err != nil && !errors.Is(err, io.EOF) {
-			return nil, err
-		}
-		return map[string]any{"content": buf[:n], "size": st.Size(), "name": a.Name, "type": a.Type}, nil
+		return f, a, nil
 	}
-	return nil, rpc.Errorf(rpc.CodeNotFound, "discussion attachment not found")
+	return nil, store.Attachment{}, rpc.Errorf(rpc.CodeNotFound, "discussion attachment not found")
 }
 
 func (d *Daemon) mobileDiscReport(raw json.RawMessage) (any, error) {
