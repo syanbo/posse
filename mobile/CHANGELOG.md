@@ -3,6 +3,22 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.19
+
+- 讨论页重新设计，和电脑端一致：自己的话靠右，执行状态收成一行，详情改成分组卡片。
+- 讨论里的图片直接显示缩略图，点开看原图。
+- 输入框打 @ 弹出候选；别人放开给你的 Agent 也能直接 @，用不了的会提醒它的拥有者。
+- 讨论列表标出 @ 你的讨论；自己的 Agent 可以设「谁能 @ 它」。
+- 需要电脑端 0.1.29 及以上才能看到图片缩略图。
+
+### English
+
+- Redesigned discussions to match the Mac: your messages sit on the right, execution status is a single line, and details use grouped cards.
+- Images in discussions show as thumbnails; tap to open the original.
+- Typing @ in the message box shows suggestions. You can @ agents their owners opened to you; picking one you can't use reminds its owner.
+- The discussion list marks rooms where someone mentioned you, and you can set who can @ your agents.
+- Image thumbnails need Posse for Mac 0.1.29 or later.
+
 ## 0.1.18
 
 - 手机端新增群聊讨论：创建和加入讨论，发送消息、引用、标记关键内容、搜索历史及分享附件。
