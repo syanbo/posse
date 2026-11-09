@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 // FileName 是身份文件在 POSSE_HOME 下的名字。
@@ -25,16 +26,21 @@ const FileName = "collab.json"
 // Identity 是这个 POSSE_HOME 的安装身份。ID 是公钥 SPKI 的 SHA-256 指纹（小写十六进制），
 // 更新、重装应用不变，只有身份文件丢失才变。
 type Identity struct {
-	ID      string
-	Name    string
-	Public  ed25519.PublicKey
-	Private ed25519.PrivateKey
+	ID     string
+	Name   string
+	Avatar string // 头像文件的 SHA-256（AvatarPath），空是没有头像
+	// ProfileRev 是名字、头像的版本：每次改都变大，房主按它丢掉旧的
+	ProfileRev int64
+	Public     ed25519.PublicKey
+	Private    ed25519.PrivateKey
 }
 
 type identityFile struct {
 	Version    int    `json:"version"`
 	PrivateKey string `json:"privateKey"` // Ed25519 种子，十六进制
 	Name       string `json:"name,omitempty"`
+	Avatar     string `json:"avatar,omitempty"`
+	ProfileRev int64  `json:"profileRev,omitempty"`
 }
 
 var mu sync.Mutex
@@ -58,9 +64,7 @@ func LoadOrCreate(home string) (Identity, error) {
 	if err != nil {
 		return Identity{}, err
 	}
-	name, _ := os.Hostname()
-	name = strings.TrimSuffix(name, ".local")
-	f := identityFile{Version: 1, PrivateKey: hex.EncodeToString(priv.Seed()), Name: name}
+	f := identityFile{Version: 1, PrivateKey: hex.EncodeToString(priv.Seed()), Name: DefaultName()}
 	b, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
 		return Identity{}, err
@@ -70,6 +74,12 @@ func LoadOrCreate(home string) (Identity, error) {
 	}
 	// 另一个进程抢先写下的以它为准
 	return load(home)
+}
+
+// DefaultName 是新身份的显示名：本机主机名。
+func DefaultName() string {
+	name, _ := os.Hostname()
+	return strings.TrimSuffix(name, ".local")
 }
 
 func load(home string) (Identity, error) {
@@ -95,7 +105,7 @@ func fromFile(f identityFile) (Identity, error) {
 	if err != nil {
 		return Identity{}, err
 	}
-	return Identity{ID: fp, Name: f.Name, Public: pub, Private: priv}, nil
+	return Identity{ID: fp, Name: f.Name, Avatar: f.Avatar, ProfileRev: f.ProfileRev, Public: pub, Private: priv}, nil
 }
 
 // Fingerprint 是公钥 SPKI（DER）的 SHA-256，小写十六进制。第二阶段 TLS 按它固定对端身份。
@@ -163,8 +173,27 @@ func writeAtomic(path string, b []byte) error {
 	return nil
 }
 
-// SetName 改显示名（其他人看到的名字）；私钥和指纹不变。改名是覆盖写：先写临时文件再改名。
+// SetName 改显示名（其他人看到的名字）；头像、私钥和指纹不变。
 func SetName(home, name string) (Identity, error) {
+	return update(home, func(f *identityFile) { f.Name = name })
+}
+
+// SetProfile 改名字和头像，nil 的一项不动：窗口和手机同时改不同的项时互不覆盖。
+// avatar 是 AvatarPath 下已存好的摘要，空是去掉头像。
+func SetProfile(home string, name, avatar *string) (Identity, error) {
+	return update(home, func(f *identityFile) {
+		if name != nil {
+			f.Name = *name
+		}
+		if avatar != nil {
+			f.Avatar = *avatar
+		}
+	})
+}
+
+// update 改身份文件里的资料并让版本变大；改是覆盖写：先写临时文件再改名。
+// 版本取毫秒时间和旧版本加一的较大者：时钟回拨也不会变小。
+func update(home string, edit func(*identityFile)) (Identity, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	path := filepath.Join(home, FileName)
@@ -176,7 +205,8 @@ func SetName(home, name string) (Identity, error) {
 	if err := json.Unmarshal(b, &f); err != nil {
 		return Identity{}, fmt.Errorf("read %s: %w", FileName, err)
 	}
-	f.Name = name
+	edit(&f)
+	f.ProfileRev = max(f.ProfileRev+1, time.Now().UnixMilli())
 	if b, err = json.MarshalIndent(f, "", "  "); err != nil {
 		return Identity{}, err
 	}

@@ -26956,3 +26956,207 @@ func DiscAccessPeople(names string) string { return In(i18n.Locale()).DiscAccess
 func (msgs Messages) DiscAccessPeople(names string) string {
 	return Catalog.Format(msgs.locale, "discAccessPeople", map[string]any{"names": names})
 }
+
+// SettingsTabProfile says "Profile"
+// in the language the app shows.
+//
+// Settings category in the left column: the user's name and avatar.
+func SettingsTabProfile() string { return In(i18n.Locale()).SettingsTabProfile() }
+
+// SettingsTabProfile says "Profile"
+// in the language of msgs.
+//
+// Settings category in the left column: the user's name and avatar.
+func (msgs Messages) SettingsTabProfile() string {
+	return Catalog.Format(msgs.locale, "settingsTabProfile", nil)
+}
+
+// SettingsProfileTitle says "Name and Avatar"
+// in the language the app shows.
+//
+// Title of the profile card in Settings.
+func SettingsProfileTitle() string { return In(i18n.Locale()).SettingsProfileTitle() }
+
+// SettingsProfileTitle says "Name and Avatar"
+// in the language of msgs.
+//
+// Title of the profile card in Settings.
+func (msgs Messages) SettingsProfileTitle() string {
+	return Catalog.Format(msgs.locale, "settingsProfileTitle", nil)
+}
+
+// SettingsProfileNote says "Used in every discussion and on paired phones. Agents keep their own names and icons."
+// in the language the app shows.
+//
+// Note under the profile card title.
+func SettingsProfileNote() string { return In(i18n.Locale()).SettingsProfileNote() }
+
+// SettingsProfileNote says "Used in every discussion and on paired phones. Agents keep their own names and icons."
+// in the language of msgs.
+//
+// Note under the profile card title.
+func (msgs Messages) SettingsProfileNote() string {
+	return Catalog.Format(msgs.locale, "settingsProfileNote", nil)
+}
+
+// SettingsProfileName says "Name"
+// in the language the app shows.
+//
+// Label and placeholder of the name field in the profile card.
+func SettingsProfileName() string { return In(i18n.Locale()).SettingsProfileName() }
+
+// SettingsProfileName says "Name"
+// in the language of msgs.
+//
+// Label and placeholder of the name field in the profile card.
+func (msgs Messages) SettingsProfileName() string {
+	return Catalog.Format(msgs.locale, "settingsProfileName", nil)
+}
+
+// SettingsProfileChoose says "Choose Image…"
+// in the language the app shows.
+//
+// Button that opens a file dialog to pick an avatar image.
+func SettingsProfileChoose() string { return In(i18n.Locale()).SettingsProfileChoose() }
+
+// SettingsProfileChoose says "Choose Image…"
+// in the language of msgs.
+//
+// Button that opens a file dialog to pick an avatar image.
+func (msgs Messages) SettingsProfileChoose() string {
+	return Catalog.Format(msgs.locale, "settingsProfileChoose", nil)
+}
+
+// SettingsProfileRemove says "Remove Avatar"
+// in the language the app shows.
+//
+// Button that removes the avatar (falls back to the first letter of the
+// name).
+func SettingsProfileRemove() string { return In(i18n.Locale()).SettingsProfileRemove() }
+
+// SettingsProfileRemove says "Remove Avatar"
+// in the language of msgs.
+//
+// Button that removes the avatar (falls back to the first letter of the
+// name).
+func (msgs Messages) SettingsProfileRemove() string {
+	return Catalog.Format(msgs.locale, "settingsProfileRemove", nil)
+}
+
+// SettingsProfilePickTitle says "Choose an Avatar"
+// in the language the app shows.
+//
+// Title of the file dialog for picking an avatar.
+func SettingsProfilePickTitle() string { return In(i18n.Locale()).SettingsProfilePickTitle() }
+
+// SettingsProfilePickTitle says "Choose an Avatar"
+// in the language of msgs.
+//
+// Title of the file dialog for picking an avatar.
+func (msgs Messages) SettingsProfilePickTitle() string {
+	return Catalog.Format(msgs.locale, "settingsProfilePickTitle", nil)
+}
+
+// SettingsProfileImages says "Images"
+// in the language the app shows.
+//
+// File type filter name in the avatar file dialog.
+func SettingsProfileImages() string { return In(i18n.Locale()).SettingsProfileImages() }
+
+// SettingsProfileImages says "Images"
+// in the language of msgs.
+//
+// File type filter name in the avatar file dialog.
+func (msgs Messages) SettingsProfileImages() string {
+	return Catalog.Format(msgs.locale, "settingsProfileImages", nil)
+}
+
+// SettingsProfileCrop says "Cropped to a square from the center."
+// in the language the app shows.
+//
+// Hint below the avatar preview after choosing an image, before saving.
+func SettingsProfileCrop() string { return In(i18n.Locale()).SettingsProfileCrop() }
+
+// SettingsProfileCrop says "Cropped to a square from the center."
+// in the language of msgs.
+//
+// Hint below the avatar preview after choosing an image, before saving.
+func (msgs Messages) SettingsProfileCrop() string {
+	return Catalog.Format(msgs.locale, "settingsProfileCrop", nil)
+}
+
+// SettingsProfilePending says "Not yet in “{title}”: {reason}"
+// in the language the app shows.
+//
+// A joined discussion whose host has not received the new name or avatar.
+// title is the discussion, reason why.
+func SettingsProfilePending(title string, reason string) string {
+	return In(i18n.Locale()).SettingsProfilePending(title, reason)
+}
+
+// SettingsProfilePending says "Not yet in “{title}”: {reason}"
+// in the language of msgs.
+//
+// A joined discussion whose host has not received the new name or avatar.
+// title is the discussion, reason why.
+func (msgs Messages) SettingsProfilePending(title string, reason string) string {
+	return Catalog.Format(msgs.locale, "settingsProfilePending", map[string]any{"title": title, "reason": reason})
+}
+
+// SettingsProfileOffline says "sent when its host is back online"
+// in the language the app shows.
+//
+// Reason in settingsProfilePending: the host is offline.
+func SettingsProfileOffline() string { return In(i18n.Locale()).SettingsProfileOffline() }
+
+// SettingsProfileOffline says "sent when its host is back online"
+// in the language of msgs.
+//
+// Reason in settingsProfilePending: the host is offline.
+func (msgs Messages) SettingsProfileOffline() string {
+	return Catalog.Format(msgs.locale, "settingsProfileOffline", nil)
+}
+
+// SettingsProfileUnsupported says "the host’s Posse is too old to show it"
+// in the language the app shows.
+//
+// Reason in settingsProfilePending: the host runs an old version.
+func SettingsProfileUnsupported() string { return In(i18n.Locale()).SettingsProfileUnsupported() }
+
+// SettingsProfileUnsupported says "the host’s Posse is too old to show it"
+// in the language of msgs.
+//
+// Reason in settingsProfilePending: the host runs an old version.
+func (msgs Messages) SettingsProfileUnsupported() string {
+	return Catalog.Format(msgs.locale, "settingsProfileUnsupported", nil)
+}
+
+// DiscEditProfile says "Edit Name and Avatar…"
+// in the language the app shows.
+//
+// Context menu item on yourself in a discussion's people list; opens
+// Settings › Profile.
+func DiscEditProfile() string { return In(i18n.Locale()).DiscEditProfile() }
+
+// DiscEditProfile says "Edit Name and Avatar…"
+// in the language of msgs.
+//
+// Context menu item on yourself in a discussion's people list; opens
+// Settings › Profile.
+func (msgs Messages) DiscEditProfile() string {
+	return Catalog.Format(msgs.locale, "discEditProfile", nil)
+}
+
+// SettingsProfileImageError says "Couldn’t use this image. Choose a PNG or JPEG under 20 MB."
+// in the language the app shows.
+//
+// Error after picking an avatar image that can't be read.
+func SettingsProfileImageError() string { return In(i18n.Locale()).SettingsProfileImageError() }
+
+// SettingsProfileImageError says "Couldn’t use this image. Choose a PNG or JPEG under 20 MB."
+// in the language of msgs.
+//
+// Error after picking an avatar image that can't be read.
+func (msgs Messages) SettingsProfileImageError() string {
+	return Catalog.Format(msgs.locale, "settingsProfileImageError", nil)
+}

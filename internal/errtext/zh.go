@@ -23,6 +23,16 @@ var zh = [][2]string{
 	{"invalid discussion post", "消息参数无效"},
 	{"discussion attachments require an upload token", "讨论附件需要先上传"},
 
+	// 个人资料
+	{"the image must be a PNG or JPEG under 20 MB", "图片必须是 20 MB 以内的 PNG 或 JPEG"},
+	{"name must be 1-60 characters", "名字要 1 到 60 个字"},
+	{"avatar not found", "头像不存在"},
+	{"avatar data required", "房主要求重新上传头像"},
+	{"avatar digest mismatch", "头像数据校验不一致"},
+	{"read image: %v", "读不了这张图：{1}"},
+	{"save profile: %v", "保存个人资料失败：{1}"},
+	{"save avatar: %v", "保存头像失败：{1}"},
+
 	// 本包自己给出的说明
 	{srcOldDaemon, "常驻进程是旧版，不认识这个操作：到设置 › 关于 更新常驻进程，终端不会断开"},
 	{srcTimeout, "常驻进程没有及时回应，稍后再试"},

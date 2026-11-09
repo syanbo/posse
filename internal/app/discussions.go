@@ -1026,19 +1026,21 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 			a.discOwnMessage(c, d, msg, hovered)
 			return
 		}
-		// 头像：成员是它的 agent 图标，用户是一个字
+		// 头像：成员是它的 agent 图标，人是他的头像（没有画首字）；名字按身份取最新的，消息里存的是发送时的
+		author, avatar := msg.AuthorName, ""
 		switch msg.Kind {
 		case "reply", "question":
 			agentTile(c, msg.AuthorAgent, tileMedium())
 		default:
-			ui.Box(c).Size(tileMedium(), tileMedium()).Radius(full(tileMedium())).Background(colors(t).tint).Center().Shrink(0).Children(func() {
-				ui.Text(c, initial(msg.AuthorName)).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.Accent)
-			})
+			if p := d.person(msg.AuthorID); p != nil {
+				author, avatar = cmp.Or(p.Name, author), p.Avatar
+			}
+			a.personAvatar(c, avatar, author, tileMedium())
 		}
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Gap(6).Children(func() {
 			// 行高按悬停按钮定好：按钮出现、消失时不跳
 			ui.Row(c).Gap(8).AlignItems(ui.Center).MinHeight(compactBox()).Children(func() {
-				ui.Text(c, msg.AuthorName).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
+				ui.Text(c, author).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
 				a.discMessageTags(c, d, msg, colors(t).tint)
 				ui.Spacer(c)
 				if hovered {
@@ -1080,7 +1082,7 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 	})
 }
 
-// discOwnMessage 是自己发的一条：靠右、最宽八成，不铺底色、不画头像和名字，标签和时间在正文上面一行；
+// discOwnMessage 是自己发的一条：靠右、最宽八成，不铺底色、不写名字，最右边是自己的头像，标签和时间在正文上面一行；
 // 悬停按钮放在左边空白里，出现、消失时内容不动。请求的执行卡跟在下面，同样靠右。
 func (a *app) discOwnMessage(c *ui.Context, d *discDetail, msg discMessage, hovered bool) {
 	t := c.Theme()
@@ -1095,10 +1097,11 @@ func (a *app) discOwnMessage(c *ui.Context, d *discDetail, msg discMessage, hove
 				})
 				a.discMessageBody(c, d, msg)
 			})
+			a.personAvatar(c, a.selfAvatar(), a.selfName(d), tileMedium())
 		})
 		if msg.Kind == "user" && msg.Execution != "" {
 			if x := d.execFor(msg.ID); x != nil {
-				ui.Row(c).Justify(ui.End).Children(func() {
+				ui.Row(c).Justify(ui.End).Padding(0, tileMedium()+6, 0, 0).Children(func() {
 					ui.Column(c).MaxWidthPercent(80).Shrink(1).MinWidth(0).Children(func() { a.execCard(c, d, *x) })
 				})
 			}
@@ -1214,8 +1217,11 @@ func (a *app) quoteBlock(c *ui.Context, d *discDetail, id string) {
 				return
 			}
 			who := m.DiscYou()
-			if q.Kind == "reply" || q.Kind == "question" {
+			switch {
+			case q.Kind == "reply" || q.Kind == "question":
 				who = q.AuthorName
+			case q.AuthorName != "" && q.AuthorID != "" && (d.collab == nil || q.AuthorID != d.collab.Self):
+				who = d.personName(q.AuthorID, q.AuthorName)
 			}
 			ui.Text(c, who).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 			ui.Text(c, firstLineText(q.Body)).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2)
@@ -2114,7 +2120,7 @@ func (a *app) discPanel(c *ui.Context, d *discDetail) {
 						ui.Column(c).Gap(2).Grow(1).Shrink(1).MinWidth(0).Children(func() {
 							who := m.DiscYou()
 							if k.AuthorName != "" && (d.collab == nil || k.AuthorID != d.collab.Self) {
-								who = k.AuthorName
+								who = d.personName(k.AuthorID, k.AuthorName)
 							}
 							ui.Text(c, who).FontSize(fsSmall).FontWeight(fwMedium)
 							ui.Text(c, firstLineText(k.Body)).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2)
@@ -2276,7 +2282,7 @@ func (a *app) discSearchPanel(c *ui.Context, d *discDetail) {
 					row.Children(func() {
 						who := m.DiscYou()
 						if h.AuthorName != "" {
-							who = h.AuthorName
+							who = d.personName(h.AuthorID, h.AuthorName)
 						}
 						ui.Row(c).Gap(6).Children(func() {
 							ui.Text(c, who).FontSize(fsSmall).FontWeight(fwMedium)

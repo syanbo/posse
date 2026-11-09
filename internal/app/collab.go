@@ -34,6 +34,7 @@ type discCollab struct {
 
 type discPerson struct {
 	FP, Name, State string
+	Avatar          string
 	Host, Online    bool
 	Generation      int64
 }
@@ -123,6 +124,14 @@ func fpText(fp string) string {
 		parts = append(parts, fp[i:min(i+4, len(fp))])
 	}
 	return strings.Join(parts, " ")
+}
+
+// personName 是一个人现在的名字（改过名后按身份取最新的）；不在讨论的人员表里就用消息里存的 snapshot。
+func (d *discDetail) personName(fp, snapshot string) string {
+	if p := d.person(fp); p != nil && p.Name != "" {
+		return p.Name
+	}
+	return snapshot
 }
 
 func initial(name string) string {
@@ -282,9 +291,7 @@ func (a *app) personRow(c *ui.Context, d *discDetail, p discPerson) {
 		row.Background(colors(t).wash)
 	}
 	row.Children(func() {
-		ui.Box(c).Size(tileMedium(), tileMedium()).Radius(full(tileMedium())).Background(colors(t).tint).Center().Shrink(0).Children(func() {
-			ui.Text(c, initial(p.Name)).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.Accent)
-		})
+		a.personAvatar(c, p.Avatar, p.Name, tileMedium())
 		ui.Column(c).Gap(2).Grow(1).Shrink(1).MinWidth(0).Children(func() {
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, p.Name).FontSize(fsBody).FontWeight(fwMedium).MaxLines(1).Shrink(1)
@@ -311,7 +318,16 @@ func (a *app) personRow(c *ui.Context, d *discDetail, p discPerson) {
 			ui.Text(c, status).FontSize(fsSmall).TextColor(color)
 		})
 	})
-	if !d.writable() || p.State != "active" || d.collab != nil && p.FP == d.collab.Self {
+	if d.collab != nil && p.FP == d.collab.Self {
+		contextMenu(c, row, func(pm *popMenu) {
+			if pm.Item(m.DiscEditProfile()).Icon(iconSettings).Chosen() {
+				a.openSettings()
+				a.settingsTab = "profile"
+			}
+		})
+		return
+	}
+	if !d.writable() || p.State != "active" {
 		return
 	}
 	contextMenu(c, row, func(pm *popMenu) {

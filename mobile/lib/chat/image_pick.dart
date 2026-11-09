@@ -89,6 +89,21 @@ Future<Uint8List?> pickOneImage(ImageSource source) async {
   return file.readAsBytes();
 }
 
+/// 头像从相册选一张：常驻进程会裁成 256 的正方形，最长边压到 1024 就够，请求也小。取消时返回 null。
+Future<Uint8List?> pickAvatarImage() async {
+  final file = await _pick(
+    ImageSource.gallery,
+    () => ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 90,
+    ),
+  );
+  if (file == null) return null;
+  return file.readAsBytes();
+}
+
 /// 没给权限时换成 [PhoneError]，按拍照还是选照片说清楚缺的是哪个权限。
 Future<T?> _pick<T>(ImageSource source, Future<T?> Function() run) async {
   try {

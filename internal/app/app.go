@@ -225,7 +225,9 @@ type app struct {
 	termFamily   string // 终端字体，空是默认
 	editorFamily string // 编辑器字体，空是默认
 	settingsTab  string // 设置页左边选中的分类，空是第一个
-	locale       string // 设置页选的界面语言（mygo.App.ChosenLocale），空是跟随系统
+	profile      profileState
+	avatars      map[string]avatarEntry // 头像图片，键是摘要
+	locale       string                 // 设置页选的界面语言（mygo.App.ChosenLocale），空是跟随系统
 	termPick     fontPick
 	editorPick   fontPick
 	editorDemo   *editor.State // 设置页编辑器预览的只读编辑器，第一次打开时建

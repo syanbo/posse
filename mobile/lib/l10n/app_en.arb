@@ -3439,5 +3439,79 @@
         "type": "String"
       }
     }
+  },
+  "profileTitle": "Name and Avatar",
+  "@profileTitle": {
+    "description": "Profile screen title and the settings section title: the user's name and avatar."
+  },
+  "profileNote": "This changes the profile of the connected computer, {computer}. It's used in all of its discussions; agents keep their own names and icons.",
+  "@profileNote": {
+    "description": "Profile screen: note that the profile belongs to the currently connected computer.",
+    "placeholders": {
+      "computer": {
+        "type": "String"
+      }
+    }
+  },
+  "profileRowNote": "Used in all discussions on {computer}",
+  "@profileRowNote": {
+    "description": "Settings: subtitle of the profile row.",
+    "placeholders": {
+      "computer": {
+        "type": "String"
+      }
+    }
+  },
+  "profileName": "Name",
+  "@profileName": {
+    "description": "Profile screen: label of the name field."
+  },
+  "profileNameInvalid": "Name must be 1–60 characters",
+  "@profileNameInvalid": {
+    "description": "Profile screen: the name is empty or longer than 60 characters."
+  },
+  "profileChoose": "Choose Image",
+  "@profileChoose": {
+    "description": "Profile screen: pick an avatar from the photo library."
+  },
+  "profileRemove": "Remove Avatar",
+  "@profileRemove": {
+    "description": "Profile screen: remove the avatar (falls back to the first letter of the name)."
+  },
+  "profileCrop": "Cropped to a square from the center after saving.",
+  "@profileCrop": {
+    "description": "Profile screen: hint below the preview after picking an image, before saving."
+  },
+  "profileSave": "Save",
+  "@profileSave": {
+    "description": "Profile screen: save the name and avatar."
+  },
+  "profilePendingTitle": "Not Yet Updated",
+  "@profilePendingTitle": {
+    "description": "Profile screen: section listing joined discussions whose host hasn't received the new profile."
+  },
+  "profilePending": "Not yet in “{title}”: {reason}",
+  "@profilePending": {
+    "description": "Profile screen: a joined discussion whose host has not received the new name or avatar. title is the discussion, reason why.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "profileOffline": "sent when the host is back online",
+  "@profileOffline": {
+    "description": "Reason in profilePending: the host is offline."
+  },
+  "profileUnsupported": "the host's Posse is too old",
+  "@profileUnsupported": {
+    "description": "Reason in profilePending: the host runs an old version."
+  },
+  "profileImageTooLarge": "This image is too large. Choose a smaller one.",
+  "@profileImageTooLarge": {
+    "description": "Profile screen: the picked image is too large to send to the computer."
   }
 }

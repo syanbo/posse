@@ -13,7 +13,7 @@ import (
 func TestCollabHostTransactions(t *testing.T) {
 	s := openTestStore(t)
 	d, _ := newDiscussion(t, s)
-	if err := s.SetShared(d.Key, true, "Hana", time.Now()); err != nil {
+	if err := s.SetShared(d.Key, true, Profile{Name: "Hana"}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.CreateInvite(d.Key, "inv1", "h1", time.Now().Add(10*time.Minute), time.Now()); err != nil {
@@ -218,7 +218,7 @@ func TestCollabLegacyOwnConfigNeedsConfirm(t *testing.T) {
 func TestCollabAddMemberOnce(t *testing.T) {
 	s := openTestStore(t)
 	d, _ := newDiscussion(t, s)
-	if err := s.SetShared(d.Key, true, "Hana", time.Now()); err != nil {
+	if err := s.SetShared(d.Key, true, Profile{Name: "Hana"}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	join := func(inv, fp string) JoinRequest {

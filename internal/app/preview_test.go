@@ -1320,9 +1320,15 @@ func TestPreview(t *testing.T) {
 		a.settingsTab = "about"
 		a.daemon.Version, a.daemon.Build, a.daemon.Pid, a.daemon.StartedAt = "0.1.0", "663c0c7+ 2026-10-18T05:18:04Z", 53330, now.Add(-2*time.Hour)
 		savePNG(t, newPreviewTester(a, dark), "settings-about-"+suffix+".png")
+		// 个人资料：选了一张图还没保存（预览、裁剪提示），一个加入的讨论还没同步到
+		a.profile = profileState{info: profileData{Name: "Mo", Pending: []struct{ Room, Title, Host, Reason string }{{Title: "登录页改版", Host: "Hana", Reason: "offline"}}},
+			name: "Mo", loaded: true, at: now.Add(time.Hour), pick: "/tmp/a.png"}
+		a.profile.preview = a.avatarImage(previewAvatar(a))
+		a.settingsTab = "profile"
+		savePNG(t, newPreviewTester(a, dark), "settings-profile-"+suffix+".png")
 		// 设置页的英文和伪语言（en-XA 把英文加长、加重音）：看排版有没有截断
 		for _, lang := range []string{"en", "en-XA"} {
-			for _, tab := range []string{"general", "appearance", "about", "agent", "keys"} {
+			for _, tab := range []string{"general", "profile", "appearance", "about", "agent", "keys"} {
 				a.settingsTab = tab
 				lt := newPreviewTester(a, dark)
 				lt.SetLocale(lang)

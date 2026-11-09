@@ -173,15 +173,18 @@ type Person struct {
 	Rev        int64      `json:"rev"`
 	JoinedAt   time.Time  `json:"joinedAt"`
 	EndedAt    *time.Time `json:"endedAt,omitempty"`
+	// Avatar 是头像的 SHA-256（空是没有），ProfileRev 是这个人自己的资料版本（旧版不带，记 0）
+	Avatar     string `json:"avatar,omitempty"`
+	ProfileRev int64  `json:"profileRev,omitempty"`
 }
 
-const personCols = `room,fp,name,generation,state,host,rev,joined_at,ended_at`
+const personCols = `room,fp,name,generation,state,host,rev,joined_at,ended_at,avatar,profile_rev`
 
 func scanPerson(row interface{ Scan(...any) error }) (Person, error) {
 	var p Person
 	var joined int64
 	var ended sql.NullInt64
-	err := row.Scan(&p.Room, &p.FP, &p.Name, &p.Generation, &p.State, &p.Host, &p.Rev, &joined, &ended)
+	err := row.Scan(&p.Room, &p.FP, &p.Name, &p.Generation, &p.State, &p.Host, &p.Rev, &joined, &ended, &p.Avatar, &p.ProfileRev)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, ErrNotFound
 	}
@@ -491,7 +494,7 @@ func answerMirror(tx querier, in AnswerInput) (bool, error) {
 
 // SetShared 打开或关闭局域网共享。关闭不撤销任何成员，重新打开后仍有效的成员不用再批准。
 // 打开时确保房主自己在成员表里（显示名可改）。
-func (s *Store) SetShared(room string, on bool, hostName string, at time.Time) error {
+func (s *Store) SetShared(room string, on bool, host Profile, at time.Time) error {
 	return s.withTx(func(tx *sql.Tx) error {
 		d, err := scanDiscussion(tx.QueryRow(`SELECT `+discCols+` FROM discussions WHERE key=?`, room))
 		if err != nil {
@@ -510,30 +513,134 @@ func (s *Store) SetShared(room string, on bool, hostName string, at time.Time) e
 		if _, err := tx.Exec(`UPDATE discussions SET shared=? WHERE key=?`, on, room); err != nil {
 			return err
 		}
-		_, err = tx.Exec(`INSERT INTO collab_people(room,fp,name,generation,state,host,rev,joined_at) VALUES(?,?,?,0,'active',1,?,?)
-			ON CONFLICT(room,fp) DO UPDATE SET name=excluded.name, rev=excluded.rev`, room, d.Host, hostName, rev, ms(at))
+		_, err = tx.Exec(`INSERT INTO collab_people(room,fp,name,generation,state,host,rev,joined_at,avatar,profile_rev) VALUES(?,?,?,0,'active',1,?,?,?,?)
+			ON CONFLICT(room,fp) DO UPDATE SET name=excluded.name, rev=excluded.rev, avatar=excluded.avatar, profile_rev=excluded.profile_rev`,
+			room, d.Host, host.Name, rev, ms(at), host.Avatar, host.Rev)
 		return err
 	})
 }
 
-// SetHostName 改房主在各个共享讨论里的显示名。
-func (s *Store) SetHostName(fp, name string) error {
+// Profile 是一个人的名字和头像，Rev 是它的版本。
+type Profile struct {
+	Name   string `json:"name"`
+	Avatar string `json:"avatar,omitempty"`
+	Rev    int64  `json:"rev,omitempty"`
+}
+
+// SetOwnProfile 把本机身份的新资料写进所有讨论里自己那一行：房主的讨论按版本增量同步给成员；
+// 加入的讨论先改本机这份（房主收下之前别人还看到旧的，界面看 ProfileSent 标出没同步）。
+func (s *Store) SetOwnProfile(fp string, p Profile) error {
 	return s.withTx(func(tx *sql.Tx) error {
-		rooms, err := collect(tx, scanPerson, `SELECT `+personCols+` FROM collab_people WHERE fp=? AND host=1 AND name!=?`, fp, name)
+		rows, err := collect(tx, scanPerson, `SELECT `+personCols+` FROM collab_people WHERE fp=? AND profile_rev<?`, fp, p.Rev)
 		if err != nil {
 			return err
 		}
-		for _, p := range rooms {
-			rev, err := bump(tx, p.Room)
+		for _, r := range rows {
+			rev, err := bump(tx, r.Room)
 			if err != nil {
 				return err
 			}
-			if _, err := tx.Exec(`UPDATE collab_people SET name=?, rev=? WHERE room=? AND fp=?`, name, rev, p.Room, fp); err != nil {
+			if _, err := tx.Exec(`UPDATE collab_people SET name=?, avatar=?, profile_rev=?, rev=? WHERE room=? AND fp=?`, p.Name, p.Avatar, p.Rev, rev, r.Room, fp); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+}
+
+// ApplyProfile 是房主收下成员交来的资料：只改连接身份自己那一行、成员资格是当前这一代，
+// 版本不比已有的新就不动（重发、乱序到达的旧版本不覆盖新的）。返回是否改了。
+func (s *Store) ApplyProfile(room, fp string, gen int64, p Profile) (bool, error) {
+	changed := false
+	err := s.withTx(func(tx *sql.Tx) error {
+		cur, err := scanPerson(tx.QueryRow(`SELECT `+personCols+` FROM collab_people WHERE room=? AND fp=?`, room, fp))
+		if err != nil {
+			return err
+		}
+		if cur.State != PersonActive || cur.Generation != gen {
+			return ErrRevoked
+		}
+		if p.Rev <= cur.ProfileRev {
+			return nil
+		}
+		rev, err := bump(tx, room)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`UPDATE collab_people SET name=?, avatar=?, profile_rev=?, rev=? WHERE room=? AND fp=?`, p.Name, p.Avatar, p.Rev, rev, room, fp)
+		changed = err == nil
+		return err
+	})
+	return changed, err
+}
+
+// MemberProfileRev 是房主记着的某成员的资料版本；不是当前这一代的有效成员回 ErrRevoked。
+// 房主收资料时先看它，旧版本不落盘。
+func (s *Store) MemberProfileRev(room, fp string, gen int64) (int64, error) {
+	cur, err := scanPerson(s.db.QueryRow(`SELECT `+personCols+` FROM collab_people WHERE room=? AND fp=?`, room, fp))
+	if err != nil {
+		return 0, err
+	}
+	if cur.State != PersonActive || cur.Generation != gen {
+		return 0, ErrRevoked
+	}
+	return cur.ProfileRev, nil
+}
+
+// AvatarsInUse 是所有讨论里有人在用的头像摘要。
+func (s *Store) AvatarsInUse() (map[string]bool, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT avatar FROM collab_people WHERE avatar!=''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		out[v] = true
+	}
+	return out, rows.Err()
+}
+
+// AvatarInRoom 看这份头像是不是讨论里某个人在用的：成员只能取同一讨论里的头像。
+func (s *Store) AvatarInRoom(room, sha string) bool {
+	var n int
+	s.db.QueryRow(`SELECT COUNT(*) FROM collab_people WHERE room=? AND avatar=?`, room, sha).Scan(&n)
+	return n > 0
+}
+
+// RoomAvatars 是讨论里各人在用的头像摘要。
+func (s *Store) RoomAvatars(room string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT avatar FROM collab_people WHERE room=? AND avatar!=''`, room)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// ProfileSent 是已经交给这个讨论房主的资料版本。
+func (s *Store) ProfileSent(room string) int64 {
+	var v int64
+	s.db.QueryRow(`SELECT profile_sent FROM collab_joined WHERE room=?`, room).Scan(&v)
+	return v
+}
+
+// SetProfileSent 记下房主已收下（或已有更新的）资料版本。
+func (s *Store) SetProfileSent(room string, rev int64) error {
+	_, err := s.db.Exec(`UPDATE collab_joined SET profile_sent=MAX(profile_sent, ?) WHERE room=?`, rev, room)
+	return err
 }
 
 // SharedRooms 是开着共享的讨论（房主一侧）。
@@ -678,7 +785,8 @@ func (s *Store) ApproveRequest(id string, at time.Time) (JoinRequest, error) {
 			return err
 		}
 		if _, err := tx.Exec(`INSERT INTO collab_people(room,fp,name,generation,state,host,rev,joined_at) VALUES(?,?,?,?,'active',0,?,?)
-			ON CONFLICT(room,fp) DO UPDATE SET name=excluded.name, generation=excluded.generation, state='active', rev=excluded.rev, joined_at=excluded.joined_at, ended_at=NULL`,
+			ON CONFLICT(room,fp) DO UPDATE SET name=excluded.name, generation=excluded.generation, state='active', rev=excluded.rev, joined_at=excluded.joined_at, ended_at=NULL,
+				avatar='', profile_rev=0`,
 			r.Room, r.FP, r.Name, gen, rev, ms(at)); err != nil {
 			return err
 		}
@@ -1368,7 +1476,7 @@ func (s *Store) CreateMirror(d Discussion, j Joined) error {
 		}
 		if _, err := tx.Exec(`INSERT INTO collab_joined(`+joinedCols+`) VALUES(?,?,?,?,?,?,0,0,'',?,?,?)
 			ON CONFLICT(room) DO UPDATE SET host_name=excluded.host_name, addrs=excluded.addrs, request=excluded.request, state=excluded.state, error='',
-			secret=excluded.secret, updated_at=excluded.updated_at`,
+			secret=excluded.secret, updated_at=excluded.updated_at, profile_sent=0`,
 			j.Room, j.Host, j.HostName, string(addrs), j.Request, j.State, j.Secret, ms(j.JoinedAt), ms(j.JoinedAt)); err != nil {
 			return err
 		}
@@ -1446,10 +1554,14 @@ func (s *Store) ApplySync(room, self string, b SyncBatch) (bool, error) {
 			if p.EndedAt != nil {
 				ended = ms(*p.EndedAt)
 			}
-			if _, err := tx.Exec(`INSERT INTO collab_people(`+personCols+`) VALUES(?,?,?,?,?,?,?,?,?)
-				ON CONFLICT(room,fp) DO UPDATE SET name=excluded.name, generation=excluded.generation, state=excluded.state, host=excluded.host,
-				rev=excluded.rev, joined_at=excluded.joined_at, ended_at=excluded.ended_at`,
-				room, p.FP, p.Name, p.Generation, p.State, p.Host, rev, ms(p.JoinedAt), ended); err != nil {
+			// 自己那一行本机可能先改了（SetOwnProfile）：房主那份的资料版本旧，名字和头像留本机的
+			if _, err := tx.Exec(`INSERT INTO collab_people(`+personCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+				ON CONFLICT(room,fp) DO UPDATE SET generation=excluded.generation, state=excluded.state, host=excluded.host,
+				rev=excluded.rev, joined_at=excluded.joined_at, ended_at=excluded.ended_at,
+				name=CASE WHEN excluded.profile_rev>=collab_people.profile_rev THEN excluded.name ELSE collab_people.name END,
+				avatar=CASE WHEN excluded.profile_rev>=collab_people.profile_rev THEN excluded.avatar ELSE collab_people.avatar END,
+				profile_rev=MAX(excluded.profile_rev, collab_people.profile_rev)`,
+				room, p.FP, p.Name, p.Generation, p.State, p.Host, rev, ms(p.JoinedAt), ended, p.Avatar, p.ProfileRev); err != nil {
 				return err
 			}
 		}

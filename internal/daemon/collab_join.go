@@ -65,6 +65,10 @@ type roomConn struct {
 	missing  map[string]bool      // 房主说没有这个文件的附件（download 返回 not_found）：显示不可用，不再试
 	retryAt  map[string]time.Time // 暂时下不了的附件下次再试的时间（退避，不会因此变成永久缺失）
 	backoff  map[string]time.Duration
+	// 个人资料：交给房主的结果（空是交上了或还没交、unsupported 是房主版本旧），取不到的头像
+	profileErr   string
+	profileTried int64
+	avatarFailed map[string]bool
 }
 
 func newRoomConn(d *Daemon, room string) *roomConn {
@@ -328,6 +332,11 @@ func (rc *roomConn) session(ctx context.Context, j store.Joined) error {
 	if err := rc.heartbeat(ctx); err != nil {
 		return err
 	}
+	// 新连接：资料和取不到的头像重新试（要在第一轮之前，第一轮记下的结果要留到下次重连）
+	rc.stmu.Lock()
+	clear(rc.avatarFailed)
+	rc.profileErr, rc.profileTried = "", 0
+	rc.stmu.Unlock()
 	first := true
 	for {
 		if err := rc.step(ctx); err != nil {
@@ -475,7 +484,14 @@ func (rc *roomConn) step(ctx context.Context) error {
 	if err := rc.claimLocked(ctx); err != nil {
 		return err
 	}
-	return rc.flushLocked(ctx)
+	if err := rc.flushLocked(ctx); err != nil {
+		return err
+	}
+	if err := rc.profileLocked(ctx); err != nil {
+		return err
+	}
+	rc.avatarsLocked(ctx)
+	return nil
 }
 
 func (rc *roomConn) syncLocked(ctx context.Context) error {

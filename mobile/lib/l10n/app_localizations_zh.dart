@@ -2440,4 +2440,52 @@ class AppLocalizationsZh extends AppLocalizations {
   String discOnComputer(String name) {
     return '在 $name 的电脑上';
   }
+
+  @override
+  String get profileTitle => '名字和头像';
+
+  @override
+  String profileNote(String computer) {
+    return '改的是当前连接的电脑（$computer）的个人资料，它的所有讨论都用这一份；Agent 的名字和图标不受影响。';
+  }
+
+  @override
+  String profileRowNote(String computer) {
+    return '$computer 上的所有讨论都用这一份';
+  }
+
+  @override
+  String get profileName => '名字';
+
+  @override
+  String get profileNameInvalid => '名字要 1 到 60 个字';
+
+  @override
+  String get profileChoose => '选择图片';
+
+  @override
+  String get profileRemove => '移除头像';
+
+  @override
+  String get profileCrop => '保存后从中间裁成正方形。';
+
+  @override
+  String get profileSave => '保存';
+
+  @override
+  String get profilePendingTitle => '还没更新';
+
+  @override
+  String profilePending(String title, String reason) {
+    return '“$title”还没更新：$reason';
+  }
+
+  @override
+  String get profileOffline => '房主上线后自动发送';
+
+  @override
+  String get profileUnsupported => '房主的 Posse 版本太旧';
+
+  @override
+  String get profileImageTooLarge => '图片太大，请换一张小一点的。';
 }

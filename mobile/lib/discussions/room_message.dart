@@ -60,7 +60,7 @@ extension _MessageViews on _DiscussionRoomState {
           const SizedBox(width: 8),
           Flexible(
             child: Text(
-              discText(m, 'authorName'),
+              discAuthorName(m, state.collab),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -80,7 +80,14 @@ extension _MessageViews on _DiscussionRoomState {
           stamp(m),
           style: TextStyle(fontSize: Fs.small, color: c.faint),
         ),
+        if (mine) ...[const SizedBox(width: 8), selfAvatar(_avatar)],
       ],
+    );
+    // 正文缩进到名字下面；自己的话靠右，右边让出头像的宽度
+    EdgeInsets indent(double top) => EdgeInsets.only(
+      left: mine ? 0 : _bodyIndent,
+      right: mine ? _bodyIndent : 0,
+      top: top,
     );
     return GestureDetector(
       key: ValueKey(m['id']),
@@ -93,13 +100,10 @@ extension _MessageViews on _DiscussionRoomState {
           children: [
             header,
             if (discText(m, 'quote').isNotEmpty)
-              Padding(
-                padding: EdgeInsets.only(left: mine ? 0 : _bodyIndent, top: 6),
-                child: quoted(discText(m, 'quote')),
-              ),
+              Padding(padding: indent(6), child: quoted(discText(m, 'quote'))),
             if (tags.isNotEmpty)
               Padding(
-                padding: EdgeInsets.only(left: mine ? 0 : _bodyIndent, top: 6),
+                padding: indent(6),
                 child: Wrap(
                   spacing: 6,
                   runSpacing: 4,
@@ -108,7 +112,7 @@ extension _MessageViews on _DiscussionRoomState {
               ),
             if (body.trim().isNotEmpty)
               Padding(
-                padding: EdgeInsets.only(left: mine ? 0 : _bodyIndent, top: 4),
+                padding: indent(4),
                 // 不包 SelectionArea：长按整条消息出引用、标为关键、复制，选字会抢走长按
                 child: MarkdownView(
                   body,
@@ -121,7 +125,7 @@ extension _MessageViews on _DiscussionRoomState {
               ),
             if (discList(m['attachments']).isNotEmpty || m['hasReport'] == true)
               Padding(
-                padding: EdgeInsets.only(left: mine ? 0 : _bodyIndent, top: 8),
+                padding: indent(8),
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -141,7 +145,7 @@ extension _MessageViews on _DiscussionRoomState {
               ),
             if (canAnswer)
               Padding(
-                padding: const EdgeInsets.only(left: _bodyIndent, top: 8),
+                padding: indent(8),
                 child: FilledButton(
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(0, 34),
@@ -153,43 +157,45 @@ extension _MessageViews on _DiscussionRoomState {
                 ),
               ),
             for (final x in xs)
-              Padding(
-                padding: EdgeInsets.only(left: mine ? 0 : _bodyIndent, top: 6),
-                child: execution(x, mine),
-              ),
+              Padding(padding: indent(6), child: execution(x, mine)),
           ],
         ),
       ),
     );
   }
 
-  /// 作者的小头像：Agent 用它的色块，人用名字的第一个字。
+  /// 作者的小头像：Agent 用它的色块，人用他的头像，没有头像画名字的第一个字。
   Widget avatar(DiscJson m) {
-    final agent = discText(m, 'authorAgent');
-    if (discText(m, 'authorMember').isNotEmpty || agent.isNotEmpty) {
-      return AgentTile(agent: agent, size: _avatar);
+    if (discAgentAuthor(m)) {
+      return AgentTile(agent: discText(m, 'authorAgent'), size: _avatar);
     }
-    return initial(discText(m, 'authorName'), _avatar);
-  }
-
-  Widget initial(String name, double size) {
-    final c = PosseColors.of(context);
-    final first = name.trim().isEmpty ? '?' : name.trim().characters.first;
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: c.tint, shape: BoxShape.circle),
-      child: Text(
-        first.toUpperCase(),
-        style: TextStyle(
-          fontSize: size > _avatar ? Fs.body : Fs.tiny,
-          fontWeight: Fw.medium,
-          color: c.accent,
-        ),
-      ),
+    final fp = discText(m, 'authorId');
+    if (fp.isNotEmpty && fp == selfFp) return selfAvatar(_avatar);
+    return personAvatar(
+      discPerson(state.collab, fp) ?? {},
+      discAuthorName(m, state.collab),
+      _avatar,
     );
   }
+
+  Widget personAvatar(DiscJson person, String name, double size) =>
+      PersonAvatar(
+        call: widget.api.call,
+        sha: discText(person, 'avatar'),
+        name: name,
+        size: size,
+      );
+
+  /// 自己的头像：先用这台电脑现在的资料（房主那边可能还是旧的），旧电脑取不到时用讨论里记的。
+  Widget selfAvatar(double size) {
+    final p = ownProfile.isNotEmpty
+        ? ownProfile
+        : discPerson(state.collab, selfFp) ?? {};
+    return personAvatar(p, discText(p, 'name'), size);
+  }
+
+  Widget initial(String name, double size) =>
+      DiscInitial(name: name, size: size);
 
   Widget pill(String text, Color color) {
     final c = PosseColors.of(context);
@@ -212,7 +218,7 @@ extension _MessageViews on _DiscussionRoomState {
     final q = state.messages.where((m) => m['id'] == id).firstOrNull;
     final text = q == null
         ? context.l10n.discQuote
-        : '${discText(q, 'authorName')}  ${plainSnippet(discText(q, 'body'))}';
+        : '${discAuthorName(q, state.collab)}  ${plainSnippet(discText(q, 'body'))}';
     return GestureDetector(
       onTap: () => locate(id),
       child: Container(

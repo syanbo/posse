@@ -2575,4 +2575,53 @@ class AppLocalizationsEn extends AppLocalizations {
   String discOnComputer(String name) {
     return 'On $name\'s computer';
   }
+
+  @override
+  String get profileTitle => 'Name and Avatar';
+
+  @override
+  String profileNote(String computer) {
+    return 'This changes the profile of the connected computer, $computer. It\'s used in all of its discussions; agents keep their own names and icons.';
+  }
+
+  @override
+  String profileRowNote(String computer) {
+    return 'Used in all discussions on $computer';
+  }
+
+  @override
+  String get profileName => 'Name';
+
+  @override
+  String get profileNameInvalid => 'Name must be 1–60 characters';
+
+  @override
+  String get profileChoose => 'Choose Image';
+
+  @override
+  String get profileRemove => 'Remove Avatar';
+
+  @override
+  String get profileCrop => 'Cropped to a square from the center after saving.';
+
+  @override
+  String get profileSave => 'Save';
+
+  @override
+  String get profilePendingTitle => 'Not Yet Updated';
+
+  @override
+  String profilePending(String title, String reason) {
+    return 'Not yet in “$title”: $reason';
+  }
+
+  @override
+  String get profileOffline => 'sent when the host is back online';
+
+  @override
+  String get profileUnsupported => 'the host\'s Posse is too old';
+
+  @override
+  String get profileImageTooLarge =>
+      'This image is too large. Choose a smaller one.';
 }

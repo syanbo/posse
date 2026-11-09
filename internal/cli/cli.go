@@ -118,6 +118,8 @@ func init() {
 		{"discussion resume", "Continue your agent's claimed requests after the connection to the host came back", "<member>", cmdDiscussionResume},
 		{"collab status", "Show this installation's collaboration identity, service and joined discussions", "", cmdCollabStatus},
 		{"collab name", "Set the name other people see", "<name>", cmdCollabName},
+		{"profile", "Show your name and avatar (shared by all your discussions and paired phones)", "", cmdProfile},
+		{"profile set", "Change your name or avatar in every discussion", "[--name NAME] [--avatar FILE | --no-avatar]", cmdProfileSet},
 		{"collab quota", "Show or set the total size of attachments members may upload to discussions you host", "[MiB]", cmdCollabQuota},
 		{"session title", "Name the agent session running in this terminal", "'<MMDD｜类型｜摘要>'", cmdSessionTitle},
 		{"session guide", "How to draft a session title (for agents)", "", cmdSessionGuide},

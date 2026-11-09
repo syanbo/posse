@@ -137,7 +137,9 @@ extension _DetailsViews on _DiscussionRoomState {
                     children: [
                       for (final p in people)
                         RowTile(
-                          leading: initial(discText(p, 'name'), Ic.large),
+                          leading: p['fp'] == selfFp
+                              ? selfAvatar(Ic.large)
+                              : personAvatar(p, discText(p, 'name'), Ic.large),
                           title: Text(
                             [
                               discText(p, 'name'),
@@ -154,7 +156,11 @@ extension _DetailsViews on _DiscussionRoomState {
                               color: p['online'] == true ? c.sage : c.muted,
                             ),
                           ),
-                          chevron: false,
+                          // 点自己改名字和头像（旧电脑没有这个接口，不给点）
+                          chevron: p['fp'] == selfFp && ownProfile.isNotEmpty,
+                          onTap: p['fp'] == selfFp && ownProfile.isNotEmpty
+                              ? editProfile
+                              : null,
                           trailing:
                               host &&
                                   p['host'] != true &&
@@ -211,7 +217,7 @@ extension _DetailsViews on _DiscussionRoomState {
                             size: Ic.medium,
                             color: c.honey,
                           ),
-                          title: Text(discText(m, 'authorName')),
+                          title: Text(discAuthorName(m, state.collab)),
                           subtitle: Text(discText(m, 'body')),
                           onTap: () {
                             Navigator.pop(sheet);

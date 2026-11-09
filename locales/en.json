@@ -9848,5 +9848,69 @@
         "type": "String"
       }
     }
+  },
+  "settingsTabProfile": "Profile",
+  "@settingsTabProfile": {
+    "description": "Settings category in the left column: the user's name and avatar."
+  },
+  "settingsProfileTitle": "Name and Avatar",
+  "@settingsProfileTitle": {
+    "description": "Title of the profile card in Settings."
+  },
+  "settingsProfileNote": "Used in every discussion and on paired phones. Agents keep their own names and icons.",
+  "@settingsProfileNote": {
+    "description": "Note under the profile card title."
+  },
+  "settingsProfileName": "Name",
+  "@settingsProfileName": {
+    "description": "Label and placeholder of the name field in the profile card."
+  },
+  "settingsProfileChoose": "Choose Image…",
+  "@settingsProfileChoose": {
+    "description": "Button that opens a file dialog to pick an avatar image."
+  },
+  "settingsProfileRemove": "Remove Avatar",
+  "@settingsProfileRemove": {
+    "description": "Button that removes the avatar (falls back to the first letter of the name)."
+  },
+  "settingsProfilePickTitle": "Choose an Avatar",
+  "@settingsProfilePickTitle": {
+    "description": "Title of the file dialog for picking an avatar."
+  },
+  "settingsProfileImages": "Images",
+  "@settingsProfileImages": {
+    "description": "File type filter name in the avatar file dialog."
+  },
+  "settingsProfileCrop": "Cropped to a square from the center.",
+  "@settingsProfileCrop": {
+    "description": "Hint below the avatar preview after choosing an image, before saving."
+  },
+  "settingsProfilePending": "Not yet in “{title}”: {reason}",
+  "@settingsProfilePending": {
+    "description": "A joined discussion whose host has not received the new name or avatar. title is the discussion, reason why.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsProfileOffline": "sent when its host is back online",
+  "@settingsProfileOffline": {
+    "description": "Reason in settingsProfilePending: the host is offline."
+  },
+  "settingsProfileUnsupported": "the host’s Posse is too old to show it",
+  "@settingsProfileUnsupported": {
+    "description": "Reason in settingsProfilePending: the host runs an old version."
+  },
+  "discEditProfile": "Edit Name and Avatar…",
+  "@discEditProfile": {
+    "description": "Context menu item on yourself in a discussion's people list; opens Settings › Profile."
+  },
+  "settingsProfileImageError": "Couldn’t use this image. Choose a PNG or JPEG under 20 MB.",
+  "@settingsProfileImageError": {
+    "description": "Error after picking an avatar image that can't be read."
   }
 }

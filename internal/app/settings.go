@@ -31,6 +31,7 @@ var settingsTabs = []struct {
 	icon  *ui.SVG
 }{
 	{"general", locales.Messages.SettingsTabGeneral, iconSettings},
+	{"profile", locales.Messages.SettingsTabProfile, iconPeople},
 	{"agent", locales.Messages.SettingsTabAgent, iconSkill},
 	{"appearance", locales.Messages.SettingsTabAppearance, iconAppearance},
 	{"keys", locales.Messages.SettingsTabKeys, iconKeyboard},
@@ -73,6 +74,8 @@ func (a *app) settingsBoard(c *ui.Context) {
 						a.closeSettings(c)
 						a.linkSettings(c)
 						a.notifySettings(c)
+					case "profile":
+						a.profileSettings(c)
 					case "agent":
 						a.agentSettings(c)
 						a.permissionSettings(c)

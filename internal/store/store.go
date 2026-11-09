@@ -157,7 +157,9 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	for _, c := range [][3]string{{"collab_intents", "config", "TEXT NOT NULL DEFAULT ''"}, {"collab_joined", "att_seq", "INTEGER NOT NULL DEFAULT 0"}} {
+	for _, c := range [][3]string{{"collab_intents", "config", "TEXT NOT NULL DEFAULT ''"}, {"collab_joined", "att_seq", "INTEGER NOT NULL DEFAULT 0"},
+		{"collab_joined", "profile_sent", "INTEGER NOT NULL DEFAULT 0"}, {"collab_people", "avatar", "TEXT NOT NULL DEFAULT ''"},
+		{"collab_people", "profile_rev", "INTEGER NOT NULL DEFAULT 0"}} {
 		if err := addColumn(db, c[0], c[1], c[2]); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("migrate: %w", err)

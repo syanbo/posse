@@ -15,6 +15,27 @@ String discRequestId() =>
 
 typedef DiscCall = Future<DiscJson> Function(String method, DiscJson params);
 
+/// 讨论里的这个人（协作信息的 people 按指纹找）；本机讨论没有协作信息，给 null。
+DiscJson? discPerson(DiscJson collab, String fp) => fp.isEmpty
+    ? null
+    : discList(collab['people']).where((p) => p['fp'] == fp).firstOrNull;
+
+/// 消息是不是 Agent 写的（回复、提问）：它们留着 Agent 的名字和图标。
+bool discAgentAuthor(DiscJson m) =>
+    m['kind'] == 'reply' ||
+    m['kind'] == 'question' ||
+    discText(m, 'authorMember').isNotEmpty ||
+    discText(m, 'authorAgent').isNotEmpty;
+
+/// 人写的消息显示他现在的名字：消息里存的是发送时的。找不到这个人时用消息里的。
+String discAuthorName(DiscJson m, DiscJson collab) {
+  final saved = discText(m, 'authorName');
+  if (discAgentAuthor(m)) return saved;
+  final p = discPerson(collab, discText(m, 'authorId'));
+  final latest = p == null ? '' : discText(p, 'name');
+  return latest.isEmpty ? saved : latest;
+}
+
 /// 消息窗口与讨论版本分开：读旧历史时只更新状态，不把新增消息拼到旧页后面。
 class DiscussionState extends ChangeNotifier {
   DiscussionState(this.call, this.room);

@@ -4327,6 +4327,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'On {name}\'s computer'**
   String discOnComputer(String name);
+
+  /// Profile screen title and the settings section title: the user's name and avatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Name and Avatar'**
+  String get profileTitle;
+
+  /// Profile screen: note that the profile belongs to the currently connected computer.
+  ///
+  /// In en, this message translates to:
+  /// **'This changes the profile of the connected computer, {computer}. It\'s used in all of its discussions; agents keep their own names and icons.'**
+  String profileNote(String computer);
+
+  /// Settings: subtitle of the profile row.
+  ///
+  /// In en, this message translates to:
+  /// **'Used in all discussions on {computer}'**
+  String profileRowNote(String computer);
+
+  /// Profile screen: label of the name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get profileName;
+
+  /// Profile screen: the name is empty or longer than 60 characters.
+  ///
+  /// In en, this message translates to:
+  /// **'Name must be 1–60 characters'**
+  String get profileNameInvalid;
+
+  /// Profile screen: pick an avatar from the photo library.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Image'**
+  String get profileChoose;
+
+  /// Profile screen: remove the avatar (falls back to the first letter of the name).
+  ///
+  /// In en, this message translates to:
+  /// **'Remove Avatar'**
+  String get profileRemove;
+
+  /// Profile screen: hint below the preview after picking an image, before saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Cropped to a square from the center after saving.'**
+  String get profileCrop;
+
+  /// Profile screen: save the name and avatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get profileSave;
+
+  /// Profile screen: section listing joined discussions whose host hasn't received the new profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Not Yet Updated'**
+  String get profilePendingTitle;
+
+  /// Profile screen: a joined discussion whose host has not received the new name or avatar. title is the discussion, reason why.
+  ///
+  /// In en, this message translates to:
+  /// **'Not yet in “{title}”: {reason}'**
+  String profilePending(String title, String reason);
+
+  /// Reason in profilePending: the host is offline.
+  ///
+  /// In en, this message translates to:
+  /// **'sent when the host is back online'**
+  String get profileOffline;
+
+  /// Reason in profilePending: the host runs an old version.
+  ///
+  /// In en, this message translates to:
+  /// **'the host\'s Posse is too old'**
+  String get profileUnsupported;
+
+  /// Profile screen: the picked image is too large to send to the computer.
+  ///
+  /// In en, this message translates to:
+  /// **'This image is too large. Choose a smaller one.'**
+  String get profileImageTooLarge;
 }
 
 class _AppLocalizationsDelegate

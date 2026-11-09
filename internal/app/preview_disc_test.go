@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"posse/internal/collaboration"
 )
 
@@ -160,9 +162,15 @@ func previewCollab(a *app, host bool) {
 		self, other = other, self
 	}
 	a.disc.self = self
-	cb := &discCollab{Self: self, SelfName: "Mo", HostID: strings.Repeat("a1", 32), HostName: "Hana", Host: host, Shared: true, Listening: true, State: "active", Connected: host,
+	hanaAvatar := previewAvatar(a)
+	selfName, selfAvatar := "Mo", ""
+	if host {
+		selfName, selfAvatar = "Hana", hanaAvatar
+	}
+	a.profile = profileState{info: profileData{ID: self, Name: selfName, Avatar: selfAvatar}, name: selfName, loaded: true, at: time.Now().Add(time.Hour)}
+	cb := &discCollab{Self: self, SelfName: selfName, HostID: strings.Repeat("a1", 32), HostName: "Hana", Host: host, Shared: true, Listening: true, State: "active", Connected: host,
 		People: []discPerson{
-			{FP: strings.Repeat("a1", 32), Name: "Hana", State: "active", Host: true, Online: true, Generation: 0},
+			{FP: strings.Repeat("a1", 32), Name: "Hana", Avatar: hanaAvatar, State: "active", Host: true, Online: true, Generation: 0},
 			{FP: strings.Repeat("b2", 32), Name: "Mo", State: "active", Online: host, Generation: 1},
 			{FP: strings.Repeat("c3", 32), Name: "Lin", State: "left", Generation: 1},
 		}}
@@ -306,4 +314,26 @@ func previewDiscImages(t *testing.T, a *app) {
 	}
 	d.msgs = append(d.msgs, discMessage{ID: "m10", Seq: 10, Kind: "user", Body: "图片不直接显示", Attachments: atts, CreatedAt: time.Now()})
 	a.disc.quote = ""
+}
+
+// previewAvatar 给预览放一张头像（竖条渐变，看得出裁剪和圆角），直接进缓存，不经磁盘。
+func previewAvatar(a *app) string {
+	img := image.NewRGBA(image.Rect(0, 0, 96, 96))
+	for y := range 96 {
+		for x := range 96 {
+			img.Set(x, y, color.RGBA{uint8(200 - x), uint8(120 + y), 180, 255})
+		}
+	}
+	var buf bytes.Buffer
+	png.Encode(&buf, img)
+	bm, err := ui.DecodeBitmap(buf.Bytes())
+	if err != nil {
+		panic(err)
+	}
+	sha := strings.Repeat("e5", 32)
+	if a.avatars == nil {
+		a.avatars = map[string]avatarEntry{}
+	}
+	a.avatars[sha] = avatarEntry{img: bm, checked: time.Now()}
+	return sha
 }

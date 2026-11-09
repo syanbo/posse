@@ -1824,5 +1824,19 @@
   "discAccessSome": "指定的人",
   "discAccessNobody": "还没有别人加入。",
   "discAccessEveryone": "所有人都能 @ 它",
-  "discAccessPeople": "{names} 能 @ 它"
+  "discAccessPeople": "{names} 能 @ 它",
+  "settingsTabProfile": "个人资料",
+  "settingsProfileTitle": "名字和头像",
+  "settingsProfileNote": "所有讨论和配对的手机都用这一份；Agent 的名字和图标不受影响。",
+  "settingsProfileName": "名字",
+  "settingsProfileChoose": "选择图片…",
+  "settingsProfileRemove": "移除头像",
+  "settingsProfilePickTitle": "选择头像",
+  "settingsProfileImages": "图片",
+  "settingsProfileCrop": "从中间裁成正方形。",
+  "settingsProfilePending": "“{title}”还没更新：{reason}",
+  "settingsProfileOffline": "房主上线后自动发送",
+  "settingsProfileUnsupported": "房主的 Posse 版本太旧，显示不了",
+  "discEditProfile": "编辑名字和头像…",
+  "settingsProfileImageError": "这张图用不了，请选 20 MB 以内的 PNG 或 JPEG。"
 }

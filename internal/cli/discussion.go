@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -815,6 +816,62 @@ func cmdCollabName(e *env, args []string) error {
 	return e.do("collab.rename", map[string]any{"caller": caller(), "name": strings.Join(pos, " ")}, &r, func() {
 		fmt.Fprintf(e.out, "other people now see you as %s\n", r.Name)
 	})
+}
+
+type profileOut struct {
+	ID, Name, Avatar string
+	Rev              int64
+	Pending          []struct{ Room, Title, Host, Reason string }
+}
+
+func printProfile(e *env, r profileOut) {
+	avatar := "none"
+	if r.Avatar != "" {
+		avatar = r.Avatar[:12]
+	}
+	fmt.Fprintf(e.out, "name %s, avatar %s (fingerprint %s)\n", r.Name, avatar, r.ID)
+	for _, p := range r.Pending {
+		fmt.Fprintf(e.out, "not yet synced to %s (host %s): %s\n", cmp.Or(p.Title, p.Room), p.Host, p.Reason)
+	}
+}
+
+func cmdProfile(e *env, args []string) error {
+	fs := flag.NewFlagSet("profile", flag.ContinueOnError)
+	if _, err := parse(fs, args); err != nil {
+		return err
+	}
+	var r profileOut
+	return e.do("profile.get", nil, &r, func() { printProfile(e, r) })
+}
+
+func cmdProfileSet(e *env, args []string) error {
+	fs := flag.NewFlagSet("profile set", flag.ContinueOnError)
+	name := fs.String("name", "", "")
+	avatar := fs.String("avatar", "", "")
+	noAvatar := fs.Bool("no-avatar", false, "")
+	if _, err := parse(fs, args); err != nil {
+		return err
+	}
+	params := map[string]any{"caller": caller()}
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		set = true
+		if f.Name == "name" {
+			params["name"] = *name
+		}
+	})
+	if !set {
+		return fmt.Errorf("nothing to change: pass --name, --avatar or --no-avatar")
+	}
+	if *avatar != "" && *noAvatar {
+		return fmt.Errorf("--avatar and --no-avatar cannot be used together")
+	}
+	if *avatar != "" {
+		params["path"] = absPath(*avatar)
+	}
+	params["remove"] = *noAvatar
+	var r profileOut
+	return e.do("profile.set", params, &r, func() { printProfile(e, r) })
 }
 
 func cmdCollabQuota(e *env, args []string) error {

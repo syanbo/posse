@@ -24,6 +24,7 @@ import '../workspace/workspace.dart';
 import 'api.dart';
 import 'forms.dart';
 import 'models.dart';
+import 'profile.dart';
 
 part 'room_composer.dart';
 part 'room_details.dart';
@@ -63,6 +64,9 @@ class _DiscussionRoomState extends State<DiscussionRoom>
   final localFiles = <String, XFile>{};
   DiscJson? pending;
   Object? error;
+
+  /// 这台电脑的名字和头像（profile.get）；旧电脑没有这个接口时为空。
+  DiscJson ownProfile = {};
   bool get writable =>
       state.discussion.isNotEmpty &&
       widget.api.connected &&
@@ -81,6 +85,7 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     scroll.addListener(scrolled);
     input.addListener(scheduleSave);
     unawaited(start());
+    unawaited(loadProfile());
     timer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (foreground && ModalRoute.of(context)?.isCurrent == true) {
         unawaited(poll());
@@ -104,6 +109,21 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     });
     await state.page();
     await bottom();
+  }
+
+  Future<void> loadProfile() async {
+    try {
+      final r = await widget.api.call('profile.get', {});
+      if (mounted) setState(() => ownProfile = r);
+    } catch (_) {
+      // 旧电脑：头像画首字，没有资料入口
+    }
+  }
+
+  Future<void> editProfile() async {
+    if (!await openProfile(context, widget.api) || !mounted) return;
+    await loadProfile();
+    await state.poll();
   }
 
   void changed() {
@@ -560,7 +580,7 @@ class _DiscussionRoomState extends State<DiscussionRoom>
                   maxLines: 4,
                   overflow: TextOverflow.ellipsis,
                 ),
-                subtitle: Text(discText(m, 'authorName')),
+                subtitle: Text(discAuthorName(m, state.collab)),
                 onTap: () => Navigator.pop(sheet, discText(m, 'id')),
               ),
           ],

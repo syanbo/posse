@@ -30,6 +30,7 @@ func (h mobileHost) Discussions(ctx context.Context, device, method string, raw 
 	}
 	delete(p, "caller")
 	delete(p, "addrs")
+	delete(p, "path") // 手机给的是图片字节，不能让它读这台电脑上的文件
 	if v, ok := p["workspace"]; ok {
 		var sel string
 		if json.Unmarshal(v, &sel) != nil {
@@ -107,6 +108,7 @@ func (h mobileHost) Discussions(ctx context.Context, device, method string, raw 
 		"discussion.member.restart": d.discMemberRestart, "discussion.member.resume": d.collabResume,
 		"discussion.share": d.collabShare, "discussion.invite": d.collabInvite, "discussion.decide": d.collabDecide,
 		"discussion.person.remove": d.collabRemovePerson, "discussion.join": d.collabJoin, "discussion.leave": d.collabLeave,
+		"discussion.profile.get": d.profileGet, "discussion.profile.set": d.profileSet, "discussion.profile.avatar": d.profileAvatar,
 	}
 	fn := handlers[method]
 	if fn == nil {

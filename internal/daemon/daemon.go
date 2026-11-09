@@ -195,6 +195,8 @@ type Daemon struct {
 	launcher agent.Launcher
 	runtime  string // 自己所在的副本目录（spawn.RuntimeDir），不在副本里运行时为空
 
+	avatarMu sync.Mutex // 头像落盘、改引用和回收不交错（profile.go）
+
 	mu    sync.Mutex
 	terms map[string]*session
 	// window 是窗口报来的终端配色，新终端按它起（见 windowColors）
@@ -582,6 +584,9 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("collab.status", d.collabStatus)
 	srv.Handle("collab.quota", d.collabQuota)
 	srv.Handle("collab.rename", d.collabRename)
+	srv.Handle("profile.get", d.profileGet)
+	srv.Handle("profile.set", d.profileSet)
+	srv.Handle("profile.avatar", d.profileAvatar)
 	srv.HandleStream("terminal.attach", d.terminalAttach)
 }
 

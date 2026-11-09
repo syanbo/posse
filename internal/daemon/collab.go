@@ -105,6 +105,7 @@ func (d *Daemon) collabStart(ctx context.Context) {
 	c.mu.Unlock()
 	d.collabEnsure()
 	go d.collabPushLoop(ctx)
+	go d.pruneAvatars()
 }
 
 // collabEnsure 让服务和连接循环和库里一致：有共享的讨论就监听，没有就停；每个加入中的房间有一个连接循环。
@@ -572,6 +573,10 @@ func (h collabHost) Serve(ctx context.Context, s *collaboration.Session, method 
 		return h.upload(s, room, method, raw)
 	case "download":
 		return h.download(room, raw)
+	case "profile":
+		return h.serveProfile(s, room, gen, raw)
+	case "avatar":
+		return h.serveAvatar(room, raw)
 	case "leave":
 		if _, err := d.store.RevokePerson(room, s.FP, store.PersonLeft, time.Now()); err != nil {
 			return nil, cerr(err)
@@ -927,7 +932,7 @@ func (d *Daemon) collabShare(ctx context.Context, raw json.RawMessage) (any, err
 	if err != nil {
 		return nil, err
 	}
-	if err := d.store.SetShared(disc.Key, p.On, id.Name, time.Now()); err != nil {
+	if err := d.store.SetShared(disc.Key, p.On, ownProfile(id), time.Now()); err != nil {
 		return nil, discError(err)
 	}
 	d.collabEnsure()
@@ -936,7 +941,7 @@ func (d *Daemon) collabShare(ctx context.Context, raw json.RawMessage) (any, err
 		lerr, srv := d.collab.listenErr, d.collab.srv
 		d.collab.mu.Unlock()
 		if srv == nil {
-			d.store.SetShared(disc.Key, false, id.Name, time.Now())
+			d.store.SetShared(disc.Key, false, ownProfile(id), time.Now())
 			d.collabEnsure()
 			if lerr == "" {
 				lerr = "collaboration service is not available while the daemon is starting or handing off"
@@ -1119,9 +1124,10 @@ func (d *Daemon) collabRename(ctx context.Context, raw json.RawMessage) (any, er
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeInternal, "rename: %v", err)
 	}
-	if err := d.store.SetHostName(id.ID, name); err != nil {
+	if err := d.store.SetOwnProfile(id.ID, ownProfile(id)); err != nil {
 		return nil, err
 	}
+	d.profileKick()
 	d.taskNotify()
 	return map[string]string{"id": id.ID, "name": id.Name}, nil
 }

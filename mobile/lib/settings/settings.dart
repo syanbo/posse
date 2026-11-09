@@ -6,6 +6,7 @@ import '../app_state.dart';
 import '../background.dart';
 import '../desk/plugin.dart';
 import '../desk/unlock.dart';
+import '../discussions/profile.dart';
 import '../l10n/l10n.dart';
 import '../push/push.dart';
 import '../ui/loading.dart';
@@ -223,6 +224,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+                ProfileSection(model: model),
                 if (model.push != null)
                   Section(
                     title: l.settingsPushTitle,
