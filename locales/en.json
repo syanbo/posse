@@ -5801,6 +5801,18 @@
   "@settingsFilesPanelShared": {
     "description": "Segment of the files panel toggle row: one state for all projects."
   },
+  "settingsGitPlace": "Branch and Git log",
+  "@settingsGitPlace": {
+    "description": "Settings row label: where the current branch button and the Git log toggle are shown."
+  },
+  "settingsGitPlaceTabBar": "Tab bar",
+  "@settingsGitPlaceTabBar": {
+    "description": "Segment of the branch and Git log row: at the right end of the tab bar, as in earlier versions."
+  },
+  "settingsGitPlaceStatusBar": "Status bar",
+  "@settingsGitPlaceStatusBar": {
+    "description": "Segment of the branch and Git log row: at the left end of the status bar at the bottom of the window."
+  },
   "settingsFont": "Font",
   "@settingsFont": {
     "description": "Row label of a font picker."

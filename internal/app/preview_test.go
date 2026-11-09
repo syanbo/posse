@@ -1249,6 +1249,11 @@ func TestPreview(t *testing.T) {
 		previewBranches(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-branches-"+suffix+".png")
 		gitLangs(a, "git-branches")
+		// 设置里把分支和 Git 日志放回标签栏：弹窗贴着右上角
+		a = previewApp(t)
+		a.state.GitInTabBar = true
+		previewBranches(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-branches-tabbar-"+suffix+".png")
 
 		a = previewApp(t)
 		previewPush(t, a)

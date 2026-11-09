@@ -232,7 +232,7 @@ func trackBadge(c *ui.Context, ahead, behind int, showCount bool) {
 	}
 }
 
-// branchButton 是状态栏左端的分支名，点开分支弹窗；有传入、传出提交时名字后面带箭头。
+// branchButton 是状态栏左端（设置里可改到标签栏右端）的分支名，点开分支弹窗；有传入、传出提交时名字后面带箭头。
 func (a *app) branchButton(c *ui.Context, w *workspace) {
 	t := c.Theme()
 	tr := a.pollTrack(c, w)
@@ -242,8 +242,12 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 	if v := a.files[w.ID]; v != nil && v.multiRepo() && !v.sameBranch(branch) {
 		label = L(c).BranchRepoBranch(v.repoName(v.git), branch)
 	}
-	b := ui.Row(c.Key("branch")).Height(sz(24)).Padding(0, 6, 0, chipPad).Gap(4).Radius(rRow).AlignItems(ui.Center).Shrink(1).MinWidth(0).
-		Role(ui.RoleButton).Label(L(c).BranchButtonLabel(branch)).Tooltip(trackTip(L(c), branch, tr) + baseTip(L(c), w.BaseRef, tr))
+	b := ui.Row(c.Key("branch")).Height(sz(24)).Padding(0, 6, 0, chipPad).Gap(4).Radius(rRow).AlignItems(ui.Center).Shrink(1).MinWidth(0)
+	if a.state.GitInTabBar {
+		// 和标签栏的图标按钮同高
+		b.Height(sz(26)).Padding(0, 6, 0, 8)
+	}
+	b.Role(ui.RoleButton).Label(L(c).BranchButtonLabel(branch)).Tooltip(trackTip(L(c), branch, tr) + baseTip(L(c), w.BaseRef, tr))
 	open := a.branchPop != nil && a.branchPop.ws == w.ID
 	bg := ui.Transparent
 	switch {
@@ -253,7 +257,7 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 		bg = colors(t).wash
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
-	// 状态栏画在弹窗后面，弹窗判断点外面时用的是上一帧的悬停
+	// 标签栏画在弹窗前面、状态栏画在后面（弹窗判断点外面时用的是上一帧的悬停），状态栏每帧开头清掉
 	a.overBranchButton = b.Hovered()
 	b.Children(func() {
 		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
@@ -275,7 +279,7 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 	}
 }
 
-// branchPopupView 画分支弹窗，浮在主区域左下角、分支按钮上面，点外面或 Esc 关闭。
+// branchPopupView 画分支弹窗，浮在主区域左下角、分支按钮上面（分支在标签栏时浮在右上角、按钮下面），点外面或 Esc 关闭。
 func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 	bp := a.branchPop
 	if bp == nil || bp.ws != w.ID {
@@ -287,9 +291,15 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 	if g.repo != "" && g.branches.list == nil && !g.branches.loading {
 		a.loadBranches(g)
 	}
-	// 贴着底边往上长，窗口矮时由外层限高、不顶出主区域（仓库和搜索框在最上面）
+	// 贴着底边往上长（在标签栏时贴着顶边往下），窗口矮时由外层限高、不顶出主区域（仓库和搜索框在最上面）
 	var panel ui.Element
-	ui.Column(c).Absolute().Top(6).Bottom(6).Left(trafficLightX - chipPad).Justify(ui.End).PassThrough().Children(func() {
+	slot := ui.Column(c).Absolute().Top(6).Bottom(6).PassThrough()
+	if a.state.GitInTabBar {
+		slot.Right(8).Justify(ui.Start)
+	} else {
+		slot.Left(trafficLightX - chipPad).Justify(ui.End)
+	}
+	slot.Children(func() {
 		panel = floating(c, ui.Column(c).Width(a.branchPopWidth()).MaxHeight(600).Shrink(1).MinHeight(0).Padding(6).Gap(2))
 		panel.Children(func() {
 			// 多个仓库：最上面选仓库，下面的分支和操作都是它的
@@ -364,10 +374,19 @@ func (a *app) branchPopWidth() float32 {
 	return branchPopDefault
 }
 
-// branchPopGrip 是分支弹窗右边缘调宽的把手：弹窗贴着左边，往右拖变宽，长分支名和远端名看得全；松手才写 ui.json。
+// branchPopGrip 是分支弹窗离按钮远的那一边调宽的把手：弹窗贴着左边时在右边缘、往右拖变宽，贴着右边（分支在标签栏）时在左边缘、往左拖变宽，
+// 长分支名和远端名看得全；松手才写 ui.json。
 func (a *app) branchPopGrip(c *ui.Context) {
-	grip := ui.Box(c.Key("branch-pop-grip")).Absolute().Top(0).Bottom(0).Right(0).Width(6).Cursor(ui.CursorResizeEW)
+	grip := ui.Box(c.Key("branch-pop-grip")).Absolute().Top(0).Bottom(0).Width(6).Cursor(ui.CursorResizeEW)
+	if a.state.GitInTabBar {
+		grip.Left(0)
+	} else {
+		grip.Right(0)
+	}
 	if dx, _, held := grip.Dragged(); held {
+		if a.state.GitInTabBar {
+			dx = -dx
+		}
 		a.state.BranchPopWidth = min(max(a.branchPopWidth()+dx, branchPopMin), branchPopMax)
 		a.resizingBranch = true
 	} else if a.resizingBranch {

@@ -119,7 +119,7 @@ func (a *app) shownWord(m locales.Messages) string {
 const chipPad = 8
 
 // statusBar 是主区域最下面的状态栏，和侧栏的底栏同高同色，并排看是贯穿窗口的一条。
-// 左边是当前工作区的分支和 Git 日志开关（w 为 nil 时不画，见 branchButton）。右边是套餐用量，每家只占一小段：图标和一个窗口（有 5 小时就是它，否则是第一个）的百分比，合起来是一个按钮，
+// 左边是当前工作区的分支和 Git 日志开关（w 为 nil 或设置里放在标签栏时不画，见 branchButton）。右边是套餐用量（分支不在这里时在左边），每家只占一小段：图标和一个窗口（有 5 小时就是它，否则是第一个）的百分比，合起来是一个按钮，
 // 点开的浮窗里是各家所有窗口、重置时间这些详情和"已用 / 剩余"切换；最右边是终端和内存、防休眠。
 func (a *app) statusBar(c *ui.Context, w *workspace) {
 	t := c.Theme()
@@ -129,18 +129,24 @@ func (a *app) statusBar(c *ui.Context, w *workspace) {
 	ui.Row(c).Height(footHeight).Padding(0, trafficLightX-chipPad).Shrink(0).AlignItems(ui.Center).Clip().
 		Background(footShade(t)).BorderWidth(hairline, 0, 0, 0).BorderColor(p.line).Children(func() {
 		a.overBranchButton = false
-		if w != nil && a.gitBranch(w) != "" {
+		inBar := !a.state.GitInTabBar
+		switch {
+		case w == nil || a.gitBranch(w) == "":
+			// 切到别的页面时弹窗画不出来、也收不到点外面，不收掉的话回来又自己弹出
+			a.branchPop = nil
+		case inBar:
 			a.branchButton(c, w)
 			// Git 日志浮层从终端底边滑上来，开关挨着分支
 			if toggleIconButtonSized(c, "git-log", iconGitLog, a.withKey(L(c).GitLogTitle(), "gitLog"), a.logPanelOpen(), sz(24), fsBody, rRow) {
 				a.toggleLogPanel(w)
 			}
-		} else {
-			// 切到别的页面时弹窗画不出来、也收不到点外面，不收掉的话回来又自己弹出
-			a.branchPop = nil
 		}
-		// 用量靠右、挨着内存；窗口窄时裁掉用量，右边的按钮不被挤出去
-		ui.Row(c).Grow(1).Shrink(1).MinWidth(0).Clip().Justify(ui.End).AlignItems(ui.Center).Children(func() { a.planButton(c, st) })
+		// 分支在这里时用量靠右、挨着内存，否则照旧在左端；窗口窄时裁掉用量，右边的按钮不被挤出去
+		plan := ui.Row(c).Grow(1).Shrink(1).MinWidth(0).Clip().AlignItems(ui.Center)
+		if inBar {
+			plan.Justify(ui.End)
+		}
+		plan.Children(func() { a.planButton(c, st) })
 		if a.loaded {
 			// 终端数和内存放在一个按钮里：点开的浮窗按工作区列的就是这些终端占的内存
 			a.memoryButton(c)

@@ -395,6 +395,17 @@ func (a *app) interfaceSettings(c *ui.Context) {
 				a.setFilesPanelShared(sel == 1)
 			}
 		})
+		settingsRow(c, m.SettingsGitPlace(), func() {
+			sel := 1
+			if a.state.GitInTabBar {
+				sel = 0
+			}
+			if segmented(c, &sel, m.SettingsGitPlace(), m.SettingsGitPlaceTabBar(), m.SettingsGitPlaceStatusBar()) {
+				a.state.GitInTabBar = sel == 0
+				a.branchPop = nil
+				a.saveState()
+			}
+		})
 		settingsRow(c, m.SettingsFontSmoothing(), func() {
 			sel := 0
 			if uiSmooth {

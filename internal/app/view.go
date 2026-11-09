@@ -1764,8 +1764,18 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace, i int) {
 	})
 }
 
-// tabBarButtons 是标签栏右边的按钮组：文件栏的开关。分支和 Git 日志在状态栏左端：分支名长时标签栏放不下。
+// tabBarButtons 是标签栏右边的按钮组：文件栏的开关；设置里选了标签栏时，前面是分支和 Git 日志（默认在状态栏左端：分支名长时标签栏放不下）。
 func (a *app) tabBarButtons(c *ui.Context, w *workspace) {
+	if a.state.GitInTabBar && a.gitBranch(w) != "" {
+		a.branchButton(c, w)
+		b := iconButton(c.Key("git-log"), iconGitLog, a.withKey(L(c).GitLogTitle(), "gitLog"))
+		if a.logPanelOpen() {
+			b.Background(colors(c.Theme()).tint)
+		}
+		if b.Clicked() {
+			a.toggleLogPanel(w)
+		}
+	}
 	// 图片、技能与工具、命令速查跟着会话走，放在终端右上角（sessionButtons）；历史按项目，在文件栏里
 	// 文件栏开着时开关在它的顶栏右端，和关着时同一个位置（照 Orca）
 	if !a.filesPanelOpen() && a.filesPanelShown == 0 {

@@ -2395,3 +2395,48 @@ func openLogWait(t *testing.T, a *app, tt *ui.Tester, w *workspace, path string)
 		return v != nil && v.logCur != nil && v.logCur.log.filter.Path == path
 	})
 }
+
+// 设置里把分支放回标签栏：分支按钮和 Git 日志开关在标签栏、不在状态栏，用量回到状态栏左端；
+// 弹窗贴着右上角，左边缘往左拖变宽。
+func TestGitInTabBar(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	a.state.GitInTabBar = true
+	tt := newTester(a.build, 1200, 760)
+	until(t, tt, "branch button", func() bool { _, ok := tt.Find("分支 main"); return ok })
+	r, ok := tt.Find("分支 main")
+	if !ok || r.Y > 100 {
+		t.Fatalf("branch button not in the tab bar: %v %v", r, ok)
+	}
+	if err := tt.Click("分支 main"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "popup", func() bool { return a.branchPop != nil && tt.HasText("搜索分支") })
+	settle(tt)
+	s, _ := tt.Find("搜索分支")
+	// 弹窗贴着主区域右边，输入框在按钮下面
+	if s.Y < r.Y || s.X < 600 {
+		t.Fatalf("popup not at the top right: field %v, button %v", s, r)
+	}
+	// 输入框文字左边是框的内边距 12、行 2、弹窗 6，再往里 3 是左边缘把手中间
+	x, y := s.X-20+3, s.Y+60
+	tt.Press(x, y)
+	tt.Move(x-50, y)
+	tt.Move(x-100, y)
+	tt.Release(x-100, y)
+	tt.Frame()
+	if got := a.branchPopWidth(); got != branchPopDefault+100 || a.resizingBranch {
+		t.Fatalf("branch popup width %v after dragging its left edge", got)
+	}
+	// 再点一下分支按钮收起弹窗，不被当成点了外面收起后又打开
+	tt.Move(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	if err := tt.Click("分支 main"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	if a.branchPop != nil {
+		t.Fatal("clicking the branch button again did not close the popup")
+	}
+}

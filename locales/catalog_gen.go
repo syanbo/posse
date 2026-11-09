@@ -15991,6 +15991,54 @@ func (msgs Messages) SettingsFilesPanelShared() string {
 	return Catalog.Format(msgs.locale, "settingsFilesPanelShared", nil)
 }
 
+// SettingsGitPlace says "Branch and Git log"
+// in the language the app shows.
+//
+// Settings row label: where the current branch button and the Git log
+// toggle are shown.
+func SettingsGitPlace() string { return In(i18n.Locale()).SettingsGitPlace() }
+
+// SettingsGitPlace says "Branch and Git log"
+// in the language of msgs.
+//
+// Settings row label: where the current branch button and the Git log
+// toggle are shown.
+func (msgs Messages) SettingsGitPlace() string {
+	return Catalog.Format(msgs.locale, "settingsGitPlace", nil)
+}
+
+// SettingsGitPlaceTabBar says "Tab bar"
+// in the language the app shows.
+//
+// Segment of the branch and Git log row: at the right end of the tab bar,
+// as in earlier versions.
+func SettingsGitPlaceTabBar() string { return In(i18n.Locale()).SettingsGitPlaceTabBar() }
+
+// SettingsGitPlaceTabBar says "Tab bar"
+// in the language of msgs.
+//
+// Segment of the branch and Git log row: at the right end of the tab bar,
+// as in earlier versions.
+func (msgs Messages) SettingsGitPlaceTabBar() string {
+	return Catalog.Format(msgs.locale, "settingsGitPlaceTabBar", nil)
+}
+
+// SettingsGitPlaceStatusBar says "Status bar"
+// in the language the app shows.
+//
+// Segment of the branch and Git log row: at the left end of the status bar
+// at the bottom of the window.
+func SettingsGitPlaceStatusBar() string { return In(i18n.Locale()).SettingsGitPlaceStatusBar() }
+
+// SettingsGitPlaceStatusBar says "Status bar"
+// in the language of msgs.
+//
+// Segment of the branch and Git log row: at the left end of the status bar
+// at the bottom of the window.
+func (msgs Messages) SettingsGitPlaceStatusBar() string {
+	return Catalog.Format(msgs.locale, "settingsGitPlaceStatusBar", nil)
+}
+
 // SettingsFont says "Font"
 // in the language the app shows.
 //

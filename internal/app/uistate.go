@@ -34,6 +34,7 @@ type uiState struct {
 	LogPanel             bool      `json:"logPanel,omitempty"`             // 旧版不分项目的日志浮层开关，读到后记到当前项目上
 	LogPanelHeight       float32   `json:"logPanelHeight,omitempty"`       // Git 日志浮层的高度，0 表示默认
 	BranchPopWidth       float32   `json:"branchPopWidth,omitempty"`       // 分支弹窗的宽度，0 表示默认
+	GitInTabBar          bool      `json:"gitInTabBar,omitempty"`          // 分支按钮和 Git 日志开关放在标签栏右端（原来的位置），默认在底部状态栏左端
 	CompareSplit         float32   `json:"compareSplit,omitempty"`         // 分支比较上一栏占的比例，0 表示各一半
 	DiffSplit            float32   `json:"diffSplit,omitempty"`            // diff 左右对照时旧版一侧占的比例，0 表示各一半
 	LogRefsWidth         float32   `json:"logRefsWidth,omitempty"`         // 日志左边分支树的宽度，0 表示默认
