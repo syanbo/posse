@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.20
+
+- 新增「名字和头像」：在设置里或讨论详情里点自己，就能改名字、换头像，和电脑端设置里的个人资料是同一份；讨论里的消息显示每个人的名字和头像。
+- 修复讨论页轮询时消息区域上下抖动。
+- 名字和头像需要电脑端 0.1.29 及以上。
+
+### English
+
+- New "Name and avatar": change your name and avatar in Settings or by tapping yourself in discussion details. They are the same profile as on your Mac, and discussion messages show each person's name and avatar.
+- Fixed the message area jittering while the discussion page polls for updates.
+- Name and avatar need Posse for Mac 0.1.29 or later.
+
 ## 0.1.19
 
 - 讨论页重新设计，和电脑端一致：自己的话靠右，执行状态收成一行，详情改成分组卡片。
