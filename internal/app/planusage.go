@@ -119,15 +119,19 @@ func (a *app) shownWord(m locales.Messages) string {
 const chipPad = 8
 
 // statusBar 是主区域最下面的状态栏，和侧栏的底栏同高同色，并排看是贯穿窗口的一条。
-// 左边是套餐用量，每家只占一小段：图标和一个窗口（有 5 小时就是它，否则是第一个）的百分比，合起来是一个按钮，
+// 左边是当前工作区的分支（w 为 nil 时不画，见 branchButton），接着是套餐用量，每家只占一小段：图标和一个窗口（有 5 小时就是它，否则是第一个）的百分比，合起来是一个按钮，
 // 点开的浮窗里是各家所有窗口、重置时间这些详情和"已用 / 剩余"切换；最右边是终端和内存、防休眠。
-func (a *app) statusBar(c *ui.Context) {
+func (a *app) statusBar(c *ui.Context, w *workspace) {
 	t := c.Theme()
 	p := colors(t)
 	st := a.daemon.Usage
 	// 两头的按钮自带 chipPad 的左右内边距，文字离边 trafficLightX，和上面顶栏的图标对齐
 	ui.Row(c).Height(footHeight).Padding(0, trafficLightX-chipPad).Shrink(0).AlignItems(ui.Center).Clip().
 		Background(footShade(t)).BorderWidth(hairline, 0, 0, 0).BorderColor(p.line).Children(func() {
+		a.overBranchButton = false
+		if w != nil && a.gitBranch(w) != "" {
+			a.branchButton(c, w)
+		}
 		// 窗口窄时裁掉用量，右边的按钮不被挤出去
 		ui.Row(c).Grow(1).Shrink(1).MinWidth(0).Clip().AlignItems(ui.Center).Children(func() { a.planButton(c, st) })
 		if a.loaded {

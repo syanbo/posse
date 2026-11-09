@@ -254,17 +254,17 @@ func TestBranchPopupAndCompare(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyEscape)
 	tt.Frame()
-	// 左边缘往左拖变宽，松手写进 ui.json
+	// 右边缘往右拖变宽，松手写进 ui.json
 	if r, ok := tt.Find("搜索分支"); ok {
-		// 输入框文字左边是框的内边距 12、行 2、弹窗 6，再往里 3 是把手中间
-		x, y := r.X-20+3, r.Y+60
+		// 输入框文字左边是框的内边距 12、行 2、弹窗 6，弹窗右边缘往里 3 是把手中间
+		x, y := r.X-20+branchPopDefault-3, r.Y+60
 		tt.Press(x, y)
-		tt.Move(x-50, y)
-		tt.Move(x-100, y)
-		tt.Release(x-100, y)
+		tt.Move(x+50, y)
+		tt.Move(x+100, y)
+		tt.Release(x+100, y)
 		tt.Frame()
 		if got := a.branchPopWidth(); got != branchPopDefault+100 || a.resizingBranch {
-			t.Fatalf("branch popup width %v after dragging its left edge", got)
+			t.Fatalf("branch popup width %v after dragging its right edge", got)
 		}
 	} else {
 		t.Fatal("search field missing")

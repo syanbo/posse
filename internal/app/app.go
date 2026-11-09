@@ -349,7 +349,7 @@ type app struct {
 	// overPanelButton 是这一帧指针是否在标签栏的面板按钮上：在按钮上按下交给按钮切换，不算点了面板外面
 	overPanelButton bool
 	resizingPanel   bool            // 正在拖文件栏的左边缘，松手时写 ui.json
-	resizingBranch  bool            // 正在拖分支弹窗的左边缘，松手时写 ui.json
+	resizingBranch  bool            // 正在拖分支弹窗的右边缘，松手时写 ui.json
 	resizingSide    bool            // 正在拖侧栏的右边缘，松手时写 ui.json
 	resizingSplit   string          // 正在拖的分栏线（paneDivider 的 key），松手时写 ui.json
 	splitDrag       float32         // 拖分隔线时累计的距离，松手才改比例
@@ -365,6 +365,9 @@ type app struct {
 	rollbackDiffBox dialogBox  // 回滚对话框里点开的 diff 浮窗的
 	pushBox         dialogBox  // Push 对话框的
 	toasts          []ui.Toast // 等下一帧交给 mygo 显示的提示：后台操作完成时手里没有 Context
+
+	// overBranchButton 是指针是否在状态栏的分支按钮上，作用同 overPanelButton
+	overBranchButton bool
 
 	// 派发任务对话框
 	dispatching bool

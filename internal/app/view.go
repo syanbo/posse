@@ -111,7 +111,13 @@ func (a *app) build(c *ui.Context) {
 					a.main(c, w, cur)
 				}
 			})
-			a.statusBar(c)
+			// 分支按钮只在工作区的主界面显示，分支弹窗也只在那里画
+			var bw *workspace
+			if !board && a.selected != historyBoardID && a.selected != discBoardID && a.selected != mobileBoardID &&
+				a.selected != skillsBoardID && a.selected != settingsBoardID {
+				bw = w
+			}
+			a.statusBar(c, bw)
 		})
 		// 最后画，压在分隔线和主区域上面，才接得到分隔线两侧的拖动
 		if !a.state.SidebarHidden {
@@ -1761,10 +1767,9 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace, i int) {
 	})
 }
 
-// tabBarButtons 是标签栏右边的按钮组：分支、Git 日志、各个面板和文件栏的开关。
+// tabBarButtons 是标签栏右边的按钮组：Git 日志和文件栏的开关。分支按钮在状态栏左端：分支名长时标签栏放不下。
 func (a *app) tabBarButtons(c *ui.Context, w *workspace) {
 	if a.gitBranch(w) != "" {
-		a.branchButton(c, w)
 		b := iconButton(c.Key("git-log"), iconGitLog, a.withKey(L(c).GitLogTitle(), "gitLog"))
 		if a.logPanelOpen() {
 			b.Background(colors(c.Theme()).tint)
