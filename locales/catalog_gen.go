@@ -12617,6 +12617,42 @@ func (msgs Messages) LogBranchCount(count int) string {
 	return Catalog.Format(msgs.locale, "logBranchCount", map[string]any{"count": count})
 }
 
+// LogGraphJumpTo says "Jump to \"{subject}\" by {author} on {when}"
+// in the language the app shows.
+//
+// Git log: tooltip of an arrow in the commit graph where a long line is
+// cut; clicking it selects the commit at the other end. when is the full
+// date and time, as in WebStorm.
+func LogGraphJumpTo(subject string, author string, when string) string {
+	return In(i18n.Locale()).LogGraphJumpTo(subject, author, when)
+}
+
+// LogGraphJumpTo says "Jump to \"{subject}\" by {author} on {when}"
+// in the language of msgs.
+//
+// Git log: tooltip of an arrow in the commit graph where a long line is
+// cut; clicking it selects the commit at the other end. when is the full
+// date and time, as in WebStorm.
+func (msgs Messages) LogGraphJumpTo(subject string, author string, when string) string {
+	return Catalog.Format(msgs.locale, "logGraphJumpTo", map[string]any{"subject": subject, "author": author, "when": when})
+}
+
+// LogGraphJumpToHash says "Jump to commit {hash}"
+// in the language the app shows.
+//
+// Git log: tooltip of a commit graph arrow whose commit is not loaded yet;
+// clicking it loads more until it is found.
+func LogGraphJumpToHash(hash string) string { return In(i18n.Locale()).LogGraphJumpToHash(hash) }
+
+// LogGraphJumpToHash says "Jump to commit {hash}"
+// in the language of msgs.
+//
+// Git log: tooltip of a commit graph arrow whose commit is not loaded yet;
+// clicking it loads more until it is found.
+func (msgs Messages) LogGraphJumpToHash(hash string) string {
+	return Catalog.Format(msgs.locale, "logGraphJumpToHash", map[string]any{"hash": hash})
+}
+
 // LogBranchFilter says "Filter by branch"
 // in the language the app shows.
 //

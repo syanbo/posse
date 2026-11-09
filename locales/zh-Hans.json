@@ -835,6 +835,8 @@
   "logAuthor": "作者",
   "logAuthorFilter": "按作者筛选",
   "logBranchCount": "{count} 个分支",
+  "logGraphJumpTo": "跳到「{subject}」，{author}，{when}",
+  "logGraphJumpToHash": "跳到提交 {hash}",
   "logBranchFilter": "按分支筛选",
   "logCheckoutCommit": "检出这个提交",
   "logClearFilter": "清除筛选",

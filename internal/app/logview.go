@@ -21,9 +21,7 @@ import (
 // 和上一个提交合并、删除提交。
 
 const (
-	logPage   = 300
-	laneWidth = 14
-	maxLanes  = 12 // 再多的线裁掉，不让提交图挤掉标题
+	logPage = 300
 )
 
 type logDoc struct {
@@ -32,9 +30,9 @@ type logDoc struct {
 	text      string // 输入框里的文字，停顿后才应用到 filter
 	author    string
 	commits   []gitx.CommitInfo
-	graph     []graphRow
-	lanes     int  // 提交图最宽处的线数，每行的图一样宽，标题才对齐
-	more      bool // 还有更早的提交
+	graph     *commitGraph // 提交图；按作者、文字筛选时为 nil，只画点
+	jump      string       // 点了提交图的箭头、要跳去的提交还没读出来：往下读到它为止
+	more      bool         // 还有更早的提交
 	loading   bool
 	gen       int
 	commit    *commitView
@@ -330,128 +328,21 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 			}
 			ld.more = len(list) == limit
 			// 按作者、文字筛出来的提交父提交多半不在结果里，画出来每个都是一条新线；这时只画点
-			ld.graph, ld.lanes = nil, 1
-			if f.Author == "" && strings.TrimSpace(f.Text) == "" {
+			ld.graph = nil
+			// 文件历史另有界面（filehistory.go），不画提交图
+			if f.Author == "" && strings.TrimSpace(f.Text) == "" && f.Path == "" {
 				ld.graph = buildGraph(ld.commits)
-				for _, r := range ld.graph {
-					ld.lanes = max(ld.lanes, len(r.in), len(r.out), r.lane+1)
-				}
-				ld.lanes = min(ld.lanes, maxLanes)
+			}
+			// 往下读是为了找箭头要跳的提交时接着找；从头重读（换了筛选、刷新）就作罢
+			if ld.jump != "" && more {
+				a.jumpToCommit(v, d, ld.jump)
+			} else {
+				ld.jump = ""
 			}
 			ld.reloaded = time.Now()
 			d.kind = docLog
 		})
 	}()
-}
-
-// --- 提交图
-
-// graphRow 是提交图的一行：提交在第几条线上，和进出这一行的线。
-// in 是这一行上边的线（每条线等着的提交），out 是下边的线。几条线可能等着同一个提交
-// （几个分支从同一处分出），所以线按位置对应（from），不按提交找。
-type graphRow struct {
-	lane    int
-	in, out []string
-	from    []int // in 里每条线在 out 里的位置；-1 是连到这个提交、在这里结束或新开的线
-	parents []int // 父提交在 out 里的位置
-}
-
-// buildGraph 按日志顺序给每个提交分线：提交接到等它的线上（没有就开一条新线），
-// 线接着等它的第一个父提交，其余父提交接到已经在等它的线上或开新线；结束的线去掉，后面的线左移。
-func buildGraph(commits []gitx.CommitInfo) []graphRow {
-	rows := make([]graphRow, len(commits))
-	var lanes []string
-	for i, c := range commits {
-		in := slices.Clone(lanes)
-		lane := slices.Index(lanes, c.Hash)
-		if lane < 0 {
-			lanes = append(lanes, c.Hash)
-			lane = len(lanes) - 1
-			in = slices.Clone(lanes)
-			in[lane] = "" // 新开的线：上边没有线进来
-		}
-		// src 跟着 lanes 增删，记每条线来自 in 的哪个位置，-1 是这一行新开的
-		src := make([]int, len(lanes))
-		for j := range src {
-			src[j] = j
-		}
-		src[lane] = -1 // 这条线从这个提交接着往下，上半段连到提交，不是直穿
-		// 别的线也在等这个提交（合并到这里的分支），它们在这里结束
-		for j := len(lanes) - 1; j >= 0; j-- {
-			if j != lane && lanes[j] == c.Hash {
-				lanes = slices.Delete(lanes, j, j+1)
-				src = slices.Delete(src, j, j+1)
-				if j < lane {
-					lane--
-				}
-			}
-		}
-		var parents []int
-		if len(c.Parents) == 0 {
-			lanes = slices.Delete(lanes, lane, lane+1)
-			src = slices.Delete(src, lane, lane+1)
-		} else {
-			lanes[lane] = c.Parents[0]
-			parents = append(parents, lane)
-			for _, p := range c.Parents[1:] {
-				k := slices.Index(lanes, p)
-				if k < 0 {
-					lanes = append(lanes, p)
-					src = append(src, -1)
-					k = len(lanes) - 1
-				}
-				parents = append(parents, k)
-			}
-		}
-		from := make([]int, len(in))
-		for j := range from {
-			from[j] = -1
-		}
-		for k, j := range src {
-			if j >= 0 {
-				from[j] = k
-			}
-		}
-		rows[i] = graphRow{lane: lane, in: in, out: slices.Clone(lanes), from: from, parents: parents}
-	}
-	return rows
-}
-
-func laneColor(t *ui.Theme, i int) ui.Color { return dataColor(t, i) }
-
-// graphCell 画一行的提交图。
-func graphCell(c *ui.Context, r graphRow, hash string, lanes int) ui.Element {
-	// 超过上限的线裁掉，但提交自己那条线总要画得出来
-	n := max(lanes, r.lane+1, 1)
-	t := c.Theme()
-	return ui.Box(c).Width(float32(n*laneWidth + 6)).Height(logRowH()).Shrink(0).Clip().Draw(func(p *ui.Painter, rect ui.Rect) {
-		x := func(i int) float32 { return rect.X + 6 + float32(i*laneWidth) }
-		top, mid, bot := rect.Y, rect.Y+rect.H/2, rect.Y+rect.H
-		line := func(x0, y0, x1, y1 float32, col ui.Color) {
-			var path ui.Path
-			path.MoveTo(x0, y0).LineTo(x1, y1)
-			p.StrokePath(&path, 1.6, col)
-		}
-		// 上半段：进来的线连到这个提交，或者连到它在下边的位置；下半段：经过的线直下
-		for j, h := range r.in {
-			switch {
-			case h == "":
-			case h == hash:
-				line(x(j), top, x(r.lane), mid, laneColor(t, j))
-			case j < len(r.from) && r.from[j] >= 0:
-				k := r.from[j]
-				line(x(j), top, x(k), mid, laneColor(t, k))
-				line(x(k), mid, x(k), bot, laneColor(t, k))
-			}
-		}
-		for _, k := range r.parents {
-			if k >= 0 {
-				line(x(r.lane), mid, x(k), bot, laneColor(t, k))
-			}
-		}
-		p.Fill(ui.Rect{X: x(r.lane) - 4, Y: mid - 4, W: 8, H: 8}, laneColor(t, r.lane), 4)
-		p.Fill(ui.Rect{X: x(r.lane) - 2, Y: mid - 2, W: 4, H: 4}, t.Background, 2)
-	})
 }
 
 // --- 日志界面
@@ -532,7 +423,7 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				})
 				return
 			}
-			commits, graph := ld.commits, ld.graph
+			commits := ld.commits
 			n := len(commits)
 			if ld.more {
 				n++
@@ -552,11 +443,7 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 					}
 					return
 				}
-				var gr graphRow // 没有提交图时只画点
-				if graph != nil {
-					gr = graph[i]
-				}
-				a.logRow(c, w, v, d, commits[i], gr)
+				a.logRow(c, w, v, d, commits[i], i)
 			}).Grow(1)
 			if ld.focusList && ld.list.Focus(c) {
 				ld.focusList = false
@@ -698,7 +585,7 @@ func (a *app) applyLogFilter(v *filesView, d *fileDoc) {
 }
 
 // logRow 是日志的一行：提交图、标题、分支和标签、作者、时间；右键是提交的操作。
-func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci gitx.CommitInfo, gr graphRow) {
+func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci gitx.CommitInfo, i int) {
 	t := c.Theme()
 	ld := d.log
 	row := ui.Row(c.Key(ci.Hash)).Height(logRowH()).Padding(0, 16, 0, 16).Gap(8).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
@@ -715,11 +602,15 @@ func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci g
 		p.Fill(ui.Rect{X: r.X + 6, Y: r.Y + 1, W: r.W - 12, H: r.H - 2}, bg, rRow)
 	})
 	row.Children(func() {
-		graphCell(c, gr, ci.Hash, ld.lanes)
+		a.graphCell(c, v, d, i)
 		// 标题和引用让位，作者、时间固定宽度、各行对齐，不被挤掉
 		// 窗口太窄时标题至少留 56（12 小时制的时间列宽出 PM、「下午」，标题先让）；短标题不撑满，后面的分支标签紧挨着它
 		sw, _ := c.MeasureText(0, ui.Span{Text: ci.Subject, Size: fsBody})
-		ui.Text(c, ci.Subject).FontSize(fsBody).SingleLine().MaxWidth(460).Shrink(1).MinWidth(min(56, sw))
+		title := ui.Text(c, ci.Subject).FontSize(fsBody).SingleLine().MaxWidth(460).Shrink(1).MinWidth(min(56, sw))
+		// 合并提交照 WebStorm 用次要色：一眼分出真正改代码的提交
+		if len(ci.Parents) > 1 {
+			title.TextColor(t.TextMuted)
+		}
 		refChips(c, ci.Refs)
 		ui.Text(c, ci.Author).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Width(authorW).Shrink(0)
 		ui.Text(c, commitTime(L(c), ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW(c)).Shrink(0).TextAlign(ui.End).Tooltip(commitStamp(L(c), ci.Time))

@@ -383,7 +383,7 @@ func TestPushDialog(t *testing.T) {
 	}
 }
 
-// 提交图：m 合并了 b，b 和 a 都从 r 分出来
+// 提交图（照 WebStorm 的布局序号）：m 合并了 b，b 和 a 都从 r 分出来
 //
 //	m
 //	|\
@@ -397,29 +397,28 @@ func TestBuildGraph(t *testing.T) {
 		{Hash: "b", Parents: []string{"r"}},
 		{Hash: "r"},
 	}
-	g := buildGraph(cs)
-	if g[0].lane != 0 || len(g[0].out) != 2 || g[0].parents[0] != 0 || g[0].parents[1] != 1 {
-		t.Fatalf("merge row %+v", g[0])
+	g := buildGraph(cs).rows
+	// 第一个父提交一路走到底是第一条（a、r），b 是第二条
+	if g[0].node != 0 || g[1].node != 0 || g[2].node != 1 || g[3].node != 0 {
+		t.Fatalf("nodes %d %d %d %d", g[0].node, g[1].node, g[2].node, g[3].node)
 	}
-	if g[1].lane != 0 || g[2].lane != 1 {
-		t.Fatalf("a on %d, b on %d", g[1].lane, g[2].lane)
+	if g[0].color != g[1].color || g[2].color == g[1].color {
+		t.Fatalf("colors %d %d %d", g[0].color, g[1].color, g[2].color)
 	}
-	// r 上两条线汇合：之后只剩没有线
-	if g[3].lane != 0 || len(g[3].in) != 2 || len(g[3].out) != 0 {
-		t.Fatalf("root row %+v", g[3])
-	}
-	// 三个分支从 r 分出：几条线都等着 r，经过的线按位置直下，不斜到第一条等 r 的线上
+	// 三个分支从 r 分出：a 一路直下，后面的分支依次往右排，到 r 汇合
 	g = buildGraph([]gitx.CommitInfo{
 		{Hash: "a", Parents: []string{"r"}},
 		{Hash: "b", Parents: []string{"r"}},
 		{Hash: "c", Parents: []string{"r"}},
 		{Hash: "r"},
-	})
-	if !slices.Equal(g[2].from, []int{0, 1, -1}) || !slices.Equal(g[2].parents, []int{2}) {
-		t.Fatalf("third branch row %+v", g[2])
+	}).rows
+	if g[1].node != 1 || g[2].node != 2 || g[3].node != 0 {
+		t.Fatalf("fork nodes %d %d %d", g[1].node, g[2].node, g[3].node)
 	}
-	if g[3].lane != 0 || !slices.Equal(g[3].from, []int{-1, -1, -1}) || len(g[3].out) != 0 {
-		t.Fatalf("fork point row %+v", g[3])
+	for _, l := range g[1].lines {
+		if l.from == 0 && l.down && l.to != 0 {
+			t.Fatalf("a's line leans: %+v", l)
+		}
 	}
 	if refs := refNames("HEAD -> main, origin/main, tag: v1"); len(refs) != 3 || !refs[0].head || refs[2].name != "v1" {
 		t.Fatalf("refs %+v", refs)
@@ -2439,4 +2438,171 @@ func TestGitInTabBar(t *testing.T) {
 	if a.branchPop != nil {
 		t.Fatal("clicking the branch button again did not close the popup")
 	}
+}
+
+// octopusCommits 是一次合并好几个子仓的历史：m 合并主线和 subs 个各自独立的子仓，子仓的提交在很远的下面；
+// 中间主线上还有一个短分支 f 合进来。
+func octopusCommits(subs, gap int) []gitx.CommitInfo {
+	at := time.Date(2026, 11, 9, 12, 0, 0, 0, time.Local)
+	var cs []gitx.CommitInfo
+	add := func(hash, subject string, parents ...string) {
+		for i := range parents {
+			parents[i] = octoHash(parents[i])
+		}
+		cs = append(cs, gitx.CommitInfo{Hash: octoHash(hash), Subject: subject, Author: "dengbo", Time: at.Add(-time.Duration(len(cs)) * time.Hour), Parents: parents})
+	}
+	add("top", "fix(preview): 修复大图预览界面直接发送", "m")
+	parents := []string{"c0"}
+	for k := range subs {
+		parents = append(parents, fmt.Sprintf("s%d", k))
+	}
+	add("m", fmt.Sprintf("build(librarys): 合并 %d 个子仓到主仓", subs), parents...)
+	for i := range gap {
+		next := fmt.Sprintf("c%d", i+1)
+		switch i {
+		case 2:
+			add(fmt.Sprintf("c%d", i), "Merge branch 'feat'", next, "f1")
+			continue
+		case 3:
+			add("f1", "fix(小火苗): 展示续火花增加待续状态", "f2")
+			add("f2", "fix(礼物面板): 默认选中滚动到顶部", next)
+		}
+		add(fmt.Sprintf("c%d", i), fmt.Sprintf("fix: 主线提交 %d", i), next)
+	}
+	add(fmt.Sprintf("c%d", gap), "chore: 主线起点")
+	for k := range subs {
+		add(fmt.Sprintf("s%d", k), fmt.Sprintf("feat(sub%d): 子仓最后一个提交", k))
+	}
+	return cs
+}
+
+// octoHash 把 octopusCommits 里的名字补成 40 位的哈希（详情里按哈希切短）。
+func octoHash(name string) string { return name + strings.Repeat("_", 40-len(name)) }
+
+// 一次合并很多子仓：通往子仓的长线只在离两头一行以内画（箭头标断开、能点），中间不占列，后面的提交图收拢回窄的
+func TestGraphHidesLongEdges(t *testing.T) {
+	cs := octopusCommits(8, 40)
+	g := buildGraph(cs)
+	rows := g.rows
+	// 合并的下一行：主线的提交和八段线，八段线都在这里断开、箭头朝下，指向各自的子仓
+	cut := 0
+	for _, l := range rows[2].lines {
+		if l.terminal && l.down {
+			cut++
+			if h := g.arrowTarget(cs, l); !strings.HasPrefix(h, "s") {
+				t.Fatalf("down arrow jumps to %s", h)
+			}
+		}
+	}
+	if cut != 8 || rows[2].width < 9 {
+		t.Fatalf("%d cut lines, width %v below the merge", cut, rows[2].width)
+	}
+	// 再往下只剩主线和短分支
+	for i := 3; i < 40; i++ {
+		if rows[i].width > 2 {
+			t.Fatalf("row %d (%s) width %v", i, cs[i].Subject, rows[i].width)
+		}
+	}
+	// 每个子仓的提交上面一行，那段线重新出现、箭头朝上，点了跳回合并
+	for i, c := range cs {
+		if !strings.HasPrefix(c.Hash, "s") {
+			continue
+		}
+		found := false
+		for _, l := range rows[i-1].lines {
+			if l.terminal && !l.down && g.edges[l.edge].down == i {
+				found = g.arrowTarget(cs, l) == octoHash("m")
+			}
+		}
+		if !found {
+			t.Fatalf("no up arrow above %s", c.Hash)
+		}
+	}
+	if rows[0].color != rows[3].color || rows[0].color != rows[len(rows)-9].color {
+		t.Fatal("main line changed color")
+	}
+	// 父提交还没读出来：下一行画朝下的箭头，点了按哈希去找
+	g = buildGraph([]gitx.CommitInfo{{Hash: "x", Parents: []string{"far"}}, {Hash: "y"}})
+	arrows := 0
+	for _, l := range g.rows[1].lines {
+		if l.terminal && l.down && g.arrowTarget(nil, l) == "far" {
+			arrows++
+		}
+	}
+	if arrows != 1 {
+		t.Fatalf("unloaded parent %+v", g.rows[1].lines)
+	}
+	// 几个父提交都没读出来：每条线各一种颜色
+	g = buildGraph([]gitx.CommitInfo{{Hash: "m", Parents: []string{"p0", "p1", "p2"}}, {Hash: "y"}})
+	colors := map[int]bool{}
+	for _, l := range g.rows[1].lines {
+		if l.terminal {
+			colors[l.color] = true
+		}
+	}
+	if len(colors) != 3 {
+		t.Fatalf("unloaded parents share colors: %+v", g.rows[1].lines)
+	}
+}
+
+// 点提交图的箭头：选中线另一头的提交、滚过去，不算点了这一行
+func TestGraphArrowJumps(t *testing.T) {
+	a := previewApp(t)
+	previewLog(t, a)
+	tt := newTester(a.build, 1200, 760)
+	ld := octopusLog(t, a, tt)
+	sub := ld.commits[len(ld.commits)-8]
+	m := locales.In(clockLocale("zh-Hans", 24))
+	tip := m.LogGraphJumpTo(sub.Subject, sub.Author, commitStamp(m, sub.Time))
+	r, ok := tt.Find(tip)
+	if !ok {
+		t.Fatalf("arrow %q missing", tip)
+	}
+	tt.Move(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	tt.Press(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	tt.Release(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	if ld.commit == nil || ld.commit.info.Hash != sub.Hash {
+		t.Fatalf("selected %+v", ld.commit)
+	}
+}
+
+// 悬停在箭头上：出提示（跳到哪个提交）
+func TestGraphArrowHover(t *testing.T) {
+	a := previewApp(t)
+	previewLog(t, a)
+	tt := newTester(a.build, 1200, 760)
+	ld := octopusLog(t, a, tt)
+	sub := ld.commits[len(ld.commits)-8]
+	m := locales.In(clockLocale("zh-Hans", 24))
+	tip := m.LogGraphJumpTo(sub.Subject, sub.Author, commitStamp(m, sub.Time))
+	r, ok := tt.Find(tip)
+	if !ok {
+		t.Fatal("arrow missing")
+	}
+	tt.Move(r.X+r.W/2, r.Y+r.H/2)
+	for range 20 {
+		pass(tt, 100*time.Millisecond)
+		tt.Frame()
+	}
+	if !tt.HasText(tip) {
+		t.Fatalf("no tooltip; texts %v", tt.Texts())
+	}
+}
+
+// octopusLog 等预览仓库的日志读完（没读完的那次会把提交换回去），再换上 octopusCommits 的提交和提交图。
+func octopusLog(t *testing.T, a *app, tt *ui.Tester) *logDoc {
+	t.Helper()
+	ld := a.files["w1"].logCur.log
+	until(t, tt, "log loaded", func() bool { return !ld.loading })
+	settle(tt)
+	ld.commits, ld.commit, ld.more = octopusCommits(8, 40), nil, false
+	ld.graph = buildGraph(ld.commits)
+	settle(tt)
+	if len(ld.commits) != len(octopusCommits(8, 40)) {
+		t.Fatal("log reloaded over the test commits")
+	}
+	return ld
 }

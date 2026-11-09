@@ -1289,6 +1289,15 @@ func TestPreview(t *testing.T) {
 		savePNG(t, newPreviewTester(a, dark), "git-log-"+suffix+".png")
 		gitLangs(a, "git-log")
 
+		// 一次合并八个子仓：通往子仓的长线两头各留一段、画箭头，中间不占列
+		a = previewApp(t)
+		previewLog(t, a)
+		if ld := a.files["w1"].logCur.log; ld != nil {
+			ld.commits, ld.commit, ld.more = octopusCommits(8, 40), nil, false
+			ld.graph = buildGraph(ld.commits)
+		}
+		savePNG(t, newPreviewTester(a, dark), "git-log-octopus-"+suffix+".png")
+
 		// 日志浮层的控制台：Posse 执行的 git 命令，失败的是红的
 		a = previewApp(t)
 		previewConsole(t, a)

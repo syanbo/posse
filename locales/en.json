@@ -4619,6 +4619,14 @@
       }
     }
   },
+  "logGraphJumpTo": "Jump to \"{subject}\" by {author} on {when}",
+  "@logGraphJumpTo": {
+    "description": "Git log: tooltip of an arrow in the commit graph where a long line is cut; clicking it selects the commit at the other end. when is the full date and time, as in WebStorm."
+  },
+  "logGraphJumpToHash": "Jump to commit {hash}",
+  "@logGraphJumpToHash": {
+    "description": "Git log: tooltip of a commit graph arrow whose commit is not loaded yet; clicking it loads more until it is found."
+  },
   "logBranchFilter": "Filter by branch",
   "@logBranchFilter": {
     "description": "Accessibility label of the branch filter button in the Git Log."
