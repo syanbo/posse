@@ -42,6 +42,8 @@ extension _MessageViews on _DiscussionRoomState {
     final canAnswer =
         writable &&
         m['kind'] == 'question' &&
+        answering != discText(m, 'question') &&
+        pending == null &&
         xs.any((x) => x['state'] == 'waiting' && discMine(x, widget.self)) &&
         !state.messages.any(
           (r) => r['kind'] == 'answer' && r['question'] == m['question'],
@@ -492,7 +494,12 @@ extension _MessageViews on _DiscussionRoomState {
     if (!mounted) return;
     switch (picked) {
       case 'quote':
-        update(() => quote = discText(m, 'id'));
+        update(() {
+          quote = discText(m, 'id');
+          answering = '';
+          answerTo = '';
+        });
+        focus.requestFocus();
         scheduleSave();
       case 'key':
         await action('key', {'message': m['id'], 'on': m['keyAt'] == null});

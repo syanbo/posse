@@ -13,8 +13,15 @@ import 'models.dart';
 import 'room.dart';
 
 class DiscussionsScreen extends StatefulWidget {
-  const DiscussionsScreen({super.key, required this.model});
+  const DiscussionsScreen({
+    super.key,
+    required this.model,
+    this.archived = false,
+  });
   final PosseAppModel model;
+
+  /// 只列归档的（从列表底部「已归档」进来）。
+  final bool archived;
   @override
   State<DiscussionsScreen> createState() => _DiscussionsScreenState();
 }
@@ -27,7 +34,8 @@ class _DiscussionsScreenState extends State<DiscussionsScreen>
   final reads = <String, int>{};
   String self = '';
   int seq = 0;
-  bool busy = false, loaded = false, archived = false, foreground = true;
+  bool busy = false, loaded = false, foreground = true;
+  bool get archived => widget.archived;
   Object? error;
   @override
   void initState() {
@@ -94,10 +102,16 @@ class _DiscussionsScreenState extends State<DiscussionsScreen>
 
   Future<void> create() async {
     final l = context.l10n;
-    final result = await discussionForm(context, api, l.discNew, 'create', {}, {
-      'title': l.discName,
-      'description': l.discDescription,
-    }, workspace: true);
+    final result = await discussionForm(
+      context,
+      api,
+      l.discNew,
+      'create',
+      {},
+      {'title': l.discName, 'description': l.discDescription},
+      workspace: true,
+      confirm: l.discCreate,
+    );
     if (!mounted || result == null) return;
     seq = 0;
     await load();
@@ -109,11 +123,52 @@ class _DiscussionsScreenState extends State<DiscussionsScreen>
     final l = context.l10n;
     if (await discussionForm(context, api, l.discJoin, 'join', {}, {
           'invite': l.discInviteCode,
-        }) !=
+        }, confirm: l.discJoinConfirm) !=
         null) {
       seq = 0;
       await load();
     }
+  }
+
+  /// 右上角的加号：新建，或用邀请加入别人分享的讨论。
+  Future<void> add() async {
+    final l = context.l10n;
+    final c = PosseColors.of(context);
+    final join = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Section(
+          children: [
+            RowTile(
+              leading: Icon(Icons.add_comment_rounded, color: c.muted),
+              title: Text(l.discNew),
+              chevron: false,
+              onTap: () => Navigator.pop(sheet, false),
+            ),
+            RowTile(
+              leading: Icon(Icons.group_add_rounded, color: c.muted),
+              title: Text(l.discJoin),
+              chevron: false,
+              onTap: () => Navigator.pop(sheet, true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || join == null) return;
+    await (join ? this.join() : create());
+  }
+
+  Future<void> openArchived() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DiscussionsScreen(model: widget.model, archived: true),
+      ),
+    );
+    seq = 0;
+    await load();
   }
 
   Future<void> open(DiscJson item) async {
@@ -243,33 +298,24 @@ class _DiscussionsScreenState extends State<DiscussionsScreen>
     final rows = items
         .where((x) => (x['status'] == 'archived') == archived)
         .toList();
+    final shelved = archived
+        ? 0
+        : items.where((x) => x['status'] == 'archived').length;
     return Scaffold(
       appBar: AppBar(
-        title: Text(l.discTitle),
+        title: Text(archived ? l.discArchived : l.discTitle),
         actions: [
-          IconButton(
-            tooltip: l.discJoin,
-            onPressed: join,
-            icon: const Icon(Icons.group_add_rounded),
-          ),
-          IconButton(
-            tooltip: l.discNew,
-            onPressed: create,
-            icon: const Icon(Icons.add_rounded),
-          ),
+          if (!archived)
+            IconButton(
+              tooltip: l.discNew,
+              onPressed: add,
+              icon: const Icon(Icons.add_rounded),
+            ),
         ],
       ),
       body: SideSafe(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Segmented(
-                labels: [l.discActive, l.discArchived],
-                selected: archived ? 1 : 0,
-                onChanged: (i) => setState(() => archived = i == 1),
-              ),
-            ),
             if (error != null)
               NoticeBar(
                 friendlyError(error!, l),
@@ -283,23 +329,54 @@ class _DiscussionsScreenState extends State<DiscussionsScreen>
                         seq = 0;
                         return load();
                       },
-                      child: rows.isEmpty
-                          ? ListView(
-                              children: [
-                                EmptyState(
-                                  icon: Icons.forum_rounded,
-                                  text: l.discEmpty,
-                                ),
-                              ],
+                      child: CustomScrollView(
+                        // 内容不满一屏也能下拉刷新
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        slivers: [
+                          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                          if (rows.isEmpty)
+                            SliverToBoxAdapter(
+                              child: EmptyState(
+                                icon: Icons.forum_rounded,
+                                text: l.discEmpty,
+                                action: archived
+                                    ? null
+                                    : FilledButton(
+                                        onPressed: create,
+                                        child: Text(l.discNew),
+                                      ),
+                              ),
                             )
-                          : CustomScrollView(
-                              slivers: [
-                                SliverSection(
-                                  itemCount: rows.length,
-                                  itemBuilder: (_, i) => row(rows[i]),
-                                ),
-                              ],
+                          else
+                            SliverSection(
+                              itemCount: rows.length,
+                              itemBuilder: (_, i) => row(rows[i]),
                             ),
+                          if (shelved > 0)
+                            SliverToBoxAdapter(
+                              child: Section(
+                                children: [
+                                  RowTile(
+                                    leading: Icon(
+                                      Icons.inventory_2_rounded,
+                                      size: Ic.medium,
+                                      color: PosseColors.of(context).muted,
+                                    ),
+                                    title: Text(l.discArchived),
+                                    trailing: Text(
+                                      '$shelved',
+                                      style: TextStyle(
+                                        fontSize: Fs.small,
+                                        color: PosseColors.of(context).faint,
+                                      ),
+                                    ),
+                                    onTap: openArchived,
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
             ),
           ],

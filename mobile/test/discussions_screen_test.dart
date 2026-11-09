@@ -12,7 +12,7 @@ import 'package:posse_mobile/discussions/api.dart';
 import 'package:posse_mobile/discussions/room.dart';
 import 'package:posse_mobile/discussions/discussions.dart';
 import 'package:posse_mobile/discussions/models.dart';
-import 'package:posse_mobile/discussions/forms.dart';
+import 'package:posse_mobile/discussions/member_form.dart';
 import 'package:posse_mobile/workspace/models.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/protocol/rpc.dart';
@@ -327,15 +327,11 @@ void main() {
             home: Builder(
               builder: (context) => Scaffold(
                 body: TextButton(
-                  onPressed: () => discussionForm(
+                  onPressed: () => openMemberPage(
                     context,
-                    DiscussionApi(model),
-                    'Add',
-                    'member.add',
-                    {'discussion': 'room'},
-                    {'name': 'Name'},
-                    workspace: true,
-                    agent: true,
+                    api: DiscussionApi(model),
+                    discussion: 'room',
+                    workspace: '',
                     project: 'project',
                   ),
                   child: const Text('Open'),
@@ -348,24 +344,24 @@ void main() {
         await t.pumpAndSettle();
         expect(find.text('Other / main'), findsNothing);
         expect(find.text('Project / main'), findsOneWidget);
-        await t.enterText(find.byType(TextField), 'Reviewer');
-        await t.tap(find.text('保存'));
+        // 添加时名字默认是 Agent 名
+        final name = find.byType(TextField).first;
+        expect(t.widget<TextField>(name).controller!.text, 'Claude');
+        await t.enterText(name, 'Reviewer');
+        await t.tap(find.text('添加'));
         await t.pumpAndSettle();
-        expect(t.widget<TextField>(find.byType(TextField)).enabled, !unknown);
+        expect(t.widget<TextField>(name).enabled, !unknown);
         final id = rpc.calls.single.params['clientId'];
         if (unknown) {
-          await t.tap(find.text('取消'));
+          await t.pageBack();
           await t.pumpAndSettle();
           await t.tap(find.text('Open'));
           await t.pumpAndSettle();
-          expect(
-            t.widget<TextField>(find.byType(TextField)).controller!.text,
-            'Reviewer',
-          );
-          expect(t.widget<TextField>(find.byType(TextField)).enabled, false);
-          await t.tap(find.text('保存'));
+          expect(t.widget<TextField>(name).controller!.text, 'Reviewer');
+          expect(t.widget<TextField>(name).enabled, false);
+          await t.tap(find.text('添加'));
         } else {
-          await t.enterText(find.byType(TextField), 'Edited');
+          await t.enterText(name, 'Edited');
           await t.tap(find.text('重试'));
         }
         await t.pumpAndSettle();

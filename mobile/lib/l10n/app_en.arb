@@ -3001,10 +3001,6 @@
   "@discArchived": {
     "description": "Mobile discussions: Archived"
   },
-  "discActive": "Active",
-  "@discActive": {
-    "description": "Mobile discussions: Active"
-  },
   "discName": "Name",
   "@discName": {
     "description": "Mobile discussions: Name"
@@ -3060,18 +3056,6 @@
   "discAgent": "Agent",
   "@discAgent": {
     "description": "Mobile discussions: Agent"
-  },
-  "discModel": "Model (blank for default)",
-  "@discModel": {
-    "description": "Mobile discussions: Model (blank for default)"
-  },
-  "discEffort": "Reasoning effort (blank for default)",
-  "@discEffort": {
-    "description": "Mobile discussions: Reasoning effort (blank for default)"
-  },
-  "discNewWorktree": "New worktree name (optional)",
-  "@discNewWorktree": {
-    "description": "Mobile discussions: New worktree name (optional)"
   },
   "discBase": "Base branch (optional)",
   "@discBase": {
@@ -3427,10 +3411,6 @@
   "@discCopy": {
     "description": "Mobile discussions: copy a message's text"
   },
-  "discEdit": "Edit",
-  "@discEdit": {
-    "description": "Mobile discussions: edit an agent member"
-  },
   "discOnComputer": "On {name}'s computer",
   "@discOnComputer": {
     "description": "Mobile discussions: member subtitle for someone else's agent",
@@ -3513,5 +3493,90 @@
   "profileImageTooLarge": "This image is too large. Choose a smaller one.",
   "@profileImageTooLarge": {
     "description": "Profile screen: the picked image is too large to send to the computer."
+  },
+  "discEditMember": "Edit Agent",
+  "@discEditMember": {
+    "description": "Mobile discussions: title of the page that edits one of your agent members"
+  },
+  "discAdd": "Add",
+  "@discAdd": {
+    "description": "Mobile discussions: confirm button on the add-agent page"
+  },
+  "discNoAgents": "No agents on this computer",
+  "@discNoAgents": {
+    "description": "Mobile discussions: shown in the agent picker when the computer reports no agents"
+  },
+  "discRoleHint": "What it is responsible for",
+  "@discRoleHint": {
+    "description": "Mobile discussions: placeholder of the agent member's role field"
+  },
+  "discModelLabel": "Model",
+  "@discModelLabel": {
+    "description": "Mobile discussions: label of the agent member's model field"
+  },
+  "discEffortLabel": "Reasoning effort",
+  "@discEffortLabel": {
+    "description": "Mobile discussions: label of the agent member's reasoning effort field"
+  },
+  "discDefault": "Default",
+  "@discDefault": {
+    "description": "Mobile discussions: placeholder of the model and reasoning effort fields; empty means the agent's default"
+  },
+  "discWorkDir": "Working directory",
+  "@discWorkDir": {
+    "description": "Mobile discussions: label of where the agent member works"
+  },
+  "discExistingWorkspace": "Existing workspace",
+  "@discExistingWorkspace": {
+    "description": "Mobile discussions: segment, the agent works in an existing workspace"
+  },
+  "discNewWorktreeMode": "New worktree",
+  "@discNewWorktreeMode": {
+    "description": "Mobile discussions: segment, create a new git worktree for the agent"
+  },
+  "discNoHits": "No matching messages",
+  "@discNoHits": {
+    "description": "Mobile discussions: search found nothing"
+  },
+  "discNoMembers": "No agents yet",
+  "@discNoMembers": {
+    "description": "Mobile discussions: empty discussion without any agent members, above the add-agent button"
+  },
+  "discAnswerHint": "Your answer…",
+  "@discAnswerHint": {
+    "description": "Mobile discussions: input placeholder while answering an agent's question"
+  },
+  "discAtButton": "Mention",
+  "@discAtButton": {
+    "description": "Mobile discussions: tooltip of the button that inserts @ into the message input"
+  },
+  "discAnswerTo": "Answer {name}",
+  "@discAnswerTo": {
+    "description": "Mobile discussions: chip in the input while answering the question an agent asked",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discWorktreeName": "Worktree name",
+  "@discWorktreeName": {
+    "description": "Mobile discussions: label of the new worktree's name on the agent member page"
+  },
+  "discCreate": "Create",
+  "@discCreate": {
+    "description": "Mobile discussions: confirm button of the new discussion dialog"
+  },
+  "discJoinConfirm": "Join",
+  "@discJoinConfirm": {
+    "description": "Mobile discussions: confirm button of the join-by-invite dialog"
+  },
+  "discShareConfirm": "Share",
+  "@discShareConfirm": {
+    "description": "Mobile discussions: confirm button when turning on LAN sharing"
+  },
+  "discUnshareConfirm": "Stop",
+  "@discUnshareConfirm": {
+    "description": "Mobile discussions: confirm button when turning off LAN sharing"
   }
 }

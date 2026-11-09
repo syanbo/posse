@@ -13,6 +13,7 @@ import 'package:posse_mobile/discussions/room.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/protocol/rpc.dart';
 import 'package:posse_mobile/ui/theme.dart';
+import 'package:posse_mobile/workspace/models.dart';
 
 import 'shot_fonts.dart';
 
@@ -70,6 +71,13 @@ class _Rpc implements PhoneRpc {
               },
             },
             {
+              'key': 'd',
+              'title': '旧的发版检查',
+              'status': 'archived',
+              'msgSeq': 1,
+              'last': {'body': '好了', 'createdAt': _at(9000).toIso8601String()},
+            },
+            {
               'key': 'c',
               'title': '安卓 qa 包打包失败',
               'status': 'active',
@@ -79,6 +87,26 @@ class _Rpc implements PhoneRpc {
                 'body': 'JDK 版本不对，已经说明。',
                 'createdAt': _at(60 * 50).toIso8601String(),
               },
+            },
+          ],
+        };
+      case 'discussion.search':
+        return {
+          'value': [
+            {
+              'id': 'q',
+              'authorName': 'Claude 方案',
+              'kind': 'question',
+              'body': '钥匙串的 access group 用主 App 的还是共享的？',
+              'createdAt': _at(10).toIso8601String(),
+            },
+            {
+              'id': 'h',
+              'authorName': 'Hana',
+              'authorId': 'hana',
+              'kind': 'user',
+              'body': '@Mo 方案我看过了，钥匙串那段你来补一下',
+              'createdAt': _at(3).toIso8601String(),
             },
           ],
         };
@@ -249,6 +277,21 @@ class _Model extends PosseAppModel {
     : super(store: MemoryPairingStore(), settingsStore: MemorySettingsStore());
   final fake = _Rpc();
   @override
+  List<String> get agents => const ['claude', 'codex', 'grok', 'cursor'];
+  @override
+  List<WorktreeRow> get worktrees => const [
+    WorktreeRow(
+      id: 'p::main',
+      repo: 'posse',
+      name: 'posse',
+      path: '/posse',
+      branch: 'main',
+      status: '',
+      live: 0,
+      isMain: true,
+    ),
+  ];
+  @override
   PhoneRpc? get rpc => fake;
   @override
   String? get activeId => 'test-computer';
@@ -338,12 +381,32 @@ void main() {
       expect(t.takeException(), isNull);
       await _shot(t, key, 'disc-details-$b');
 
+      // 点自己的 Agent 直接进编辑页，打开终端、重启、移除在页面下面
       await t.tap(find.text('Claude 方案').last);
-      await _settle(t);
-      await t.tap(find.text('编辑'));
       await _settle(t);
       expect(find.text('谁能 @ 它'), findsOneWidget);
       await _shot(t, key, 'disc-member-$b');
+      await t.tap(find.text('新建 worktree'));
+      await _settle(t);
+      await _shot(t, key, 'disc-member-worktree-$b');
+      await t.binding.handlePopRoute();
+      await _settle(t);
+      await t.binding.handlePopRoute();
+      await _settle(t);
+
+      // 回答进输入框；搜索在顶栏
+      await t.drag(find.byType(ListView).first, const Offset(0, -3000));
+      await _settle(t);
+      await t.tap(find.text('回答'));
+      await _settle(t);
+      expect(find.text('回答 Claude 方案'), findsOneWidget);
+      await _shot(t, key, 'disc-answer-$b');
+      await t.tap(find.byTooltip('搜索消息'));
+      await _settle(t);
+      await t.enterText(find.byType(TextField).first, '钥匙串');
+      await t.testTextInput.receiveAction(TextInputAction.search);
+      await _settle(t);
+      await _shot(t, key, 'disc-search-$b');
 
       await t.pumpWidget(const SizedBox());
       await t.pumpAndSettle();

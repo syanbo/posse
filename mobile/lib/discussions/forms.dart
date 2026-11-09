@@ -1,18 +1,54 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-
-import '../workspace/models.dart';
 
 import '../app_state.dart';
 import '../protocol/rpc.dart';
 import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
+import '../workspace/models.dart';
 import '../workspace/workspace.dart';
 import 'api.dart';
 import 'models.dart';
 
+/// 表单里的一项：名字在上面一行，输入在下面。不用浮动标签：弹框、页面顶上的浮动标签会被裁掉一半。
+class FormBlock extends StatelessWidget {
+  const FormBlock({
+    super.key,
+    required this.label,
+    required this.child,
+    this.padding = const EdgeInsets.fromLTRB(16, 0, 16, 16),
+  });
+  final String label;
+  final Widget child;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = PosseColors.of(context);
+    return Padding(
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: Fs.small,
+                fontWeight: Fw.medium,
+                color: c.muted,
+              ),
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// 只有几个文字框的小表单（新建、编辑讨论，用邀请加入）。成员的表单是整页，见 member_form.dart。
 Future<DiscJson?> discussionForm(
   BuildContext context,
   DiscussionApi api,
@@ -21,10 +57,7 @@ Future<DiscJson?> discussionForm(
   DiscJson params,
   Map<String, String> fields, {
   bool workspace = false,
-  bool agent = false,
-  bool applyNow = false,
-  String? project,
-  List<DiscJson>? people,
+  String? confirm,
 }) => showPosseDialog<DiscJson>(
   context: context,
   builder: (_) => _DiscussionForm(
@@ -34,10 +67,7 @@ Future<DiscJson?> discussionForm(
     params: params,
     fields: fields,
     workspace: workspace,
-    agent: agent,
-    applyNow: applyNow,
-    project: project,
-    people: people,
+    confirm: confirm,
   ),
 );
 
@@ -49,20 +79,14 @@ class _DiscussionForm extends StatefulWidget {
     required this.params,
     required this.fields,
     required this.workspace,
-    required this.agent,
-    required this.applyNow,
-    this.project,
-    this.people,
+    this.confirm,
   });
   final DiscussionApi api;
   final String title, method;
-  final String? project;
+  final String? confirm;
   final DiscJson params;
   final Map<String, String> fields;
-  final bool workspace, agent, applyNow;
-
-  /// 不为空时（协作讨论里的 Agent）表单里有「谁能 @ 它」，可选的是讨论里的别人。
-  final List<DiscJson>? people;
+  final bool workspace;
   @override
   State<_DiscussionForm> createState() => _DiscussionFormState();
 }
@@ -73,76 +97,16 @@ class _DiscussionFormState extends State<_DiscussionForm> {
       key: TextEditingController(text: discText(widget.params, key)),
   };
   late String workspace = discText(widget.params, 'workspace');
-  late String agent = discText(widget.params, 'agent');
-  bool applyNow = false;
-  late String accessValue = discText(widget.params, 'access');
-  late int access = switch (accessValue) {
-    '' => 0,
-    'all' => 1,
-    _ => 2,
-  };
-  late final picked = {
-    for (final fp in accessValue.split(','))
-      if (fp.isNotEmpty && fp != 'all') fp,
-  };
   bool busy = false;
   DiscJson? request;
   Object? error;
-  DiscJson errorData = {};
   bool uncertain = false;
-  DiscussionStorage? get storage => widget.method == 'member.add'
-      ? DiscussionStorage(
-          widget.api.computer ?? '',
-          '${discText(widget.params, 'discussion')}/member.add',
-        )
-      : null;
-  List<WorktreeRow> get rows => widget.api.model.worktrees
-      .where(
-        (row) =>
-            widget.project == null || row.id.startsWith('${widget.project}::'),
-      )
-      .toList();
+  List<WorktreeRow> get rows => widget.api.model.worktrees;
 
   @override
   void initState() {
     super.initState();
-
     if (workspace.isEmpty && rows.isNotEmpty) workspace = rows.first.id;
-    if (agent.isEmpty && widget.api.model.agents.isNotEmpty) {
-      agent = widget.api.model.agents.first;
-    }
-    if (storage != null) {
-      busy = true;
-      unawaited(restore());
-    }
-  }
-
-  Future<void> restore() async {
-    final saved = await storage!.read();
-    if (!mounted) return;
-    setState(() {
-      if (saved['request'] is Map) {
-        request = discMap(saved['request']);
-        for (final e in fields.entries) {
-          e.value.text = discText(request!, e.key);
-        }
-        workspace = discText(request!, 'workspace');
-        agent = discText(request!, 'agent');
-        applyNow = request!['applyNow'] == true;
-        final was = discText(request!, 'access');
-        access = was.isEmpty
-            ? 0
-            : was == 'all'
-            ? 1
-            : 2;
-        picked
-          ..clear()
-          ..addAll(was.split(',').where((fp) => fp.isNotEmpty && fp != 'all'));
-        uncertain = true;
-        errorData = discMap(saved['data']);
-      }
-      busy = false;
-    });
   }
 
   @override
@@ -153,122 +117,48 @@ class _DiscussionFormState extends State<_DiscussionForm> {
     super.dispose();
   }
 
+  /// 第一项（名字、邀请）必填。
+  bool get ready =>
+      !busy && (fields.isEmpty || fields.values.first.text.trim().isNotEmpty);
+
   Future<void> save() async {
+    if (!ready) return;
     setState(() {
       busy = true;
       error = null;
     });
     request ??= {
       ...widget.params,
-      for (final e in fields.entries) e.key: e.value.text,
+      for (final e in fields.entries) e.key: e.value.text.trim(),
       if (widget.workspace) 'workspace': workspace,
-      if (widget.agent) 'agent': agent,
-      if (widget.applyNow) 'applyNow': applyNow,
-      if (widget.people != null)
-        'access': switch (access) {
-          1 => 'all',
-          2 => picked.join(','),
-          _ => '',
-        },
       'clientId': discRequestId(),
     };
     try {
-      await storage?.write({'request': request, 'data': errorData});
       final result = await widget.api.call(widget.method, request!);
-      await storage?.write({});
       if (mounted) Navigator.pop(context, result);
     } catch (e) {
       final data = e is RpcException ? discMap(e.data) : <String, Object?>{};
       final unknown =
           e is! RpcException ||
           ['closed', 'timeout', 'internal_error'].contains(e.code) ||
-          data['unknown'] == true ||
-          discText(data, 'worktree').isNotEmpty;
-      await storage?.write(unknown ? {'request': request, 'data': data} : {});
+          data['unknown'] == true;
       if (mounted) {
         setState(() {
           error = e;
           busy = false;
           uncertain = unknown;
-          errorData = data;
           if (!unknown) request = null;
         });
       }
     }
   }
 
-  /// 谁能 @ 它：只有我、所有人、指定的人（勾选讨论里的人）。
-  Widget accessField(AppLocalizations l, bool locked) {
-    final c = PosseColors.of(context);
-    final people = widget.people!;
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l.discAccessLabel,
-            style: TextStyle(fontSize: Fs.small, color: c.muted),
-          ),
-          const SizedBox(height: 6),
-          IgnorePointer(
-            ignoring: locked,
-            child: Segmented(
-              labels: [l.discAccessOnlyMe, l.discAccessAll, l.discAccessSome],
-              selected: access,
-              onChanged: (i) => setState(() => access = i),
-            ),
-          ),
-          if (access == 2) ...[
-            const SizedBox(height: 8),
-            if (people.isEmpty)
-              Text(
-                l.discAccessNobody,
-                style: TextStyle(fontSize: Fs.small, color: c.muted),
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final p in people)
-                    FilterChip(
-                      label: Text(discText(p, 'name')),
-                      showCheckmark: false,
-                      side: BorderSide.none,
-                      backgroundColor: c.fill,
-                      selectedColor: c.tint,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(Rd.button),
-                      ),
-                      labelStyle: TextStyle(
-                        fontSize: Fs.body,
-                        color: picked.contains(p['fp']) ? c.accent : c.text,
-                      ),
-                      selected: picked.contains(p['fp']),
-                      onSelected: locked
-                          ? null
-                          : (on) => setState(() {
-                              final fp = discText(p, 'fp');
-                              on ? picked.add(fp) : picked.remove(fp);
-                            }),
-                    ),
-                ],
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final c = PosseColors.of(context);
     final locked = request != null || busy;
-    final git = rows.any(
-      (r) => r.id == workspace && (r.branch.isNotEmpty || r.isWorktree),
-    );
-    final agents = {...widget.api.model.agents, if (agent.isNotEmpty) agent};
+    const flush = EdgeInsets.only(bottom: 14);
     return PopScope(
       canPop: !busy,
       child: AlertDialog(
@@ -276,122 +166,71 @@ class _DiscussionFormState extends State<_DiscussionForm> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final e in fields.entries)
-                if (!['worktree', 'base'].contains(e.key) || git)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: TextField(
-                      controller: e.value,
-                      enabled: !locked,
-                      minLines: 1,
-                      maxLines:
-                          e.key == 'role' ||
-                              e.key == 'description' ||
-                              e.key == 'body'
-                          ? 5
-                          : 1,
-                      decoration: InputDecoration(
-                        labelText: widget.fields[e.key],
-                      ),
-                    ),
+              for (final (i, e) in fields.entries.indexed)
+                FormBlock(
+                  label: widget.fields[e.key]!,
+                  padding: flush,
+                  child: TextField(
+                    controller: e.value,
+                    enabled: !locked,
+                    autofocus: i == 0,
+                    minLines: 1,
+                    maxLines: e.key == 'description' ? 4 : 1,
+                    onChanged: (_) => setState(() {}),
                   ),
+                ),
               if (widget.workspace)
-                DropdownButtonFormField<String>(
-                  key: ValueKey(workspace),
-                  initialValue: rows.any((r) => r.id == workspace)
-                      ? workspace
-                      : null,
-                  isExpanded: true,
-                  decoration: InputDecoration(labelText: l.discWorkspace),
-                  items: [
-                    for (final row in rows)
-                      DropdownMenuItem(
-                        value: row.id,
-                        child: Text(
-                          worktreeLabel(row),
-                          overflow: TextOverflow.ellipsis,
+                FormBlock(
+                  label: l.discWorkspace,
+                  padding: flush,
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey(workspace),
+                    initialValue: rows.any((r) => r.id == workspace)
+                        ? workspace
+                        : null,
+                    isExpanded: true,
+                    items: [
+                      for (final row in rows)
+                        DropdownMenuItem(
+                          value: row.id,
+                          child: Text(
+                            worktreeLabel(row),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                  ],
-                  onChanged: locked
-                      ? null
-                      : (v) => setState(() => workspace = v ?? ''),
-                ),
-              if (widget.agent)
-                DropdownButtonFormField<String>(
-                  key: ValueKey(agent),
-                  initialValue: agent.isEmpty ? null : agent,
-                  decoration: InputDecoration(labelText: l.discAgent),
-                  items: [
-                    for (final a in agents)
-                      DropdownMenuItem(value: a, child: Text(a)),
-                  ],
-                  onChanged: locked
-                      ? null
-                      : (v) => setState(() => agent = v ?? ''),
-                ),
-              if (widget.people != null) accessField(l, locked),
-              if (widget.applyNow)
-                CheckboxListTile(
-                  value: applyNow,
-                  title: Text(l.discApplyNow),
-                  onChanged: locked
-                      ? null
-                      : (v) => setState(() => applyNow = v ?? false),
-                ),
-              if (uncertain && error == null) Text(l.discUnknown),
-              if (error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Column(
-                    children: [
-                      Text(friendlyError(error!, l)),
-                      const SizedBox(height: 8),
-                      if (uncertain) Text(l.discUnknown),
-                      if (discText(errorData, 'worktree').isNotEmpty)
-                        Text(discText(errorData, 'worktree')),
                     ],
+                    onChanged: locked
+                        ? null
+                        : (v) => setState(() => workspace = v ?? ''),
+                  ),
+                ),
+              if (error != null || uncertain)
+                Text(
+                  [
+                    if (error != null) friendlyError(error!, l),
+                    if (uncertain) l.discUnknown,
+                  ].join('\n'),
+                  style: TextStyle(
+                    fontSize: Fs.small,
+                    height: Lh.body,
+                    color: error != null ? c.danger : c.muted,
                   ),
                 ),
             ],
           ),
         ),
         actions: [
-          if (uncertain)
-            TextButton(
-              onPressed: busy
-                  ? null
-                  : () async {
-                      if (!await showPosseConfirm(
-                        context,
-                        title: l.discNewRequest,
-                        body: l.discNewRequestWarning,
-                        confirm: l.discNewRequest,
-                        tone: ConfirmTone.warning,
-                      )) {
-                        return;
-                      }
-                      await storage?.write({});
-                      if (!mounted) return;
-                      setState(() {
-                        request = null;
-                        uncertain = false;
-                        error = null;
-                        errorData = {};
-                        fields['worktree']?.clear();
-                      });
-                    },
-              child: Text(l.discNewRequest),
-            ),
-
           TextButton(
             onPressed: busy ? null : () => Navigator.pop(context),
             child: Text(l.discCancel),
           ),
           FilledButton(
-            onPressed: busy ? null : save,
-            child: Text(error != null ? l.discRetry : l.discSave),
+            onPressed: ready ? save : null,
+            child: Text(
+              error != null ? l.discRetry : widget.confirm ?? l.discSave,
+            ),
           ),
         ],
       ),

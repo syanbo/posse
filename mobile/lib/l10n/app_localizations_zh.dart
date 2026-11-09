@@ -2118,9 +2118,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discArchived => '已归档';
 
   @override
-  String get discActive => '进行中';
-
-  @override
   String get discName => '名称';
 
   @override
@@ -2161,15 +2158,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get discAgent => 'Agent';
-
-  @override
-  String get discModel => '模型（留空用默认）';
-
-  @override
-  String get discEffort => '思考深度（留空用默认）';
-
-  @override
-  String get discNewWorktree => '新建 worktree 名称（可选）';
 
   @override
   String get discBase => '基准分支（可选）';
@@ -2434,9 +2422,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discCopy => '复制';
 
   @override
-  String get discEdit => '编辑';
-
-  @override
   String discOnComputer(String name) {
     return '在 $name 的电脑上';
   }
@@ -2488,4 +2473,66 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get profileImageTooLarge => '图片太大，请换一张小一点的。';
+
+  @override
+  String get discEditMember => '编辑 Agent';
+
+  @override
+  String get discAdd => '添加';
+
+  @override
+  String get discNoAgents => '这台电脑上没有可用的 Agent';
+
+  @override
+  String get discRoleHint => '它负责什么';
+
+  @override
+  String get discModelLabel => '模型';
+
+  @override
+  String get discEffortLabel => '思考深度';
+
+  @override
+  String get discDefault => '默认';
+
+  @override
+  String get discWorkDir => '工作目录';
+
+  @override
+  String get discExistingWorkspace => '已有工作区';
+
+  @override
+  String get discNewWorktreeMode => '新建 worktree';
+
+  @override
+  String get discNoHits => '没有找到相关消息';
+
+  @override
+  String get discNoMembers => '还没有 Agent';
+
+  @override
+  String get discAnswerHint => '输入回答…';
+
+  @override
+  String get discAtButton => '@ 提及';
+
+  @override
+  String discAnswerTo(String name) {
+    return '回答 $name';
+  }
+
+  @override
+  String get discWorktreeName => 'worktree 名称';
+
+  @override
+  String get discCreate => '创建';
+
+  @override
+  String get discJoinConfirm => '加入';
+
+  @override
+  String get discShareConfirm => '分享';
+
+  @override
+  String get discUnshareConfirm => '停止分享';
 }

@@ -112,7 +112,9 @@ extension _ComposerViews on _DiscussionRoomState {
   }
 
   Widget atPicker() {
-    if (!writable || pending != null) return const SizedBox.shrink();
+    if (!writable || pending != null || answering.isNotEmpty) {
+      return const SizedBox.shrink();
+    }
     final (at, query) = discAtToken(input.text, caret);
     if (at < 0) return const SizedBox.shrink();
     final list = atCandidates(query);
@@ -254,6 +256,20 @@ extension _ComposerViews on _DiscussionRoomState {
     final targetRow = activeMembers.where((m) => m['id'] == target).firstOrNull;
     final quoteRow = state.messages.where((m) => m['id'] == quote).firstOrNull;
     final chips = [
+      if (answering.isNotEmpty)
+        chip(
+          l.discAnswerTo(answerTo),
+          locked
+              ? null
+              : () {
+                  update(() {
+                    answering = '';
+                    answerTo = '';
+                  });
+                  scheduleSave();
+                },
+          color: c.honey,
+        ),
       if (targetRow != null)
         chip(
           '@${discText(targetRow, 'name')}',
@@ -272,13 +288,17 @@ extension _ComposerViews on _DiscussionRoomState {
           locked ? null : () => update(() => quote = ''),
           onTap: () => locate(quote),
         ),
-      for (final a in attachments)
-        chip(discText(a, 'name'), locked ? null : () => removeAttachment(a)),
+      // 回答不带附件：回答模式下先藏起来，回到发言时还在
+      if (answering.isEmpty)
+        for (final a in attachments)
+          chip(discText(a, 'name'), locked ? null : () => removeAttachment(a)),
     ];
     final ready =
         !sending &&
         !uploading &&
-        (locked || input.text.trim().isNotEmpty || attachments.isNotEmpty);
+        (locked ||
+            input.text.trim().isNotEmpty ||
+            answering.isEmpty && attachments.isNotEmpty);
     return SafeArea(
       top: false,
       child: Column(
@@ -331,16 +351,19 @@ extension _ComposerViews on _DiscussionRoomState {
                           padding: EdgeInsets.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        onPressed: locked || uploading ? null : pickAttachment,
+                        onPressed: locked || uploading || answering.isNotEmpty
+                            ? null
+                            : pickAttachment,
                         icon: Icon(
                           Icons.add_rounded,
                           size: Ic.button,
-                          color: c.muted,
+                          color: answering.isNotEmpty ? c.faint : c.muted,
                         ),
                       ),
                       Expanded(
                         child: TextField(
                           controller: input,
+                          focusNode: focus,
                           enabled: !locked,
                           minLines: 1,
                           maxLines: 6,
@@ -349,7 +372,9 @@ extension _ComposerViews on _DiscussionRoomState {
                           onTap: () => update(() {}),
                           style: TextStyle(fontSize: Fs.body, color: c.text),
                           decoration: InputDecoration(
-                            hintText: l.discMessageHint,
+                            hintText: answering.isNotEmpty
+                                ? l.discAnswerHint
+                                : l.discMessageHint,
                             filled: false,
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
@@ -365,6 +390,23 @@ extension _ComposerViews on _DiscussionRoomState {
                           ),
                         ),
                       ),
+                      // 手机键盘打 @ 要切一次键盘：这里一下插进去，弹出候选
+                      if (answering.isEmpty && !locked)
+                        IconButton(
+                          tooltip: l.discAtButton,
+                          style: IconButton.styleFrom(
+                            fixedSize: const Size.square(34),
+                            minimumSize: const Size.square(34),
+                            padding: EdgeInsets.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: insertAt,
+                          icon: Icon(
+                            Icons.alternate_email_rounded,
+                            size: Ic.medium,
+                            color: c.muted,
+                          ),
+                        ),
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
                         width: 34,
@@ -397,6 +439,24 @@ extension _ComposerViews on _DiscussionRoomState {
         ],
       ),
     );
+  }
+
+  /// 在光标处插一个 @（前面不是空白时先补一个空格，免得被当成邮箱），弹出候选。
+  void insertAt() {
+    final text = input.text;
+    final sel = input.selection;
+    final at = sel.isValid ? sel.baseOffset.clamp(0, text.length) : text.length;
+    final before = text.substring(0, at);
+    final pad = before.isEmpty || before.endsWith(' ') || before.endsWith('\n')
+        ? ''
+        : ' ';
+    final next = '$before$pad@';
+    input.value = TextEditingValue(
+      text: next + text.substring(at),
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    focus.requestFocus();
+    update(() {});
   }
 
   /// 加附件：照片或文件。

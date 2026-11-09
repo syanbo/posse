@@ -23,6 +23,7 @@ import '../workspace/models.dart';
 import '../workspace/workspace.dart';
 import 'api.dart';
 import 'forms.dart';
+import 'member_form.dart';
 import 'models.dart';
 import 'profile.dart';
 
@@ -59,6 +60,16 @@ class _DiscussionRoomState extends State<DiscussionRoom>
   bool foreground = true, sending = false, uploading = false, restored = false;
   double progress = 0;
   String quote = '', target = '', mention = '', clientId = '';
+
+  /// 正在回答的问题（question ID）和提问的 Agent 名字：输入框此时发的是回答。
+  String answering = '', answerTo = '';
+  final focus = FocusNode();
+  final searchInput = TextEditingController();
+  bool searching = false, searchBusy = false;
+  int searchGen = 0;
+
+  /// 搜索结果；null 是还没搜。
+  List<DiscJson>? hits;
   int read = 0;
   List<DiscJson> attachments = [];
   final localFiles = <String, XFile>{};
@@ -101,6 +112,8 @@ class _DiscussionRoomState extends State<DiscussionRoom>
       quote = discText(saved, 'quote');
       target = discText(saved, 'target');
       mention = discText(saved, 'mention');
+      answering = discText(saved, 'answering');
+      answerTo = discText(saved, 'answerTo');
       clientId = discText(saved, 'clientId');
       read = discInt(saved, 'read');
       attachments = discList(saved['attachments']);
@@ -148,6 +161,8 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     WidgetsBinding.instance.removeObserver(this);
     input.removeListener(scheduleSave);
     input.dispose();
+    focus.dispose();
+    searchInput.dispose();
     scroll.dispose();
     state.removeListener(changed);
     state.dispose();
@@ -167,6 +182,8 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     'quote': quote,
     'target': target,
     'mention': mention,
+    'answering': answering,
+    'answerTo': answerTo,
     'clientId': clientId,
     'read': read,
     'attachments': attachments,
@@ -247,7 +264,9 @@ class _DiscussionRoomState extends State<DiscussionRoom>
 
   Future<void> send() async {
     if (sending || !writable || uploading) return;
-    if (pending == null && input.text.trim().isEmpty && attachments.isEmpty) {
+    if (pending == null &&
+        input.text.trim().isEmpty &&
+        (answering.isNotEmpty || attachments.isEmpty)) {
       return;
     }
     setState(() {
@@ -255,28 +274,36 @@ class _DiscussionRoomState extends State<DiscussionRoom>
       error = null;
     });
     clientId = clientId.isEmpty ? discRequestId() : clientId;
-    pending ??= {
-      'discussion': widget.room,
-      'body': input.text,
-      'quote': quote,
-      'target': target,
-      'mention': mention,
-      'clientId': clientId,
-      'attachments': attachments
-          .map((a) => {'staged': a['staged'], 'name': a['name']})
-          .toList(),
-    };
+    pending ??= answering.isNotEmpty
+        ? {'question': answering, 'body': input.text, 'clientId': clientId}
+        : {
+            'discussion': widget.room,
+            'body': input.text,
+            'quote': quote,
+            'target': target,
+            'mention': mention,
+            'clientId': clientId,
+            'attachments': attachments
+                .map((a) => {'staged': a['staged'], 'name': a['name']})
+                .toList(),
+          };
     await save();
     try {
-      await widget.api.call('post', pending!);
+      final answered = pending!.containsKey('question');
+      await widget.api.call(answered ? 'answer' : 'post', pending!);
       if (!mounted) return;
       setState(() {
         input.clear();
         quote = '';
         target = '';
         mention = '';
-        attachments = [];
-        localFiles.clear();
+        answering = '';
+        answerTo = '';
+        // 回答不带附件：已选的附件留在草稿里，下一条发言再发
+        if (!answered) {
+          attachments = [];
+          localFiles.clear();
+        }
         clientId = '';
         pending = null;
       });
@@ -464,6 +491,7 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     DiscJson params, {
     String? title,
     String? body,
+    String? confirm,
   }) async {
     if (title != null &&
         !await showPosseConfirm(
@@ -471,7 +499,7 @@ class _DiscussionRoomState extends State<DiscussionRoom>
           title: title,
           body: body,
           // 确认按钮写这个操作本身（归档、分享、移除……），不写通用的「保存」
-          confirm: title,
+          confirm: confirm ?? title,
           tone: ConfirmTone.warning,
         )) {
       return;
@@ -489,17 +517,19 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     }
   }
 
-  Future<void> answer(DiscJson m) async {
-    final l = context.l10n;
-    await discussionForm(
-      context,
-      widget.api,
-      l.discAnswer,
-      'answer',
-      {'question': m['question']},
-      {'body': l.discAnswer},
-    );
-    await state.poll();
+  /// 点「回答」：输入框换成回答这个问题，发出去走 answer。
+  void answer(DiscJson m) {
+    // 上一条还没确认发没发出去时不能换成回答：重试发的仍是那一条
+    if (pending != null) return;
+    update(() {
+      answering = discText(m, 'question');
+      answerTo = discAuthorName(m, state.collab);
+      quote = '';
+      target = '';
+      mention = '';
+    });
+    focus.requestFocus();
+    scheduleSave();
   }
 
   void worker(DiscJson row) {
@@ -520,75 +550,83 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     );
   }
 
+  /// 添加或编辑自己的 Agent。编辑页下面的打开终端、重启、移除在这里做。
   Future<void> member([DiscJson? row]) async {
     final l = context.l10n;
-    final add = row == null;
-    await discussionForm(
+    final live =
+        row != null &&
+        discText(row, 'worker').isNotEmpty &&
+        !['gone', 'shell', null].contains(state.live[discText(row, 'worker')]);
+    final picked = await openMemberPage(
       context,
-      widget.api,
-      add ? l.discAddMember : discText(row, 'name'),
-      add ? 'member.add' : 'member.update',
-      {
-        'discussion': widget.room,
-        ...?row,
-        if (row != null) 'member': row['id'],
-        'workspace':
-            row?['workspaceId'] ?? state.discussion['workspaceId'] ?? '',
-      },
-      {
-        'name': l.discName,
-        'role': l.discRole,
-        'model': l.discModel,
-        'effort': l.discEffort,
-        'worktree': l.discNewWorktree,
-        'base': l.discBase,
-      },
-      workspace: true,
-      agent: true,
-      applyNow: !add,
-      project: state.discussion['mirror'] == true
+      api: widget.api,
+      discussion: widget.room,
+      member: row,
+      workspace: discText(row ?? {}, 'workspaceId').isNotEmpty
+          ? discText(row!, 'workspaceId')
+          : discText(state.discussion, 'workspaceId'),
+      project:
+          state.discussion['mirror'] == true ||
+              discText(state.discussion, 'projectId').isEmpty
           ? null
           : discText(state.discussion, 'projectId'),
       people: state.collab.isEmpty
           ? null
           : activePeople.where((p) => p['fp'] != selfFp).toList(),
+      members: activeMembers,
+      live: live,
+      resumable: [
+        'connection to the host was lost; confirm to continue',
+        'daemon restarted',
+      ].contains(row?['paused']),
     );
-    await state.poll();
+    if (!mounted) return;
+    switch (picked) {
+      case MemberOutcome.open:
+        worker(row!);
+      case MemberOutcome.resume:
+        await action('member.resume', {'member': row!['id']});
+      case MemberOutcome.restart:
+        await action('member.restart', {
+          'member': row!['id'],
+        }, title: l.discRestart);
+      case MemberOutcome.remove:
+        await action('member.remove', {
+          'member': row!['id'],
+        }, title: l.discRemove);
+      case MemberOutcome.saved || null:
+        await state.poll();
+    }
   }
 
-  Future<void> search() async {
-    final l = context.l10n;
-    final result = await discussionForm(
-      context,
-      widget.api,
-      l.discSearch,
-      'search',
-      {'discussion': widget.room},
-      {'query': l.discSearch},
-    );
-    if (!mounted || result == null) return;
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheet) => SafeArea(
-        child: ListView(
-          children: [
-            for (final m in discList(result['value']))
-              ListTile(
-                title: Text(
-                  discText(m, 'body'),
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(discAuthorName(m, state.collab)),
-                onTap: () => Navigator.pop(sheet, discText(m, 'id')),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (selected != null) await locate(selected);
+  /// 顶栏的搜索：提交后列出命中的消息，点一条退出搜索并跳过去。
+  Future<void> runSearch(String query) async {
+    if (query.trim().isEmpty) return;
+    // 只认最后一次搜索的结果：取消后、换了词之后回来的旧结果丢掉
+    final gen = ++searchGen;
+    setState(() => searchBusy = true);
+    try {
+      final result = await widget.api.call('search', {
+        'discussion': widget.room,
+        'query': query.trim(),
+      });
+      if (mounted && gen == searchGen) {
+        setState(() => hits = discList(result['value']));
+      }
+    } catch (e) {
+      if (mounted && gen == searchGen) setState(() => error = e);
+    } finally {
+      if (mounted && gen == searchGen) setState(() => searchBusy = false);
+    }
   }
+
+  void closeSearch() => setState(() {
+    searchGen++;
+    searchBusy = false;
+    searching = false;
+    hits = null;
+    searchInput.clear();
+  });
 
   String status(String value) {
     final l = context.l10n;
@@ -645,6 +683,44 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     scheduleSave();
   }
 
+  Widget searchResults() {
+    final l = context.l10n;
+    final c = PosseColors.of(context);
+    final list = hits;
+    if (searchBusy) return const Center(child: HexSpinner(size: Ic.hero));
+    if (list == null) return const SizedBox.shrink();
+    if (list.isEmpty) {
+      return EmptyState(icon: Icons.search_rounded, text: l.discNoHits);
+    }
+    return ListView(
+      padding: const EdgeInsets.only(top: 8),
+      children: [
+        Section(
+          children: [
+            for (final m in list)
+              RowTile(
+                title: Text(
+                  '${discAuthorName(m, state.collab)}  ${stamp(m)}',
+                  style: TextStyle(fontSize: Fs.small, color: c.muted),
+                ),
+                subtitle: Text(
+                  plainSnippet(discText(m, 'body')),
+                  maxLines: 3,
+                  style: TextStyle(fontSize: Fs.body, color: c.text),
+                ),
+                chevron: false,
+                onTap: () {
+                  final id = discText(m, 'id');
+                  closeSearch();
+                  unawaited(locate(id));
+                },
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
@@ -655,22 +731,55 @@ class _DiscussionRoomState extends State<DiscussionRoom>
         state.messages.length +
         (state.more ? 1 : 0) +
         (state.moreAfter ? 1 : 0);
+    final appBar = searching
+        ? AppBar(
+            automaticallyImplyLeading: false,
+            titleSpacing: 16,
+            title: TextField(
+              controller: searchInput,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              onSubmitted: runSearch,
+              style: TextStyle(fontSize: Fs.body, color: c.text),
+              decoration: InputDecoration(
+                hintText: l.discSearch,
+                isDense: true,
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  size: Ic.medium,
+                  color: c.faint,
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: c.accent,
+                ),
+                onPressed: closeSearch,
+                child: Text(l.discCancel),
+              ),
+              const SizedBox(width: 8),
+            ],
+          )
+        : AppBar(
+            title: Text(title.isEmpty ? l.discTitle : title),
+            actions: [
+              IconButton(
+                tooltip: l.discSearch,
+                onPressed: () => setState(() => searching = true),
+                icon: const Icon(Icons.search_rounded),
+              ),
+              IconButton(
+                tooltip: l.discDetails,
+                onPressed: details,
+                icon: const Icon(Icons.more_horiz_rounded),
+              ),
+            ],
+          );
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title.isEmpty ? l.discTitle : title),
-        actions: [
-          IconButton(
-            tooltip: l.discSearch,
-            onPressed: search,
-            icon: const Icon(Icons.search_rounded),
-          ),
-          IconButton(
-            tooltip: l.discDetails,
-            onPressed: details,
-            icon: const Icon(Icons.more_horiz_rounded),
-          ),
-        ],
-      ),
+      appBar: appBar,
       body: SideSafe(
         child: Column(
           children: [
@@ -682,87 +791,103 @@ class _DiscussionRoomState extends State<DiscussionRoom>
                   state.dismissError();
                 },
               ),
+            // 搜索时消息列表留在树里（IndexedStack），取消搜索回到原来的位置
             Expanded(
-              child: Stack(
+              child: IndexedStack(
+                index: searching ? 1 : 0,
+                sizing: StackFit.expand,
                 children: [
-                  if (state.messages.isEmpty)
-                    state.loading
-                        ? const Center(child: HexSpinner(size: Ic.hero))
-                        : EmptyState(
-                            icon: Icons.forum_rounded,
-                            text: l.discNoMessages,
-                          )
-                  else
-                    // 消息高度在图片、Markdown 排好后才定下来，不滚动时也要重算是否在底部
-                    NotificationListener<ScrollMetricsNotification>(
-                      onNotification: (_) {
-                        scrolled();
-                        return false;
-                      },
-                      child: ListViewObserver(
-                        controller: observer,
-                        child: ListView.builder(
-                          controller: scroll,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          itemCount: count,
-                          itemBuilder: (_, i) {
-                            if (state.more && i == 0) {
-                              return EarlierRow(
-                                loading: state.loading,
-                                onLoad: earlier,
-                              );
-                            }
-                            final j = i - (state.more ? 1 : 0);
-                            if (j >= state.messages.length) {
-                              return Center(
-                                child: TextButton(
-                                  onPressed: () =>
-                                      state.page(after: state.last),
-                                  child: Text(l.discLater),
-                                ),
-                              );
-                            }
-                            return message(state.messages[j]);
+                  Stack(
+                    children: [
+                      if (state.messages.isEmpty)
+                        state.loading
+                            ? const Center(child: HexSpinner(size: Ic.hero))
+                            : EmptyState(
+                                icon: Icons.forum_rounded,
+                                text: activeMembers.isEmpty && writable
+                                    ? l.discNoMembers
+                                    : l.discNoMessages,
+                                action: activeMembers.isEmpty && writable
+                                    ? FilledButton(
+                                        onPressed: () => member(),
+                                        child: Text(l.discAddMember),
+                                      )
+                                    : null,
+                              )
+                      else
+                        // 消息高度在图片、Markdown 排好后才定下来，不滚动时也要重算是否在底部
+                        NotificationListener<ScrollMetricsNotification>(
+                          onNotification: (_) {
+                            scrolled();
+                            return false;
                           },
-                        ),
-                      ),
-                    ),
-                  if (!atBottom && state.messages.isNotEmpty)
-                    Positioned(
-                      right: 16,
-                      bottom: 12,
-                      child: Material(
-                        color: c.raised,
-                        shape: const CircleBorder(),
-                        elevation: 2,
-                        shadowColor: c.shadow,
-                        child: IconButton(
-                          tooltip: l.discLatest,
-                          onPressed: state.moreAfter ? latest : bottom,
-                          icon: Icon(
-                            Icons.arrow_downward_rounded,
-                            size: Ic.medium,
-                            color: c.muted,
+                          child: ListViewObserver(
+                            controller: observer,
+                            child: ListView.builder(
+                              controller: scroll,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              itemCount: count,
+                              itemBuilder: (_, i) {
+                                if (state.more && i == 0) {
+                                  return EarlierRow(
+                                    loading: state.loading,
+                                    onLoad: earlier,
+                                  );
+                                }
+                                final j = i - (state.more ? 1 : 0);
+                                if (j >= state.messages.length) {
+                                  return Center(
+                                    child: TextButton(
+                                      onPressed: () =>
+                                          state.page(after: state.last),
+                                      child: Text(l.discLater),
+                                    ),
+                                  );
+                                }
+                                return message(state.messages[j]);
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  if (uploading)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 12,
-                      child: UploadBar(
-                        index: 0,
-                        count: 1,
-                        done: progress,
-                        files: true,
-                      ),
-                    ),
+                      if (!atBottom && state.messages.isNotEmpty)
+                        Positioned(
+                          right: 16,
+                          bottom: 12,
+                          child: Material(
+                            color: c.raised,
+                            shape: const CircleBorder(),
+                            elevation: 2,
+                            shadowColor: c.shadow,
+                            child: IconButton(
+                              tooltip: l.discLatest,
+                              onPressed: state.moreAfter ? latest : bottom,
+                              icon: Icon(
+                                Icons.arrow_downward_rounded,
+                                size: Ic.medium,
+                                color: c.muted,
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (uploading)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 12,
+                          child: UploadBar(
+                            index: 0,
+                            count: 1,
+                            done: progress,
+                            files: true,
+                          ),
+                        ),
+                    ],
+                  ),
+                  searchResults(),
                 ],
               ),
             ),
-            composer(),
+            if (!searching) composer(),
           ],
         ),
       ),

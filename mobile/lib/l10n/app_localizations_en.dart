@@ -2247,9 +2247,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discArchived => 'Archived';
 
   @override
-  String get discActive => 'Active';
-
-  @override
   String get discName => 'Name';
 
   @override
@@ -2290,15 +2287,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get discAgent => 'Agent';
-
-  @override
-  String get discModel => 'Model (blank for default)';
-
-  @override
-  String get discEffort => 'Reasoning effort (blank for default)';
-
-  @override
-  String get discNewWorktree => 'New worktree name (optional)';
 
   @override
   String get discBase => 'Base branch (optional)';
@@ -2569,9 +2557,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discCopy => 'Copy';
 
   @override
-  String get discEdit => 'Edit';
-
-  @override
   String discOnComputer(String name) {
     return 'On $name\'s computer';
   }
@@ -2624,4 +2609,66 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get profileImageTooLarge =>
       'This image is too large. Choose a smaller one.';
+
+  @override
+  String get discEditMember => 'Edit Agent';
+
+  @override
+  String get discAdd => 'Add';
+
+  @override
+  String get discNoAgents => 'No agents on this computer';
+
+  @override
+  String get discRoleHint => 'What it is responsible for';
+
+  @override
+  String get discModelLabel => 'Model';
+
+  @override
+  String get discEffortLabel => 'Reasoning effort';
+
+  @override
+  String get discDefault => 'Default';
+
+  @override
+  String get discWorkDir => 'Working directory';
+
+  @override
+  String get discExistingWorkspace => 'Existing workspace';
+
+  @override
+  String get discNewWorktreeMode => 'New worktree';
+
+  @override
+  String get discNoHits => 'No matching messages';
+
+  @override
+  String get discNoMembers => 'No agents yet';
+
+  @override
+  String get discAnswerHint => 'Your answer…';
+
+  @override
+  String get discAtButton => 'Mention';
+
+  @override
+  String discAnswerTo(String name) {
+    return 'Answer $name';
+  }
+
+  @override
+  String get discWorktreeName => 'Worktree name';
+
+  @override
+  String get discCreate => 'Create';
+
+  @override
+  String get discJoinConfirm => 'Join';
+
+  @override
+  String get discShareConfirm => 'Share';
+
+  @override
+  String get discUnshareConfirm => 'Stop';
 }

@@ -3692,12 +3692,6 @@ abstract class AppLocalizations {
   /// **'Archived'**
   String get discArchived;
 
-  /// Mobile discussions: Active
-  ///
-  /// In en, this message translates to:
-  /// **'Active'**
-  String get discActive;
-
   /// Mobile discussions: Name
   ///
   /// In en, this message translates to:
@@ -3781,24 +3775,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Agent'**
   String get discAgent;
-
-  /// Mobile discussions: Model (blank for default)
-  ///
-  /// In en, this message translates to:
-  /// **'Model (blank for default)'**
-  String get discModel;
-
-  /// Mobile discussions: Reasoning effort (blank for default)
-  ///
-  /// In en, this message translates to:
-  /// **'Reasoning effort (blank for default)'**
-  String get discEffort;
-
-  /// Mobile discussions: New worktree name (optional)
-  ///
-  /// In en, this message translates to:
-  /// **'New worktree name (optional)'**
-  String get discNewWorktree;
 
   /// Mobile discussions: Base branch (optional)
   ///
@@ -4316,12 +4292,6 @@ abstract class AppLocalizations {
   /// **'Copy'**
   String get discCopy;
 
-  /// Mobile discussions: edit an agent member
-  ///
-  /// In en, this message translates to:
-  /// **'Edit'**
-  String get discEdit;
-
   /// Mobile discussions: member subtitle for someone else's agent
   ///
   /// In en, this message translates to:
@@ -4411,6 +4381,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This image is too large. Choose a smaller one.'**
   String get profileImageTooLarge;
+
+  /// Mobile discussions: title of the page that edits one of your agent members
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Agent'**
+  String get discEditMember;
+
+  /// Mobile discussions: confirm button on the add-agent page
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get discAdd;
+
+  /// Mobile discussions: shown in the agent picker when the computer reports no agents
+  ///
+  /// In en, this message translates to:
+  /// **'No agents on this computer'**
+  String get discNoAgents;
+
+  /// Mobile discussions: placeholder of the agent member's role field
+  ///
+  /// In en, this message translates to:
+  /// **'What it is responsible for'**
+  String get discRoleHint;
+
+  /// Mobile discussions: label of the agent member's model field
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get discModelLabel;
+
+  /// Mobile discussions: label of the agent member's reasoning effort field
+  ///
+  /// In en, this message translates to:
+  /// **'Reasoning effort'**
+  String get discEffortLabel;
+
+  /// Mobile discussions: placeholder of the model and reasoning effort fields; empty means the agent's default
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get discDefault;
+
+  /// Mobile discussions: label of where the agent member works
+  ///
+  /// In en, this message translates to:
+  /// **'Working directory'**
+  String get discWorkDir;
+
+  /// Mobile discussions: segment, the agent works in an existing workspace
+  ///
+  /// In en, this message translates to:
+  /// **'Existing workspace'**
+  String get discExistingWorkspace;
+
+  /// Mobile discussions: segment, create a new git worktree for the agent
+  ///
+  /// In en, this message translates to:
+  /// **'New worktree'**
+  String get discNewWorktreeMode;
+
+  /// Mobile discussions: search found nothing
+  ///
+  /// In en, this message translates to:
+  /// **'No matching messages'**
+  String get discNoHits;
+
+  /// Mobile discussions: empty discussion without any agent members, above the add-agent button
+  ///
+  /// In en, this message translates to:
+  /// **'No agents yet'**
+  String get discNoMembers;
+
+  /// Mobile discussions: input placeholder while answering an agent's question
+  ///
+  /// In en, this message translates to:
+  /// **'Your answer…'**
+  String get discAnswerHint;
+
+  /// Mobile discussions: tooltip of the button that inserts @ into the message input
+  ///
+  /// In en, this message translates to:
+  /// **'Mention'**
+  String get discAtButton;
+
+  /// Mobile discussions: chip in the input while answering the question an agent asked
+  ///
+  /// In en, this message translates to:
+  /// **'Answer {name}'**
+  String discAnswerTo(String name);
+
+  /// Mobile discussions: label of the new worktree's name on the agent member page
+  ///
+  /// In en, this message translates to:
+  /// **'Worktree name'**
+  String get discWorktreeName;
+
+  /// Mobile discussions: confirm button of the new discussion dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get discCreate;
+
+  /// Mobile discussions: confirm button of the join-by-invite dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get discJoinConfirm;
+
+  /// Mobile discussions: confirm button when turning on LAN sharing
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get discShareConfirm;
+
+  /// Mobile discussions: confirm button when turning off LAN sharing
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get discUnshareConfirm;
 }
 
 class _AppLocalizationsDelegate
