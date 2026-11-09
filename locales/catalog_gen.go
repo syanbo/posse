@@ -9213,6 +9213,22 @@ func (msgs Messages) ImagesOpenInPreview() string {
 	return Catalog.Format(msgs.locale, "imagesOpenInPreview", nil)
 }
 
+// ImagesSaveAs says "Save As…"
+// in the language the app shows.
+//
+// Images in discussions: context menu item and image viewer button that
+// saves a copy of the image to a place the user picks, as macOS names it.
+func ImagesSaveAs() string { return In(i18n.Locale()).ImagesSaveAs() }
+
+// ImagesSaveAs says "Save As…"
+// in the language of msgs.
+//
+// Images in discussions: context menu item and image viewer button that
+// saves a copy of the image to a place the user picks, as macOS names it.
+func (msgs Messages) ImagesSaveAs() string {
+	return Catalog.Format(msgs.locale, "imagesSaveAs", nil)
+}
+
 // ImagesPasted says "Pasted"
 // in the language the app shows.
 //

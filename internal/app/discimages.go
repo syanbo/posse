@@ -2,13 +2,17 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"image"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 
+	"posse/internal/errtext"
 	"posse/internal/media"
+	"posse/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -113,30 +117,37 @@ func (th *discThumb) set(img *image.RGBA) {
 
 // decodeDiscThumb 先只读文件头看尺寸，原图太大就不解，再解码并缩到缩略图的像素上限。
 func decodeDiscThumb(path string) (*image.RGBA, error) {
-	f, err := os.Open(path)
-	if err != nil {
+	if err := checkDiscSource(path); err != nil {
 		return nil, err
-	}
-	st, err := f.Stat()
-	if err == nil && st.Size() > discThumbMaxBytes {
-		err = errImageTooLarge
-	}
-	var cfg image.Config
-	if err == nil {
-		cfg, _, err = image.DecodeConfig(f)
-	}
-	f.Close()
-	if err != nil {
-		return nil, err
-	}
-	if int64(cfg.Width)*int64(cfg.Height) > discThumbMaxSource {
-		return nil, errImageTooLarge
 	}
 	pi, err := media.DecodePreview(path, discThumbPixels)
 	if err != nil {
 		return nil, err
 	}
 	return pi.Img, nil
+}
+
+// checkDiscSource 只读文件头：文件或原图像素超过上限就报 errImageTooLarge。解码要先把整张原图解出来，
+// 缩略图和大图都先过这一关。
+func checkDiscSource(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if st, err := f.Stat(); err != nil {
+		return err
+	} else if st.Size() > discThumbMaxBytes {
+		return errImageTooLarge
+	}
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return err
+	}
+	if int64(cfg.Width)*int64(cfg.Height) > discThumbMaxSource {
+		return errImageTooLarge
+	}
+	return nil
 }
 
 var errImageTooLarge = errors.New("image too large to preview")
@@ -162,9 +173,9 @@ func (v *discThumbs) evict() {
 }
 
 // discImage 画一张图片附件：没解好时是同样大小的占位块，只解码看得见（含上下一段预取）的。
-// 点了用系统默认程序打开，右键复制图片、在访达中显示、用预览打开、复制路径。
+// 点了在窗口里看大图，右键见 discImageMenu。
 func (a *app) discImage(c *ui.Context, key, abs string) {
-	t, m := c.Theme(), L(c)
+	t := c.Theme()
 	box := ui.Box(c.Key(key)).Radius(rSmall).Background(colors(t).fill).Shrink(0).Role(ui.RoleButton).Label(filepath.Base(abs))
 	// 位置是上一帧的：刚出现的还没排版，约一帧再看；消息区被挤成零高度时什么都看不见，不解也不约
 	r, view := box.Bounds(), a.disc.view
@@ -181,13 +192,24 @@ func (a *app) discImage(c *ui.Context, key, abs string) {
 		if bm != nil {
 			ui.Image(c, bm).Size(w, h).Fit(ui.Contain).Radius(rSmall)
 		}
+		// 截图常是和消息底色一样的白底或黑底，描一圈才看得出图的边界；盖在图上面，不占图的位置
+		ui.Box(c).Absolute().Top(0).Right(0).Bottom(0).Left(0).Radius(rSmall).BorderWidth(hairline).BorderColor(colors(t).line)
 	})
 	if box.Clicked() {
-		mygo.Shell.OpenPath(abs)
+		a.openDiscImage(abs)
 	}
-	contextMenu(c, box, func(pm *popMenu) {
+	a.discImageMenu(c, box, abs)
+}
+
+// discImageMenu 是讨论里图片的右键菜单（缩略图和大图共用）：复制图片、存储为、在访达中显示、用预览打开、复制路径。
+func (a *app) discImageMenu(c *ui.Context, el ui.Element, abs string) {
+	m := L(c)
+	contextMenu(c, el, func(pm *popMenu) {
 		if pm.Item(m.ImagesCopyImage()).Icon(iconCopy).Chosen() {
 			a.copyImage(m, imageItem{Item: media.Item{Path: abs}})
+		}
+		if pm.Item(m.ImagesSaveAs()).Icon(iconSave).Chosen() {
+			a.saveImageAs(m, abs)
 		}
 		if pm.Item(m.CommonRevealInFinder()).Icon(iconFolder).Chosen() {
 			mygo.Shell.ShowItemInFolder(abs)
@@ -199,4 +221,142 @@ func (a *app) discImage(c *ui.Context, key, abs string) {
 			mygo.Clipboard.WriteText(abs)
 		}
 	})
+}
+
+// saveImageAs 让用户选位置，把附件复制一份过去；默认放在下载目录、用附件原来的名字。
+func (a *app) saveImageAs(m locales.Messages, abs string) {
+	name := filepath.Base(abs)
+	def := name
+	if home, err := os.UserHomeDir(); err == nil {
+		def = filepath.Join(home, "Downloads", name)
+	}
+	dst, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: a.win, Title: m.ImagesSaveAs(), DefaultPath: def, CreateDirectories: true})
+	if err != nil || dst == "" || dst == abs {
+		return
+	}
+	go func() {
+		err := copyFileTo(abs, dst)
+		a.update(func() {
+			if err != nil {
+				a.err = errtext.Text(err)
+			}
+		})
+	}()
+}
+
+// copyFileTo 先写到同目录的临时文件再改名：中途失败不留下半截的文件，也不毁掉被覆盖的那个。
+func copyFileTo(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".posse-save-*")
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(tmp, in)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(tmp.Name(), 0o644)
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), dst)
+	}
+	if err != nil {
+		os.Remove(tmp.Name())
+	}
+	return err
+}
+
+// discViewer 是讨论里点开的大图：盖在窗口上，Esc 或点外面关掉，关了就放掉位图。
+type discViewer struct {
+	open bool
+	path string
+	bm   *ui.Bitmap
+	size image.Point // 原图像素
+}
+
+// discViewerMaxPixels 是大图解码的像素上限：够铺满 2 倍屏上的大窗口，一张最多约 64 MB
+const discViewerMaxPixels = 16 << 20
+
+// openDiscImage 打开大图，在后台按原图解码（超过上限才缩小）；解不开的用系统默认程序打开。
+func (a *app) openDiscImage(abs string) {
+	a.discView = discViewer{open: true, path: abs}
+	go func() {
+		pi, err := decodeDiscFull(abs)
+		a.update(func() {
+			v := &a.discView
+			if v.path != abs || !v.open {
+				return
+			}
+			if err != nil {
+				v.open = false
+				mygo.Shell.OpenPath(abs)
+				return
+			}
+			v.bm, v.size = ui.NewBitmap(pi.Img), pi.Size
+		})
+	}()
+}
+
+// decodeDiscFull 解大图：缩略图还没解完时也能点开，所以这里同样先查原图大小。
+func decodeDiscFull(path string) (media.PreviewImage, error) {
+	if err := checkDiscSource(path); err != nil {
+		return media.PreviewImage{}, err
+	}
+	return media.DecodePreview(path, discViewerMaxPixels)
+}
+
+// discImageDialog 画大图：原图按 2 倍屏的点数显示，放不下等比缩到窗口里，不放大小图；下面一行是名字和操作。
+func (a *app) discImageDialog(c *ui.Context) {
+	v := &a.discView
+	if !v.open {
+		if v.bm != nil || v.path != "" {
+			a.discView = discViewer{}
+		}
+		return
+	}
+	t, m := c.Theme(), L(c)
+	abs := v.path
+	panel := ui.Modal(c, &v.open, func() {
+		ww, wh := c.Size()
+		maxW, maxH := max(ww-96, 160), max(wh-96-sz(28)-8-24, 120)
+		w, h := float32(discThumbBox), float32(discThumbBox)*0.75
+		if v.bm != nil {
+			w, h = float32(v.size.X)/2, float32(v.size.Y)/2
+		}
+		if k := min(maxW/max(w, 1), maxH/max(h, 1)); k < 1 {
+			w, h = w*k, h*k
+		}
+		img := ui.Box(c.Key("disc-view")).Size(w, h).Radius(rSmall).Background(colors(t).fill).Center().Label(filepath.Base(abs))
+		img.Children(func() {
+			if v.bm != nil {
+				ui.Image(c, v.bm).Size(w, h).Fit(ui.Contain).Radius(rSmall)
+			}
+		})
+		a.discImageMenu(c, img, abs)
+		ui.Row(c).Gap(4).AlignItems(ui.Center).Width(max(w, 320)).Children(func() {
+			ui.Text(c, filepath.Base(abs)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			if v.size.X > 0 {
+				ui.Text(c, fmt.Sprintf("%d × %d", v.size.X, v.size.Y)).FontSize(fsSmall).FontFeatures("tnum").TextColor(colors(t).faint).Shrink(0).Margin(0, 0, 0, 4)
+			}
+			ui.Spacer(c)
+			if iconButton(c, iconCopy, m.ImagesCopyImage()).Clicked() {
+				a.copyImage(m, imageItem{Item: media.Item{Path: abs}})
+			}
+			if iconButton(c, iconSave, m.ImagesSaveAs()).Clicked() {
+				a.saveImageAs(m, abs)
+			}
+			if iconButton(c, iconFolder, m.CommonRevealInFinder()).Clicked() {
+				mygo.Shell.ShowItemInFolder(abs)
+			}
+			if iconButton(c, iconOpen, m.ImagesOpenInPreview()).Clicked() {
+				go exec.Command("open", "-a", "Preview", abs).Run()
+			}
+		})
+	})
+	panel.Padding(12).Gap(8)
 }

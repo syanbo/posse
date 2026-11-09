@@ -595,6 +595,7 @@
   "imagesNoneGenerated": "agent 还没有生成图片或视频。",
   "imagesNonePasted": "这个会话还没有粘贴过图片。",
   "imagesOpenInPreview": "用系统预览打开",
+  "imagesSaveAs": "存储为…",
   "imagesPasted": "粘贴",
   "imagesPastedTab": "粘贴",
   "imagesPause": "暂停",

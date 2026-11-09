@@ -3613,6 +3613,10 @@
   "@imagesOpenInPreview": {
     "description": "Images panel: context menu item that opens the image in the macOS Preview app."
   },
+  "imagesSaveAs": "Save As…",
+  "@imagesSaveAs": {
+    "description": "Images in discussions: context menu item and image viewer button that saves a copy of the image to a place the user picks, as macOS names it."
+  },
   "imagesPasted": "Pasted",
   "@imagesPasted": {
     "description": "Images panel: name under a thumbnail of an image the user pasted, when it has no number."

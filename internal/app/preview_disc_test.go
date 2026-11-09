@@ -121,6 +121,23 @@ func renderDiscussionPreviews(t *testing.T, dark bool, suffix string) {
 	}
 	savePNG(t, tt, "discussions-images-"+suffix+".png")
 
+	// 点开的大图
+	for path := range a.discThumbs.m {
+		if filepath.Base(path) == "design.png" {
+			pi, err := decodeDiscFull(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			a.discView = discViewer{open: true, path: path, bm: ui.NewBitmap(pi.Img), size: pi.Size}
+		}
+	}
+	tt = newPreviewTester(a, dark)
+	for range 3 {
+		tt.Frame()
+	}
+	savePNG(t, tt, "discussions-image-viewer-"+suffix+".png")
+	a.discView = discViewer{}
+
 	// 归档的讨论
 	a = previewApp(t)
 	previewDiscussion(a)
@@ -307,6 +324,8 @@ func previewDiscImages(t *testing.T, a *app) {
 	atts := []discAttachment{
 		write("design.png", 1600, 1000, color.RGBA{243, 242, 239, 255}, color.RGBA{217, 119, 87, 255}),
 		write("screenshot.png", 590, 1280, color.RGBA{40, 44, 52, 255}, color.RGBA{91, 141, 239, 255}),
+		// 和消息底色一样的白底截图：靠描边看出边界
+		write("white.png", 900, 240, color.RGBA{255, 255, 255, 255}, color.RGBA{255, 255, 255, 255}),
 		{ID: "notes", Name: "notes.md", Path: "notes.md", Size: 2048},
 	}
 	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("# notes"), 0o644); err != nil {

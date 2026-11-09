@@ -143,6 +143,7 @@ func (a *app) build(c *ui.Context) {
 	a.promptDialog(c)
 	a.unsavedDialog(c)
 	a.rollbackDialog(c)
+	a.discImageDialog(c)
 	a.confirmDialog(c)
 	a.tracesDialog(c)
 	a.skillChangeDialog(c)
