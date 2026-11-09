@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.21
+
+- 讨论模块重新整理：添加、编辑 Agent 改成整页表单，标签都在输入框上方；打开终端、继续、重启、移除放在编辑页底部。
+- 回答 Agent 的提问改在输入框里写，上方标出在回答谁；输入框多了一个 @ 按钮。
+- 搜索消息改在顶栏，讨论详情改成整页；讨论列表右上一个「+」新建或加入，归档的讨论在列表底部。
+
+### English
+
+- Reorganized discussions: adding or editing an agent is now a full-page form with labels above each field; open terminal, resume, restart and remove sit at the bottom of the edit page.
+- Answer an agent's question right in the message box, which shows who you're answering; the message box also has an @ button.
+- Message search moved to the top bar and discussion details open as a full page; one "+" in the list creates or joins a discussion, and archived discussions are at the bottom of the list.
+
 ## 0.1.20
 
 - 新增「名字和头像」：在设置里或讨论详情里点自己，就能改名字、换头像，和电脑端设置里的个人资料是同一份；讨论里的消息显示每个人的名字和头像。
