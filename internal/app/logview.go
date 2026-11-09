@@ -347,10 +347,12 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 // --- 提交图
 
 // graphRow 是提交图的一行：提交在第几条线上，和进出这一行的线。
-// in 是这一行上边的线（每条线等着的提交），out 是下边的线；同一个提交在 in 里的位置连到它在 out 里的位置。
+// in 是这一行上边的线（每条线等着的提交），out 是下边的线。几条线可能等着同一个提交
+// （几个分支从同一处分出），所以线按位置对应（from），不按提交找。
 type graphRow struct {
 	lane    int
 	in, out []string
+	from    []int // in 里每条线在 out 里的位置；-1 是连到这个提交、在这里结束或新开的线
 	parents []int // 父提交在 out 里的位置
 }
 
@@ -368,10 +370,17 @@ func buildGraph(commits []gitx.CommitInfo) []graphRow {
 			in = slices.Clone(lanes)
 			in[lane] = "" // 新开的线：上边没有线进来
 		}
+		// src 跟着 lanes 增删，记每条线来自 in 的哪个位置，-1 是这一行新开的
+		src := make([]int, len(lanes))
+		for j := range src {
+			src[j] = j
+		}
+		src[lane] = -1 // 这条线从这个提交接着往下，上半段连到提交，不是直穿
 		// 别的线也在等这个提交（合并到这里的分支），它们在这里结束
 		for j := len(lanes) - 1; j >= 0; j-- {
 			if j != lane && lanes[j] == c.Hash {
 				lanes = slices.Delete(lanes, j, j+1)
+				src = slices.Delete(src, j, j+1)
 				if j < lane {
 					lane--
 				}
@@ -380,18 +389,30 @@ func buildGraph(commits []gitx.CommitInfo) []graphRow {
 		var parents []int
 		if len(c.Parents) == 0 {
 			lanes = slices.Delete(lanes, lane, lane+1)
+			src = slices.Delete(src, lane, lane+1)
 		} else {
 			lanes[lane] = c.Parents[0]
+			parents = append(parents, lane)
 			for _, p := range c.Parents[1:] {
-				if !slices.Contains(lanes, p) {
+				k := slices.Index(lanes, p)
+				if k < 0 {
 					lanes = append(lanes, p)
+					src = append(src, -1)
+					k = len(lanes) - 1
 				}
-			}
-			for _, p := range c.Parents {
-				parents = append(parents, slices.Index(lanes, p))
+				parents = append(parents, k)
 			}
 		}
-		rows[i] = graphRow{lane: lane, in: in, out: slices.Clone(lanes), parents: parents}
+		from := make([]int, len(in))
+		for j := range from {
+			from[j] = -1
+		}
+		for k, j := range src {
+			if j >= 0 {
+				from[j] = k
+			}
+		}
+		rows[i] = graphRow{lane: lane, in: in, out: slices.Clone(lanes), from: from, parents: parents}
 	}
 	return rows
 }
@@ -411,24 +432,17 @@ func graphCell(c *ui.Context, r graphRow, hash string, lanes int) ui.Element {
 			path.MoveTo(x0, y0).LineTo(x1, y1)
 			p.StrokePath(&path, 1.6, col)
 		}
-		// 上半段：进来的线连到这个提交，或者连到它在下边的位置
+		// 上半段：进来的线连到这个提交，或者连到它在下边的位置；下半段：经过的线直下
 		for j, h := range r.in {
 			switch {
 			case h == "":
 			case h == hash:
 				line(x(j), top, x(r.lane), mid, laneColor(t, j))
-			default:
-				if k := slices.Index(r.out, h); k >= 0 {
-					line(x(j), top, x(k), mid, laneColor(t, k))
-				}
+			case j < len(r.from) && r.from[j] >= 0:
+				k := r.from[j]
+				line(x(j), top, x(k), mid, laneColor(t, k))
+				line(x(k), mid, x(k), bot, laneColor(t, k))
 			}
-		}
-		// 下半段：经过的线直下，提交连到父提交的线
-		for k, h := range r.out {
-			if !slices.Contains(r.in, h) || h == hash {
-				continue
-			}
-			line(x(k), mid, x(k), bot, laneColor(t, k))
 		}
 		for _, k := range r.parents {
 			if k >= 0 {

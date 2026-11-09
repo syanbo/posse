@@ -408,6 +408,19 @@ func TestBuildGraph(t *testing.T) {
 	if g[3].lane != 0 || len(g[3].in) != 2 || len(g[3].out) != 0 {
 		t.Fatalf("root row %+v", g[3])
 	}
+	// 三个分支从 r 分出：几条线都等着 r，经过的线按位置直下，不斜到第一条等 r 的线上
+	g = buildGraph([]gitx.CommitInfo{
+		{Hash: "a", Parents: []string{"r"}},
+		{Hash: "b", Parents: []string{"r"}},
+		{Hash: "c", Parents: []string{"r"}},
+		{Hash: "r"},
+	})
+	if !slices.Equal(g[2].from, []int{0, 1, -1}) || !slices.Equal(g[2].parents, []int{2}) {
+		t.Fatalf("third branch row %+v", g[2])
+	}
+	if g[3].lane != 0 || !slices.Equal(g[3].from, []int{-1, -1, -1}) || len(g[3].out) != 0 {
+		t.Fatalf("fork point row %+v", g[3])
+	}
 	if refs := refNames("HEAD -> main, origin/main, tag: v1"); len(refs) != 3 || !refs[0].head || refs[2].name != "v1" {
 		t.Fatalf("refs %+v", refs)
 	}
