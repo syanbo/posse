@@ -245,6 +245,7 @@ func (b *discBoard) stickBottom() {
 
 // discBoard 是讨论页在窗口里的状态。
 type discBoard struct {
+	area   ui.Handle // 三栏所在的行：上一帧的宽度决定放不放得下三栏
 	list   []discSummary
 	sel    string
 	d      *discDetail
@@ -565,7 +566,7 @@ func (a *app) selectDiscussion(key string) {
 		return
 	}
 	removePasted(b.atts)
-	*b = discBoard{list: b.list, panel: b.panel, newOpen: b.newOpen, self: b.self, join: b.join, invite: b.invite}
+	*b = discBoard{area: b.area, list: b.list, panel: b.panel, newOpen: b.newOpen, self: b.self, join: b.join, invite: b.invite}
 	b.sel = key
 	a.setWantedDisc(key, 0)
 	a.pollForce.Store(true)
@@ -642,12 +643,18 @@ func (a *app) discBoard(c *ui.Context) {
 	if b.sel == "" || a.discussion(b.sel) == nil {
 		a.selectDiscussion(b.list[0].Key)
 	}
-	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Children(func() {
-		card(c).Width(260).Shrink(0).Clip().Label(m.DiscList()).Children(func() {
-			ui.Scroll(c).Grow(1).Children(func() {
-				ui.Column(c).Padding(4, 0, 8, 0).Gap(4).Children(func() { a.discListView(c) })
+	panel := b.panel && b.d != nil && b.d.key == b.sel
+	// 三栏放不下时（窗口窄、侧栏开着）开着详情就先收起讨论列表，消息区不被挤成一字一行
+	w := b.area.Bounds(c).W
+	list := !panel || w == 0 || w >= 2*discSideWidth+discMinMessages()+4*pageGap
+	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Ref(&b.area).Children(func() {
+		if list {
+			card(c).Width(discSideWidth).Shrink(0).Clip().Label(m.DiscList()).Children(func() {
+				ui.Scroll(c).Grow(1).Children(func() {
+					ui.Column(c).Padding(4, 0, 8, 0).Gap(4).Children(func() { a.discListView(c) })
+				})
 			})
-		})
+		}
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Children(func() {
 			if b.d == nil || b.d.key != b.sel {
 				ui.Column(c).Grow(1).Center().Children(func() {
@@ -657,11 +664,17 @@ func (a *app) discBoard(c *ui.Context) {
 			}
 			a.discDetailView(c, b.d)
 		})
-		if b.panel && b.d != nil && b.d.key == b.sel {
-			card(c).Width(260).Shrink(0).Clip().Children(func() { a.discPanel(c, b.d) })
+		if panel {
+			card(c).Width(discSideWidth).Shrink(0).Clip().Children(func() { a.discPanel(c, b.d) })
 		}
 	})
 }
+
+// discSideWidth 是讨论列表和右栏的宽度。
+const discSideWidth = 260
+
+// discMinMessages 是消息区至少要留的宽度，跟着字号。
+func discMinMessages() float32 { return sz(420) }
 
 func (a *app) discEmpty(c *ui.Context) {
 	t, m := c.Theme(), L(c)

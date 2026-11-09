@@ -63,7 +63,8 @@ func (a *app) settingsBoard(c *ui.Context) {
 		})
 		ui.Scroll(c.Key("settings:" + tab)).Grow(1).Shrink(1).Basis(0).MinWidth(0).Children(func() {
 			ui.Column(c).Padding(24).AlignItems(ui.Center).Children(func() {
-				ui.Column(c).Width(640).MaxWidth(640).Gap(16).Children(func() {
+				// 窗口窄时跟着变窄：定宽居中会向两边溢出，左边被分类栏盖住
+				ui.Column(c).WidthPercent(100).MaxWidth(640).Gap(16).Children(func() {
 					switch tab {
 					case "general":
 						a.languageSettings(c)

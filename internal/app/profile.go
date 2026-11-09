@@ -37,6 +37,7 @@ type profileState struct {
 	remove  bool
 	picking bool
 	saving  bool
+	err     string // 选图、保存失败：写在卡片里，侧栏底部的错误条离得太远，收起侧栏时还看不到
 }
 
 type avatarEntry struct {
@@ -178,9 +179,12 @@ func (a *app) profileSettings(c *ui.Context) {
 				}
 			})
 		})
-		settingsRow(c, m.SettingsProfileName(), func() {
+		// 不用 settingsRow：窄的时候让输入框缩，标签不折成一字一行
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, m.SettingsProfileName()).FontSize(fsBody).Shrink(0)
+			ui.Spacer(c)
 			before := p.name
-			fieldInputWidth(c.Key("profile-name"), &p.name, m.SettingsProfileName(), sz(280))
+			fieldInputSized(c.Key("profile-name"), &p.name, m.SettingsProfileName(), sz(280), sz(120))
 			if p.name != before {
 				p.edited = true
 			}
@@ -195,6 +199,9 @@ func (a *app) profileSettings(c *ui.Context) {
 				go a.saveProfile(name, p.pick, p.remove)
 			}
 		})
+		if p.err != "" {
+			ui.Text(c, p.err).FontSize(fsSmall).TextColor(t.Danger)
+		}
 		for _, r := range p.info.Pending {
 			reason := r.Reason
 			switch reason {
@@ -234,9 +241,9 @@ func (a *app) pickAvatar(m locales.Messages) {
 		p.picking = false
 		switch {
 		case err != nil:
-			a.err = m.SettingsProfileImageError()
+			p.err = m.SettingsProfileImageError()
 		case preview != nil:
-			p.pick, p.preview, p.remove = path, preview, false
+			p.pick, p.preview, p.remove, p.err = path, preview, false, ""
 		}
 	})
 }
@@ -244,13 +251,17 @@ func (a *app) pickAvatar(m locales.Messages) {
 func (a *app) saveProfile(name, path string, remove bool) {
 	params := map[string]any{"name": name, "path": path, "remove": remove}
 	var r profileData
-	err := a.call("profile.set", params, &r, 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	err := a.c.Call(ctx, "profile.set", params, &r)
+	cancel()
 	a.update(func() {
 		p := &a.profile
 		p.saving = false
 		if err != nil {
+			p.err = errtext.Text(err)
 			return
 		}
+		p.err = ""
 		p.info, p.loaded, p.at = r, true, time.Now()
 		p.name, p.edited, p.pick, p.preview, p.remove = r.Name, false, "", nil, false
 	})

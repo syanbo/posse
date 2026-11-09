@@ -569,7 +569,12 @@ func savePNG(t *testing.T, tt *ui.Tester, name string) {
 }
 
 func newPreviewTester(a *app, dark bool) *ui.Tester {
-	tt := newTester(a.build, 1200, 760)
+	return newPreviewTesterSize(a, dark, 1200, 760)
+}
+
+// newPreviewTesterSize 用来看窄窗口：侧栏开着时设置页、讨论页三栏放不下的样子。
+func newPreviewTesterSize(a *app, dark bool, w, h int) *ui.Tester {
+	tt := newTester(a.build, w, h)
 	tt.SetScale(2)
 	tt.SetDark(dark)
 	tt.SetTitleBar(ui.TitleBar{Height: 40, Left: 70}) // TrafficLightPosition{16, 13} 时红绿灯占的位置
@@ -1326,6 +1331,10 @@ func TestPreview(t *testing.T) {
 		a.profile.preview = a.avatarImage(previewAvatar(a))
 		a.settingsTab = "profile"
 		savePNG(t, newPreviewTester(a, dark), "settings-profile-"+suffix+".png")
+		// 窄窗口：卡片跟着变窄、不被分类栏盖住；选图失败的报错写在卡片里
+		a.profile.err = locales.In("zh-Hans").SettingsProfileImageError()
+		savePNG(t, newPreviewTesterSize(a, dark, 860, 760), "settings-profile-narrow-"+suffix+".png")
+		a.profile.err = ""
 		// 设置页的英文和伪语言（en-XA 把英文加长、加重音）：看排版有没有截断
 		for _, lang := range []string{"en", "en-XA"} {
 			for _, tab := range []string{"general", "profile", "appearance", "about", "agent", "keys"} {

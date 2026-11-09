@@ -272,6 +272,8 @@ func renderCollabPreviews(t *testing.T, dark bool, suffix string) {
 	previewCollab(a, false)
 	a.disc.quote = ""
 	savePNG(t, newPreviewTester(a, dark), "discussions-collab-member-"+suffix+".png")
+	// 窄窗口开着详情：讨论列表收起，消息区不被挤窄
+	savePNG(t, newPreviewTesterSize(a, dark, 1000, 760), "discussions-narrow-"+suffix+".png")
 
 	a = previewApp(t)
 	previewDiscussion(a)

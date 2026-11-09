@@ -160,3 +160,28 @@ func TestProfileAvatarValidation(t *testing.T) {
 		t.Fatal("bad digest accepted")
 	}
 }
+
+// 成员改名后，房主讨论列表里最后一条消息的预览写新名字（消息存的是发送时的名字）。
+func TestProfileRenameUpdatesListPreview(t *testing.T) {
+	p := newCollabPair(t)
+	h, m := p.host, p.member
+	room, memberFP := p.disc.Key, m.store.Self()
+	call(t, m.profileSet, map[string]any{"name": "Old Name"})
+	waitFor(t, "host sees name", func() bool { return person(t, h, room, memberFP).Name == "Old Name" })
+	call(t, m.discPost, map[string]any{"discussion": room, "body": "hello", "clientId": "c-preview"})
+	last := func() string {
+		list, err := h.store.DiscussionSummaries()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range list {
+			if s.Key == room && s.Last != nil {
+				return s.Last.AuthorName
+			}
+		}
+		return ""
+	}
+	waitFor(t, "host sees the message", func() bool { return last() == "Old Name" })
+	call(t, m.profileSet, map[string]any{"name": "New Name"})
+	waitFor(t, "preview uses the new name", func() bool { return last() == "New Name" })
+}

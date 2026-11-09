@@ -564,6 +564,13 @@ func (s *Store) DiscussionSummaries() ([]DiscussionSummary, error) {
 	for _, d := range ds {
 		x := DiscussionSummary{Discussion: d}
 		if m, err := scanDiscMessage(s.db.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? ORDER BY seq DESC LIMIT 1`, d.Key)); err == nil {
+			// 人发的消息存着发送时的名字：预览和消息区一样按身份取人员表里最新的
+			if m.AuthorID != "" && m.AuthorMember == "" {
+				var name string
+				if s.db.QueryRow(`SELECT name FROM collab_people WHERE room=? AND fp=?`, d.Key, m.AuthorID).Scan(&name) == nil && name != "" {
+					m.AuthorName = name
+				}
+			}
 			x.Last = &m
 		}
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_messages q WHERE q.discussion=? AND q.kind='question'
