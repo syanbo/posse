@@ -3,6 +3,22 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.29
+
+- 个人资料：在设置里填名字、选头像，讨论里显示你的名字和头像；也可以在讨论人员表里右键自己那行或用 `posse profile set` 修改。加入别人的讨论时，资料会同步给房主（双方都需要更新到这个版本）。
+- 讨论里的图片加了细边框，白底、黑底的截图也看得出边界；点开在窗口里看大图，大图下方和右键菜单都能复制、存储为、在访达中显示、用预览打开。
+- 分支按钮和 Git 日志开关移到底部状态栏左端，长分支名不再挤占标签栏；在设置「外观 → 界面」里可以改回标签栏。
+- Git 日志的提交图照 WebStorm 重画：跨很多行的长线只在两头各画一小段，断开处是箭头，悬停提示要跳到的提交，点击直接选中它（还没读到会接着往下读）；一次合并几十个分支时提交图不再被撑宽，合并提交的标题变淡。
+- 修复：Codex 讨论成员按回答结束派下一轮，后台命令不再卡住队列；开着详情切换讨论时窗口崩溃；头像改为从图片中间裁成正方形；窄窗口下设置页不被遮住，讨论页会收起列表。
+
+### English
+
+- Profile: set your name and avatar in Settings, and discussions show them. You can also change them by right-clicking your own row in a discussion's member list or with `posse profile set`. In discussions you joined, your profile syncs to the host (both sides need this version).
+- Images in discussions get a thin border, so white or black screenshots stand out. Clicking one opens it large in the window; the buttons below it and the context menu can copy, save as, reveal in Finder or open in Preview.
+- The branch button and the Git log toggle move to the left end of the status bar, so long branch names no longer crowd the tab bar. Settings > Appearance > Interface can put them back in the tab bar.
+- The Git log commit graph is redrawn the WebStorm way: long lines show only a short piece at each end with arrows where they are cut, hovering an arrow names the commit it leads to, and clicking selects that commit (loading more history if needed). Merging dozens of branches at once no longer widens the graph, and merge commit titles are dimmed.
+- Fixes: Codex members in discussions start their next request when the answer finishes, so background commands no longer block the queue; the window no longer crashes when switching discussions with details open; avatars are cropped from the center of the image; the settings page is no longer covered in narrow windows, and the discussion page collapses its list.
+
 ## 0.1.28
 
 - 讨论里的图片附件直接显示缩略图，点开用默认程序查看；超大图片仍显示为文件。
