@@ -65,8 +65,8 @@ func NormalizeAvatar(src []byte) ([]byte, error) {
 	}
 	b := img.Bounds()
 	side := min(b.Dx(), b.Dy())
-	crop := image.Rect(b.Min.X+(b.Dx()-side)/2, b.Min.Y+(b.Dy()-side)/2, 0, 0)
-	crop.Max = crop.Min.Add(image.Pt(side, side))
+	at := image.Pt(b.Min.X+(b.Dx()-side)/2, b.Min.Y+(b.Dy()-side)/2)
+	crop := image.Rectangle{Min: at, Max: at.Add(image.Pt(side, side))}
 	out := min(side, AvatarSide)
 	dst := image.NewRGBA(image.Rect(0, 0, out, out))
 	draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
