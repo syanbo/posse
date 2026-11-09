@@ -265,7 +265,7 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 		if open {
 			a.branchPop = nil
 		} else {
-			// 两个按钮都算"面板按钮"，点它们不会触发对方的点外面收起，只能在这里互相关掉
+			// 和右侧面板互斥：面板开着时这一下先被它当成点了外面收起，这里再确保关掉
 			if a.state.RightPanel != "" {
 				a.state.RightPanel = ""
 				a.saveState()
@@ -287,60 +287,64 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 	if g.repo != "" && g.branches.list == nil && !g.branches.loading {
 		a.loadBranches(g)
 	}
-	panel := floating(c, ui.Column(c).Absolute().Bottom(6).Left(trafficLightX-chipPad).Width(a.branchPopWidth()).MaxHeight(600).Padding(6).Gap(2))
-	panel.Children(func() {
-		// 多个仓库：最上面选仓库，下面的分支和操作都是它的
-		if v.multiRepo() {
-			ui.Row(c).Padding(0, 2, 4, 2).AlignItems(ui.Center).Children(func() { a.repoPicker(c, v) })
-		}
-		ui.Row(c).Gap(4).Padding(2, 2, 6, 2).AlignItems(ui.Center).Children(func() {
-			ui.Column(c).Grow(1).Children(func() {
-				in := fieldInput(c, &bp.query, L(c).BranchSearch()).AutoFocus()
-				switch {
-				case in.Changed():
-					bp.hl = -1
-					if strings.TrimSpace(bp.query) != "" {
-						bp.hl = 0
-					}
-				case in.Shortcut(0, ui.KeyDown):
-					bp.hl, bp.scroll = min(bp.hl+1, len(bp.rows)-1), true
-				case in.Shortcut(0, ui.KeyUp):
-					bp.hl, bp.scroll = max(bp.hl-1, 0), true
-				case in.Submitted() && bp.hl >= 0 && bp.hl < len(bp.rows):
-					a.checkoutBranch(L(c), w, v, bp.rows[bp.hl])
-				}
-			})
-			// Fetch 进行中按钮换成转圈，不另起一行文字
-			if g.busyKind == gitFetch {
-				spin := ui.Row(c.Key("fetching")).Size(buttonBox(), buttonBox()).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
-					Role(ui.RoleButton).Label(L(c).BranchCancelFetch()).Tooltip(L(c).BranchFetchingTip())
-				spin.Children(func() { ui.Spinner(c).Label(L(c).BranchFetching()) })
-				if spin.Clicked() && g.cancel != nil {
-					g.cancel()
-				}
-			} else if fetch := pressable(iconButtonSized(c, iconFetch, L(c).BranchFetchTip(), buttonBox(), iconSize)); g.busy == "" && fetch.Clicked() {
-				m := L(c)
-				a.gitDoKind(m, v.git, gitFetch, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) },
-					func() { a.notify(m.BranchFetched(), "", nil) })
-			} else if g.busy != "" {
-				fetch.Opacity(0.4)
+	// 贴着底边往上长，窗口矮时由外层限高、不顶出主区域（仓库和搜索框在最上面）
+	var panel ui.Element
+	ui.Column(c).Absolute().Top(6).Bottom(6).Left(trafficLightX - chipPad).Justify(ui.End).PassThrough().Children(func() {
+		panel = floating(c, ui.Column(c).Width(a.branchPopWidth()).MaxHeight(600).Shrink(1).MinHeight(0).Padding(6).Gap(2))
+		panel.Children(func() {
+			// 多个仓库：最上面选仓库，下面的分支和操作都是它的
+			if v.multiRepo() {
+				ui.Row(c).Padding(0, 2, 4, 2).AlignItems(ui.Center).Children(func() { a.repoPicker(c, v) })
 			}
-		})
-		if g.busy != "" && (g.busyKind != gitFetch || len(g.queue) > 0) {
-			ui.Row(c).Padding(0, 12, 4, 12).Children(func() { busyLine(c, g) })
-		}
-		query := strings.ToLower(strings.TrimSpace(bp.query))
-		bp.rows = bp.rows[:0]
-		ui.Scroll(c).Grow(1).Shrink(1).Children(func() {
-			ui.Column(c).Gap(2).Children(func() {
-				if query == "" {
-					a.branchActions(c, w, v)
-					hline(c).Margin(4, 6)
+			ui.Row(c).Gap(4).Padding(2, 2, 6, 2).AlignItems(ui.Center).Children(func() {
+				ui.Column(c).Grow(1).Children(func() {
+					in := fieldInput(c, &bp.query, L(c).BranchSearch()).AutoFocus()
+					switch {
+					case in.Changed():
+						bp.hl = -1
+						if strings.TrimSpace(bp.query) != "" {
+							bp.hl = 0
+						}
+					case in.Shortcut(0, ui.KeyDown):
+						bp.hl, bp.scroll = min(bp.hl+1, len(bp.rows)-1), true
+					case in.Shortcut(0, ui.KeyUp):
+						bp.hl, bp.scroll = max(bp.hl-1, 0), true
+					case in.Submitted() && bp.hl >= 0 && bp.hl < len(bp.rows):
+						a.checkoutBranch(L(c), w, v, bp.rows[bp.hl])
+					}
+				})
+				// Fetch 进行中按钮换成转圈，不另起一行文字
+				if g.busyKind == gitFetch {
+					spin := ui.Row(c.Key("fetching")).Size(buttonBox(), buttonBox()).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
+						Role(ui.RoleButton).Label(L(c).BranchCancelFetch()).Tooltip(L(c).BranchFetchingTip())
+					spin.Children(func() { ui.Spinner(c).Label(L(c).BranchFetching()) })
+					if spin.Clicked() && g.cancel != nil {
+						g.cancel()
+					}
+				} else if fetch := pressable(iconButtonSized(c, iconFetch, L(c).BranchFetchTip(), buttonBox(), iconSize)); g.busy == "" && fetch.Clicked() {
+					m := L(c)
+					a.gitDoKind(m, v.git, gitFetch, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) },
+						func() { a.notify(m.BranchFetched(), "", nil) })
+				} else if g.busy != "" {
+					fetch.Opacity(0.4)
 				}
-				a.branchGroups(c, w, v, query)
 			})
+			if g.busy != "" && (g.busyKind != gitFetch || len(g.queue) > 0) {
+				ui.Row(c).Padding(0, 12, 4, 12).Children(func() { busyLine(c, g) })
+			}
+			query := strings.ToLower(strings.TrimSpace(bp.query))
+			bp.rows = bp.rows[:0]
+			ui.Scroll(c).Grow(1).Shrink(1).Children(func() {
+				ui.Column(c).Gap(2).Children(func() {
+					if query == "" {
+						a.branchActions(c, w, v)
+						hline(c).Margin(4, 6)
+					}
+					a.branchGroups(c, w, v, query)
+				})
+			})
+			a.branchPopGrip(c)
 		})
-		a.branchPopGrip(c)
 	})
 	if panel.PressedOutside() && !a.overPanelButton && !a.overBranchButton || panel.Shortcut(0, ui.KeyEscape) {
 		a.branchPop = nil

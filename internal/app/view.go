@@ -93,6 +93,8 @@ func (a *app) build(c *ui.Context) {
 		}
 		// 只占剩下的宽度：标签多了也不撑出窗口（右边停靠的文件栏要完整显示）
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Background(p.canvas).Children(func() {
+			// 分支按钮只在工作区的主界面显示，分支弹窗也只在那里画
+			var bw *workspace
 			ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 				switch {
 				case board:
@@ -109,14 +111,9 @@ func (a *app) build(c *ui.Context) {
 					a.settingsBoard(c)
 				default:
 					a.main(c, w, cur)
+					bw = w
 				}
 			})
-			// 分支按钮只在工作区的主界面显示，分支弹窗也只在那里画
-			var bw *workspace
-			if !board && a.selected != historyBoardID && a.selected != discBoardID && a.selected != mobileBoardID &&
-				a.selected != skillsBoardID && a.selected != settingsBoardID {
-				bw = w
-			}
 			a.statusBar(c, bw)
 		})
 		// 最后画，压在分隔线和主区域上面，才接得到分隔线两侧的拖动
@@ -1767,17 +1764,8 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace, i int) {
 	})
 }
 
-// tabBarButtons 是标签栏右边的按钮组：Git 日志和文件栏的开关。分支按钮在状态栏左端：分支名长时标签栏放不下。
+// tabBarButtons 是标签栏右边的按钮组：文件栏的开关。分支和 Git 日志在状态栏左端：分支名长时标签栏放不下。
 func (a *app) tabBarButtons(c *ui.Context, w *workspace) {
-	if a.gitBranch(w) != "" {
-		b := iconButton(c.Key("git-log"), iconGitLog, a.withKey(L(c).GitLogTitle(), "gitLog"))
-		if a.logPanelOpen() {
-			b.Background(colors(c.Theme()).tint)
-		}
-		if b.Clicked() {
-			a.toggleLogPanel(w)
-		}
-	}
 	// 图片、技能与工具、命令速查跟着会话走，放在终端右上角（sessionButtons）；历史按项目，在文件栏里
 	// 文件栏开着时开关在它的顶栏右端，和关着时同一个位置（照 Orca）
 	if !a.filesPanelOpen() && a.filesPanelShown == 0 {
