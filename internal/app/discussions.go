@@ -664,7 +664,8 @@ func (a *app) discBoard(c *ui.Context) {
 			}
 			a.discDetailView(c, b.d)
 		})
-		if panel {
+		// 再判断一次：同一帧里在列表上点了别的讨论，b.d 已经清掉
+		if panel && b.d != nil && b.d.key == b.sel {
 			card(c).Width(discSideWidth).Shrink(0).Clip().Children(func() { a.discPanel(c, b.d) })
 		}
 	})

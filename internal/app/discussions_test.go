@@ -746,3 +746,17 @@ func TestDiscussionAtOthersAgent(t *testing.T) {
 		t.Fatalf("after pick: target %q mention %q text %q", a.disc.target, a.disc.mention, a.disc.text)
 	}
 }
+
+// 开着右栏时在列表上点另一个讨论：同一帧里当前讨论已清掉，右栏不能拿空的详情去画（曾在这里崩溃）。
+func TestDiscussionSwitchWithPanelOpen(t *testing.T) {
+	a, tt, _ := discTester(t)
+	a.disc.panel = true
+	tt.Frame()
+	if err := tt.Click("IM 重连路径梳理"); err != nil {
+		t.Fatalf("click list row: %v; texts %v", err, tt.Texts())
+	}
+	tt.Frame()
+	if a.disc.sel != "fp/d_2" {
+		t.Fatalf("selected %q", a.disc.sel)
+	}
+}
