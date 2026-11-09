@@ -28,12 +28,13 @@ tasks.discussion_id      讨论成员专用 worker 的任务属于哪个讨论�
         ├── 同成员有进行中的一轮 → 等
         ├── 同一真实目录有别的讨论成员在执行 → held，等「仍然继续」「改用独立 worktree」或取消；冲突结束后自动回到队列
         ├── 没有 worker：queued → starting（条件更新，预分配任务 ID）→ 拉起专用 worker → 事务里登记任务、转 running、绑定成员
-        └── 有 worker：上一轮 done 且 agent 回到空闲 → 事务里重开任务、追加提醒、转 running；worker 已不在 → blocked
+        └── 有 worker：上一轮 done 且回答结束（Codex 按同轮 Stop，其余按空闲） → 事务里重开任务、追加提醒、转 running；worker 已不在 → blocked
             └── worker：posse discussion read --execution X（分页，读完才算接收）
                 ├── posse task ask <task> --execution X → 讨论里出现待回答的问题，群里或任务页回答（同一事务，只接受一次）
                 └── posse task done <task> --execution X --body-file F → 完整回复进讨论，执行转 done/failed
 ```
 
+- Codex 复用 worker 时，用 UserPromptSubmit 与 Stop 的 `turn_id` 对齐回答：上一轮已汇报（任务 done）且当前回答已结束（Stop，或 Esc 中断发的 Interrupt）才派下一轮，汇报后用户自己问的一轮结束同样放行；后台命令让 OSC 保持 working 不阻塞队列，也不改变终端的工作中显示。旧轮次的 Stop 不放行新轮次，Stop 若交了继续执行的提醒则仍等待。轮次状态随常驻进程交接保留；没有带轮次的 hook 时沿用空闲判断。
 - 同一成员严格串行，不同成员可以并行。后来的 @ 排队，不经 `task.send` 往同一轮里追加。
 - 讨论任务的 `done`、`ask`、`check` 必带 `--execution`；缺了或不是当前一轮都拒绝，报错给出 `posse discussion pending` 重新领取，不自动补成当前轮。迟到、重复的汇报结束不了下一轮：轮次校验和任务、讨论回复在同一事务里。
 - 完整回复是 `--body`/`--body-file` 的正文（Markdown），`--summary` 可省（取正文第一行）；任务页照常显示摘要。

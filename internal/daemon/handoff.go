@@ -40,11 +40,12 @@ type handoffHello struct {
 }
 
 type handoffTerm struct {
-	Term     host.Record `json:"term"`
-	Agent    string      `json:"agent,omitempty"`
-	Hooked   bool        `json:"hooked,omitempty"`
-	HookedPg int         `json:"hookedPg,omitempty"` // session.agentPg；沿用旧名，和旧版本互相交接时格式不变
-	Fg       int         `json:"fg,omitempty"`
+	Term           host.Record    `json:"term"`
+	Agent          string         `json:"agent,omitempty"`
+	DiscussionTurn discussionTurn `json:"discussionTurn,omitzero"`
+	Hooked         bool           `json:"hooked,omitempty"`
+	HookedPg       int            `json:"hookedPg,omitempty"` // session.agentPg；沿用旧名，和旧版本互相交接时格式不变
+	Fg             int            `json:"fg,omitempty"`
 	// Unread 可以省略：旧进程交过来时没有，当作看过；交给旧进程时它不认，丢掉也只是少提醒一次，不用升 handoffVersion
 	Unread bool `json:"unread,omitempty"`
 	// Runtime 是拉起终端的常驻进程所在的副本（session.runtime）。新加的可选字段，没加 handoffVersion：
@@ -336,7 +337,7 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 			d.handoff.export(s.ID)
 		}
 		s.mu.Lock()
-		batch.Terms = append(batch.Terms, handoffTerm{Term: rec, Agent: s.agent, Hooked: s.hooked, HookedPg: s.agentPg, Fg: s.fg, Unread: s.unread, Runtime: s.runtime})
+		batch.Terms = append(batch.Terms, handoffTerm{Term: rec, Agent: s.agent, Hooked: s.hooked, HookedPg: s.agentPg, Fg: s.fg, Unread: s.unread, Runtime: s.runtime, DiscussionTurn: s.discussionTurn})
 		s.mu.Unlock()
 	}
 	if err := writeFrame(conn, batch); err != nil {
@@ -464,7 +465,7 @@ func (d *Daemon) adopt(in *incoming) error {
 		in.ptys[i] = nil
 		info := t.Info()
 		s := &session{Terminal: t, ID: info.ID, WorkspaceID: info.WorkspaceID, Dir: info.Dir, Command: info.Command, CreatedAt: info.CreatedAt,
-			agent: ht.Agent, hooked: ht.Hooked, agentPg: ht.HookedPg, fg: ht.Fg, unread: ht.Unread, runtime: ht.Runtime}
+			agent: ht.Agent, hooked: ht.Hooked, agentPg: ht.HookedPg, fg: ht.Fg, unread: ht.Unread, runtime: ht.Runtime, discussionTurn: ht.DiscussionTurn}
 		// 标签名和恢复信息不在交接记录里：两边共用一个数据库
 		if r, err := d.store.TerminalResume(s.ID); err == nil {
 			s.name, s.saved = r.Title, resumeRec{agent: r.Agent, sid: r.SessionID, cwd: r.Cwd, label: r.Label}

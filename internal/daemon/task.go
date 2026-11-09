@@ -858,7 +858,7 @@ func (d *Daemon) deliver(terminalID string) {
 		return
 	}
 	s := d.liveSession(terminalID)
-	if s == nil || s.agentName() == "" || !s.Running() || s.Agent().Status != agent.StatusIdle && !agent.Parked(s.Agent()) {
+	if s == nil || s.agentName() == "" || !s.Running() || s.Agent().Status != agent.StatusIdle && !agent.Parked(s.Agent()) && !s.discussionDelivery() {
 		return
 	}
 	if wait := nudgeQuiet - time.Since(s.LastInput()); wait > 0 {

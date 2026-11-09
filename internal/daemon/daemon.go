@@ -70,6 +70,8 @@ type session struct {
 	oscAt     time.Time // 开始以 7501 为准的时间
 	oscTurn   bool      // 这之后 hook 报过工作中
 
+	discussionTurn discussionTurn
+
 	hookSeq uint64    // 收到的 hook 事件计数：本轮结束时交了提醒，靠它看 agent 之后有没有接着做
 	turnAt  time.Time // 这一轮开始工作的时间，痕迹账本凭它判断文件是不是这一轮新建的
 	pushAt  time.Time // 上次给手机推送这个终端的时间（push.go）
@@ -95,6 +97,7 @@ func (s *session) markHooked(name string) {
 	defer s.mu.Unlock()
 	if name != s.agent {
 		s.agentPg, s.osc = 0, ""
+		s.discussionTurn = discussionTurn{}
 	}
 	s.agent, s.hooked = name, true
 	if isAgent {
@@ -114,6 +117,7 @@ func (s *session) clearAgent(pg int) bool {
 		return false
 	}
 	s.agent, s.hooked, s.agentPg, s.osc = "", false, 0, ""
+	s.discussionTurn = discussionTurn{}
 	return true
 }
 
@@ -176,6 +180,7 @@ func (s *session) detectAgent() (name string, hooked, changed bool, sid string) 
 		s.agentPg = pg
 	case found != s.agent || s.hooked:
 		s.agent, s.hooked, s.agentPg, s.osc, changed = found, false, pg, "", true
+		s.discussionTurn = discussionTurn{}
 		sid = agent.SessionFromArgs(found, args)
 	default:
 		s.agentPg = pg

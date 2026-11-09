@@ -859,3 +859,139 @@ func TestDiscussionNudgeWithoutRound(t *testing.T) {
 		t.Fatalf("nudge without a round: %q", text)
 	}
 }
+
+// 后台命令让 OSC 保持 working；已汇报回答的 Stop 应放行下一轮，且提醒实际送到终端。
+func TestDiscussionCodexBackgroundDoesNotBlockQueue(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	m := addMember(t, d, disc, "Codex", "codex")
+	r1 := postTo(t, d, disc, "first", m.ID, "")
+	r2 := postTo(t, d, disc, "second", m.ID, "")
+	x1 := waitExec(t, d, r1.Execution.ID, store.ExecRunning)
+	s := d.liveSession(x1.Worker)
+	s.setOSC("codex", agent.StatusWorking)
+	hook := func(event, turn string) {
+		call(t, d.hookEvent, map[string]any{"terminalId": s.ID, "agent": "codex", "event": event, "payload": map[string]any{"turn_id": turn}})
+	}
+	queued := func(id string) {
+		t.Helper()
+		d.dispatchAll()
+		if x, _ := d.store.Execution(id); x.State != store.ExecQueued {
+			t.Fatalf("premature dispatch: %+v", x)
+		}
+	}
+	hook("UserPromptSubmit", "turn-1")
+	readAll(t, d, x1)
+	call(t, d.taskDone, map[string]any{"task": x1.TaskID, "caller": x1.Worker, "execution": x1.ID, "body": "one"})
+	queued(r2.Execution.ID)
+	hook("Stop", "old-turn")
+	queued(r2.Execution.ID)
+	hook("Stop", "turn-1")
+	x2 := waitExec(t, d, r2.Execution.ID, store.ExecRunning)
+	waitScreen(t, s, "--execution "+x2.ID)
+	if st := s.Agent(); st.Status != agent.StatusWorking {
+		t.Fatalf("background status changed: %+v", st)
+	}
+	r3 := postTo(t, d, disc, "third", m.ID, "")
+	hook("UserPromptSubmit", "turn-2")
+	readAll(t, d, x2)
+	call(t, d.taskDone, map[string]any{"task": x2.TaskID, "caller": x2.Worker, "execution": x2.ID, "body": "two"})
+	hook("Stop", "turn-1")
+	queued(r3.Execution.ID)
+	hook("Stop", "turn-2")
+	x3 := waitExec(t, d, r3.Execution.ID, store.ExecRunning)
+	waitScreen(t, s, "--execution "+x3.ID)
+}
+
+func TestDiscussionCodexStopBeforeReport(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	m := addMember(t, d, disc, "Codex", "codex")
+	r1 := postTo(t, d, disc, "first", m.ID, "")
+	r2 := postTo(t, d, disc, "second", m.ID, "")
+	x1 := waitExec(t, d, r1.Execution.ID, store.ExecRunning)
+	s := d.liveSession(x1.Worker)
+	s.setOSC("codex", agent.StatusWorking)
+	for _, event := range []string{"UserPromptSubmit", "Stop"} {
+		call(t, d.hookEvent, map[string]any{"terminalId": s.ID, "agent": "codex", "event": event, "payload": map[string]any{"turn_id": "turn-1"}})
+	}
+	d.dispatchAll()
+	if x, _ := d.store.Execution(r2.Execution.ID); x.State != store.ExecQueued {
+		t.Fatal("Stop bypassed report")
+	}
+	readAll(t, d, x1)
+	call(t, d.taskDone, map[string]any{"task": x1.TaskID, "caller": x1.Worker, "execution": x1.ID, "body": "one"})
+	waitExec(t, d, r2.Execution.ID, store.ExecRunning)
+}
+
+func TestDiscussionCodexContinuedStop(t *testing.T) {
+	s := &session{agent: "codex"}
+	raw := json.RawMessage(`{"turn_id":"turn-1"}`)
+	s.discussionHook("codex", "UserPromptSubmit", raw, false)
+	s.discussionHook("codex", "Stop", raw, true)
+	if s.discussionReady() {
+		t.Fatal("continued Stop released the queue")
+	}
+	s.discussionHook("codex", "Stop", raw, false)
+	if !s.discussionReady() {
+		t.Fatal("final Stop did not release the queue")
+	}
+	finish, ok := s.reserveDiscussion()
+	if !ok {
+		t.Fatal("ready turn could not be reserved")
+	}
+	finish(true)
+	s.discussionHook("codex", "Stop", raw, false)
+	if s.discussionReady() {
+		t.Fatal("duplicate Stop reused a consumed turn")
+	}
+	if !s.discussionDelivery() {
+		t.Fatal("claimed request cannot be delivered")
+	}
+	s.discussionHook("codex", "UserPromptSubmit", json.RawMessage(`{"turn_id":"turn-2"}`), false)
+	if s.discussionDelivery() || s.discussionReady() {
+		t.Fatal("new turn inherited readiness")
+	}
+}
+
+// 汇报后用户在 worker 里自己问了一轮：那一轮结束就放行，不因它没汇报卡住队列。
+func TestDiscussionCodexUserTurnAfterReport(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	m := addMember(t, d, disc, "Codex", "codex")
+	r1 := postTo(t, d, disc, "first", m.ID, "")
+	x1 := waitExec(t, d, r1.Execution.ID, store.ExecRunning)
+	s := d.liveSession(x1.Worker)
+	s.setOSC("codex", agent.StatusWorking)
+	hook := func(event, turn string) {
+		call(t, d.hookEvent, map[string]any{"terminalId": s.ID, "agent": "codex", "event": event, "payload": map[string]any{"turn_id": turn}})
+	}
+	hook("UserPromptSubmit", "turn-1")
+	readAll(t, d, x1)
+	call(t, d.taskDone, map[string]any{"task": x1.TaskID, "caller": x1.Worker, "execution": x1.ID, "body": "one"})
+	hook("Stop", "turn-1")
+	hook("UserPromptSubmit", "user-turn")
+	r2 := postTo(t, d, disc, "second", m.ID, "")
+	d.dispatchAll()
+	if x, _ := d.store.Execution(r2.Execution.ID); x.State != store.ExecQueued {
+		t.Fatalf("dispatched during user turn: %+v", x)
+	}
+	hook("Stop", "user-turn")
+	x2 := waitExec(t, d, r2.Execution.ID, store.ExecRunning)
+	waitScreen(t, s, "--execution "+x2.ID)
+}
+
+// Esc 中断只发 Interrupt，不发 Stop：同样算这一轮结束。
+func TestDiscussionCodexInterruptReleases(t *testing.T) {
+	for _, turn := range []string{"turn-1", ""} {
+		s := &session{agent: "codex"}
+		s.discussionHook("codex", "UserPromptSubmit", json.RawMessage(`{"turn_id":"turn-1"}`), false)
+		s.discussionHook("codex", "Interrupt", json.RawMessage(`{"turn_id":"`+turn+`"}`), false)
+		if !s.discussionReady() {
+			t.Fatalf("Interrupt %q did not release the queue", turn)
+		}
+	}
+	s := &session{agent: "codex"}
+	s.discussionHook("codex", "UserPromptSubmit", json.RawMessage(`{"turn_id":"turn-2"}`), false)
+	s.discussionHook("codex", "Interrupt", json.RawMessage(`{"turn_id":"turn-1"}`), false)
+	if s.discussionReady() {
+		t.Fatal("stale Interrupt released a newer turn")
+	}
+}

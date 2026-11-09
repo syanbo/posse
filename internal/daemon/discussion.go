@@ -154,7 +154,7 @@ func (d *Daemon) dispatchMember(m store.Member) {
 	d.startRound(m, x)
 }
 
-// continueRound 在成员已有的 worker 上开下一轮：上一轮汇报后还要等 worker 真正空闲。
+// continueRound 在成员已有的 worker 上开下一轮：上一轮汇报后还要等回答结束。
 func (d *Daemon) continueRound(m store.Member, x store.Execution) {
 	t, err := d.store.Task(m.TaskID)
 	if err != nil {
@@ -175,8 +175,8 @@ func (d *Daemon) continueRound(m store.Member, x store.Execution) {
 		return
 	}
 	s := d.liveSession(t.Worker)
-	if s == nil || s.Agent().Status != agent.StatusIdle {
-		return // done 之后 agent 还没停到输入框：等它空闲再派（afterAgent 会再踢一次）
+	if s == nil || !s.discussionReady() {
+		return // done 之后回答可能还在收尾，结束事件到达后再派
 	}
 	w, err := d.store.Workspace(t.WorkspaceID)
 	if err != nil {
@@ -186,6 +186,16 @@ func (d *Daemon) continueRound(m store.Member, x store.Execution) {
 	if !d.canDispatch() || d.holdConcurrent(m, x, w) {
 		return
 	}
+	finish, ready := s.reserveDiscussion()
+	if !ready {
+		return
+	}
+	claimed := false
+	defer func() {
+		if !claimed {
+			finish(false)
+		}
+	}()
 	note := store.Message{ID: store.NewID("m_"), TaskID: t.ID, Kind: "note", Body: roundNote(t.ID, x.ID), CreatedAt: time.Now()}
 	_, ok, err := d.store.ClaimExecution(store.ClaimInput{Exec: x.ID, TaskID: t.ID, Reuse: true, Note: note, Render: d.renderContext, At: time.Now()})
 	if err != nil {
@@ -195,6 +205,8 @@ func (d *Daemon) continueRound(m store.Member, x store.Execution) {
 	if !ok {
 		return
 	}
+	claimed = true
+	finish(true)
 	d.taskNotify()
 	go d.deliver(t.Worker)
 }

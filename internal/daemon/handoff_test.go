@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"encoding/json"
 	"io"
 	"net"
 	"os"
@@ -57,5 +58,46 @@ func TestSendFileAfterLargeFrame(t *testing.T) {
 	}
 	if err := <-got; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestHandoffCarriesDiscussionReadiness(t *testing.T) {
+	d, w := newTestDaemon(t)
+	s, err := d.startTerminal(w, []string{"/bin/cat"}, "codex", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.discussionTurn = discussionTurn{ID: "turn-1", Stopped: true}
+	rec, f, err := s.Pause()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(handoffBatch{Version: handoffVersion, Terms: []handoffTerm{{Term: rec, Agent: "codex", DiscussionTurn: s.discussionTurn}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var batch handoffBatch
+	if err := json.Unmarshal(data, &batch); err != nil {
+		t.Fatal(err)
+	}
+	d2, _ := newTestDaemon(t)
+	if err := d2.adopt(&incoming{batch: batch, ptys: []*os.File{f}}); err != nil {
+		t.Fatal(err)
+	}
+	got := d2.terms[s.ID]
+	got.Resume()
+	d.mu.Lock()
+	delete(d.terms, s.ID)
+	d.mu.Unlock()
+	if !got.discussionReady() {
+		t.Fatal("handoff lost completed turn")
+	}
+	finish, ok := got.reserveDiscussion()
+	if !ok {
+		t.Fatal("adopted turn cannot be claimed")
+	}
+	finish(true)
+	if got.discussionReady() || !got.discussionDelivery() {
+		t.Fatal("adopted turn cannot deliver exactly one next round")
 	}
 }

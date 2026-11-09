@@ -690,7 +690,11 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 			time.AfterFunc(stopDeliveryGrace, func() { d.checkStopDelivery(s, seq, ids) })
 		}
 	}
+	s.discussionHook(p.Agent, p.Event, p.Payload, res.Deliver != "")
 	d.setAgent(s, st)
+	if p.Agent == "codex" && (p.Event == "Stop" || p.Event == "Interrupt") {
+		d.discKick()
+	}
 	// 会话 ID 和 agent 退出都从 hook 来；标题、进程检查发现的变化由 agentLoop 记（不在 PTY 读协程里写库）
 	d.saveResume(s, false)
 	// Claude 只在 UserPromptSubmit 的回应里接受改名：把待交的标题交过去，由 posse hook 写到 stdout
