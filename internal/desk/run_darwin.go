@@ -1107,6 +1107,23 @@ func (e *engine) halt(err error) {
 	if !e.stopping.CompareAndSwap(false, true) {
 		return
 	}
+	e.halted(err)
+}
+
+// haltIfCurrent 是 stream 报了停止：在 streamMu 里核对它还是现在的流再停。入口核对之后可能刚换了流，
+// 旧流迟到的停止不能把新流结束掉；stopping 在同一个临界区里置上，之后的换屏、换窗口见到就不再开新流。
+func (e *engine) haltIfCurrent(stream objc.ID, err error) {
+	e.streamMu.Lock()
+	if e.stream != stream || !e.stopping.CompareAndSwap(false, true) {
+		e.streamMu.Unlock()
+		return
+	}
+	e.streamMu.Unlock()
+	e.halted(err)
+}
+
+// halted 是 halt 置上 stopping 之后的部分。
+func (e *engine) halted(err error) {
 	e.releaseInput()
 	e.err = err
 	if err != nil {
@@ -1676,10 +1693,10 @@ func streamDidStop(_ objc.ID, _ objc.SEL, stream objc.ID, nserr objc.ID) {
 	// 用户在菜单栏停了录屏：正常退出，这次观看结束。别的原因带着错误退出，常驻进程重新拉起子进程
 	if userStopped {
 		active.logf("%s", msg)
-		active.halt(nil)
+		active.haltIfCurrent(stream, nil)
 		return
 	}
-	active.halt(fmt.Errorf("desk: %s", msg))
+	active.haltIfCurrent(stream, fmt.Errorf("desk: %s", msg))
 }
 
 // scStreamErrorUserStopped 是 SCStreamErrorUserStopped：用户从系统的录屏指示里停了采集。

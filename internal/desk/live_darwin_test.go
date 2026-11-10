@@ -61,3 +61,17 @@ func TestAdmittedOldSampleNotEncodedOnNewSession(t *testing.T) {
 		t.Fatalf("old stream sample encoded on the new session %d", encodedOn)
 	}
 }
+
+// 旧流的停止过了入口的核对之后，刚好换成了新流：不能把新流结束掉。
+func TestLateStopAfterSwitchKeepsNewStream(t *testing.T) {
+	e := &engine{}
+	e.live.Store(0x5000) // 入口核对时还是旧流
+	e.stream = objc.ID(0x6000)
+	prev := active
+	active = e
+	defer func() { active = prev }()
+	streamDidStop(0, 0, objc.ID(0x5000), 0)
+	if e.stopping.Load() {
+		t.Fatal("a late stop of the old stream ended the new one")
+	}
+}
