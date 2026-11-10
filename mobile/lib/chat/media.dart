@@ -135,7 +135,9 @@ class _MediaScreenState extends State<MediaScreen> {
   void initState() {
     super.initState();
     _refresh();
-    _timer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!appAway) _refresh();
+    });
   }
 
   @override

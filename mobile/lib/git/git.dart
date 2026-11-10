@@ -174,7 +174,7 @@ class _GitPaneState extends State<GitPane> {
 
   /// 定时刷新：上面盖着 diff 页、切到文件页、上一次还没回来时跳过；出错留着上次的列表，只挂提示。
   Future<void> _tick() async {
-    if (_busy || _loading || !mounted || !widget.active) return;
+    if (_busy || _loading || !mounted || !widget.active || appAway) return;
     if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
     _busy = true;
     try {

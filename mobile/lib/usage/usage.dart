@@ -339,7 +339,9 @@ class _UsageCardState extends State<UsageCard> {
     _onModel();
     unawaited(loadUsageMode());
     // 读数只在电脑上的 agent 运行时变，一分钟取一次足够
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _load());
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!appAway) _load();
+    });
   }
 
   @override

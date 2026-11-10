@@ -19,6 +19,13 @@ import 'terminal/frames.dart';
 import 'workspace/models.dart';
 
 /// 把连接、协议层的报错换成看得懂的话；认不出的原样给出，方便排查。
+/// App 切到了后台（hidden、paused；只到 inactive 的控制中心不算）。定时轮询这时不发请求：
+/// 安卓和开了「后台保持连接」的 iOS 在后台照常跑定时器，每轮 RPC 都耗电；回到前台由 [PosseAppModel.wake] 和下一轮补上。
+bool get appAway {
+  final state = WidgetsBinding.instance.lifecycleState;
+  return state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
+}
+
 String friendlyError(Object error, AppLocalizations l) {
   if (error is TimeoutException) return l.errorTimeout;
   if (error is FirstConnectFailed) return l.errorFirstConnect;
@@ -820,7 +827,7 @@ class PosseAppModel extends ChangeNotifier {
       if (gen != _connectGen) return false;
       _poll?.cancel();
       _poll = Timer.periodic(const Duration(seconds: 3), (_) {
-        unawaited(refreshWorktrees());
+        if (!appAway) unawaited(refreshWorktrees());
       });
       return true;
     } catch (caught) {

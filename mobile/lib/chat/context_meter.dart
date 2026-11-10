@@ -68,7 +68,9 @@ class _ContextMeterState extends State<ContextMeter> {
   void initState() {
     super.initState();
     _refresh();
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) => _refresh());
+    _timer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (!appAway) _refresh();
+    });
   }
 
   @override

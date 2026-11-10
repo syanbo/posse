@@ -256,7 +256,9 @@ class _ToolsScreenState extends State<ToolsScreen> {
     super.initState();
     unawaited(_loadFilter());
     _refresh();
-    _timer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!appAway) _refresh();
+    });
   }
 
   @override
