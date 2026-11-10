@@ -551,7 +551,7 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 	shown := group.AnimateTo("open", target, ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut})
 	group.Children(func() {
 		if !nested {
-			sessions := agentSessions(head.Terminals)
+			sessions := sidebarSessions(head.Terminals)
 			var toggle func()
 			if len(sessions) > 0 {
 				toggle = func() {
@@ -577,7 +577,7 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 						label = L(c).SidebarMainWorkspace()
 					}
 					a.sidebarItem(c, w, label, true, false, nil)
-					a.sessionRows(c, w, agentSessions(w.Terminals), links)
+					a.sessionRows(c, w, sidebarSessions(w.Terminals), links)
 				}
 			})
 			if len(links.order) > 0 {
@@ -711,7 +711,7 @@ func summaryTrailing(c *ui.Context, running int, status string) {
 	}
 }
 
-// agentSessions 是侧栏列出的会话：运行中和等着恢复的 agent 终端，普通 shell 只在标签栏。
+// agentSessions 是运行中和等着恢复的 agent 终端，「运行中」视图和跨工作区的 worker 连线用它。
 func agentSessions(ts []terminalInfo) []terminalInfo {
 	var out []terminalInfo
 	for _, t := range ts {
@@ -722,12 +722,24 @@ func agentSessions(ts []terminalInfo) []terminalInfo {
 	return out
 }
 
-// selectedSession 返回工作区当前显示的 agent 会话；当前是 shell、文件或没有终端时为空。
+// sidebarSessions 是侧栏列出的会话：运行中的终端（agent 和普通 shell），以及等着恢复的 agent 会话。
+// 等着恢复的 shell 只在标签栏：常驻进程重启后所有 shell 都等着恢复，全列出来会把侧栏挤满。
+func sidebarSessions(ts []terminalInfo) []terminalInfo {
+	var out []terminalInfo
+	for _, t := range ts {
+		if t.Running || t.Lost && t.Agent != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// selectedSession 返回工作区当前显示的、侧栏里列着的会话；当前是文件、不在侧栏里的终端或没有终端时为空。
 func (a *app) selectedSession(w *workspace) string {
 	if w == nil || a.filesActive(w) {
 		return ""
 	}
-	if cur := a.currentTerminal(w); cur != nil && cur.Agent != "" && (cur.Running || cur.Lost) {
+	if cur := a.currentTerminal(w); cur != nil && (cur.Running || cur.Lost && cur.Agent != "") {
 		return cur.ID
 	}
 	return ""
@@ -737,7 +749,7 @@ func (a *app) selectedSession(w *workspace) string {
 // collapsed 表示它的会话收起了，这时行尾汇总会话状态，当前会话也算选中这一行。extra 画在行尾最后（展开箭头）。
 func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, collapsed bool, extra func()) ui.Element {
 	running, status := a.terminalSummary(w.Terminals)
-	if !collapsed && len(agentSessions(w.Terminals)) > 0 {
+	if !collapsed && len(sidebarSessions(w.Terminals)) > 0 {
 		// 会话在下面各自显示状态
 		status = ""
 	}
@@ -785,7 +797,7 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 		}
 	}
 	selected := a.selected == w.ID && (collapsed || a.selectedSession(a.workspace(w.ID)) == "")
-	if selected || collapsed || len(agentSessions(w.Terminals)) == 0 {
+	if selected || collapsed || len(sidebarSessions(w.Terminals)) == 0 {
 		a.navOrder = append(a.navOrder, navTarget{ws: w.ID})
 		if selected {
 			a.navCur = len(a.navOrder) - 1
@@ -820,7 +832,7 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 	return item
 }
 
-// sessionRows 把工作区里的 agent 会话缩进列在它下面，单击切到对应的终端标签。
+// sessionRows 把工作区里的会话缩进列在它下面，单击切到对应的终端标签。
 // links 不为空时 w 在多工作区项目的列表里：派到同一项目别的工作区的 worker 不画影子行，记进 links 由列表直接连线。
 func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo, links *remoteLinks) {
 	if len(sessions) == 0 {

@@ -112,25 +112,23 @@ func waitState(t *testing.T, home string, ok func(uiState) bool) {
 	}
 }
 
-// 侧栏最多三层：项目、工作区（只有主工作区时省掉）、agent 会话；shell 不进侧栏。
+// 侧栏最多三层：项目、工作区（只有主工作区时省掉）、会话（agent 和运行中的 shell）。
 func TestSidebarTree(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
 	a.sectionsOpen = map[string]*bool{}
 	tt := newPreviewTester(a, true)
 	// 窗口高一些：侧栏顶上任务、历史、技能、手机之后，展开的 ios-crash 才在窗口里点得到
-	tt.SetSize(1200, 860)
+	tt.SetSize(1200, 900)
 	tt.Frame()
 	for _, label := range []string{"重写 posse 界面", "feat-login", "ios-crash"} {
 		if _, ok := tt.Find(label); !ok {
 			t.Fatalf("%q not shown", label)
 		}
 	}
-	// 标签栏里有 zsh，只能从侧栏的行里看
-	for _, n := range a.navOrder {
-		if n.term == "t3" {
-			t.Fatal("shell terminal shown in sidebar")
-		}
+	// 标签栏里也有 zsh，只能从侧栏的行里看
+	if !slices.Contains(a.navOrder, navTarget{ws: "w1", term: "t3"}) {
+		t.Fatal("running shell missing from the sidebar")
 	}
 	// 单击会话切到这个终端。测试里没有常驻进程，先让界面以为已经接入了它，免得去接入
 	// Apps 下面的第一个 Codex 是 t2（feat-login 里的 t5 排在后面）
@@ -228,6 +226,24 @@ func TestSidebarToggleAndResize(t *testing.T) {
 }
 
 // settle 多画几帧，等滑进滑出的动画（200ms）走完。
+// findTab 找标签栏上写着 label 的标签：侧栏的会话行写着同样的名字、排在前面，先收起项目 project 再找，找到后展开回去。
+func findTab(t *testing.T, a *app, tt *ui.Tester, project, label string) ui.Rect {
+	t.Helper()
+	open := a.sectionsOpen[project]
+	if open == nil {
+		t.Fatalf("project %s has no section", project)
+	}
+	*open = false
+	settle(tt)
+	r, ok := tt.Find(label)
+	*open = true
+	settle(tt)
+	if !ok {
+		t.Fatalf("tab %q missing", label)
+	}
+	return r
+}
+
 func settle(tt *ui.Tester) {
 	for range 4 {
 		tt.Frame()

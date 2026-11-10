@@ -51,10 +51,7 @@ func TestTerminalTabMouse(t *testing.T) {
 	a.selected = "w1"
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
-	r, ok := tt.Find("zsh")
-	if !ok {
-		t.Fatal("zsh tab missing")
-	}
+	r := findTab(t, a, tt, "p1", "zsh")
 	tt.MiddleClickAt(r.X+r.W/2, r.Y+r.H/2)
 	tt.Frame()
 	if !a.confirming || a.confirmTitle != "关闭 终端？" {
@@ -63,9 +60,8 @@ func TestTerminalTabMouse(t *testing.T) {
 	a.confirming = false
 	tt.Frame()
 
-	if err := tt.RightClick("zsh"); err != nil {
-		t.Fatal(err)
-	}
+	tt.RightClickAt(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
 	if !menuHas(tt, "关闭其他终端") || !menuHas(tt, "关闭右侧终端") {
 		t.Fatalf("menu = %q", tt.Texts())
 	}

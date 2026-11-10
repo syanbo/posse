@@ -178,15 +178,15 @@ func TestRevealOpensSection(t *testing.T) {
 			t.Fatalf("section %s collapsed after launch", id)
 		}
 	}
-	// 只有主工作区的项目：定位到 shell 时项目行就看得见，不用展开；定位到会话才展开
+	// 只有主工作区的项目：定位到文件时项目行就看得见，不用展开；定位到会话（shell 也在侧栏里）才展开
 	*a.sectionsOpen["p1"] = false
 	a.selected, a.revealSel = "w1", true
-	a.activeTerm["w1"] = "t3"
+	a.showFiles(a.workspace("w1"))
 	newTester(a.build, 1200, 760).Frame()
 	if *a.sectionsOpen["p1"] {
 		t.Fatal("revealing the project row opened it")
 	}
-	a.activeTerm["w1"], a.revealSel = "t1", true
+	a.activeTerm["w1"], a.revealSel = "t3", true
 	newTester(a.build, 1200, 760).Frame()
 	if !*a.sectionsOpen["p1"] {
 		t.Fatal("revealing a session did not open its project")

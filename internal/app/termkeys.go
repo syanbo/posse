@@ -106,7 +106,7 @@ func (a *app) clearTerminal(m locales.Messages, v *termView, id string) {
 }
 
 // stepTab 是 ⌘⇧] / ⌘⇧[（和 ⌃Tab / ⌃⇧Tab）：按侧栏从上到下的顺序切到下一个 / 上一个标签，侧栏的高亮只往一个方向走。
-// 一个工作区里先是 shell 和文件（侧栏里高亮工作区那一行），再是侧栏里列在它下面的 agent 会话。
+// 一个工作区里先是不在侧栏里的终端（已退出的、等着恢复的 shell）和文件（侧栏里高亮工作区那一行），再是侧栏里列在它下面的会话（agent 和 shell）。
 // 到头了切到下一个 / 上一个有标签的工作区（跨项目），停在它的第一个 / 最后一个标签；只有这一个工作区有标签时在它里面绕回来。
 func (a *app) stepTab(w *workspace, dir int) {
 	// 侧栏跟着滚到切过去的那一行，收着的项目、worker 展开
@@ -145,11 +145,11 @@ type tabStop struct {
 	doc  *fileDoc
 }
 
-// tabOrder 是工作区的标签按侧栏的顺序：shell 和文件按标签栏的先后，再是 agent 会话按侧栏的先后
+// tabOrder 是工作区的标签按侧栏的顺序：不在侧栏里的终端和文件按标签栏的先后，再是侧栏里的会话按侧栏的先后
 // （worker 跟在派发它的会话后面，和 sessionRows 一样）。
 func (a *app) tabOrder(w *workspace) []tabStop {
 	var tabs []tabStop
-	sessions := agentSessions(w.Terminals)
+	sessions := sidebarSessions(w.Terminals)
 	for _, t := range w.Terminals {
 		if !slices.ContainsFunc(sessions, func(s terminalInfo) bool { return s.ID == t.ID }) {
 			tabs = append(tabs, tabStop{term: t.ID})

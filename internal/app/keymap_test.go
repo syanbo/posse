@@ -236,21 +236,23 @@ func TestStepTabCrossesWorkspaces(t *testing.T) {
 	}
 }
 
-// 一个工作区里先是 shell，再是侧栏里的会话：worker 跟在派发它的会话后面，不按标签栏的先后。
+// 一个工作区里先是不在侧栏里的终端，再是侧栏里的会话（shell 也在里面）：worker 跟在派发它的会话后面，不按标签栏的先后。
 func TestTabOrderFollowsSidebar(t *testing.T) {
 	a := &app{activeTerm: map[string]string{}, coordOf: map[string]string{"wk": "c1"}}
 	w := &workspace{ID: "w1", Terminals: []terminalInfo{
 		{ID: "c1", Agent: "claude", Running: true},
-		{ID: "sh"},
+		{ID: "sh", Running: true},
 		{ID: "c2", Agent: "codex", Running: true},
 		{ID: "wk", Agent: "cursor", Running: true},
-		{ID: "done", Agent: "claude"}, // 退出了的 agent 不在侧栏，和 shell 一起
+		{ID: "done", Agent: "claude"}, // 退出了的终端不在侧栏
+		{ID: "lostsh", Lost: true},    // 等着恢复的 shell 也不在
+		{ID: "lostc", Agent: "claude", Lost: true},
 	}}
 	var got []string
 	for _, s := range a.tabOrder(w) {
 		got = append(got, s.term)
 	}
-	if want := []string{"sh", "done", "c1", "wk", "c2"}; !slices.Equal(got, want) {
+	if want := []string{"done", "lostsh", "c1", "wk", "sh", "c2", "lostc"}; !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }

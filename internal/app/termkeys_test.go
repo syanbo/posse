@@ -148,7 +148,7 @@ func TestTermClear(t *testing.T) {
 	}
 }
 
-// ⌘⇧] / ⌘⇧[ 按侧栏顺序切换：shell 之后是文件，再是 agent 会话，到头了切到侧栏里相邻的工作区。
+// ⌘⇧] / ⌘⇧[ 按侧栏顺序切换：已退出的终端和文件在前，再是侧栏里的会话（shell 也在里面），到头了切到侧栏里相邻的工作区。
 func TestStepTab(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
@@ -156,27 +156,21 @@ func TestStepTab(t *testing.T) {
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	tt := newTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
-	v := a.files[w.ID]
-	sessions := agentSessions(w.Terminals)
-	if len(sessions) == 0 {
-		t.Fatal("the fixture workspace has no agent sessions")
+	sessions := sidebarSessions(w.Terminals)
+	if !slices.ContainsFunc(sessions, func(s terminalInfo) bool { return s.Agent == "" }) {
+		t.Fatal("the fixture workspace has no running shell")
 	}
-	for _, term := range w.Terminals {
-		if !slices.ContainsFunc(sessions, func(s terminalInfo) bool { return s.ID == term.ID }) {
-			a.activeTerm[w.ID] = term.ID
-		}
+	tabs := a.tabOrder(w)
+	if tabs[0].doc == nil || len(tabs) != len(sessions)+1 {
+		t.Fatalf("the file comes first, then every sidebar session: %+v", tabs)
 	}
+	a.selectTab(w, tabs[0])
 	tt.Frame()
-	tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketRight)
-	tt.Frame()
-	if !a.filesActive(w) || v.cur == nil {
-		t.Fatal("after the last shell comes the file")
-	}
-	for range sessions {
+	for _, want := range tabs[1:] {
 		tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketRight)
 		tt.Frame()
-		if a.selected != w.ID || a.filesActive(w) || a.selectedSession(w) == "" {
-			t.Fatalf("after the file come the sessions, selected %q", a.selected)
+		if a.selected != w.ID || a.filesActive(w) || a.activeTerm[w.ID] != want.term || a.selectedSession(w) != want.term {
+			t.Fatalf("want %s, selected %q term %q", want.term, a.selected, a.activeTerm[w.ID])
 		}
 	}
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketRight)
@@ -187,7 +181,7 @@ func TestStepTab(t *testing.T) {
 	}
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketLeft)
 	tt.Frame()
-	if tabs := a.tabOrder(w); a.selected != w.ID || a.activeTerm[w.ID] != tabs[len(tabs)-1].term {
+	if a.selected != w.ID || a.activeTerm[w.ID] != tabs[len(tabs)-1].term {
 		t.Fatalf("back from the next workspace is the last tab here, selected %q", a.selected)
 	}
 }
@@ -218,9 +212,7 @@ func TestStepTabScrollsSidebar(t *testing.T) {
 	if a.selected != "w6" || !visible("feat-login") {
 		t.Fatalf("selected %q, feat-login visible %v", a.selected, visible("feat-login"))
 	}
-	// 绕回 Apps：先是 shell，再是第一个会话
-	tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketRight)
-	tt.Frame()
+	// 绕回 Apps：第一个是侧栏里的第一个会话
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketRight)
 	tt.Frame()
 	tt.Frame()

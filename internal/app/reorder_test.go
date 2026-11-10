@@ -59,10 +59,7 @@ func TestReorderTerminals(t *testing.T) {
 	}
 
 	// 把 zsh 标签拖到最前面（第一个标签上）
-	zsh, ok := tt.Find("zsh")
-	if !ok {
-		t.Fatal("zsh tab missing")
-	}
+	zsh := findTab(t, a, tt, "p1", "zsh")
 	drag(tt, zsh.X+zsh.W/2, zsh.Y+zsh.H/2, termX(52), zsh.Y+zsh.H/2)
 	want := []string{"t3", "t1", "t2", "t6"}
 	if got := termIDs(a.workspace("w1").Terminals); !slices.Equal(got, want) {
