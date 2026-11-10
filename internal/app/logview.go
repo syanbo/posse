@@ -60,7 +60,11 @@ func logKey(root string, f gitx.LogFilter) string {
 // 整个仓库的日志不给 branch 时只看当前分支。
 func (a *app) openLog(w *workspace, branch, path string) {
 	v := a.filesFor(w)
-	a.withRepos(v, func() { a.openLogIn(w, v.git, branch, path) })
+	v.logOpening = true
+	a.withRepos(v, func() {
+		v.logOpening = false
+		a.openLogIn(w, v.git, branch, path)
+	})
 }
 
 // openLogIn 打开仓库 g 的日志（path 为空）或其中一个文件的历史（path 相对 g 的根目录）。
@@ -172,7 +176,10 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 		if open == 0 {
 			return
 		}
-		a.openLog(w, "", "")
+		// 仓库还没找完时 openLog 排在 withRepos 后面：已经排了就不再每帧排一个，找完时一次开几十个 git log
+		if !v.logOpening {
+			a.openLog(w, "", "")
+		}
 	}
 	t := c.Theme()
 	p := colors(t)

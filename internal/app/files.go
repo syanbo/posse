@@ -241,6 +241,7 @@ type filesView struct {
 	prevTerm     string     // 切到文件标签前选中的终端，关掉最后一个文件时切回去
 	logs         []*fileDoc // 底部 Git 日志浮层里的日志和文件历史（logview.go），不在标签栏
 	logCur       *fileDoc
+	logOpening   bool // openLog 排在 withRepos 后面、还没开
 	// 日志浮层里选的是"操作记录"标签（gitconsole.go）；consoleLast、consoleDone 记上次看到的最后一条，变了才滚到底
 	console     bool
 	consoleList ui.ListState

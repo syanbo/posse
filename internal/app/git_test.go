@@ -2627,3 +2627,22 @@ func octopusLog(t *testing.T, a *app, tt *ui.Tester) *logDoc {
 	}
 	return ld
 }
+
+// 开着日志浮层、仓库还没找完：每帧不再各排一个 openLog，找完时只开一次。
+func TestLogPanelOpensOnceWhileScanning(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	v := a.filesFor(w)
+	v.repos.scanned, v.repos.scanning, v.repos.waiting = false, true, nil
+	v.logCur = nil
+	a.setLogPanel(true)
+	tt := newTester(a.build, 1200, 760)
+	for range 5 {
+		tt.Frame()
+	}
+	if n := len(v.repos.waiting); n != 1 {
+		t.Fatalf("%d openLog calls queued", n)
+	}
+}
