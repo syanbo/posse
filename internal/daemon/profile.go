@@ -294,7 +294,7 @@ func (rc *roomConn) profileLocked(ctx context.Context) error {
 			p.Avatar = "" // 头像文件丢了：只交名字
 		}
 	}
-	err = rc.cli.Call(ctx, "profile", p, nil)
+	err = rc.callLocked(ctx, collabCallTimeout, "profile", p, nil)
 	rc.stmu.Lock()
 	rc.profileTried = id.ProfileRev
 	switch {
@@ -341,7 +341,7 @@ func (rc *roomConn) avatarsLocked(ctx context.Context) {
 		var res struct {
 			Data []byte `json:"data"`
 		}
-		err := rc.cli.Call(ctx, "avatar", map[string]string{"sha": sha}, &res)
+		err := rc.callLocked(ctx, collabCallTimeout, "avatar", map[string]string{"sha": sha}, &res)
 		if err == nil {
 			err = collaboration.CheckAvatar(res.Data, sha)
 		}

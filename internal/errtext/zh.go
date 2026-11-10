@@ -59,6 +59,7 @@ var zh = [][2]string{
 	{"the host did not answer (%v); your draft is kept, try again", "房主没有回应（{1}），草稿已保留，请重试"},
 	{"the host turned off sharing for this discussion; you can read what was already synced", "房主关掉了这个讨论的分享，已同步的内容仍可阅读"},
 	{"the host turned off sharing for this discussion", "房主关掉了这个讨论的分享"},
+	{"the host stopped answering; reconnecting", "房主没有回应，正在重新连接"},
 	{"your access to this discussion was revoked", "你在这个讨论里的成员资格已被撤销"},
 	{"this credential is no longer valid; ask the host for a new invitation", "这份凭据已经失效，请向房主要新的邀请"},
 	{"the room credential on this computer is missing; ask the host for a new invitation", "本机的房间凭据不见了，请向房主要新的邀请"},

@@ -603,7 +603,12 @@ func (c *Client) Call(ctx context.Context, method string, params, out any) error
 	}
 }
 
-// Close 断开。
+// Close 断开。走关闭握手：对方不读的话最多等 5 秒。
 func (c *Client) Close() {
 	c.ws.Close(websocket.StatusNormalClosure, "")
+}
+
+// Abort 立即断开，不等关闭握手：对方不应答或者自己要马上停下时用。
+func (c *Client) Abort() {
+	c.ws.CloseNow()
 }

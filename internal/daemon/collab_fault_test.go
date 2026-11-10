@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -526,7 +527,7 @@ func TestCollabFetchTemporaryFailureRecovers(t *testing.T) {
 	rc := m.roomConnFor(p.disc.Key)
 	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": false})
 	waitFor(t, "member offline", func() bool { return !m.roomStatus(p.disc.Key).Connected })
-	rc.closeBulk()
+	rc.closeBulk(false)
 	rc.fetchRound(context.Background())
 	rc.stmu.Lock()
 	missing := rc.missing[a.ID]
@@ -566,7 +567,7 @@ func TestCollabRequestWaitsForAttachments(t *testing.T) {
 	rc := m.roomConnFor(p.disc.Key)
 	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": false})
 	waitFor(t, "member offline", func() bool { return !m.roomStatus(p.disc.Key).Connected })
-	rc.closeBulk()
+	rc.closeBulk(false)
 	rc.fetchRound(context.Background())
 	m.dispatchAll()
 	if st := m.store.AcceptState(r.Execution.ID); st != store.AcceptFetching {
@@ -857,5 +858,95 @@ func TestCollabAddRetryReusesItsWorktree(t *testing.T) {
 	other["worktree"] = "another-wt"
 	if _, err := callErr(m.discMemberAdd, other); err == nil || !strings.Contains(err.Error(), "already created worktree bob-wt") {
 		t.Fatalf("same request with another worktree: %v", err)
+	}
+}
+
+// holdHost 让房主收到这些请求后不应答（连接不断），测试结束时放开。
+func holdHost(t *testing.T, p *collabPair, methods ...string) <-chan string {
+	t.Helper()
+	release := make(chan struct{})
+	held := make(chan string, 64)
+	hold := func(method string) {
+		if !slices.Contains(methods, method) {
+			return
+		}
+		select {
+		case held <- method:
+		default:
+		}
+		<-release
+	}
+	p.host.collab.hostHold.Store(&hold)
+	// 后注册的先跑：在关协作之前放开房主那边挂着的请求
+	t.Cleanup(func() { close(release) })
+	return held
+}
+
+// 房主收了请求不应答（合盖、卡住，连接没断）时，停掉到房主的连接（交接、退出）马上返回，不等那个请求。
+func TestCollabStopWhileHostSilent(t *testing.T) {
+	p := newCollabPair(t)
+	held := holdHost(t, p, "sync", "heartbeat")
+	rc := p.member.roomConnFor(p.disc.Key)
+	rc.poke()
+	select {
+	case <-held:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the host never got a request")
+	}
+	done := make(chan struct{})
+	go func() {
+		rc.stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("stop waited for the unanswered request")
+	}
+}
+
+// 没开始过的连接循环也能停。
+func TestRoomConnStopBeforeRun(t *testing.T) {
+	d, _ := newTestDaemon(t)
+	rc := newRoomConn(d, context.Background(), "room")
+	done := make(chan struct{})
+	go func() {
+		rc.stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("stop blocked on a loop that never ran")
+	}
+	rc.run() // 停了之后才开始：马上结束
+	if !rc.stopped() {
+		t.Fatal("run after stop should end at once")
+	}
+}
+
+// 房主不应答时发言不会一直挂着：后台请求超时断开重连，发言自己也有时限，都给出明确的报错。
+func TestCollabPostWhileHostSilent(t *testing.T) {
+	oldCall, oldUser := collabCallTimeout, collabUserCallTimeout
+	collabCallTimeout, collabUserCallTimeout = 300*time.Millisecond, 300*time.Millisecond
+	t.Cleanup(func() { collabCallTimeout, collabUserCallTimeout = oldCall, oldUser })
+	p := newCollabPair(t)
+	held := holdHost(t, p, "sync", "heartbeat", "post")
+	p.member.roomConnFor(p.disc.Key).poke()
+	select {
+	case <-held:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the host never got a request")
+	}
+	start := time.Now()
+	_, err := callErr(p.member.discPost, map[string]any{"discussion": p.disc.Key, "body": "hello", "clientId": "c-silent"})
+	if err == nil {
+		t.Fatal("post succeeded while the host is silent")
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Fatalf("post took %s", took)
+	}
+	if msg := err.Error(); !strings.Contains(msg, "did not answer") && !strings.Contains(msg, "Nothing was sent") {
+		t.Fatalf("unclear error: %v", err)
 	}
 }

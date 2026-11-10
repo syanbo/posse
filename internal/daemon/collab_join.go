@@ -38,6 +38,21 @@ const collabUnreachable = "Could not reach the host. Check that both Macs are on
 
 var errStopRoom = errors.New("stop")
 
+// 加入者等房主应答的上限。房主不应答但 TCP 没断（合盖、卡住）时，请求会一直等到系统判定连接中断，
+// 期间占着连接锁，发言、退出都要等；超时就当断线，关掉这条连接走重连。测试里调小。
+var (
+	// collabCallTimeout：后台的一次请求（同步一页最多 200 条、领取一轮、补发一条事件、交个人资料、取头像）。
+	// 都是小请求，局域网上远在 1 秒内；给到 60 秒，房主忙（大库同步）也不会误判
+	collabCallTimeout = 60 * time.Second
+	// collabBeatTimeout：心跳。两个心跳间隔（15 秒），房主那边 60 秒没收到才显示离线，30 秒内重连上不会闪成离线
+	collabBeatTimeout = 30 * time.Second
+	// collabUserCallTimeout：用户操作经房主的请求（发言、加 Agent、改设置……），用户在界面上等着，沿用原来的 30 秒
+	collabUserCallTimeout = 30 * time.Second
+)
+
+// errHostStalled 是房主在限定时间内没应答：这条连接已经关掉，按断线重连
+var errHostStalled = errors.New("the host stopped answering; reconnecting")
+
 type roomStatus struct {
 	Connected bool      `json:"connected"`
 	Addr      string    `json:"addr,omitempty"`
@@ -51,9 +66,13 @@ type roomConn struct {
 	mu     sync.Mutex // 一次只有一个调用在用连接（请求、同步、补发）
 	cli    *collaboration.Client
 	pokeCh chan struct{}
+	// ctx、cancel 建的时候就定下，之后不变：stop 不用拿 mu（mu 可能被等房主应答的调用占着）
 	ctx    context.Context
 	cancel context.CancelFunc
 	done   chan struct{}
+	// lmu 护着 started：run 开始了 stop 才等它结束，没开始过的直接返回
+	lmu     sync.Mutex
+	started bool
 
 	fetchCh chan struct{}
 	bmu     sync.Mutex // 附件连接
@@ -71,8 +90,9 @@ type roomConn struct {
 	avatarFailed map[string]bool
 }
 
-func newRoomConn(d *Daemon, room string) *roomConn {
-	return &roomConn{d: d, room: room, pokeCh: make(chan struct{}, 1), fetchCh: make(chan struct{}, 1), done: make(chan struct{}),
+func newRoomConn(d *Daemon, parent context.Context, room string) *roomConn {
+	ctx, cancel := context.WithCancel(parent)
+	return &roomConn{d: d, room: room, ctx: ctx, cancel: cancel, pokeCh: make(chan struct{}, 1), fetchCh: make(chan struct{}, 1), done: make(chan struct{}),
 		missing: map[string]bool{}, retryAt: map[string]time.Time{}, backoff: map[string]time.Duration{}}
 }
 
@@ -85,14 +105,15 @@ func (rc *roomConn) stopped() bool {
 	}
 }
 
+// stop 取消连接循环并等它结束。取消后等着房主应答的请求马上返回，不用等它们放开 mu。
 func (rc *roomConn) stop() {
-	rc.mu.Lock()
-	cancel := rc.cancel
-	rc.mu.Unlock()
-	if cancel != nil {
-		cancel()
+	rc.cancel()
+	rc.lmu.Lock()
+	started := rc.started
+	rc.lmu.Unlock()
+	if started {
+		<-rc.done
 	}
-	<-rc.done
 }
 
 func (rc *roomConn) poke() {
@@ -134,13 +155,19 @@ func (d *Daemon) roomConnFor(room string) *roomConn {
 	return d.collab.rooms[room]
 }
 
-func (rc *roomConn) run(parent context.Context) {
+func (rc *roomConn) run() {
+	ctx := rc.ctx
+	rc.lmu.Lock()
+	if ctx.Err() != nil {
+		// 还没开始就停了
+		rc.lmu.Unlock()
+		close(rc.done)
+		return
+	}
+	rc.started = true
+	rc.lmu.Unlock()
 	defer close(rc.done)
-	ctx, cancel := context.WithCancel(parent)
-	rc.mu.Lock()
-	rc.ctx, rc.cancel = ctx, cancel
-	rc.mu.Unlock()
-	defer cancel()
+	defer rc.cancel()
 	go rc.fetchLoop(ctx)
 	backoff := time.Second
 	for ctx.Err() == nil {
@@ -311,7 +338,7 @@ func (rc *roomConn) session(ctx context.Context, j store.Joined) error {
 		Features []string `json:"features"`
 	}
 	if err := cli.Call(ctx, "hello", collabHello{Room: j.Room, Credential: cred.Credential, Version: collaboration.ProtocolVersion}, &hello); err != nil {
-		cli.Close()
+		closeClient(ctx, cli)
 		return rc.callFailed(err)
 	}
 	// 每次连上都重记：房主升级、降级后按它现在的能力来
@@ -326,8 +353,8 @@ func (rc *roomConn) session(ctx context.Context, j store.Joined) error {
 		rc.mu.Lock()
 		rc.cli = nil
 		rc.mu.Unlock()
-		cli.Close()
-		rc.closeBulk()
+		closeClient(ctx, cli)
+		rc.closeBulk(ctx.Err() != nil)
 		// 和房主断开（不是交接、退出）：已领取、还没开始的轮次等拥有者确认再开始；已经开始的照常做完，结果留在 outbox
 		if ctx.Err() == nil {
 			if n, _ := rc.d.store.PauseOwnQueues(j.Room, collabLostReason); n > 0 {
@@ -416,11 +443,7 @@ func (rc *roomConn) refetchCredential(ctx context.Context, j store.Joined) (cred
 // 然后在本机停用。
 func (rc *roomConn) finishLeave(ctx context.Context) error {
 	rc.mu.Lock()
-	cli := rc.cli
-	var err error
-	if cli != nil {
-		err = cli.Call(ctx, "leave", map[string]any{}, nil)
-	}
+	err := rc.callLocked(ctx, collabCallTimeout, "leave", map[string]any{}, nil)
 	rc.mu.Unlock()
 	if err != nil && !collaboration.IsCode(err, collaboration.CodeRevoked) {
 		return err
@@ -435,11 +458,7 @@ func (rc *roomConn) heartbeat(ctx context.Context) error {
 		Online []string `json:"online"`
 	}
 	rc.mu.Lock()
-	cli := rc.cli
-	var err error
-	if cli != nil {
-		err = cli.Call(ctx, "heartbeat", map[string]any{}, &res)
-	}
+	err := rc.callLocked(ctx, collabBeatTimeout, "heartbeat", map[string]any{}, &res)
 	rc.mu.Unlock()
 	if err != nil {
 		return rc.callFailed(err)
@@ -452,6 +471,24 @@ func (rc *roomConn) heartbeat(ctx context.Context) error {
 	}
 	rc.stmu.Unlock()
 	return nil
+}
+
+// callLocked 在持有 rc.mu 时发一个请求，最多等 timeout。房主没在时限内应答（连接没断）时关掉这条连接：
+// 和断线一样，session 看到连接关了就退出、按退避重连，不留半开的连接给下一次请求用。没连着报 ErrClosed。
+func (rc *roomConn) callLocked(ctx context.Context, timeout time.Duration, method string, params, out any) error {
+	cli := rc.cli
+	if cli == nil {
+		return collaboration.ErrClosed
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	err := cli.Call(cctx, method, params, out)
+	if err != nil && ctx.Err() == nil && errors.Is(cctx.Err(), context.DeadlineExceeded) {
+		log.Printf("collaboration %s: no answer to %s within %s; reconnecting", short(rc.room), method, timeout)
+		cli.Abort()
+		return errHostStalled
+	}
+	return err
 }
 
 // callFailed 看房主的错误是不是终态：撤销了就停在本机缓存上，房主关了共享就慢慢重试。
@@ -510,7 +547,7 @@ func (rc *roomConn) syncLocked(ctx context.Context) error {
 			return err
 		}
 		var b store.SyncBatch
-		if err := rc.cli.Call(ctx, "sync", map[string]any{"since": j.Cursor, "limit": 200}, &b); err != nil {
+		if err := rc.callLocked(ctx, collabCallTimeout, "sync", map[string]any{"since": j.Cursor, "limit": 200}, &b); err != nil {
 			return rc.callFailed(err)
 		}
 		ch, err := rc.d.store.ApplySync(rc.room, rc.d.store.Self(), b)
@@ -553,7 +590,7 @@ func (rc *roomConn) claimLocked(ctx context.Context) error {
 			continue
 		}
 		var res map[string]any
-		if err := rc.cli.Call(ctx, "claim", map[string]string{"execution": x.ID}, &res); err != nil {
+		if err := rc.callLocked(ctx, collabCallTimeout, "claim", map[string]string{"execution": x.ID}, &res); err != nil {
 			if collaboration.IsCode(err, collaboration.CodeConflict) || collaboration.IsCode(err, collaboration.CodeNotFound) {
 				continue // 已经取消或不在了：下一次同步会带来新状态
 			}
@@ -645,7 +682,7 @@ func (rc *roomConn) flushLocked(ctx context.Context) error {
 		return err
 	}
 	for _, it := range items {
-		err := rc.cli.Call(ctx, "event", map[string]any{"execution": it.Exec, "seq": it.Seq, "digest": it.Digest, "event": it.Event}, nil)
+		err := rc.callLocked(ctx, collabCallTimeout, "event", map[string]any{"execution": it.Exec, "seq": it.Seq, "digest": it.Digest, "event": it.Event}, nil)
 		var ce *collaboration.Error
 		switch {
 		case err == nil:
@@ -816,13 +853,27 @@ func (rc *roomConn) bulkClient(ctx context.Context) (*collaboration.Client, erro
 	return cli, nil
 }
 
-func (rc *roomConn) closeBulk() {
+// closeBulk 关掉附件连接；abort 时不等关闭握手（停下来的时候房主可能不应答）。
+func (rc *roomConn) closeBulk(abort bool) {
 	rc.bmu.Lock()
 	defer rc.bmu.Unlock()
 	if rc.bulk != nil {
-		rc.bulk.Close()
+		if abort {
+			rc.bulk.Abort()
+		} else {
+			rc.bulk.Close()
+		}
 		rc.bulk = nil
 	}
+}
+
+// closeClient 断开到房主的连接：要停下了（ctx 已取消）就不等关闭握手，房主不应答时 Close 要等 5 秒，交接、退出跟着等。
+func closeClient(ctx context.Context, cli *collaboration.Client) {
+	if ctx.Err() != nil {
+		cli.Abort()
+		return
+	}
+	cli.Close()
 }
 
 // downloadTo 按附件 ID 分块下载到缓存：先写同目录的临时文件，长度和摘要对上再改名。
@@ -893,9 +944,8 @@ func (rc *roomConn) call(method string, params, out any) error {
 	if rc.cli == nil {
 		return hostOffline(rc)
 	}
-	ctx, cancel := context.WithTimeout(rc.ctx, 30*time.Second)
-	defer cancel()
-	if err := rc.cli.Call(ctx, method, params, out); err != nil {
+	ctx := rc.ctx
+	if err := rc.callLocked(ctx, collabUserCallTimeout, method, params, out); err != nil {
 		var ce *collaboration.Error
 		if errors.As(err, &ce) {
 			if ce.Code == collaboration.CodeRevoked {

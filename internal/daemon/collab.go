@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -62,6 +63,8 @@ type collabState struct {
 	manualFetch bool
 	// listen 测试里换成别的地址（端口 0）
 	listenAddr string
+	// hostHold 是测试让房主收到请求后不应答（连接不断）：认证通过后调用，返回才接着处理
+	hostHold atomic.Pointer[func(method string)]
 }
 
 func (d *Daemon) collabPort() int {
@@ -152,9 +155,9 @@ func (d *Daemon) collabEnsure() {
 		if rc := c.rooms[j.Room]; rc != nil && !rc.stopped() {
 			continue
 		}
-		rc := newRoomConn(d, j.Room)
+		rc := newRoomConn(d, c.ctx, j.Room)
 		c.rooms[j.Room] = rc
-		go rc.run(c.ctx)
+		go rc.run()
 	}
 }
 
@@ -442,6 +445,9 @@ func (h collabHost) Serve(ctx context.Context, s *collaboration.Session, method 
 	room, gen, err := h.auth(s)
 	if err != nil {
 		return nil, err
+	}
+	if hold := d.collab.hostHold.Load(); hold != nil {
+		(*hold)(method)
 	}
 	// 只读访客：只放行读取和自己的资料、退出，其余一律拒绝（写入口各自在事务里还会再核对一次）
 	switch method {
