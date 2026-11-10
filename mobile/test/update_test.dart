@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
@@ -14,6 +16,20 @@ Map<String, Object?> _latest(int build) => {
 };
 
 void main() {
+  test(
+    'a latest.json that is not 200 is a failed check, not "up to date"',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((req) {
+        req.response.statusCode = HttpStatus.notFound;
+        req.response.close();
+      });
+      addTearDown(server.close);
+      final url = Uri.parse('http://127.0.0.1:${server.port}/latest.json');
+      await expectLater(fetchReleaseJson(url), throwsA(isA<HttpException>()));
+    },
+  );
+
   test('parses latest.json and skips broken ones', () {
     final r = AppRelease.parse(_latest(460))!;
     expect(r.version, '0.1.1');

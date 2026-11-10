@@ -129,13 +129,20 @@ class UpdateChecker extends ChangeNotifier {
   }
 }
 
-Future<Object?> _fetchLatest() async {
+Future<Object?> _fetchLatest() => fetchReleaseJson(Uri.parse(_latestUrl));
+
+/// 取 latest.json。不是 200 时报错：一次 404、5xx 不能当成「已是最新」，按查失败下次再查。
+@visibleForTesting
+Future<Object?> fetchReleaseJson(Uri url) async {
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
   try {
-    final req = await client.getUrl(Uri.parse(_latestUrl));
+    final req = await client.getUrl(url);
     req.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
     final res = await req.close().timeout(const Duration(seconds: 15));
-    if (res.statusCode != 200) return null;
+    if (res.statusCode != 200) {
+      await res.drain<void>();
+      throw HttpException('latest.json: HTTP ${res.statusCode}', uri: url);
+    }
     return jsonDecode(await res.transform(utf8.decoder).join());
   } finally {
     client.close();
