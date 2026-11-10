@@ -239,12 +239,21 @@
       (el) => !el.disabled && el.tabIndex >= 0 && visible(el),
     );
 
+  // 单字符按键的 event.code 按美式键盘的物理键给：数字是 Digit1，符号各有名字，不能一律拼 Key。
+  const symbolCodes = { " ": "Space", "-": "Minus", "_": "Minus", "=": "Equal", "+": "Equal", "[": "BracketLeft", "{": "BracketLeft", "]": "BracketRight", "}": "BracketRight", "\\": "Backslash", "|": "Backslash", ";": "Semicolon", ":": "Semicolon", "'": "Quote", '"': "Quote", ",": "Comma", "<": "Comma", ".": "Period", ">": "Period", "/": "Slash", "?": "Slash", "`": "Backquote", "~": "Backquote", "!": "Digit1", "@": "Digit2", "#": "Digit3", "$": "Digit4", "%": "Digit5", "^": "Digit6", "&": "Digit7", "*": "Digit8", "(": "Digit9", ")": "Digit0" };
+  const codeFor = (key) => {
+    if (key.length !== 1) return key;
+    if (/[a-z]/i.test(key)) return "Key" + key.toUpperCase();
+    if (/[0-9]/.test(key)) return "Digit" + key;
+    return symbolCodes[key] || "";
+  };
+
   // press 派发的是脚本合成的按键，浏览器不会照真按键做默认动作，常用的几个在这里补上。
   const press = (key, target) => {
     const el = target ? find(target) : document.activeElement || document.body;
     if (target) el.focus();
     const k = key === "Space" ? " " : key;
-    const init = { key: k, code: key.length === 1 ? "Key" + key.toUpperCase() : key, keyCode: keyCodes[key] || k.toUpperCase().charCodeAt(0), bubbles: true, cancelable: true, composed: true };
+    const init = { key: k, code: codeFor(key), keyCode: keyCodes[key] || k.toUpperCase().charCodeAt(0), bubbles: true, cancelable: true, composed: true };
     const go = el.dispatchEvent(new KeyboardEvent("keydown", init));
     if (go && k.length === 1) el.dispatchEvent(new KeyboardEvent("keypress", init));
     if (go) {
