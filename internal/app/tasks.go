@@ -649,15 +649,15 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 			if task.Coordinator != "" {
 				placeholder = m.TasksReplyForDispatcher()
 			}
-			if composer(c, &a.replyText, placeholder, m.TasksReplyButton(), true) {
+			if a.composer(c, &a.replyText, placeholder, m.TasksReplyButton(), true) {
 				go a.reply(q.ID, strings.TrimSpace(a.replyText))
 			}
 		} else if task.Status == "running" && task.Terminal != nil && task.DiscussionID == "" {
-			if composer(c, &a.noteText, m.TasksNotePlaceholder(), m.TasksSend(), false) {
+			if a.composer(c, &a.noteText, m.TasksNotePlaceholder(), m.TasksSend(), false) {
 				go a.sendNote(task.ID, strings.TrimSpace(a.noteText))
 			}
 		} else if followable(task) {
-			if composer(c, &a.noteText, m.TasksFollowUpPlaceholder(), m.TasksSend(), false) {
+			if a.composer(c, &a.noteText, m.TasksFollowUpPlaceholder(), m.TasksSend(), false) {
 				go a.sendNote(task.ID, strings.TrimSpace(a.noteText))
 			}
 		}

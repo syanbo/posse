@@ -438,9 +438,9 @@ func vline(c *ui.Context) ui.Element {
 	return ui.Box(c).Width(hairline).Shrink(0).Background(colors(c.Theme()).line)
 }
 
-// composer 是一体的输入区：圆角框里是输入，右下角是发送按钮，⌘↩ 也能发送；聚焦时描边换成焦点色。
+// composer 是一体的输入区：圆角框里是输入，右下角是发送按钮，sendMessage 的键（⌘↩）也能发送；聚焦时描边换成焦点色。
 // 它自己就是框，外面不再套卡片。返回这一帧是否要发送（内容不为空）。
-func composer(c *ui.Context, value *string, placeholder, verb string, multiline bool) bool {
+func (a *app) composer(c *ui.Context, value *string, placeholder, verb string, multiline bool) bool {
 	t := c.Theme()
 	box := ui.Column(c).Radius(rComposer).Background(colors(t).card).Padding(12, 12, 12, 16).Gap(6)
 	sent := false
@@ -456,9 +456,9 @@ func composer(c *ui.Context, value *string, placeholder, verb string, multiline 
 			in.Shortcut(0, ui.KeyDown)
 		}
 		// 中文输入法拼字时的回车是确认拼写，不是发送
-		sent = (sent || in.Shortcut(ui.Cmd, ui.KeyEnter)) && !in.Composing()
+		sent = (sent || a.pressedIn(in, "sendMessage")) && !in.Composing()
 		ui.Row(c).Justify(ui.End).Children(func() {
-			btn := pressable(accentButton(c, verb)).Tooltip(verb + " ⌘↩")
+			btn := pressable(accentButton(c, verb)).Tooltip(a.withKey(verb, "sendMessage"))
 			if strings.TrimSpace(*value) == "" {
 				btn.Disabled(true).Opacity(0.5)
 			} else if btn.Clicked() {

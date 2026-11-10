@@ -1743,7 +1743,7 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 			placeholder = m.DiscPlaceholderTo(mem.Name)
 		}
 		in = ui.TextAreaBase(c.Key("disc-input"), &b.text).Placeholder(placeholder).Label(placeholder).Height(sz(64)).FontSize(fsBody)
-		sent = in.Shortcut(ui.Cmd, ui.KeyEnter) && !in.Composing()
+		sent = a.pressedIn(in, "sendMessage") && !in.Composing()
 		// 打 @ 弹出候选（回答问题时不弹）：光标前是 @ 加没打完的名字，没按 Esc 关掉过
 		if b.at.caretTo >= 0 && b.at.focus {
 			in.SetTextSelection(b.at.caretTo, b.at.caretTo)
@@ -1797,7 +1797,7 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 			if question != nil {
 				verb = m.TasksReplyButton()
 			}
-			btn := pressable(accentButton(c, verb)).Tooltip(verb + " ⌘↩")
+			btn := pressable(accentButton(c, verb)).Tooltip(a.withKey(verb, "sendMessage"))
 			empty := strings.TrimSpace(b.text) == "" && (len(b.atts) == 0 || question != nil)
 			if empty || b.sending {
 				btn.Disabled(true).Opacity(0.5)

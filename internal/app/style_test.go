@@ -15,8 +15,9 @@ func TestComposer(t *testing.T) {
 	for _, multiline := range []bool{false, true} {
 		var value string
 		sent := 0
+		a := &app{}
 		tt := newTester(func(c *ui.Context) {
-			if composer(c, &value, "说点什么", "发送", multiline) {
+			if a.composer(c, &value, "说点什么", "发送", multiline) {
 				sent++
 				value = ""
 			}

@@ -305,10 +305,13 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		if a.pressed(c, "prevTab") {
 			a.stepTab(w, -1)
 		}
+		// selectTab 表里只登记了 ⌘1，修饰键照它、数字键 1…9 依次对应第几个终端
 		keys := []ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5, ui.Key6, ui.Key7, ui.Key8, ui.Key9}
-		for i, k := range keys {
-			if i < len(w.Terminals) && a.keyRec == nil && c.Shortcut(ui.Cmd, k) {
-				a.activeTerm[w.ID] = w.Terminals[i].ID
+		for _, kc := range a.keysFor("selectTab") {
+			for i, k := range keys {
+				if i < len(w.Terminals) && a.keyRec == nil && c.Shortcut(kc.mods, k) {
+					a.activeTerm[w.ID] = w.Terminals[i].ID
+				}
 			}
 		}
 	}
@@ -2116,7 +2119,7 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 				ui.Row(c).Gap(12).Padding(2, 4).Justify(ui.Center).Wrap().Children(func() {
 					shortcutHint(c, a.keyText("newTerminal"), L(c).EmptyNewTerminal())
 					shortcutHint(c, a.keyText("newWorkspace"), L(c).EmptyNewWorkspace())
-					shortcutHint(c, "⌘1…9", L(c).EmptySwitchTerminal())
+					shortcutHint(c, keyActionByID("selectTab").text, L(c).EmptySwitchTerminal())
 					shortcutHint(c, a.keyText("quickOpen"), L(c).EmptyOpenFile())
 				})
 			})
