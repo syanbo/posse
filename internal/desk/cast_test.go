@@ -152,6 +152,62 @@ func TestCastReportResetsQuiet(t *testing.T) {
 	}
 }
 
+// hello 丢了、报告照常到：按报告续命，不在 helloWait 到点时按没有 hello 断开。
+func TestCastReportWithoutHello(t *testing.T) {
+	oldQuiet, oldGone, oldHello := reportQuiet, reportGone, helloWait
+	reportQuiet, reportGone = 300*time.Millisecond, 500*time.Millisecond
+	helloWait = 400 * time.Millisecond
+	t.Cleanup(func() {
+		reportQuiet, reportGone, helloWait = oldQuiet, oldGone, oldHello
+	})
+
+	pr, pw := io.Pipe()
+	t.Cleanup(func() { pw.Close() })
+	addr := freeUDP(t)
+	done := make(chan error, 1)
+	go func() { done <- Cast(pr, io.Discard, addr) }()
+	time.Sleep(30 * time.Millisecond)
+
+	conn, err := net.Dial("udp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	_, toMac := TestKeys()
+	aead, err := NewAEAD(toMac)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := make([]byte, 36)
+	binary.BigEndian.PutUint32(body[12:16], 100)
+	var n uint64
+	until := time.Now().Add(1200 * time.Millisecond)
+	for time.Now().Before(until) {
+		n++
+		pkt, err := Seal(aead, DirToMac, PacketReport, n, body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := conn.Write(pkt); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("stopped while reports were flowing: %v", err)
+	default:
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrNoReport) {
+			t.Fatalf("err = %v, want the report timeout once reports stop", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("did not stop after reports ended")
+	}
+}
+
 // 断流超过 reportQuiet 先暂停：不结束，报告回来就接着发，请一个关键帧、码率减半
 func TestCastPausesAndResumes(t *testing.T) {
 	oldQuiet, oldGone, oldHello := reportQuiet, reportGone, helloWait

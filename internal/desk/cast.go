@@ -700,9 +700,9 @@ func (c *caster) recv() {
 			}
 			log.Printf("desk: hello from %s", addr)
 		case PacketReport:
-			if c.seenHello {
-				c.quietDeadline = time.Now().Add(reportQuiet)
-			}
+			// 解得开的报告和 hello 一样证明手机在：hello 丢了、报告到了时也从这里起算，不再等满 helloWait 按没有 hello 断开
+			c.seenHello = true
+			c.quietDeadline = time.Now().Add(reportQuiet)
 			c.notePeer(addr)
 			c.resume()
 			c.onReport(plain)
