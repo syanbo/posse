@@ -2,6 +2,7 @@ package app
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -131,6 +132,8 @@ type historyView struct {
 	wAgent  int
 	visible bool
 	fetched time.Time
+	// inflight 是正在等的列表请求数：定时刷新只在没有在途请求时发，慢的时候不一秒叠一个
+	inflight int
 }
 
 // setSessions 换上新的会话列表，顺便分好组：分组要比较日期或目录，不放在每帧里做。
@@ -248,8 +251,15 @@ func (a *app) fetchHistory(req int) {
 	if params["query"] != "" {
 		method = "history.search"
 	}
-	err := a.call(method, params, &res, 30*time.Second)
+	// 报错写在历史页里（failed），不经 a.call 再弹一遍错误条：定时刷新失败时错误条不会每 15 秒重弹
 	h.mu.Lock()
+	h.inflight++
+	h.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	err := a.c.Call(ctx, method, params, &res)
+	cancel()
+	h.mu.Lock()
+	h.inflight--
 	h.fetched = time.Now()
 	stale := req != h.req
 	h.mu.Unlock()
@@ -286,7 +296,7 @@ func (a *app) fetchHistory(req int) {
 func (a *app) historyTick() {
 	h := &a.history
 	h.mu.Lock()
-	due := h.visible && time.Since(h.fetched) > 15*time.Second
+	due := h.visible && h.inflight == 0 && time.Since(h.fetched) > 15*time.Second
 	req := h.req
 	if due {
 		// 轮询协程不碰界面状态，沿用上次的查询条件
@@ -366,7 +376,9 @@ func (a *app) resumeSession(m locales.Messages, s history.Session) {
 			ID          string `json:"id"`
 			WorkspaceID string `json:"workspaceId"`
 		}
-		err := a.call("history.resume", map[string]any{"session": s.ID, "cols": 120, "rows": 36}, &t, 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := a.c.Call(ctx, "history.resume", map[string]any{"session": s.ID, "cols": 120, "rows": 36}, &t)
+		cancel()
 		var re *rpc.Error
 		if errors.As(err, &re) && re.Code == rpc.CodeNotFound && s.Cwd != "" && strings.Contains(re.Message, "no workspace contains") {
 			a.win.Update(func() {
@@ -383,6 +395,10 @@ func (a *app) resumeSession(m locales.Messages, s history.Session) {
 					})
 			})
 			return
+		}
+		// 目录不在工作区里时只问要不要加成项目，不同时在错误条上报一遍；其余的报错照常上错误条
+		if err != nil {
+			a.update(func() { a.err = errtext.Text(err) })
 		}
 		a.refresh()
 		if err == nil {

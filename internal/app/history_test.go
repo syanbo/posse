@@ -1,15 +1,19 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/client"
+	"posse/internal/rpc"
 )
 
 // 历史列表里上下键换选中：只走看得见的会话，折起来的分组跳过，到头不动。
@@ -116,5 +120,43 @@ func TestHistoryGroupByFolder(t *testing.T) {
 		if h.sessions[i].ID != id {
 			t.Fatalf("time order broken at %d: %s", i, h.sessions[i].ID)
 		}
+	}
+}
+
+// 历史列表取不到时报错只写在历史页里，不弹错误条；请求还在途时定时刷新不再发第二个。
+func TestFetchHistoryErrors(t *testing.T) {
+	release := make(chan struct{})
+	var calls atomic.Int32
+	_, c := startFakeDaemon(t, map[string]rpc.Handler{"history.list": func(ctx context.Context, raw json.RawMessage) (any, error) {
+		calls.Add(1)
+		<-release
+		return nil, rpc.Errorf(rpc.CodeConflict, "index busy")
+	}})
+	a := &app{c: c}
+	h := &a.history
+	h.visible = true
+	h.mu.Lock()
+	h.req = 1
+	h.mu.Unlock()
+	done := make(chan struct{})
+	go func() {
+		a.fetchHistory(1)
+		close(done)
+	}()
+	for calls.Load() == 0 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	for range 3 {
+		a.historyTick()
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("%d requests in flight", n)
+	}
+	close(release)
+	<-done
+	a.runPending()
+	if a.err != "" {
+		t.Fatalf("err bar %q", a.err)
 	}
 }
