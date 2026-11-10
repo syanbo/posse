@@ -397,7 +397,6 @@ func (a *app) sidebarSlot() bool { return !a.state.SidebarHidden || a.sidebarSho
 const (
 	titleGap   = 18 // 红绿灯到应用名
 	appNameGap = 12 // 应用名到侧栏开关
-	toggleBox  = 28 // iconButton 的方框
 )
 
 // appName 是包的显示名：PosseDev 是"Posse Dev"，和日常的窗口分得清。不在 .app 里运行时是 Posse。
@@ -422,7 +421,7 @@ func appNameWidth(c *ui.Context) float32 {
 // appNameWidths 只在界面线程读写。
 var appNameWidths = map[[2]float32]float32{}
 
-func titleLead(c *ui.Context) float32 { return appNameWidth(c) + appNameGap + toggleBox }
+func titleLead(c *ui.Context) float32 { return appNameWidth(c) + appNameGap + buttonBox() }
 
 // barInset 是侧栏不占位置时主区域顶栏左边要让出的宽度：红绿灯和浮在旁边的应用名、侧栏开关。
 func (a *app) barInset(c *ui.Context) float32 {
