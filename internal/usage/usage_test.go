@@ -299,3 +299,74 @@ func TestClaudePlan(t *testing.T) {
 		t.Fatalf("merged %+v", got)
 	}
 }
+
+// 对某类附加项完整的读数里没有这一项：比它旧的旧项去掉（关了按量付费、取消了分池）；
+// 不完整的读数（statusLine）没有时照旧沿用；完整读数比旧项旧时不去掉；读取失败不改动已有的。
+func TestMergeDropsGoneExtras(t *testing.T) {
+	now := time.UnixMilli(1792430000000)
+	s := Open(t.TempDir())
+	with := `{"billingCycleStart":"1790812800000","billingCycleEnd":"1793491200000","planUsage":{"totalSpend":4110,"limit":40000,"autoPercentUsed":2.5,"apiPercentUsed":18.2,"totalPercentUsed":10.3},"spendLimitUsage":{"individualUsed":250,"individualLimit":2000}}`
+	without := `{"billingCycleStart":"1790812800000","billingCycleEnd":"1793491200000","planUsage":{"totalSpend":4110,"limit":40000,"totalPercentUsed":10.3}}`
+	u, ok := cursorUsage([]byte(with), now)
+	if !ok || u.Covers != CoverPools|CoverOnDemand {
+		t.Fatalf("cursor covers %v", u.Covers)
+	}
+	s.Update(u)
+	// 读取失败：没有读数，什么都不并
+	if _, ok := cursorUsage([]byte(`{"error":"x"}`), now.Add(time.Minute)); ok {
+		t.Fatal("failed read produced a reading")
+	}
+	if got := s.List(now)[0]; got.OnDemand == nil || len(got.Windows) != 3 {
+		t.Fatalf("after failed read %+v", got)
+	}
+	// 完整但比旧项旧的读数：不去掉
+	old, _ := cursorUsage([]byte(without), now.Add(-time.Hour))
+	s.Update(old)
+	if got := s.List(now)[0]; got.OnDemand == nil || len(got.Windows) != 3 {
+		t.Fatalf("older complete reading dropped items %+v", got)
+	}
+	// 完整、更新的读数里没有了：去掉
+	u, _ = cursorUsage([]byte(without), now.Add(time.Hour))
+	s.Update(u)
+	got := s.List(now.Add(time.Hour))[0]
+	if got.OnDemand != nil || len(got.Windows) != 1 {
+		t.Fatalf("gone extras kept %+v", got)
+	}
+	// 落盘的读数不带 Covers
+	if s.List(now)[0].Covers != 0 {
+		t.Fatal("covers stored")
+	}
+
+	// Claude：statusLine 不完整，没带分池和分摊时照旧沿用
+	c := Open(t.TempDir())
+	c.Update(Usage{Agent: "claude", UpdatedAt: 1000, Covers: CoverPools | CoverShares,
+		Windows: []Window{{Percent: 52, Minutes: 300}, {Percent: 12, Minutes: 10080, Name: "Fable"}},
+		Shares:  &Shares{Items: []Share{{Name: "Claude Code", Percent: 100}}}})
+	c.Update(Usage{Agent: "claude", UpdatedAt: 5000, Windows: []Window{{Percent: 60, Minutes: 300}}})
+	cu := c.List(time.UnixMilli(6000))[0]
+	if len(cu.Windows) != 2 || cu.Shares == nil {
+		t.Fatalf("statusline dropped extras %+v", cu)
+	}
+	// 缓存的读数带了 limits（空的）和分摊：Fable 分池去掉，分摊换新
+	c.Update(Usage{Agent: "claude", UpdatedAt: 7000, Covers: CoverPools | CoverShares,
+		Windows: []Window{{Percent: 61, Minutes: 300}},
+		Shares:  &Shares{Items: []Share{{Name: "Claude Code", Percent: 80}}}})
+	cu = c.List(time.UnixMilli(8000))[0]
+	if len(cu.Windows) != 1 || cu.Shares == nil || cu.Shares.Items[0].Percent != 80 {
+		t.Fatalf("cache reading kept the cancelled pool %+v", cu)
+	}
+}
+
+// Claude 缓存：哪一类的键在才算这一类完整，键不在（旧版 Claude 不写）不算。
+func TestClaudeCacheCovers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "claude.json")
+	os.WriteFile(path, []byte(`{"cachedUsageUtilization":{"fetchedAtMs":1000,"utilization":{"five_hour":{"utilization":5},"limits":[]}}}`), 0o644)
+	u, ok := ClaudeCache(path)
+	if !ok || u.Covers != CoverPools {
+		t.Fatalf("covers %v ok %v", u.Covers, ok)
+	}
+	os.WriteFile(path, []byte(`{"cachedUsageUtilization":{"fetchedAtMs":1000,"utilization":{"five_hour":{"utilization":5},"spend":{"enabled":false},"seven_day_breakdown":{"rows":[]}}}}`), 0o644)
+	if u, _ = ClaudeCache(path); u.Covers != CoverOnDemand|CoverShares {
+		t.Fatalf("covers %v", u.Covers)
+	}
+}

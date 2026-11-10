@@ -108,6 +108,17 @@ func ClaudeCache(path string) (Usage, bool) {
 	}
 	c := cfg.Cache.Utilization
 	u := Usage{Agent: "claude", UpdatedAt: cfg.Cache.FetchedAtMs}
+	// 缓存是 Claude 整份存下的接口回复。哪一类的键在、就说明这一类是完整的（键在而里面没有就是确实没有）；
+	// 键不在分不清是没有还是这个版本的 Claude 不写，不算完整。从来不带重置卡
+	if c.Limits != nil {
+		u.Covers |= CoverPools
+	}
+	if c.Breakdown != nil {
+		u.Covers |= CoverShares
+	}
+	if c.Spend != nil {
+		u.Covers |= CoverOnDemand
+	}
 	if a := cfg.Account; a != nil {
 		tier := a.OrgTier
 		if a.UserTier != nil && *a.UserTier != "" {

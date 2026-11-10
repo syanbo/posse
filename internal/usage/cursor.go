@@ -176,7 +176,9 @@ func cursorUsage(raw []byte, now time.Time) (Usage, bool) {
 	if start := epochMs(r.CycleStart.v); start > 0 && w.ResetsAt > start {
 		w.Minutes = int((w.ResetsAt - start) / 60000)
 	}
-	u := Usage{Agent: "cursor", Windows: []Window{w}, UpdatedAt: now.UnixMilli()}
+	// 一次 GetCurrentPeriodUsage 的整份回复（请求失败、解析不了时走不到这里）：分池百分比和 spendLimitUsage
+	// 不在就是这个账户确实没有（套餐没分池、没开按量付费）
+	u := Usage{Agent: "cursor", Windows: []Window{w}, UpdatedAt: now.UnixMilli(), Covers: CoverPools | CoverOnDemand}
 	// 套餐里 Auto 和第三方模型（API）各是一池，分别有百分比
 	for _, pool := range []struct {
 		name string

@@ -61,7 +61,20 @@ type Usage struct {
 	Shares    *Shares  `json:"shares,omitempty"`
 	Resets    *Resets  `json:"resets,omitempty"`
 	UpdatedAt int64    `json:"updatedAt"` // agent 给出这份读数的时间，Unix 毫秒
+	// Covers 是这份读数对哪几类附加项是完整的：读到了、而这类里没有的那项就是确实没有了（取消了分池、关掉了按量付费），
+	// 并入时去掉比它旧的旧项。只在读取的这一刻有，不落盘、不给界面
+	Covers Covers `json:"-"`
 }
+
+// Covers 是附加项的类别，按位组合。
+type Covers uint8
+
+const (
+	CoverPools    Covers = 1 << iota // 有名字的分池窗口
+	CoverOnDemand                    // 按量付费
+	CoverShares                      // 用量分摊
+	CoverResets                      // 重置卡
+)
 
 // merge 把新读数并进旧的：总额度取较新的一份，分池和各项各取较新的。
 func merge(old, in Usage) Usage {
@@ -103,12 +116,17 @@ func merge(old, in Usage) Usage {
 	}
 	var names []string
 	named := map[string]Window{}
-	for _, u := range []Usage{old, in} {
+	for i, u := range []Usage{old, in} {
 		for _, w := range u.Windows {
 			if w.Name == "" {
 				continue
 			}
 			w.At = at(w.At, u.UpdatedAt)
+			// 对分池完整的新读数里没有、又不比它新的旧分池：已经没有了
+			if i == 0 && in.Covers&CoverPools != 0 && w.At <= in.UpdatedAt &&
+				!slices.ContainsFunc(in.Windows, func(x Window) bool { return x.Name == w.Name }) {
+				continue
+			}
 			if cur, ok := named[w.Name]; !ok || w.At >= cur.At {
 				if !ok {
 					names = append(names, w.Name)
@@ -134,6 +152,19 @@ func merge(old, in Usage) Usage {
 		out.Resets = old.Resets
 	} else {
 		out.Resets = in.Resets
+	}
+	// 对这一类完整的新读数里没有这一项：比它旧的旧项去掉
+	gone := func(c Covers, has bool, oldAt int64) bool {
+		return in.Covers&c != 0 && !has && at(oldAt, old.UpdatedAt) <= in.UpdatedAt
+	}
+	if old.OnDemand != nil && gone(CoverOnDemand, in.OnDemand != nil, old.OnDemand.At) {
+		out.OnDemand = nil
+	}
+	if old.Shares != nil && gone(CoverShares, in.Shares != nil, old.Shares.At) {
+		out.Shares = nil
+	}
+	if old.Resets != nil && gone(CoverResets, in.Resets != nil, old.Resets.At) {
+		out.Resets = nil
 	}
 	// 各项都记上自己的读数时间，以后再并时不会被当成整家最新的那份
 	if out.OnDemand != nil {
