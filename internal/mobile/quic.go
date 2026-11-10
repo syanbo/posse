@@ -242,7 +242,7 @@ func (s *Server) serveQUIC(qc *quic.Conn) {
 	// 和 WebSocket 的读上限一致：手机发来的只有请求和分块上传的图片
 	c.ReadLimit = 4 << 20
 	w := &quicWire{c: c}
-	s.serveWire(qc.Context(), w)
+	s.serveWire(qc.Context(), w, nil)
 	if !c.Closing() {
 		c.CloseNow()
 	}

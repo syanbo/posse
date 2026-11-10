@@ -11,46 +11,87 @@ import (
 	"github.com/coder/websocket"
 )
 
-// 真实的 WebSocket：手机断了网（连接还在、不回关闭帧），服务端读循环照常在 Read 里。Close 到 closeWait 就断开，
-// 不等关闭握手的 5 秒（websocket 库的 CloseNow 在关闭中会去等那次握手，不能靠它）。
-func TestCloseRealSilentWebsocket(t *testing.T) {
+// 真实的 WebSocket 连接，服务端照 serveWS 留住底层连接：
+//   - idle：手机断了网（连接在、不回关闭帧），服务端读循环在 Read 里；
+//   - busy：手机发了一条请求后断网，服务端正在处理、没在 Read；
+//   - normal：连着的手机照常收到 GoingAway；
+//   - revoke：撤销设备时同样不等断网的手机 5 秒。
+func TestCloseRealWebsocket(t *testing.T) {
 	defer func(v time.Duration) { closeWait = v }(closeWait)
 	closeWait = 300 * time.Millisecond
-	s := &Server{conns: map[*conn]struct{}{}}
-	served := make(chan struct{})
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ws, err := websocket.Accept(w, r, nil)
-		if err != nil {
-			return
-		}
-		defer ws.CloseNow()
-		// 照 serveWire：连接自己的 ctx，读循环一直 Read(ctx)
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		c := &conn{ws: ws, ctx: ctx, cancel: cancel}
-		s.mu.Lock()
-		s.conns[c] = struct{}{}
-		s.mu.Unlock()
-		close(served)
-		for {
-			if _, _, err := ws.Read(ctx); err != nil {
+	for _, mode := range []string{"idle", "busy", "normal", "revoke"} {
+		t.Run(mode, func(t *testing.T) {
+			s := &Server{conns: map[*conn]struct{}{}}
+			var kept *hijackKeeper
+			ready := make(chan struct{})
+			release := make(chan struct{})
+			defer close(release)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				keep := &hijackKeeper{ResponseWriter: w}
+				kept = keep
+				ws, err := websocket.Accept(keep, r, nil)
+				if err != nil {
+					return
+				}
+				defer ws.CloseNow()
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				c := &conn{ws: ws, ctx: ctx, cancel: cancel, abort: keep.abort, device: Device{ID: "phone"}}
+				s.mu.Lock()
+				s.conns[c] = struct{}{}
+				s.mu.Unlock()
+				if mode == "busy" {
+					if _, _, err := ws.Read(ctx); err != nil {
+						return
+					}
+					close(ready)
+					<-release // 正在处理这条请求
+					return
+				}
+				close(ready)
+				ws.Read(ctx)
+			}))
+			defer srv.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			peer, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer peer.CloseNow()
+			if mode == "busy" {
+				if err := peer.Write(ctx, websocket.MessageText, []byte("request")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			<-ready
+			peerErr := make(chan error, 1)
+			if mode == "normal" {
+				go func() {
+					_, _, err := peer.Read(ctx)
+					peerErr <- err
+				}()
+			}
+			start := time.Now()
+			if mode == "revoke" {
+				s.dropDevices([]string{"phone"})
+			} else {
+				s.Close()
+			}
+			took := time.Since(start)
+			if limit := closeWait + closeGrace + 200*time.Millisecond; took > limit {
+				t.Fatalf("took %s, want under %s", took, limit)
+			}
+			if mode == "normal" {
+				if err := <-peerErr; websocket.CloseStatus(err) != websocket.StatusGoingAway {
+					t.Fatalf("peer got %v", err)
+				}
 				return
 			}
-		}
-	}))
-	defer srv.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	// 手机连上后什么都不读：收不到关闭帧，也不回
-	peer, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http"), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer peer.CloseNow()
-	<-served
-	start := time.Now()
-	s.Close()
-	if took := time.Since(start); took > 2*time.Second {
-		t.Fatalf("Close took %s", took)
+			// 断网的那条也真的断开了：服务端的底层连接已经关掉，不是留着等进程退出
+			if err := kept.conn.SetReadDeadline(time.Now()); err == nil {
+				t.Fatal("the underlying connection is still open after Close")
+			}
+		})
 	}
 }

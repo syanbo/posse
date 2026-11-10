@@ -4,6 +4,7 @@
 package mobile
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -123,8 +124,7 @@ func (s *Server) Close() {
 	if srv != nil {
 		srv.Close()
 	}
-	var wg sync.WaitGroup
-	var slow []*conn
+	var ws []*conn
 	for _, c := range conns {
 		// QUIC 连接当场关：后面关 Transport 只在本地销毁连接、不通知手机；交接、重启时新进程紧接着
 		// 听同一个端口，手机也收不到端口不可达，要等测延迟连续超时（十几秒）才发现断了
@@ -132,9 +132,22 @@ func (s *Server) Close() {
 			q.c.CloseNow()
 			continue
 		}
-		// WebSocket 的关闭握手要等手机回一帧，断了网的手机不回，一条就要等 5 秒：一起关，限时等
-		slow = append(slow, c)
-		wg.Go(func() { c.ws.Close(websocket.StatusGoingAway, "host shutting down") })
+		ws = append(ws, c)
+	}
+	closeConns(ws, websocket.StatusGoingAway, "host shutting down")
+	s.closeQUIC()
+}
+
+// closeConns 一起关这些连接：先走关闭握手（连着的手机收到关闭原因），closeWait 还没回的是断了网的，
+// 直接关底层连接。不能用 CloseNow：websocket 库见已经在关就去等那次握手，照样 5 秒。
+// 断开后再等 closeGrace 让关闭的协程收尾；还没收完的不再等，底层连接已经关了，它们读写出错就返回。
+func closeConns(cs []*conn, code websocket.StatusCode, reason string) {
+	if len(cs) == 0 {
+		return
+	}
+	var wg sync.WaitGroup
+	for _, c := range cs {
+		wg.Go(func() { c.ws.Close(code, reason) })
 	}
 	done := make(chan struct{})
 	go func() {
@@ -143,22 +156,29 @@ func (s *Server) Close() {
 	}()
 	select {
 	case <-done:
+		return
 	case <-time.After(closeWait):
-		// 过时还没回的直接断开。不能用 CloseNow：websocket 库见已经在关就去等那次关闭握手，照样 5 秒。
-		// 结束读循环的 ctx：库在 ctx 结束时关掉底层连接，等着的关闭握手跟着返回
-		for _, c := range slow {
-			if c.cancel != nil {
-				c.cancel()
-			}
-		}
-		<-done
 	}
-	s.closeQUIC()
+	for _, c := range cs {
+		if c.abort != nil {
+			c.abort()
+		}
+		if c.cancel != nil {
+			c.cancel()
+		}
+	}
+	select {
+	case <-done:
+	case <-time.After(closeGrace):
+	}
 }
 
 // closeWait 是退出时等手机回关闭握手的时间：连着的手机（局域网、经中转）几十到几百毫秒就回，
 // 过了还没回的是断了网的，不再等（常驻进程退出、交接都在等这一步）
 var closeWait = time.Second
+
+// closeGrace 是直接断开之后还等关闭的协程多久。
+const closeGrace = 300 * time.Millisecond
 
 // Pair 返回配对码（必要时开始监听）。rotate 时作废还没用过的旧码。
 // addr 为空时自动选 Tailscale 或局域网地址，写法见 ResolveEndpoint。
@@ -245,9 +265,8 @@ func (s *Server) dropDevices(ids []string) {
 		}
 	}
 	s.mu.Unlock()
-	for _, c := range drop {
-		c.ws.Close(4001, "Unauthorized")
-	}
+	// 撤销设备不能让调用方等断网的手机一条 5 秒：一起关、限时，过时的直接断开底层连接
+	closeConns(drop, 4001, "Unauthorized")
 	s.dropRelays(ids)
 }
 
@@ -255,7 +274,9 @@ func (s *Server) serveWS(w http.ResponseWriter, r *http.Request) {
 	// 手机 App 的 WebSocket 不带 Origin；安全靠 E2EE 和设备 token
 	// 不开 permessage-deflate：消息都是密文（分帧 2 是密文的 base64，只有 HuffmanOnly 压得动、约少四分之一；
 	// 分帧 3 是原始密文，更压不动），websocket 库写死用 BestSpeed，Go 1.27 的 BestSpeed 遇到这种数据原样存储，开了只白费 CPU
-	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	// 留住接管下来的 TCP 连接：断了网的手机不回关闭帧时直接关它（websocket 库的 CloseNow 在关闭中会去等握手）
+	keep := &hijackKeeper{ResponseWriter: w}
+	ws, err := websocket.Accept(keep, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 	if err != nil {
 		return
 	}
@@ -263,14 +284,46 @@ func (s *Server) serveWS(w http.ResponseWriter, r *http.Request) {
 	defer ws.CloseNow()
 	// 图片上传按块发，每块不超过几百 KB
 	ws.SetReadLimit(4 << 20)
-	s.serveWire(r.Context(), ws)
+	s.serveWire(r.Context(), ws, keep.abort)
+}
+
+// hijackKeeper 在 websocket.Accept 接管连接时记下底层的 net.Conn。
+type hijackKeeper struct {
+	http.ResponseWriter
+	mu   sync.Mutex
+	conn net.Conn
+}
+
+func (k *hijackKeeper) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hj, ok := k.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("hijacking not supported")
+	}
+	c, brw, err := hj.Hijack()
+	if err == nil {
+		k.mu.Lock()
+		k.conn = c
+		k.mu.Unlock()
+	}
+	return c, brw, err
+}
+
+// abort 直接关掉底层连接：读写和等着的关闭握手都马上返回。
+func (k *hijackKeeper) abort() {
+	k.mu.Lock()
+	c := k.conn
+	k.mu.Unlock()
+	if c != nil {
+		c.Close()
+	}
 }
 
 // serveWire 在一条已经连上的传输上握手，然后处理请求直到断开。
-func (s *Server) serveWire(parent context.Context, w wire) {
+// abort 立即断开这条传输的底层连接，没有时为空。
+func (s *Server) serveWire(parent context.Context, w wire, abort func()) {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	c := &conn{srv: s, ws: w, ctx: ctx, cancel: cancel, streams: map[string]context.CancelFunc{}, streamGen: map[string]uint64{}, uploads: map[string]*upload{}}
+	c := &conn{srv: s, ws: w, ctx: ctx, cancel: cancel, abort: abort, streams: map[string]context.CancelFunc{}, streamGen: map[string]uint64{}, uploads: map[string]*upload{}}
 	c.lastRead.Store(time.Now().UnixNano())
 	if err := c.handshake(); err != nil {
 		return
@@ -308,8 +361,9 @@ type conn struct {
 	srv *Server
 	ws  wire
 	ctx context.Context
-	// cancel 结束这条连接的 ctx：读循环正在 Read(ctx)，websocket 库见 ctx 结束就关掉底层连接
+	// cancel 结束这条连接的 ctx（请求、流跟着停）；abort 直接关掉底层连接（WebSocket 才有）
 	cancel context.CancelFunc
+	abort  func()
 	sess   *session
 	device Device
 
