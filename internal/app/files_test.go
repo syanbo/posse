@@ -1421,3 +1421,22 @@ func TestDoubleShift(t *testing.T) {
 		t.Fatalf("generation reused after reopening: %d", old)
 	}
 }
+
+// 列文件失败也要把等着的回调交回去：搜索、跳到定义不能一直停在「搜索中」。
+func TestRefreshListFailureCallsDone(t *testing.T) {
+	a := &app{}
+	v := &filesView{root: filepath.Join(t.TempDir(), "gone")}
+	called := false
+	a.refreshList(v, true, func() { called = true })
+	deadline := time.Now().Add(5 * time.Second)
+	for v.listing && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+		a.runPending()
+	}
+	if v.listErr == nil {
+		t.Skip("listing a missing directory did not fail")
+	}
+	if !called {
+		t.Fatal("done not called after the listing failed")
+	}
+}

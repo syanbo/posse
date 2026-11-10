@@ -213,7 +213,11 @@ func (a *app) syncQuickSymbols(v *filesView, query string, typesOnly bool) {
 				return
 			}
 			a.refreshList(v, false, func() {
-				if a.quick.sym.gen != gen || v.list == nil {
+				if a.quick.sym.gen != gen {
+					return
+				}
+				if v.list == nil {
+					a.quick.sym.running = false
 					return
 				}
 				l, overlay := v.list, editorOverlay(v)
@@ -268,7 +272,11 @@ func (a *app) syncQuickText(v *filesView, query string) {
 				return
 			}
 			a.refreshList(v, false, func() {
-				if a.quick.text.gen != gen || v.list == nil {
+				if a.quick.text.gen != gen {
+					return
+				}
+				if v.list == nil {
+					a.quick.text.running = false
 					return
 				}
 				l, overlay := v.list, editorOverlay(v)

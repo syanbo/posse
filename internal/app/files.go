@@ -414,9 +414,10 @@ func (a *app) refreshList(v *filesView, force bool, done func()) {
 			if err != nil {
 				v.listFailAt = time.Now()
 				v.listErr = err
-				return
+			} else {
+				v.list, v.listAt, v.listFailAt = l, time.Now(), time.Time{}
 			}
-			v.list, v.listAt, v.listFailAt = l, time.Now(), time.Time{}
+			// 失败了也交回去：等着的搜索、跳到定义拿上一份清单接着做，没有清单的收起「搜索中」，报错已经在错误条上
 			if done != nil {
 				done()
 			}
