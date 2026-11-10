@@ -307,9 +307,17 @@ func (rc *roomConn) session(ctx context.Context, j store.Joined) error {
 	if err != nil {
 		return err
 	}
-	if err := cli.Call(ctx, "hello", collabHello{Room: j.Room, Credential: cred.Credential, Version: collaboration.ProtocolVersion}, nil); err != nil {
+	var hello struct {
+		Features []string `json:"features"`
+	}
+	if err := cli.Call(ctx, "hello", collabHello{Room: j.Room, Credential: cred.Credential, Version: collaboration.ProtocolVersion}, &hello); err != nil {
 		cli.Close()
 		return rc.callFailed(err)
+	}
+	// 每次连上都重记：房主升级、降级后按它现在的能力来
+	if err := rc.d.store.SetHostFeatures(j.Room, hello.Features); err != nil {
+		cli.Close()
+		return err
 	}
 	rc.mu.Lock()
 	rc.cli = cli
@@ -1173,6 +1181,15 @@ func (d *Daemon) collabResume(ctx context.Context, raw json.RawMessage) (any, er
 }
 
 // mine 判断一个 Agent 或执行是不是本机的（拥有者为空是本机房主的旧记录）。
+// guestIn 报告本机在这个加入的讨论里是不是只读访客（按同步来的人员表；房主还会再核对）。
+func (d *Daemon) guestIn(room string) bool {
+	p, err := d.store.Person(room, d.store.Self())
+	return err == nil && p.Role == store.RoleGuest
+}
+
+// guestErr 是只读访客做写操作时本机直接给的报错，和房主拒绝时的是同一句。
+func guestErr() error { return rpc.Errorf(rpc.CodeConflict, "%v", store.ErrGuest) }
+
 func (d *Daemon) mine(owner string) bool {
 	return owner == "" || owner == d.store.Self()
 }

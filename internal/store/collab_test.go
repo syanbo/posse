@@ -16,7 +16,7 @@ func TestCollabHostTransactions(t *testing.T) {
 	if err := s.SetShared(d.Key, true, Profile{Name: "Hana"}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CreateInvite(d.Key, "inv1", "h1", time.Now().Add(10*time.Minute), time.Now()); err != nil {
+	if err := s.CreateInvite(d.Key, "inv1", "h1", "", time.Now().Add(10*time.Minute), time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	// 两份申请抢同一份邀请：只有一份成功
@@ -223,7 +223,7 @@ func TestCollabAddMemberOnce(t *testing.T) {
 	}
 	join := func(inv, fp string) JoinRequest {
 		t.Helper()
-		if err := s.CreateInvite(d.Key, inv, "h-"+inv, time.Now().Add(10*time.Minute), time.Now()); err != nil {
+		if err := s.CreateInvite(d.Key, inv, "h-"+inv, "", time.Now().Add(10*time.Minute), time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := s.SubmitJoin(d.Key, "h-"+inv, "rq-"+inv, fp, fp, "", time.Now()); err != nil {

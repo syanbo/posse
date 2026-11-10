@@ -146,6 +146,10 @@ func Open(path string) (*Store, error) {
 		{"disc_messages", "mention_name", "TEXT NOT NULL DEFAULT ''"}, {"disc_messages", "key_by", "TEXT NOT NULL DEFAULT ''"},
 		{"disc_executions", "owner", "TEXT NOT NULL DEFAULT ''"}, {"disc_executions", "generation", "INTEGER NOT NULL DEFAULT 0"},
 		{"disc_members", "own_config", "TEXT NOT NULL DEFAULT ''"}, {"disc_members", "access", "TEXT NOT NULL DEFAULT ''"}, {"disc_members", "client_id", "TEXT NOT NULL DEFAULT ''"},
+		{"disc_messages", "choices", "TEXT NOT NULL DEFAULT ''"},
+		{"disc_executions", "root", "TEXT NOT NULL DEFAULT ''"}, {"disc_executions", "depth", "INTEGER NOT NULL DEFAULT 0"},
+		{"discussions", "summary", "TEXT NOT NULL DEFAULT ''"}, {"discussions", "summary_seq", "INTEGER NOT NULL DEFAULT 0"},
+		{"discussions", "summary_by", "TEXT NOT NULL DEFAULT ''"}, {"discussions", "summary_at", "INTEGER NOT NULL DEFAULT 0"},
 	} {
 		if err := addColumn(db, c[0], c[1], c[2]); err != nil {
 			db.Close()
@@ -159,7 +163,8 @@ func Open(path string) (*Store, error) {
 	}
 	for _, c := range [][3]string{{"collab_intents", "config", "TEXT NOT NULL DEFAULT ''"}, {"collab_joined", "att_seq", "INTEGER NOT NULL DEFAULT 0"},
 		{"collab_joined", "profile_sent", "INTEGER NOT NULL DEFAULT 0"}, {"collab_people", "avatar", "TEXT NOT NULL DEFAULT ''"},
-		{"collab_people", "profile_rev", "INTEGER NOT NULL DEFAULT 0"}} {
+		{"collab_people", "profile_rev", "INTEGER NOT NULL DEFAULT 0"}, {"collab_joined", "features", "TEXT NOT NULL DEFAULT ''"},
+		{"collab_people", "role", "TEXT NOT NULL DEFAULT ''"}, {"collab_invites", "role", "TEXT NOT NULL DEFAULT ''"}, {"collab_requests", "role", "TEXT NOT NULL DEFAULT ''"}} {
 		if err := addColumn(db, c[0], c[1], c[2]); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("migrate: %w", err)

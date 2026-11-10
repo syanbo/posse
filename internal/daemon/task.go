@@ -443,6 +443,8 @@ type taskAskParams struct {
 	Resume    string `json:"resume"` // 接着等之前提过的问题
 	TimeoutMs int    `json:"timeoutMs"`
 	Execution string `json:"execution"` // 讨论任务必带
+	// Choices 是可选答案：讨论里画成按钮，别的任务写进问题正文
+	Choices []string `json:"choices"`
 }
 
 type taskAskResult struct {
@@ -463,6 +465,9 @@ func (d *Daemon) taskAsk(ctx context.Context, raw json.RawMessage) (any, error) 
 	}
 	if err := authorizeWorker(t, p.Caller); err != nil {
 		return nil, err
+	}
+	if p.Choices, err = store.NormalizeChoices(p.Choices); err != nil {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "%v", err)
 	}
 	var q store.Message
 	if p.Resume != "" {
@@ -491,6 +496,9 @@ func (d *Daemon) taskAsk(ctx context.Context, raw json.RawMessage) (any, error) 
 		}
 		if p.Question = strings.TrimSpace(p.Question); p.Question == "" {
 			return nil, rpc.Errorf(rpc.CodeBadRequest, "question required")
+		}
+		if len(p.Choices) > 0 {
+			p.Question += "\n\n" + store.ChoiceList(p.Choices)
 		}
 		q = store.Message{ID: store.NewID("m_"), TaskID: t.ID, Kind: "question", Body: p.Question, CreatedAt: time.Now()}
 		if err := d.store.AddMessage(q); err != nil {

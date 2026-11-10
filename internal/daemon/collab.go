@@ -317,6 +317,8 @@ func cerr(err error) error {
 		return collaboration.Errorf(code, "%s", re.Message)
 	case errors.Is(err, store.ErrRevoked):
 		return collaboration.Errorf(collaboration.CodeRevoked, "your access to this discussion was revoked")
+	case errors.Is(err, store.ErrGuest):
+		return collaboration.Errorf(collaboration.CodeUnauthorized, "%v", store.ErrGuest)
 	case errors.Is(err, store.ErrNotOwner):
 		return collaboration.Errorf(collaboration.CodeUnauthorized, "%v", err)
 	case errors.Is(err, store.ErrNotFound):
@@ -435,11 +437,19 @@ func (h collabHost) Serve(ctx context.Context, s *collaboration.Session, method 
 		}
 		s.Bind(p.Room, person.Generation)
 		s.Touch()
-		return map[string]any{"generation": person.Generation, "rev": disc.Rev, "hostName": id.Name}, nil
+		return map[string]any{"generation": person.Generation, "rev": disc.Rev, "hostName": id.Name, "features": store.HostFeatures}, nil
 	}
 	room, gen, err := h.auth(s)
 	if err != nil {
 		return nil, err
+	}
+	// 只读访客：只放行读取和自己的资料、退出，其余一律拒绝（写入口各自在事务里还会再核对一次）
+	switch method {
+	case "heartbeat", "sync", "download", "profile", "avatar", "leave":
+	default:
+		if person, err := d.store.Person(room, s.FP); err == nil && person.Role == store.RoleGuest {
+			return nil, cerr(store.ErrGuest)
+		}
 	}
 	switch method {
 	case "heartbeat":
@@ -642,6 +652,8 @@ type collabPostParams struct {
 	Target   string   `json:"target"`
 	Mention  string   `json:"mention"`
 	Uploads  []string `json:"uploads"`
+	// From 是发起的那一轮执行：这条是发言人的 Agent @ 另一个成员（FeatureDelegate）
+	From string `json:"from,omitempty"`
 }
 
 func (h collabHost) post(s *collaboration.Session, room string, gen int64, raw json.RawMessage) (any, error) {
@@ -671,8 +683,11 @@ func (h collabHost) post(s *collaboration.Session, room string, gen int64, raw j
 		return nil, cerr(store.ErrRevoked)
 	}
 	m, x, dup, err := d.store.PostMessage(store.PostInput{Discussion: room, ClientID: p.ClientID, Body: p.Body, Quote: p.Quote, Target: p.Target,
-		Mention: p.Mention, Uploads: p.Uploads, At: time.Now(), Author: s.FP, AuthorName: person.Name, Generation: gen})
+		Mention: p.Mention, Uploads: p.Uploads, At: time.Now(), Author: s.FP, AuthorName: person.Name, Generation: gen, From: p.From})
 	if err != nil {
+		if errors.Is(err, store.ErrChainLimit) {
+			return nil, collaboration.Errorf(collaboration.CodeConflict, "%s", errMessage(discError(err)))
+		}
 		if errors.Is(err, store.ErrNotOwner) {
 			return nil, collaboration.Errorf(collaboration.CodeUnauthorized, "you can only send requests to your own agents and those their owners let you use; @ the owner to ask them")
 		}
@@ -958,6 +973,7 @@ func (d *Daemon) collabShare(ctx context.Context, raw json.RawMessage) (any, err
 func (d *Daemon) collabInvite(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p struct {
 		Discussion string `json:"discussion"`
+		Guest      bool   `json:"guest"` // 只读访客的邀请
 	}
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
@@ -968,6 +984,10 @@ func (d *Daemon) collabInvite(ctx context.Context, raw json.RawMessage) (any, er
 	disc, err := d.discussion(p.Discussion)
 	if err != nil {
 		return nil, err
+	}
+	role := ""
+	if p.Guest {
+		role = store.RoleGuest
 	}
 	srv := d.collabServer()
 	if !disc.Shared || srv == nil {
@@ -990,11 +1010,11 @@ func (d *Daemon) collabInvite(ctx context.Context, raw json.RawMessage) (any, er
 	secret := collaboration.NewSecret()
 	now := time.Now()
 	exp := now.Add(collaboration.InviteTTL)
-	if err := d.store.CreateInvite(disc.Key, store.NewID("inv_"), collaboration.HashSecret(secret), exp, now); err != nil {
+	if err := d.store.CreateInvite(disc.Key, store.NewID("inv_"), collaboration.HashSecret(secret), role, exp, now); err != nil {
 		return nil, discError(err)
 	}
 	inv := collaboration.Invite{V: collaboration.ProtocolVersion, Host: id.ID, HostName: id.Name, Room: disc.Key, Title: disc.Title, Addrs: addrs, Secret: secret, Expires: exp.UnixMilli()}
-	return map[string]any{"invite": inv.Encode(), "expires": exp, "addrs": addrs, "fingerprint": id.ID}, nil
+	return map[string]any{"invite": inv.Encode(), "expires": exp, "addrs": addrs, "fingerprint": id.ID, "role": role}, nil
 }
 
 func splitHostPort(addr string) (string, int, error) {

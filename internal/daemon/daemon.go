@@ -404,6 +404,7 @@ func Run(ctx context.Context, cfg Config) error {
 	d.newMobile()
 	go d.agentLoop(ctx)
 	go d.detectLoop(ctx)
+	d.disc.settle = discSettle
 	go d.discLoop(ctx)
 	go d.mobileStageLoop(ctx)
 	if in == nil {
@@ -574,6 +575,9 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("discussion.read", d.discRead)
 	srv.Handle("discussion.ack", d.discAck)
 	srv.Handle("discussion.pending", d.discPending)
+	srv.Handle("discussion.summarize", d.discSummarize)
+	srv.Handle("discussion.mention", d.discMention)
+	srv.Handle("discussion.summary.clear", d.discSummaryClear)
 	srv.Handle("discussion.share", d.collabShare)
 	srv.Handle("discussion.invite", d.collabInvite)
 	srv.Handle("discussion.decide", d.collabDecide)

@@ -2671,4 +2671,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get discUnshareConfirm => 'Stop';
+
+  @override
+  String get discSummary => 'Summary';
+
+  @override
+  String get discSummarize => 'Update summary';
+
+  @override
+  String get discSummaryClear => 'Clear summary';
+
+  @override
+  String get discSummarizeRequest =>
+      'Summarize this discussion so far and save it as the discussion summary: decisions, open questions, and who is doing what.';
+
+  @override
+  String get discStateMerged => 'Merged into the previous request';
+
+  @override
+  String get discGuest => 'view only';
+
+  @override
+  String get discInviteGuest => 'Invite a viewer';
+
+  @override
+  String get discGuestNote => 'You joined as a viewer and can’t post here.';
 }

@@ -37,7 +37,11 @@ CREATE TABLE IF NOT EXISTS discussions (
 	created_at INTEGER NOT NULL,
 	archived_at INTEGER,
 	mirror INTEGER NOT NULL DEFAULT 0,
-	shared INTEGER NOT NULL DEFAULT 0
+	shared INTEGER NOT NULL DEFAULT 0,
+	summary TEXT NOT NULL DEFAULT '',
+	summary_seq INTEGER NOT NULL DEFAULT 0,
+	summary_by TEXT NOT NULL DEFAULT '',
+	summary_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS disc_members (
 	id TEXT PRIMARY KEY,
@@ -88,6 +92,7 @@ CREATE TABLE IF NOT EXISTS disc_messages (
 	mention TEXT NOT NULL DEFAULT '',
 	mention_name TEXT NOT NULL DEFAULT '',
 	key_by TEXT NOT NULL DEFAULT '',
+	choices TEXT NOT NULL DEFAULT '',
 	UNIQUE(discussion, seq)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS disc_messages_client ON disc_messages(discussion, client_id) WHERE client_id != '';
@@ -123,7 +128,9 @@ CREATE TABLE IF NOT EXISTS disc_executions (
 	started_at INTEGER,
 	ended_at INTEGER,
 	owner TEXT NOT NULL DEFAULT '',
-	generation INTEGER NOT NULL DEFAULT 0
+	generation INTEGER NOT NULL DEFAULT 0,
+	root TEXT NOT NULL DEFAULT '',
+	depth INTEGER NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX IF NOT EXISTS disc_executions_request ON disc_executions(message) WHERE retry_of = '';
 CREATE UNIQUE INDEX IF NOT EXISTS disc_executions_retry ON disc_executions(retry_of) WHERE retry_of != '';
@@ -144,6 +151,15 @@ const (
 	DiscReply    = "reply"    // 成员这一轮的完整回复（task done 的正文）
 	DiscQuestion = "question" // 成员在执行中提的问题，等用户回答
 	DiscAnswer   = "answer"   // 用户对问题的回答
+	// DiscDelegate 是成员在自己的一轮里 @ 另一个成员的请求（作者是成员，不是人），同样为对方排一轮执行
+	DiscDelegate = "delegate"
+)
+
+// 成员互相 @ 的上限：从用户的一条请求算起，最多转 MaxChainDepth 层、一共 MaxChainRounds 轮（含用户那一轮）。
+// 超了就拒绝，由成员向用户汇报；用户再 @ 是新的一条链。
+const (
+	MaxChainDepth  = 3
+	MaxChainRounds = 8
 )
 
 // 执行状态。queued、held、blocked 是还没开始的；starting、running、waiting 是正在进行的轮次，一个成员同时只有一个。
@@ -159,6 +175,8 @@ const (
 	ExecInterrupted = "interrupted" // 这一轮进行中 worker 退出、常驻进程重启
 	ExecStopped     = "stopped"     // 用户停止
 	ExecCancelled   = "cancelled"   // 用户在开始前取消
+	// ExecMerged：同一个人连着发给同一成员的请求，排在后面的并进前一条那一轮（reason 是那一轮的执行 ID），不单独执行
+	ExecMerged = "merged"
 	// 局域网协作（房主一侧）：成员电脑上的 Agent 的请求
 	ExecClaimed = "claimed" // 拥有者的电脑已领取，在它本机的队列里，还没开始
 	ExecRevoked = "revoked" // 拥有者的访问被撤销（移除、退出）：共享侧终态，不代表对方电脑上的进程已停止
@@ -181,6 +199,8 @@ var (
 	// 加 Agent 的请求 ID 重发时对不上（AddMemberOnce）：那个 Agent 已经移除或属于上一代资格，或者这次的设置不同
 	ErrAddGone    = errors.New("the agent this request added was removed since; add it again from a new form")
 	ErrAddChanged = errors.New("this request already added an agent with other settings; edit that agent instead")
+	// ErrChainLimit 是成员互相 @ 到了上限
+	ErrChainLimit = errors.New("agent-to-agent request limit reached")
 )
 
 // pendingStates 和 activeStates 合起来就是挡住归档、移除成员的状态。
@@ -220,7 +240,19 @@ type Discussion struct {
 	// Mirror 是加入的别人的讨论：这里是房主权威记录的缓存，只有自己 Agent 的执行和私有配置在本机写
 	Mirror bool `json:"mirror,omitempty"`
 	Shared bool `json:"shared,omitempty"` // 房主开着局域网共享
+	// Summary 是成员写的讨论摘要，覆盖到序号 SummarySeq 为止的消息：之后的轮次先读它，
+	// 落后很多的成员不再逐条领取它之前的消息。SummaryBy 是写它的成员的名字。
+	Summary    string     `json:"summary,omitempty"`
+	SummarySeq int64      `json:"summarySeq,omitempty"`
+	SummaryBy  string     `json:"summaryBy,omitempty"`
+	SummaryAt  *time.Time `json:"summaryAt,omitempty"`
 }
+
+// MaxSummary 是讨论摘要的长度上限（UTF-8 字节）：每一轮的上下文都带着它。
+const MaxSummary = 4000
+
+// SummarySkip：成员没接收过、被摘要覆盖的消息多于这个数时，上下文里用摘要代替它们。
+const SummarySkip = 20
 
 type Member struct {
 	ID             string     `json:"id"`
@@ -314,6 +346,8 @@ type DiscMessage struct {
 	Mention     string `json:"mention,omitempty"` // @ 的人（指纹）：只是提醒，不触发 Agent
 	MentionName string `json:"mentionName,omitempty"`
 	KeyBy       string `json:"keyBy,omitempty"` // 标关键的人
+	// Choices 是问题附带的可选答案：界面画成按钮，点了就用这段文字回答；也可以不选、自己写
+	Choices []string `json:"choices,omitempty"`
 }
 
 type Execution struct {
@@ -343,20 +377,27 @@ type Execution struct {
 	EndedAt        *time.Time `json:"endedAt,omitempty"`
 	Owner          string     `json:"owner,omitempty"` // 执行设备（拥有者的安装身份），空是房主
 	Generation     int64      `json:"generation,omitempty"`
+	// Root 是这条链最初那一轮用户请求的执行（成员互相 @ 出来的轮次才有），Depth 是转了几层（用户的请求是 0）
+	Root  string `json:"root,omitempty"`
+	Depth int    `json:"depth,omitempty"`
 }
 
 // --- 扫描
 
-const discCols = `key,host,local_id,title,description,project_id,project_name,project_path,workspace_id,status,rev,msg_seq,changed,created_at,archived_at,mirror,shared`
+const discCols = `key,host,local_id,title,description,project_id,project_name,project_path,workspace_id,status,rev,msg_seq,changed,created_at,archived_at,mirror,shared,summary,summary_seq,summary_by,summary_at`
 
 func scanDiscussion(row interface{ Scan(...any) error }) (Discussion, error) {
 	var d Discussion
-	var created int64
+	var created, summaryAt int64
 	var archived sql.NullInt64
 	err := row.Scan(&d.Key, &d.Host, &d.LocalID, &d.Title, &d.Description, &d.ProjectID, &d.ProjectName, &d.ProjectPath, &d.WorkspaceID,
-		&d.Status, &d.Rev, &d.MsgSeq, &d.Changed, &created, &archived, &d.Mirror, &d.Shared)
+		&d.Status, &d.Rev, &d.MsgSeq, &d.Changed, &created, &archived, &d.Mirror, &d.Shared, &d.Summary, &d.SummarySeq, &d.SummaryBy, &summaryAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, ErrNotFound
+	}
+	if summaryAt > 0 {
+		at := fromMS(summaryAt)
+		d.SummaryAt = &at
 	}
 	d.CreatedAt = fromMS(created)
 	d.ArchivedAt = optTime(archived)
@@ -379,34 +420,37 @@ func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	return m, err
 }
 
-const dmsgCols = `id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,key_at,rev,created_at,author_id,mention,mention_name,key_by`
+const dmsgCols = `id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,key_at,rev,created_at,author_id,mention,mention_name,key_by,choices`
 
 func scanDiscMessage(row interface{ Scan(...any) error }) (DiscMessage, error) {
 	var m DiscMessage
 	var created int64
 	var key sql.NullInt64
-	var atts string
+	var atts, choices string
 	err := row.Scan(&m.ID, &m.Discussion, &m.Seq, &m.Kind, &m.AuthorMember, &m.AuthorName, &m.AuthorAgent, &m.Body, &m.Quote, &m.Target, &m.TargetName,
-		&m.Execution, &m.Question, &m.Report, &m.Outcome, &atts, &m.ClientID, &key, &m.Rev, &created, &m.AuthorID, &m.Mention, &m.MentionName, &m.KeyBy)
+		&m.Execution, &m.Question, &m.Report, &m.Outcome, &atts, &m.ClientID, &key, &m.Rev, &created, &m.AuthorID, &m.Mention, &m.MentionName, &m.KeyBy, &choices)
 	if errors.Is(err, sql.ErrNoRows) {
 		return m, ErrNotFound
 	}
 	if atts != "" {
 		json.Unmarshal([]byte(atts), &m.Attachments)
 	}
+	if choices != "" {
+		json.Unmarshal([]byte(choices), &m.Choices)
+	}
 	m.CreatedAt = fromMS(created)
 	m.KeyAt = optTime(key)
 	return m, err
 }
 
-const execCols = `id,discussion,member,message,retry_of,state,reason,task_id,worker,agent,model,effort,role,workspace_id,workspace_label,config_version,confirmed,length(CAST(context AS BLOB)),acked,reply,rev,created_at,started_at,ended_at,owner,generation`
+const execCols = `id,discussion,member,message,retry_of,state,reason,task_id,worker,agent,model,effort,role,workspace_id,workspace_label,config_version,confirmed,length(CAST(context AS BLOB)),acked,reply,rev,created_at,started_at,ended_at,owner,generation,root,depth`
 
 func scanExecution(row interface{ Scan(...any) error }) (Execution, error) {
 	var x Execution
 	var created int64
 	var started, ended sql.NullInt64
 	err := row.Scan(&x.ID, &x.Discussion, &x.Member, &x.Message, &x.RetryOf, &x.State, &x.Reason, &x.TaskID, &x.Worker, &x.Agent, &x.Model, &x.Effort, &x.Role,
-		&x.WorkspaceID, &x.WorkspaceLabel, &x.ConfigVersion, &x.Confirmed, &x.ContextLen, &x.Acked, &x.Reply, &x.Rev, &created, &started, &ended, &x.Owner, &x.Generation)
+		&x.WorkspaceID, &x.WorkspaceLabel, &x.ConfigVersion, &x.Confirmed, &x.ContextLen, &x.Acked, &x.Reply, &x.Rev, &created, &started, &ended, &x.Owner, &x.Generation, &x.Root, &x.Depth)
 	if errors.Is(err, sql.ErrNoRows) {
 		return x, ErrNotFound
 	}
@@ -901,6 +945,8 @@ type PostInput struct {
 	Generation int64
 	Mention    string
 	Uploads    []string // 成员上传好的附件 ID（房主一侧）
+	// From 不为空时这条是成员 @ 成员：From 是发起的那一轮执行，作者记成它的成员，必须带 Target
+	From string
 }
 
 // PostMessage 保存消息，Target 不为空时同时建一轮排队的执行。ClientID 重复时返回已有的消息和执行，dup 为 true。
@@ -965,6 +1011,34 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 				return fmt.Errorf("%w: quoted message", ErrNotFound)
 			}
 		}
+		// 成员 @ 成员：发起的那一轮要在进行中，在发言人名下；从它算出这条链转到第几层
+		var from Execution
+		var fromMember Member
+		if in.From != "" {
+			if from, err = scanExecution(tx.QueryRow(`SELECT `+execCols+` FROM disc_executions WHERE id=? AND discussion=?`, in.From, in.Discussion)); err != nil {
+				return err
+			}
+			if !ExecActive(from.State) {
+				return fmt.Errorf("%w: execution is %s", ErrStaleRound, from.State)
+			}
+			if fromMember, err = scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE id=?`, from.Member)); err != nil {
+				return err
+			}
+			if cmpOr(fromMember.Owner, d.Host) != author {
+				return ErrNotOwner
+			}
+			if in.Target == "" || in.Target == from.Member {
+				return fmt.Errorf("%w: a member's request needs another member as its target", ErrConflict)
+			}
+			root := cmpOr(from.Root, from.ID)
+			var rounds int
+			if err := tx.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE (root=? OR id=?) AND retry_of=''`, root, root).Scan(&rounds); err != nil {
+				return err
+			}
+			if from.Depth+1 > MaxChainDepth || rounds+1 > MaxChainRounds {
+				return ErrChainLimit
+			}
+		}
 		var target Member
 		if in.Target != "" {
 			var err error
@@ -987,11 +1061,17 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 		msg = DiscMessage{ID: NewID("dm_") + NewID(""), Discussion: in.Discussion, Kind: DiscUser, Body: in.Body, Quote: in.Quote,
 			Target: target.ID, TargetName: target.Name, Attachments: in.Attachments, ClientID: in.ClientID, Rev: rev, CreatedAt: in.At,
 			AuthorID: author, AuthorName: in.AuthorName, Mention: in.Mention, MentionName: mentionName}
+		if from.ID != "" {
+			msg.Kind, msg.AuthorMember, msg.AuthorName, msg.AuthorAgent = DiscDelegate, fromMember.ID, fromMember.Name, fromMember.Agent
+		}
 		if target.ID != "" {
 			x := Execution{ID: in.ExecID, Discussion: in.Discussion, Member: target.ID, Message: msg.ID, State: ExecQueued,
 				Agent: target.Agent, Model: target.Model, Effort: target.Effort, Role: target.Role, WorkspaceID: target.WorkspaceID,
 				WorkspaceLabel: target.WorkspaceLabel, ConfigVersion: target.ConfigVersion, Rev: rev, CreatedAt: in.At,
 				Owner: target.Owner, Generation: target.Generation}
+			if from.ID != "" {
+				x.Root, x.Depth = cmpOr(from.Root, from.ID), from.Depth+1
+			}
 			if x.ID == "" {
 				x.ID = NewID("x_") + NewID("")
 			}
@@ -1007,9 +1087,9 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 }
 
 func insertExecution(tx querier, x Execution) error {
-	_, err := tx.Exec(`INSERT INTO disc_executions(id,discussion,member,message,retry_of,state,reason,agent,model,effort,role,workspace_id,workspace_label,config_version,rev,created_at,owner,generation)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		x.ID, x.Discussion, x.Member, x.Message, x.RetryOf, x.State, x.Reason, x.Agent, x.Model, x.Effort, x.Role, x.WorkspaceID, x.WorkspaceLabel, x.ConfigVersion, x.Rev, ms(x.CreatedAt), x.Owner, x.Generation)
+	_, err := tx.Exec(`INSERT INTO disc_executions(id,discussion,member,message,retry_of,state,reason,agent,model,effort,role,workspace_id,workspace_label,config_version,rev,created_at,owner,generation,root,depth)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		x.ID, x.Discussion, x.Member, x.Message, x.RetryOf, x.State, x.Reason, x.Agent, x.Model, x.Effort, x.Role, x.WorkspaceID, x.WorkspaceLabel, x.ConfigVersion, x.Rev, ms(x.CreatedAt), x.Owner, x.Generation, x.Root, x.Depth)
 	if isUnique(err) {
 		return fmt.Errorf("%w: execution for this message exists", ErrConflict)
 	}
@@ -1039,10 +1119,15 @@ func insertDiscMessageAt(tx querier, m *DiscMessage, source string) error {
 	if m.KeyAt != nil {
 		key = ms(*m.KeyAt)
 	}
-	_, err := tx.Exec(`INSERT INTO disc_messages(id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,source,rev,created_at,author_id,mention,mention_name,key_at,key_by)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	var choices string
+	if len(m.Choices) > 0 {
+		b, _ := json.Marshal(m.Choices)
+		choices = string(b)
+	}
+	_, err := tx.Exec(`INSERT INTO disc_messages(id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,source,rev,created_at,author_id,mention,mention_name,key_at,key_by,choices)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		m.ID, m.Discussion, m.Seq, m.Kind, m.AuthorMember, m.AuthorName, m.AuthorAgent, m.Body, m.Quote, m.Target, m.TargetName, m.Execution, m.Question,
-		m.Report, m.Outcome, atts, m.ClientID, source, m.Rev, ms(m.CreatedAt), m.AuthorID, m.Mention, m.MentionName, key, m.KeyBy)
+		m.Report, m.Outcome, atts, m.ClientID, source, m.Rev, ms(m.CreatedAt), m.AuthorID, m.Mention, m.MentionName, key, m.KeyBy, choices)
 	if isUnique(err) {
 		return fmt.Errorf("%w: duplicate message", ErrConflict)
 	}
@@ -1308,7 +1393,24 @@ func (s *Store) changeExec(id string, from []string, to, reason string, requireA
 
 // CancelExecution 取消还没开始的请求，源消息不删。
 func (s *Store) CancelExecution(id string) (bool, error) {
-	return s.changeExec(id, pendingStates, ExecCancelled, "", false)
+	ok, err := s.changeExec(id, pendingStates, ExecCancelled, "", false)
+	if err != nil || !ok {
+		return ok, err
+	}
+	// 并进这一轮的后续请求（领取后又回到队列时留下的）跟着取消，不留成没人做的「已合并」
+	return ok, s.withTx(func(tx *sql.Tx) error {
+		var key string
+		var n int
+		if err := tx.QueryRow(`SELECT discussion, (SELECT COUNT(*) FROM disc_executions f WHERE f.state=? AND f.reason=x.id) FROM disc_executions x WHERE id=?`, ExecMerged, id).Scan(&key, &n); err != nil || n == 0 {
+			return err
+		}
+		rev, err := bump(tx, key)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`UPDATE disc_executions SET state=?, reason='', rev=? WHERE discussion=? AND state=? AND reason=?`, ExecCancelled, rev, key, ExecMerged, id)
+		return err
+	})
 }
 
 // HoldExecution 派发前发现同一目录有别的讨论 worker 在执行，先停下等用户确认。
@@ -1396,13 +1498,16 @@ func (s *Store) RetryExecution(id, newID string, at time.Time) (Execution, error
 		}
 		nx = Execution{ID: newID, Discussion: x.Discussion, Member: m.ID, Message: x.Message, RetryOf: x.ID, State: ExecQueued,
 			Agent: m.Agent, Model: m.Model, Effort: m.Effort, Role: m.Role, WorkspaceID: m.WorkspaceID, WorkspaceLabel: m.WorkspaceLabel,
-			ConfigVersion: m.ConfigVersion, Rev: rev, CreatedAt: at, Owner: m.Owner, Generation: m.Generation}
+			ConfigVersion: m.ConfigVersion, Rev: rev, CreatedAt: at, Owner: m.Owner, Generation: m.Generation, Root: x.Root, Depth: x.Depth}
 		// 一轮只能重试一次（retry_of 唯一）：重复点、CLI 重跑都不会多排
 		if err := insertExecution(tx, nx); errors.Is(err, ErrConflict) {
 			return ErrRetried
-		} else {
+		} else if err != nil {
 			return err
 		}
+		// 并进旧一轮的后续请求跟到新的一轮上
+		_, err = tx.Exec(`UPDATE disc_executions SET reason=?, rev=? WHERE discussion=? AND state=? AND reason=?`, nx.ID, rev, x.Discussion, ExecMerged, x.ID)
+		return err
 	})
 	return nx, err
 }
@@ -1417,9 +1522,15 @@ type ContextSource struct {
 	Members     []Member
 	Request     DiscMessage
 	Quote       *DiscMessage
-	Key         []DiscMessage
-	Unreceived  []DiscMessage // 成员还没接收过的、在请求之前的消息
-	Exec        Execution
+	// More 是并进这一轮的后续请求（同一个人连着发的），MoreQuotes 是它们引用的消息
+	More       []DiscMessage
+	MoreQuotes []DiscMessage
+	Key        []DiscMessage
+	Unreceived []DiscMessage // 成员还没接收过的、在请求之前的消息
+	Exec       Execution
+	// Skipped 不为 0 时，成员没接收过的消息里序号到 SkippedTo 为止的 Skipped 条由讨论摘要代替，不在 Unreceived 里
+	Skipped   int
+	SkippedTo int64
 }
 
 // RenderContext 把 ContextSource 写成固定的上下文正文，并记下每条消息在正文里结束的位置（推进接收位置用）。
@@ -1468,11 +1579,7 @@ func (s *Store) ClaimExecution(in ClaimInput) (Execution, bool, error) {
 		if err := tx.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE member=? AND state IN `+inList(activeStates), m.ID).Scan(&n); err != nil || n > 0 {
 			return err
 		}
-		src, err := contextSource(tx, x, m)
-		if err != nil {
-			return err
-		}
-		cfg, worker := m, ""
+		cfg, worker, role := m, "", m.Role
 		state := ExecStarting
 		if in.Reuse {
 			if m.TaskID != in.TaskID {
@@ -1483,7 +1590,7 @@ func (s *Store) ClaimExecution(in ClaimInput) (Execution, bool, error) {
 			if prev, err := scanExecution(tx.QueryRow(`SELECT `+execCols+` FROM disc_executions WHERE task_id=? ORDER BY started_at DESC LIMIT 1`, in.TaskID)); err == nil {
 				cfg.Agent, cfg.Model, cfg.Effort, cfg.Role, cfg.WorkspaceID, cfg.WorkspaceLabel, cfg.ConfigVersion =
 					prev.Agent, prev.Model, prev.Effort, prev.Role, prev.WorkspaceID, prev.WorkspaceLabel, prev.ConfigVersion
-				src.Member.Role = prev.Role
+				role = prev.Role
 			}
 			// 上一轮 done 之后才能接着用：任务回到运行中，提醒和轮次在同一事务里
 			res, err := tx.Exec(`UPDATE tasks SET status='running', ended_at=NULL WHERE id=? AND status IN ('done','failed')`, in.TaskID)
@@ -1497,20 +1604,91 @@ func (s *Store) ClaimExecution(in ClaimInput) (Execution, bool, error) {
 				return err
 			}
 		}
+		// 到这里这一轮确定能领：把紧跟着的同一个人的请求并进来，再冻结上下文。后面改不动这一行时整个回滚，并进来的不算
+		if err := mergeFollowers(tx, x, in.At); err != nil {
+			return err
+		}
+		src, err := contextSource(tx, x, m)
+		if err != nil {
+			return err
+		}
+		src.Member.Role = role
 		text, ends := in.Render(src)
 		idx, _ := json.Marshal(ends)
 		ok, err := setExec(tx, x.Discussion, x.ID, "('queued')",
 			"state=?, task_id=?, worker=?, agent=?, model=?, effort=?, role=?, workspace_id=?, workspace_label=?, config_version=?, context=?, context_index=?, context_from=?, context_upto=?, acked=0, started_at=?",
 			state, in.TaskID, worker, cfg.Agent, cfg.Model, cfg.Effort, cfg.Role, cfg.WorkspaceID, cfg.WorkspaceLabel, cfg.ConfigVersion,
-			text, string(idx), m.RecvSeq, src.Request.Seq, ms(in.At))
-		if err != nil || !ok {
+			text, string(idx), m.RecvSeq, src.lastRequest(), ms(in.At))
+		if err != nil {
 			return err
+		}
+		if !ok {
+			return errNoChange
 		}
 		claimed = true
 		out, err = scanExecution(tx.QueryRow(`SELECT `+execCols+` FROM disc_executions WHERE id=?`, x.ID))
 		return err
 	})
+	if errors.Is(err, errNoChange) {
+		err = nil
+	}
 	return out, claimed, err
+}
+
+// lastRequest 是这一轮最后一条请求的序号（并进来的排在后面）。
+func (src ContextSource) lastRequest() int64 {
+	if n := len(src.More); n > 0 {
+		return src.More[n-1].Seq
+	}
+	return src.Request.Seq
+}
+
+// mergeFollowers 在领取 x 时把紧跟在它后面、同一个发言人发给同一成员、还在排队的请求并进这一轮：
+// 它们转 merged（reason 记 x），正文作为这一轮的后续请求一起交给成员，由这一轮的一条回复一并回答。
+// 只并用户直接发的（不并重试、成员 @ 成员的）；加入的讨论不并：那些轮次的状态由房主记，房主不认这个状态。
+func mergeFollowers(tx querier, x Execution, at time.Time) error {
+	if x.RetryOf != "" || x.Root != "" {
+		return nil
+	}
+	if mirror, err := isMirror(tx, x.Discussion); err != nil || mirror {
+		return err
+	}
+	head, err := scanDiscMessage(tx.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE id=?`, x.Message))
+	if err != nil || head.Kind != DiscUser {
+		return err
+	}
+	queue, err := collect(tx, scanExecution, `SELECT `+execCols+` FROM disc_executions WHERE member=? AND state IN `+inList(pendingStates)+` AND id!=? ORDER BY created_at, rowid`, x.Member, x.ID)
+	if err != nil {
+		return err
+	}
+	var ids []string
+	for _, f := range queue {
+		// 只并紧跟着的：中间隔着别人的请求、等确认的请求就停，不打乱顺序
+		if f.State != ExecQueued || f.RetryOf != "" || f.Root != "" || f.Owner != x.Owner {
+			break
+		}
+		fm, err := scanDiscMessage(tx.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE id=?`, f.Message))
+		if err != nil {
+			return err
+		}
+		if fm.Kind != DiscUser || fm.AuthorID != head.AuthorID || fm.Seq < head.Seq {
+			break
+		}
+		ids = append(ids, f.ID)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rev, err := bump(tx, x.Discussion)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if _, err := tx.Exec(`UPDATE disc_executions SET state=?, reason=?, ended_at=?, rev=? WHERE id=? AND state='queued'`, ExecMerged, x.ID, ms(at), rev, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func contextSource(tx querier, x Execution, m Member) (ContextSource, error) {
@@ -1535,11 +1713,114 @@ func contextSource(tx querier, x Execution, m Member) (ContextSource, error) {
 			src.Quote = &q
 		}
 	}
-	if src.Key, err = collect(tx, scanDiscMessage, `SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND key_at IS NOT NULL AND seq<? ORDER BY seq`, x.Discussion, src.Request.Seq); err != nil {
+	if src.More, err = collect(tx, scanDiscMessage, `SELECT `+dmsgCols+` FROM disc_messages WHERE id IN
+		(SELECT message FROM disc_executions WHERE discussion=? AND state=? AND reason=?) ORDER BY seq`, x.Discussion, ExecMerged, x.ID); err != nil {
 		return src, err
 	}
-	src.Unreceived, err = collect(tx, scanDiscMessage, `SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND seq>? AND seq<? ORDER BY seq`, x.Discussion, m.RecvSeq, src.Request.Seq)
+	for _, r := range src.More {
+		if r.Quote == "" {
+			continue
+		}
+		if q, err := scanDiscMessage(tx.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE id=?`, r.Quote)); err == nil {
+			src.MoreQuotes = append(src.MoreQuotes, q)
+		}
+	}
+	last := src.lastRequest()
+	if src.Key, err = collect(tx, scanDiscMessage, `SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND key_at IS NOT NULL AND seq<? ORDER BY seq`, x.Discussion, last); err != nil {
+		return src, err
+	}
+	from := m.RecvSeq
+	if d := src.Discussion; d.Summary != "" && d.SummarySeq > from {
+		// 摘要覆盖的那一段落后太多：用摘要代替，成员要细节时按序号补读
+		upto := min(d.SummarySeq, src.Request.Seq-1)
+		var n int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM disc_messages WHERE discussion=? AND seq>? AND seq<=?`, x.Discussion, from, upto).Scan(&n); err != nil {
+			return src, err
+		}
+		if n > SummarySkip {
+			src.Skipped, src.SkippedTo, from = n, upto, upto
+		}
+	}
+	// 并进来的请求之间别人说的话照常给（摘要只代替第一条请求之前的）
+	src.Unreceived, err = collect(tx, scanDiscMessage, `SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND seq>? AND seq<? ORDER BY seq`, x.Discussion, from, last)
 	return src, err
+}
+
+// --- 摘要
+
+// SummaryInput 是成员在自己的一轮里写讨论摘要。
+type SummaryInput struct {
+	RoundCheck
+	Body string
+	At   time.Time
+}
+
+// SetSummary 保存成员写的摘要：核对轮次，摘要覆盖到这一轮的请求为止。加入的讨论交给房主（事件）。
+func (s *Store) SetSummary(in SummaryInput) (Discussion, error) {
+	var d Discussion
+	err := s.withTx(func(tx *sql.Tx) error {
+		x, err := checkRound(tx, in.RoundCheck, ExecRunning, ExecWaiting)
+		if err != nil {
+			return err
+		}
+		if x.Acked < x.ContextLen {
+			return fmt.Errorf("%w: read %d of %d bytes", ErrNotAcked, x.Acked, x.ContextLen)
+		}
+		if mirror, err := isMirror(tx, x.Discussion); err != nil {
+			return err
+		} else if mirror {
+			if !hostHas(tx, x.Discussion, FeatureSummary) {
+				return fmt.Errorf("%w: the host of this discussion runs an older Posse that has no summaries", ErrConflict)
+			}
+			if err := addOutbox(tx, x.Discussion, x.ID, OwnerEvent{Kind: EventSummary, Body: in.Body, At: ms(in.At)}); err != nil {
+				return err
+			}
+		} else if err := writeSummary(tx, x, in.Body, in.At); err != nil {
+			return err
+		}
+		d, err = scanDiscussion(tx.QueryRow(`SELECT `+discCols+` FROM discussions WHERE key=?`, x.Discussion))
+		return err
+	})
+	return d, err
+}
+
+// writeSummary 把摘要写到讨论上（房主一侧）：覆盖到执行 x 的请求消息为止，不往回退。
+func writeSummary(tx querier, x Execution, body string, at time.Time) error {
+	var seq int64
+	if err := tx.QueryRow(`SELECT seq FROM disc_messages WHERE id=?`, x.Message).Scan(&seq); err != nil {
+		return err
+	}
+	var name string
+	if err := tx.QueryRow(`SELECT name FROM disc_members WHERE id=?`, x.Member).Scan(&name); err != nil {
+		return err
+	}
+	rev, err := bump(tx, x.Discussion)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`UPDATE discussions SET summary=?, summary_seq=MAX(summary_seq, ?), summary_by=?, summary_at=?, rev=? WHERE key=?`,
+		body, seq, name, ms(at), rev, x.Discussion)
+	return err
+}
+
+// ClearSummary 去掉讨论的摘要（用户的操作，只在房主一侧）。
+func (s *Store) ClearSummary(key string) error {
+	return s.withTx(func(tx *sql.Tx) error {
+		if err := activeDiscussion(tx, key); err != nil {
+			return err
+		}
+		if mirror, err := isMirror(tx, key); err != nil {
+			return err
+		} else if mirror {
+			return fmt.Errorf("%w: only the host can clear the summary", ErrConflict)
+		}
+		rev, err := bump(tx, key)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`UPDATE discussions SET summary='', summary_seq=0, summary_by='', summary_at=0, rev=? WHERE key=?`, rev, key)
+		return err
+	})
 }
 
 // BindWorker 把新拉起的 worker 绑到 starting 的轮次上：同一事务里登记任务、轮次转 running、成员绑定 worker。
@@ -1822,7 +2103,8 @@ func (s *Store) FinishExecution(in FinishInput) (DiscMessage, error) {
 // AskInput 是成员在这一轮里提问。
 type AskInput struct {
 	RoundCheck
-	TaskMsg Message // 任务的 question 消息
+	TaskMsg Message  // 任务的 question 消息
+	Choices []string // 可选答案（已规整）
 	At      time.Time
 }
 
@@ -1855,10 +2137,15 @@ func (s *Store) AskExecution(in AskInput) (DiscMessage, error) {
 			if _, err := tx.Exec(`UPDATE disc_executions SET state='waiting', rev=? WHERE id=?`, rev, x.ID); err != nil {
 				return err
 			}
-			return addOutbox(tx, x.Discussion, x.ID, OwnerEvent{Kind: EventQuestion, Question: in.TaskMsg.ID, Body: in.TaskMsg.Body, At: ms(in.At)})
+			ev := OwnerEvent{Kind: EventQuestion, Question: in.TaskMsg.ID, Body: in.TaskMsg.Body, Choices: in.Choices, At: ms(in.At)}
+			if len(in.Choices) > 0 && !hostHas(tx, x.Discussion, FeatureChoices) {
+				// 旧版房主不认 choices（事件摘要会对不上）：选项写进正文，照常能答
+				ev.Choices, ev.Body = nil, in.TaskMsg.Body+"\n\n"+ChoiceList(in.Choices)
+			}
+			return addOutbox(tx, x.Discussion, x.ID, ev)
 		}
 		q = DiscMessage{ID: NewID("dm_") + NewID(""), Discussion: x.Discussion, Kind: DiscQuestion, AuthorMember: m.ID, AuthorName: m.Name, AuthorAgent: m.Agent,
-			Body: in.TaskMsg.Body, Execution: x.ID, Question: in.TaskMsg.ID, Rev: rev, CreatedAt: in.At}
+			Body: in.TaskMsg.Body, Execution: x.ID, Question: in.TaskMsg.ID, Choices: in.Choices, Rev: rev, CreatedAt: in.At}
 		if err := insertDiscMessageSrc(tx, &q, in.TaskMsg.ID); err != nil {
 			return err
 		}

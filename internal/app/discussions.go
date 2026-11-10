@@ -44,6 +44,7 @@ type discSummary struct {
 	Joined                                                                                           string // 加入的讨论：pending、active、rejected、removed、left
 	MentionSeq                                                                                       int64  // 最近一条 @ 你的消息的序号
 	Requests                                                                                         int    // 房主：待批准的加入申请
+	Summary, SummaryBy                                                                               string // 成员写的讨论摘要和写它的成员
 }
 
 type discMember struct {
@@ -67,6 +68,7 @@ type discMessage struct {
 	KeyAt                                                                                                                              *time.Time
 	CreatedAt                                                                                                                          time.Time
 	AuthorID, Mention, MentionName, KeyBy                                                                                              string
+	Choices                                                                                                                            []string
 }
 
 type discExec struct {
@@ -122,6 +124,9 @@ type discDetail struct {
 	md        map[string][]mdBlock // 消息 ID → 解析好的 Markdown（正文不会改，解析一次），跟着窗口回收
 	live      map[string]string    // worker 终端的实时状态，每次轮询都换
 	collab    *discCollab          // 局域网协作的状态，每次轮询都换
+	// summaryMD 是解析好的摘要，summarySrc 是它对应的原文（摘要换了才重新解析）
+	summaryMD  []mdBlock
+	summarySrc string
 }
 
 // alive 报告执行卡上的 worker 终端现在还在不在：按实时状态，没有时用执行记录带来的。
@@ -784,7 +789,7 @@ func discPreview(m locales.Messages, msg discMessage, self string) string {
 		body = msg.Attachments[0].Name
 	}
 	switch {
-	case msg.Kind == "reply" || msg.Kind == "question":
+	case msg.Kind == "reply" || msg.Kind == "question" || msg.Kind == "delegate":
 		return msg.AuthorName + m.DiscColon() + body
 	case msg.AuthorName != "" && msg.AuthorID != "" && msg.AuthorID != self:
 		return msg.AuthorName + m.DiscColon() + body
@@ -846,12 +851,27 @@ func (a *app) discDetailView(c *ui.Context, d *discDetail) {
 							a.askShare(m, d)
 						}
 						if shared && pm.Item(m.CollabInviteEllipsis()).Icon(iconLink).Chosen() {
-							go a.createInvite(d.key)
+							go a.createInvite(d.key, false)
+						}
+						if shared && pm.Item(m.CollabInviteGuestEllipsis()).Icon(iconEye).Chosen() {
+							go a.createInvite(d.key, true)
+						}
+					}
+					if d.writable() {
+						// 摘要由成员写：挑一个自己能用的 Agent 发一条请求，它存好摘要再回复
+						for _, mem := range activeMembers(d) {
+							if d.canUse(mem) && pm.Item(m.DiscSummarizeBy(mem.Name)).Icon(iconFileText).Chosen() {
+								go a.discCall("discussion.post", map[string]any{"discussion": d.key, "target": mem.ID,
+									"body": m.DiscSummarizeRequest(), "clientId": fmt.Sprintf("c_%x", time.Now().UnixNano())})
+							}
+						}
+						if host && d.info.Summary != "" && pm.Item(m.DiscSummaryClear()).Icon(iconClose).Chosen() {
+							go a.discCall("discussion.summary.clear", map[string]any{"discussion": d.key})
 						}
 					}
 					pm.Separator()
 					if !host {
-						if d.writable() && pm.Item(m.CollabLeaveEllipsis()).Icon(iconLeave).Danger().Chosen() {
+						if (d.writable() || d.guest() && !archived) && pm.Item(m.CollabLeaveEllipsis()).Icon(iconLeave).Danger().Chosen() {
 							a.askLeave(m, d)
 						}
 						return
@@ -1043,7 +1063,7 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 		// 头像：成员是它的 agent 图标，人是他的头像（没有画首字）；名字按身份取最新的，消息里存的是发送时的
 		author, avatar := msg.AuthorName, ""
 		switch msg.Kind {
-		case "reply", "question":
+		case "reply", "question", "delegate":
 			agentTile(c, msg.AuthorAgent, tileMedium())
 		default:
 			if p := d.person(msg.AuthorID); p != nil {
@@ -1063,13 +1083,21 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 			})
 			a.discMessageBody(c, d, msg)
 			if msg.Kind == "question" && !archived && d.execs[msg.Execution].State == "waiting" && !answered(d, msg) && d.mine(d.execs[msg.Execution].Owner) {
-				ui.Row(c).Gap(8).Children(func() {
+				// 选项是一键回答，放不下就换行；最后的「回答…」留给选项之外的答案
+				ui.Row(c).Gap(8).Wrap().Children(func() {
+					for i, choice := range msg.Choices {
+						if pressable(textButton(c.Key(fmt.Sprint("choice-", msg.ID, "-", i)), choice)).Clicked() && !b.sending {
+							b.sending = true
+							go a.sendDiscAnswer(msg.Question, choice, false)
+						}
+					}
 					if pressable(textButton(c.Key("answer-"+msg.ID), m.DiscAnswerEllipsis())).Clicked() {
 						b.answerQ, b.quote, b.target = msg.Question, "", ""
 					}
 				})
 			}
-			if msg.Kind == "user" && msg.Execution != "" {
+			// 请求下面跟它的执行状态：用户发的，和成员 @ 成员的
+			if (msg.Kind == "user" || msg.Kind == "delegate") && msg.Execution != "" {
 				if x := d.execFor(msg.ID); x != nil {
 					a.execCard(c, d, *x)
 				}
@@ -1184,7 +1212,7 @@ func (a *app) discMessageBody(c *ui.Context, d *discDetail, msg discMessage) {
 		a.quoteBlock(c, d, msg.Quote)
 	}
 	if strings.TrimSpace(msg.Body) != "" {
-		if msg.Kind == "reply" {
+		if msg.Kind == "reply" || msg.Kind == "delegate" {
 			blocks, ok := d.md[msg.ID]
 			if !ok {
 				blocks = parseMarkdown(strings.TrimSpace(msg.Body))
@@ -1368,6 +1396,8 @@ func execStatus(m locales.Messages, x discExec) (string, string) {
 		return m.TasksStatusStopped(), "ended"
 	case "cancelled":
 		return m.DiscExecCancelled(), "ended"
+	case "merged":
+		return m.DiscExecMerged(), "ended"
 	case "claimed":
 		return m.DiscExecClaimed(), "ended"
 	case "revoked":
@@ -1405,7 +1435,7 @@ func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
 	}
 	lost := !mine && x.Owner != "" && !d.online(x.Owner) && (x.State == "claimed" || x.State == "starting" || x.State == "running" || x.State == "waiting")
 	// 不用你处理的（结束了的，别人电脑上正常进行的）收成一行小字，不画卡片；要处理的才是卡片
-	settled := x.State == "done" || x.State == "cancelled" || x.State == "stopped"
+	settled := x.State == "done" || x.State == "cancelled" || x.State == "stopped" || x.State == "merged"
 	if !lost && (accept == "" || accept == "accepted") && (settled || !mine && (x.State == "queued" || x.State == "claimed" || x.State == "starting" || x.State == "running")) {
 		a.execLine(c, d, x, text, glyph, mine)
 		return
@@ -1782,7 +1812,7 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 	}
 	if question != nil {
 		b.sending = true
-		go a.sendDiscAnswer(question.Question, strings.TrimSpace(b.text))
+		go a.sendDiscAnswer(question.Question, strings.TrimSpace(b.text), true)
 		return
 	}
 	if b.clientID == "" {
@@ -1816,13 +1846,19 @@ func (a *app) sendDiscMessage(key string, params map[string]any) {
 	a.refresh()
 }
 
-func (a *app) sendDiscAnswer(question, text string) {
+// sendDiscAnswer 回答一个问题。typed 是从输入框发的：成功后清掉输入框；点选项回答的不动输入框里的草稿。
+func (a *app) sendDiscAnswer(question, text string, typed bool) {
 	err := a.call("discussion.answer", map[string]any{"question": question, "body": text}, nil, 10*time.Second)
 	a.update(func() {
 		b := &a.disc
 		b.sending = false
 		if err == nil {
-			b.text, b.answerQ = "", ""
+			if typed {
+				b.text = ""
+			}
+			if typed || b.answerQ == question {
+				b.answerQ = ""
+			}
 			b.stickBottom()
 		}
 	})
@@ -2104,6 +2140,15 @@ func (a *app) discPanel(c *ui.Context, d *discDetail) {
 				}
 				ui.Text(c, m.DiscCreatedAt(d.info.CreatedAt.Local())).FontSize(fsSmall).TextColor(t.TextMuted)
 			})
+			if d.info.Summary != "" {
+				if d.summarySrc != d.info.Summary {
+					d.summaryMD, d.summarySrc = parseMarkdown(d.info.Summary), d.info.Summary
+				}
+				ui.Column(c).Gap(6).Children(func() {
+					cardTitle(c, m.DiscSummary())
+					ui.Column(c).Selectable().Children(func() { mdView{size: fsSmall}.page(c, d.summaryMD) })
+				})
+			}
 			ui.Column(c).Gap(6).Children(func() {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					cardTitle(c, m.DiscMembers()).Grow(1)

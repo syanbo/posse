@@ -1024,7 +1024,7 @@ func TestPreview(t *testing.T) {
 		a.indexTasks()
 		savePNG(t, newPreviewTester(a, dark), "tasks-empty-"+suffix+".png")
 
-		// 讨论页：列表、消息、执行卡、输入区、右边一栏，窄窗口、回答和搜索、长消息、归档、对话框（preview_disc_test.go）
+		// 讨论页：列表、消息、执行卡、输入区、右边一栏（含摘要），窄窗口、回答和搜索、带选项的问题、长消息、归档、对话框（preview_disc_test.go）
 		renderDiscussionPreviews(t, dark, suffix)
 		renderCollabPreviews(t, dark, suffix)
 

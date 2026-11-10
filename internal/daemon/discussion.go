@@ -36,6 +36,8 @@ const (
 	discMaxAttachSize  = 20 << 20
 	// 消息正文上限：比读取预算大得多，分页照样能读完
 	discMaxBody = 256 << 10
+	// 请求发出后等这么久才派发（discState.settle）
+	discSettle = 1200 * time.Millisecond
 )
 
 // discState 是讨论调度在内存里的部分：只负责唤醒，状态都在 SQLite。
@@ -46,6 +48,8 @@ type discState struct {
 	waitLock atomic.Bool
 	// idle 是上一遍派发时没有任何讨论成员：兜底轮询放慢到 30 秒，有 kick 时照常立刻派发
 	idle atomic.Bool
+	// settle 是请求发出后等多久才派发：同一个人连着发的几条在这段时间里到齐，并成一轮（store.mergeFollowers）
+	settle time.Duration
 	// launch 拉起成员的 worker；测试里换成普通命令。调用时已持有 handoff.startMu 的读锁，里面要用不加锁的拉起
 	launch func(w store.Workspace, name string, m agent.Model, prompt string, env ...string) (*session, error)
 }
@@ -145,6 +149,11 @@ func (d *Daemon) dispatchMember(m store.Member) {
 		}
 	}
 	if x.State != store.ExecQueued {
+		return
+	}
+	// 刚发出的请求先等一小会儿：连着发的几条到齐了并成一轮，不是第一条先走、后面的另排一轮
+	if wait := d.disc.settle - time.Since(x.CreatedAt); wait > 0 && x.RetryOf == "" && x.Root == "" {
+		time.AfterFunc(wait, d.discKick)
 		return
 	}
 	if m.TaskID != "" {
@@ -371,8 +380,12 @@ func discWorkerPrompt(disc store.Discussion, m store.Member, t store.Task, x sto
 	fmt.Fprintf(&b, "Current execution: %s\n\n", x.ID)
 	fmt.Fprintf(&b, "posse discussion read --execution %s\n", x.ID)
 	b.WriteString("  Get the request with its context. Long context comes in pages: run the command it prints with --cursor until it says the context is complete. You cannot report before reading all of it.\n\n")
-	fmt.Fprintf(&b, "posse task ask %s --execution %s \"<question>\"\n", t.ID, x.ID)
-	b.WriteString("  Ask the user and wait; the command prints the answer. It waits up to 9 minutes, so give your shell tool a 10-minute timeout; if it times out, run the command it prints to keep waiting.\n\n")
+	fmt.Fprintf(&b, "posse task ask %s --execution %s [--choice \"<option>\"]... \"<question>\"\n", t.ID, x.ID)
+	b.WriteString("  Ask the user and wait; the command prints the answer. When the answer is one of a few options, pass each as --choice: the user answers with one click (they can still type something else). It waits up to 9 minutes, so give your shell tool a 10-minute timeout; if it times out, run the command it prints to keep waiting.\n\n")
+	fmt.Fprintf(&b, "posse discussion summarize --execution %s --body-file <file>\n", x.ID)
+	fmt.Fprintf(&b, "  Only when the request asks you to summarize the discussion: save the summary (Markdown, at most %d bytes) so that later requests start from it instead of the whole history. Keep decisions, open questions and who is doing what; then report with posse task done as usual.\n\n", store.MaxSummary)
+	fmt.Fprintf(&b, "posse discussion mention --execution %s --to \"<member name>\" --body-file <file>\n", x.ID)
+	fmt.Fprintf(&b, "  Hand part of the work to another member: it gets your message as a request and replies in the discussion. You are not woken when it replies; if you need its result, ask it to mention you back. Only for work that member is better placed to do, never to acknowledge or chat: a request can be passed along at most %d times before the user has to step in.\n\n", store.MaxChainDepth)
 	fmt.Fprintf(&b, "posse task check %s --execution %s\n", t.ID, x.ID)
 	b.WriteString("  Read notes the user sent during this round.\n\n")
 	fmt.Fprintf(&b, "posse task done %s --execution %s --body-file <file> [--summary \"<one line>\"] [--report <file>] [--failed]\n", t.ID, x.ID)
@@ -418,6 +431,8 @@ func (d *Daemon) renderContext(src store.ContextSource) (string, []store.Context
 			author = m.AuthorName + " (person)"
 		}
 		switch {
+		case m.Kind == store.DiscDelegate:
+			author = fmt.Sprintf("%s (%s), request from a member", m.AuthorName, m.AuthorAgent)
 		case m.Kind == store.DiscReply:
 			author = fmt.Sprintf("%s (%s), reply", m.AuthorName, m.AuthorAgent)
 			if m.Outcome == store.TaskFailed {
@@ -446,6 +461,9 @@ func (d *Daemon) renderContext(src store.ContextSource) (string, []store.Context
 		if !strings.HasSuffix(m.Body, "\n") {
 			b.WriteString("\n")
 		}
+		if len(m.Choices) > 0 {
+			b.WriteString(store.ChoiceList(m.Choices) + "\n")
+		}
 		for _, a := range m.Attachments {
 			path := filepath.Join(src.ProjectPath, a.Path)
 			note := ""
@@ -458,12 +476,32 @@ func (d *Daemon) renderContext(src store.ContextSource) (string, []store.Context
 	}
 	seen := map[int64]bool{}
 	b.WriteString("\n## Current request (to you)\n")
+	if src.Request.Kind == store.DiscDelegate {
+		fmt.Fprintf(&b, "This request comes from the member %s, not from the user. Reply as usual; if %s has to act on your result, hand it back with posse discussion mention.\n",
+			src.Request.AuthorName, src.Request.AuthorName)
+	}
+	if len(src.More) > 0 {
+		fmt.Fprintf(&b, "The same person sent %d requests in a row; they are merged into this one round. Handle all of them, in order, and answer them together in your one reply.\n", len(src.More)+1)
+	}
 	write(src.Request)
 	seen[src.Request.Seq] = true
+	for _, m := range src.More {
+		write(m)
+		seen[m.Seq] = true
+	}
+	quotes := src.MoreQuotes
 	if src.Quote != nil {
-		b.WriteString("\n## Quoted message\n")
-		write(*src.Quote)
-		seen[src.Quote.Seq] = true
+		quotes = append([]store.DiscMessage{*src.Quote}, quotes...)
+	}
+	for i, q := range quotes {
+		if seen[q.Seq] {
+			continue
+		}
+		if i == 0 || len(quotes) == 1 {
+			b.WriteString("\n## Quoted message\n")
+		}
+		write(q)
+		seen[q.Seq] = true
 	}
 	var key []store.DiscMessage
 	for _, m := range src.Key {
@@ -476,6 +514,13 @@ func (d *Daemon) renderContext(src store.ContextSource) (string, []store.Context
 		for _, m := range key {
 			write(m)
 			seen[m.Seq] = true
+		}
+	}
+	if d := src.Discussion; d.Summary != "" {
+		fmt.Fprintf(&b, "\n## Summary of the discussion up to #%d (written by %s)\n%s\n", d.SummarySeq, d.SummaryBy, strings.TrimRight(d.Summary, "\n"))
+		if src.Skipped > 0 {
+			fmt.Fprintf(&b, "The summary stands in for %d earlier messages you have not received (up to #%d). Read any of them with: posse discussion read %s --from <seq> --to <seq>\n",
+				src.Skipped, src.SkippedTo, d.Key)
 		}
 	}
 	var rest []store.DiscMessage
@@ -555,6 +600,9 @@ func discError(err error) error {
 		return rpc.Errorf(rpc.CodeConflict, "this request was already retried")
 	case errors.Is(err, store.ErrNotOwner):
 		return rpc.Errorf(rpc.CodeConflict, "you can only send requests to your own agents and those their owners let you use; @ the owner to ask them")
+	case errors.Is(err, store.ErrChainLimit):
+		return rpc.Errorf(rpc.CodeConflict, "agents have passed this request along %d times (or %d rounds in total), which is the limit; report to the user in your reply and let them decide who continues",
+			store.MaxChainDepth, store.MaxChainRounds)
 	case errors.Is(err, store.ErrRevoked):
 		return rpc.Errorf(rpc.CodeConflict, "your access to this discussion was revoked")
 	case errors.Is(err, store.ErrAddGone), errors.Is(err, store.ErrAddChanged), errors.Is(err, store.ErrConflict), errors.Is(err, store.ErrStaleRound), errors.Is(err, store.ErrNotAcked):
@@ -857,7 +905,8 @@ func (d *Daemon) discUpdate(ctx context.Context, raw json.RawMessage) (any, erro
 }
 
 // userOnly 挡住任务 worker 终端里的调用：讨论里发言、@ 成员、回答、改成员、归档这些是用户的操作，
-// 讨论 worker 只用 posse task done/ask 汇报，不能以用户身份发言或给别的成员排请求（成员之间不互相唤醒）。
+// 讨论 worker 只用 posse task done/ask 汇报，不能以用户身份发言；要别的成员接手用 discussion mention（discMention），
+// 那条消息署它自己的名字、受层数上限约束。
 // 窗口、终端之外的 CLI 和不是 worker 的终端照常可用。调用方 ID 由本机进程报、可以伪造：这是防误用，不是安全隔离。
 func (d *Daemon) userOnly(raw json.RawMessage) error {
 	var p struct {
@@ -1051,6 +1100,10 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 	}
 	var rc *roomConn
 	if disc.Mirror {
+		// 只读访客带不了 Agent：在建 worktree 之前就挡
+		if d.guestIn(disc.Key) {
+			return nil, guestErr()
+		}
 		if p.ClientID == "" {
 			p.ClientID = store.NewID("c_") + store.NewID("")
 		}
@@ -1343,6 +1396,14 @@ func (d *Daemon) discPost(ctx context.Context, raw json.RawMessage) (any, error)
 			return nil, err
 		}
 		p.Mention = fp
+	}
+	if p.Target != "" {
+		// 成员可以写 ID 或名字（CLI 的 --to）
+		t, err := d.findMember(disc, p.Target, "")
+		if err != nil {
+			return nil, err
+		}
+		p.Target = t.ID
 	}
 	if disc.Mirror {
 		return d.mirrorPost(disc, p)
@@ -1696,6 +1757,13 @@ func (d *Daemon) discAnswer(ctx context.Context, raw json.RawMessage) (any, erro
 	if err := d.userOnly(raw); err != nil {
 		return nil, err
 	}
+	// 也认讨论里那条问题消息的 ID（discussion show 印的 dm_…）：换成它对应的任务问题
+	if dm, err := d.store.DiscMessage(p.Question); err == nil {
+		if dm.Kind != store.DiscQuestion {
+			return nil, rpc.Errorf(rpc.CodeBadRequest, "message %s is not a question", dm.ID)
+		}
+		p.Question = dm.Question
+	}
 	a, err := d.answerDiscussion(p.Question, p.Body, p.ClientID)
 	if err != nil {
 		return nil, err
@@ -1854,6 +1922,184 @@ func (d *Daemon) discAttachments(ctx context.Context, raw json.RawMessage) (any,
 		out = append(out, item{Attachment: a, Abs: abs, Exists: err == nil})
 	}
 	return map[string]any{"dir": filepath.Join(root, filepath.Dir(store.AttachmentDir(disc.LocalID))), "items": out}, nil
+}
+
+// --- 成员 @ 成员
+
+type discMentionParams struct {
+	Execution string `json:"execution"`
+	To        string `json:"to"` // 成员的名字或 ID
+	Body      string `json:"body"`
+	Caller    string `json:"caller"`
+}
+
+// discMention 是成员在自己的一轮里 @ 另一个成员：消息署它的名字，为对方排一轮。
+// 能 @ 谁按它的拥有者算（自己的，和别人放开给拥有者的）；从用户那条请求算起转的层数有上限（store.MaxChainDepth）。
+func (d *Daemon) discMention(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p discMentionParams
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if p.Execution == "" {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "pass --execution <id>: a member mentions another member during its own request")
+	}
+	x, err := d.execSel(p.Execution)
+	if err != nil {
+		return nil, err
+	}
+	if err := authorizeExecWorker(x, p.Caller); err != nil {
+		return nil, err
+	}
+	switch {
+	case !store.ExecActive(x.State):
+		return nil, rpc.Errorf(rpc.CodeConflict, "execution %s is %s; find your current request with: posse discussion pending", x.ID, x.State)
+	case x.Acked < x.ContextLen:
+		return nil, rpc.Errorf(rpc.CodeConflict, "you have not read the whole request yet; run: posse discussion read --execution %s", x.ID)
+	}
+	body := strings.TrimSpace(p.Body)
+	switch {
+	case body == "":
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "message text required: pass --body-file <file> or --body <text>")
+	case len(body) > discMaxBody:
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "message is longer than %d KiB; put the detail in a file and name its path", discMaxBody>>10)
+	case !utf8.ValidString(body):
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "message is not valid UTF-8")
+	}
+	disc, err := d.store.Discussion(x.Discussion)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(p.To) == "" {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "pass --to <member name>")
+	}
+	target, err := d.findMember(disc, p.To, x.Member)
+	if err != nil {
+		return nil, err
+	}
+	// 请求 ID 按这一轮、对象和正文固定：响应丢了重跑同一条命令认回已经发出的那条
+	clientID := "dg-" + x.ID + "-" + store.IntentDigest(body, "", target.ID, nil)[:16]
+	if disc.Mirror {
+		return d.mirrorMention(disc, x, target, body, clientID)
+	}
+	m, nx, dup, err := d.store.PostMessage(store.PostInput{Discussion: disc.Key, ClientID: clientID, Body: body, Target: target.ID, From: x.ID, At: time.Now()})
+	if err != nil {
+		if errors.Is(err, store.ErrNotOwner) {
+			return nil, notYours(target.Name)
+		}
+		return nil, discError(err)
+	}
+	d.taskNotify()
+	d.discKick()
+	return discPostResult{Message: m, Execution: nx, Duplicate: dup}, nil
+}
+
+// findMember 按 ID 或名字（不分大小写，可以带 @）找讨论里还在的成员；skip 是不算在内的成员（@ 别人时是自己）。
+// 找不到时列出有哪些成员，重名时要求用 ID。
+func (d *Daemon) findMember(disc store.Discussion, sel, skip string) (store.Member, error) {
+	sel = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(sel), "@"))
+	ms, err := d.store.Members(disc.Key)
+	if err != nil {
+		return store.Member{}, err
+	}
+	var found []store.Member
+	var names []string
+	for _, m := range ms {
+		if m.ID == sel && m.ID != skip {
+			// ID 对上了直接用：移除了的成员由后面的入口各自报错
+			return m, nil
+		}
+		if m.RemovedAt != nil || m.ID == skip {
+			continue
+		}
+		names = append(names, m.Name)
+		if strings.EqualFold(m.Name, sel) {
+			found = append(found, m)
+		}
+	}
+	other := ""
+	if skip != "" {
+		other = "other "
+	}
+	switch len(found) {
+	case 1:
+		return found[0], nil
+	case 0:
+		if len(names) == 0 {
+			return store.Member{}, rpc.Errorf(rpc.CodeNotFound, "no %smember is called %q; this discussion has no %smembers", other, sel, other)
+		}
+		return store.Member{}, rpc.Errorf(rpc.CodeNotFound, "no %smember is called %q; members: %s", other, sel, strings.Join(names, ", "))
+	}
+	return store.Member{}, rpc.Errorf(rpc.CodeConflict, "several members are called %q; pass a member ID from: posse discussion show %s", sel, disc.Key)
+}
+
+// --- 摘要
+
+type discSummaryParams struct {
+	Discussion string `json:"discussion"`
+	Execution  string `json:"execution"`
+	Body       string `json:"body"`
+	Caller     string `json:"caller"`
+}
+
+// discSummaryClear 是用户去掉讨论摘要。
+func (d *Daemon) discSummaryClear(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p discSummaryParams
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := d.userOnly(raw); err != nil {
+		return nil, err
+	}
+	disc, err := d.discussion(p.Discussion)
+	if err != nil {
+		return nil, err
+	}
+	if disc.Mirror {
+		return nil, rpc.Errorf(rpc.CodeConflict, "only the host can clear this discussion's summary")
+	}
+	if err := d.store.ClearSummary(disc.Key); err != nil {
+		return nil, discError(err)
+	}
+	d.taskNotify()
+	return d.store.Discussion(disc.Key)
+}
+
+// discSummarize 是成员在自己的一轮里保存讨论摘要。
+func (d *Daemon) discSummarize(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p discSummaryParams
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if p.Execution == "" {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "pass --execution <id>: a summary is saved by a member during its request")
+	}
+	x, err := d.execSel(p.Execution)
+	if err != nil {
+		return nil, err
+	}
+	if err := authorizeExecWorker(x, p.Caller); err != nil {
+		return nil, err
+	}
+	body := strings.TrimSpace(p.Body)
+	switch {
+	case body == "":
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "summary text required: pass --body-file <file> or --body <text>")
+	case len(body) > store.MaxSummary:
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "summary is %d bytes, longer than %d; shorten it", len(body), store.MaxSummary)
+	case !utf8.ValidString(body):
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "summary is not valid UTF-8")
+	}
+	disc, err := d.store.SetSummary(store.SummaryInput{RoundCheck: store.RoundCheck{Exec: x.ID, TaskID: x.TaskID, Worker: p.Caller}, Body: body, At: time.Now()})
+	switch {
+	case errors.Is(err, store.ErrStaleRound):
+		return nil, rpc.Errorf(rpc.CodeConflict, "execution %s is %s; find your current request with: posse discussion pending", x.ID, x.State)
+	case errors.Is(err, store.ErrNotAcked):
+		return nil, rpc.Errorf(rpc.CodeConflict, "you have not read the whole request yet (%v); run: posse discussion read --execution %s", err, x.ID)
+	case err != nil:
+		return nil, discError(err)
+	}
+	d.taskNotify()
+	return disc, nil
 }
 
 // --- worker 读取上下文
@@ -2079,7 +2325,7 @@ func (d *Daemon) discAsk(t store.Task, p taskAskParams) (store.Message, error) {
 		return store.Message{}, discRoundErr(t, "")
 	}
 	q := store.Message{ID: store.NewID("m_"), TaskID: t.ID, Kind: "question", Body: p.Question, CreatedAt: time.Now()}
-	if _, err := d.store.AskExecution(store.AskInput{RoundCheck: store.RoundCheck{Exec: p.Execution, TaskID: t.ID, Worker: p.Caller}, TaskMsg: q, At: time.Now()}); err != nil {
+	if _, err := d.store.AskExecution(store.AskInput{RoundCheck: store.RoundCheck{Exec: p.Execution, TaskID: t.ID, Worker: p.Caller}, TaskMsg: q, Choices: p.Choices, At: time.Now()}); err != nil {
 		if errors.Is(err, store.ErrStaleRound) {
 			return q, discRoundErr(t, p.Execution)
 		}

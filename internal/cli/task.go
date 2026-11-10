@@ -436,13 +436,15 @@ func cmdTaskAsk(e *env, args []string) error {
 	resume := fs.String("resume", "", "")
 	timeout := fs.Duration("timeout", 9*time.Minute, "")
 	exec := fs.String("execution", "", "")
+	var choices multiFlag
+	fs.Var(&choices, "choice", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
 	task, pos := splitTaskArg(pos)
 	params := map[string]any{"task": task, "caller": caller(), "question": strings.Join(pos, " "), "resume": *resume,
-		"timeoutMs": timeout.Milliseconds(), "execution": *exec}
+		"timeoutMs": timeout.Milliseconds(), "execution": *exec, "choices": []string(choices)}
 	var r struct{ Answer string }
 	return e.doWait("task.ask", params, &r, func() { fmt.Fprintln(e.out, r.Answer) })
 }

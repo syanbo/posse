@@ -4501,6 +4501,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Stop'**
   String get discUnshareConfirm;
+
+  /// Mobile discussions: details section showing the summary an agent wrote
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get discSummary;
+
+  /// Mobile discussions: details action asking an agent to write the discussion summary
+  ///
+  /// In en, this message translates to:
+  /// **'Update summary'**
+  String get discSummarize;
+
+  /// Mobile discussions: details action and confirm button removing the summary
+  ///
+  /// In en, this message translates to:
+  /// **'Clear summary'**
+  String get discSummaryClear;
+
+  /// Mobile discussions: text of the request posted to an agent when the user taps Update summary
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize this discussion so far and save it as the discussion summary: decisions, open questions, and who is doing what.'**
+  String get discSummarizeRequest;
+
+  /// Mobile discussions: state of a request handled in the round of the request sent just before it
+  ///
+  /// In en, this message translates to:
+  /// **'Merged into the previous request'**
+  String get discStateMerged;
+
+  /// Mobile discussions: tag after the name of a person who joined, or asks to join, as a read-only viewer
+  ///
+  /// In en, this message translates to:
+  /// **'view only'**
+  String get discGuest;
+
+  /// Mobile discussions: details action and dialog title for an invitation whose holder can only read
+  ///
+  /// In en, this message translates to:
+  /// **'Invite a viewer'**
+  String get discInviteGuest;
+
+  /// Mobile discussions: shown in place of the input when this computer joined the discussion as a read-only viewer
+  ///
+  /// In en, this message translates to:
+  /// **'You joined as a viewer and can’t post here.'**
+  String get discGuestNote;
 }
 
 class _AppLocalizationsDelegate

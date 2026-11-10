@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -176,8 +177,9 @@ func TestDiscussionSerialPerMember(t *testing.T) {
 	d, _, disc := newDiscDaemon(t)
 	a := addMember(t, d, disc, "Alice", "claude")
 	r1 := postTo(t, d, disc, "first", a.ID, "")
-	r2 := postTo(t, d, disc, "second", a.ID, "")
 	x1 := waitExec(t, d, r1.Execution.ID, store.ExecRunning)
+	// 第一轮已经开始之后再发第二条：连着发的会并成一轮（TestDiscussionMergesBurst），这里要的是排队
+	r2 := postTo(t, d, disc, "second", a.ID, "")
 	d.dispatchAll()
 	if x, _ := d.store.Execution(r2.Execution.ID); x.State != store.ExecQueued {
 		t.Fatalf("second started while first runs: %s", x.State)
@@ -240,7 +242,8 @@ func TestDiscussionQuestion(t *testing.T) {
 	}
 	got := make(chan res, 1)
 	go func() {
-		v, err := callErr(d.taskAsk, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "question": "which branch?", "timeoutMs": 5000})
+		v, err := callErr(d.taskAsk, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "question": "which branch?", "timeoutMs": 5000,
+			"choices": []string{"main", " main ", "", "a  new\tbranch"}})
 		got <- res{v, err}
 	}()
 	var q store.DiscMessage
@@ -255,6 +258,18 @@ func TestDiscussionQuestion(t *testing.T) {
 	}
 	if q.ID == "" {
 		t.Fatal("question not posted")
+	}
+	// 选项去掉空的、重复的，空白收成一个空格；太多、太长的被拒
+	if !slices.Equal(q.Choices, []string{"main", "a new branch"}) || q.Body != "which branch?" {
+		t.Fatalf("choices %q body %q", q.Choices, q.Body)
+	}
+	if _, err := callErr(d.taskAsk, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "question": "q",
+		"choices": []string{"1", "2", "3", "4", "5", "6", "7"}}); err == nil {
+		t.Fatal("seven choices accepted")
+	}
+	if _, err := callErr(d.taskAsk, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "question": "q",
+		"choices": []string{strings.Repeat("x", store.MaxChoiceLen+1)}}); err == nil {
+		t.Fatal("overlong choice accepted")
 	}
 	if xs, _ := d.store.Execution(x.ID); xs.State != store.ExecWaiting {
 		t.Fatalf("state %s", xs.State)
@@ -865,8 +880,9 @@ func TestDiscussionCodexBackgroundDoesNotBlockQueue(t *testing.T) {
 	d, _, disc := newDiscDaemon(t)
 	m := addMember(t, d, disc, "Codex", "codex")
 	r1 := postTo(t, d, disc, "first", m.ID, "")
-	r2 := postTo(t, d, disc, "second", m.ID, "")
 	x1 := waitExec(t, d, r1.Execution.ID, store.ExecRunning)
+	// 第一轮已经开始之后再发第二条：连着发的会并成一轮（TestDiscussionMergesBurst），这里要的是排队
+	r2 := postTo(t, d, disc, "second", m.ID, "")
 	s := d.liveSession(x1.Worker)
 	s.setOSC("codex", agent.StatusWorking)
 	hook := func(event, turn string) {
@@ -906,8 +922,9 @@ func TestDiscussionCodexStopBeforeReport(t *testing.T) {
 	d, _, disc := newDiscDaemon(t)
 	m := addMember(t, d, disc, "Codex", "codex")
 	r1 := postTo(t, d, disc, "first", m.ID, "")
-	r2 := postTo(t, d, disc, "second", m.ID, "")
 	x1 := waitExec(t, d, r1.Execution.ID, store.ExecRunning)
+	// 第一轮已经开始之后再发第二条：连着发的会并成一轮（TestDiscussionMergesBurst），这里要的是排队
+	r2 := postTo(t, d, disc, "second", m.ID, "")
 	s := d.liveSession(x1.Worker)
 	s.setOSC("codex", agent.StatusWorking)
 	for _, event := range []string{"UserPromptSubmit", "Stop"} {
@@ -993,5 +1010,246 @@ func TestDiscussionCodexInterruptReleases(t *testing.T) {
 	s.discussionHook("codex", "Interrupt", json.RawMessage(`{"turn_id":"turn-1"}`), false)
 	if s.discussionReady() {
 		t.Fatal("stale Interrupt released a newer turn")
+	}
+}
+
+// 摘要：成员在自己的一轮里保存，之后别的成员的上下文从它开始；别的终端、worker 不能清，用户能清。
+func TestDiscussionSummary(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	a := addMember(t, d, disc, "Alice", "claude")
+	b := addMember(t, d, disc, "Bob", "codex")
+	for i := range store.SummarySkip + 1 {
+		postTo(t, d, disc, fmt.Sprint("old chat ", i), "", "")
+	}
+	r := postTo(t, d, disc, "summarize the discussion", a.ID, "")
+	x := waitExec(t, d, r.Execution.ID, store.ExecRunning)
+	if task, _ := d.store.Task(x.TaskID); !strings.Contains(task.Spec, "posse discussion summarize --execution "+x.ID) {
+		t.Fatalf("prompt does not explain summaries:\n%s", task.Spec)
+	}
+	if _, err := callErr(d.discSummarize, map[string]any{"execution": x.ID, "caller": x.Worker, "body": "s"}); err == nil || !strings.Contains(err.Error(), "not read") {
+		t.Fatalf("summary before reading: %v", err)
+	}
+	readAll(t, d, x)
+	if _, err := callErr(d.discSummarize, map[string]any{"execution": x.ID, "caller": "t_other", "body": "s"}); err == nil {
+		t.Fatal("another terminal saved a summary")
+	}
+	if _, err := callErr(d.discSummarize, map[string]any{"execution": x.ID, "caller": x.Worker, "body": strings.Repeat("x", store.MaxSummary+1)}); err == nil {
+		t.Fatal("overlong summary accepted")
+	}
+	got := call(t, d.discSummarize, map[string]any{"execution": x.ID, "caller": x.Worker, "body": "Decided: ship on Friday.\n"}).(store.Discussion)
+	if got.Summary != "Decided: ship on Friday." || got.SummaryBy != "Alice" {
+		t.Fatalf("summary %+v", got)
+	}
+	if _, err := callErr(d.discSummaryClear, map[string]any{"discussion": disc.Key, "caller": x.Worker}); err == nil {
+		t.Fatal("a worker cleared the summary")
+	}
+	call(t, d.taskDone, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "body": "summary saved"})
+	// Bob 没接收过任何消息：给摘要和补读的命令，不给摘要之前的闲聊
+	r2 := postTo(t, d, disc, "what did we decide?", b.ID, "")
+	x2 := waitExec(t, d, r2.Execution.ID, store.ExecRunning)
+	text := readAll(t, d, x2)
+	for _, want := range []string{"## Summary of the discussion up to #", "written by Alice", "Decided: ship on Friday.", "posse discussion read " + disc.Key + " --from", "summary saved"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("context lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "old chat 3") {
+		t.Fatalf("context still carries messages the summary covers:\n%s", text)
+	}
+	if cur := call(t, d.discSummaryClear, map[string]any{"discussion": disc.Key}).(store.Discussion); cur.Summary != "" {
+		t.Fatalf("summary not cleared: %+v", cur)
+	}
+}
+
+// 成员 @ 成员：消息署成员的名字、为对方排一轮，对方的上下文写明来自成员；重跑同一条命令不多排；
+// 别的终端、@ 自己、没读完都被拒；转到第 MaxChainDepth 层之后再转被拒，用户再 @ 是新的一条链。
+func TestDiscussionMemberMention(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	a := addMember(t, d, disc, "Alice", "claude")
+	b := addMember(t, d, disc, "Bob", "codex")
+	r := postTo(t, d, disc, "plan and get it reviewed", a.ID, "")
+	x := waitExec(t, d, r.Execution.ID, store.ExecRunning)
+	if task, _ := d.store.Task(x.TaskID); !strings.Contains(task.Spec, "posse discussion mention --execution "+x.ID) {
+		t.Fatalf("prompt does not explain mentions:\n%s", task.Spec)
+	}
+	mention := func(x store.Execution, to, body string) (discPostResult, error) {
+		v, err := callErr(d.discMention, map[string]any{"execution": x.ID, "caller": x.Worker, "to": to, "body": body})
+		if err != nil {
+			return discPostResult{}, err
+		}
+		return v.(discPostResult), nil
+	}
+	if _, err := mention(x, "Bob", "review this"); err == nil || !strings.Contains(err.Error(), "not read") {
+		t.Fatalf("mention before reading: %v", err)
+	}
+	readAll(t, d, x)
+	if _, err := callErr(d.discMention, map[string]any{"execution": x.ID, "caller": "t_other", "to": "Bob", "body": "x"}); err == nil {
+		t.Fatal("another terminal mentioned as Alice")
+	}
+	if _, err := mention(x, "Alice", "me again"); err == nil {
+		t.Fatal("a member mentioned itself")
+	}
+	if _, err := mention(x, "Nobody", "x"); err == nil || !strings.Contains(err.Error(), "Bob") {
+		t.Fatalf("unknown member: %v", err)
+	}
+	// worker 仍然不能以用户身份发言
+	if _, err := callErr(d.discPost, map[string]any{"discussion": disc.Key, "body": "as user", "target": b.ID, "caller": x.Worker}); err == nil {
+		t.Fatal("worker posted as the user")
+	}
+	got, err := mention(x, "@bob", "please review the plan in PLAN.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := got.Message
+	if m.Kind != store.DiscDelegate || m.AuthorMember != a.ID || m.AuthorName != "Alice" || m.AuthorAgent != "claude" || m.Target != b.ID || got.Execution == nil ||
+		got.Execution.Depth != 1 || got.Execution.Root != x.ID {
+		t.Fatalf("mention %+v %+v", m, got.Execution)
+	}
+	again, err := mention(x, "Bob", "please review the plan in PLAN.md")
+	if err != nil || !again.Duplicate || again.Execution.ID != got.Execution.ID {
+		t.Fatalf("rerun: %v %+v", err, again)
+	}
+	// 两个成员在同一个目录：Alice 还在做，Bob 这一轮照同目录的规矩等确认（Alice 做完会自动放行），这里直接确认
+	waitExec(t, d, got.Execution.ID, store.ExecHeld)
+	call(t, d.discConfirm, map[string]any{"execution": got.Execution.ID})
+	xb := waitExec(t, d, got.Execution.ID, store.ExecRunning)
+	text := readAll(t, d, xb)
+	for _, want := range []string{"comes from the member Alice, not from the user", "Alice (claude), request from a member", "please review the plan in PLAN.md"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Bob's context lacks %q:\n%s", want, text)
+		}
+	}
+	// 结束了的一轮不能再 @
+	call(t, d.taskDone, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "body": "handed to Bob"})
+	d.setAgent(d.liveSession(x.Worker), term.AgentState{Status: agent.StatusIdle})
+	if _, err := mention(x, "Bob", "late"); err == nil {
+		t.Fatal("mention from a finished round")
+	}
+	// Bob → Alice（第 2 层）→ Bob（第 3 层）→ 再转被拒
+	cur, who := xb, "Alice"
+	for depth := 2; depth <= store.MaxChainDepth; depth++ {
+		next, err := mention(cur, who, fmt.Sprint("hop ", depth))
+		if err != nil || next.Execution.Depth != depth || next.Execution.Root != x.ID {
+			t.Fatalf("hop %d: %v %+v", depth, err, next.Execution)
+		}
+		call(t, d.taskDone, map[string]any{"task": cur.TaskID, "caller": cur.Worker, "execution": cur.ID, "body": "passed on"})
+		d.setAgent(d.liveSession(cur.Worker), term.AgentState{Status: agent.StatusIdle})
+		cur = waitExec(t, d, next.Execution.ID, store.ExecRunning)
+		readAll(t, d, cur)
+		if who == "Alice" {
+			who = "Bob"
+		} else {
+			who = "Alice"
+		}
+	}
+	if _, err := mention(cur, who, "one more"); err == nil || !strings.Contains(err.Error(), "limit") {
+		t.Fatalf("mention past the limit: %v", err)
+	}
+	call(t, d.taskDone, map[string]any{"task": cur.TaskID, "caller": cur.Worker, "execution": cur.ID, "body": "stopping here"})
+	d.setAgent(d.liveSession(cur.Worker), term.AgentState{Status: agent.StatusIdle})
+	// 用户再 @：新的一条链，又可以转
+	r2 := postTo(t, d, disc, "go on", a.ID, "")
+	x2 := waitExec(t, d, r2.Execution.ID, store.ExecRunning)
+	readAll(t, d, x2)
+	if n, err := mention(x2, "Bob", "fresh chain"); err != nil || n.Execution.Depth != 1 || n.Execution.Root != x2.ID {
+		t.Fatalf("fresh chain: %v %+v", err, n.Execution)
+	}
+}
+
+// 连着发给同一成员的几条请求并成一轮：后面的转 merged、不单独执行，上下文按顺序带上它们和中间别人说的话，
+// 一条回复一并回答；重试带着并进来的；发给别的成员的、成员忙着时隔着别人请求的不并。
+func TestDiscussionMergesBurst(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	d.disc.settle = 300 * time.Millisecond
+	a := addMember(t, d, disc, "Alice", "claude")
+	r1 := postTo(t, d, disc, "first: rename the flag", a.ID, "")
+	d.dispatchAll()
+	if x, _ := d.store.Execution(r1.Execution.ID); x.State != store.ExecQueued {
+		t.Fatalf("dispatched before the settle window: %s", x.State)
+	}
+	postTo(t, d, disc, "a plain remark in between", "", "")
+	r2 := postTo(t, d, disc, "second: update the docs too", a.ID, "")
+	r3 := postTo(t, d, disc, "third: and the changelog", a.ID, "")
+	x1 := waitExec(t, d, r1.Execution.ID, store.ExecRunning)
+	for _, r := range []discPostResult{r2, r3} {
+		if x, _ := d.store.Execution(r.Execution.ID); x.State != store.ExecMerged || x.Reason != x1.ID || x.TaskID != "" {
+			t.Fatalf("follower %+v", x)
+		}
+	}
+	if ts, _ := d.store.Tasks(store.TaskFilter{}); len(ts) != 1 {
+		t.Fatalf("%d workers for one merged round", len(ts))
+	}
+	text := readAll(t, d, x1)
+	i1, i2, i3 := strings.Index(text, "first: rename the flag"), strings.Index(text, "second: update the docs too"), strings.Index(text, "third: and the changelog")
+	if i1 < 0 || i2 < i1 || i3 < i2 || !strings.Contains(text, "sent 3 requests in a row") || !strings.Contains(text, "a plain remark in between") {
+		t.Fatalf("merged context:\n%s", text)
+	}
+	if mem, _ := d.store.Member(a.ID); mem.RecvSeq != r3.Message.Seq {
+		t.Fatalf("recv %d, want %d", mem.RecvSeq, r3.Message.Seq)
+	}
+	// 停止后重试：并进来的跟到新的一轮上
+	call(t, d.discStop, map[string]any{"execution": x1.ID})
+	nx := call(t, d.discRetry, map[string]any{"execution": x1.ID}).(store.Execution)
+	if x, _ := d.store.Execution(r2.Execution.ID); x.State != store.ExecMerged || x.Reason != nx.ID {
+		t.Fatalf("follower after retry %+v", x)
+	}
+	call(t, d.discMemberRestart, map[string]any{"member": a.ID})
+	xr := waitExec(t, d, nx.ID, store.ExecRunning)
+	if text := readAll(t, d, xr); !strings.Contains(text, "third: and the changelog") {
+		t.Fatalf("retried context lost the merged requests:\n%s", text)
+	}
+	// 成员忙着时又来两条：做完后这两条并成下一轮
+	r4 := postTo(t, d, disc, "fourth", a.ID, "")
+	r5 := postTo(t, d, disc, "fifth", a.ID, "")
+	call(t, d.taskDone, map[string]any{"task": xr.TaskID, "caller": xr.Worker, "execution": xr.ID, "body": "all three done"})
+	d.setAgent(d.liveSession(xr.Worker), term.AgentState{Status: agent.StatusIdle})
+	x4 := waitExec(t, d, r4.Execution.ID, store.ExecRunning)
+	if x, _ := d.store.Execution(r5.Execution.ID); x.State != store.ExecMerged || x.Reason != x4.ID {
+		t.Fatalf("backlog follower %+v", x)
+	}
+}
+
+// CLI 好用的两处：回答可以用讨论里那条问题消息的 ID（discussion show 印的那个），发请求的对象可以写成员名字。
+func TestDiscussionAnswerByMessageAndPostByName(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	a := addMember(t, d, disc, "Alice", "claude")
+	// 名字不分大小写、可以带 @；找不到时列出成员
+	r := call(t, d.discPost, map[string]any{"discussion": disc.Key, "body": "do it", "target": "@alice"}).(discPostResult)
+	if r.Message.Target != a.ID || r.Execution == nil {
+		t.Fatalf("post to a member by name: %+v", r.Message)
+	}
+	if _, err := callErr(d.discPost, map[string]any{"discussion": disc.Key, "body": "x", "target": "nobody"}); err == nil || !strings.Contains(err.Error(), "members: Alice") {
+		t.Fatalf("post to an unknown member: %v", err)
+	}
+	x := waitExec(t, d, r.Execution.ID, store.ExecRunning)
+	got := make(chan error, 1)
+	go func() {
+		v, err := callErr(d.taskAsk, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "question": "which?", "timeoutMs": 5000})
+		if err == nil && v.(taskAskResult).Answer != "main" {
+			err = fmt.Errorf("answer %q", v.(taskAskResult).Answer)
+		}
+		got <- err
+	}()
+	var q store.DiscMessage
+	deadline := time.Now().Add(3 * time.Second)
+	for q.ID == "" && time.Now().Before(deadline) {
+		msgs, _ := d.store.DiscMessages(disc.Key, 0, 100)
+		if last := msgs[len(msgs)-1]; last.Kind == store.DiscQuestion {
+			q = last
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if q.ID == "" {
+		t.Fatal("question not posted")
+	}
+	if _, err := callErr(d.discAnswer, map[string]any{"question": r.Message.ID, "body": "x"}); err == nil || !strings.Contains(err.Error(), "not a question") {
+		t.Fatalf("answering a message that is not a question: %v", err)
+	}
+	call(t, d.discAnswer, map[string]any{"question": q.ID, "body": "main"})
+	if _, err := callErr(d.discAnswer, map[string]any{"question": q.ID, "body": "again"}); err == nil {
+		t.Fatal("second answer by message id accepted")
+	}
+	if err := <-got; err != nil {
+		t.Fatal(err)
 	}
 }

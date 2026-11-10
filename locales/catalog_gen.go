@@ -24807,6 +24807,22 @@ func (msgs Messages) DiscExecInterrupted() string {
 	return Catalog.Format(msgs.locale, "discExecInterrupted", nil)
 }
 
+// DiscExecMerged says "Merged into the previous request"
+// in the language the app shows.
+//
+// Discussion: status line under a request that was sent right after another
+// one to the same agent and is handled in that earlier request's round.
+func DiscExecMerged() string { return In(i18n.Locale()).DiscExecMerged() }
+
+// DiscExecMerged says "Merged into the previous request"
+// in the language of msgs.
+//
+// Discussion: status line under a request that was sent right after another
+// one to the same agent and is handled in that earlier request's round.
+func (msgs Messages) DiscExecMerged() string {
+	return Catalog.Format(msgs.locale, "discExecMerged", nil)
+}
+
 // DiscExecQueued says "Queued"
 // in the language the app shows.
 //
@@ -25625,6 +25641,68 @@ func (msgs Messages) DiscStopConfirm(name string) string {
 	return Catalog.Format(msgs.locale, "discStopConfirm", map[string]any{"name": name})
 }
 
+// DiscSummarizeBy says "Have {name} Summarize"
+// in the language the app shows.
+//
+// Discussion more menu: asks the named agent member to write the discussion
+// summary. name is the member's name.
+func DiscSummarizeBy(name string) string { return In(i18n.Locale()).DiscSummarizeBy(name) }
+
+// DiscSummarizeBy says "Have {name} Summarize"
+// in the language of msgs.
+//
+// Discussion more menu: asks the named agent member to write the discussion
+// summary. name is the member's name.
+func (msgs Messages) DiscSummarizeBy(name string) string {
+	return Catalog.Format(msgs.locale, "discSummarizeBy", map[string]any{"name": name})
+}
+
+// DiscSummarizeRequest says "Summarize this discussion so far and save it as the discussion summary: decisions, open questions, and who is doing w…"
+// in the language the app shows.
+//
+// Discussion: text of the request sent to a member when the user picks Have
+// X Summarize. It is posted as the user's message.
+func DiscSummarizeRequest() string { return In(i18n.Locale()).DiscSummarizeRequest() }
+
+// DiscSummarizeRequest says "Summarize this discussion so far and save it as the discussion summary: decisions, open questions, and who is doing w…"
+// in the language of msgs.
+//
+// Discussion: text of the request sent to a member when the user picks Have
+// X Summarize. It is posted as the user's message.
+func (msgs Messages) DiscSummarizeRequest() string {
+	return Catalog.Format(msgs.locale, "discSummarizeRequest", nil)
+}
+
+// DiscSummary says "Summary"
+// in the language the app shows.
+//
+// Discussion side panel: title of the section showing the summary a member
+// wrote.
+func DiscSummary() string { return In(i18n.Locale()).DiscSummary() }
+
+// DiscSummary says "Summary"
+// in the language of msgs.
+//
+// Discussion side panel: title of the section showing the summary a member
+// wrote.
+func (msgs Messages) DiscSummary() string {
+	return Catalog.Format(msgs.locale, "discSummary", nil)
+}
+
+// DiscSummaryClear says "Clear Summary"
+// in the language the app shows.
+//
+// Discussion more menu: removes the discussion summary.
+func DiscSummaryClear() string { return In(i18n.Locale()).DiscSummaryClear() }
+
+// DiscSummaryClear says "Clear Summary"
+// in the language of msgs.
+//
+// Discussion more menu: removes the discussion summary.
+func (msgs Messages) DiscSummaryClear() string {
+	return Catalog.Format(msgs.locale, "discSummaryClear", nil)
+}
+
 // DiscTitle says "Discussions"
 // in the language the app shows.
 //
@@ -25957,6 +26035,38 @@ func (msgs Messages) CollabFingerprint() string {
 	return Catalog.Format(msgs.locale, "collabFingerprint", nil)
 }
 
+// CollabGuestLabel says "view only"
+// in the language the app shows.
+//
+// Discussion people list and join request: tag after a person's name who
+// joined (or asks to join) as a read-only viewer.
+func CollabGuestLabel() string { return In(i18n.Locale()).CollabGuestLabel() }
+
+// CollabGuestLabel says "view only"
+// in the language of msgs.
+//
+// Discussion people list and join request: tag after a person's name who
+// joined (or asks to join) as a read-only viewer.
+func (msgs Messages) CollabGuestLabel() string {
+	return Catalog.Format(msgs.locale, "collabGuestLabel", nil)
+}
+
+// CollabGuestNote says "You joined as a viewer: you can read this discussion but not post."
+// in the language the app shows.
+//
+// Discussion: note shown in place of the message input for a person who
+// joined as a read-only viewer.
+func CollabGuestNote() string { return In(i18n.Locale()).CollabGuestNote() }
+
+// CollabGuestNote says "You joined as a viewer: you can read this discussion but not post."
+// in the language of msgs.
+//
+// Discussion: note shown in place of the message input for a person who
+// joined as a read-only viewer.
+func (msgs Messages) CollabGuestNote() string {
+	return Catalog.Format(msgs.locale, "collabGuestNote", nil)
+}
+
 // CollabHostedBy says "Hosted by {name}"
 // in the language the app shows.
 //
@@ -25997,6 +26107,38 @@ func CollabInviteEllipsis() string { return In(i18n.Locale()).CollabInviteEllips
 // Create an invitation for a shared discussion.
 func (msgs Messages) CollabInviteEllipsis() string {
 	return Catalog.Format(msgs.locale, "collabInviteEllipsis", nil)
+}
+
+// CollabInviteGuestEllipsis says "Invite a Viewer…"
+// in the language the app shows.
+//
+// Discussion more menu (host): creates an invitation whose holder can read
+// the discussion but not post or bring agents.
+func CollabInviteGuestEllipsis() string { return In(i18n.Locale()).CollabInviteGuestEllipsis() }
+
+// CollabInviteGuestEllipsis says "Invite a Viewer…"
+// in the language of msgs.
+//
+// Discussion more menu (host): creates an invitation whose holder can read
+// the discussion but not post or bring agents.
+func (msgs Messages) CollabInviteGuestEllipsis() string {
+	return Catalog.Format(msgs.locale, "collabInviteGuestEllipsis", nil)
+}
+
+// CollabInviteGuestNote says "Whoever joins with this invitation can read messages and download attachments, but can’t post, mark messages or bri…"
+// in the language the app shows.
+//
+// Invitation dialog: extra line shown when the invitation is for a
+// read-only viewer.
+func CollabInviteGuestNote() string { return In(i18n.Locale()).CollabInviteGuestNote() }
+
+// CollabInviteGuestNote says "Whoever joins with this invitation can read messages and download attachments, but can’t post, mark messages or bri…"
+// in the language of msgs.
+//
+// Invitation dialog: extra line shown when the invitation is for a
+// read-only viewer.
+func (msgs Messages) CollabInviteGuestNote() string {
+	return Catalog.Format(msgs.locale, "collabInviteGuestNote", nil)
 }
 
 // CollabInviteNote says "Single use, valid until {at, date, ::jm}. Posse does not send it: copy it and send it with your own chat tool. You st…"

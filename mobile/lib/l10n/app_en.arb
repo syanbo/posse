@@ -3578,5 +3578,37 @@
   "discUnshareConfirm": "Stop",
   "@discUnshareConfirm": {
     "description": "Mobile discussions: confirm button when turning off LAN sharing"
+  },
+  "discSummary": "Summary",
+  "@discSummary": {
+    "description": "Mobile discussions: details section showing the summary an agent wrote"
+  },
+  "discSummarize": "Update summary",
+  "@discSummarize": {
+    "description": "Mobile discussions: details action asking an agent to write the discussion summary"
+  },
+  "discSummaryClear": "Clear summary",
+  "@discSummaryClear": {
+    "description": "Mobile discussions: details action and confirm button removing the summary"
+  },
+  "discSummarizeRequest": "Summarize this discussion so far and save it as the discussion summary: decisions, open questions, and who is doing what.",
+  "@discSummarizeRequest": {
+    "description": "Mobile discussions: text of the request posted to an agent when the user taps Update summary"
+  },
+  "discStateMerged": "Merged into the previous request",
+  "@discStateMerged": {
+    "description": "Mobile discussions: state of a request handled in the round of the request sent just before it"
+  },
+  "discGuest": "view only",
+  "@discGuest": {
+    "description": "Mobile discussions: tag after the name of a person who joined, or asks to join, as a read-only viewer"
+  },
+  "discInviteGuest": "Invite a viewer",
+  "@discInviteGuest": {
+    "description": "Mobile discussions: details action and dialog title for an invitation whose holder can only read"
+  },
+  "discGuestNote": "You joined as a viewer and can’t post here.",
+  "@discGuestNote": {
+    "description": "Mobile discussions: shown in place of the input when this computer joined the discussion as a read-only viewer"
   }
 }

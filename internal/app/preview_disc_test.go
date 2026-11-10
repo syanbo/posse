@@ -43,7 +43,8 @@ func previewDiscussion(a *app) {
 			Body:   "## 要改的地方\n\n1. `LoginView.swift`：删掉 `CaptchaSheet`，表单下面加「记住密码」开关。\n2. `Keychain.swift`：新增 `savePassword(_:for:)`，service 用 `com.example.skill`。\n3. `LoginViewModel`：登录成功后按开关决定是否写钥匙串。\n\n不需要改注册流程。"},
 		{ID: "m4", Seq: 4, Kind: "user", Body: "复核一下 Claude 的方案，有风险就指出来，然后按方案实现。", Quote: "m3", Target: "mb2", TargetName: "Codex 审查", Execution: "x2", CreatedAt: at(50),
 			Attachments: []discAttachment{{ID: "a1", Name: "登录页设计稿.png", Path: ".posse/discussions/d_1/attachments/a1/登录页设计稿.png", Size: 482113}}},
-		{ID: "m5", Seq: 5, Kind: "question", AuthorMember: "mb2", AuthorName: "Codex 审查", AuthorAgent: "codex", Execution: "x2", Question: "q1", Body: "要不要保留旧的短信登录入口？去掉验证码弹窗后它也会跟着失效。", CreatedAt: ago},
+		{ID: "m5", Seq: 5, Kind: "question", AuthorMember: "mb2", AuthorName: "Codex 审查", AuthorAgent: "codex", Execution: "x2", Question: "q1", Body: "要不要保留旧的短信登录入口？去掉验证码弹窗后它也会跟着失效。", CreatedAt: ago,
+			Choices: []string{"保留，另开一个入口", "去掉", "先保留，下个版本再去掉"}},
 		{ID: "m6", Seq: 6, Kind: "user", Body: "再试一次打包，把错误贴回来。", Target: "mb1", TargetName: "Claude 方案", Execution: "x3", CreatedAt: at(45)},
 		{ID: "m7", Seq: 7, Kind: "reply", AuthorMember: "mb1", AuthorName: "Claude 方案", AuthorAgent: "claude", Execution: "x3", Outcome: "failed", CreatedAt: at(44),
 			Body: "打包在 `resguardArmQa` 失败：JDK 版本不对（需要 17，本机是 21）。没有改构建配置。"},
@@ -66,6 +67,8 @@ func previewDiscussion(a *app) {
 		}}
 	a.disc.d.keyMsgs[1].KeyAt = &keyAt
 	a.disc.d.msgs[2].KeyAt = &keyAt
+	a.disc.d.info.Summary = "- 登录页去掉验证码弹窗，记住密码写钥匙串。\n- 实现由 **Codex 审查** 在 `feat-login` 上做。\n- 还没定：旧的短信登录入口留不留。"
+	a.disc.d.info.SummaryBy = "Claude 方案"
 	a.disc.target = "mb1"
 	a.disc.quote = "m7"
 	a.disc.panel = true
@@ -100,6 +103,33 @@ func renderDiscussionPreviews(t *testing.T, dark bool, suffix string) {
 	a.disc.searchQ, a.disc.search = "search", "钥匙串"
 	a.disc.hits = []discMessage{a.disc.d.msgs[0], a.disc.d.msgs[2]}
 	savePNG(t, newPreviewTester(a, dark), "discussions-answer-search-"+suffix+".png")
+
+	// 带选项的问题：滚到问题那里，选项和「回答…」排一行
+	a = previewApp(t)
+	previewDiscussion(a)
+	a.disc.quote = ""
+	a.disc.reveal = "m5"
+	tt = newPreviewTester(a, dark)
+	for range 3 {
+		tt.Frame()
+	}
+	savePNG(t, tt, "discussions-choices-"+suffix+".png")
+
+	// 成员 @ 成员：消息署成员的名字，带 @ 标签，下面是对方那一轮的状态
+	a = previewApp(t)
+	previewDiscussion(a)
+	a.disc.quote = ""
+	a.disc.d.msgs = append(a.disc.d.msgs,
+		discMessage{ID: "m10", Seq: 10, Kind: "delegate", AuthorMember: "mb1", AuthorName: "Claude 方案", AuthorAgent: "claude", Target: "mb2", TargetName: "Codex 审查", Execution: "x6",
+			Body: "方案在 `login-plan.md`，请按它实现，重点看 **钥匙串** 那一步。", CreatedAt: time.Now()},
+		discMessage{ID: "m11", Seq: 11, Kind: "reply", AuthorMember: "mb2", AuthorName: "Codex 审查", AuthorAgent: "codex", Execution: "x6", Outcome: "done", Body: "已按方案实现，单测通过。", CreatedAt: time.Now()})
+	a.disc.d.execs["x6"] = discExec{ID: "x6", Member: "mb2", Message: "m10", State: "done", Agent: "codex", WorkspaceLabel: "Skill/feat-login", TaskID: "k2", Worker: "t5", Terminal: true}
+	a.disc.reveal = "m11"
+	tt = newPreviewTester(a, dark)
+	for range 3 {
+		tt.Frame()
+	}
+	savePNG(t, tt, "discussions-delegate-"+suffix+".png")
 
 	// 长消息
 	a = previewApp(t)
@@ -210,7 +240,7 @@ func previewCollab(a *app, host bool) {
 	d.msgs = append(d.msgs, discMessage{ID: "m10", Seq: 10, Kind: "user", AuthorID: strings.Repeat("b2", 32), AuthorName: "Mo", Mention: strings.Repeat("a1", 32), MentionName: "Hana",
 		Body: "我这边的 Codex 在改登录页，Hana 你的 Claude 先别动 LoginView。", CreatedAt: time.Now()})
 	if host {
-		cb.Requests = []discJoinRequest{{ID: "rq_1", FP: strings.Repeat("d4", 32), Name: "Qiao", Addr: "192.168.1.23:52011", State: "pending", CreatedAt: time.Now()}}
+		cb.Requests = []discJoinRequest{{ID: "rq_1", FP: strings.Repeat("d4", 32), Name: "Qiao", Addr: "192.168.1.23:52011", State: "pending", Role: "guest", CreatedAt: time.Now()}}
 		a.disc.list[0].Shared, a.disc.list[0].Requests = true, 1
 		return
 	}
@@ -266,6 +296,16 @@ func renderCollabPreviews(t *testing.T, dark bool, suffix string) {
 	previewCollab(a, true)
 	a.disc.quote = ""
 	savePNG(t, newPreviewTester(a, dark), "discussions-collab-host-"+suffix+".png")
+
+	// 只读访客：本机以只读身份加入，输入区换成一行说明；人员表里带「只读」
+	a = previewApp(t)
+	previewDiscussion(a)
+	previewCollab(a, false)
+	a.disc.quote = ""
+	a.disc.d.collab.Connected, a.disc.d.collab.Error, a.disc.d.collab.Outbox = true, "", 0
+	a.disc.d.collab.People[1].Role, a.disc.d.collab.People[1].Online = "guest", true
+	a.disc.d.members = a.disc.d.members[:1]
+	savePNG(t, newPreviewTester(a, dark), "discussions-collab-guest-"+suffix+".png")
 
 	a = previewApp(t)
 	previewDiscussion(a)

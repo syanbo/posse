@@ -6,6 +6,10 @@ import 'package:flutter/foundation.dart';
 typedef DiscJson = Map<String, Object?>;
 DiscJson discMap(Object? v) => v is Map ? v.cast<String, Object?>() : {};
 List<DiscJson> discList(Object? v) => v is List ? v.map(discMap).toList() : [];
+
+/// 字符串列表（问题的选项）。
+List<String> discStrings(Object? v) =>
+    v is List ? v.whereType<String>().toList() : [];
 String discText(DiscJson v, String k) => v[k] is String ? v[k]! as String : '';
 int discInt(DiscJson v, String k) => (v[k] as num?)?.toInt() ?? 0;
 bool discMine(DiscJson v, String self) =>

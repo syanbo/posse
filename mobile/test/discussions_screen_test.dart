@@ -106,6 +106,12 @@ class DiscModel extends PosseAppModel {
   String? get activeId => 'test-computer';
 }
 
+Future<void> settle(WidgetTester t) async {
+  for (var i = 0; i < 5; i++) {
+    await t.pump(const Duration(milliseconds: 200));
+  }
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   test(
@@ -253,6 +259,88 @@ void main() {
     );
     await t.pumpWidget(const SizedBox());
     await t.pumpAndSettle();
+    model.dispose();
+  });
+  testWidgets('a question choice answers in one tap and keeps the draft', (
+    t,
+  ) async {
+    final fake = DiscRpc();
+    var answered = false;
+    fake.handler = (method, params) async {
+      if (method == 'discussion.answer') answered = true;
+      return {
+        'discussion': {
+          'key': 'room',
+          'title': 'Design review',
+          'status': 'active',
+          'rev': answered ? 2 : 1,
+          'msgSeq': answered ? 2 : 1,
+        },
+        'members': [
+          {'id': 'mine', 'name': 'Reviewer', 'agent': 'claude', 'owner': ''},
+        ],
+        'messages': [
+          {
+            'id': 'q1',
+            'seq': 1,
+            'kind': 'question',
+            'authorName': 'Reviewer',
+            'authorAgent': 'claude',
+            'body': 'Which branch?',
+            'question': 'm_q',
+            'execution': 'x1',
+            'choices': ['main', 'a new branch'],
+            'createdAt': '2026-11-06T10:00:00Z',
+          },
+          if (answered)
+            {
+              'id': 'a1',
+              'seq': 2,
+              'kind': 'answer',
+              'body': 'a new branch',
+              'question': 'm_q',
+              'execution': 'x1',
+              'createdAt': '2026-11-06T10:01:00Z',
+            },
+        ],
+        'executions': [
+          {
+            'id': 'x1',
+            'message': 'm0',
+            'member': 'mine',
+            'state': answered ? 'running' : 'waiting',
+            'owner': '',
+          },
+        ],
+        'more': false,
+        'moreAfter': false,
+      };
+    };
+    final model = DiscModel(fake);
+    await t.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.light),
+        home: DiscussionRoom(
+          api: DiscussionApi(model),
+          room: 'room',
+          self: 'self',
+        ),
+      ),
+    );
+    // 进行中的执行有一直在动的指示，等不到静止：按时间推进
+    await settle(t);
+    await t.enterText(find.byType(TextField), 'my draft');
+    await t.tap(find.text('a new branch'));
+    await settle(t);
+    final call = fake.calls.lastWhere((c) => c.method == 'discussion.answer');
+    expect(call.params['question'], 'm_q');
+    expect(call.params['body'], 'a new branch');
+    expect(call.params['clientId'], 'choice-m_q-1');
+    expect(find.text('my draft'), findsOneWidget);
+    // 答过之后按钮收起，答案作为一条消息留着
+    expect(find.text('main'), findsNothing);
+    await t.pumpWidget(const SizedBox());
+    await settle(t);
     model.dispose();
   });
   testWidgets('active composer fits a narrow screen with the keyboard', (

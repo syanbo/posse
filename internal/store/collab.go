@@ -17,8 +17,10 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const collabSchema = `
@@ -176,15 +178,23 @@ type Person struct {
 	// Avatar 是头像的 SHA-256（空是没有），ProfileRev 是这个人自己的资料版本（旧版不带，记 0）
 	Avatar     string `json:"avatar,omitempty"`
 	ProfileRev int64  `json:"profileRev,omitempty"`
+	// Role 为 RoleGuest 时这个人只读：能看消息、下载附件，不能发言、标关键、带 Agent。空是普通成员
+	Role string `json:"role,omitempty"`
 }
 
-const personCols = `room,fp,name,generation,state,host,rev,joined_at,ended_at,avatar,profile_rev`
+// RoleGuest 是只读访客（邀请时定，换成普通成员要新邀请）。
+const RoleGuest = "guest"
+
+// ErrGuest 是只读访客做了写操作。
+var ErrGuest = errors.New("you joined this discussion as a viewer and cannot post, mark messages or add agents; ask the host for a full invitation")
+
+const personCols = `room,fp,name,generation,state,host,rev,joined_at,ended_at,avatar,profile_rev,role`
 
 func scanPerson(row interface{ Scan(...any) error }) (Person, error) {
 	var p Person
 	var joined int64
 	var ended sql.NullInt64
-	err := row.Scan(&p.Room, &p.FP, &p.Name, &p.Generation, &p.State, &p.Host, &p.Rev, &joined, &ended, &p.Avatar, &p.ProfileRev)
+	err := row.Scan(&p.Room, &p.FP, &p.Name, &p.Generation, &p.State, &p.Host, &p.Rev, &joined, &ended, &p.Avatar, &p.ProfileRev, &p.Role)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, ErrNotFound
 	}
@@ -205,15 +215,16 @@ type JoinRequest struct {
 	Generation int64      `json:"generation,omitempty"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	DecidedAt  *time.Time `json:"decidedAt,omitempty"`
+	Role       string     `json:"role,omitempty"` // 邀请给的身份：RoleGuest 是只读访客
 }
 
-const requestCols = `id,room,fp,name,invite,addr,state,generation,created_at,decided_at`
+const requestCols = `id,room,fp,name,invite,addr,state,generation,created_at,decided_at,role`
 
 func scanRequest(row interface{ Scan(...any) error }) (JoinRequest, error) {
 	var r JoinRequest
 	var created int64
 	var decided sql.NullInt64
-	err := row.Scan(&r.ID, &r.Room, &r.FP, &r.Name, &r.Invite, &r.Addr, &r.State, &r.Generation, &created, &decided)
+	err := row.Scan(&r.ID, &r.Room, &r.FP, &r.Name, &r.Invite, &r.Addr, &r.State, &r.Generation, &created, &decided, &r.Role)
 	if errors.Is(err, sql.ErrNoRows) {
 		return r, ErrNotFound
 	}
@@ -262,6 +273,72 @@ type OwnerEvent struct {
 	Body     string `json:"body,omitempty"`
 	Outcome  string `json:"outcome,omitempty"`
 	At       int64  `json:"at,omitempty"`
+	// Choices 是问题的可选答案。房主有 FeatureChoices 才带：旧版房主解不出这个字段，摘要会对不上
+	Choices []string `json:"choices,omitempty"`
+}
+
+// 房主在 hello 里报的能力：加入者按它决定能不能用新加的事件字段和方法，没报的按旧版对待。
+const (
+	FeatureChoices = "choices"
+	FeatureSummary = "summary"
+	// FeatureDelegate：post 认 from（成员 @ 成员）。旧版房主会把它当成这个人自己发的普通请求
+	FeatureDelegate = "delegate"
+	// FeatureGuest：房主能发只读访客的邀请，并挡住访客的写操作
+	FeatureGuest = "guest"
+)
+
+// HostFeatures 是这一版房主支持的能力。
+var HostFeatures = []string{FeatureChoices, FeatureSummary, FeatureDelegate, FeatureGuest}
+
+// hostHas 报告加入的讨论的房主（上次连上时）有没有这项能力。
+func hostHas(tx querier, room, feature string) bool {
+	var fs string
+	tx.QueryRow(`SELECT features FROM collab_joined WHERE room=?`, room).Scan(&fs)
+	return slices.Contains(strings.Split(fs, ","), feature)
+}
+
+// HostHas 报告加入的讨论的房主（上次连上时）有没有这项能力。
+func (s *Store) HostHas(room, feature string) bool { return hostHas(s.db, room, feature) }
+
+// SetHostFeatures 记下房主这次 hello 报的能力。
+func (s *Store) SetHostFeatures(room string, features []string) error {
+	_, err := s.db.Exec(`UPDATE collab_joined SET features=? WHERE room=?`, strings.Join(features, ","), room)
+	return err
+}
+
+// MaxChoices、MaxChoiceLen 是一个问题最多带的选项数和每个选项的长度（字符）。
+const (
+	MaxChoices   = 6
+	MaxChoiceLen = 80
+)
+
+// NormalizeChoices 去掉空的、重复的选项；太多或太长时报错。
+func NormalizeChoices(in []string) ([]string, error) {
+	var out []string
+	for _, c := range in {
+		c = strings.Join(strings.Fields(c), " ")
+		if c == "" || slices.Contains(out, c) {
+			continue
+		}
+		if utf8.RuneCountInString(c) > MaxChoiceLen {
+			return nil, fmt.Errorf("a choice is longer than %d characters; keep choices short and put details in the question", MaxChoiceLen)
+		}
+		out = append(out, c)
+	}
+	if len(out) > MaxChoices {
+		return nil, fmt.Errorf("at most %d choices per question", MaxChoices)
+	}
+	return out, nil
+}
+
+// ChoiceList 把选项写成正文里的一段（没有按钮的地方用）。
+func ChoiceList(choices []string) string {
+	var b strings.Builder
+	b.WriteString("Options:")
+	for i, c := range choices {
+		fmt.Fprintf(&b, "\n%d. %s", i+1, c)
+	}
+	return b.String()
 }
 
 // 执行事件的种类
@@ -270,6 +347,8 @@ const (
 	EventQuestion = "question"
 	EventAnswer   = "answer"
 	EventReply    = "reply"
+	// EventSummary 是成员的 Agent 写的讨论摘要（房主有 FeatureSummary 才发）
+	EventSummary = "summary"
 )
 
 // OutboxItem 是一条待交给房主的事件。
@@ -360,6 +439,9 @@ func checkPerson(tx querier, room, fp string, gen int64) error {
 	}
 	if err != nil {
 		return err
+	}
+	if p.State == PersonActive && p.Generation == gen && p.Role == RoleGuest {
+		return ErrGuest
 	}
 	if p.State != PersonActive || p.Generation != gen {
 		return ErrRevoked
@@ -649,7 +731,7 @@ func (s *Store) SharedRooms() ([]Discussion, error) {
 }
 
 // CreateInvite 记下一份邀请：只存凭据哈希，十分钟（按房主时钟）有效，只能用一次。
-func (s *Store) CreateInvite(room, id, secretHash string, expires, at time.Time) error {
+func (s *Store) CreateInvite(room, id, secretHash, role string, expires, at time.Time) error {
 	return s.withTx(func(tx *sql.Tx) error {
 		d, err := scanDiscussion(tx.QueryRow(`SELECT `+discCols+` FROM discussions WHERE key=?`, room))
 		if err != nil {
@@ -664,7 +746,7 @@ func (s *Store) CreateInvite(room, id, secretHash string, expires, at time.Time)
 		if d.Status != DiscussionActive {
 			return ErrArchived
 		}
-		_, err = tx.Exec(`INSERT INTO collab_invites(id,room,secret_hash,expires_at,created_at) VALUES(?,?,?,?,?)`, id, room, secretHash, ms(expires), ms(at))
+		_, err = tx.Exec(`INSERT INTO collab_invites(id,room,secret_hash,expires_at,created_at,role) VALUES(?,?,?,?,?,?)`, id, room, secretHash, ms(expires), ms(at), role)
 		return err
 	})
 }
@@ -690,7 +772,8 @@ func (s *Store) SubmitJoin(room, secretHash, reqID, fp, name, addr string, now t
 		}
 		var invID, invRoom, used string
 		var expires int64
-		err := tx.QueryRow(`SELECT id, room, request, expires_at FROM collab_invites WHERE secret_hash=?`, secretHash).Scan(&invID, &invRoom, &used, &expires)
+		var role string
+		err := tx.QueryRow(`SELECT id, room, request, expires_at, role FROM collab_invites WHERE secret_hash=?`, secretHash).Scan(&invID, &invRoom, &used, &expires, &role)
 		if errors.Is(err, sql.ErrNoRows) || err == nil && invRoom != room {
 			return ErrInviteInvalid
 		}
@@ -723,9 +806,9 @@ func (s *Store) SubmitJoin(room, secretHash, reqID, fp, name, addr string, now t
 		if n, _ := res.RowsAffected(); n == 0 {
 			return ErrInviteUsed
 		}
-		out = JoinRequest{ID: reqID, Room: room, FP: fp, Name: name, Invite: invID, Addr: addr, State: RequestPending, CreatedAt: now}
-		if _, err := tx.Exec(`INSERT INTO collab_requests(id,room,fp,name,invite,addr,state,created_at) VALUES(?,?,?,?,?,?,?,?)`,
-			out.ID, room, fp, name, invID, addr, RequestPending, ms(now)); err != nil {
+		out = JoinRequest{ID: reqID, Room: room, FP: fp, Name: name, Invite: invID, Addr: addr, State: RequestPending, CreatedAt: now, Role: role}
+		if _, err := tx.Exec(`INSERT INTO collab_requests(id,room,fp,name,invite,addr,state,created_at,role) VALUES(?,?,?,?,?,?,?,?,?)`,
+			out.ID, room, fp, name, invID, addr, RequestPending, ms(now), role); err != nil {
 			if isUnique(err) {
 				return ErrInviteUsed
 			}
@@ -784,10 +867,10 @@ func (s *Store) ApproveRequest(id string, at time.Time) (JoinRequest, error) {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`INSERT INTO collab_people(room,fp,name,generation,state,host,rev,joined_at) VALUES(?,?,?,?,'active',0,?,?)
+		if _, err := tx.Exec(`INSERT INTO collab_people(room,fp,name,generation,state,host,rev,joined_at,role) VALUES(?,?,?,?,'active',0,?,?,?)
 			ON CONFLICT(room,fp) DO UPDATE SET name=excluded.name, generation=excluded.generation, state='active', rev=excluded.rev, joined_at=excluded.joined_at, ended_at=NULL,
-				avatar='', profile_rev=0`,
-			r.Room, r.FP, r.Name, gen, rev, ms(at)); err != nil {
+				avatar='', profile_rev=0, role=excluded.role`,
+			r.Room, r.FP, r.Name, gen, rev, ms(at), r.Role); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(`UPDATE collab_requests SET state='approved', generation=?, decided_at=? WHERE id=?`, gen, ms(at), id); err != nil {
@@ -1153,8 +1236,12 @@ func (s *Store) ApplyOwnerEvent(ev HostEvent) error {
 			if e.Question == "" || strings.TrimSpace(e.Body) == "" {
 				return fmt.Errorf("%w: empty question", ErrConflict)
 			}
+			choices, err := NormalizeChoices(e.Choices)
+			if err != nil {
+				return fmt.Errorf("%w: %v", ErrConflict, err)
+			}
 			q := DiscMessage{ID: NewID("dm_") + NewID(""), Discussion: ev.Room, Kind: DiscQuestion, AuthorMember: m.ID, AuthorName: m.Name, AuthorAgent: m.Agent,
-				Body: e.Body, Execution: x.ID, Question: e.Question, Rev: rev, CreatedAt: fromMS(at)}
+				Body: e.Body, Execution: x.ID, Question: e.Question, Choices: choices, Rev: rev, CreatedAt: fromMS(at)}
 			if err := insertDiscMessage(tx, &q); err != nil {
 				return err
 			}
@@ -1182,6 +1269,11 @@ func (s *Store) ApplyOwnerEvent(ev HostEvent) error {
 				_, err = tx.Exec(`UPDATE disc_executions SET state='running', rev=? WHERE id=? AND state='waiting'`, rev, x.ID)
 			}
 			return err
+		case EventSummary:
+			if strings.TrimSpace(e.Body) == "" || len(e.Body) > MaxSummary {
+				return fmt.Errorf("%w: summary is empty or too long", ErrConflict)
+			}
+			return writeSummary(tx, x, e.Body, fromMS(at))
 		case EventReply:
 			if x.Reply != "" {
 				return fmt.Errorf("%w: execution %s already has a reply", ErrConflict, x.ID)
@@ -1363,6 +1455,10 @@ type SyncDiscussion struct {
 	MsgSeq      int64      `json:"msgSeq"`
 	Shared      bool       `json:"shared"`
 	CreatedAt   time.Time  `json:"createdAt"`
+	Summary     string     `json:"summary,omitempty"`
+	SummarySeq  int64      `json:"summarySeq,omitempty"`
+	SummaryBy   string     `json:"summaryBy,omitempty"`
+	SummaryAt   *time.Time `json:"summaryAt,omitempty"`
 }
 
 // SyncBatch 是一次增量：游标 since 之后改过的记录。Rev 是应用完之后的游标；More 为真时还有后续。
@@ -1390,7 +1486,8 @@ func (s *Store) SyncSince(room string, since int64, limit int) (SyncBatch, error
 		}
 		var hostName string
 		tx.QueryRow(`SELECT name FROM collab_people WHERE room=? AND fp=?`, room, d.Host).Scan(&hostName)
-		b.Discussion = SyncDiscussion{Title: d.Title, Description: d.Description, Status: d.Status, ArchivedAt: d.ArchivedAt, MsgSeq: d.MsgSeq, Shared: d.Shared, CreatedAt: d.CreatedAt}
+		b.Discussion = SyncDiscussion{Title: d.Title, Description: d.Description, Status: d.Status, ArchivedAt: d.ArchivedAt, MsgSeq: d.MsgSeq, Shared: d.Shared, CreatedAt: d.CreatedAt,
+			Summary: d.Summary, SummarySeq: d.SummarySeq, SummaryBy: d.SummaryBy, SummaryAt: d.SummaryAt}
 		upto := d.Rev
 		var cut int64
 		if limit > 0 && tx.QueryRow(`SELECT rev FROM disc_messages WHERE discussion=? AND rev>? ORDER BY rev LIMIT 1 OFFSET ?`, room, since, limit-1).Scan(&cut) == nil && cut < upto {
@@ -1418,7 +1515,7 @@ func (s *Store) SyncSince(room string, since int64, limit int) (SyncBatch, error
 		}
 		for i := range b.Messages {
 			m := &b.Messages[i]
-			if m.Kind == DiscUser || m.Kind == DiscAnswer {
+			if m.Kind == DiscUser || m.Kind == DiscAnswer || m.Kind == DiscDelegate {
 				m.AuthorID = cmpOr(m.AuthorID, d.Host)
 				if m.AuthorID == d.Host && m.AuthorName == "" {
 					m.AuthorName = hostName
@@ -1545,8 +1642,12 @@ func (s *Store) ApplySync(room, self string, b SyncBatch) (bool, error) {
 		if sd.ArchivedAt != nil {
 			archived = ms(*sd.ArchivedAt)
 		}
-		if _, err := tx.Exec(`UPDATE discussions SET title=?, description=?, status=?, archived_at=?, shared=? WHERE key=? AND mirror=1`,
-			sd.Title, sd.Description, sd.Status, archived, sd.Shared, room); err != nil {
+		var summaryAt int64
+		if sd.SummaryAt != nil {
+			summaryAt = ms(*sd.SummaryAt)
+		}
+		if _, err := tx.Exec(`UPDATE discussions SET title=?, description=?, status=?, archived_at=?, shared=?, summary=?, summary_seq=?, summary_by=?, summary_at=? WHERE key=? AND mirror=1`,
+			sd.Title, sd.Description, sd.Status, archived, sd.Shared, sd.Summary, sd.SummarySeq, sd.SummaryBy, summaryAt, room); err != nil {
 			return err
 		}
 		for _, p := range b.People {
@@ -1555,13 +1656,13 @@ func (s *Store) ApplySync(room, self string, b SyncBatch) (bool, error) {
 				ended = ms(*p.EndedAt)
 			}
 			// 自己那一行本机可能先改了（SetOwnProfile）：房主那份的资料版本旧，名字和头像留本机的
-			if _, err := tx.Exec(`INSERT INTO collab_people(`+personCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?)
-				ON CONFLICT(room,fp) DO UPDATE SET generation=excluded.generation, state=excluded.state, host=excluded.host,
+			if _, err := tx.Exec(`INSERT INTO collab_people(`+personCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+				ON CONFLICT(room,fp) DO UPDATE SET generation=excluded.generation, state=excluded.state, host=excluded.host, role=excluded.role,
 				rev=excluded.rev, joined_at=excluded.joined_at, ended_at=excluded.ended_at,
 				name=CASE WHEN excluded.profile_rev>=collab_people.profile_rev THEN excluded.name ELSE collab_people.name END,
 				avatar=CASE WHEN excluded.profile_rev>=collab_people.profile_rev THEN excluded.avatar ELSE collab_people.avatar END,
 				profile_rev=MAX(excluded.profile_rev, collab_people.profile_rev)`,
-				room, p.FP, p.Name, p.Generation, p.State, p.Host, rev, ms(p.JoinedAt), ended, p.Avatar, p.ProfileRev); err != nil {
+				room, p.FP, p.Name, p.Generation, p.State, p.Host, rev, ms(p.JoinedAt), ended, p.Avatar, p.ProfileRev, p.Role); err != nil {
 				return err
 			}
 		}
@@ -1684,8 +1785,8 @@ func (s *Store) ApplySync(room, self string, b SyncBatch) (bool, error) {
 			if x.EndedAt != nil {
 				ended = ms(*x.EndedAt)
 			}
-			res, err := tx.Exec(`UPDATE disc_executions SET state=?, reason=?, agent=?, model=?, effort=?, role=?, config_version=?, reply=?, started_at=?, ended_at=?, owner=?, generation=?, rev=?
-				WHERE id=? AND discussion=?`, x.State, x.Reason, x.Agent, x.Model, x.Effort, x.Role, x.ConfigVersion, x.Reply, started, ended, x.Owner, x.Generation, rev, x.ID, room)
+			res, err := tx.Exec(`UPDATE disc_executions SET state=?, reason=?, agent=?, model=?, effort=?, role=?, config_version=?, reply=?, started_at=?, ended_at=?, owner=?, generation=?, root=?, depth=?, rev=?
+				WHERE id=? AND discussion=?`, x.State, x.Reason, x.Agent, x.Model, x.Effort, x.Role, x.ConfigVersion, x.Reply, started, ended, x.Owner, x.Generation, x.Root, x.Depth, rev, x.ID, room)
 			if err != nil {
 				return err
 			}

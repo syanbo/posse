@@ -9059,6 +9059,10 @@
   "@discExecInterrupted": {
     "description": "Discussion request card: the worker exited or the daemon restarted during the request."
   },
+  "discExecMerged": "Merged into the previous request",
+  "@discExecMerged": {
+    "description": "Discussion: status line under a request that was sent right after another one to the same agent and is handled in that earlier request's round."
+  },
   "discExecQueued": "Queued",
   "@discExecQueued": {
     "description": "Discussion request card status."
@@ -9344,6 +9348,27 @@
       }
     }
   },
+  "discSummarizeBy": "Have {name} Summarize",
+  "@discSummarizeBy": {
+    "description": "Discussion more menu: asks the named agent member to write the discussion summary. name is the member's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discSummarizeRequest": "Summarize this discussion so far and save it as the discussion summary: decisions, open questions, and who is doing what.",
+  "@discSummarizeRequest": {
+    "description": "Discussion: text of the request sent to a member when the user picks Have X Summarize. It is posted as the user's message."
+  },
+  "discSummary": "Summary",
+  "@discSummary": {
+    "description": "Discussion side panel: title of the section showing the summary a member wrote."
+  },
+  "discSummaryClear": "Clear Summary",
+  "@discSummaryClear": {
+    "description": "Discussion more menu: removes the discussion summary."
+  },
   "discTitle": "Discussions",
   "@discTitle": {
     "description": "Sidebar tile name and Discussions page title."
@@ -9451,6 +9476,14 @@
   "@collabFingerprint": {
     "description": "Label of the host identity fingerprint."
   },
+  "collabGuestLabel": "view only",
+  "@collabGuestLabel": {
+    "description": "Discussion people list and join request: tag after a person's name who joined (or asks to join) as a read-only viewer."
+  },
+  "collabGuestNote": "You joined as a viewer: you can read this discussion but not post.",
+  "@collabGuestNote": {
+    "description": "Discussion: note shown in place of the message input for a person who joined as a read-only viewer."
+  },
   "collabHostedBy": "Hosted by {name}",
   "@collabHostedBy": {
     "description": "Joined discussion: who hosts it.",
@@ -9467,6 +9500,14 @@
   "collabInviteEllipsis": "Invite…",
   "@collabInviteEllipsis": {
     "description": "Create an invitation for a shared discussion."
+  },
+  "collabInviteGuestEllipsis": "Invite a Viewer…",
+  "@collabInviteGuestEllipsis": {
+    "description": "Discussion more menu (host): creates an invitation whose holder can read the discussion but not post or bring agents."
+  },
+  "collabInviteGuestNote": "Whoever joins with this invitation can read messages and download attachments, but can’t post, mark messages or bring agents.",
+  "@collabInviteGuestNote": {
+    "description": "Invitation dialog: extra line shown when the invitation is for a read-only viewer."
   },
   "collabInviteNote": "Single use, valid until {at, date, ::jm}. Posse does not send it: copy it and send it with your own chat tool. You still approve each request.",
   "@collabInviteNote": {

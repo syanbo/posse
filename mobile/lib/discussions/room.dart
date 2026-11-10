@@ -84,7 +84,14 @@ class _DiscussionRoomState extends State<DiscussionRoom>
       state.discussion['status'] != 'archived' &&
       (state.discussion['mirror'] != true ||
           state.collab['state'] == 'active' &&
-              state.collab['connected'] == true);
+              state.collab['connected'] == true &&
+              !guest);
+
+  /// 这台电脑是以只读访客的身份加入这个讨论的：能看，不能发言、带 Agent。
+  bool get guest =>
+      state.discussion['mirror'] == true &&
+      discPerson(state.collab, discText(state.collab, 'self'))?['role'] ==
+          'guest';
   bool get atBottom => !scroll.hasClients || scroll.position.extentAfter < 48;
   bool wasAtBottom = true;
 
@@ -517,6 +524,38 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     }
   }
 
+  /// 点问题的一个选项：直接用这段文字回答，不动输入框里的草稿。
+  /// clientId 按问题和选项固定：响应丢了再点一次，电脑认回已经写入的答案。
+  Future<void> answerChoice(DiscJson m, int index) async {
+    final choices = discStrings(m['choices']);
+    if (sending || pending != null || index >= choices.length) return;
+    final question = discText(m, 'question');
+    setState(() {
+      sending = true;
+      error = null;
+    });
+    try {
+      await widget.api.call('answer', {
+        'question': question,
+        'body': choices[index],
+        'clientId': 'choice-$question-$index',
+      });
+      if (!mounted) return;
+      if (answering == question) {
+        setState(() {
+          answering = '';
+          answerTo = '';
+        });
+        await save();
+      }
+      await latest();
+    } catch (e) {
+      if (mounted) setState(() => error = e);
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
   /// 点「回答」：输入框换成回答这个问题，发出去走 answer。
   void answer(DiscJson m) {
     // 上一条还没确认发没发出去时不能换成回答：重试发的仍是那一条
@@ -642,6 +681,7 @@ class _DiscussionRoomState extends State<DiscussionRoom>
       'interrupted' => l.discStateInterrupted,
       'stopped' => l.discStateStopped,
       'cancelled' => l.discStateCancelled,
+      'merged' => l.discStateMerged,
       'claimed' => l.discStateClaimed,
       'revoked' => l.discStateRevoked,
       _ => value,
@@ -661,6 +701,8 @@ class _DiscussionRoomState extends State<DiscussionRoom>
         ? l.discPending
         : ['removed', 'left', 'rejected'].contains(state.collab['state'])
         ? l.discRevoked
+        : guest && state.collab['connected'] == true
+        ? l.discGuestNote
         : l.discOffline;
   }
 

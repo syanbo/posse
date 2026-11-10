@@ -545,3 +545,89 @@ func TestUpdateMemberApplyNowAtomic(t *testing.T) {
 		t.Fatalf("apply now: %v old %+v new %+v", err, old, got)
 	}
 }
+
+// 摘要：成员在自己的一轮里保存；之后落后很多的成员用摘要代替它覆盖的消息，读完算接收过；落后不多的照常逐条领取。
+func TestSummaryStandsInForOldMessages(t *testing.T) {
+	s := openTestStore(t)
+	d, a := newDiscussion(t, s)
+	b := Member{ID: NewID("dmb_"), Discussion: d.Key, Name: "B", Agent: "codex", WorkspaceID: "w", CreatedAt: time.Now()}
+	if err := s.AddMember(b); err != nil {
+		t.Fatal(err)
+	}
+	for i := range SummarySkip + 5 {
+		post(t, s, d, fmt.Sprint("chat ", i), "", "")
+	}
+	_, x := post(t, s, d, "summarize please", a.ID, "")
+	r := startRound(t, s, x, "k_1", "t_1")
+	in := SummaryInput{RoundCheck: RoundCheck{Exec: r.ID, TaskID: "k_1", Worker: "t_1"}, Body: "we decided X", At: time.Now()}
+	if _, err := s.SetSummary(in); !errors.Is(err, ErrNotAcked) {
+		t.Fatalf("summary before reading the request: %v", err)
+	}
+	s.AckContext(r.ID, 0, r.ContextLen)
+	in.Worker = "t_other"
+	if _, err := s.SetSummary(in); !errors.Is(err, ErrStaleRound) {
+		t.Fatalf("summary from another terminal: %v", err)
+	}
+	in.Worker = "t_1"
+	got, err := s.SetSummary(in)
+	if err != nil || got.Summary != "we decided X" || got.SummaryBy != "A" || got.SummarySeq != int64(SummarySkip+6) || got.SummaryAt == nil {
+		t.Fatalf("summary %+v %v", got, err)
+	}
+	if _, err := finish(s, r, "t_1", "saved"); err != nil {
+		t.Fatal(err)
+	}
+	// B 从没接收过：摘要覆盖的 26 条不再逐条给，只给摘要之后的
+	post(t, s, d, "after the summary", "", "")
+	_, xb := post(t, s, d, "your turn", b.ID, "")
+	var src ContextSource
+	rb, ok, err := s.ClaimExecution(ClaimInput{Exec: xb.ID, TaskID: "k_2", At: time.Now(), Render: func(cs ContextSource) (string, []ContextEnd) {
+		src = cs
+		return render(cs)
+	}})
+	if err != nil || !ok {
+		t.Fatalf("claim: %v %v", err, ok)
+	}
+	if src.Skipped != SummarySkip+6 || src.SkippedTo != got.SummarySeq || len(src.Unreceived) != 2 || src.Unreceived[0].Body != "saved" {
+		t.Fatalf("skipped %d to %d, unreceived %d", src.Skipped, src.SkippedTo, len(src.Unreceived))
+	}
+	s.AckContext(rb.ID, 0, rb.ContextLen)
+	if mb, _ := s.Member(b.ID); mb.RecvSeq != src.Request.Seq {
+		t.Fatalf("recv %d, want %d", mb.RecvSeq, src.Request.Seq)
+	}
+	// 用户清掉摘要
+	if err := s.ClearSummary(d.Key); err != nil {
+		t.Fatal(err)
+	}
+	if cur, _ := s.Discussion(d.Key); cur.Summary != "" || cur.SummarySeq != 0 || cur.SummaryAt != nil {
+		t.Fatalf("after clear %+v", cur)
+	}
+}
+
+// 落后不多（不超过 SummarySkip 条）时照常逐条领取，摘要只是多一段。
+func TestSummaryKeepsShortBacklog(t *testing.T) {
+	s := openTestStore(t)
+	d, a := newDiscussion(t, s)
+	b := Member{ID: NewID("dmb_"), Discussion: d.Key, Name: "B", Agent: "codex", WorkspaceID: "w", CreatedAt: time.Now()}
+	if err := s.AddMember(b); err != nil {
+		t.Fatal(err)
+	}
+	post(t, s, d, "chat", "", "")
+	_, x := post(t, s, d, "summarize", a.ID, "")
+	r := startRound(t, s, x, "k_1", "t_1")
+	s.AckContext(r.ID, 0, r.ContextLen)
+	if _, err := s.SetSummary(SummaryInput{RoundCheck: RoundCheck{Exec: r.ID, TaskID: "k_1", Worker: "t_1"}, Body: "short", At: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	finish(s, r, "t_1", "saved")
+	_, xb := post(t, s, d, "your turn", b.ID, "")
+	var src ContextSource
+	if _, ok, err := s.ClaimExecution(ClaimInput{Exec: xb.ID, TaskID: "k_2", At: time.Now(), Render: func(cs ContextSource) (string, []ContextEnd) {
+		src = cs
+		return render(cs)
+	}}); err != nil || !ok {
+		t.Fatalf("claim: %v %v", err, ok)
+	}
+	if src.Skipped != 0 || len(src.Unreceived) != 3 || src.Discussion.Summary != "short" {
+		t.Fatalf("skipped %d, unreceived %d", src.Skipped, len(src.Unreceived))
+	}
+}

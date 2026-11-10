@@ -22,6 +22,8 @@ type discussionInfo struct {
 	Key, LocalID, Title, Description, ProjectName, Status string
 	MsgSeq                                                int64
 	CreatedAt                                             time.Time
+	Summary, SummaryBy                                    string
+	SummarySeq                                            int64
 }
 
 type discSummary struct {
@@ -43,6 +45,7 @@ type discMsg struct {
 	ID, Kind, AuthorName, AuthorAgent, AuthorID, MentionName, Body, Quote, Target, TargetName, Execution, Question, Outcome string
 	Seq                                                                                                                     int64
 	Attachments                                                                                                             []struct{ Name, Path string }
+	Choices                                                                                                                 []string
 	KeyAt                                                                                                                   *time.Time
 	CreatedAt                                                                                                               time.Time
 }
@@ -127,6 +130,9 @@ func cmdDiscussionShow(e *env, args []string) error {
 		if v.Discussion.Description != "" {
 			fmt.Fprintf(e.out, "description: %s\n", v.Discussion.Description)
 		}
+		if v.Discussion.Summary != "" {
+			fmt.Fprintf(e.out, "summary: by %s, up to #%d (posse discussion summary %s)\n", v.Discussion.SummaryBy, v.Discussion.SummarySeq, v.Discussion.Key)
+		}
 		fmt.Fprintln(e.out, "\nmembers:")
 		for _, m := range v.Members {
 			state := ""
@@ -148,6 +154,12 @@ func cmdDiscussionShow(e *env, args []string) error {
 		for _, x := range v.Executions {
 			execs[x.ID] = x
 		}
+		answered := map[string]bool{}
+		for _, m := range v.Messages {
+			if m.Kind == "answer" {
+				answered[m.Question] = true
+			}
+		}
 		fmt.Fprintln(e.out, "\nmessages:")
 		if v.More {
 			fmt.Fprintln(e.out, "  (earlier messages: posse discussion read "+v.Discussion.Key+" --from 1)")
@@ -161,10 +173,16 @@ func cmdDiscussionShow(e *env, args []string) error {
 			if m.KeyAt != nil {
 				line += " [key]"
 			}
-			if x, ok := execs[m.Execution]; ok && m.Kind == "user" {
+			if x, ok := execs[m.Execution]; ok && (m.Kind == "user" || m.Kind == "delegate") {
 				line += fmt.Sprintf(" [%s %s]", x.ID, x.State)
 			}
 			fmt.Fprintf(e.out, "%s (%s)\n%s\n", line, m.ID, indent2(m.Body, "    "))
+			for i, c := range m.Choices {
+				fmt.Fprintf(e.out, "    %d. %s\n", i+1, c)
+			}
+			if x, ok := execs[m.Execution]; ok && m.Kind == "question" && x.State == "waiting" && !answered[m.Question] {
+				fmt.Fprintf(e.out, "    answer with: posse discussion answer %s \"<answer>\"\n", m.ID)
+			}
 			for _, a := range m.Attachments {
 				fmt.Fprintf(e.out, "    attachment: %s\n", a.Name)
 			}
@@ -425,6 +443,80 @@ func cmdDiscussionRead(e *env, args []string) error {
 	return nil
 }
 
+// cmdDiscussionMention 是 worker 在自己的一轮里 @ 另一个成员。
+func cmdDiscussionMention(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion mention", flag.ContinueOnError)
+	exec := fs.String("execution", "", "")
+	to := fs.String("to", "", "")
+	body := fs.String("body", "", "")
+	bodyFile := fs.String("body-file", "", "")
+	if _, err := parse(fs, args); err != nil {
+		return err
+	}
+	if *bodyFile != "" {
+		text, err := readSpec("", *bodyFile)
+		if err != nil {
+			return err
+		}
+		*body = text
+	}
+	var r struct {
+		Message   discMsg
+		Execution *discExec
+	}
+	return e.do("discussion.mention", map[string]any{"execution": *exec, "to": *to, "body": *body, "caller": caller()}, &r, func() {
+		fmt.Fprintf(e.out, "sent to %s as message #%d; it replies in the discussion and you are not woken. Carry on and report your own request with posse task done\n", r.Message.TargetName, r.Message.Seq)
+	})
+}
+
+// cmdDiscussionSummarize 是 worker 在自己的一轮里保存讨论摘要。
+func cmdDiscussionSummarize(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion summarize", flag.ContinueOnError)
+	exec := fs.String("execution", "", "")
+	body := fs.String("body", "", "")
+	bodyFile := fs.String("body-file", "", "")
+	if _, err := parse(fs, args); err != nil {
+		return err
+	}
+	if *bodyFile != "" {
+		text, err := readSpec("", *bodyFile)
+		if err != nil {
+			return err
+		}
+		*body = text
+	}
+	var d discussionInfo
+	return e.do("discussion.summarize", map[string]any{"execution": *exec, "body": *body, "caller": caller()}, &d, func() {
+		fmt.Fprintf(e.out, "summary saved for %s; now report this request with posse task done\n", d.Key)
+	})
+}
+
+func cmdDiscussionSummary(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion summary", flag.ContinueOnError)
+	clear := fs.Bool("clear", false, "")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	key, err := discKey(pos, "discussion summary")
+	if err != nil {
+		return err
+	}
+	if *clear {
+		return e.do("discussion.summary.clear", map[string]any{"discussion": key, "caller": caller()}, nil, func() {
+			fmt.Fprintln(e.out, "summary removed")
+		})
+	}
+	var v struct{ Discussion discussionInfo }
+	return e.do("discussion.show", map[string]any{"discussion": key, "limit": 1}, &v, func() {
+		if v.Discussion.Summary == "" {
+			fmt.Fprintln(e.out, "no summary yet; ask a member to summarize the discussion")
+			return
+		}
+		fmt.Fprintf(e.out, "by %s, up to #%d\n\n%s\n", v.Discussion.SummaryBy, v.Discussion.SummarySeq, v.Discussion.Summary)
+	})
+}
+
 func cmdDiscussionPending(e *env, args []string) error {
 	fs := flag.NewFlagSet("discussion pending", flag.ContinueOnError)
 	pos, err := parse(fs, args)
@@ -535,14 +627,14 @@ func discExecCmd(method, verb string) func(e *env, args []string) error {
 // --- 局域网协作
 
 type discPerson struct {
-	FP, Name, State string
-	Host, Online    bool
-	Generation      int64
+	FP, Name, State, Role string
+	Host, Online          bool
+	Generation            int64
 }
 
 type discRequest struct {
-	ID, FP, Name, Addr, State string
-	CreatedAt                 time.Time
+	ID, FP, Name, Addr, State, Role string
+	CreatedAt                       time.Time
 }
 
 type discCollab struct {
@@ -577,6 +669,7 @@ func cmdDiscussionShare(e *env, args []string) error {
 
 func cmdDiscussionInvite(e *env, args []string) error {
 	fs := flag.NewFlagSet("discussion invite", flag.ContinueOnError)
+	guest := fs.Bool("guest", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -591,8 +684,11 @@ func cmdDiscussionInvite(e *env, args []string) error {
 		Addrs       []string
 		Fingerprint string
 	}
-	return e.do("discussion.invite", map[string]any{"caller": caller(), "discussion": key}, &r, func() {
+	return e.do("discussion.invite", map[string]any{"caller": caller(), "discussion": key, "guest": *guest}, &r, func() {
 		fmt.Fprintln(e.out, r.Invite)
+		if *guest {
+			fmt.Fprintln(e.out, "\nviewer invitation: whoever joins with it can read and download, not post or bring agents.")
+		}
 		fmt.Fprintf(e.out, "\nsingle use, valid until %s; send it yourself (Posse does not send it).\nhost fingerprint %s, addresses %s\n",
 			r.Expires.Format("15:04"), r.Fingerprint, strings.Join(r.Addrs, ", "))
 	})
@@ -646,11 +742,18 @@ func cmdDiscussionPeople(e *env, args []string) error {
 			if p.FP == c.Self {
 				name += " (you)"
 			}
+			if p.Role == "guest" {
+				name += " (viewer)"
+			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%v\n", p.FP[:16], name, p.State, p.Online)
 		}
 		w.Flush()
 		for _, r := range c.Requests {
-			fmt.Fprintf(e.out, "\nrequest %s from %s (%s, fingerprint %s) — posse discussion approve %s | reject %s\n", r.ID, r.Name, r.Addr, r.FP[:16], r.ID, r.ID)
+			as := ""
+			if r.Role == "guest" {
+				as = " as a viewer"
+			}
+			fmt.Fprintf(e.out, "\nrequest %s from %s%s (%s, fingerprint %s) — posse discussion approve %s | reject %s\n", r.ID, r.Name, as, r.Addr, r.FP[:16], r.ID, r.ID)
 		}
 	})
 }

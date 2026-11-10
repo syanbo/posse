@@ -34,6 +34,7 @@ type discCollab struct {
 
 type discPerson struct {
 	FP, Name, State string
+	Role            string // guest 是只读访客
 	Avatar          string
 	Host, Online    bool
 	Generation      int64
@@ -41,6 +42,7 @@ type discPerson struct {
 
 type discJoinRequest struct {
 	ID, FP, Name, Addr, State string
+	Role                      string
 	CreatedAt                 time.Time
 }
 
@@ -60,6 +62,7 @@ type inviteView struct {
 	expires time.Time
 	addrs   []string
 	fp      string
+	guest   bool // 只读访客的邀请
 }
 
 // mine：这个 Agent 或执行在不在这台电脑上（拥有者为空是房主自己的旧记录）。
@@ -103,12 +106,21 @@ func (d *discDetail) online(fp string) bool {
 	return false
 }
 
-// writable：没归档；加入的讨论还要仍是成员。
+// writable：没归档；加入的讨论还要仍是成员，而且不是只读访客。
 func (d *discDetail) writable() bool {
 	if d.info.Status == "archived" {
 		return false
 	}
-	return !d.info.Mirror || d.collab != nil && d.collab.State == "active"
+	return !d.info.Mirror || d.collab != nil && d.collab.State == "active" && !d.guest()
+}
+
+// guest：本机是以只读访客的身份加入这个讨论的。
+func (d *discDetail) guest() bool {
+	if !d.info.Mirror || d.collab == nil {
+		return false
+	}
+	p := d.person(d.collab.Self)
+	return p != nil && p.Role == "guest"
 }
 
 // hostRole：本机是这个讨论的房主（本机建的）。
@@ -215,6 +227,13 @@ func (a *app) collabBanner(c *ui.Context, d *discDetail) (hide bool) {
 		banner("collab-left", iconLeave, t.TextMuted, m.CollabLeftNote(), "", nil)
 		return true
 	}
+	if d.guest() {
+		if !cb.Connected {
+			banner("collab-offline", iconHexAlert, colors(t).honey, m.CollabOfflineTitle(), "", nil)
+		}
+		banner("collab-guest", iconHexOutline, t.TextMuted, m.CollabGuestNote(), "", nil)
+		return true
+	}
 	if !cb.Connected {
 		body := m.CollabOfflineBody()
 		if cb.Error != "" {
@@ -249,7 +268,7 @@ func (a *app) collabSection(c *ui.Context, d *discDetail) {
 			cardTitle(c, m.CollabPeople()).Grow(1)
 			if d.hostRole() && cb != nil && cb.Shared && !archived {
 				if iconButtonSized(c.Key("collab-invite"), iconLink, m.CollabInviteEllipsis(), compactBox(), smallIcon()).Clicked() {
-					go a.createInvite(d.key)
+					go a.createInvite(d.key, false)
 				}
 			}
 		})
@@ -261,7 +280,12 @@ func (a *app) collabSection(c *ui.Context, d *discDetail) {
 		}
 		for _, r := range cb.Requests {
 			ui.Column(c.Key("req-" + r.ID)).Gap(6).Padding(8).Radius(rControl).Background(soft(t, colors(t).honey)).Children(func() {
-				ui.Text(c, m.CollabNoticeRequest(r.Name)).FontSize(fsSmall).FontWeight(fwMedium)
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, m.CollabNoticeRequest(r.Name)).FontSize(fsSmall).FontWeight(fwMedium).Shrink(1)
+					if r.Role == "guest" {
+						ui.Text(c, m.CollabGuestLabel()).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+					}
+				})
 				ui.Text(c, m.CollabPersonFP(fpText(r.FP))).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted)
 				ui.Row(c).Gap(8).Children(func() {
 					if pressable(accentButton(c.Key("approve-"+r.ID), m.CollabApprove())).Clicked() {
@@ -301,6 +325,9 @@ func (a *app) personRow(c *ui.Context, d *discDetail, p discPerson) {
 				}
 				if d.collab != nil && p.FP == d.collab.Self {
 					tags = append(tags, m.CollabYouLabel())
+				}
+				if p.Role == "guest" {
+					tags = append(tags, m.CollabGuestLabel())
 				}
 				if len(tags) > 0 {
 					ui.Text(c, strings.Join(tags, " · ")).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
@@ -353,7 +380,7 @@ func (a *app) askShare(m interface {
 	key := d.key
 	a.confirm(m.CollabShareTitle(), m.CollabShareBody(), m.CollabShareVerb(), func() {
 		if a.call("discussion.share", map[string]any{"discussion": key, "on": true}, nil, 10*time.Second) == nil {
-			a.createInvite(key)
+			a.createInvite(key, false)
 		}
 		a.refresh()
 	})
@@ -371,18 +398,18 @@ func (a *app) askLeave(m interface {
 }
 
 // createInvite 生成一份邀请并打开邀请框（复制后由用户自己发出去）。
-func (a *app) createInvite(key string) {
+func (a *app) createInvite(key string, guest bool) {
 	var r struct {
 		Invite      string
 		Expires     time.Time
 		Addrs       []string
 		Fingerprint string
 	}
-	if a.call("discussion.invite", map[string]any{"discussion": key}, &r, 10*time.Second) != nil {
+	if a.call("discussion.invite", map[string]any{"discussion": key, "guest": guest}, &r, 10*time.Second) != nil {
 		return
 	}
 	a.update(func() {
-		a.disc.invite = inviteView{open: true, text: r.Invite, expires: r.Expires, addrs: r.Addrs, fp: r.Fingerprint}
+		a.disc.invite = inviteView{open: true, text: r.Invite, expires: r.Expires, addrs: r.Addrs, fp: r.Fingerprint, guest: guest}
 	})
 }
 
@@ -396,6 +423,9 @@ func (a *app) inviteDialog(c *ui.Context) {
 		ui.Column(c).Width(480).Gap(12).Children(func() {
 			titleText(c, m.CollabInviteTitle(), fsTitle)
 			ui.Text(c, m.CollabInviteNote(v.expires.Local())).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5)
+			if v.guest {
+				ui.Text(c, m.CollabInviteGuestNote()).FontSize(fsSmall).LineHeight(1.5)
+			}
 			ui.Text(c.Key("invite-text"), v.text).FontSize(fsSmall).Font(monoFont).LineHeight(1.4).Selectable().
 				Padding(8, 10).Radius(rControl).Background(colors(t).fill).MaxLines(6)
 			ui.Column(c).Gap(4).Children(func() {

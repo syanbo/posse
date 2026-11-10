@@ -13,6 +13,13 @@ extension _MessageViews on _DiscussionRoomState {
     return !other && (m['kind'] == 'user' || m['kind'] == 'answer');
   }
 
+  /// 问题下面一排按钮（选项、回答）共用的尺寸。
+  ButtonStyle get answerStyle => FilledButton.styleFrom(
+    minimumSize: const Size(0, 34),
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+
   String stamp(DiscJson m) {
     final time = DateTime.tryParse(discText(m, 'createdAt'))?.toLocal();
     if (time == null) return '';
@@ -148,14 +155,29 @@ extension _MessageViews on _DiscussionRoomState {
             if (canAnswer)
               Padding(
                 padding: indent(8),
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 34),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  onPressed: () => answer(m),
-                  child: Text(context.l10n.discAnswer),
+                // 选项是一键回答，放不下就换行；「回答」留给选项之外的答案
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final (i, choice) in discStrings(m['choices']).indexed)
+                      FilledButton.tonal(
+                        style: answerStyle,
+                        onPressed: sending ? null : () => answerChoice(m, i),
+                        child: Text(choice),
+                      ),
+                    discStrings(m['choices']).isEmpty
+                        ? FilledButton(
+                            style: answerStyle,
+                            onPressed: () => answer(m),
+                            child: Text(context.l10n.discAnswer),
+                          )
+                        : TextButton(
+                            style: answerStyle,
+                            onPressed: () => answer(m),
+                            child: Text(context.l10n.discAnswer),
+                          ),
+                  ],
                 ),
               ),
             for (final x in xs)
@@ -346,7 +368,8 @@ extension _MessageViews on _DiscussionRoomState {
     final line = [
       if (name.isNotEmpty) name,
       status(st),
-      if (reason.isNotEmpty) reason,
+      // 并入的那一轮的原因字段是它并进的执行 ID，不是给人看的
+      if (reason.isNotEmpty && st != 'merged') reason,
     ].join(' · ');
     final actions = <(String, VoidCallback)>[];
     if (discMine(x, widget.self) && writable) {

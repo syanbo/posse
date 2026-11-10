@@ -733,5 +733,13 @@
   "discCreate": "创建",
   "discJoinConfirm": "加入",
   "discShareConfirm": "分享",
-  "discUnshareConfirm": "停止分享"
+  "discUnshareConfirm": "停止分享",
+  "discSummary": "摘要",
+  "discSummarize": "更新摘要",
+  "discSummaryClear": "清除摘要",
+  "discSummarizeRequest": "总结这个讨论到目前为止的内容，并保存为讨论摘要：已经定下的结论、还没解决的问题、谁在做什么。",
+  "discStateMerged": "已并入上一条请求",
+  "discGuest": "只读",
+  "discInviteGuest": "邀请只读访客",
+  "discGuestNote": "你是以只读身份加入的，不能在这里发言。"
 }

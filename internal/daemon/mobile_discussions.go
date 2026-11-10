@@ -109,6 +109,7 @@ func (h mobileHost) Discussions(ctx context.Context, device, method string, raw 
 		"discussion.share": d.collabShare, "discussion.invite": d.collabInvite, "discussion.decide": d.collabDecide,
 		"discussion.person.remove": d.collabRemovePerson, "discussion.join": d.collabJoin, "discussion.leave": d.collabLeave,
 		"discussion.profile.get": d.profileGet, "discussion.profile.set": d.profileSet, "discussion.profile.avatar": d.profileAvatar,
+		"discussion.summary.clear": d.discSummaryClear,
 	}
 	fn := handlers[method]
 	if fn == nil {

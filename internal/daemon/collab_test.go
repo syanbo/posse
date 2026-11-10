@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -351,7 +352,7 @@ func TestCollabInviteRules(t *testing.T) {
 	}
 	// 过期的邀请
 	secret := collaboration.NewSecret()
-	if err := h.store.CreateInvite(disc.Key, "inv_old", collaboration.HashSecret(secret), time.Now().Add(-time.Minute), time.Now().Add(-11*time.Minute)); err != nil {
+	if err := h.store.CreateInvite(disc.Key, "inv_old", collaboration.HashSecret(secret), "", time.Now().Add(-time.Minute), time.Now().Add(-11*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 	parsed, _ := collaboration.ParseInvite(inv)
@@ -397,7 +398,8 @@ func TestCollabQuestionAndDisconnect(t *testing.T) {
 	})
 	got := make(chan error, 1)
 	go func() {
-		_, err := callErr(m.taskAsk, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "question": "which branch?", "timeoutMs": 8000})
+		_, err := callErr(m.taskAsk, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "question": "which branch?", "timeoutMs": 8000,
+			"choices": []string{"main", "dev"}})
 		got <- err
 	}()
 	var q store.DiscMessage
@@ -411,12 +413,31 @@ func TestCollabQuestionAndDisconnect(t *testing.T) {
 		}
 		return false
 	})
+	// 选项随问题事件交给房主，再同步回成员的缓存
+	if !slices.Equal(q.Choices, []string{"main", "dev"}) {
+		t.Fatalf("choices on host %q", q.Choices)
+	}
+	waitFor(t, "choices in the member's cache", func() bool {
+		mq, err := m.store.QuestionByTaskMessage(q.Question)
+		return err == nil && slices.Equal(mq.Choices, []string{"main", "dev"})
+	})
 	if _, err := callErr(h.discAnswer, map[string]any{"question": q.Question, "body": "main"}); err == nil || !strings.Contains(err.Error(), "owner") {
 		t.Fatalf("host answered the member's question: %v", err)
 	}
 	call(t, m.discAnswer, map[string]any{"question": q.Question, "body": "main"})
 	if err := <-got; err != nil {
 		t.Fatal(err)
+	}
+	// 成员的 Agent 写的摘要交给房主，再同步回成员的缓存；只有房主能清
+	readAll(t, m, x)
+	call(t, m.discSummarize, map[string]any{"execution": x.ID, "caller": x.Worker, "body": "use main"})
+	waitFor(t, "summary on host and back", func() bool {
+		hd, _ := h.store.Discussion(p.disc.Key)
+		md, _ := m.store.Discussion(p.disc.Key)
+		return hd.Summary == "use main" && hd.SummaryBy == "Bob" && md.Summary == "use main" && md.SummarySeq == hd.SummarySeq && md.SummarySeq > 0
+	})
+	if _, err := callErr(m.discSummaryClear, map[string]any{"discussion": p.disc.Key}); err == nil {
+		t.Fatal("a member cleared the host's summary")
 	}
 	waitFor(t, "answer on host", func() bool {
 		msgs, _ := h.store.DiscMessages(p.disc.Key, 0, 100)
@@ -433,7 +454,6 @@ func TestCollabQuestionAndDisconnect(t *testing.T) {
 	waitFor(t, "claimed", func() bool { return m.store.AcceptState(r2.Execution.ID) == store.AcceptAccepted })
 	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": false})
 	waitFor(t, "disconnected", func() bool { return !m.roomStatus(p.disc.Key).Connected })
-	readAll(t, m, x)
 	call(t, m.taskDone, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "body": "done offline"})
 	waitFor(t, "queue paused", func() bool {
 		mb, _ := m.store.Member(bob.ID)
@@ -459,6 +479,181 @@ func TestCollabQuestionAndDisconnect(t *testing.T) {
 		m.dispatchAll()
 		x2, _ := m.store.Execution(r2.Execution.ID)
 		return x2.State == store.ExecRunning
+	})
+}
+
+// 房主是不认选项的旧版（hello 没报这项能力）：选项写进问题正文交过去，事件里不带新字段。
+func TestCollabChoicesOldHost(t *testing.T) {
+	p := newCollabPair(t)
+	h, m := p.host, p.member
+	bob := call(t, m.discMemberAdd, map[string]any{"discussion": p.disc.Key, "name": "Bob", "agent": "codex", "workspace": p.mw.ID}).(store.Member)
+	r := call(t, m.discPost, map[string]any{"discussion": p.disc.Key, "body": "q?", "target": bob.ID, "clientId": "c-1"}).(discPostResult)
+	var x store.Execution
+	waitFor(t, "running", func() bool {
+		m.dispatchAll()
+		x, _ = m.store.Execution(r.Execution.ID)
+		return x.State == store.ExecRunning
+	})
+	if err := m.store.SetHostFeatures(p.disc.Key, nil); err != nil {
+		t.Fatal(err)
+	}
+	go callErr(m.taskAsk, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "question": "which branch?", "timeoutMs": 2000,
+		"choices": []string{"main", "dev"}})
+	waitFor(t, "question on host", func() bool {
+		msgs, _ := h.store.DiscMessages(p.disc.Key, 0, 100)
+		for _, mm := range msgs {
+			if mm.Kind == store.DiscQuestion {
+				if len(mm.Choices) != 0 || mm.Body != "which branch?\n\nOptions:\n1. main\n2. dev" {
+					t.Errorf("question for an old host: %q %q", mm.Body, mm.Choices)
+				}
+				return true
+			}
+		}
+		return false
+	})
+}
+
+// 跨电脑的成员 @ 成员：成员电脑上的 Bob @ 同一台电脑上的 Carol（照自己发的请求领取），再 @ 房主放开的 Alice（房主执行）；
+// 没放开的 @ 不了；房主是旧版（没报这项能力）时拒绝，不把它发成这个人自己的请求。
+func TestCollabMemberMention(t *testing.T) {
+	p := newCollabPair(t)
+	h, m := p.host, p.member
+	bob := call(t, m.discMemberAdd, map[string]any{"discussion": p.disc.Key, "name": "Bob", "agent": "codex", "workspace": p.mw.ID}).(store.Member)
+	carol := call(t, m.discMemberAdd, map[string]any{"discussion": p.disc.Key, "name": "Carol", "agent": "claude", "workspace": p.mw.ID}).(store.Member)
+	alice := addMember(t, h, p.disc, "Alice", "claude")
+	waitFor(t, "member sees Alice", func() bool { _, err := m.store.Member(alice.ID); return err == nil })
+	r := call(t, m.discPost, map[string]any{"discussion": p.disc.Key, "body": "start", "target": bob.ID, "clientId": "c-1"}).(discPostResult)
+	var x store.Execution
+	waitFor(t, "Bob running", func() bool {
+		m.dispatchAll()
+		x, _ = m.store.Execution(r.Execution.ID)
+		return x.State == store.ExecRunning
+	})
+	readAll(t, m, x)
+	waitFor(t, "host sees Bob running", func() bool { hx, _ := h.store.Execution(x.ID); return hx.State == store.ExecRunning })
+	mention := func(to, body string) (discPostResult, error) {
+		v, err := callErr(m.discMention, map[string]any{"execution": x.ID, "caller": x.Worker, "to": to, "body": body})
+		if err != nil {
+			return discPostResult{}, err
+		}
+		return v.(discPostResult), nil
+	}
+	if _, err := mention("Alice", "hi"); err == nil {
+		t.Fatal("Bob mentioned the host's agent before it was opened to his owner")
+	}
+	m.store.SetHostFeatures(p.disc.Key, []string{store.FeatureChoices})
+	if _, err := mention("Carol", "hi"); err == nil || !strings.Contains(err.Error(), "older") {
+		t.Fatalf("mention with an old host: %v", err)
+	}
+	m.store.SetHostFeatures(p.disc.Key, store.HostFeatures)
+	got, err := mention("Carol", "take the tests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hm, err := h.store.DiscMessage(got.Message.ID)
+	if err != nil || hm.Kind != store.DiscDelegate || hm.AuthorMember != bob.ID || hm.AuthorID != m.store.Self() || hm.Target != carol.ID {
+		t.Fatalf("host message %+v %v", hm, err)
+	}
+	// Carol 在成员电脑上：照自己发的请求一样核对意图后领取，同目录时等 Bob（这里直接确认）
+	waitFor(t, "Carol claimed", func() bool { return m.store.AcceptState(got.Execution.ID) == store.AcceptAccepted })
+	waitFor(t, "Carol runs", func() bool {
+		m.dispatchAll()
+		cx, _ := m.store.Execution(got.Execution.ID)
+		if cx.State == store.ExecHeld {
+			callErr(m.discConfirm, map[string]any{"execution": cx.ID})
+		}
+		return cx.State == store.ExecRunning
+	})
+	cx, _ := m.store.Execution(got.Execution.ID)
+	if cx.Depth != 1 || cx.Root != x.ID {
+		t.Fatalf("Carol's round %+v", cx)
+	}
+	if text := readAll(t, m, cx); !strings.Contains(text, "comes from the member Bob") {
+		t.Fatalf("Carol's context:\n%s", text)
+	}
+	// 房主把 Alice 放开给所有人：Bob 能 @ 她，在房主电脑上执行
+	call(t, h.discMemberUpdate, map[string]any{"member": alice.ID, "access": "all"})
+	waitFor(t, "member sees Alice opened", func() bool { ma, _ := m.store.Member(alice.ID); return ma.Access == store.AccessAll })
+	ga, err := mention("Alice", "review please")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "Alice runs on the host", func() bool {
+		h.dispatchAll()
+		ax, _ := h.store.Execution(ga.Execution.ID)
+		return ax.State == store.ExecRunning && ax.Depth == 1
+	})
+}
+
+// 只读访客：用访客邀请加入的人能同步消息，不能发言、标关键、带 Agent、传附件；房主直接调写接口也被拒。
+func TestCollabGuest(t *testing.T) {
+	t.Setenv("POSSE_COLLAB_ADDRS", "127.0.0.1")
+	h, _, disc := newDiscDaemon(t)
+	m, mw := newTestDaemon(t)
+	fakeLaunch(m)
+	startCollab(t, h)
+	startCollab(t, m)
+	call(t, h.collabShare, map[string]any{"discussion": disc.Key, "on": true})
+	inv := call(t, h.collabInvite, map[string]any{"discussion": disc.Key, "guest": true}).(map[string]any)
+	call(t, m.collabJoin, map[string]any{"invite": inv["invite"]})
+	var reqs []store.JoinRequest
+	waitFor(t, "join request", func() bool {
+		reqs, _ = h.store.JoinRequests(disc.Key, true)
+		return len(reqs) == 1
+	})
+	if reqs[0].Role != store.RoleGuest {
+		t.Fatalf("request role %q", reqs[0].Role)
+	}
+	call(t, h.collabDecide, map[string]any{"request": reqs[0].ID, "approve": true})
+	waitFor(t, "guest connected", func() bool { return m.roomStatus(disc.Key).Connected })
+	// 读得到
+	hp := postTo(t, h, disc, "hello viewers", "", "")
+	waitFor(t, "guest syncs", func() bool { _, err := m.store.DiscMessage(hp.Message.ID); return err == nil })
+	waitFor(t, "guest sees its own role", func() bool { return m.guestIn(disc.Key) })
+	// 写不了：本机先挡
+	for name, try := range map[string]func() error{
+		"post": func() error {
+			_, err := callErr(m.discPost, map[string]any{"discussion": disc.Key, "body": "hi", "clientId": "c-1"})
+			return err
+		},
+		"add agent": func() error {
+			_, err := callErr(m.discMemberAdd, map[string]any{"discussion": disc.Key, "name": "Bob", "agent": "codex", "workspace": mw.ID})
+			return err
+		},
+	} {
+		if err := try(); err == nil || !strings.Contains(err.Error(), "viewer") {
+			t.Fatalf("guest %s: %v", name, err)
+		}
+	}
+	// 绕过本机检查直接调房主：房主也拒
+	rc, err := m.mirrorConn(disc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, method := range []string{"post", "key", "member.add", "upload.begin", "claim"} {
+		err := rc.call(method, map[string]any{"clientId": "c-9", "body": "x", "message": hp.Message.ID, "on": true, "name": "f", "size": 1}, nil)
+		if err == nil || !strings.Contains(err.Error(), "viewer") {
+			t.Fatalf("host accepted %s from a guest: %v", method, err)
+		}
+	}
+	if msgs, _ := h.store.DiscMessages(disc.Key, 0, 10); len(msgs) != 1 {
+		t.Fatalf("%d messages on the host", len(msgs))
+	}
+	// 普通邀请重新加入：成为普通成员，能发言
+	call(t, h.collabRemovePerson, map[string]any{"discussion": disc.Key, "person": m.store.Self()})
+	waitFor(t, "guest removed", func() bool { j, _ := m.store.Joined(disc.Key); return j.State != store.JoinedActive })
+	call(t, m.collabJoin, map[string]any{"invite": invite(t, h, disc)})
+	waitFor(t, "second request", func() bool {
+		reqs, _ = h.store.JoinRequests(disc.Key, true)
+		return len(reqs) == 1
+	})
+	call(t, h.collabDecide, map[string]any{"request": reqs[0].ID, "approve": true})
+	waitFor(t, "member can post", func() bool {
+		if !m.roomStatus(disc.Key).Connected || m.guestIn(disc.Key) {
+			return false
+		}
+		_, err := callErr(m.discPost, map[string]any{"discussion": disc.Key, "body": "now I can talk", "clientId": "c-2"})
+		return err == nil
 	})
 }
 

@@ -123,6 +123,23 @@ extension _DetailsViews on _DiscussionRoomState {
                         ),
                       ],
                     ),
+                    if (discText(disc, 'summary').isNotEmpty)
+                      Section(
+                        title: l.discSummary,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                            child: MarkdownView(
+                              discText(disc, 'summary'),
+                              style: TextStyle(
+                                fontSize: Fs.small,
+                                height: Lh.body,
+                                color: c.text,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     Section(
                       title: l.discMembers,
                       trailing: writable
@@ -170,6 +187,7 @@ extension _DetailsViews on _DiscussionRoomState {
                                   if (p['fp'] == discText(collab, 'self'))
                                     l.discYou,
                                   if (p['host'] == true) l.discHost,
+                                  if (p['role'] == 'guest') l.discGuest,
                                 ].join(' · '),
                               ),
                               subtitle: Text(
@@ -207,7 +225,12 @@ extension _DetailsViews on _DiscussionRoomState {
                           for (final r in requests)
                             RowTile(
                               leading: initial(discText(r, 'name'), Ic.large),
-                              title: Text(discText(r, 'name')),
+                              title: Text(
+                                [
+                                  discText(r, 'name'),
+                                  if (r['role'] == 'guest') l.discGuest,
+                                ].join(' · '),
+                              ),
                               chevron: false,
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -253,6 +276,20 @@ extension _DetailsViews on _DiscussionRoomState {
                       ),
                     Section(
                       children: [
+                        if (writable && members.any(canUse))
+                          RowTile(
+                            title: Text(l.discSummarize),
+                            chevron: false,
+                            onTap: () => summarize(sheet),
+                          ),
+                        if (editable && discText(disc, 'summary').isNotEmpty)
+                          RowTile(
+                            title: Text(l.discSummaryClear),
+                            chevron: false,
+                            onTap: () => action('summary.clear', {
+                              'discussion': widget.room,
+                            }, title: l.discSummaryClear),
+                          ),
                         if (host) ...[
                           RowTile(
                             title: Text(l.discShare),
@@ -270,8 +307,13 @@ extension _DetailsViews on _DiscussionRoomState {
                               ),
                             ),
                           ),
-                          if (disc['shared'] == true)
+                          if (disc['shared'] == true) ...[
                             RowTile(title: Text(l.discInvite), onTap: invite),
+                            RowTile(
+                              title: Text(l.discInviteGuest),
+                              onTap: () => invite(guest: true),
+                            ),
+                          ],
                           RowTile(
                             title: Text(
                               disc['status'] == 'archived'
@@ -314,18 +356,51 @@ extension _DetailsViews on _DiscussionRoomState {
     if (mounted) await state.poll();
   }
 
-  Future<void> invite() async {
+  /// 摘要由成员写：挑一个能用的 Agent（只有一个就直接用它），给它发一条请求，它存好摘要再回复。
+  Future<void> summarize(BuildContext sheet) async {
+    final l = context.l10n;
+    final usable = activeMembers.where(canUse).toList();
+    var target = usable.length == 1 ? discText(usable.first, 'id') : null;
+    target ??= await showModalBottomSheet<String>(
+      context: sheet,
+      showDragHandle: true,
+      builder: (picker) => SafeArea(
+        child: Section(
+          children: [
+            for (final m in usable)
+              RowTile(
+                leading: AgentTile(agent: discText(m, 'agent'), size: Ic.large),
+                title: Text(discText(m, 'name')),
+                chevron: false,
+                onTap: () => Navigator.pop(picker, discText(m, 'id')),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (target == null || !mounted) return;
+    await action('post', {
+      'discussion': widget.room,
+      'target': target,
+      'body': l.discSummarizeRequest,
+      'clientId': discRequestId(),
+    });
+    if (sheet.mounted) Navigator.pop(sheet);
+  }
+
+  Future<void> invite({bool guest = false}) async {
     final l = context.l10n;
     try {
       final result = await widget.api.call('invite', {
         'discussion': widget.room,
+        'guest': guest,
       });
       if (!mounted) return;
       final code = discText(result, 'invite');
       await showPosseDialog<void>(
         context: context,
         builder: (dialog) => AlertDialog(
-          title: Text(l.discInvite),
+          title: Text(guest ? l.discInviteGuest : l.discInvite),
           content: SelectableText(code),
           actions: [
             TextButton(

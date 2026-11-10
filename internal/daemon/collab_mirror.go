@@ -14,6 +14,9 @@ import (
 // mirrorPost 在加入的讨论里发言：附件先分块传给房主，@ 自己的 Agent 时先存授权意图，再提交房主。
 // 房主按客户端请求 ID 去重：响应丢了重发不会多一条。离线时报错，草稿留在窗口里，不自动补发。
 func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error) {
+	if d.guestIn(disc.Key) {
+		return nil, guestErr()
+	}
 	rc, err := d.mirrorConn(disc)
 	if err != nil {
 		return nil, err
@@ -85,6 +88,47 @@ func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error
 		if x, err := d.store.Execution(res.Execution); err == nil {
 			out.Execution = &x
 		}
+	}
+	return out, nil
+}
+
+// mirrorMention 是加入的讨论里本机的 Agent @ 另一个成员：经房主的 post 带上发起的那一轮（from），
+// 房主核对这一轮在本机名下、算层数。对象也是本机的 Agent 时照自己发的请求一样先记授权意图，领取时对得上。
+func (d *Daemon) mirrorMention(disc store.Discussion, x store.Execution, target store.Member, body, clientID string) (any, error) {
+	if !d.store.HostHas(disc.Key, store.FeatureDelegate) {
+		return nil, rpc.Errorf(rpc.CodeConflict, "the host of this discussion runs an older Posse where members cannot mention each other; report to the user instead")
+	}
+	rc, err := d.mirrorConn(disc)
+	if err != nil {
+		return nil, err
+	}
+	if d.mine(target.Owner) {
+		switch {
+		case store.ConfigUntrusted(target.Paused):
+			return nil, rpc.Errorf(rpc.CodeConflict, "%s's settings on this computer need the user's review first", target.Name)
+		case target.WorkspaceID == "":
+			return nil, rpc.Errorf(rpc.CodeConflict, "%s has no workspace on this computer yet", target.Name)
+		}
+		dig := store.IntentDigest(body, "", target.ID, nil)
+		if err := d.store.SaveIntent(disc.Key, clientID, target.ID, target.ConfigVersion, dig, store.OwnConfigDigest(target), time.Now()); err != nil {
+			return nil, err
+		}
+	} else if !target.Allows(d.store.Self(), disc.Host) {
+		return nil, notYours(target.Name)
+	}
+	var res struct {
+		Message   string `json:"message"`
+		Execution string `json:"execution"`
+		Duplicate bool   `json:"duplicate"`
+	}
+	if err := rc.call("post", collabPostParams{ClientID: clientID, Body: body, Target: target.ID, From: x.ID}, &res); err != nil {
+		return nil, err
+	}
+	d.taskNotify()
+	out := discPostResult{Duplicate: res.Duplicate}
+	out.Message, _ = d.store.DiscMessage(res.Message)
+	if nx, err := d.store.Execution(res.Execution); err == nil {
+		out.Execution = &nx
 	}
 	return out, nil
 }

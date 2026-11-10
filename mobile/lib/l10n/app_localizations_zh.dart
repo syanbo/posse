@@ -2535,4 +2535,29 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get discUnshareConfirm => '停止分享';
+
+  @override
+  String get discSummary => '摘要';
+
+  @override
+  String get discSummarize => '更新摘要';
+
+  @override
+  String get discSummaryClear => '清除摘要';
+
+  @override
+  String get discSummarizeRequest =>
+      '总结这个讨论到目前为止的内容，并保存为讨论摘要：已经定下的结论、还没解决的问题、谁在做什么。';
+
+  @override
+  String get discStateMerged => '已并入上一条请求';
+
+  @override
+  String get discGuest => '只读';
+
+  @override
+  String get discInviteGuest => '邀请只读访客';
+
+  @override
+  String get discGuestNote => '你是以只读身份加入的，不能在这里发言。';
 }

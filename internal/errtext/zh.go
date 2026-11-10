@@ -82,6 +82,8 @@ var zh = [][2]string{
 	{"only the owner of %s can answer this question", "只有 {1} 的拥有者能回答这个问题"},
 	{"only the host can archive or restore this discussion", "只有房主能归档或恢复这个讨论"},
 	{"only the host can rename this discussion", "只有房主能修改这个讨论"},
+	{"only the host can clear this discussion's summary", "只有房主能清除这个讨论的摘要"},
+	{"you joined this discussion as a viewer and cannot post, mark messages or add agents; ask the host for a full invitation", "你是以只读身份加入这个讨论的，不能发言、标记消息或添加 Agent；需要的话请房主重新发一份普通邀请"},
 	{"choose a workspace on this computer for your agent", "给你的 Agent 选一个本机工作区"},
 	{"choose a workspace on this computer for %s first", "先给 {1} 选一个本机工作区"},
 	{"turn on LAN sharing first", "先打开局域网分享"},
