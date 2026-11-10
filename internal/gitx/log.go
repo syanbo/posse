@@ -55,20 +55,34 @@ func Log(ctx context.Context, dir string, f LogFilter, skip, limit int) ([]Commi
 		return runRaw(ctx, dir, nil, nil, a...)
 	}
 	out, err := logRevs(revs)
-	if err != nil && slices.Contains(revs, "HEAD") {
+	if err != nil && slices.Contains(revs, "HEAD") && unbornHead(ctx, dir) {
 		// 还没有提交的仓库里 HEAD 解析不了，git 报 bad revision：去掉 HEAD 再读，别的分支照样列出，一个都没有就是空的
-		if _, herr := runRaw(ctx, dir, nil, nil, "rev-parse", "--verify", "--quiet", "HEAD"); herr != nil {
-			revs = slices.DeleteFunc(slices.Clone(revs), func(r string) bool { return r == "HEAD" })
-			if len(revs) == 0 {
-				return nil, nil
-			}
-			out, err = logRevs(revs)
+		revs = slices.DeleteFunc(slices.Clone(revs), func(r string) bool { return r == "HEAD" })
+		if len(revs) == 0 {
+			return nil, nil
 		}
+		out, err = logRevs(revs)
 	}
 	if err != nil {
 		return nil, err
 	}
 	return parseCommits(out), nil
+}
+
+// unbornHead 确认 dir 是正常的仓库、HEAD 指向一个还不存在的分支（git init 后还没有提交）。
+// 取消、不是仓库、读不了等其他失败都不算，调用方照常报错。
+func unbornHead(ctx context.Context, dir string) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	ref, err := runRaw(ctx, dir, nil, nil, "symbolic-ref", "-q", "HEAD")
+	name := strings.TrimSpace(string(ref))
+	if err != nil || !strings.HasPrefix(name, "refs/heads/") {
+		return false
+	}
+	// for-each-ref 对不存在的引用成功且什么都不输出，出错时才失败
+	out, err := runRaw(ctx, dir, nil, nil, "for-each-ref", "--format=%(refname)", name)
+	return err == nil && strings.TrimSpace(string(out)) == ""
 }
 
 // looksLikeHashPrefix 至少 7 位才当哈希：短的像 "feed"、"cafe" 更可能是要搜的词。

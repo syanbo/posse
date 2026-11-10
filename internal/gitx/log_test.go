@@ -186,3 +186,20 @@ func TestLogUnbornHead(t *testing.T) {
 		}
 	}
 }
+
+// 兜底只认还没有提交的仓库：不是仓库、已取消时照常报错，不当成空列表。
+func TestLogHeadErrorsKept(t *testing.T) {
+	head := LogFilter{Branches: []string{"HEAD"}}
+	if list, err := Log(context.Background(), t.TempDir(), head, 0, 100); err == nil {
+		t.Fatalf("non-repository: %d commits, no error", len(list))
+	}
+	dir := t.TempDir()
+	gitIn(t, dir, "init", "-q", "-b", "main")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, f := range []LogFilter{head, {}} {
+		if list, err := Log(ctx, dir, f, 0, 100); err == nil {
+			t.Fatalf("%+v cancelled: %d commits, no error", f, len(list))
+		}
+	}
+}
