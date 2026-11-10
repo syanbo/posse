@@ -2144,6 +2144,12 @@ abstract class AppLocalizations {
   /// **'Mac'**
   String get homeComputerFallback;
 
+  /// Computer list: a computer saved under several addresses, its name followed by the address to tell them apart.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({host})'**
+  String homeComputerWithHost(String name, String host);
+
   /// Home: Mac pill while connecting.
   ///
   /// In en, this message translates to:
@@ -3241,6 +3247,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Update to {version} ({build})'**
   String settingsUpdateTo(String version, String build);
+
+  /// Settings › About: the installed version and build number.
+  ///
+  /// In en, this message translates to:
+  /// **'{version} ({build})'**
+  String settingsVersionBuild(String version, String build);
 
   /// Settings › Home: switch.
   ///

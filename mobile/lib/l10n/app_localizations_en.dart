@@ -1244,6 +1244,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeComputerFallback => 'Mac';
 
   @override
+  String homeComputerWithHost(String name, String host) {
+    return '$name ($host)';
+  }
+
+  @override
   String get homeConnecting => 'Connecting to the Mac…';
 
   @override
@@ -1892,6 +1897,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String settingsUpdateTo(String version, String build) {
     return 'Update to $version ($build)';
+  }
+
+  @override
+  String settingsVersionBuild(String version, String build) {
+    return '$version ($build)';
   }
 
   @override

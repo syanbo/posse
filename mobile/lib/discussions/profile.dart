@@ -393,7 +393,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                       child: Text(
-                        l.profileNote(model.labelOf(model.current)),
+                        l.profileNote(model.labelOf(model.current, l)),
                         style: TextStyle(
                           fontSize: Fs.small,
                           height: Lh.body,
@@ -488,7 +488,7 @@ class _ProfileSectionState extends State<ProfileSection> {
             size: Ic.large,
           ),
           title: Text(discText(profile, 'name')),
-          subtitle: Text(l.profileRowNote(model.labelOf(model.current))),
+          subtitle: Text(l.profileRowNote(model.labelOf(model.current, l))),
           onTap: () async {
             if (await openProfile(context, a) && mounted) await load();
           },

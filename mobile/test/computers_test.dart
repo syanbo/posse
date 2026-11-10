@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
 
 String pairCode(String key, String endpoint) {
   final json = jsonEncode({
@@ -89,11 +91,15 @@ void main() {
       'k@wss://tun.example/posse',
       'k@ws://192.168.1.5:6788',
     ]);
-    expect(model.computers.map(model.labelOf), [
+    final zh = lookupAppLocalizations(const Locale('zh'));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(model.computers.map((c) => model.labelOf(c, zh)), [
       'MacBook（tun.example）',
       'MacBook（192.168.1.5）',
     ]);
+    // 英文界面用半角括号
+    expect(model.labelOf(model.computers.last, en), 'MacBook (192.168.1.5)');
     model.renameComputer('k@ws://192.168.1.5:6788', '家里');
-    expect(model.labelOf(model.computers.last), '家里');
+    expect(model.labelOf(model.computers.last, zh), '家里');
   });
 }

@@ -1675,6 +1675,18 @@
   "@homeComputerFallback": {
     "description": "Name used for a paired Mac when it has no name yet."
   },
+  "homeComputerWithHost": "{name} ({host})",
+  "@homeComputerWithHost": {
+    "description": "Computer list: a computer saved under several addresses, its name followed by the address to tell them apart.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "host": {
+        "type": "String"
+      }
+    }
+  },
   "homeConnecting": "Connecting to the Mac…",
   "@homeConnecting": {
     "description": "Home: Mac pill while connecting."
@@ -2504,6 +2516,18 @@
   "settingsUpdateTo": "Update to {version} ({build})",
   "@settingsUpdateTo": {
     "description": "Settings › About: row that opens the update sheet.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsVersionBuild": "{version} ({build})",
+  "@settingsVersionBuild": {
+    "description": "Settings › About: the installed version and build number.",
     "placeholders": {
       "version": {
         "type": "String"

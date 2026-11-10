@@ -215,7 +215,7 @@ class SettingsScreen extends StatelessWidget {
                       title: Text(
                         model.current == null
                             ? l.settingsNotConnected
-                            : model.labelOf(model.current),
+                            : model.labelOf(model.current, l),
                       ),
                       subtitle: Text(
                         l.settingsPairedCount(model.computers.length),
@@ -316,7 +316,9 @@ class SettingsScreen extends StatelessWidget {
                       chevron: false,
                       title: const Text('Posse'),
                       trailing: Text(
-                        appBuild > 0 ? '$appVersion（$appBuild）' : appVersion,
+                        appBuild > 0
+                            ? l.settingsVersionBuild(appVersion, '$appBuild')
+                            : appVersion,
                         style: mono(Fs.small, color: c.muted),
                       ),
                     ),

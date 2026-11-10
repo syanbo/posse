@@ -263,7 +263,7 @@ Future<bool> connectAndAnnounce(
   final messenger = ScaffoldMessenger.of(context);
   final l = context.l10n;
   if (!await model.connectCode(code)) return false;
-  final label = model.labelOf(model.current);
+  final label = model.labelOf(model.current, l);
   final name = label.isEmpty ? l.homeComputerFallback : label;
   final where = hostOf(l, model.connectedUrl);
   messenger.showSnackBar(
@@ -1263,7 +1263,7 @@ class _ConnectionLine extends StatelessWidget {
     final offline = !off && !failed && (model.rpc == null || model.connecting);
     final l = context.l10n;
     final current = model.current;
-    final name = current == null ? null : model.labelOf(current);
+    final name = current == null ? null : model.labelOf(current, l);
     final text = model.connecting
         ? l.homeConnecting
         : off
@@ -1272,7 +1272,7 @@ class _ConnectionLine extends StatelessWidget {
         ? (name == null ? l.homeFailed : l.homeFailedNamed(name))
         : offline
         ? l.homeReconnecting
-        : model.labelOf(model.current);
+        : model.labelOf(model.current, l);
     return AnimatedSize(
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
@@ -1349,7 +1349,7 @@ class _ComputerSheet extends StatelessWidget {
           top: false,
           child: SingleChildScrollView(
             child: Section(
-              title: model.labelOf(computer),
+              title: model.labelOf(computer, sheet.l10n),
               inset: 48,
               children: [
                 RowTile(
@@ -1402,7 +1402,7 @@ class _ComputerSheet extends StatelessWidget {
     final l = context.l10n;
     final ok = await showPosseConfirm(
       context,
-      title: l.homeForgetConfirm(model.labelOf(computer)),
+      title: l.homeForgetConfirm(model.labelOf(computer, l)),
       body: l.homeForgetBody,
       confirm: l.homeForget,
       tone: ConfirmTone.danger,
@@ -1439,7 +1439,7 @@ class _ComputerSheet extends StatelessWidget {
                   size: Ic.button,
                   color: c.accent,
                 ),
-                title: Text(model.labelOf(computer)),
+                title: Text(model.labelOf(computer, l)),
                 // 连着的那台写实际连上的地址，其余写配对码里的主地址
                 subtitle: Text(
                   computer.id == active && model.connectedUrl != null
@@ -1563,7 +1563,7 @@ class _DisconnectedList extends StatelessWidget {
                   size: Ic.button,
                   color: c.accent,
                 ),
-                title: Text(model.labelOf(computer)),
+                title: Text(model.labelOf(computer, context.l10n)),
                 subtitle: Text(
                   computerEndpoint(computer),
                   style: mono(Fs.small, color: c.muted),

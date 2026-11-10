@@ -1177,6 +1177,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeComputerFallback => '电脑';
 
   @override
+  String homeComputerWithHost(String name, String host) {
+    return '$name（$host）';
+  }
+
+  @override
   String get homeConnecting => '正在连接电脑…';
 
   @override
@@ -1793,6 +1798,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String settingsUpdateTo(String version, String build) {
     return '更新到 $version（$build）';
+  }
+
+  @override
+  String settingsVersionBuild(String version, String build) {
+    return '$version（$build）';
   }
 
   @override

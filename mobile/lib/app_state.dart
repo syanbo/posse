@@ -669,7 +669,7 @@ class PosseAppModel extends ChangeNotifier {
   SavedComputer? get current => saved.current;
 
   /// 列表里显示的名字：同一台电脑存了几个地址（远程、局域网）时，没改过名的后面带上地址区分。
-  String labelOf(SavedComputer? c) {
+  String labelOf(SavedComputer? c, AppLocalizations l) {
     if (c == null) return '';
     if (c.customName.isNotEmpty) return c.label;
     final key = c.id.split('@').first;
@@ -677,7 +677,7 @@ class PosseAppModel extends ChangeNotifier {
     if (twins.length < 2) return c.label;
     try {
       final uri = Uri.parse(PairingOffer.parse(c.code).endpoint);
-      return '${c.label}（${uri.host}）';
+      return l.homeComputerWithHost(c.label, uri.host);
     } catch (_) {
       return c.label;
     }
