@@ -47,6 +47,9 @@ final _png = base64Decode(
 class _FilesRpc implements PhoneRpc {
   final previews = <String>[];
 
+  /// 读 src 时先失败几次。
+  var failSrc = 0;
+
   @override
   Future<Map<String, Object?>> call(
     String method,
@@ -54,6 +57,16 @@ class _FilesRpc implements PhoneRpc {
     Duration? timeout,
   }) async {
     switch (method) {
+      case 'files.readDir' when params['relativePath'] == 'src':
+        if (failSrc > 0) {
+          failSrc--;
+          throw RpcException('timeout', 'request timed out');
+        }
+        return {
+          'value': [
+            {'name': 'main.go', 'isDirectory': false},
+          ],
+        };
       case 'files.readDir':
         return {
           'value': [
@@ -85,6 +98,33 @@ class _Model extends PosseAppModel {
 }
 
 void _mediaPagerTests() {
+  testWidgets('a folder that fails to read says so and reads again on tap', (
+    tester,
+  ) async {
+    final rpc = _FilesRpc()..failSrc = 1;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FilesPane(model: _Model(rpc), worktree: 'w'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('src'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('重试'), findsOneWidget);
+    expect(find.text('main.go'), findsNothing);
+
+    await tester.tap(find.text('重试'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('重试'), findsNothing);
+    expect(find.text('main.go'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('an image opened from the tree swipes to the next image', (
     tester,
   ) async {

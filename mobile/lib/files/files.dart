@@ -177,6 +177,9 @@ class _FilesPaneState extends State<FilesPane> {
   final _loading = <String>{};
   String? _error;
 
+  /// 读失败的子目录和报错：在它下面占一行，点一下重读。不记下来的话展开后什么都没有，看着像空文件夹
+  final _failed = <String, String>{};
+
   @override
   void initState() {
     super.initState();
@@ -200,10 +203,20 @@ class _FilesPaneState extends State<FilesPane> {
       if (!mounted) return;
       setState(() {
         _children[dir] = parseDir(dir, res['value']);
-        _error = null;
+        _failed.remove(dir);
+        if (dir.isEmpty) _error = null;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = friendlyError(error, context.l10n));
+      if (mounted) {
+        final text = friendlyError(error, context.l10n);
+        setState(() {
+          if (dir.isEmpty) {
+            _error = text;
+          } else {
+            _failed[dir] = text;
+          }
+        });
+      }
     } finally {
       if (mounted) setState(() => _loading.remove(dir));
     }
@@ -253,13 +266,18 @@ class _FilesPaneState extends State<FilesPane> {
     if (path != null && mounted) _openFile(path);
   }
 
-  /// 展开的树按显示顺序摊平成行。
-  List<(FileEntry, int)> _rows() {
-    final out = <(FileEntry, int)>[];
+  /// 展开的树按显示顺序摊平成行。读失败的目录下面是一行报错（项为空，第三项是那个目录）。
+  List<(FileEntry?, int, String)> _rows() {
+    final out = <(FileEntry?, int, String)>[];
     void walk(String dir, int depth) {
       for (final e in _children[dir] ?? const <FileEntry>[]) {
-        out.add((e, depth));
-        if (e.dir && _open.contains(e.path)) walk(e.path, depth + 1);
+        out.add((e, depth, e.path));
+        if (!e.dir || !_open.contains(e.path)) continue;
+        if (_failed.containsKey(e.path) && !_loading.contains(e.path)) {
+          out.add((null, depth + 1, e.path));
+        } else {
+          walk(e.path, depth + 1);
+        }
       }
     }
 
@@ -321,9 +339,49 @@ class _FilesPaneState extends State<FilesPane> {
       itemCount: rows.length + 1,
       itemBuilder: (context, i) {
         if (i == 0) return search;
-        final (e, depth) = rows[i - 1];
-        return _row(c, e, depth);
+        final (e, depth, dir) = rows[i - 1];
+        return e == null ? _failedRow(c, dir, depth) : _row(c, e, depth);
       },
+    );
+  }
+
+  Widget _failedRow(PosseColors c, String dir, int depth) {
+    return InkWell(
+      onTap: () => _load(dir),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          12 + depth * _treeIndent + _arrowBox + 4,
+          0,
+          12,
+          0,
+        ),
+        child: SizedBox(
+          height: 40,
+          child: Row(
+            children: [
+              Icon(
+                Icons.error_outline_rounded,
+                size: Ic.medium,
+                color: c.danger,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _failed[dir] ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: Fs.body, color: c.danger),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                context.l10n.commonRetry,
+                style: TextStyle(fontSize: Fs.body, color: c.accent),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
