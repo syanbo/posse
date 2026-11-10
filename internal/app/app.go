@@ -205,6 +205,7 @@ type app struct {
 	// 轮询上次交给界面的数据，没变就不更新界面；refreshMu 保护
 	lastPoll      *pollResult
 	diffAt        map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
+	paneGone      map[string]time.Time // 分栏里记着、列表里不见了的终端 → 第一次不见的时间（prunePanes）
 	termAt        time.Time            // 上次统计终端内存的时间（轮询协程里用）
 	lastTerm      int64
 	pollForce     atomic.Bool // 下一次轮询无论有没有变化都交给界面
@@ -803,6 +804,7 @@ func (a *app) apply(ps []project, ws []workspace) {
 			delete(a.state.TermNames, id)
 		}
 	}
+	a.prunePanes(time.Now())
 	for _, p := range ps {
 		if a.sectionsOpen[p.ID] == nil {
 			open := true

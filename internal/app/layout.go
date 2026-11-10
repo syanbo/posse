@@ -227,6 +227,66 @@ func (a *app) dropLayout(wsID string) {
 	a.saveState()
 }
 
+// paneGoneAfter 是分栏里的终端从列表里消失多久才拿掉：交接时终端会从列表里短暂消失，回来还要回到原来那格。
+const paneGoneAfter = 30 * time.Second
+
+// prunePanes 清理分栏记录：工作区删了的整份删掉；格里的终端不在列表里超过 paneGoneAfter 的拿掉
+// （别处关掉、自己退出的终端），不然 ui.json 和每帧的查找随历史终端数一直增长。
+func (a *app) prunePanes(now time.Time) {
+	if len(a.state.Panes) == 0 {
+		a.paneGone = nil
+		return
+	}
+	seen := map[string]bool{}
+	changed := false
+	for wsID, saved := range a.state.Panes {
+		w := a.workspace(wsID)
+		if w == nil {
+			delete(a.state.Panes, wsID)
+			changed = true
+			continue
+		}
+		st := saved.clone()
+		drop := false
+		for _, leaf := range st.Root.leaves(nil) {
+			leaf.Tabs = slices.DeleteFunc(leaf.Tabs, func(k string) bool {
+				if !isTermKey(k) || slices.ContainsFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == k }) {
+					return false
+				}
+				seen[k] = true
+				if a.paneGone == nil {
+					a.paneGone = map[string]time.Time{}
+				}
+				at, ok := a.paneGone[k]
+				if !ok {
+					a.paneGone[k] = now
+					return false
+				}
+				if now.Sub(at) < paneGoneAfter {
+					return false
+				}
+				drop = true
+				return true
+			})
+			if leaf.Active != "" && !slices.Contains(leaf.Tabs, leaf.Active) && len(leaf.Tabs) > 0 {
+				leaf.Active = leaf.Tabs[0]
+			}
+		}
+		if drop {
+			prune(&st, func(l *paneNode) bool { return len(l.Tabs) > 0 })
+			a.setLayout(wsID, st)
+		}
+	}
+	for k := range a.paneGone {
+		if !seen[k] {
+			delete(a.paneGone, k)
+		}
+	}
+	if changed {
+		a.saveState()
+	}
+}
+
 // renameColumnKey 把格里的标签键 from 原地换成 to（预览标签被下一次单击换掉时），不挪格。
 func (a *app) renameColumnKey(wsID, from, to string) {
 	saved, ok := a.layoutOf(wsID)

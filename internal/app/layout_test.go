@@ -3,6 +3,7 @@ package app
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -436,5 +437,31 @@ func TestDropKeyKeepsHiddenCells(t *testing.T) {
 	a.dropColumnKey(w, "t2")
 	if st := a.state.Panes["w1"]; st.leaf("p2") == nil {
 		t.Fatalf("hidden cell dropped: %+v", st)
+	}
+}
+
+// 分栏记录不随历史终端和删掉的工作区一直长：不见了超过 paneGoneAfter 的终端拿掉，短暂不见（交接）的留着。
+func TestPrunePanes(t *testing.T) {
+	a, w := columnsApp()
+	a.state.Panes = map[string]layoutState{
+		"w1":   twoCols([]string{"t1", "t9"}, []string{"t2", "t8"}, 0),
+		"gone": twoCols([]string{"x1"}, []string{"x2"}, 0),
+	}
+	now := time.Now()
+	a.prunePanes(now)
+	if _, ok := a.state.Panes["gone"]; ok {
+		t.Fatal("layout of a deleted workspace kept")
+	}
+	st := a.state.Panes["w1"]
+	if ls := st.Root.leaves(nil); !slices.Contains(ls[0].Tabs, "t9") {
+		t.Fatal("terminal dropped right after it went missing")
+	}
+	// t9 回来了（交接结束），t8 一直不在
+	w.Terminals = append(w.Terminals, terminalInfo{ID: "t9"})
+	a.prunePanes(now.Add(paneGoneAfter + time.Second))
+	st = a.state.Panes["w1"]
+	ls := st.Root.leaves(nil)
+	if !slices.Contains(ls[0].Tabs, "t9") || slices.Contains(ls[1].Tabs, "t8") {
+		t.Fatalf("after grace %+v", ls)
 	}
 }
