@@ -20,6 +20,9 @@ func isDevBundle(exe string) bool {
 	return strings.Contains(exe, "/PosseDev.app/Contents/MacOS/")
 }
 
+// RunningDevBundle 报告这个进程是不是从 PosseDev.app 运行的。
+func RunningDevBundle() bool { return runningDevBundle() }
+
 func runningDevBundle() bool {
 	exe, err := os.Executable()
 	return err == nil && isDevBundle(exe)

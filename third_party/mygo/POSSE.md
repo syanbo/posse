@@ -25,6 +25,8 @@ github.com/egoist/mygo v0.7.4 的副本，go.mod 用 replace 指向这里。去�
 
 `locale.go`：加 `App.ChosenLocale`，读出应用选的语言（`SetLocale` 存下的，跟随系统时为空串）；上游只能设、读不出，Posse 的设置页要显示选中的那项。
 
+`ui/window.go`：加 `ui.DrawWhenOccluded`，开着时窗口被完全挡住也照常画（`windowHost.occluded` 一直报没挡住，`holdFrame` 不再扣帧）。Posse 只在 PosseDev.app 里开，验收工具从别的窗口后面截图、操作它，不用把它叫到最前。
+
 `ui/scroll.go`：`adoptScroll` 在鼠标滚轮的一格正在途中、应用把位置写成「到头」（跟随末尾的日志每帧写 `math.MaxFloat32`）而内容已经在头上时，不算应用接管、不清掉滚轮；内容这一帧变长时照常由布局放到新的末尾。上游这样会吞掉停在底部时往上滚的第一格：事件后的第一帧滚轮还没走（或不到容差），应用照常跟随写了一次。应用写别的位置仍然接管。测试见 `ui/posse_scroll_test.go`（`go test github.com/egoist/mygo/ui`）。
 
 `ui/runtime.go`：`commit` 重置命中表 `rt.hits` 时先 `clear` 再截断。上游只截断，表里每项带元素的状态，长度之外的旧项会让较大一帧之后已剪掉的状态一直可达，直到又画出那么多元素：长讨论翻 12 页后关掉，约 2 万个状态、离屏约 38 MB 放不掉。测试见 `ui/posse_memory_test.go`。

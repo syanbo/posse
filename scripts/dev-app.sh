@@ -68,6 +68,7 @@ fi
 mv "$new" "$dev"
 rm -rf "$old"
 if [ "${1-}" = --open ]; then
-	open "$dev"
+	# -g：在后台打开，不把窗口叫到最前、不抢用户正在用的窗口
+	open -g "$dev"
 fi
 echo "$dev"

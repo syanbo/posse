@@ -410,11 +410,19 @@ const frameIdle = 2 * time.Second
 
 func (h *windowHost) refreshRate() float32 { return float32(h.conn.Surface.RefreshRate()) }
 
+// DrawWhenOccluded keeps windows drawing while nothing of them shows,
+// rather than holding frames until some of them does (holdFrame): for a
+// development build that tools screenshot and drive from behind the
+// windows of whoever uses the machine. Set it before the window opens.
+// (Posse)
+var DrawWhenOccluded bool
+
 // occluded reports whether nothing of the window shows: never before its
 // first frame reached the surface, which a window made hidden waits for
-// to become ready to show (OnReadyToShow), though it shows nothing yet.
+// to become ready to show (OnReadyToShow), though it shows nothing yet,
+// and never with DrawWhenOccluded.
 func (h *windowHost) occluded() bool {
-	if !h.shown {
+	if !h.shown || DrawWhenOccluded {
 		return false
 	}
 	s, ok := h.conn.Surface.(platform.OccludableSurface)

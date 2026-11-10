@@ -29,6 +29,7 @@ import (
 
 	"posse/internal/agent"
 	"posse/internal/client"
+	"posse/internal/daemon"
 	"posse/internal/errtext"
 	"posse/internal/gitx"
 	"posse/internal/procmem"
@@ -470,6 +471,9 @@ func Run(c *client.Client) error {
 	if err != nil {
 		log.Printf("posse web: %v", err)
 	}
+	// 开发包放在别的窗口后面也照常画：验收工具从后面截图、操作它，不用把窗口叫到最前抢用户的屏幕。
+	// 日常的包照旧被挡住时不画，省电
+	ui.DrawWhenOccluded = daemon.RunningDevBundle()
 	a := &app{
 		c:            c,
 		activeTerm:   map[string]string{},
