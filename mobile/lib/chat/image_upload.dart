@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -62,10 +63,18 @@ Future<String> uploadImage(
   }
   final blob = start['blob'];
   if (blob is num) {
-    for (var off = 0; off < bytes.length; off += bulkChunk) {
-      final end = min(off + bulkChunk, bytes.length);
-      await rpc.sendUploadChunk(blob.toInt(), bytes.sublist(off, end));
-      onProgress?.call(min(end / bytes.length, 0.99));
+    final sender = UploadSender(rpc, blob.toInt(), acked: start['ack'] == true);
+    try {
+      for (var off = 0; off < bytes.length; off += bulkChunk) {
+        final end = min(off + bulkChunk, bytes.length);
+        await sender.send(bytes.sublist(off, end));
+        onProgress?.call(min(end / bytes.length, 0.99));
+      }
+    } catch (_) {
+      unawaited(_abortUpload(rpc, id));
+      rethrow;
+    } finally {
+      sender.close();
     }
   } else {
     await _uploadBase64(rpc, id, base64.encode(bytes), onProgress);
@@ -75,6 +84,132 @@ Future<String> uploadImage(
   );
   onProgress?.call(1);
   return path;
+}
+
+/// 按电脑的确认控制上传在路上的字节数。不控制的话整张图一下子进了发送队列：同一连接上的按键、ping
+/// 排在它后面，手机上行占满还拖慢看桌面的输入和接收报告，延迟一下子飙上去。
+///
+/// 窗口按往返时间调：比最小往返多出 [queueLimit] 说明在排队，缩到四分之三（每个往返最多缩一次）；
+/// 否则每次确认加一段。电脑不回确认（旧版）时照旧一口气发。
+///
+/// 等确认时连接断了马上报 closed；确认 [stallTimeout] 没前进、期间也没收到任何数据才算超时：
+/// 确认和电脑发来的大回复共用一条连接，慢线路上可能排在后面，连接还在收东西就接着等，最多 [maxStall]。
+class UploadSender {
+  UploadSender(this.rpc, this.blob, {required this.acked}) {
+    if (acked) _cancel = rpc.watchUploadAcks(blob, _onAck, _onClosed);
+  }
+
+  static const minWindow = bulkChunk;
+  static const maxWindow = 4 << 20;
+  static const queueLimit = Duration(milliseconds: 60);
+  static const stallTimeout = Duration(seconds: 20);
+  static const maxStall = Duration(minutes: 2);
+
+  final PhoneRpc rpc;
+  final int blob;
+
+  /// 电脑会回确认（startImageUpload 的回复带 ack）
+  final bool acked;
+  void Function()? _cancel;
+
+  var window = 4 * bulkChunk;
+  var _sent = 0;
+  var _got = 0;
+  var _closed = false;
+  Duration? _minRtt;
+  var _lastCut = DateTime.fromMillisecondsSinceEpoch(0);
+  var _progressAt = DateTime.now();
+  // 每段发完时的累计字节和时刻，按确认算往返
+  final _marks = <(int, DateTime)>[];
+  Completer<void>? _wake;
+
+  int get inFlight => _sent - _got;
+
+  Future<void> send(List<int> chunk) async {
+    if (acked) await _waitForRoom(chunk.length);
+    await rpc.sendUploadChunk(blob, chunk);
+    _sent += chunk.length;
+    if (acked) _marks.add((_sent, DateTime.now()));
+  }
+
+  Future<void> _waitForRoom(int size) async {
+    _progressAt = DateTime.now();
+    var received = rpc.receivedBytes;
+    var quietSince = DateTime.now();
+    while (inFlight > 0 && inFlight + size > window) {
+      if (_closed) throw RpcException('closed', 'connection closed');
+      final wake = _wake = Completer<void>();
+      try {
+        await wake.future.timeout(const Duration(seconds: 1));
+      } on TimeoutException {
+        final now = DateTime.now();
+        if (rpc.receivedBytes != received) {
+          received = rpc.receivedBytes;
+          quietSince = now;
+        }
+        final stalled = now.difference(_progressAt);
+        if (stalled > maxStall ||
+            (stalled > stallTimeout &&
+                now.difference(quietSince) > stallTimeout)) {
+          throw TimeoutException('upload ack');
+        }
+      }
+    }
+    if (_closed) throw RpcException('closed', 'connection closed');
+  }
+
+  void close() {
+    _cancel?.call();
+    _cancel = null;
+  }
+
+  void _onAck(int got) => ack(got, DateTime.now());
+
+  void _onClosed() {
+    _closed = true;
+    _signal();
+  }
+
+  void _signal() {
+    final wake = _wake;
+    _wake = null;
+    if (wake != null && !wake.isCompleted) wake.complete();
+  }
+
+  /// 收到累计 [got] 字节的确认。测试直接调。
+  void ack(int got, DateTime now) {
+    if (got <= _got) return;
+    _got = got;
+    _progressAt = now;
+    DateTime? sentAt;
+    while (_marks.isNotEmpty && _marks.first.$1 <= got) {
+      sentAt = _marks.removeAt(0).$2;
+    }
+    if (sentAt != null) {
+      final rtt = now.difference(sentAt);
+      final base = _minRtt == null || rtt < _minRtt!
+          ? (_minRtt = rtt)
+          : _minRtt!;
+      if (rtt - base > queueLimit) {
+        if (now.difference(_lastCut) > rtt) {
+          window = max(minWindow, window * 3 ~/ 4);
+          _lastCut = now;
+        }
+      } else {
+        window = min(maxWindow, window + bulkChunk);
+      }
+    }
+    _signal();
+  }
+}
+
+/// 分段上传出错时告诉电脑丢掉没传完的临时文件；连接断了就算了，断开时电脑自己清。
+Future<void> _abortUpload(PhoneRpc rpc, String id) async {
+  try {
+    await rpc.call('clipboard.abortImageUpload', {
+      'uploadId': id,
+    }, timeout: const Duration(seconds: 5));
+  } catch (_) {}
 }
 
 Future<void> _uploadBase64(
@@ -124,25 +259,33 @@ Future<String> uploadFile(
   }
   final blob = start['blob'];
   if (blob is num) {
+    final sender = UploadSender(rpc, blob.toInt(), acked: start['ack'] == true);
     var sent = 0;
     var buf = <int>[];
     Future<void> flush() async {
-      await rpc.sendUploadChunk(blob.toInt(), buf);
+      await sender.send(buf);
       sent += buf.length;
       buf = <int>[];
       onProgress?.call(min(sent / size, 0.99));
     }
 
-    await for (final piece in file.openRead()) {
-      var off = 0;
-      while (off < piece.length) {
-        final take = min(bulkChunk - buf.length, piece.length - off);
-        buf.addAll(piece.sublist(off, off + take));
-        off += take;
-        if (buf.length == bulkChunk) await flush();
+    try {
+      await for (final piece in file.openRead()) {
+        var off = 0;
+        while (off < piece.length) {
+          final take = min(bulkChunk - buf.length, piece.length - off);
+          buf.addAll(piece.sublist(off, off + take));
+          off += take;
+          if (buf.length == bulkChunk) await flush();
+        }
       }
+      if (buf.isNotEmpty) await flush();
+    } catch (_) {
+      unawaited(_abortUpload(rpc, id));
+      rethrow;
+    } finally {
+      sender.close();
     }
-    if (buf.isNotEmpty) await flush();
   } else {
     // 旧电脑：只能整段 base64，也不认文件名
     if (size > _maxBase64Upload) {

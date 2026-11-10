@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,8 +77,23 @@ func TestBulkFrames(t *testing.T) {
 	img := append([]byte{0xff, 0xd8, 0xff}, data...)
 	start := result(t, p.next(p.call("clipboard.startImageUpload", map[string]any{"expectedBytes": len(img)})))
 	up := uint32(start["blob"].(float64))
+	if start["ack"] != true {
+		t.Fatalf("start %v without ack", start)
+	}
 	for off := 0; off < len(img); off += bulkChunk {
 		p.sendBin(bulkFrame(opUploadChunk, up, img[off:min(off+bulkChunk, len(img))]))
+	}
+	// 确认是累计的已收字节数，积压时可能合并，最后一个是全部
+	for acked := uint64(0); acked < uint64(len(img)); {
+		op, id, payload, ok := parseBulk(<-p.binary)
+		if !ok || op != opUploadAck || id != up || len(payload) != 8 {
+			t.Fatalf("ack frame op %d id %d len %d", op, id, len(payload))
+		}
+		n := binary.LittleEndian.Uint64(payload)
+		if n <= acked {
+			t.Fatalf("ack went from %d to %d", acked, n)
+		}
+		acked = n
 	}
 	m := p.next(p.call("clipboard.commitImageUpload", map[string]any{"uploadId": start["uploadId"]}))
 	path, _ := m["result"].(string)
@@ -94,6 +110,18 @@ func TestBulkFrames(t *testing.T) {
 	p.sendBin(bulkFrame(opUploadChunk, uint32(start["blob"].(float64)), img[:bulkChunk]))
 	if m := p.next(p.call("clipboard.commitImageUpload", map[string]any{"uploadId": start["uploadId"]})); m["ok"] != false {
 		t.Fatalf("short upload committed: %v", m)
+	}
+	<-p.binary
+
+	// 超出说好大小的段也确认（手机不在窗口上干等），提交时报错
+	start = result(t, p.next(p.call("clipboard.startImageUpload", map[string]any{"expectedBytes": 10})))
+	over := uint32(start["blob"].(float64))
+	p.sendBin(bulkFrame(opUploadChunk, over, img[:20]))
+	if op, id, payload, _ := parseBulk(<-p.binary); op != opUploadAck || id != over || binary.LittleEndian.Uint64(payload) != 20 {
+		t.Fatalf("overflow ack op %d id %d %v", op, id, payload)
+	}
+	if m := p.next(p.call("clipboard.commitImageUpload", map[string]any{"uploadId": start["uploadId"]})); m["ok"] != false {
+		t.Fatalf("overflowed upload committed: %v", m)
 	}
 
 	// 带文件名的（视频、文件）放进新的临时目录、用原名；名字里的目录去掉

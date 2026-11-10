@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:posse_mobile/chat/image_upload.dart';
 import 'package:posse_mobile/protocol/e2ee.dart';
 import 'package:posse_mobile/protocol/rpc.dart';
 import 'package:posse_mobile/protocol/socket.dart';
@@ -114,6 +115,88 @@ void main() {
       expect(ByteData.sublistView(chunk).getUint32(4, Endian.little), 3);
       expect(chunk.sublist(bulkHeader), [9, 8, 7]);
       await rpc.close();
+    },
+  );
+
+  test(
+    'upload waits for acks and shrinks the window when acks queue up',
+    () async {
+      final desk = E2eeSession(
+        recvKey: _key(1),
+        sendKey: _key(2),
+        id: Uint8List(32),
+        transcriptHash: Uint8List(32),
+      );
+      final socket = _Socket();
+      final rpc = PhoneRpc(
+        socket: socket,
+        session: desk.asPhone(),
+        deviceToken: 't',
+        reader: SocketReader(socket.events),
+      )..start();
+      final frames = <SocketEvent>[];
+      socket.sent.stream.listen(frames.add);
+      final sender = UploadSender(rpc, 5, acked: true);
+      final chunk = List.filled(bulkChunk, 1);
+      var done = 0;
+      unawaited(() async {
+        for (var i = 0; i < 6; i++) {
+          await sender.send(chunk);
+          done++;
+        }
+      }());
+      await pumpEventQueue();
+      // 起始窗口 4 段，没有确认就停在这里
+      expect(done, 4);
+      expect(frames, hasLength(4));
+
+      // 电脑的确认帧经连接送来，放出下一段，窗口加一段
+      socket.incoming.add(
+        SocketEvent.binary(
+          desk.seal(
+            bulkFrame(
+              opUploadAck,
+              5,
+              Uint8List(8)
+                ..buffer.asByteData().setUint64(0, bulkChunk, Endian.little),
+            ),
+            direction: dirDesktopToMobile,
+            kind: kindBinary,
+          ),
+        ),
+      );
+      await pumpEventQueue();
+      expect(sender.window, 5 * bulkChunk);
+      expect(done, 6);
+
+      // 往返比最小值多出排队上限：窗口缩小
+      final before = sender.window;
+      sender.ack(
+        2 * bulkChunk,
+        DateTime.now().add(const Duration(milliseconds: 500)),
+      );
+      expect(sender.window, before * 3 ~/ 4);
+
+      // 旧电脑不回确认：不等
+      final legacy = UploadSender(rpc, 6, acked: false);
+      for (var i = 0; i < 8; i++) {
+        await legacy.send(chunk);
+      }
+      sender.close();
+
+      // 等确认时连接断了，马上报 closed，不等超时
+      final stuck = UploadSender(rpc, 7, acked: true);
+      for (var i = 0; i < 4; i++) {
+        await stuck.send(chunk);
+      }
+      final waiting = expectLater(
+        stuck.send(chunk),
+        throwsA(isA<RpcException>().having((e) => e.code, 'code', 'closed')),
+      );
+      await pumpEventQueue();
+      await rpc.close();
+      await waiting;
+      stuck.close();
     },
   );
 }

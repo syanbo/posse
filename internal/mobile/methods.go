@@ -937,6 +937,7 @@ type upload struct {
 	blob uint32
 	file *os.File
 	got  int
+	seen int    // 收到的段一共多少字节，作废后丢掉的也算，确认按它回
 	name string // 手机上的文件名，存的时候用它，agent 看得到原名
 	bad  bool   // 送来的超过了说好的大小，或者写盘失败
 }
@@ -956,6 +957,9 @@ func (c *conn) uploadChunk(blob uint32, p []byte) {
 	defer c.smu.Unlock()
 	for _, u := range c.uploads {
 		if u.raw && u.blob == blob {
+			// 作废了也照样确认：手机接着发完、到 commit 拿到真正的报错，不在窗口上干等
+			u.seen += len(p)
+			defer c.ackUpload(blob, u.seen)
 			if u.bad || u.got+len(p) > u.expect {
 				u.bad = true
 				return
@@ -1114,7 +1118,7 @@ func (c *conn) image(id, method string, p json.RawMessage) error {
 			c.smu.Lock()
 			c.uploads[uid] = &upload{expect: a.ExpectedBytes, raw: true, blob: bid, file: f, name: a.Name}
 			c.smu.Unlock()
-			return c.reply(id, map[string]any{"uploadId": uid, "blob": bid})
+			return c.reply(id, map[string]any{"uploadId": uid, "blob": bid, "ack": true})
 		}
 		if a.ExpectedBase64Len <= 0 || a.ExpectedBase64Len > maxImage {
 			return errorf("invalid_params", "bad upload size")

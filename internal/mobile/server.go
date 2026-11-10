@@ -293,6 +293,9 @@ type conn struct {
 	streamGen map[string]uint64
 	nextGen   uint64
 	uploads   map[string]*upload
+	// 待发的上传确认（bulk.go 的 ackUpload）：blob → 已收字节数；acking 时有协程在发
+	acks   map[uint32]int
+	acking bool
 
 	// 握手之后 runtime.clientCapabilities.update 记在这条连接上。没声明的（旧版客户端）能力为空。
 	clientName    string

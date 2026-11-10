@@ -12,6 +12,9 @@ import (
 // 别的消息能插在块之间；最后发 JSON 回复，字段换成 "blobs": {"字段路径": 块编号}（嵌套的用点连起来）。
 // 同一条连接按顺序到达，手机收到回复时这些块都已经到了。
 // 手机 → 电脑：上传的分段（clipboard.startImageUpload 带 bytes 时）也走二进制帧，不用每段等一次回复。
+// 每收下一段回一个确认帧（内容是 u64 已收字节数，小端），手机按它限制路上的数据量：一下子全塞进发送队列，
+// 同一连接的按键、ping 要排在整张图后面，手机上行占满还会拖慢看桌面的输入和接收报告。
+// startImageUpload 的回复带 "ack": true 表示会回确认，旧电脑没有，手机照旧一口气发。
 //
 // 帧：u8 0x62（'b'，和终端流的 0x74 区分）、u8 版本 1、u8 操作、u8 0、u32 编号（小端）、内容。
 // 没声明这个能力的连接（旧版客户端）照旧：[]byte 由 encoding/json 编成标准 base64。
@@ -22,6 +25,7 @@ const (
 
 	opBlobChunk   = 1 // 电脑 → 手机：回复里一个字段的一块
 	opUploadChunk = 2 // 手机 → 电脑：上传的一段
+	opUploadAck   = 3 // 电脑 → 手机：上传已收下的字节数
 
 	bulkChunk = 64 << 10
 )
@@ -90,4 +94,48 @@ func (c *conn) sendBlobs(m map[string]any, prefix string, blobs map[string]uint3
 		}
 	}
 	return nil
+}
+
+// ackUpload 记下 blob 收到了多少，交给后台发确认：读循环不等发送锁（可能排在别的大回复后面）。
+// 确认是累计值，积压时只发最新的。调用方持有 smu。
+func (c *conn) ackUpload(blob uint32, got int) {
+	if c.acks == nil {
+		c.acks = map[uint32]int{}
+	}
+	c.acks[blob] = got
+	if c.acking {
+		return
+	}
+	c.acking = true
+	go c.sendAcks()
+}
+
+func (c *conn) sendAcks() {
+	for {
+		c.smu.Lock()
+		var blob uint32
+		var got int
+		found := false
+		for b, n := range c.acks {
+			blob, got, found = b, n, true
+			break
+		}
+		if !found {
+			c.acking = false
+			c.smu.Unlock()
+			return
+		}
+		delete(c.acks, blob)
+		c.smu.Unlock()
+		var p [8]byte
+		binary.LittleEndian.PutUint64(p[:], uint64(got))
+		if c.sendBinary(bulkFrame(opUploadAck, blob, p[:])) != nil {
+			// 连接已经作废，剩下的不用发了
+			c.smu.Lock()
+			c.acks = nil
+			c.acking = false
+			c.smu.Unlock()
+			return
+		}
+	}
 }

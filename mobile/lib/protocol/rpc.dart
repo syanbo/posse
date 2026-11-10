@@ -38,6 +38,7 @@ const bulkMagic = 0x62;
 const bulkHeader = 8;
 const opBlobChunk = 1;
 const opUploadChunk = 2;
+const opUploadAck = 3;
 const bulkChunk = 64 * 1024;
 
 Uint8List bulkFrame(int op, int id, List<int> payload) {
@@ -300,12 +301,15 @@ class PhoneRpc {
           if (plain.length >= bulkHeader &&
               plain[0] == bulkMagic &&
               plain[1] == 1) {
+            final view = ByteData.sublistView(plain);
+            final id = view.getUint32(4, Endian.little);
             if (plain[2] == opBlobChunk) {
-              final id = ByteData.sublistView(plain)
-                  .getUint32(4, Endian.little);
               (_blobs[id] ??= BytesBuilder(
                 copy: false,
               )).add(Uint8List.sublistView(plain, bulkHeader));
+            } else if (plain[2] == opUploadAck &&
+                plain.length >= bulkHeader + 8) {
+              _uploadAcks[id]?.ack(view.getUint64(bulkHeader, Endian.little));
             }
             continue;
           }
@@ -373,6 +377,27 @@ class PhoneRpc {
     }
   }
 
+  /// 电脑确认上传已收下的字节数（累计值），见 [watchUploadAcks]。
+  final _uploadAcks =
+      <int, ({void Function(int) ack, void Function() closed})>{};
+
+  /// 收编号为 [blob] 的上传的确认，返回取消函数。连接断开时调一次 [onClosed]，之后不再调 [onAck]。
+  void Function() watchUploadAcks(
+    int blob,
+    void Function(int got) onAck,
+    void Function() onClosed,
+  ) {
+    final entry = (ack: onAck, closed: onClosed);
+    if (_closed) {
+      onClosed();
+      return () {};
+    }
+    _uploadAcks[blob] = entry;
+    return () {
+      if (identical(_uploadAcks[blob], entry)) _uploadAcks.remove(blob);
+    };
+  }
+
   /// 上传的一段（编号由 clipboard.startImageUpload 给），和请求共用发送顺序。
   Future<void> sendUploadChunk(int blob, List<int> payload) => sendPlain(
     bulkFrame(opUploadChunk, blob, payload),
@@ -393,6 +418,11 @@ class PhoneRpc {
 
   void _closeBinary() {
     _blobs.clear();
+    final waiting = _uploadAcks.values.toList();
+    _uploadAcks.clear();
+    for (final entry in waiting) {
+      entry.closed();
+    }
     if (!_binary.isClosed) unawaited(_binary.close());
   }
 
