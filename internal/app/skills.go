@@ -851,7 +851,11 @@ func (a *app) issueRow(c *ui.Context, is skills.Issue) {
 				}
 			case skills.LockMissing:
 				if pressable(iconButtonSized(c, iconTrash, m.SkillsRemoveFromLock(), compactBox(), smallIcon())).Clicked() {
-					a.askSkillCommand(m, m.SkillsRemoveFromLockConfirm(is.Name), m.SkillsRemoveFromLockBody(), skills.ShellLine(skills.RemoveArgs(is.Name, true)), a.skillsWorkspace(), false)
+					if args, err := skills.RemoveArgs(is.Name, true); err != nil {
+						a.err = errtext.Text(err)
+					} else {
+						a.askSkillCommand(m, m.SkillsRemoveFromLockConfirm(is.Name), m.SkillsRemoveFromLockBody(), skills.ShellLine(args), a.skillsWorkspace(), false)
+					}
 				}
 			}
 		})
@@ -1101,7 +1105,11 @@ func (a *app) skillActions(c *ui.Context, sk skills.Skill, w *workspace, global 
 			update = iconButton(c.Key("skill-update"), iconFetch, m.SkillsUpdate())
 		}
 		if pressable(update).Clicked() {
-			a.askSkillCommand(m, m.SkillsUpdateConfirm(sk.Name), m.SkillsUpdateBody(sk.Source), skills.ShellLine(skills.UpdateArgs([]string{sk.Name}, global)), w, false)
+			if args, err := skills.UpdateArgs([]string{sk.Name}, global); err != nil {
+				a.err = errtext.Text(err)
+			} else {
+				a.askSkillCommand(m, m.SkillsUpdateConfirm(sk.Name), m.SkillsUpdateBody(sk.Source), skills.ShellLine(args), w, false)
+			}
 		}
 		if pressable(iconButton(c.Key("skill-remove"), iconTrash, m.CommonDelete())).Clicked() {
 			a.askSkillRemove(m, sk, w, global)
@@ -1119,7 +1127,12 @@ func (a *app) askSkillRemove(m locales.Messages, sk skills.Skill, w *workspace, 
 	for _, p := range sk.Paths {
 		list = append(list, shortPath(p))
 	}
-	a.askSkillCommand(m, m.SkillsDeleteConfirm(sk.Name), m.SkillsDeleteBody(strings.Join(list, "\n")), skills.ShellLine(skills.RemoveArgs(sk.Name, global)), w, false)
+	args, err := skills.RemoveArgs(sk.Name, global)
+	if err != nil {
+		a.err = errtext.Text(err)
+		return
+	}
+	a.askSkillCommand(m, m.SkillsDeleteConfirm(sk.Name), m.SkillsDeleteBody(strings.Join(list, "\n")), skills.ShellLine(args), w, false)
 }
 
 // askTrashSkill 确认后把指向技能的链接和技能目录移到废纸篓（先移链接：中途失败也不留下断链）。

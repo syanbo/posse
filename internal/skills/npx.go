@@ -205,22 +205,31 @@ func listError(lines []string) error {
 	return errors.New("no skill list in the output")
 }
 
-// RemoveArgs 是删除 npx skills 装的技能：连同它给各家建的链接。
-func RemoveArgs(name string, global bool) []string {
+// RemoveArgs 是删除 npx skills 装的技能：连同它给各家建的链接。技能名来自 SKILL.md，
+// 以 - 开头的会被 npx 当成选项（name: --all），和 Install.Check 一样拒绝。
+func RemoveArgs(name string, global bool) ([]string, error) {
+	if strings.HasPrefix(name, "-") {
+		return nil, fmt.Errorf("skill name %s must not start with -", name)
+	}
 	args := []string{name}
 	if global {
 		args = append(args, "-g")
 	}
-	return npx("remove", append(args, "-y")...)
+	return npx("remove", append(args, "-y")...), nil
 }
 
-// UpdateArgs 是更新 npx skills 装的技能，names 为空时全部更新。
-func UpdateArgs(names []string, global bool) []string {
+// UpdateArgs 是更新 npx skills 装的技能，names 为空时全部更新。以 - 开头的名字同 RemoveArgs 拒绝。
+func UpdateArgs(names []string, global bool) ([]string, error) {
+	for _, s := range names {
+		if strings.HasPrefix(s, "-") {
+			return nil, fmt.Errorf("skill name %s must not start with -", s)
+		}
+	}
 	args := append([]string{}, names...)
 	if global {
 		args = append(args, "-g")
 	}
-	return npx("update", append(args, "-y")...)
+	return npx("update", append(args, "-y")...), nil
 }
 
 // ShellLine 把命令拼成一行 shell，前面带上关掉统计的环境变量，给确认框显示、交给终端运行。

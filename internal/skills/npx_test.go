@@ -16,10 +16,12 @@ func TestNPXArgs(t *testing.T) {
 	if got := ShellLine(Install{Source: "./my skill", Global: true}.Args()); got != "DISABLE_TELEMETRY=1 npx -y skills@"+NPXVersion+" add './my skill' -g -a codex -y" {
 		t.Errorf("带空格的路径要加引号：%s", got)
 	}
-	if got := ShellLine(RemoveArgs("it's", true)); !strings.HasSuffix(got, `remove 'it'\''s' -g -y`) {
+	rm, _ := RemoveArgs("it's", true)
+	if got := ShellLine(rm); !strings.HasSuffix(got, `remove 'it'\''s' -g -y`) {
 		t.Errorf("删除：%s", got)
 	}
-	if got := strings.Join(UpdateArgs(nil, true), " "); !strings.HasSuffix(got, "update -g -y") {
+	up, _ := UpdateArgs(nil, true)
+	if got := strings.Join(up, " "); !strings.HasSuffix(got, "update -g -y") {
 		t.Errorf("全部更新：%s", got)
 	}
 }
@@ -66,5 +68,18 @@ func TestParseList(t *testing.T) {
 	_, err = ParseList("◇  No skills found\n│\n└  No valid skills found. Skills require a SKILL.md with name and description.\n")
 	if err == nil || !strings.HasPrefix(err.Error(), "No valid skills found") {
 		t.Errorf("没有技能：%v", err)
+	}
+}
+
+// SKILL.md 里写的名字以 - 开头时不交给 npx，免得 name: --all 被当成选项。
+func TestRemoveUpdateRejectDashNames(t *testing.T) {
+	if _, err := RemoveArgs("--all", true); err == nil {
+		t.Fatal("remove accepted --all")
+	}
+	if _, err := UpdateArgs([]string{"ok", "-g"}, false); err == nil {
+		t.Fatal("update accepted -g")
+	}
+	if _, err := UpdateArgs([]string{"ok"}, false); err != nil {
+		t.Fatal(err)
 	}
 }
