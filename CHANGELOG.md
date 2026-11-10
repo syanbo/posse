@@ -3,6 +3,16 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.34
+
+- 修复：用手机看桌面时，在 iOS 模拟器、iPhone 镜像这类窗口里用手机键盘打字，数字和字母全变成了 a。
+- 修复：手机传大图、视频时，同一连接上的按键和其他操作要排在整个文件后面，手机卡住、延迟一下子飙升。现在电脑边收边确认，手机按确认控制发送速度（手机端需要 0.1.22 及以上）。
+
+### English
+
+- Fix: when viewing the desktop from the phone, typing with the phone keyboard into windows such as the iOS Simulator or iPhone Mirroring turned every digit and letter into "a".
+- Fix: uploading a large image or video from the phone made keystrokes and other actions on the same connection wait behind the whole file, so the phone froze and latency spiked. Your Mac now acknowledges as it receives, and the phone paces the upload by those acknowledgements (needs Posse mobile 0.1.22 or later).
+
 ## 0.1.33
 
 - 终端里图片的悬浮预览按窗口大小放大（最宽是终端宽度的一半），竖的手机截图、长截图整张显示在终端里，不再超出窗口看不到下半截；点击图片链接弹出的卡片里，太高的图会缩小，下面的按钮不再被挤出窗口。
