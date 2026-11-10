@@ -3,6 +3,14 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.31
+
+- 终端里的 Agent 被认作已退出时，`~/.posse/daemon.log` 会记下原因，方便排查「Agent 还在跑，图标却变回普通终端」这类问题。
+
+### English
+
+- When an agent in a terminal is taken as exited, `~/.posse/daemon.log` records why, to help track down cases where the agent is still running but its icon turns back into a plain terminal.
+
 ## 0.1.30
 
 - 侧栏在工作区下面也列出运行中的普通终端，点一下切过去；已退出的终端和还没恢复的普通终端仍只在标签栏。⌘⇧] / ⌘⇧[ 照侧栏的顺序切换。
