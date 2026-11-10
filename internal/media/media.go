@@ -351,6 +351,17 @@ func ScaledImage(path string, width int) (*image.RGBA, error) {
 	return img, err
 }
 
+// FittedImage 解码图片并等比缩到宽不超过 maxW、高不超过 maxH 像素；本来就更小的不放大。
+// 悬浮预览用它，长截图按宽缩完还有上万像素高，只缩宽会白占几十 MB。
+func FittedImage(path string, maxW, maxH int) (*image.RGBA, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	img, _, err := decodeFit(b, maxW, maxH)
+	return img, err
+}
+
 // ScaledImageBytes 是 ScaledImage 读内存里的图片，顺带返回原始尺寸。
 func ScaledImageBytes(b []byte, width int) (*image.RGBA, image.Point, error) {
 	return decodeScaled(b, width)
@@ -428,15 +439,24 @@ func decodeAny(data []byte) (image.Image, string, error) {
 }
 
 func decodeScaled(data []byte, width int) (*image.RGBA, image.Point, error) {
+	return decodeFit(data, width, 0)
+}
+
+// decodeFit 缩到宽不超过 maxW、高不超过 maxH（0 是不限高）。
+func decodeFit(data []byte, maxW, maxH int) (*image.RGBA, image.Point, error) {
 	src, _, err := decodeAny(data)
 	if err != nil {
 		return nil, image.Point{}, err
 	}
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
-	if w > width {
-		h = max(h*width/w, 1)
-		w = width
+	if w > maxW {
+		h = max(h*maxW/w, 1)
+		w = maxW
+	}
+	if maxH > 0 && h > maxH {
+		w = max(w*maxH/h, 1)
+		h = maxH
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.CatmullRom.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)

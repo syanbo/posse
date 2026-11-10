@@ -68,6 +68,7 @@ github.com/egoist/mygo v0.7.4 的副本，go.mod 用 replace 指向这里。去�
 - `font.go`：加 `Font.BoldWeight`，粗体的字重可以单独设；为 0 时照上游比正文重 300、至少 700。加 `Font.Antialiased`，照 `ui.Font.Antialiased` 不用字体平滑画字：Core Text 的平滑让深色底上的浅色字看上去重一档。
 - `terminal.go`、`view.go`：加 `Options.NoWheelZoom`，开着时按住 Command 滚动滚轮或在触控板上滑动照常滚动，不缩放字号；调字号的快捷键（⌘=、⌘-、⌘0）不受影响。
 - `paint.go`、`view.go`：重建一行时拼行用的缓冲（`rowBuild`）挂在视图上，跨行、跨帧复用；字形切片沿用这一行上次的容量（`shapeRun`）。上游每行每次重建都新分配，程序持续输出时每帧都要重建所有变了的行：整屏 20 帧/秒重画时窗口 30 秒 GC 25 次，改后 5 次。
+- `posse.go`、`view.go` 的 `linkAt`：agent 输入框里粘贴的图片占位 `[Image #N]`（Claude 发送前只是文字，没有 OSC 8）也认成链接（`imageTagPattern`，排在网址后、路径前，只在设了 `OpenLink` 或 `LinkClick` 时），原文交给 `LinkUsable`、`OnHoverLink`、`LinkClick`，由 Posse 换成图片文件；测试在 `links_wrap_test.go`。
 - `posse.go`：`Terminal.Selection`、`SelectAll`、`PasteClipboard`（照常经过 `OnPaste`）给 Posse 自己的右键菜单用；`ScrollToEdge`、`AltScreen` 给 Posse 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
 
 `updater.go`、`updater_stage.go`：`Update.Install` 把下载和换包放在一步（0.7 起 macOS 上留一个 shell 进程等 app 退出再换，`stageBundle`）。拆出 `stageUpdate`（`Install` 照旧用它，下载经上游的 `get`，走系统代理和 `SetSource`）和 `swapUpdate`（macOS 上用保留下来的 `swapBundle` 当场换：Posse 换包后马上把常驻进程交接到新包，不能等 app 退出），加 `Update.Stage`（下载、校验、解压到 app 旁边的 `.<名字>.app.update-*`，app 不动）、`Staged.Apply`（换包）、`Staged.Discard`、`Updater.CleanStaged`（清掉上次留下的暂存和换包残留）和 `Updater.Configured`（这个包带不带更新地址）。macOS 上包被换掉后，进程还没用过的隐私授权（文稿、桌面等）会失效，常驻进程也从同一个包运行，所以 Posse 后台只暂存，用户重启时才换包。

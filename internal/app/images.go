@@ -412,9 +412,7 @@ func (a *app) imagePreview(c *ui.Context, body ui.Element) {
 	}
 	if bh := b.H; bh > 0 {
 		// 上下各留 8，卡片自己的内边距各 8
-		if maxH := bh - 32; dw*float32(h)/float32(max(w, 1)) > maxH {
-			dw = max(maxH, 80) * float32(w) / float32(max(h, 1))
-		}
+		dw, _ = fitSize(float32(max(w, 1)), float32(max(h, 1)), dw, max(bh-32, 80))
 	}
 	floating(c, ui.Box(c).Absolute().Top(8).Right(8+280+8).Padding(8)).Children(func() {
 		anim := v.bigAnim

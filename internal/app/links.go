@@ -159,6 +159,9 @@ func (a *app) termWorkspace(v *termView) *workspace {
 
 // linkPath 是链接指向的本地文件：file:// 链接取路径，网址返回 ok=false，路径按终端目录解析，不存在返回空。
 func (a *app) linkPath(v *termView, link string) (path string, local bool) {
+	if m := imageTagRe.FindStringSubmatch(link); m != nil {
+		return a.pastedImage(v, m[1]), true
+	}
 	if len(link) >= len("file://") && strings.EqualFold(link[:len("file://")], "file://") {
 		return fileURLPath(link), true
 	}
@@ -166,6 +169,29 @@ func (a *app) linkPath(v *termView, link string) (path string, local bool) {
 		return "", false
 	}
 	return resolveLinkPath(link, a.linkBase(v)), true
+}
+
+// imageTagRe 是 agent 输入框里粘贴的图片占位（终端插件认出的 [Image #N]）。发出去以后 Claude 把它输出成 OSC 8 链接，那时走 file://。
+var imageTagRe = regexp.MustCompile(`^\[Image #(\d+)\]$`)
+
+// pastedImage 是终端里 Claude 会话粘贴的第 n 张图：Claude 粘贴时就存进会话的图片目录（N.png 这样），还没发送也在。
+// 别家的输入框里的图不知道存在哪，返回空，占位就不当链接。
+func (a *app) pastedImage(v *termView, n string) string {
+	_, ti := a.findTerminal(v.id)
+	if ti == nil || ti.Agent != "claude" || ti.AgentState == nil {
+		return ""
+	}
+	dir := media.ClaudeImageDir(ti.AgentState.SessionID, ti.AgentState.TranscriptPath)
+	if dir == "" {
+		return ""
+	}
+	for _, ext := range []string{".png", ".jpg", ".jpeg"} {
+		p := filepath.Join(dir, n+ext)
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			return p
+		}
+	}
+	return ""
 }
 
 // fileURLPath 是 file:// 链接指向的、存在的文件，不存在返回空。程序在 OSC 8 里常直接拼绝对路径、不做百分号编码：
@@ -190,7 +216,9 @@ func fileURLPath(link string) string {
 // linkUsable 告诉终端一个链接能不能打开：网址都能，文件链接和路径要文件还在。
 // 不能打开的不显示下划线，点了也没反应。悬停时每帧都会问，结果缓存一会儿。
 func (a *app) linkUsable(v *termView, link string) bool {
-	if c, ok := a.linkChecks[link]; ok && time.Since(c.at) < linkCheckTTL {
+	// 按终端分开记：相对路径按各自的目录找，[Image #N] 是各自会话的图
+	key := v.id + "\x00" + link
+	if c, ok := a.linkChecks[key]; ok && time.Since(c.at) < linkCheckTTL {
 		return c.ok
 	}
 	path, local := a.linkPath(v, link)
@@ -198,7 +226,7 @@ func (a *app) linkUsable(v *termView, link string) bool {
 	if a.linkChecks == nil || len(a.linkChecks) > 256 {
 		a.linkChecks = map[string]linkCheck{}
 	}
-	a.linkChecks[link] = linkCheck{ok: ok, at: time.Now()}
+	a.linkChecks[key] = linkCheck{ok: ok, at: time.Now()}
 	return ok
 }
 
@@ -263,10 +291,16 @@ type linkCard struct {
 	x, y    float32 // 相对终端区域；placed 前还没取
 	placed  bool
 	preview *ui.Bitmap // 图片的预览
-	term    string     // 点的是哪个终端里的链接：分栏时卡片只画在那一栏
+	// 图片预览的高度上限（按卡片弹出那一边剩下的空间算）、这一帧画出的高度，
+	// 和卡片里预览以外部分的高（上一帧量出来的）
+	previewMaxH, previewH, chromeH float32
+	term                           string // 点的是哪个终端里的链接：分栏时卡片只画在那一栏
 }
 
-const linkPreviewWidth = 640 // 2 倍屏下 320pt
+const (
+	linkPreviewWidth = 640  // 2 倍屏下 320pt
+	linkPreviewMaxPx = 1400 // 高的上限，显示时还会按终端高度再压
+)
 
 func isImagePath(p string) bool {
 	switch strings.ToLower(filepath.Ext(p)) {
@@ -286,7 +320,7 @@ func (a *app) showLinkCard(card *linkCard) {
 	a.linkCard = card
 	if !card.isDir && isImagePath(path) {
 		go func() {
-			img, err := media.ScaledImage(path, linkPreviewWidth)
+			img, err := media.FittedImage(path, linkPreviewWidth, linkPreviewMaxPx)
 			if err != nil {
 				return
 			}
@@ -321,12 +355,27 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element, termID string) {
 		x = max(8, min(x, b.W-width-8))
 	}
 	el := floating(c, ui.Column(c).Absolute().Left(x).Width(width).Padding(6).Gap(2))
-	// 点在下半部分时往上弹：卡片的下边贴着点击处上方，卡片多高都对得上；否则顶边贴着点击处下方
-	if b.H > 0 && card.y > b.H*0.55 {
-		el.Bottom(max(8, b.H-card.y+10))
+	// 往空间大的一边弹：往上时卡片的下边贴着点击处上方，卡片多高都对得上；往下时顶边贴着点击处下方。
+	// 图片预览压到那一边放得下整张卡片，下面的按钮不被挤出窗口
+	const upGap, downGap, edge = 10, 14, 8
+	up, down := card.y-upGap-edge, b.H-card.y-downGap-edge
+	if b.H > 0 && up > down {
+		el.Bottom(max(edge, b.H-card.y+upGap))
 	} else {
-		el.Top(card.y + 14)
+		el.Top(card.y + downGap)
 	}
+	if h := el.Bounds().H; h > 0 {
+		card.chromeH = h - card.previewH
+	}
+	card.previewMaxH = 0
+	if b.H > 0 {
+		chrome := card.chromeH
+		if chrome <= 0 {
+			chrome = 220 // 还没量过：路径两行加四项操作的高
+		}
+		card.previewMaxH = max(80, max(up, down)-chrome)
+	}
+	card.previewH = 0
 	if card.url != "" {
 		el.Children(func() { a.urlCardItems(c, card) })
 	} else {
@@ -374,7 +423,17 @@ func (a *app) linkCardHead(c *ui.Context, text, value, label string) {
 func (a *app) pathCardItems(c *ui.Context, card *linkCard, width float32) {
 	a.linkCardHead(c, shortPath(card.path), card.path, L(c).CommonCopyPath())
 	if card.preview != nil {
-		ui.Image(c, card.preview).Width(width-12).Radius(rRow).Margin(2, 0, 4, 0)
+		// 高图按 linkCardView 算的上限压低，竖图居中
+		iw, ih := card.preview.Size()
+		maxH := card.previewMaxH
+		if maxH <= 0 {
+			maxH = 240
+		}
+		w, h := fitSize(float32(iw), float32(ih), width-12, maxH)
+		card.previewH = h + 2 + 4 + 2 // 上下外边距和列的间隔
+		ui.Row(c).Justify(ui.Center).Margin(2, 0, 4, 0).Children(func() {
+			ui.Image(c, card.preview).Width(w).Radius(rRow)
+		})
 	}
 	hline(c).Margin(4, 6)
 	// 最常用的在最上面：在 Posse 里打开。网页直接打开的是渲染出来的页面，源码在文件标签里看
@@ -437,9 +496,11 @@ func linkCardItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
 
 // 鼠标停在终端里的图片链接上（Claude 的 [Image #N]、打印出来的图片路径）时，在指针旁边浮出预览。
 const (
-	hoverPreviewWidth = 360
-	hoverPreviewPx    = 720 // 2 倍屏下正好是预览宽度
-	hoverPreviewKeep  = 2   // 最多留几张解码好的预览，换终端时全部放掉
+	hoverPreviewMinWidth = 360 // 预览宽度随终端变：终端宽的一半，夹在这两个数之间
+	hoverPreviewMaxWidth = 800
+	hoverPreviewPx       = 2 * hoverPreviewMaxWidth // 2 倍屏下最宽时的像素
+	hoverPreviewMaxPx    = 2000                     // 高的上限：2 倍屏下 1000pt，长截图不至于解出几十 MB
+	hoverPreviewKeep     = 2                        // 最多留几张解码好的预览，换终端时全部放掉
 )
 
 // onHoverLink 是终端的悬停回调：持着终端的锁调用，只记下状态、在后台解码，不碰终端。
@@ -461,7 +522,7 @@ func (a *app) onHoverLink(v *termView, link string) {
 	}
 	a.previewLoading[path] = true
 	go func() {
-		img, err := media.ScaledImage(path, hoverPreviewPx)
+		img, err := media.FittedImage(path, hoverPreviewPx, hoverPreviewMaxPx)
 		a.win.Update(func() {
 			delete(a.previewLoading, path)
 			if err != nil {
@@ -475,7 +536,7 @@ func (a *app) onHoverLink(v *termView, link string) {
 	}()
 }
 
-// hoverPreviewView 画悬停预览：指针在终端上半部分时出现在下方，下半部分时出现在上方。弹出链接卡片时让位给卡片。
+// hoverPreviewView 画悬停预览，位置和大小见 placeHoverPreview。弹出链接卡片时让位给卡片。
 func (a *app) hoverPreviewView(c *ui.Context, area ui.Element, termID string) {
 	bm := a.previews[a.hoverImage]
 	if a.hoverImage == "" || bm == nil || a.linkCard != nil || a.hoverTerm != termID {
@@ -487,17 +548,60 @@ func (a *app) hoverPreviewView(c *ui.Context, area ui.Element, termID string) {
 		return
 	}
 	b := area.Bounds()
-	left := x + 12
-	if b.W > 0 {
-		left = max(8, min(left, b.W-hoverPreviewWidth-8))
-	}
-	el := floating(c, ui.Box(c).Absolute().Left(left).Width(hoverPreviewWidth).Padding(6))
-	if b.H > 0 && y > b.H*0.5 {
-		el.Bottom(max(8, b.H-y+14))
-	} else {
-		el.Top(y + 20)
-	}
-	el.Children(func() {
-		ui.Image(c, bm).Width(hoverPreviewWidth - 12).Radius(rRow)
+	iw, ih := bm.Size()
+	r := placeHoverPreview(b.W, b.H, x, y, float32(iw), float32(ih))
+	floating(c, ui.Box(c).Absolute().Left(r.X).Top(r.Y).Padding(hoverPreviewPad)).Children(func() {
+		ui.Image(c, bm).Width(r.W - 2*hoverPreviewPad).Radius(rRow)
 	})
+}
+
+const hoverPreviewPad = 6
+
+// placeHoverPreview 算悬停预览外框的位置和大小（相对终端区域 bw×bh，指针在 x,y，图片 iw×ih）。
+// 指针下方、上方、右边、左边四处各按剩下的空间等比缩放，取图最大的一处；一样大时按这个顺序，横图照旧在上下。
+// 竖图放在左右能用满终端的高度。预览不能盖住指针：盖住了指针就不在链接上，预览会来回闪。
+// 最宽是终端宽的一半（360 到 800）；小图最多放大到原来的 360 宽，不再往上放大（按 2 倍屏算原图有多大）。
+func placeHoverPreview(bw, bh, x, y, iw, ih float32) ui.Rect {
+	const edge, below, above, side = 8, 20, 14, 12
+	pad := float32(2 * hoverPreviewPad)
+	maxW := min(max(bw/2, hoverPreviewMinWidth), hoverPreviewMaxWidth) - pad
+	maxW = min(maxW, max(hoverPreviewMinWidth-pad, iw/2))
+	if bw <= 0 || bh <= 0 {
+		// 还没排版出尺寸：照旧放在指针右下
+		w, h := fitSize(iw, ih, maxW, maxW*4)
+		return ui.Rect{X: x + side, Y: y + below, W: w + pad, H: h + pad}
+	}
+	clamp := func(v, size, limit float32) float32 { return max(edge, min(v, limit-size-edge)) }
+	fullW, fullH := bw-2*edge-pad, bh-2*edge-pad
+	var best ui.Rect
+	var bestArea float32
+	try := func(availW, availH float32, at func(w, h float32) (float32, float32)) {
+		w, h := fitSize(iw, ih, availW, availH)
+		if w <= 0 || h <= 0 || w*h <= bestArea {
+			return
+		}
+		bestArea = w * h
+		w, h = w+pad, h+pad
+		px, py := at(w, h)
+		best = ui.Rect{X: px, Y: py, W: w, H: h}
+	}
+	try(min(maxW, fullW), bh-(y+below)-edge-pad, func(w, h float32) (float32, float32) { return clamp(x+side, w, bw), y + below })
+	try(min(maxW, fullW), y-above-edge-pad, func(w, h float32) (float32, float32) { return clamp(x+side, w, bw), y - above - h })
+	try(min(maxW, bw-(x+side)-edge-pad), fullH, func(w, h float32) (float32, float32) { return x + side, clamp(y-h/2, h, bh) })
+	try(min(maxW, x-side-edge-pad), fullH, func(w, h float32) (float32, float32) { return x - side - w, clamp(y-h/2, h, bh) })
+	if bestArea == 0 {
+		// 终端小到哪边都放不下：贴着左上角，至少看得见
+		w, h := fitSize(iw, ih, max(fullW, 40), max(fullH, 40))
+		return ui.Rect{X: edge, Y: edge, W: w + pad, H: h + pad}
+	}
+	return best
+}
+
+// fitSize 把 w×h 等比缩放到正好放进 maxW×maxH（小图也放大到放满）。
+func fitSize(w, h, maxW, maxH float32) (float32, float32) {
+	if w <= 0 || h <= 0 || maxW <= 0 || maxH <= 0 {
+		return 0, 0
+	}
+	s := min(maxW/w, maxH/h)
+	return w * s, h * s
 }

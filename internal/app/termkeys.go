@@ -29,6 +29,11 @@ var termEditKeys = []struct{ id, seq string }{
 
 // termKey 是终端的 OnKey：报告这个键是不是 Posse 处理掉了。
 func (a *app) termKey(v *termView, id string, mods ui.Modifiers, key ui.Key) bool {
+	// 链接卡片不拿焦点，Esc 先到这里：关卡片，不发给终端里的程序（Claude、Codex 收到 Esc 会中断这一轮）
+	if card := a.linkCard; card != nil && mods == 0 && key == ui.KeyEscape && (card.term == "" || card.term == id) {
+		a.linkCard = nil
+		return true
+	}
 	t := v.term
 	if t == nil {
 		return false

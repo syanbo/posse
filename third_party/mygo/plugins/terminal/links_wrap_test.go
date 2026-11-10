@@ -43,6 +43,8 @@ func TestLinkAcrossRows(t *testing.T) {
 		{"three rows", three, nil, [2]int{5, 1}, "/tmp/aa/bb/dd/cc.go:24", rows(0, [2]int{0, 8}, [2]int{2, 8}, [2]int{4, 12})},
 		{"past the span's rows", "/tmp/" + strings.Repeat("a", 20*17), nil, [2]int{3, 17}, "/tmp/" + strings.Repeat("a", 20*17), rows(0, full...)},
 		{"one row", "a /tmp/x.go b\r\nnext", nil, [2]int{4, 0}, "/tmp/x.go", rows(0, [2]int{2, 11})},
+		{"image tag", "> [Image #12] hi", nil, [2]int{5, 0}, "[Image #12]", rows(0, [2]int{2, 13})},
+		{"image tag, after it", "> [Image #12] hi", nil, [2]int{14, 0}, "", linkSpan{}},
 	}
 	for _, c := range cases {
 		term, err := vt.NewTerminal(20, 20, vt.Effects{})

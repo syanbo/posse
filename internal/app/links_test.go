@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"image"
 	"os"
 	"path/filepath"
@@ -374,15 +375,22 @@ func TestLinkCardPlacement(t *testing.T) {
 		{"folder low", 560, false},
 		{"image low", 560, true},
 		{"folder high", 100, false},
+		{"tall image low", 560, true},
+		{"tall image middle", 330, true},
 	} {
 		a := previewApp(t)
 		card := &linkCard{path: dir, isDir: !tc.preview, x: 200, y: tc.y, placed: true}
 		if tc.preview {
-			card.preview = ui.NewBitmap(image.NewRGBA(image.Rect(0, 0, 640, 400)))
+			w, h := 640, 400
+			if strings.HasPrefix(tc.name, "tall") {
+				w, h = 600, 1300 // 手机截图
+			}
+			card.preview = ui.NewBitmap(image.NewRGBA(image.Rect(0, 0, w, h)))
 		}
 		a.linkCard = card
 		tt := newPreviewTester(a, true)
 		tt.Frame()
+		tt.Frame() // 第二帧按量出的卡片高度压图片
 		// 最后一行：文件夹是"在访达中打开"，文件是"在访达中显示"
 		last := "在访达中打开"
 		if !card.isDir {
@@ -398,6 +406,13 @@ func TestLinkCardPlacement(t *testing.T) {
 		}
 		// 终端区域从窗口 y≈40 开始；卡片的 card.y 相对终端区域
 		click := 40 + tc.y
+		// 整张卡片都在终端区域里（窗口 760 高，底下是状态栏）
+		if top.Y < 40 || r.Y+r.H > 730 {
+			t.Errorf("%s: card spans %.0f..%.0f, outside the terminal", tc.name, top.Y, r.Y+r.H)
+		}
+		if tc.name == "tall image middle" {
+			continue
+		}
 		if tc.y > 300 {
 			if bottom := r.Y + r.H; bottom > click || click-bottom > 40 {
 				t.Errorf("%s: card bottom %.0f, click at %.0f", tc.name, bottom, click)
@@ -405,6 +420,53 @@ func TestLinkCardPlacement(t *testing.T) {
 		} else if top.Y < click || top.Y-click > 40 {
 			t.Errorf("%s: card top %.0f, click at %.0f", tc.name, top.Y, click)
 		}
+	}
+}
+
+// 悬停预览放进终端区域、不盖住指针；竖图放在指针旁边，比只放上下大。
+func TestPlaceHoverPreview(t *testing.T) {
+	const bw, bh = 1000, 800
+	for _, tc := range []struct {
+		name         string
+		x, y, iw, ih float32
+		side         bool // 应该在指针左右
+	}{
+		{"wide top", 300, 100, 1600, 900, false},
+		{"wide bottom", 300, 700, 1600, 900, false},
+		{"phone middle", 300, 400, 1179, 2556, true},
+		{"phone right edge", 950, 300, 1179, 2556, true},
+		{"long screenshot", 300, 100, 1000, 20000, true},
+		{"phone near top", 500, 30, 1179, 2556, true},
+	} {
+		r := placeHoverPreview(bw, bh, tc.x, tc.y, tc.iw, tc.ih)
+		if r.X < 8 || r.Y < 8 || r.X+r.W > bw-8 || r.Y+r.H > bh-8 {
+			t.Errorf("%s: %+v outside area", tc.name, r)
+		}
+		if tc.x >= r.X && tc.x <= r.X+r.W && tc.y >= r.Y && tc.y <= r.Y+r.H {
+			t.Errorf("%s: %+v covers pointer", tc.name, r)
+		}
+		iw, ih := r.W-2*hoverPreviewPad, r.H-2*hoverPreviewPad
+		if d := iw/ih - tc.iw/tc.ih; d > 0.01 || d < -0.01 {
+			t.Errorf("%s: aspect %v, want %v", tc.name, iw/ih, tc.iw/tc.ih)
+		}
+		if side := tc.y >= r.Y && tc.y <= r.Y+r.H; side != tc.side {
+			t.Errorf("%s: %+v side=%v", tc.name, r, side)
+		}
+	}
+	// 竖图用满终端的高度
+	if r := placeHoverPreview(bw, bh, 300, 400, 1179, 2556); r.H < bh-20 {
+		t.Errorf("phone preview only %v high", r.H)
+	}
+	// 宽随终端变：大终端里横图比原来的 360 宽，最多 800
+	if r := placeHoverPreview(2000, 1000, 500, 550, 2624, 2024); r.W < 700 || r.W > hoverPreviewMaxWidth {
+		t.Errorf("wide preview in a big terminal is %v wide", r.W)
+	}
+	if r := placeHoverPreview(600, 800, 100, 100, 1600, 900); r.W > hoverPreviewMinWidth {
+		t.Errorf("preview in a narrow terminal is %v wide", r.W)
+	}
+	// 小图不放大到糊
+	if r := placeHoverPreview(2000, 1000, 500, 300, 200, 200); r.W > hoverPreviewMinWidth {
+		t.Errorf("small image blown up to %v", r.W)
 	}
 }
 
@@ -524,5 +586,49 @@ func TestRelInside(t *testing.T) {
 		if rel, ok := relInside("/p/main", tc.path); rel != tc.rel || ok != tc.ok {
 			t.Errorf("%s: %q %v, want %q %v", tc.path, rel, ok, tc.rel, tc.ok)
 		}
+	}
+}
+
+// 链接卡片开着时终端里按 Esc 关掉卡片、不交给程序；别的分栏的卡片不管。
+func TestEscClosesLinkCard(t *testing.T) {
+	a := previewApp(t)
+	a.linkCard = &linkCard{path: "/x.png", term: "t2"}
+	if a.termKey(&termView{}, "t1", 0, ui.KeyEscape) || a.linkCard == nil {
+		t.Fatal("Esc in another pane closed the card")
+	}
+	if !a.termKey(&termView{}, "t2", 0, ui.KeyEscape) || a.linkCard != nil {
+		t.Fatal("Esc did not close the card")
+	}
+	if a.termKey(&termView{}, "t2", 0, ui.KeyEscape) {
+		t.Fatal("Esc without a card was taken")
+	}
+}
+
+// Claude 输入框里还没发送的 [Image #N] 指向会话图片目录里的 N.png；别的 agent、别的终端、还没存下的都不算链接。
+func TestPastedImageTag(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	sid := "posse-test-" + filepath.Base(tmp)
+	dir := filepath.Join(tmp, fmt.Sprintf("claude-%d", os.Getuid()), "-proj", sid, "images")
+	os.MkdirAll(dir, 0o755)
+	img := filepath.Join(dir, "2.png")
+	os.WriteFile(img, []byte("x"), 0o644)
+
+	a := previewApp(t)
+	a.workspaces[0].Terminals = append(a.workspaces[0].Terminals,
+		terminalInfo{ID: "tc", Agent: "claude", AgentState: &agentState{SessionID: sid}},
+		terminalInfo{ID: "tx", Agent: "codex", AgentState: &agentState{SessionID: sid}})
+	claude, codex := &termView{id: "tc"}, &termView{id: "tx"}
+	if p, local := a.linkPath(claude, "[Image #2]"); p != img || !local {
+		t.Fatalf("[Image #2] = %q, want %q", p, img)
+	}
+	if !a.linkUsable(claude, "[Image #2]") {
+		t.Fatal("[Image #2] not usable")
+	}
+	if a.linkUsable(claude, "[Image #3]") {
+		t.Fatal("[Image #3] usable before Claude saved it")
+	}
+	if a.linkUsable(codex, "[Image #2]") {
+		t.Fatal("[Image #2] in a codex terminal usable")
 	}
 }

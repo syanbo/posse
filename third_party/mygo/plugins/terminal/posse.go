@@ -1,5 +1,7 @@
 package terminal
 
+import "regexp"
+
 // What Posse adds to the terminal's API, kept in a file of its own so that
 // upgrading MyGo merges less. (Posse)
 
@@ -54,3 +56,8 @@ func (t *Terminal) AltScreen() bool {
 	defer t.mu.Unlock()
 	return t.term != nil && t.term.AltScreen()
 }
+
+// imageTagPattern is an agent's placeholder for an image pasted into its
+// prompt, as Claude Code's "[Image #1]": plain text until the prompt is
+// sent, which Options.LinkUsable and LinkClick turn into the image's file.
+var imageTagPattern = regexp.MustCompile(`\[Image #\d+\]`)

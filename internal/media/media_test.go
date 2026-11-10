@@ -50,6 +50,15 @@ func TestListAndScaleImages(t *testing.T) {
 	if b := small.Bounds(); b.Dx() != 300 || b.Dy() != 200 {
 		t.Fatalf("small scaled to %v", b)
 	}
+	// 长截图宽高都封顶
+	writePNG(t, filepath.Join(dir, "long.png"), 1000, 8000)
+	long, err := FittedImage(filepath.Join(dir, "long.png"), 720, 2000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := long.Bounds(); b.Dx() != 250 || b.Dy() != 2000 {
+		t.Fatalf("long fitted to %v", b)
+	}
 	if got := ClaudeImageDir("../x", ""); got != "" {
 		t.Fatalf("bad session id gave %q", got)
 	}

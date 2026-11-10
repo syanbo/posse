@@ -1369,6 +1369,9 @@ func (v *view) linkAt(col, row int) (link string, path bool, at linkSpan) {
 	if t.opts.OpenLink == nil && t.opts.LinkClick == nil {
 		return "", false, linkSpan{}
 	}
+	if tag, at := v.matchLink(imageTagPattern, text, cols, col, row); tag != "" {
+		return tag, true, at
+	}
 	if text, cols := r.text(row, true); len(text) > 0 {
 		p, at := v.matchLink(pathPattern, text, cols, col, row)
 		if usable := t.opts.LinkUsable; p != "" && (at.rows == 1 || usable == nil || usable(p)) {
