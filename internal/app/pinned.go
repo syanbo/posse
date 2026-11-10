@@ -107,7 +107,8 @@ func (a *app) topTiles(c *ui.Context) {
 		if d, over := ui.DragOver[topDrag](area); over {
 			id, own := d.topTarget(a)
 			switch {
-			case own:
+			case own && slices.Contains(shown, id):
+				// 拖着的磁贴的工作区拖动途中被删了：不再当它在顶上
 				moving = id
 			case a.pinnable(id) && len(order) < topTilesMax:
 				incoming = id
@@ -221,7 +222,12 @@ func (a *app) topTile(c *ui.Context, id string) ui.Element {
 	case mobileBoardID:
 		return a.mobileSidebarItem(c)
 	}
-	return a.pinnedTile(c, *a.workspace(id))
+	w := a.workspace(id)
+	if w == nil {
+		// 工作区刚被删（拖动途中、常驻进程还没报上来）：画一块空的，不解引用
+		return ui.Row(c)
+	}
+	return a.pinnedTile(c, *w)
 }
 
 // dropSlot 是拖工作区进来时空出来的格子：强调色描边加淡底。
