@@ -235,6 +235,7 @@ const paneGoneAfter = 30 * time.Second
 func (a *app) prunePanes(now time.Time) {
 	if len(a.state.Panes) == 0 {
 		a.paneGone = nil
+		a.paneDue.Store(false)
 		return
 	}
 	seen := map[string]bool{}
@@ -253,18 +254,19 @@ func (a *app) prunePanes(now time.Time) {
 				if !isTermKey(k) || slices.ContainsFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == k }) {
 					return false
 				}
-				seen[k] = true
 				if a.paneGone == nil {
 					a.paneGone = map[string]time.Time{}
 				}
 				at, ok := a.paneGone[k]
 				if !ok {
-					a.paneGone[k] = now
+					a.paneGone[k], seen[k] = now, true
 					return false
 				}
 				if now.Sub(at) < paneGoneAfter {
+					seen[k] = true
 					return false
 				}
+				// 拿掉了就不用再记（下面按 seen 清掉）
 				drop = true
 				return true
 			})
@@ -282,6 +284,7 @@ func (a *app) prunePanes(now time.Time) {
 			delete(a.paneGone, k)
 		}
 	}
+	a.paneDue.Store(len(a.paneGone) > 0)
 	if changed {
 		a.saveState()
 	}

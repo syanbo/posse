@@ -206,6 +206,7 @@ type app struct {
 	lastPoll      *pollResult
 	diffAt        map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
 	paneGone      map[string]time.Time // 分栏里记着、列表里不见了的终端 → 第一次不见的时间（prunePanes）
+	paneDue       atomic.Bool          // paneGone 里有等着到期的：轮询结果没变、不走 apply 时轮询也在界面线程上跑一次 prunePanes
 	termAt        time.Time            // 上次统计终端内存的时间（轮询协程里用）
 	lastTerm      int64
 	pollForce     atomic.Bool // 下一次轮询无论有没有变化都交给界面
@@ -705,6 +706,9 @@ func (a *app) refresh() {
 	}
 	force := a.pollForce.Swap(false)
 	if !force && a.lastPoll != nil && samePoll(a.lastPoll, &r) {
+		if r.err == "" && a.paneDue.Load() {
+			a.update(func() { a.prunePanes(time.Now()) })
+		}
 		return
 	}
 	prevErr := a.lastPoll != nil && a.lastPoll.err != ""
