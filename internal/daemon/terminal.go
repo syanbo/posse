@@ -729,7 +729,8 @@ var codexEndGrace = 3 * time.Second
 
 // codexSessionEnded 在 Codex 报 SessionEnd 之后复查：进程还在就不是它退出了，不摘。
 func (d *Daemon) codexSessionEnded(s *session, sid string) {
-	if !s.Running() || s.agentName() != "codex" {
+	// 常驻进程开始退出后不动：关机时 Codex 跟着退出，记录要留着下次启动恢复；交接后终端归新进程管
+	if d.exiting.Load() || !s.Running() || s.agentName() != "codex" {
 		return
 	}
 	if s.agentStillRuns("codex") {
