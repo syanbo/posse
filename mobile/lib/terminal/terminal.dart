@@ -187,10 +187,26 @@ class _TerminalScreenState extends State<TerminalScreen>
     super.dispose();
   }
 
+  /// 切到过后台（hidden、paused）。下拉控制中心、来电横幅只到 inactive，回来时不算。
+  var _wentAway = false;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 回到前台总是重取一次画面：后台期间连接可能卡过，留着的半截画面不会自己好
-    if (state == AppLifecycleState.resumed) _schedule(fresh: true);
+    switch (state) {
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        _wentAway = true;
+      case AppLifecycleState.resumed:
+        // 从后台回来重取一次画面：后台期间连接可能卡过，留着的半截画面不会自己好。
+        // 只是 inactive 一下（控制中心）不重订：会丢掉选区和回滚位置，Mac 上还多占一次尺寸
+        if (_wentAway) {
+          _wentAway = false;
+          _schedule(fresh: true);
+        }
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   String _titleKey = '';
