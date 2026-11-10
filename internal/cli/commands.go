@@ -593,7 +593,11 @@ func cmdTerminalClose(e *env, args []string) error {
 // cmdHook 由 agent 的 hooks 调用：不能拖慢或打断 agent，所以从不拉起常驻进程，出错也返回 0。
 func cmdHook(e *env, args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: posse hook <agent> <event>")
+		fmt.Fprintln(e.errOut, "posse hook: usage: posse hook <agent> <event>")
+		if len(args) == 1 && args[0] == "cursor" {
+			fmt.Fprintln(e.out, "{}")
+		}
+		return nil
 	}
 	id := os.Getenv("POSSE_TERMINAL_ID")
 	payload, _ := io.ReadAll(io.LimitReader(os.Stdin, 1<<20))
