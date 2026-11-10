@@ -7,7 +7,7 @@
 ```text
 internal/collaboration   安装身份 $POSSE_HOME/collab.json（Ed25519，0600、原子写入，与 mobile.json 无关），第一次建讨论时生成
 internal/store/discussion.go
-├── discussions      roomKey = <安装身份公钥 SPKI 的 SHA-256 指纹>/<128 位随机讨论 ID>；标题、描述、项目（ID、名字、路径快照）、默认工作区、归档、版本
+├── discussions      roomKey = <安装身份公钥 SPKI 的 SHA-256 指纹>/<128 位随机讨论 ID>；标题、描述、项目（ID、名字、路径快照）、默认工作区、归档、版本、新建时的客户端请求 ID（只在本机去重，不同步、不给客户端）
 ├── disc_members     成员配置（名字、职责、agent、模型、思考深度、执行工作区、配置版本）、绑定的 worker 任务、队列暂停原因、接收位置
 ├── disc_messages    讨论内序号、作者快照、正文、引用、@ 的成员、附件、关键标记、客户端请求 ID 和源事件 ID（各自唯一）
 ├── disc_executions  每条 @ 一轮：状态、预分配的任务、worker、配置快照、冻结的上下文快照和接收确认、回复

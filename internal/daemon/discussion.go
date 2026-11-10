@@ -627,6 +627,8 @@ type discCreateParams struct {
 	Description string `json:"description"`
 	Project     string `json:"project"`
 	Workspace   string `json:"workspace"`
+	// ClientID 是这次新建的请求 ID：应答丢了用同一个 ID 重试不会建出两个
+	ClientID string `json:"clientId"`
 }
 
 func (d *Daemon) discCreate(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -639,6 +641,9 @@ func (d *Daemon) discCreate(ctx context.Context, raw json.RawMessage) (any, erro
 	}
 	if p.Title = strings.TrimSpace(p.Title); p.Title == "" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "title required")
+	}
+	if len(p.ClientID) > 100 {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "clientId too long")
 	}
 	var proj store.Project
 	var ws store.Workspace
@@ -663,7 +668,8 @@ func (d *Daemon) discCreate(ctx context.Context, raw json.RawMessage) (any, erro
 		local := collaboration.NewDiscussionID()
 		disc := store.Discussion{Key: collaboration.RoomKey(id.ID, local), Host: id.ID, LocalID: local, Title: p.Title, Description: strings.TrimSpace(p.Description),
 			ProjectID: proj.ID, ProjectName: proj.Name, ProjectPath: proj.Path, WorkspaceID: ws.ID, CreatedAt: time.Now()}
-		err = d.store.CreateDiscussion(disc)
+		var key string
+		key, err = d.store.CreateDiscussion(disc, p.ClientID)
 		if errors.Is(err, store.ErrConflict) {
 			continue
 		}
@@ -671,7 +677,7 @@ func (d *Daemon) discCreate(ctx context.Context, raw json.RawMessage) (any, erro
 			return nil, err
 		}
 		d.taskNotify()
-		return d.store.Discussion(disc.Key)
+		return d.store.Discussion(key)
 	}
 	return nil, discError(err)
 }

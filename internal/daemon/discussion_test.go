@@ -1253,3 +1253,32 @@ func TestDiscussionAnswerByMessageAndPostByName(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 新建讨论的应答丢了，手机用同一个请求 ID 重试：只建一个，第二次返回第一次那条；不带 ID 的照常各建各的。
+func TestDiscCreateClientID(t *testing.T) {
+	d, w := newTestDaemon(t)
+	params := map[string]any{"title": "retry", "workspace": w.ID, "clientId": "phone-1"}
+	first := call(t, d.discCreate, params).(store.Discussion)
+	again := call(t, d.discCreate, params).(store.Discussion)
+	if again.Key != first.Key {
+		t.Fatalf("retry created %s, first was %s", again.Key, first.Key)
+	}
+	other := call(t, d.discCreate, map[string]any{"title": "retry", "workspace": w.ID, "clientId": "phone-2"}).(store.Discussion)
+	plain1 := call(t, d.discCreate, map[string]any{"title": "plain", "workspace": w.ID}).(store.Discussion)
+	plain2 := call(t, d.discCreate, map[string]any{"title": "plain", "workspace": w.ID}).(store.Discussion)
+	if other.Key == first.Key || plain1.Key == plain2.Key {
+		t.Fatal("different or missing request IDs must create separate discussions")
+	}
+	all, err := d.store.Discussions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 4 {
+		t.Fatalf("%d discussions, want 4", len(all))
+	}
+	// 请求 ID 不出现在给客户端的讨论数据里
+	raw, _ := json.Marshal(first)
+	if strings.Contains(string(raw), "phone-1") {
+		t.Fatalf("client id leaked: %s", raw)
+	}
+}

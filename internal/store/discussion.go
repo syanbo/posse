@@ -528,10 +528,22 @@ func (s *Store) DiscussionSeq() (int64, error) {
 
 // --- 讨论
 
-func (s *Store) CreateDiscussion(d Discussion) error {
-	return s.withTx(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`INSERT INTO discussions(key,host,local_id,title,description,project_id,project_name,project_path,workspace_id,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-			d.Key, d.Host, d.LocalID, d.Title, d.Description, d.ProjectID, d.ProjectName, d.ProjectPath, d.WorkspaceID, DiscussionActive, ms(d.CreatedAt)); err != nil {
+// CreateDiscussion 新建讨论，返回它的 key。client 是客户端的请求 ID（手机应答丢了用同一个 ID 重试）：
+// 这个 ID 已经建过讨论时不再建，返回那一条的 key。client_id 只在本机去重，不同步、不给客户端。
+func (s *Store) CreateDiscussion(d Discussion, client string) (string, error) {
+	key := d.Key
+	err := s.withTx(func(tx *sql.Tx) error {
+		if client != "" {
+			err := tx.QueryRow(`SELECT key FROM discussions WHERE client_id=?`, client).Scan(&key)
+			if err == nil {
+				return nil
+			}
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+		}
+		if _, err := tx.Exec(`INSERT INTO discussions(key,host,local_id,title,description,project_id,project_name,project_path,workspace_id,status,created_at,client_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+			d.Key, d.Host, d.LocalID, d.Title, d.Description, d.ProjectID, d.ProjectName, d.ProjectPath, d.WorkspaceID, DiscussionActive, ms(d.CreatedAt), client); err != nil {
 			if isUnique(err) {
 				return fmt.Errorf("%w: discussion id collision", ErrConflict)
 			}
@@ -540,6 +552,7 @@ func (s *Store) CreateDiscussion(d Discussion) error {
 		_, err := bump(tx, d.Key)
 		return err
 	})
+	return key, err
 }
 
 // UpdateDiscussion 改标题、描述和默认工作区；归档的讨论只读。

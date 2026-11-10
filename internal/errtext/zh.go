@@ -148,6 +148,7 @@ var zh = [][2]string{
 	{"project %s is not a git repository; pick an existing workspace", "项目 {1} 不是 Git 仓库，选一个已有的工作区"},
 	{"%s is not installed on this Mac", "这台 Mac 上没有装 {1}"},
 	{"title required", "没有填标题"},
+	{"clientId too long", "请求 ID 太长"},
 
 	// 项目、工作区
 	{"repository no longer in workspace", "这个仓库已经不在工作区里了"},

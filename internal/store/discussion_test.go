@@ -39,7 +39,7 @@ func newDiscussion(t *testing.T, s *Store) (Discussion, Member) {
 	t.Helper()
 	d := Discussion{Key: "host/" + NewID("d_"), Host: "host", Title: "t", ProjectID: "p", CreatedAt: time.Now()}
 	d.LocalID = strings.TrimPrefix(d.Key, "host/")
-	if err := s.CreateDiscussion(d); err != nil {
+	if _, err := s.CreateDiscussion(d, ""); err != nil {
 		t.Fatal(err)
 	}
 	m := Member{ID: NewID("dmb_"), Discussion: d.Key, Name: "A", Agent: "claude", WorkspaceID: "w", CreatedAt: time.Now()}

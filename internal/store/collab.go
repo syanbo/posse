@@ -124,6 +124,8 @@ CREATE TABLE IF NOT EXISTS collab_outbox (
 CREATE INDEX IF NOT EXISTS collab_outbox_room ON collab_outbox(room, state);
 -- host: one agent per request ID of one person in one discussion (AddMemberOnce)
 CREATE UNIQUE INDEX IF NOT EXISTS disc_members_client ON disc_members(discussion, owner, client_id) WHERE client_id <> '';
+-- one discussion per create request ID (CreateDiscussion); local only, not synced or shown
+CREATE UNIQUE INDEX IF NOT EXISTS discussions_client ON discussions(client_id) WHERE client_id <> '';
 -- member: the worktree an add request created, reused when the same request is retried
 CREATE TABLE IF NOT EXISTS collab_add_workspaces (
 	room TEXT NOT NULL,
