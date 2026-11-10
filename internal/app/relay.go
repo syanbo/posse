@@ -19,6 +19,7 @@ type relayView struct {
 	loaded   bool
 	loading  bool
 	loadedAt time.Time
+	old      bool   // 常驻进程不认 relay.status（旧版）：不显示中转卡片，也不再问
 	busy     bool   // 正在使用邀请码或生成邀请码
 	code     string // 正在粘贴的邀请码
 	err      string
@@ -36,9 +37,12 @@ type relayStatus struct {
 // relayPoll 是手机页开着时重新检查中转的间隔。
 const relayPoll = 30 * time.Second
 
+// relayRetry 是手机页刚打开时问中转状态失败后多久再问。
+const relayRetry = 5 * time.Second
+
 func (a *app) loadRelay() {
 	r := &a.mobile.relay
-	if r.loading {
+	if r.loading || a.c == nil {
 		return
 	}
 	r.loading = true
@@ -51,6 +55,9 @@ func (a *app) loadRelay() {
 			r := &a.mobile.relay
 			r.loading, r.loadedAt = false, time.Now()
 			if err != nil {
+				// 只有常驻进程不认这个方法才当旧版；一时取不到（常驻进程正在交接、超时）的过一会儿再问
+				var re *rpc.Error
+				r.old = errors.As(err, &re) && re.Code == rpc.CodeUnknown
 				return
 			}
 			r.st, r.loaded = st, true
@@ -150,6 +157,13 @@ var relayStates = map[string]struct{ label, note func(locales.Messages) string }
 func (a *app) mobileRelayCard(c *ui.Context) {
 	r := &a.mobile.relay
 	if !r.loaded {
+		if !r.old && !r.loading {
+			if wait := relayRetry - time.Since(r.loadedAt); wait > 0 {
+				c.After(wait)
+			} else {
+				a.loadRelay()
+			}
+		}
 		return
 	}
 	a.pollRelay(c)
