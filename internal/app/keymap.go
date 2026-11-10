@@ -296,16 +296,6 @@ func (a *app) withKey(label, id string) string {
 	return label
 }
 
-// menuKey 是 id 的第一组键，给自绘菜单的 Shortcut 用；没有键时 ok 为假。
-func (a *app) menuKey(id string) (ui.Modifiers, ui.Key, bool) {
-	for _, kc := range a.keysFor(id) {
-		if kc.thenKey == 0 {
-			return kc.mods, kc.key, true
-		}
-	}
-	return 0, 0, false
-}
-
 // editorBindings 是交给编辑器的按键：改过的命令先把默认的键让出来（NoCommand），再绑上新键。
 // 没改过时为 nil，编辑器用自己的默认。改过的表按 ui.json 缓存，ui.json 的 keys 变了才重算。
 func (a *app) editorBindings() []editor.Binding {

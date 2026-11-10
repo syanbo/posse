@@ -431,12 +431,3 @@ func LocalEndpoints() []string {
 	}
 	return append(ts, lan...)
 }
-
-// LocalAddress 选手机能连到的本机地址：优先 Tailscale，其次局域网的私有地址。
-func LocalAddress() string {
-	eps := LocalEndpoints()
-	if len(eps) == 0 {
-		return ""
-	}
-	return eps[0]
-}

@@ -67,9 +67,6 @@ func weightsOf(weight, bold int) (int, int) {
 }
 
 func termLineHeightOf(s uiState) float32 { return cmp.Or(s.TermLineHeight, defaultTermLineHeight) }
-func editorLineHeightOf(s uiState) float32 {
-	return cmp.Or(s.EditorLineHeight, defaultEditorLineHeight)
-}
 
 // stepWeight 把字重加减 100，限制在 100 到 900。
 func stepWeight(w, d int) int { return min(max(w+d*100, minWeight), maxWeight) }

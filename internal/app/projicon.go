@@ -190,7 +190,7 @@ func (a *app) editProjectIcon(p project) {
 // pickProjectIcon 让用户选一张图片导入成草稿；在后台调用，系统对话框会等用户选完。
 func (a *app) pickProjectIcon(m locales.Messages, p project) {
 	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: m.ProjectIconPickTitle(p.Name), ButtonLabel: m.ProjectIconPickButton(),
-		DefaultPath: p.Path, Filters: []mygo.FileFilter{{Name: m.ProjectIconImages(), Extensions: []string{"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"}}}})
+		DefaultPath: p.Path, Filters: []mygo.FileFilter{{Name: m.ProjectIconImages(), Extensions: []string{"png", "jpg", "jpeg", "gif", "webp", "svg"}}}})
 	var name string
 	if err == nil && len(paths) > 0 {
 		name, err = importProjectIcon(a.home, p.ID, paths[0])

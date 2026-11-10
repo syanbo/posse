@@ -49,7 +49,7 @@ Future<File> fetchFile(
   }
   return fetchChunked(
     key: '$worktree\n$path\n$size\n${stat['mtime']}',
-    ext: path.substring(path.lastIndexOf('.')),
+    ext: _extOf(path),
     size: size,
     read: (offset, limit, timeout) => rpc.call('files.readRange', {
       'worktree': worktree,
@@ -71,6 +71,12 @@ typedef ChunkReader = Future<Map<String, Object?>> Function(
 
 /// 正在下的文件，按 [fetchChunked] 的 key：看视频时又点了存到手机，两边不能同时往一个 .part 里写。
 final _fetching = <String, Future<void>>{};
+
+/// 文件名的扩展名（带点）；没有扩展名的（Makefile、目录名里才有点的）是空串。
+String _extOf(String path) {
+  final dot = path.lastIndexOf('.');
+  return dot > path.lastIndexOf('/') + 1 ? path.substring(dot) : '';
+}
 
 /// 分段下载一个远端文件到手机的临时目录，[key] 相同的只下一次。[size] 不知道时由第一段的回复带回来。
 /// 分段按顺序写进 .part，没下完时留着，下次接着下。同一个 key 同时只有一个在下，后来的等前面的停了再接着下。

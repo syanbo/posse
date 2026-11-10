@@ -159,12 +159,12 @@ private final class DeskReplay {
     let words = Int(n / 64)
     let bitsn = n % 64
     var next = [UInt64](repeating: 0, count: 16)
-    for i in 0 ..< 16 {
-      let from = words + i
-      if from >= 16 { break }
+    // 位号是离 last 的距离：last 前进 n，每一位往高处挪 n
+    for i in words ..< 16 {
+      let from = i - words
       next[i] = bits[from] << bitsn
-      if bitsn != 0, from + 1 < 16 {
-        next[i] |= bits[from + 1] >> (64 - bitsn)
+      if bitsn != 0, from > 0 {
+        next[i] |= bits[from - 1] >> (64 - bitsn)
       }
     }
     bits = next

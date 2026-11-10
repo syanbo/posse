@@ -84,6 +84,8 @@ func (d *Daemon) openGitTrace(ctx context.Context) {
 		return
 	}
 	os.Chmod(sock, 0o600)
+	// Close 默认会删 socket 文件：交接后旧进程晚于新进程重建它才退出
+	ln.(*net.UnixListener).SetUnlinkOnClose(false)
 	go func() {
 		<-ctx.Done()
 		ln.Close()

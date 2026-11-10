@@ -7,7 +7,7 @@
 #   scripts/android-release.sh         CHANGELOG 最上面一节的版本和 pubspec.yaml 不同时发这一版（同上）；
 #                                      相同时不改版本（比如 iOS 刚发过这一版），按现在的版本打包上传
 #
-# 版本号和 CHANGELOG 和 iOS 共用。构建号取提交数，写成 versionCode，App 也按它判断有没有新版本。
+# 版本号和 CHANGELOG 和 iOS 共用。构建号取提交数加 8，写成 versionCode，App 也按它判断有没有新版本。
 # 发布证书在 ~/Library/Application Support/Posse/android/（第一次运行时生成），丢了已装的 App 就不能覆盖更新，
 # 只能卸载重装、重新配对。
 set -eu

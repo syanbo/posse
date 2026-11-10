@@ -1059,7 +1059,7 @@ func (s *Store) OwnerRetry(room, fp string, gen int64, execID, newID string, aba
 		}
 		nx = Execution{ID: newID, Discussion: room, Member: m.ID, Message: x.Message, RetryOf: x.ID, State: ExecQueued,
 			Agent: m.Agent, Model: m.Model, Effort: m.Effort, Role: m.Role, ConfigVersion: m.ConfigVersion, Rev: rev, CreatedAt: at,
-			Owner: m.Owner, Generation: m.Generation}
+			Owner: m.Owner, Generation: m.Generation, Root: x.Root, Depth: x.Depth}
 		if err := insertExecution(tx, nx); errors.Is(err, ErrConflict) {
 			return ErrRetried
 		} else {

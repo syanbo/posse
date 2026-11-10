@@ -116,11 +116,11 @@ private class DeskReplay {
         val words = n / 64
         val b = n % 64
         val next = LongArray(16)
-        for (i in 0 until 16) {
-            val from = words + i
-            if (from >= 16) break
+        // 位号是离 last 的距离：last 前进 n，每一位往高处挪 n
+        for (i in words until 16) {
+            val from = i - words
             next[i] = bits[from] shl b
-            if (b != 0 && from + 1 < 16) next[i] = next[i] or (bits[from + 1] ushr (64 - b))
+            if (b != 0 && from > 0) next[i] = next[i] or (bits[from - 1] ushr (64 - b))
         }
         bits = next
     }

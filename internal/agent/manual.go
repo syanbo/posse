@@ -9,7 +9,7 @@ import (
 )
 
 // 用户在 posse 终端的 shell 里自己敲 claude、codex、cursor-agent 时，也带上和界面启动一样的 hooks
-// （grok 的 hooks 只能写进 ~/.grok，只补会话 ID 和规则）：
+// （grok 的 hooks 只能写进 ~/.grok，只补会话 ID）：
 // $POSSE_HOME/bin 里放同名脚本，转给 `posse agent exec`，由它补上参数再换成真正的程序。
 // 用户的 .zshrc 常把 ~/.local/bin 等目录插到 PATH 最前面，所以照 Ghostty 的 shell 集成，
 // 用 ZDOTDIR 让 zsh 先读 posse 的 .zshenv，在每次出提示符前把 $POSSE_HOME/bin 挪回最前。

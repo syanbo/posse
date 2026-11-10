@@ -93,8 +93,8 @@ func (a *app) askTrashSession(m locales.Messages, d *historyDetail) {
 					a.history.sel, a.history.detail = "", nil
 				}
 				a.recent.poll.at = time.Time{}
+				a.searchHistory(0)
 			})
-			a.searchHistory(0)
 		})
 }
 

@@ -65,6 +65,10 @@ func (a *app) loadBranches(g *gitState) {
 		}
 		a.update(func() {
 			again := g.branches.again
+			if list == nil {
+				// nil 表示还没读过；没有分支（刚 init 的仓库）也算读过，否则每帧重读
+				list = []gitx.Branch{}
+			}
 			g.branches = branchInfo{list: list, recent: recent, tags: tags}
 			if again {
 				a.loadBranches(g)

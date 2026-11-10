@@ -103,7 +103,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS titles_fts USING fts5(
 );
 `
 
-// schemaVersion 变化时清空重建：索引是派生数据，重建比迁移简单可靠。解析规则变了也要改它。
+// schemaVersion 变化时清空重建：索引是派生数据，重建比迁移简单可靠。只改了某一家的解析规则改 parserVersions。
 const schemaVersion = "5"
 
 // Open 打开索引供更新用，版本不对时清空重建。

@@ -215,7 +215,7 @@ func cmdProjectAdd(e *env, args []string) error {
 		return err
 	}
 	var p projectInfo
-	return e.do("project.add", map[string]any{"path": absPath(pos[0]), "name": *name, "setupScript": *setup}, &p, func() {
+	return e.do("project.add", map[string]any{"path": filePath(pos[0]), "name": *name, "setupScript": *setup}, &p, func() {
 		fmt.Fprintf(e.out, "added %s project %s (%s) at %s\n", p.Kind, p.Name, p.ID, p.Path)
 	})
 }
@@ -685,7 +685,16 @@ func cmdVersion(e *env, args []string) error {
 	return e.emit(map[string]string{"version": daemon.Version}, func() { fmt.Fprintln(e.out, "posse", daemon.Version) })
 }
 
+// filePath 把只能是路径的参数转成绝对路径（不带斜杠的相对路径也转）。
+func filePath(p string) string {
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p
+}
+
 // absPath 把看起来像路径的参数转成绝对路径；常驻进程的工作目录与调用方不同。
+// 给「项目名或路径」两可的参数用，只能是路径的用 filePath。
 func absPath(p string) string {
 	if p != "." && p != ".." && !strings.ContainsRune(p, filepath.Separator) {
 		return p

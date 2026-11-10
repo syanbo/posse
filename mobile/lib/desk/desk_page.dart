@@ -1241,8 +1241,9 @@ class _DeskPageState extends State<DeskPage>
     // 攒得多了、垫着的零宽空格快删完了才重置：每次都清空会和系统输入法抢，打快了重复前缀
     if (value.text.length > 64 ||
         !value.text.startsWith(deskTypingPad.substring(2))) {
-      _input.value = _padded;
+      // 先改 _shadow：给 _input 赋值会当场再进一次这个回调，拿旧文字比会多删一遍
       _shadow = deskTypingPad;
+      _input.value = _padded;
     }
     if (deleted == 0 && text.isEmpty) return;
     if (deleted > 0) {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -39,6 +40,7 @@ func ListFiles(ctx context.Context, root string) (*List, error) {
 	root = filepath.Clean(root)
 	l := &List{Root: root}
 	cmd := exec.CommandContext(ctx, "git", "-C", root, "ls-files", "-co", "--exclude-standard", "-z")
+	cmd.Env = append(os.Environ(), "GIT_TRACE2_EVENT=0")
 	if out, err := cmd.Output(); err == nil {
 		l.Git = true
 		for name := range bytes.SplitSeq(out, []byte{0}) {
@@ -287,7 +289,9 @@ func (l *List) Ignored(abs string, dir bool) bool {
 // lsFiles 把 dir 里 git ls-files 列出的文件加进清单，前面加上 prefix（dir 相对 Root 的路径）。
 // 嵌套仓库（未跟踪的报成 "nested/"、子模块和指向仓库的软链报成 "nested"）跳过：它的文件由它自己列。
 func (l *List) lsFiles(ctx context.Context, dir, prefix string, isRepo map[string]bool) {
-	out, err := exec.CommandContext(ctx, "git", "-C", dir, "ls-files", "-co", "--exclude-standard", "-z").Output()
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "ls-files", "-co", "--exclude-standard", "-z")
+	cmd.Env = append(os.Environ(), "GIT_TRACE2_EVENT=0")
+	out, err := cmd.Output()
 	if err != nil {
 		return
 	}

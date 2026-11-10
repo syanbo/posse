@@ -195,8 +195,6 @@ func UnmarshalConfig(b []byte) (Config, error) {
 }
 
 const (
-	ctrlHeader = 5
-
 	CtrlKeyframe byte = 1
 	CtrlBitrate  byte = 2
 	CtrlStop     byte = 3

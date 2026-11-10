@@ -48,6 +48,25 @@ func TestReplayWindow(t *testing.T) {
 	if !r.Accept(6+1024) || r.Accept(6) {
 		t.Fatal("advance drops the old window")
 	}
+	// 窗口里跨字的旧包也要认得出是重复的
+	r = Replay{}
+	for n := uint64(1); n <= 500; n++ {
+		if !r.Accept(n) {
+			t.Fatalf("fresh %d rejected", n)
+		}
+	}
+	for n := uint64(1); n <= 500; n++ {
+		if r.Accept(n) {
+			t.Fatalf("replayed %d accepted", n)
+		}
+	}
+	// 乱序到的照收，只收一次
+	r = Replay{}
+	r.Accept(1)
+	r.Accept(300)
+	if !r.Accept(100) || r.Accept(100) || !r.Accept(301) || r.Accept(100) || !r.Accept(299) {
+		t.Fatal("out of order within the window")
+	}
 }
 
 func TestRTPRoundTrip(t *testing.T) {

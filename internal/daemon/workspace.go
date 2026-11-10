@@ -64,6 +64,13 @@ func (d *Daemon) projectAdd(ctx context.Context, raw json.RawMessage) (any, erro
 	if top := gitx.TopLevel(ctx, path); top != "" && samePath(top, path) {
 		kind = "git"
 	}
+	mainName := "main"
+	if p.MainName != "" {
+		if err := validName(p.MainName); err != nil {
+			return nil, err
+		}
+		mainName = p.MainName
+	}
 	proj := store.Project{ID: store.NewID("p_"), Name: name, Path: path, Kind: kind, SetupScript: p.SetupScript, CreatedAt: time.Now()}
 	if err := d.store.AddProject(proj); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
@@ -72,13 +79,6 @@ func (d *Daemon) projectAdd(ctx context.Context, raw json.RawMessage) (any, erro
 		return nil, err
 	}
 	// 项目目录本身就是第一个工作区，对应 git 仓库的主 worktree
-	mainName := "main"
-	if p.MainName != "" {
-		if err := validName(p.MainName); err != nil {
-			return nil, err
-		}
-		mainName = p.MainName
-	}
 	main := store.Workspace{ID: store.NewID("w_"), ProjectID: proj.ID, Name: mainName, Path: path, Kind: "main", CreatedAt: time.Now()}
 	if kind == "git" {
 		main.Branch, _ = gitx.CurrentBranch(ctx, path)

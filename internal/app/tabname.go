@@ -49,7 +49,7 @@ func (a *app) finishRename(m locales.Messages, term terminalInfo) {
 	a.renaming = ""
 	name := strings.TrimSpace(a.renameText)
 	// 和默认显示的一样就不记，之后会话标题变了还能跟着变
-	if def, detail := tabLabel(m, terminalInfo{ID: term.ID, Title: term.Title, Agent: term.Agent, AgentState: term.AgentState, Running: true}); term.Name == "" && (name == def || name == detail) {
+	if def, detail := tabLabel(m, terminalInfo{ID: term.ID, Title: term.Title, Agent: term.Agent, AgentState: term.AgentState, Running: true}); term.Name == "" && (name == def || name == detail || name == a.workerTitle[term.ID]) {
 		return
 	}
 	a.renameTerminal(term.ID, name)

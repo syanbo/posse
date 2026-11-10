@@ -1246,23 +1246,8 @@ func dropMark(c *ui.Context, e ui.Element, after, across bool) {
 	})
 }
 
-// navRow 是侧栏的一行，sub 非空时在名称下面用等宽小字显示（路径或分支），branch 非空时在 sub 上面单独一行；
-// 选中和悬停的样式见 selectedBg。
-func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch string, trailing func()) ui.Element {
-	selected := a.navMark(id)
-	accent := c.Theme().Accent
-	row := a.navRowAt(c, id, selected, func() { ui.Icon(c, icon).FontSize(iconSize).TextColor(accent).Shrink(0) }, label, sub, branch, trailing)
-	if row.Clicked() {
-		if id == taskBoardID {
-			a.showTaskHome()
-		}
-		a.selected = id
-	}
-	return row
-}
-
 // navTile 是侧栏顶上的全局页面磁贴：几个平分一行，图标下面写名字；
-// badge 非空时画在右上角（待处理、手机在线）。点击和方向键顺序同 navRow。
+// badge 非空时画在右上角（待处理、手机在线）。点击后选中，方向键顺序经 navMark 登记。
 func (a *app) navTile(c *ui.Context, id string, icon *ui.SVG, label string, badge func()) ui.Element {
 	selected := a.navMark(id)
 	tile := sideTile(c, id, selected, func() { ui.Icon(c, icon).FontSize(iconSize).TextColor(c.Theme().Accent) }, label, badge)
@@ -1317,6 +1302,7 @@ func (a *app) navMark(id string) bool {
 func tileHeight() float32 { return sz(56) }
 
 // navRowAt 画侧栏的一行，选中、点击和方向键顺序由调用方处理；icon 画行首的图标。
+// sub 非空时在名称下面用等宽小字显示（路径或分支），branch 非空时在 sub 上面单独一行；选中和悬停的样式见 selectedBg。
 func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), label, sub, branch string, trailing func()) ui.Element {
 	return a.navRowSized(c, key, selected, icon, label, fsBody, sub, branch, trailing)
 }

@@ -1724,7 +1724,7 @@ func (d *Daemon) discIsolate(ctx context.Context, raw json.RawMessage) (any, err
 			return nil, discError(err)
 		}
 	} else if _, err := d.store.UpdateMember(store.Member{ID: m.ID, Name: m.Name, Role: m.Role, Agent: m.Agent, Model: m.Model, Effort: m.Effort,
-		WorkspaceID: w.ID, WorkspaceLabel: d.workspaceLabel(w)}); err != nil {
+		WorkspaceID: w.ID, WorkspaceLabel: d.workspaceLabel(w), Access: m.Access}); err != nil {
 		return nil, discError(err)
 	}
 	if m.TaskID != "" {

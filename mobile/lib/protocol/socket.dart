@@ -41,10 +41,6 @@ class WebSocketByteSocket implements ByteSocket {
     if (cancel.cancelled) throw const RaceCancelled();
     final channel = WebSocketChannel.connect(Uri.parse(url));
     final socket = WebSocketByteSocket(channel);
-    if (cancel.cancelled) {
-      await socket.close();
-      throw const RaceCancelled();
-    }
     try {
       await channel.ready;
     } catch (error) {

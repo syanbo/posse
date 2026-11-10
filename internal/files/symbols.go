@@ -389,7 +389,8 @@ func grepLines(ctx context.Context, l *List, overlay map[string]string, words []
 			add(rel, h)
 		}
 	}
-	if l.Git {
+	// 多仓库的清单不走这条：根目录的 git grep 搜不到嵌套仓库
+	if l.Git && l.repos == nil {
 		if err := gitGrep(ctx, l.Root, words, func(rel string, h lineHit) {
 			if _, ok := overlay[rel]; !ok {
 				add(rel, h)

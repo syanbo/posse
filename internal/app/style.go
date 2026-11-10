@@ -550,7 +550,7 @@ func markSpans(text string, marks [][2]int, base ui.Span, mark ui.Color) []ui.Sp
 var homeDir, _ = os.UserHomeDir()
 
 func shortPath(p string) string {
-	if homeDir != "" && strings.HasPrefix(p, homeDir) {
+	if homeDir != "" && (p == homeDir || strings.HasPrefix(p, homeDir+"/")) {
 		return "~" + p[len(homeDir):]
 	}
 	return p

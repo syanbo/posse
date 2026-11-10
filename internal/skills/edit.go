@@ -155,7 +155,8 @@ func setJSONOverride(src, name, value string) (string, error) {
 		}
 		src = "{}\n"
 	}
-	if !json.Valid([]byte(src)) {
+	// 顶层不是对象（[]、null）的也不碰：下面按最后一个 } 接着写
+	if !json.Valid([]byte(src)) || !strings.HasPrefix(strings.TrimSpace(src), "{") {
 		return "", errors.New("settings.json is not valid JSON; nothing changed")
 	}
 	keyStart, valStart, valEnd, found := topLevelKey(src, "skillOverrides")

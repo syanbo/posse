@@ -136,14 +136,12 @@ func (r *Replay) shift(n uint64) {
 	words := n / 64
 	bits := n % 64
 	var next [16]uint64
-	for i := range next {
-		from := int(words) + i
-		if from >= len(r.bits) {
-			break
-		}
+	// 位号是离 last 的距离：last 前进 n，每一位往高处挪 n
+	for i := int(words); i < len(next); i++ {
+		from := i - int(words)
 		next[i] = r.bits[from] << bits
-		if bits != 0 && from+1 < len(r.bits) {
-			next[i] |= r.bits[from+1] >> (64 - bits)
+		if bits != 0 && from > 0 {
+			next[i] |= r.bits[from-1] >> (64 - bits)
 		}
 	}
 	r.bits = next

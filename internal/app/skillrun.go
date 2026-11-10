@@ -68,16 +68,19 @@ func (a *app) startSkillRun(m locales.Messages) {
 				r.err = m.SkillsRunOpenError(errtext.Text(err))
 				return
 			}
+			light, dark := terminalThemes()
+			conn := a.c.Attach(t.ID)
+			term, err := terminal.New(terminal.Options{Conn: conn, Font: a.termFont(), Theme: light, DarkTheme: dark, NoWheelZoom: true})
+			if err != nil {
+				// 没藏起来：命令照跑，留在标签栏里
+				conn.Close()
+				a.err = errtext.Text(err)
+				return
+			}
 			if a.hiddenTerms == nil {
 				a.hiddenTerms = map[string]bool{}
 			}
 			a.hiddenTerms[t.ID] = true
-			light, dark := terminalThemes()
-			term, err := terminal.New(terminal.Options{Conn: a.c.Attach(t.ID), Font: a.termFont(), Theme: light, DarkTheme: dark, NoWheelZoom: true})
-			if err != nil {
-				a.err = errtext.Text(err)
-				return
-			}
 			r.id, r.term, r.exit = t.ID, term, nil
 		})
 	}()

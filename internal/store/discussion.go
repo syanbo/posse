@@ -618,7 +618,7 @@ func (s *Store) DiscussionSummaries() ([]DiscussionSummary, error) {
 			x.Last = &m
 		}
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_messages q WHERE q.discussion=? AND q.kind='question'
-			AND NOT EXISTS (SELECT 1 FROM disc_messages a WHERE a.question=q.question AND a.kind='answer')
+			AND NOT EXISTS (SELECT 1 FROM disc_messages a WHERE a.discussion=q.discussion AND a.question=q.question AND a.kind='answer')
 			AND EXISTS (SELECT 1 FROM disc_executions x WHERE x.id=q.execution AND x.state='waiting' AND x.owner IN ('', ?))`, d.Key, s.Self()).Scan(&x.Questions)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE discussion=? AND state IN `+inList(activeStates), d.Key).Scan(&x.Active)
 		s.db.QueryRow(`SELECT COUNT(*) FROM disc_executions WHERE discussion=? AND state IN `+inList(pendingStates), d.Key).Scan(&x.Pending)
@@ -1380,10 +1380,13 @@ func (s *Store) changeExec(id string, from []string, to, reason string, requireA
 			args = append(args, ms(time.Now()))
 		}
 		changed, err = setExec(tx, x.Discussion, id, inList(from), "state=?, reason=?"+end, append([]any{to, reason}, args...)...)
+		if err != nil {
+			return err
+		}
 		if !changed {
 			return ErrConflict // 回滚 bump
 		}
-		return err
+		return nil
 	})
 	if errors.Is(err, ErrConflict) && !changed {
 		return false, nil
@@ -2216,7 +2219,7 @@ func (s *Store) AnswerQuestion(in AnswerInput) (DiscMessage, error) {
 		// 还有别的没回答的问题时仍是 waiting
 		var open int
 		if err := tx.QueryRow(`SELECT COUNT(*) FROM disc_messages q WHERE q.execution=? AND q.kind='question'
-			AND NOT EXISTS (SELECT 1 FROM disc_messages a WHERE a.question=q.question AND a.kind='answer')`, x.ID).Scan(&open); err != nil {
+			AND NOT EXISTS (SELECT 1 FROM disc_messages a WHERE a.discussion=q.discussion AND a.question=q.question AND a.kind='answer')`, x.ID).Scan(&open); err != nil {
 			return err
 		}
 		if open == 0 {

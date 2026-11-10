@@ -393,14 +393,6 @@ func (a *app) gitChanged(g *gitState, old *gitx.Status) {
 	}
 }
 
-// entryFor 返回文件在它所在仓库里的改动，没有改动或不在仓库里时为 nil。
-func (v *filesView) entryFor(abs string) *gitx.Entry {
-	if g := v.repoFor(abs); g != nil {
-		return g.entry(abs)
-	}
-	return nil
-}
-
 // relIn 返回文件所在的仓库和相对它根目录的路径；不在仓库里时 g 为 nil。
 func (v *filesView) relIn(abs string) (g *gitState, rel string) {
 	if g = v.repoFor(abs); g != nil {

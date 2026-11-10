@@ -192,7 +192,11 @@ class _GitPaneState extends State<GitPane> {
   }
 
   Future<void> _reload() async {
-    setState(() => _error = null);
+    setState(() {
+      _error = null;
+      // 还没读到过状态时重试要回到加载中，否则等的这段显示成「没有改动」
+      if (_status == null) _loading = true;
+    });
     try {
       final status = await widget.loadStatus();
       if (!mounted) return;

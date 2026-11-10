@@ -11,7 +11,7 @@ Posse 能在手机上操作 Mac 的终端和桌面，安全问题请私下报告
 - 外网中转的鉴权、邀请和推送（`internal/deskrelay`）。中转只转发密文，看不到内容；能绕过鉴权白用中转、或从中转拿到明文的都算。
 - Posse 手机 App（`mobile/`）。
 
-**不算**：要先拿到已解锁的 Mac 或手机的用户权限才能做到的事；兼容的 Orca 手机 App 自身的问题请报给 Orca。
+**不算**：要先拿到已解锁的 Mac 或手机的用户权限才能做到的事。
 
 ---
 
@@ -26,4 +26,4 @@ Posse can drive a Mac’s terminals and desktop from a phone, so please report s
 - Relay authentication, invites and push (`internal/deskrelay`). The relay only forwards ciphertext; anything that lets someone use a relay without authorization or read plaintext through it counts.
 - The Posse mobile app (`mobile/`).
 
-**Out of scope**: anything that first requires user-level access to an unlocked Mac or phone; issues in the compatible Orca mobile app itself should go to Orca.
+**Out of scope**: anything that first requires user-level access to an unlocked Mac or phone.

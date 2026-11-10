@@ -36,7 +36,6 @@ type skillsView struct {
 	req     int // 每次扫描加一，过时的结果不要
 	cat     skills.Catalog
 	loaded  bool
-	at      time.Time
 	sel     string // 选中技能的目录，或 skillIssuesKey
 	reveal  bool   // 方向键换了选中：下一帧把它滚进视野
 	query   string
@@ -116,7 +115,7 @@ func (a *app) scanSkills() {
 			if s.req != req {
 				return
 			}
-			s.cat, s.loaded, s.loading, s.at = cat, true, false, time.Now()
+			s.cat, s.loaded, s.loading = cat, true, false
 		})
 		a.update(a.readPosseSkills)
 	}()

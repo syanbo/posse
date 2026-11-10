@@ -618,9 +618,8 @@ func quoteArgs(args []string) string {
 
 // pollGitTrace 在轮询里调用：常驻进程的序号变了就取新的终端 git 命令。序号变小说明记录文件没了，从头取。
 func (a *app) pollGitTrace(ctx context.Context, seq int64) {
-	initial := !a.traceLoaded
-	a.traceLoaded = true
 	if seq == a.traceSeq {
+		a.traceLoaded = true
 		return
 	}
 	after := a.traceSeq
@@ -634,6 +633,9 @@ func (a *app) pollGitTrace(ctx context.Context, seq int64) {
 	if a.c.Call(ctx, "git.trace", map[string]any{"after": after}, &res) != nil {
 		return
 	}
+	// 取到了才算读过：第一次失败后取回的旧记录不当成新命令
+	initial := !a.traceLoaded
+	a.traceLoaded = true
 	a.traceSeq = res.Seq
 	a.update(func() { a.addTermRuns(res.Records, initial) })
 }

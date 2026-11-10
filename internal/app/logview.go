@@ -37,7 +37,6 @@ type logDoc struct {
 	gen       int
 	commit    *commitView
 	list      ui.ListState
-	reloaded  time.Time
 	refsOpen  map[string]bool // 左边分支树展开了哪些组："local"、"remote"、"tags"、"remote:<远端>"
 	refQuery  string
 	refList   ui.ListState
@@ -339,7 +338,6 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 			} else {
 				ld.jump = ""
 			}
-			ld.reloaded = time.Now()
 			d.kind = docLog
 		})
 	}()
@@ -748,7 +746,7 @@ func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		}
 	})
 	if m.Item(lm.LogRevertCommit()).Chosen() {
-		do("Revert", func(ctx context.Context, root string) error { return gitx.RevertCommit(ctx, root, ci.Hash) })
+		do(lm.GitRevert(), func(ctx context.Context, root string) error { return gitx.RevertCommit(ctx, root, ci.Hash) })
 	}
 	m.Separator()
 	if m.Item(lm.LogRewordEllipsis()).Chosen() {

@@ -167,7 +167,12 @@ func Main(args []string) int {
 	e.socket = daemon.SocketPath(e.home)
 
 	var rest []string
-	for _, a := range args {
+	for i, a := range args {
+		if a == "--" {
+			// -- 后面是交给别的程序的参数（agent exec、terminal create），里面的 --json 不是给 posse 的
+			rest = append(rest, args[i:]...)
+			break
+		}
 		if a == "--json" {
 			e.json = true
 			continue

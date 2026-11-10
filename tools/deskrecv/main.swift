@@ -83,11 +83,10 @@ final class Replay {
     func shift(_ n: UInt64) {
         let words = Int(n / 64), bitsn = n % 64
         var next = [UInt64](repeating: 0, count: 16)
-        for i in 0..<16 {
-            let from = words + i
-            if from >= 16 { break }
+        for i in words..<16 {
+            let from = i - words
             next[i] = bits[from] << bitsn
-            if bitsn != 0, from + 1 < 16 { next[i] |= bits[from + 1] >> (64 - bitsn) }
+            if bitsn != 0, from > 0 { next[i] |= bits[from - 1] >> (64 - bitsn) }
         }
         bits = next
     }

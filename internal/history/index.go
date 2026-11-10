@@ -246,6 +246,10 @@ func (x *Index) updateFile(ctx context.Context, src source, k knownFile, roots R
 			return err
 		}
 		offset += n
+		if n == 0 && !reset {
+			// 只多了半行：没读进新的整行，留着上次的结尾，否则下次对不上、当成被改写整份重读
+			tail = k.tail
+		}
 	} else {
 		tail = k.tail
 	}

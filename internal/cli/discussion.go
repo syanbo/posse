@@ -544,12 +544,16 @@ func cmdDiscussionArchive(e *env, args []string) error { return discArchive(e, a
 func cmdDiscussionRestore(e *env, args []string) error { return discArchive(e, args, false) }
 
 func discArchive(e *env, args []string, archived bool) error {
-	fs := flag.NewFlagSet("discussion archive", flag.ContinueOnError)
+	name := "discussion archive"
+	if !archived {
+		name = "discussion restore"
+	}
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "discussion archive"); err != nil {
+	if err := need(pos, 1, name); err != nil {
 		return err
 	}
 	var d discussionInfo
@@ -970,7 +974,7 @@ func cmdProfileSet(e *env, args []string) error {
 		return fmt.Errorf("--avatar and --no-avatar cannot be used together")
 	}
 	if *avatar != "" {
-		params["path"] = absPath(*avatar)
+		params["path"] = filePath(*avatar)
 	}
 	params["remove"] = *noAvatar
 	var r profileOut

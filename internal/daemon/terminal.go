@@ -489,7 +489,8 @@ func (d *Daemon) terminalWait(ctx context.Context, raw json.RawMessage) (any, er
 			// 交接期间不读 PTY，没有输出不代表空闲；等交接结束回 restarting，CLI 到新进程上接着等
 			matched = (since >= idle && !d.handoff.active()) || !s.Running()
 			if !matched {
-				tick = time.After(idle - since)
+				// 交接中 since 可能已超过 idle，负的等待会让循环空转
+				tick = time.After(max(idle-since, 200*time.Millisecond))
 			}
 		case "text":
 			// 全文检索有成本，输出很频繁时限制在每 200ms 一次

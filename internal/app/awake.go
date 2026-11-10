@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// awakeStatus 是常驻进程的防休眠状态（internal/daemon/awake.go）：档位 off、auto、display、on，
+// awakeStatus 是常驻进程的防休眠状态（internal/daemon/awake.go）：档位 off、auto、display，
 // 此刻是否托着不让睡，以及正在工作的 agent 数（不决定托不托住）。
 type awakeStatus struct {
 	Mode    string `json:"mode"`

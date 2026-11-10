@@ -816,6 +816,8 @@ class PosseAppModel extends ChangeNotifier {
       unawaited(registerPush());
       unawaited(refreshAgents());
       await refreshWorktrees();
+      // 等的时候用户断开了：不再起轮询
+      if (gen != _connectGen) return false;
       _poll?.cancel();
       _poll = Timer.periodic(const Duration(seconds: 3), (_) {
         unawaited(refreshWorktrees());

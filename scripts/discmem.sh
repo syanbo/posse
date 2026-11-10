@@ -42,5 +42,5 @@ for phase in "$@"; do
 	fi
 	kill -0 "$win" 2>/dev/null || { echo "窗口进程 ${win} 不在了：同一进程的对比中断" >&2; exit 1; }
 	sh scripts/memprobe.sh "$win" "window:$phase" "$samples"
-	[ -n "$dpid" ] && sh scripts/memprobe.sh "$dpid" "daemon:$phase" "$samples"
+	if [ -n "$dpid" ]; then sh scripts/memprobe.sh "$dpid" "daemon:$phase" "$samples"; fi
 done
