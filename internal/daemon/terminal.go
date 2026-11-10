@@ -662,6 +662,13 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	if s == nil {
 		return nil, rpc.Errorf(rpc.CodeNotFound, "terminal %s not found", p.TerminalID)
 	}
+	// Codex 的子 agent、agent 跑的命令里嵌套启动的 agent 都带着这个终端的 ID，它们结束时报的 SessionEnd
+	// 不是终端里正在跑的会话退出，当成退出会把主会话摘掉，直到它下一个 hook 才挂回来
+	if p.Event == "SessionEnd" {
+		if sid, cur := agent.SessionOf(p.Payload), s.Agent().SessionID; sid != "" && cur != "" && sid != cur {
+			return map[string]bool{"ignored": true}, nil
+		}
+	}
 	if s.agentName() != p.Agent || !s.isHooked() {
 		s.markHooked(p.Agent)
 	}

@@ -176,6 +176,24 @@ func TestSessionEndClearsAgent(t *testing.T) {
 	}
 }
 
+// 别的会话（Codex 子 agent、嵌套启动的 agent）报的 SessionEnd 不摘掉终端里还在跑的 agent。
+func TestOtherSessionEndKeepsAgent(t *testing.T) {
+	d, ws := newTestDaemon(t)
+	s, err := d.startTerminal(ws, []string{"/bin/cat"}, "claude", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook(t, d, s.ID, "UserPromptSubmit", map[string]any{"session_id": "main"})
+	hook(t, d, s.ID, "SessionEnd", map[string]any{"session_id": "child", "reason": "prompt_input_exit"})
+	if info := d.terminalInfo(s); info.Agent != "claude" || s.Agent().Status != agent.StatusWorking {
+		t.Fatalf("agent %q state %+v", info.Agent, s.Agent())
+	}
+	hook(t, d, s.ID, "SessionEnd", map[string]any{"session_id": "main", "reason": "prompt_input_exit"})
+	if info := d.terminalInfo(s); info.Agent != "" || s.Agent().Status != agent.StatusExited {
+		t.Fatalf("agent %q state %+v", info.Agent, s.Agent())
+	}
+}
+
 // 后台子 agent 还在跑时主线程停下：仍是工作中，等它结束、Claude 开新一轮再停下才是完成。
 // 事件顺序照 Claude Code 2.1.306 实测（后台子 agent 不发 SubagentStart）。
 func TestBackgroundSubagentKeepsWorking(t *testing.T) {

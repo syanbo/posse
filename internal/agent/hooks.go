@@ -59,6 +59,15 @@ func runningSubagents(p hookPayload) []string {
 	return ids
 }
 
+// SessionOf 取 hook 事件里的会话 ID，没带时为空。
+func SessionOf(payload json.RawMessage) string {
+	var p struct {
+		SessionID string `json:"session_id"`
+	}
+	json.Unmarshal(payload, &p)
+	return p.SessionID
+}
+
 // MapEvent 把 hooks 事件映射成 agent 状态；不影响状态的事件返回 false。
 func MapEvent(agentName, event string, payload json.RawMessage) (term.AgentState, bool) {
 	var p hookPayload
