@@ -214,7 +214,8 @@ func (a *app) addGitRun(r gitx.Run) {
 		line, _ := json.Marshal(r)
 		a.saveGitRun(line)
 	}
-	for i := len(a.gitRuns) - 1; i >= 0 && i >= len(a.gitRuns)-50; i-- {
+	// 找整个列表：长推送期间插进来的命令再多，结束记录也换得掉开始那条（trimGitRuns 每次也是全表走一遍）
+	for i := len(a.gitRuns) - 1; i >= 0; i-- {
 		if a.gitRuns[i].ID == r.ID {
 			a.gitRuns[i] = r
 			return

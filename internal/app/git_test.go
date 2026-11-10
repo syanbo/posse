@@ -2664,3 +2664,25 @@ func TestLogFilterSurvivesReload(t *testing.T) {
 	a.reloadLog(v, d)
 	until(t, tt, "filter applied", func() bool { return d.log.filter.Text == "feat" })
 }
+
+// 长推送期间插进来五十多条命令：推送结束时换掉它开始的那条，不留一条永远「进行中」。
+func TestAddGitRunReplacesOldStart(t *testing.T) {
+	a := &app{}
+	a.addGitRun(gitx.Run{ID: 1, Dir: "/r", Args: []string{"push"}})
+	for i := range 80 {
+		a.addGitRun(gitx.Run{ID: int64(100 + i), Dir: "/r", Args: []string{"status"}, Done: true})
+	}
+	a.addGitRun(gitx.Run{ID: 1, Dir: "/r", Args: []string{"push"}, Done: true})
+	n := 0
+	for _, r := range a.gitRuns {
+		if r.ID == 1 {
+			n++
+			if !r.Done {
+				t.Fatal("push still running")
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d push records", n)
+	}
+}
