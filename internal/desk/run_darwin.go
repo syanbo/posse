@@ -1576,7 +1576,14 @@ func (e *engine) stopStream() {
 	parts := e.parts
 	e.parts = streamParts{}
 	done := make(chan struct{})
-	block := objc.NewBlock(func(_ objc.Block, _ objc.ID) { close(done) })
+	var stopErr string
+	block := objc.NewBlock(func(_ objc.Block, err objc.ID) {
+		// 回调带着 NSError 是没停成（SCStream.h）：流可能还在往队列里交样本
+		if err != 0 {
+			stopErr = e.mac.goString(e.mac.init(err, e.mac.sel("localizedDescription")))
+		}
+		close(done)
+	})
 	e.mac.stopCapture(stream, e.mac.sel("stopCaptureWithCompletionHandler:"), uintptr(block))
 	select {
 	case <-done:
@@ -1588,7 +1595,13 @@ func (e *engine) stopStream() {
 	}
 	block.Release()
 	e.mac.release(stream, e.mac.sel("release"))
-	e.mac.releaseParts(parts)
+	if stopErr != "" {
+		// 没确认停下：和超时一样，流用着的东西留着
+		e.logf("stop capture: %s", stopErr)
+		return
+	}
+	// 排空样本队列要等已经进了回调的样本编完；编码器排满、父进程不读管道时会一直等，不拿着 streamMu 等
+	go e.mac.releaseParts(parts)
 }
 
 func streamDidOutput(_ objc.ID, _ objc.SEL, _ objc.ID, sample unsafe.Pointer, typ int) {
