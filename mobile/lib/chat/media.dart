@@ -319,11 +319,19 @@ class _MediaTileState extends State<_MediaTile> {
   Uint8List? _thumb;
   var _failed = false;
 
+  /// 上一次去取缩略图用的连接和失败的时间：换了连接（重连）马上再取，同一条连接隔一阵再试。
+  PhoneRpc? _tried;
+  DateTime? _failedAt;
+  var _loading = false;
+
+  static const _retryAfter = Duration(seconds: 30);
+
   String get _key => '${widget.tab.sessionId}\n${widget.item.id}';
 
   @override
   void initState() {
     super.initState();
+    widget.model.addListener(_onModel);
     _thumb = _thumbs.remove(_key);
     if (_thumb != null) {
       _thumbs[_key] = _thumb!;
@@ -332,9 +340,28 @@ class _MediaTileState extends State<_MediaTile> {
     }
   }
 
+  @override
+  void dispose() {
+    widget.model.removeListener(_onModel);
+    super.dispose();
+  }
+
+  void _onModel() {
+    if (_thumb != null || _loading) return;
+    final rpc = widget.model.rpc;
+    if (rpc == null) return;
+    final at = _failedAt;
+    if (!identical(rpc, _tried) ||
+        at != null && DateTime.now().difference(at) >= _retryAfter) {
+      _load();
+    }
+  }
+
   Future<void> _load() async {
     final rpc = widget.model.rpc;
     if (rpc == null) return;
+    _tried = rpc;
+    _loading = true;
     try {
       final res = await rpc.call('session.mediaThumb', {
         ..._sessionArgs(widget.tab),
@@ -347,7 +374,10 @@ class _MediaTileState extends State<_MediaTile> {
       }
       if (mounted) setState(() => _thumb = bytes);
     } catch (_) {
+      _failedAt = DateTime.now();
       if (mounted) setState(() => _failed = true);
+    } finally {
+      _loading = false;
     }
   }
 
@@ -535,6 +565,27 @@ class MediaViewer extends StatefulWidget {
 class _MediaViewerState extends State<MediaViewer> {
   late var _index = widget.index;
 
+  /// 画面用的连接。重连后换成新的，「重试」不再用断掉的那条。
+  late PhoneRpc? _rpc = widget.model.rpc;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.model.addListener(_onModel);
+  }
+
+  @override
+  void dispose() {
+    widget.model.removeListener(_onModel);
+    super.dispose();
+  }
+
+  void _onModel() {
+    if (!identical(widget.model.rpc, _rpc) && mounted) {
+      setState(() => _rpc = widget.model.rpc);
+    }
+  }
+
   /// 已经取到手机上的项，按位置记：翻回来时顶栏的存到手机还能用。
   final _files = <int, File>{};
 
@@ -548,7 +599,7 @@ class _MediaViewerState extends State<MediaViewer> {
     final items = widget.items;
     final item = items[_index];
     final tab = widget.tab;
-    final rpc = widget.model.rpc;
+    final rpc = _rpc;
     final file = _files[_index];
     final to = _target(item);
     final time = historyTime(

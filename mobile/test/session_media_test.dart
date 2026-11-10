@@ -75,6 +75,38 @@ class _MediaRpc implements PhoneRpc {
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
+/// 取缩略图一律失败的连接（断掉的那条）。
+class _DeadThumbRpc extends _MediaRpc {
+  @override
+  Future<Map<String, Object?>> call(
+    String method,
+    Map<String, Object?> params, {
+    Duration? timeout,
+  }) async {
+    if (method == 'session.mediaThumb') {
+      calls.add(method);
+      throw RpcException('closed', 'connection closed');
+    }
+    return super.call(method, params, timeout: timeout);
+  }
+}
+
+/// 连接可以换：模拟断线重连。
+class _SwitchModel extends PosseAppModel {
+  _SwitchModel(this.fakeRpc)
+    : super(store: MemoryPairingStore(), settingsStore: MemorySettingsStore());
+
+  PhoneRpc? fakeRpc;
+
+  @override
+  PhoneRpc? get rpc => fakeRpc;
+
+  void swap(PhoneRpc next) {
+    fakeRpc = next;
+    notifyListeners();
+  }
+}
+
 class _Model extends PosseAppModel {
   _Model(this.fake)
     : super(store: MemoryPairingStore(), settingsStore: MemorySettingsStore());
@@ -172,6 +204,40 @@ void main() {
     ).listSync()) {
       if (f is File && f.lengthSync() == _png.length) f.deleteSync();
     }
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('thumbnails that failed load again after reconnecting', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    final t = SessionTab(
+      worktreeId: 'w',
+      title: 'claude',
+      terminalId: 't1',
+      agent: 'claude',
+      sessionId: 'media-retry-$stamp',
+    );
+    final dead = _DeadThumbRpc();
+    final model = _SwitchModel(dead);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaScreen(model: model, tab: t),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.byIcon(Icons.broken_image_rounded), findsNWidgets(2));
+
+    final live = _MediaRpc();
+    model.swap(live);
+    await tester.pump();
+    await tester.pump();
+    expect(live.calls.where((m) => m == 'session.mediaThumb').length, 3);
+    expect(find.byIcon(Icons.broken_image_rounded), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
