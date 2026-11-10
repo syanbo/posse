@@ -632,3 +632,24 @@ func TestPastedImageTag(t *testing.T) {
 		t.Fatal("[Image #2] in a codex terminal usable")
 	}
 }
+
+// 网址卡片开着时它的工作区被删了：不再给出「在 Posse 中打开」（会给不存在的工作区建网页标签）。
+func TestURLCardWorkspaceGone(t *testing.T) {
+	a := previewApp(t)
+	stale := a.workspaces[0]
+	stale.ID = "w-deleted"
+	a.linkCard = &linkCard{url: "https://example.com", ws: &stale, x: 200, y: 200, placed: true}
+	tt := newPreviewTester(a, true)
+	tt.Frame()
+	tt.Frame()
+	if tt.HasText("在 Posse 中打开") {
+		t.Fatal("offered to open in a deleted workspace")
+	}
+	live := a.workspaces[0]
+	a.linkCard = &linkCard{url: "https://example.com", ws: &live, x: 200, y: 200, placed: true}
+	tt.Frame()
+	tt.Frame()
+	if !tt.HasText("在 Posse 中打开") {
+		t.Fatal("live workspace lost the web tab item")
+	}
+}

@@ -391,9 +391,11 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element, termID string) {
 func (a *app) urlCardItems(c *ui.Context, card *linkCard) {
 	a.linkCardHead(c, card.url, card.url, L(c).LinksCopyLink())
 	hline(c).Margin(4, 6)
-	web := isWebURL(card.url) && card.ws != nil
+	// 按 ID 现查：工作区删了就没有「在 Posse 里打开」
+	w := a.cardWorkspace(card)
+	web := isWebURL(card.url) && w != nil
 	if web && linkCardItem(c, iconGlobe, L(c).LinksOpenInPosse(), a.posseKeys(L(c))) {
-		a.openWeb(card.ws, card.url)
+		a.openWeb(w, card.url)
 		a.linkCard = nil
 	}
 	// 不是 http、https 的网址两种按法都交给系统，写在 Posse 里打开的那个
@@ -438,7 +440,7 @@ func (a *app) pathCardItems(c *ui.Context, card *linkCard, width float32) {
 	hline(c).Margin(4, 6)
 	// 最常用的在最上面：在 Posse 里打开。网页直接打开的是渲染出来的页面，源码在文件标签里看
 	fileKeys := a.posseKeys(L(c))
-	if !card.isDir && isHTML(card.path) && card.ws != nil {
+	if !card.isDir && isHTML(card.path) && a.cardWorkspace(card) != nil {
 		if linkCardItem(c, iconGlobe, L(c).LinksOpenInPosse(), fileKeys) {
 			a.openLinkWeb(card)
 			a.linkCard = nil
