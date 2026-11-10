@@ -233,15 +233,41 @@ func (r *Routes) ReadFrom(b []byte) (int, net.Addr, error) {
 	}
 	select {
 	case p := <-r.in:
-		r.mu.Lock()
-		r.via[p.addr.String()] = p.sock
-		r.mu.Unlock()
+		r.noteVia(p)
 		return copy(b, p.data), p.addr, nil
 	case <-timeout:
 		return 0, nil, os.ErrDeadlineExceeded
 	case <-r.done:
 		return 0, nil, net.ErrClosed
 	}
+}
+
+// viaMax 是记着回包 socket 的地址数上限。正常观看只有手机的一两个地址（直连、打洞后的公网地址）。
+const viaMax = 64
+
+// noteVia 记下回包用哪个 socket。包还没解密，来源地址谁都能伪造：只记和默认不同的（局域网地址从中转用的 socket 进来），
+// 超过上限就清空重记，不让乱发包的人把表撑大；被清掉的手机地址下一个包到了又记上。
+func (r *Routes) noteVia(p routedPacket) {
+	u := p.addr
+	key := u.String()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if p.sock == r.defaultSock(u) {
+		delete(r.via, key)
+		return
+	}
+	if _, ok := r.via[key]; !ok && len(r.via) >= viaMax {
+		clear(r.via)
+	}
+	r.via[key] = p.sock
+}
+
+// defaultSock 是没记着时发往 u 用的 socket：中转走 relaySock，其余走 lan。
+func (r *Routes) defaultSock(u *net.UDPAddr) *net.UDPConn {
+	if r.IsRelay(u) {
+		return r.relaySock()
+	}
+	return r.lan
 }
 
 func (r *Routes) WriteTo(b []byte, addr net.Addr) (int, error) {
@@ -253,10 +279,7 @@ func (r *Routes) WriteTo(b []byte, addr net.Addr) (int, error) {
 	sock := r.via[u.String()]
 	r.mu.Unlock()
 	if sock == nil {
-		sock = r.lan
-		if r.IsRelay(u) {
-			sock = r.relaySock()
-		}
+		sock = r.defaultSock(u)
 	}
 	return sock.WriteToUDP(b, u)
 }

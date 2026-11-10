@@ -137,3 +137,43 @@ func TestRoutesPunch(t *testing.T) {
 		break
 	}
 }
+
+// 解密前就按来源地址记回包 socket：乱发包的人换着来源地址发，表不能一直长。
+func TestRoutesViaBounded(t *testing.T) {
+	r, err := ListenRoutes("", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	other, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	buf := make([]byte, 16)
+	for i := range 1000 {
+		addr := &net.UDPAddr{IP: net.IPv4(10, byte(i>>8), byte(i), 1), Port: 4000 + i}
+		sock := r.lan
+		if i%2 == 0 {
+			sock = other // 从另一个 socket 进来的才需要记
+		}
+		r.in <- routedPacket{data: []byte("x"), addr: addr, sock: sock}
+		if _, _, err := r.ReadFrom(buf); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r.mu.Lock()
+	n := len(r.via)
+	r.mu.Unlock()
+	if n > viaMax {
+		t.Fatalf("via grew to %d", n)
+	}
+	// 刚进来的地址还记着，回包走它进来的 socket
+	last := &net.UDPAddr{IP: net.IPv4(10, 3, 230, 1), Port: 4998}
+	r.mu.Lock()
+	got := r.via[last.String()]
+	r.mu.Unlock()
+	if got != other {
+		t.Fatal("latest address lost its socket")
+	}
+}
