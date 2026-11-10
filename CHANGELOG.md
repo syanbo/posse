@@ -3,6 +3,20 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.33
+
+- 终端里图片的悬浮预览按窗口大小放大（最宽是终端宽度的一半），竖的手机截图、长截图整张显示在终端里，不再超出窗口看不到下半截；点击图片链接弹出的卡片里，太高的图会缩小，下面的按钮不再被挤出窗口。
+- Claude 输入框里粘贴了、还没发送的图片（`[Image #N]`）也能悬停预览、点击打开。
+- 修复：链接卡片开着时按 Esc 关不掉，Esc 还会发给终端里的 Claude、Codex，打断它们这一轮。
+- 「技能与工具」面板能认出 Claude 在后台运行的内置技能（如 `/code-review`）。
+
+### English
+
+- Image previews on hover in the terminal now scale with the window (up to half the terminal's width), and tall phone screenshots and long screenshots show whole inside the terminal instead of running off the window. In the card that opens when you click an image link, a tall image is scaled down so the buttons below it stay on screen.
+- Images pasted into Claude's prompt but not sent yet (`[Image #N]`) can also be previewed on hover and opened with a click.
+- Fix: Esc did not close an open link card, and it went on to the Claude or Codex in the terminal, interrupting its turn.
+- The Skills & Tools panel now recognizes Claude's built-in skills that run in the background (such as `/code-review`).
+
 ## 0.1.32
 
 - 修复：Codex 还在运行时，终端偶尔被认作已退出，图标变回普通终端、侧栏里不见了（Codex 结束旧会话时也会发出退出通知）。现在收到通知后先确认 Codex 进程是否真的退出了。
