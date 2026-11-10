@@ -902,7 +902,7 @@ func (t *Terminal) Inject(data []byte) error {
 	if !t.Running() {
 		return errors.New("terminal has exited")
 	}
-	mouse := mouseReport.Match(data)
+	mouse := isMouseReport(data)
 	if mouse && lossyMouse(data) {
 		// 程序忙着没读输入时（Codex 回合中、重画长会话），macOS 的 PTY 输入队列只放得下约 1 KB，
 		// 再写就在报告中间截断、等程序读走再写后半截；程序读到结尾孤零零的 ESC 当成按了 Esc，
@@ -966,8 +966,25 @@ func (t *Terminal) inputQueued() int {
 	return n
 }
 
-// mouseReport 匹配整段都是鼠标报告的输入（SGR 和 X10 两种编码）。
-var mouseReport = regexp.MustCompile(`^(?:\x1b\[<\d+;\d+;\d+[Mm]|\x1b\[M[\x20-\xff]{3})+$`)
+// isMouseReport 报告整段输入都是鼠标报告（SGR 和 X10 两种编码）。X10 的三个字节是原始字节（32 加按键、列、行），
+// 第 96 列、行以后是 0x80 以上，不是 UTF-8：Go 的正则按 UTF-8 码点匹配，认不出这些字节，所以逐字节看。
+func isMouseReport(data []byte) bool {
+	if len(data) == 0 {
+		return false
+	}
+	for len(data) > 0 {
+		if m := sgrReport.Find(data); m != nil {
+			data = data[len(m):]
+			continue
+		}
+		if len(data) >= 6 && data[0] == 0x1b && data[1] == '[' && data[2] == 'M' && data[3] >= 0x20 && data[4] >= 0x20 && data[5] >= 0x20 {
+			data = data[6:]
+			continue
+		}
+		return false
+	}
+	return true
+}
 
 func mouseTracking(emu *vt.Terminal) bool {
 	return emu.Mode(9) || emu.Mode(1000) || emu.Mode(1002) || emu.Mode(1003)

@@ -350,6 +350,28 @@ func TestLossyMouse(t *testing.T) {
 	}
 }
 
+// 认整段是不是鼠标报告：X10 第 96 列以后的坐标字节在 0x80 以上，也要认得出。
+func TestIsMouseReport(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want bool
+	}{
+		{"\x1b[<64;53;8M", true},
+		{"\x1b[<0;5;5m\x1b[<35;1;1M", true},
+		{"\x1b[M`!!", true},
+		{"\x1b[M`\xa0\x30", true},              // 第 128 列
+		{"\x1b[M#\xff\xff\x1b[<64;1;1M", true}, // 最远的格子接着 SGR
+		{"\x1b[M`!", false},                    // 截断
+		{"\x1b[<64;53;8Mx", false},             // 后面跟着字
+		{"abc", false},
+		{"", false},
+	} {
+		if got := isMouseReport([]byte(c.in)); got != c.want {
+			t.Errorf("isMouseReport(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
 // 程序退出前不再读输入、鼠标跟踪还开着时，鼠标移动的报告堆在 PTY 里；程序关掉鼠标跟踪时丢掉它们，
 // 后面的 shell 读不到一串"35;12;8M"。最后写进去的是键盘输入时不丢。
 func TestMouseReportsDroppedWhenTrackingEnds(t *testing.T) {
