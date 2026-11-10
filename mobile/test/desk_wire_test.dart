@@ -261,7 +261,8 @@ void main() {
 
   test('only a direct host may subscribe', () async {
     expect(deskAddressDirect(InternetAddress('127.0.0.1')), isTrue);
-    expect(deskAddressDirect(InternetAddress('::1')), isTrue);
+    // 原生收包只认 IPv4：IPv6 的地址（回环、Tailscale、链路本地）都不算直连
+    expect(deskAddressDirect(InternetAddress('::1')), isFalse);
     expect(deskAddressDirect(InternetAddress('10.1.2.3')), isTrue);
     expect(deskAddressDirect(InternetAddress('192.168.50.188')), isTrue);
     expect(deskAddressDirect(InternetAddress('172.16.0.1')), isTrue);
@@ -273,8 +274,8 @@ void main() {
     expect(deskAddressDirect(InternetAddress('100.128.0.1')), isFalse);
     expect(deskAddressDirect(InternetAddress('8.8.8.8')), isFalse);
     expect(deskAddressDirect(InternetAddress('1.1.1.1')), isFalse);
-    expect(deskAddressDirect(InternetAddress('fd7a:115c:a1e0::1')), isTrue);
-    expect(deskAddressDirect(InternetAddress('fe80::1')), isTrue);
+    expect(deskAddressDirect(InternetAddress('fd7a:115c:a1e0::1')), isFalse);
+    expect(deskAddressDirect(InternetAddress('fe80::1')), isFalse);
     expect(deskAddressDirect(InternetAddress('2001:db8::1')), isFalse);
 
     Future<List<InternetAddress>> lan(String host) async => [
@@ -298,6 +299,34 @@ void main() {
       isTrue,
     );
   });
+
+  test(
+    'an IPv6 pairing sends the picture to an IPv4 address of the same Mac',
+    () async {
+      Future<List<InternetAddress>> lookup(String host) async => switch (host) {
+        'mac.local' => [
+          InternetAddress('fd7a:115c:a1e0::5'),
+          InternetAddress('192.168.50.187'),
+        ],
+        'v6only.local' => [InternetAddress('fd7a:115c:a1e0::5')],
+        _ => throw const SocketException('no'),
+      };
+      // 按 IPv6 配对：换到同一台电脑的 IPv4 局域网地址，不把 IPv6 交给原生层
+      expect(
+        await deskUdpHost('fd7a:115c:a1e0::5', ['192.168.50.187']),
+        '192.168.50.187',
+      );
+      // 名字同时解析出 IPv6 和 IPv4：看 IPv4 那个
+      expect(await deskHostDirect('mac.local', lookup: lookup), isTrue);
+      // 只有 IPv6：没有能直连的，走中转
+      expect(
+        await deskUdpHost('fd7a:115c:a1e0::5', [
+          'v6only.local',
+        ], lookup: lookup),
+        isNull,
+      );
+    },
+  );
 
   test('a tunnel sends the picture to a LAN address of the same Mac', () async {
     Future<List<InternetAddress>> lookup(String host) async => switch (host) {

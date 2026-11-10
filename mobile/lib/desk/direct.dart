@@ -1,9 +1,11 @@
 import 'dart:io';
 
 /// 这条 WebSocket 能不能走桌面 UDP。
-/// 主机本身是局域网、Tailscale（100.64.0.0/10）或回环地址，
+/// 主机本身是局域网、Tailscale（100.64.0.0/10）或回环的 IPv4 地址，
 /// 或者名字能解析成这类地址，才算直连。模拟器的 127.0.0.1 算。
 /// 解析失败、只解析到公网地址，都不订阅。
+/// 只认 IPv4：两端原生的收包（DeskSession）只解析、只发 IPv4，IPv6 的地址交过去直接报采集失败，
+/// 不会再去试别的地址和中转。
 Future<bool> deskHostDirect(
   String host, {
   Future<List<InternetAddress>> Function(String host)? lookup,
@@ -20,11 +22,8 @@ Future<bool> deskHostDirect(
 }
 
 bool deskAddressDirect(InternetAddress address) {
-  if (address.isLoopback) return true;
-  if (address.type == InternetAddressType.IPv4) {
-    return _ipv4Direct(_octets(address.address));
-  }
-  return _ipv6Direct(address);
+  if (address.type != InternetAddressType.IPv4) return false;
+  return _ipv4Direct(_octets(address.address));
 }
 
 bool _ipv4Direct(List<int>? parts) {
@@ -51,15 +50,6 @@ List<int>? _octets(String text) {
     out.add(n);
   }
   return out;
-}
-
-bool _ipv6Direct(InternetAddress address) {
-  final raw = address.rawAddress;
-  if (raw.length != 16) return false;
-  // fc00::/7 是本地唯一地址，Tailscale 的 IPv6 在里面。fe80::/10 是链路本地。
-  if (raw[0] & 0xfe == 0xfc) return true;
-  if (raw[0] == 0xfe && raw[1] & 0xc0 == 0x80) return true;
-  return false;
 }
 
 /// 画面的 UDP 发到哪。当前连接本身能直连就用它；走隧道时从同一台电脑的其他地址
