@@ -303,6 +303,7 @@ func codexHookHash(eventKey, matcher, command string, timeout int) string {
 }
 
 // ShellArgv 在交互式登录 shell 里执行 cmd（加载用户的 rc，如 nvm），结束后换成新的交互式 shell。
+// cmd 和后面接的脚本是 POSIX sh 的写法：fish、csh 这类 shell 读不懂，交给 /bin/sh 跑（见 shellFamily）。
 func ShellArgv(cmd string) []string {
 	sh := UserShell()
 	if cmd == "" {
@@ -311,7 +312,34 @@ func ShellArgv(cmd string) []string {
 	// agent 退出后换回的 shell 也走 posse 的 zsh 集成（POSSE_ZDOTDIR 只在 zsh 终端里有），
 	// 在里面手动再敲 claude 照样带 hooks
 	back := "exec " + Quote(sh) + " -l"
-	return []string{sh, "-l", "-i", "-c", cmd + `; if [ -n "$POSSE_ZDOTDIR" ]; then ZDOTDIR=$POSSE_ZDOTDIR ` + back + "; else " + back + "; fi"}
+	script := cmd + `; if [ -n "$POSSE_ZDOTDIR" ]; then ZDOTDIR=$POSSE_ZDOTDIR ` + back + "; else " + back + "; fi"
+	switch shellFamily(sh) {
+	case "fish":
+		// 先让 fish 读完自己的配置（PATH、nvm 之类），再把脚本原样交给 /bin/sh：脚本经参数传，不经 fish 的引号规则
+		return []string{sh, "-l", "-i", "-c", `exec /bin/sh -c "$argv[1]"`, script}
+	case "csh":
+		// csh、tcsh 的 -l 只能单独用；-c 时照样读 .cshrc/.tcshrc，脚本同样经 $argv 交给 /bin/sh
+		return []string{sh, "-c", `exec /bin/sh -c "$argv[1]"`, script}
+	case "other":
+		// nushell、xonsh、elvish、PowerShell：传参写法各不相同，直接用 /bin/sh 的登录 shell 跑（读 /etc/profile、~/.profile），
+		// 跑完照样换回用户的 shell
+		return []string{"/bin/sh", "-l", "-c", script}
+	}
+	return []string{sh, "-l", "-i", "-c", script}
+}
+
+// shellFamily 按 shell 的名字分：posix（sh、bash、zsh 等，也是认不出的默认）、fish、csh（含 tcsh）、
+// other（不认 POSIX 语法、也没有统一传参写法的）。
+func shellFamily(sh string) string {
+	switch filepath.Base(sh) {
+	case "fish":
+		return "fish"
+	case "csh", "tcsh":
+		return "csh"
+	case "nu", "xonsh", "elvish", "pwsh", "powershell":
+		return "other"
+	}
+	return "posix"
 }
 
 func UserShell() string {
