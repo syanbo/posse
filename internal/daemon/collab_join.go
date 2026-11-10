@@ -61,9 +61,11 @@ type roomStatus struct {
 }
 
 type roomConn struct {
-	d      *Daemon
-	room   string
-	mu     sync.Mutex // 一次只有一个调用在用连接（请求、同步、补发）
+	d    *Daemon
+	room string
+	// mu 是连接锁：一次只有一个调用在用连接（请求、同步、补发）。用带一格缓冲的 channel 做锁，
+	// 用户操作等锁也能带时限（lockCtx），后台的照常一直等（lock）
+	mu     chan struct{}
 	cli    *collaboration.Client
 	pokeCh chan struct{}
 	// ctx、cancel 建的时候就定下，之后不变：stop 不用拿 mu（mu 可能被等房主应答的调用占着）
@@ -92,7 +94,7 @@ type roomConn struct {
 
 func newRoomConn(d *Daemon, parent context.Context, room string) *roomConn {
 	ctx, cancel := context.WithCancel(parent)
-	return &roomConn{d: d, room: room, ctx: ctx, cancel: cancel, pokeCh: make(chan struct{}, 1), fetchCh: make(chan struct{}, 1), done: make(chan struct{}),
+	return &roomConn{d: d, room: room, ctx: ctx, cancel: cancel, mu: make(chan struct{}, 1), pokeCh: make(chan struct{}, 1), fetchCh: make(chan struct{}, 1), done: make(chan struct{}),
 		missing: map[string]bool{}, retryAt: map[string]time.Time{}, backoff: map[string]time.Duration{}}
 }
 
@@ -113,6 +115,19 @@ func (rc *roomConn) stop() {
 	rc.lmu.Unlock()
 	if started {
 		<-rc.done
+	}
+}
+
+func (rc *roomConn) lock()   { rc.mu <- struct{}{} }
+func (rc *roomConn) unlock() { <-rc.mu }
+
+// lockCtx 等连接锁直到 ctx 结束，拿到了返回 true。
+func (rc *roomConn) lockCtx(ctx context.Context) bool {
+	select {
+	case rc.mu <- struct{}{}:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }
 
@@ -346,13 +361,13 @@ func (rc *roomConn) session(ctx context.Context, j store.Joined) error {
 		cli.Close()
 		return err
 	}
-	rc.mu.Lock()
+	rc.lock()
 	rc.cli = cli
-	rc.mu.Unlock()
+	rc.unlock()
 	defer func() {
-		rc.mu.Lock()
+		rc.lock()
 		rc.cli = nil
-		rc.mu.Unlock()
+		rc.unlock()
 		closeClient(ctx, cli)
 		rc.closeBulk(ctx.Err() != nil)
 		// 和房主断开（不是交接、退出）：已领取、还没开始的轮次等拥有者确认再开始；已经开始的照常做完，结果留在 outbox
@@ -442,9 +457,9 @@ func (rc *roomConn) refetchCredential(ctx context.Context, j store.Joined) (cred
 // finishLeave 是离线时点了退出、现在连上了：先把本机已有的结果交上去（step 里补发过），再请房主撤销，
 // 然后在本机停用。
 func (rc *roomConn) finishLeave(ctx context.Context) error {
-	rc.mu.Lock()
+	rc.lock()
 	err := rc.callLocked(ctx, collabCallTimeout, "leave", map[string]any{}, nil)
-	rc.mu.Unlock()
+	rc.unlock()
 	if err != nil && !collaboration.IsCode(err, collaboration.CodeRevoked) {
 		return err
 	}
@@ -457,9 +472,9 @@ func (rc *roomConn) heartbeat(ctx context.Context) error {
 	var res struct {
 		Online []string `json:"online"`
 	}
-	rc.mu.Lock()
+	rc.lock()
 	err := rc.callLocked(ctx, collabBeatTimeout, "heartbeat", map[string]any{}, &res)
-	rc.mu.Unlock()
+	rc.unlock()
 	if err != nil {
 		return rc.callFailed(err)
 	}
@@ -518,8 +533,8 @@ func (d *Daemon) revokeLocal(room, state, reason string) {
 
 // step 是一轮：补齐增量、领取归自己的请求、补发 outbox。
 func (rc *roomConn) step(ctx context.Context) error {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
+	rc.lock()
+	defer rc.unlock()
 	if rc.cli == nil {
 		return collaboration.ErrClosed
 	}
@@ -845,8 +860,17 @@ func (rc *roomConn) bulkClient(ctx context.Context) (*collaboration.Client, erro
 	if err != nil {
 		return nil, err
 	}
-	if err := cli.Call(ctx, "hello", collabHello{Room: rc.room, Credential: cred.Credential, Version: collaboration.ProtocolVersion}, nil); err != nil {
-		cli.Close()
+	// 拿着 bmu 等 hello：限时，出错时停下来了或者房主没应答就直接断开，不等关闭握手（会话收尾的 closeBulk 也在等 bmu）
+	hctx, hcancel := context.WithTimeout(ctx, collabCallTimeout)
+	err = cli.Call(hctx, "hello", collabHello{Room: rc.room, Credential: cred.Credential, Version: collaboration.ProtocolVersion}, nil)
+	stalled := hctx.Err() != nil
+	hcancel()
+	if err != nil {
+		if stalled {
+			cli.Abort()
+		} else {
+			cli.Close()
+		}
 		return nil, err
 	}
 	rc.bulk = cli
@@ -932,20 +956,32 @@ func (rc *roomConn) downloadTo(ctx context.Context, a store.Attachment, dst stri
 
 // call 在连着的时候发一个请求给房主，然后补齐增量（让本机缓存马上有结果）。没连着报房主离线。
 // online 报告现在连着房主（call 能发出去）。
+// 后台同步正占着连接、房主又不应答时，等 collabUserCallTimeout 还拿不到锁就当不在线。
 func (rc *roomConn) online() bool {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
+	ctx, cancel := context.WithTimeout(rc.ctx, collabUserCallTimeout)
+	defer cancel()
+	if !rc.lockCtx(ctx) {
+		return false
+	}
+	defer rc.unlock()
 	return rc.cli != nil
 }
 
+// call 从调用起最多 collabUserCallTimeout 返回：等连接锁（后台同步可能正占着）、请求、请求后的补齐增量都算在里面。
+// 等锁就到点了说明什么都没发出去，报房主不在线；请求超时照后台一样断开重连，报结果未知。
 func (rc *roomConn) call(method string, params, out any) error {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
+	deadline := time.Now().Add(collabUserCallTimeout)
+	ctx, cancel := context.WithDeadline(rc.ctx, deadline)
+	defer cancel()
+	if !rc.lockCtx(ctx) {
+		return hostOffline(rc)
+	}
+	defer rc.unlock()
 	if rc.cli == nil {
 		return hostOffline(rc)
 	}
-	ctx := rc.ctx
-	if err := rc.callLocked(ctx, collabUserCallTimeout, method, params, out); err != nil {
+	// 用 rc.ctx 加剩下的时间：到点时 callLocked 认得出是这次请求超时，断开这条连接
+	if err := rc.callLocked(rc.ctx, time.Until(deadline), method, params, out); err != nil {
 		var ce *collaboration.Error
 		if errors.As(err, &ce) {
 			if ce.Code == collaboration.CodeRevoked {
@@ -958,6 +994,7 @@ func (rc *roomConn) call(method string, params, out any) error {
 		e.Data = json.RawMessage(`{"unknown":true}`)
 		return e
 	}
+	// 补齐增量也在时限里：到点了就不等，下一轮后台同步补上
 	if err := rc.syncLocked(ctx); err != nil && !errors.Is(err, errStopRoom) {
 		log.Printf("collaboration %s: sync after %s: %v", short(rc.room), method, err)
 	}
@@ -966,25 +1003,30 @@ func (rc *roomConn) call(method string, params, out any) error {
 
 // flushNow 把还没交出去的事件补发一遍（退出前）。
 func (rc *roomConn) flushNow() {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
+	ctx, cancel := context.WithTimeout(rc.ctx, 15*time.Second)
+	defer cancel()
+	// 等锁也算在 15 秒里：后台正占着连接时不一直等
+	if !rc.lockCtx(ctx) {
+		return
+	}
+	defer rc.unlock()
 	if rc.cli == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(rc.ctx, 15*time.Second)
-	defer cancel()
 	rc.flushLocked(ctx)
 }
 
 // syncNow 补齐一次增量（发消息前对账用）；没连着就算了。
 func (rc *roomConn) syncNow() {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
+	ctx, cancel := context.WithTimeout(rc.ctx, 15*time.Second)
+	defer cancel()
+	if !rc.lockCtx(ctx) {
+		return
+	}
+	defer rc.unlock()
 	if rc.cli == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(rc.ctx, 15*time.Second)
-	defer cancel()
 	rc.syncLocked(ctx)
 }
 

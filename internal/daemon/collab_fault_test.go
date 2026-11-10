@@ -950,3 +950,59 @@ func TestCollabPostWhileHostSilent(t *testing.T) {
 		t.Fatalf("unclear error: %v", err)
 	}
 }
+
+// 后台同步正占着连接、房主又不应答：发言从调用起最多 collabUserCallTimeout 就返回（等锁也算在里面），
+// 报房主不在线、什么都没发出去；后台同步照样按自己的时限断开重连。
+func TestCollabPostDeadlineIncludesLockWait(t *testing.T) {
+	oldCall, oldUser := collabCallTimeout, collabUserCallTimeout
+	collabCallTimeout, collabUserCallTimeout = 850*time.Millisecond, 200*time.Millisecond
+	t.Cleanup(func() { collabCallTimeout, collabUserCallTimeout = oldCall, oldUser })
+	p := newCollabPair(t)
+	held := holdHost(t, p, "sync", "post")
+	p.member.roomConnFor(p.disc.Key).poke()
+	select {
+	case m := <-held:
+		if m != "sync" {
+			t.Fatalf("held %s", m)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("sync did not reach the host")
+	}
+	start := time.Now()
+	_, err := callErr(p.member.discPost, map[string]any{"discussion": p.disc.Key, "body": "deadline", "clientId": "c-deadline"})
+	took := time.Since(start)
+	if err == nil {
+		t.Fatal("post succeeded while the host is silent")
+	}
+	if took > 450*time.Millisecond {
+		t.Fatalf("post waited %s for the background sync", took)
+	}
+	if !strings.Contains(err.Error(), "Nothing was sent") {
+		t.Fatalf("error %v", err)
+	}
+}
+
+// 附件连接正在和房主 hello、房主冻住了：停掉到房主的连接（交接、退出）也马上返回，不卡在附件连接的关闭握手上。
+func TestCollabStopWhileBulkHelloSilent(t *testing.T) {
+	p := newCollabPair(t)
+	held := holdHost(t, p, "hello")
+	rc := p.member.roomConnFor(p.disc.Key)
+	file := filepath.Join(t.TempDir(), "a.txt")
+	os.WriteFile(file, []byte("x"), 0o644)
+	go rc.upload(file, "a.txt")
+	select {
+	case <-held:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the attachment connection never said hello")
+	}
+	done := make(chan struct{})
+	go func() {
+		rc.stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("stop waited for the attachment connection")
+	}
+}

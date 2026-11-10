@@ -63,7 +63,7 @@ type collabState struct {
 	manualFetch bool
 	// listen 测试里换成别的地址（端口 0）
 	listenAddr string
-	// hostHold 是测试让房主收到请求后不应答（连接不断）：认证通过后调用，返回才接着处理
+	// hostHold 是测试让房主收到请求后不应答（连接不断）：收到请求先调用，返回才接着处理
 	hostHold atomic.Pointer[func(method string)]
 }
 
@@ -386,6 +386,9 @@ type collabHello struct {
 
 func (h collabHost) Serve(ctx context.Context, s *collaboration.Session, method string, raw json.RawMessage) (any, error) {
 	d := h.d
+	if hold := d.collab.hostHold.Load(); hold != nil {
+		(*hold)(method)
+	}
 	switch method {
 	case "join":
 		var p collabJoinParams
@@ -454,9 +457,6 @@ func (h collabHost) Serve(ctx context.Context, s *collaboration.Session, method 
 	room, gen, err := h.auth(s)
 	if err != nil {
 		return nil, err
-	}
-	if hold := d.collab.hostHold.Load(); hold != nil {
-		(*hold)(method)
 	}
 	// 只读访客：只放行读取和自己的资料、退出，其余一律拒绝（写入口各自在事务里还会再核对一次）
 	switch method {
