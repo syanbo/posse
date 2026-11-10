@@ -2247,6 +2247,27 @@ func TestComparePick(t *testing.T) {
 	}
 }
 
+// 比较的仓库检出的分支和工作区记的 w.Branch 不同（工作区里的嵌套仓库）：按这个仓库自己的分支判断能不能 cherry-pick。
+func TestComparePickUsesRepoBranch(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	v := a.filesFor(w)
+	tt := newTester(a.build, 1200, 760)
+	a.loadBranches(v.git)
+	until(t, tt, "repo", func() bool { return v.git.repo != "" })
+	a.openCompare(w, v, "feat", "main", false)
+	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare })
+	cd := v.cur.comp
+	w.Branch = "outer-repo-branch"
+	a.selectCommit(v.git.repo, &cd.commit, cd.onlyOther[0])
+	tt.Frame()
+	if err := tt.Click("Cherry-pick"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "agent guard", func() bool { return a.confirming && tt.HasText("仍然Cherry-pick") })
+}
+
 // 比较页每栏的搜索只筛这一栏显示的提交；⌘ 点多选、⇧ 点选一段，Cherry-pick 按提交先后应用选中的几个。
 func TestComparePickMany(t *testing.T) {
 	a := previewApp(t)

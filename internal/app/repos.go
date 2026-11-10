@@ -486,6 +486,18 @@ func (a *app) gitBranch(w *workspace) string {
 	return g.headRef
 }
 
+// repoBranch 是 root 这个仓库检出的分支（游离时是哈希前 8 位），读 HEAD 文件最多一秒一次。
+func (v *filesView) repoBranch(root string) string {
+	g := v.repoAt(root)
+	if g == nil {
+		return gitx.Head(root)
+	}
+	if time.Since(g.headAt) > time.Second {
+		g.headRef, g.headAt = gitx.Head(g.repo), time.Now()
+	}
+	return g.headRef
+}
+
 // repoOrGone 按根目录找仓库；重新找仓库后没了时给一个不在列表里的，交给 gitDoKind 报"仓库不在了"。
 func (v *filesView) repoOrGone(root string) *gitState {
 	if g := v.repoAt(root); g != nil {

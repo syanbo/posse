@@ -305,8 +305,9 @@ func (a *app) comparePick(c *ui.Context, w *workspace, v *filesView, cd *compare
 		case len(inOrder(cd.onlyCur)) == len(sel):
 			target, hashes = cd.other, inOrder(cd.onlyCur)
 		}
-		if target != "" && target != w.Branch {
-			tip = m.CompareCherryPickCheckedOut(w.Branch)
+		// 比较的可能是工作区里的嵌套仓库：看这个仓库自己检出的分支，不是工作区目录的 w.Branch
+		if branch := v.repoBranch(cd.root); target != "" && target != branch {
+			tip = m.CompareCherryPickCheckedOut(branch)
 			target = ""
 		}
 	}
