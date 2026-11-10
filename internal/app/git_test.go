@@ -2646,3 +2646,21 @@ func TestLogPanelOpensOnceWhileScanning(t *testing.T) {
 		t.Fatalf("%d openLog calls queued", n)
 	}
 }
+
+// 输入筛选字的 300ms 里有 git 操作结束（重读日志）：筛选照样生效。
+func TestLogFilterSurvivesReload(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	v := a.filesFor(w)
+	tt := newTester(a.build, 1200, 760)
+	until(t, tt, "repo", func() bool { return v.git.repo != "" })
+	a.openLog(w, "", "")
+	until(t, tt, "log", func() bool { return v.logCur != nil && !v.logCur.log.loading })
+	d := v.logCur
+	d.log.text = "feat"
+	a.applyLogFilter(v, d)
+	a.reloadLog(v, d)
+	until(t, tt, "filter applied", func() bool { return d.log.filter.Text == "feat" })
+}

@@ -35,6 +35,7 @@ type logDoc struct {
 	more      bool         // 还有更早的提交
 	loading   bool
 	gen       int
+	filterGen int // 筛选输入的防抖计数（applyLogFilter）
 	commit    *commitView
 	list      ui.ListState
 	refsOpen  map[string]bool // 左边分支树展开了哪些组："local"、"remote"、"tags"、"remote:<远端>"
@@ -576,11 +577,13 @@ func (a *app) clearLogFilter(v *filesView, d *fileDoc) {
 // applyLogFilter 在输入停顿 300ms 后按新的文字和作者重读。
 func (a *app) applyLogFilter(v *filesView, d *fileDoc) {
 	ld := d.log
+	// gen 加一让在途的读作废；防抖用自己的计数：停顿期间有 git 操作结束（reloadLog 也加 gen）时筛选照样生效
 	ld.gen++
-	gen := ld.gen
+	ld.filterGen++
+	gen := ld.filterGen
 	time.AfterFunc(300*time.Millisecond, func() {
 		a.update(func() {
-			if ld.gen != gen {
+			if ld.filterGen != gen {
 				return
 			}
 			ld.filter.Text, ld.filter.Author = ld.text, ld.author
