@@ -173,3 +173,16 @@ func TestRewriteIgnoresUserConfig(t *testing.T) {
 		t.Fatalf("history: %s", s)
 	}
 }
+
+// 刚 git init、还没有提交的仓库：日志是空的，不报 bad revision 'HEAD'；只选了 HEAD 时也一样。
+func TestLogUnbornHead(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	gitIn(t, dir, "init", "-q", "-b", "main")
+	for _, f := range []LogFilter{{}, {Branches: []string{"HEAD"}}} {
+		list, err := Log(ctx, dir, f, 0, 100)
+		if err != nil || len(list) != 0 {
+			t.Fatalf("%+v: %d %v", f, len(list), err)
+		}
+	}
+}

@@ -42,16 +42,29 @@ func Log(ctx context.Context, dir string, f LogFilter, skip, limit int) ([]Commi
 	if text != "" {
 		args = append(args, "--grep="+text, "--regexp-ignore-case", "--fixed-strings")
 	}
-	if len(f.Branches) > 0 {
-		args = append(args, f.Branches...)
-	} else {
-		args = append(args, "--branches", "--remotes", "--tags", "HEAD")
+	revs := f.Branches
+	if len(revs) == 0 {
+		revs = []string{"--branches", "--remotes", "--tags", "HEAD"}
 	}
-	args = append(args, "--")
-	if f.Path != "" {
-		args = append(args, literal(f.Path)...)
+	logRevs := func(revs []string) ([]byte, error) {
+		a := append(slices.Clone(args), revs...)
+		a = append(a, "--")
+		if f.Path != "" {
+			a = append(a, literal(f.Path)...)
+		}
+		return runRaw(ctx, dir, nil, nil, a...)
 	}
-	out, err := runRaw(ctx, dir, nil, nil, args...)
+	out, err := logRevs(revs)
+	if err != nil && slices.Contains(revs, "HEAD") {
+		// 还没有提交的仓库里 HEAD 解析不了，git 报 bad revision：去掉 HEAD 再读，别的分支照样列出，一个都没有就是空的
+		if _, herr := runRaw(ctx, dir, nil, nil, "rev-parse", "--verify", "--quiet", "HEAD"); herr != nil {
+			revs = slices.DeleteFunc(slices.Clone(revs), func(r string) bool { return r == "HEAD" })
+			if len(revs) == 0 {
+				return nil, nil
+			}
+			out, err = logRevs(revs)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
