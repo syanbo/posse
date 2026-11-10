@@ -491,25 +491,76 @@ func (in *injector) key(ev Event) {
 	}
 }
 
-// 按下和松开带同一段文字，接收方按 unicode 字符串插入一次。键码 0 不记成按住。
+// 按下和松开带同一段文字，接收方按 unicode 字符串插入一次。键码不记成按住。
+// 布局里有的字逐个带上它的键码：iOS 模拟器、iPhone 镜像这类 App 只认键码，键码 0 在它们那里全是 a。
+// 布局里没有的字（中文等）连成段、键码 0 投出。
 func (in *injector) typeUnicode(s string) {
 	if s == "" {
 		return
 	}
-	for _, chunk := range splitUTF16(s, unicodeChunk) {
-		in.postUnicode(0, chunk)
+	var rest []rune
+	flush := func() {
+		if len(rest) == 0 {
+			return
+		}
+		for _, chunk := range splitUTF16(string(rest), unicodeChunk) {
+			in.postUnicodeKey(0, 0, 0, chunk)
+		}
+		rest = rest[:0]
+	}
+	for _, r := range s {
+		st, ok := in.layout[r]
+		if !ok {
+			rest = append(rest, r)
+			continue
+		}
+		flush()
+		in.typeUnicodeKey(st, r)
+	}
+	flush()
+}
+
+// typeUnicodeKey 按下 st 这个键并带上文字 r。要 Shift 时像真键盘一样先按下 Shift、打完松开：
+// 模拟器这类 App 按单独的 Shift 键事件记修饰键，只在字的事件上设标志它们看不到。已经按着左或右 Shift 时不动它。
+func (in *injector) typeUnicodeKey(st keyStroke, r rune) {
+	chars := utf16.Encode([]rune{r})
+	if !st.shift {
+		in.postUnicodeKey(0, st.code, 0, chars)
+		return
+	}
+	shift, _ := HIDToVirtualKey(0xE1)
+	flags := modifierFlags(ModLShift)
+	held := in.heldFlags()
+	temp := held&flagShift == 0
+	if !temp {
+		flags = held & (flagShift | flagLShift | flagRShift)
+	}
+	if temp {
+		in.postKey(shift, true, flags)
+	}
+	in.postUnicodeKey(0, st.code, flags, chars)
+	if temp {
+		in.postKey(shift, false, 0)
 	}
 }
 
 // postUnicode 的 pid 为 0 时投到 HID 层，否则只投给这个进程。
 func (in *injector) postUnicode(pid int32, chars []uint16) bool {
+	return in.postUnicodeKey(pid, 0, 0, chars)
+}
+
+// postUnicodeKey 投出带文字的一次按下、松开，键码和标志给只认键码的接收方。
+func (in *injector) postUnicodeKey(pid int32, code uint16, flags uint64, chars []uint16) bool {
 	if len(chars) == 0 || in.mac.cgKey == nil || in.mac.cgUnicode == nil {
 		return false
 	}
 	for _, down := range []bool{true, false} {
-		ev := in.mac.cgKey(in.source, 0, down)
+		ev := in.mac.cgKey(in.source, code, down)
 		if ev == 0 {
 			return false
+		}
+		if flags != 0 && in.mac.cgSetFlags != nil {
+			in.mac.cgSetFlags(ev, flags)
 		}
 		in.mac.cgUnicode(ev, uintptr(len(chars)), &chars[0])
 		ok := in.post(pid, ev)
@@ -755,11 +806,16 @@ func (m *macAPI) keyLayout() map[rune]keyStroke {
 		kb = uint32(m.lmKbdType())
 	}
 	layout := make(map[rune]keyStroke)
-	fill := func(mod uint32, shift bool) {
+	// 小键盘的键（0x41–0x5C）最后才用：* 和 + 先取到小键盘的话，只认键码的 App 收到的是小键盘键，
+	// 真键盘上打它们是 Shift+8、Shift+=
+	fill := func(mod uint32, shift, keypad bool) {
 		var dead uint32
 		var n uintptr
 		var buf [8]uint16
 		for code := uint16(0); code < 128; code++ {
+			if (code >= 0x41 && code <= 0x5C) != keypad {
+				continue
+			}
 			dead = 0
 			n = 0
 			st := m.ucTranslate(uintptr(ptr), code, ucActionDisplay, mod, kb, ucNoDeadKeys, &dead, uintptr(len(buf)), &n, &buf[0])
@@ -776,8 +832,9 @@ func (m *macAPI) keyLayout() map[rune]keyStroke {
 			layout[r] = keyStroke{code: code, shift: shift}
 		}
 	}
-	fill(0, false)
-	fill(ucShiftState, true)
+	fill(0, false, false)
+	fill(ucShiftState, true, false)
+	fill(0, false, true)
 	if len(layout) == 0 {
 		return nil
 	}
