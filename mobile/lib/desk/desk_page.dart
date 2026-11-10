@@ -412,14 +412,15 @@ class _DeskPageState extends State<DeskPage>
   void _kickSend() {
     _sendTail = _sendTail.then((_) => _drainPackets());
     // 测试里没有确认号，周期重发会让 pumpAndSettle 停不下来。
-    if (_link.needsRetry && deskSupported) _armRetry();
+    // 接收停了（断开、锁屏、切后台）就不会再有确认号，不重发；再开始时 _link.reset() 清掉没确认的
+    if (_link.needsRetry && deskSupported && _up) _armRetry();
   }
 
   void _armRetry() {
     if (_retry != null) return;
     _retry = Timer(const Duration(milliseconds: 100), () {
       _retry = null;
-      if (!mounted) return;
+      if (!mounted || !_up) return;
       if (!_link.needsRetry && !_link.hasFreshMove) return;
       _link.retransmit();
     });
