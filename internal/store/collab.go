@@ -732,6 +732,15 @@ func (s *Store) SharedRooms() ([]Discussion, error) {
 	return collect(s.db, scanDiscussion, `SELECT `+discCols+` FROM discussions WHERE shared=1 AND mirror=0 ORDER BY created_at`)
 }
 
+// PruneInvites 删掉 before 之前就过期、一直没被用过的邀请，返回删了几条。用过的被 collab_requests 引用，不动。
+func (s *Store) PruneInvites(before time.Time) (int64, error) {
+	res, err := s.db.Exec(`DELETE FROM collab_invites WHERE request='' AND expires_at < ?`, ms(before))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // CreateInvite 记下一份邀请：只存凭据哈希，十分钟（按房主时钟）有效，只能用一次。
 func (s *Store) CreateInvite(room, id, secretHash, role string, expires, at time.Time) error {
 	return s.withTx(func(tx *sql.Tx) error {

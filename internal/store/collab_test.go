@@ -482,3 +482,37 @@ func TestSyncCannotTakeOwnAgent(t *testing.T) {
 		}
 	}
 }
+
+// 清理邀请：过期又没用过的删掉；过期但用过的（被申请引用）和没过期的留着。
+func TestPruneInvites(t *testing.T) {
+	s := openTestStore(t)
+	d, _ := newDiscussion(t, s)
+	if err := s.SetShared(d.Key, true, Profile{Name: "Hana"}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	for _, inv := range []struct {
+		id      string
+		expires time.Time
+	}{{"stale", now.Add(-time.Hour)}, {"used", now.Add(-time.Hour)}, {"fresh", now.Add(10 * time.Minute)}} {
+		if err := s.CreateInvite(d.Key, inv.id, "h-"+inv.id, "", inv.expires, now.Add(-2*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.db.Exec(`UPDATE collab_invites SET request='r1' WHERE id='used'`)
+	n, err := s.PruneInvites(now)
+	if err != nil || n != 1 {
+		t.Fatalf("pruned %d, %v", n, err)
+	}
+	var left []string
+	rows, _ := s.db.Query(`SELECT id FROM collab_invites ORDER BY id`)
+	for rows.Next() {
+		var id string
+		rows.Scan(&id)
+		left = append(left, id)
+	}
+	rows.Close()
+	if fmt.Sprint(left) != "[fresh used]" {
+		t.Fatalf("left %v", left)
+	}
+}

@@ -109,7 +109,16 @@ func (d *Daemon) collabStart(ctx context.Context) {
 	d.collabEnsure()
 	go d.collabPushLoop(ctx)
 	go d.pruneAvatars()
+	// 邀请十分钟有效，没人用的过期了就留着没用。多留 inviteKeep：这期间有人再贴它，报的是「已过期」而不是「无效」
+	if n, err := d.store.PruneInvites(time.Now().Add(-inviteKeep)); err != nil {
+		log.Printf("collaboration: prune invites: %v", err)
+	} else if n > 0 {
+		log.Printf("collaboration: removed %d expired invitations", n)
+	}
 }
+
+// inviteKeep 是过期、没用过的邀请还留多久。
+const inviteKeep = 7 * 24 * time.Hour
 
 // collabEnsure 让服务和连接循环和库里一致：有共享的讨论就监听，没有就停；每个加入中的房间有一个连接循环。
 func (d *Daemon) collabEnsure() {
