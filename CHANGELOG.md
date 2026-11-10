@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.30
+
+- 侧栏在工作区下面也列出运行中的普通终端，点一下切过去；已退出的终端和还没恢复的普通终端仍只在标签栏。⌘⇧] / ⌘⇧[ 照侧栏的顺序切换。
+- 讨论：Agent 提问时可以给出选项，点一下就回答；成员可以把一部分工作 @ 给另一个成员（最多转 3 层、一条请求最多 8 轮）；可以让成员写一份讨论摘要，之后加入的成员从摘要读起，右栏显示摘要；连着发给同一成员的几条请求并成一轮回答；在局域网分享时可以邀请只读访客，只能看、不能发言。新功能要房主和成员都更新到这个版本。
+- 修复：Codex 用子 Agent，或 Agent 跑的命令里又启动了 Agent 时，终端被误认成已退出，图标变回普通终端、侧栏里不见了。
+
+### English
+
+- The sidebar now also lists running plain terminals under their workspace, and clicking one switches to it. Exited terminals and plain terminals not yet restored stay in the tab bar only. ⌘⇧] / ⌘⇧[ follow the sidebar order.
+- Discussions: agents can offer choices with a question, and clicking one answers it; members can hand part of their work to another member with @ (up to 3 hops and 8 rounds per request); a member can write a discussion summary that later members read first, shown in the side panel; several requests sent in a row to the same member are answered in one round; when sharing on the local network you can invite read-only guests who can read but not post. The new features need this version on both the host and the members.
+- Fix: when Codex used subagents, or a command an agent ran started another agent, the terminal was taken as exited, its icon turned back into a plain terminal and it vanished from the sidebar.
+
 ## 0.1.29
 
 - 个人资料：在设置里填名字、选头像，讨论里显示你的名字和头像；也可以在讨论人员表里右键自己那行或用 `posse profile set` 修改。加入别人的讨论时，资料会同步给房主（双方都需要更新到这个版本）。
