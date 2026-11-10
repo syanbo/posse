@@ -312,7 +312,16 @@ func ShellArgv(cmd string) []string {
 	// agent 退出后换回的 shell 也走 posse 的 zsh 集成（POSSE_ZDOTDIR 只在 zsh 终端里有），
 	// 在里面手动再敲 claude 照样带 hooks
 	back := "exec " + Quote(sh) + " -l"
-	script := cmd + `; if [ -n "$POSSE_ZDOTDIR" ]; then ZDOTDIR=$POSSE_ZDOTDIR ` + back + "; else " + back + "; fi"
+	return shellScriptArgv(sh, cmd+`; if [ -n "$POSSE_ZDOTDIR" ]; then ZDOTDIR=$POSSE_ZDOTDIR `+back+"; else "+back+"; fi")
+}
+
+// ShellCommand 在交互式登录 shell 里执行 cmd（加载用户的 rc）后退出，退出码就是 cmd 的。cmd 是 POSIX sh 的写法。
+func ShellCommand(cmd string) []string {
+	return shellScriptArgv(UserShell(), cmd)
+}
+
+// shellScriptArgv 让用户的 shell sh 读完自己的配置后执行 POSIX sh 脚本 script：fish、csh 这类读不懂的交给 /bin/sh。
+func shellScriptArgv(sh, script string) []string {
 	switch shellFamily(sh) {
 	case "fish":
 		// 先让 fish 读完自己的配置（PATH、nvm 之类），再把脚本原样交给 /bin/sh：脚本经参数传，不经 fish 的引号规则

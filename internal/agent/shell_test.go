@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"slices"
@@ -57,5 +58,31 @@ func TestShellArgvFamilies(t *testing.T) {
 		if tc.first != tc.sh && !slices.Contains(argv, "-c") {
 			t.Fatalf("%s: argv %q", tc.sh, argv)
 		}
+	}
+}
+
+// 跑技能命令（npx skills）用的 ShellCommand：本机有的 shell 逐个真跑，命令要执行，退出码就是命令的。
+func TestShellCommandRuns(t *testing.T) {
+	for _, sh := range []string{"/bin/zsh", "/bin/bash", "/bin/dash", "/bin/ksh", "/bin/tcsh", "/bin/csh", "/opt/homebrew/bin/fish"} {
+		if _, err := os.Stat(sh); err != nil {
+			continue
+		}
+		t.Run(sh, func(t *testing.T) {
+			t.Setenv("SHELL", sh)
+			t.Setenv("HOME", t.TempDir())
+			argv := ShellCommand(`printf '%s\n' 'it'"'"'s ok'; exit 7`)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			c := exec.CommandContext(ctx, argv[0], argv[1:]...)
+			c.Stdin = strings.NewReader("")
+			out, err := c.CombinedOutput()
+			if !strings.Contains(string(out), "it's ok") {
+				t.Fatalf("argv %q: %s", argv, out)
+			}
+			var ee *exec.ExitError
+			if !errors.As(err, &ee) || ee.ExitCode() != 7 {
+				t.Fatalf("argv %q: exit %v", argv, err)
+			}
+		})
 	}
 }

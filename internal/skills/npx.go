@@ -86,10 +86,12 @@ const listTimeout = 60 * time.Second
 
 // ListSource 在 dir 里起一个交互式登录 shell 跑 ListArgs（窗口进程的 PATH 里通常没有 npx，
 // 要从用户的 shell 配置里拿），解析出技能列表。相对路径的来源按 dir 算。
-func ListSource(ctx context.Context, shell, dir, source string) ([]Listed, error) {
+// shell 把一行 POSIX sh 命令变成在用户 shell 里跑它的参数（agent.ShellCommand：fish、csh 用户交给 /bin/sh）。
+func ListSource(ctx context.Context, shell func(cmd string) []string, dir, source string) ([]Listed, error) {
 	ctx, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, shell, "-l", "-i", "-c", ShellLine(ListArgs(source)))
+	argv := shell(ShellLine(ListArgs(source)))
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = dir
 	// git 要账号密码时不问（没有终端可答，会一直等），直接报错
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "NO_COLOR=1")

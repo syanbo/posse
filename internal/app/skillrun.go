@@ -54,10 +54,11 @@ func (a *app) startSkillRun(m locales.Messages) {
 	r := &a.skillRun
 	r.gen++
 	r.starting, r.err = true, ""
-	sh, ws, line, gen := userShell(), r.ws, r.line, r.gen
+	ws, line, gen := r.ws, r.line, r.gen
 	go func() {
 		var t terminalInfo
-		err := a.call("terminal.create", map[string]any{"workspace": ws, "command": []string{sh, "-l", "-i", "-c", line}}, &t, 10*time.Second)
+		// 命令是 POSIX sh 的写法：fish、csh 用户的 shell 读不懂，经 agent.ShellCommand 交给 /bin/sh
+		err := a.call("terminal.create", map[string]any{"workspace": ws, "command": agent.ShellCommand(line)}, &t, 10*time.Second)
 		a.update(func() {
 			if r.gen != gen {
 				// 等终端建好时对话框已经关了或换了一次：命令照跑，留在标签栏里

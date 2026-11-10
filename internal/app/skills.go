@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/agent"
 	"posse/internal/errtext"
 	"posse/internal/history"
 	"posse/internal/skills"
@@ -1299,7 +1300,7 @@ func (a *app) listInstallSource(w *workspace) {
 		root = homeDir
 	}
 	go func() {
-		list, err := skills.ListSource(context.Background(), userShell(), w.Path, src)
+		list, err := skills.ListSource(context.Background(), agent.ShellCommand, w.Path, src)
 		installed := make([]bool, len(list))
 		for i, l := range list {
 			_, serr := os.Stat(filepath.Join(root, ".agents", "skills", l.Name))
@@ -1321,13 +1322,6 @@ func (a *app) listInstallSource(w *workspace) {
 			}
 		})
 	}()
-}
-
-func userShell() string {
-	if sh := os.Getenv("SHELL"); sh != "" {
-		return sh
-	}
-	return "/bin/zsh"
 }
 
 // skillInstallDialog 收来源、要装的技能和给不给 Claude 用，下面实时显示要跑的命令。
