@@ -249,6 +249,46 @@ void main() {
       model.dispose();
     });
   }
+  testWidgets('tapping an attachment twice downloads it once', (t) async {
+    final rpc = DiscRpc();
+    final pending = Completer<DiscJson>();
+    final base = DiscRpc();
+    rpc.handler = (method, params) async {
+      if (method == 'discussion.attachment.read') return pending.future;
+      final out = await base.call(method, params);
+      if (method == 'discussion.show') {
+        final messages = discList(out['messages']);
+        messages.first['attachments'] = [
+          {'id': 'a1', 'name': 'notes.txt', 'type': 'text/plain', 'size': 4},
+        ];
+      }
+      return out;
+    };
+    final model = DiscModel(rpc);
+    await t.pumpWidget(
+      MaterialApp(
+        home: DiscussionRoom(
+          api: DiscussionApi(model),
+          room: 'room',
+          self: 'self',
+        ),
+      ),
+    );
+    await t.pumpAndSettle();
+    await t.tap(find.text('notes.txt'));
+    await t.pump();
+    await t.tap(find.text('notes.txt'));
+    await t.pump();
+    final reads = rpc.calls.where(
+      (c) => c.method == 'discussion.attachment.read',
+    );
+    expect(reads.length, 1);
+    pending.completeError(RpcException('closed', ''));
+    await t.pumpWidget(const SizedBox());
+    await t.pumpAndSettle();
+    model.dispose();
+  });
+
   testWidgets('old desktop gives upgrade message', (t) async {
     final model = DiscModel(DiscRpc()..old = true);
     await t.pumpWidget(MaterialApp(home: DiscussionsScreen(model: model)));

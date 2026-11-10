@@ -409,7 +409,12 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     }
   }
 
+  /// 正在下载的附件（消息 ID 加附件 ID）：连点只下一份，不叠多个预览
+  final _downloading = <String>{};
+
   Future<void> download(DiscJson m, DiscJson a) async {
+    final key = '${discText(m, 'id')}/${discText(a, 'id')}';
+    if (!_downloading.add(key)) return;
     Directory? dir;
     try {
       final bytes = await widget.api.download(
@@ -454,6 +459,7 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     } catch (e) {
       if (mounted) setState(() => error = e);
     } finally {
+      _downloading.remove(key);
       await dir?.delete(recursive: true);
     }
   }
