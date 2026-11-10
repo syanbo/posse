@@ -5,10 +5,13 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"posse/internal/store"
 )
 
 // 前面的大帧对方还没读完就发描述符：macOS 上 sendmsg 直接报 EMSGSIZE，不会等，sendFile 要自己等对方读走再发。
@@ -99,5 +102,42 @@ func TestHandoffCarriesDiscussionReadiness(t *testing.T) {
 	finish(true)
 	if got.discussionReady() || !got.discussionDelivery() {
 		t.Fatal("adopted turn cannot deliver exactly one next round")
+	}
+}
+
+// 交接过来后对账失败不退出（交来的终端都在这个进程里），普通启动照旧报错。
+func TestReconcileRecordsAfterHandoff(t *testing.T) {
+	home := t.TempDir()
+	st, err := store.Open(filepath.Join(home, "posse.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Close() // 之后每一步都报错
+	if err := reconcileRecords(st, []string{"t1"}, true); err != nil {
+		t.Fatalf("handoff: %v", err)
+	}
+	if err := reconcileRecords(st, nil, false); err == nil {
+		t.Fatal("normal start must still fail")
+	}
+
+	// 交接过来的终端接着跑：对账失败也不碰它
+	d, w := newTestDaemon(t)
+	s, err := d.startTerminal(w, []string{"/bin/cat"}, "", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileRecords(st, []string{s.ID}, true); err != nil {
+		t.Fatal(err)
+	}
+	d.mu.Lock()
+	_, ok := d.terms[s.ID]
+	d.mu.Unlock()
+	select {
+	case <-s.Exited():
+		ok = false
+	default:
+	}
+	if !ok {
+		t.Fatal("adopted terminal gone")
 	}
 }

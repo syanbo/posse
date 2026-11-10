@@ -365,15 +365,7 @@ func Run(ctx context.Context, cfg Config) error {
 		lockMu.Unlock()
 	}()
 
-	if n, err := st.MarkRunningLost(time.Now(), keep); err != nil {
-		return err
-	} else if n > 0 {
-		log.Printf("%d terminals from the previous daemon are waiting to be restored", n)
-	}
-	if err := st.PruneTerminals(); err != nil {
-		return err
-	}
-	if err := st.MarkRunningTasksLost(time.Now(), keep); err != nil {
+	if err := reconcileRecords(st, keep, in != nil); err != nil {
 		return err
 	}
 	// 讨论的轮次对账：普通启动马上做（进行中的轮次中断、排队的暂停等用户确认）；交接过来的等拿到锁再做，
@@ -464,6 +456,37 @@ func Run(ctx context.Context, cfg Config) error {
 	d.closeAll()
 	d.closeHistory()
 	return err
+}
+
+// reconcileRecords 把上一个常驻进程留下、这里没有接着跑的终端和任务记为 lost，清掉已结束的终端记录。
+// 交接过来时（handoff）旧进程已经认定交接成功、终端都在这个进程里：对账失败只记日志接着服务，
+// 没对上的记录留到下次启动再对；退出的话交过来的终端全部丢失。普通启动还没有活着的终端，照旧报错退出。
+func reconcileRecords(st *store.Store, keep []string, handoff bool) error {
+	steps := []struct {
+		name string
+		run  func() error
+	}{
+		{"mark running terminals lost", func() error {
+			n, err := st.MarkRunningLost(time.Now(), keep)
+			if err == nil && n > 0 {
+				log.Printf("%d terminals from the previous daemon are waiting to be restored", n)
+			}
+			return err
+		}},
+		{"prune ended terminals", st.PruneTerminals},
+		{"mark running tasks lost", func() error { return st.MarkRunningTasksLost(time.Now(), keep) }},
+	}
+	for _, step := range steps {
+		err := step.run()
+		if err == nil {
+			continue
+		}
+		if !handoff {
+			return err
+		}
+		log.Printf("after handoff: %s: %v; keeping the adopted terminals, these records are reconciled on the next start", step.name, err)
+	}
+	return nil
 }
 
 // lock 独占 path 上的文件锁，保证一个 home 只有一个常驻进程。
