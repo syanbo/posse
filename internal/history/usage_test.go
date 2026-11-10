@@ -65,6 +65,11 @@ func TestUsageClaude(t *testing.T) {
 		// Claude 启用技能会注入说明，读 SKILL.md（Read、cat、sed）不算
 		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Write","input":{"file_path":"/t/a_test.go","content":"skills/archify/SKILL.md"}},{"type":"tool_use","name":"Bash","input":{"command":"grep -o skills/x/SKILL.md f"}}]}}`+"\n",
 		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/Users/x/.agents/skills/unslop/SKILL.md"}},{"type":"tool_use","name":"Bash","input":{"command":"sed -n 1,80p ~/.agents/skills/orchestration/SKILL.md"}}]}}`+"\n",
+		// 后台跑的内置技能不注入说明：用户敲斜杠命令记成 local_command，模型调 Skill 看工具结果
+		`{"type":"system","subtype":"local_command","content":"<local-command-stdout>Running in the background as @code-review</local-command-stdout>\n<forked-skill-launch>{\"agentId\":\"a1\",\"skillName\":\"code-review\",\"description\":\"/code-review x\"}</forked-skill-launch>"}`+"\n",
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t9","content":"Skill \"code-review\" launched (forked execution, running in the background)."}]},"toolUseResult":{"success":true,"commandName":"code-review","status":"forked","background":true}}`+"\n",
+		// 不在后台跑的技能照旧认注入的说明，工具结果不重复算
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t8","content":"Launching skill: lark-im"}]},"toolUseResult":{"success":true,"commandName":"lark-im"}}`+"\n",
 	)
 	s := NewUsageScanner("claude", path)
 	u, err := s.Scan()
@@ -72,7 +77,7 @@ func TestUsageClaude(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := Usage{
-		Skills: []UsageItem{{"computer-use", 1}, {"find-skills", 1}},
+		Skills: []UsageItem{{"code-review", 2}, {"computer-use", 1}, {"find-skills", 1}},
 		MCP: []MCPUsage{
 			{Server: "codex-cu", Count: 2, Tools: []UsageItem{{"js", 2}}},
 			{Server: "claude_ai_Claude_Docs", Count: 1, Tools: []UsageItem{{"batch", 1}}},
@@ -84,11 +89,19 @@ func TestUsageClaude(t *testing.T) {
 
 	// 写到一半的行留到下次，写完后增量读到
 	writeLines(t, path, `{"type":"user","message":{"content":"Base directory for this skill: /x/skills/computer-use"}}`)
-	if u, _ = s.Scan(); u.Skills[0] != (UsageItem{"computer-use", 1}) {
+	skillCount := func(u Usage, name string) int {
+		for _, it := range u.Skills {
+			if it.Name == name {
+				return it.Count
+			}
+		}
+		return 0
+	}
+	if u, _ = s.Scan(); skillCount(u, "computer-use") != 1 {
 		t.Fatalf("half line counted: %+v", u.Skills)
 	}
 	writeLines(t, path, "\n")
-	if u, _ = s.Scan(); u.Skills[0] != (UsageItem{"computer-use", 2}) {
+	if u, _ = s.Scan(); skillCount(u, "computer-use") != 2 {
 		t.Fatalf("after newline: %+v", u.Skills)
 	}
 

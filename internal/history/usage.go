@@ -73,6 +73,7 @@ const (
 //
 // 各家记录方式：
 //   - claude：用技能（模型调 Skill 或用户输入斜杠命令）都会注入一段 "Base directory for this skill: <目录>"；
+//     在后台子 agent 里跑的技能（code-review 这类内置技能）不注入，认 forked 的启动记录（forkedSlash、forkedTool）；
 //     MCP 工具名是 mcp__<服务>__<工具>。
 //   - codex：用户点名的技能注入成 "<skill><name>…</name>"；MCP 调用是 McpToolCall 条目，同一次调用会记多遍，按 id 去重；
 //     执行的命令是 CommandExecution 条目，parsed_cmd 标出了读的文件。
@@ -170,6 +171,7 @@ func (s *UsageScanner) Scan() (Usage, error) {
 // usageMarkers 先粗筛，只有可能相关的行才解析 JSON。
 var usageMarkers = [][]byte{
 	[]byte("Base directory for this skill"), []byte("mcp__"), []byte("<skill>"),
+	[]byte("forked-skill-launch"), []byte(`"status":"forked"`), // claude 在后台跑的技能
 	[]byte("McpToolCall"), []byte("use_tool"), []byte("SKILL.md"), []byte("CallDynamicTool"),
 	[]byte(`"Bash"`), []byte(`"Shell"`), []byte("run_terminal_command"), []byte("exec_command"),
 	[]byte(`"shell"`), []byte("CommandExecution"),
@@ -245,15 +247,26 @@ func (s *UsageScanner) cursorLine(b []byte) {
 
 func (s *UsageScanner) claudeLine(b []byte) {
 	var r struct {
-		Type    string `json:"type"`
+		Type    string          `json:"type"`
+		Subtype string          `json:"subtype"`
+		Content json.RawMessage `json:"content"` // 只有 system 记录在这里放字符串
 		Message struct {
 			Content json.RawMessage `json:"content"`
 		} `json:"message"`
+		ToolUseResult json.RawMessage `json:"toolUseResult"`
 	}
-	// api-request-blob 这类记录把发给模型的消息再存一遍（不带时间），只认 user、assistant
-	if json.Unmarshal(b, &r) != nil || r.Type != "user" && r.Type != "assistant" {
+	if json.Unmarshal(b, &r) != nil {
 		return
 	}
+	if r.Type == "system" && r.Subtype == "local_command" {
+		s.forkedSlash(r.Content)
+		return
+	}
+	// api-request-blob 这类记录把发给模型的消息再存一遍（不带时间），只认 user、assistant
+	if r.Type != "user" && r.Type != "assistant" {
+		return
+	}
+	s.forkedTool(r.ToolUseResult)
 	blocks, _ := contentBlocks(r.Message.Content)
 	for _, bl := range blocks {
 		switch bl.Type {
@@ -286,6 +299,40 @@ func (s *UsageScanner) skillBase(text string) {
 	dir, _, _ := strings.Cut(strings.TrimSpace(rest), "\n")
 	if name := filepath.Base(strings.TrimSpace(dir)); name != "" && name != "." && name != "/" {
 		s.addSkill(name)
+	}
+}
+
+// forkedSlash 认出用户敲斜杠命令启动的后台技能（code-review 这类内置技能在子 agent 里跑，不注入说明），
+// 记成一条 local_command：<forked-skill-launch>{"skillName":…}</forked-skill-launch>。
+func (s *UsageScanner) forkedSlash(raw json.RawMessage) {
+	var content string
+	if json.Unmarshal(raw, &content) != nil {
+		return
+	}
+	_, rest, ok := strings.Cut(content, "<forked-skill-launch>")
+	if !ok {
+		return
+	}
+	body, _, _ := strings.Cut(rest, "</forked-skill-launch>")
+	var l struct {
+		SkillName string `json:"skillName"`
+	}
+	if json.Unmarshal([]byte(body), &l) == nil && l.SkillName != "" {
+		s.addSkill(l.SkillName)
+	}
+}
+
+// forkedTool 认出模型调 Skill 启动的后台技能：工具结果的 toolUseResult 是 {"status":"forked","commandName":…}。
+func (s *UsageScanner) forkedTool(raw json.RawMessage) {
+	if len(raw) == 0 || raw[0] != '{' {
+		return
+	}
+	var t struct {
+		Status      string `json:"status"`
+		CommandName string `json:"commandName"`
+	}
+	if json.Unmarshal(raw, &t) == nil && t.Status == "forked" && t.CommandName != "" {
+		s.addSkill(t.CommandName)
 	}
 }
 

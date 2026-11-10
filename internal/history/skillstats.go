@@ -28,7 +28,7 @@ type SkillStat struct {
 }
 
 // skillStatsVersion 是缓存的格式和认技能的规则版本，变了整份重算。
-const skillStatsVersion = 2
+const skillStatsVersion = 3
 
 type skillCache struct {
 	Version int                       `json:"version"`
