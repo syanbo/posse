@@ -566,7 +566,8 @@ func (e *engine) onSample(stream, sample uintptr) {
 	if img == 0 {
 		return
 	}
-	session := e.holdEncoder()
+	// 入口那次核对之后可能已经换了流：拿编码器时在 encMu 里再核对一次
+	session := e.holdEncoderFor(stream)
 	if session == 0 {
 		return
 	}
@@ -583,6 +584,19 @@ func (e *engine) holdEncoder() uintptr {
 	if e.enc != 0 {
 		e.mac.cfRetain(e.enc)
 	}
+	return e.enc
+}
+
+// holdEncoderFor 和 holdEncoder 一样，只在 stream 还是现在的流时才给。换流时先清 live（stopStream）、
+// 再在 encMu 里换编码器（resizeLocked），所以在 encMu 里看到 live 还是 stream，拿到的就是给这个流的编码器；
+// 看到不是了就不给，旧尺寸的样本不会编进新会话。
+func (e *engine) holdEncoderFor(stream uintptr) uintptr {
+	e.encMu.Lock()
+	defer e.encMu.Unlock()
+	if e.enc == 0 || e.live.Load() != stream {
+		return 0
+	}
+	e.mac.cfRetain(e.enc)
 	return e.enc
 }
 

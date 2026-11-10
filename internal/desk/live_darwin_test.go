@@ -21,3 +21,43 @@ func TestOldStreamCallbacksDropped(t *testing.T) {
 	defer func() { active = prev }()
 	streamDidStop(0, 0, objc.ID(0x7000), 0)
 }
+
+// 旧流的样本已经过了入口的核对、正在取像素时，停流、换编码器、开新流：它不能编进新会话（照 Codex 的复现）。
+func TestAdmittedOldSampleNotEncodedOnNewSession(t *testing.T) {
+	const oldStream, newStream, oldEncoder, newEncoder, oldImage = 1, 2, 11, 22, 111
+	entered := make(chan struct{})
+	resume := make(chan struct{})
+	done := make(chan struct{})
+	var encodedOn uintptr
+	e := &engine{enc: oldEncoder, pend: map[uint64]*stamp{}}
+	e.mac = &macAPI{
+		sampleImage: func(uintptr) uintptr {
+			close(entered)
+			<-resume
+			return oldImage
+		},
+		cfRetain:  func(p uintptr) uintptr { return p },
+		cfRelease: func(uintptr) {},
+		vtEncode: func(session, img uintptr, _, _ cmTime, _, _ uintptr, _ *uint32) int32 {
+			encodedOn = session
+			return 0
+		},
+	}
+	e.live.Store(oldStream)
+	go func() {
+		e.onSample(oldStream, 100)
+		close(done)
+	}()
+	<-entered
+	// stopStream 清掉旧流，resizeLocked 换编码器，openStream 发布新流
+	e.live.Store(0)
+	e.encMu.Lock()
+	e.enc = newEncoder
+	e.encMu.Unlock()
+	e.live.Store(newStream)
+	close(resume)
+	<-done
+	if encodedOn == newEncoder {
+		t.Fatalf("old stream sample encoded on the new session %d", encodedOn)
+	}
+}
