@@ -37,6 +37,8 @@ type engine struct {
 	stream   objc.ID
 	block    objc.Block
 	observer objc.ID
+	// live 是正在用的流（stream 的值），样本和停止的回调按它认：旧流排空队列在后台做，停下之后还可能交来样本、报停止
+	live atomic.Uintptr
 	// parts 是 stream 用着的过滤器、输出对象（也是它的 delegate，SCStream 只弱引用它）和样本队列：
 	// 流确认停下、放掉之后才放，换屏、换窗口、缩放时不再每次漏一份
 	parts streamParts
@@ -349,6 +351,7 @@ func (e *engine) openStream(filter objc.ID) error {
 	}
 	e.stream = stream
 	e.parts = parts
+	e.live.Store(uintptr(stream))
 	started := make(chan error, 1)
 	block := objc.NewBlock(func(_ objc.Block, err objc.ID) {
 		if err == 0 {
@@ -553,8 +556,10 @@ func (e *engine) applyBitrate(session uintptr, bits uint32) {
 	})
 }
 
-func (e *engine) onSample(sample uintptr) {
-	if e.stopping.Load() || e.dropping.Load() {
+// onSample 收一个样本。stream 是交来样本的流：不是现在这个流的（换屏、缩放后旧流队列里还没跑完的）不编，
+// 旧尺寸的帧送进新编码器会编坏。
+func (e *engine) onSample(stream, sample uintptr) {
+	if e.stopping.Load() || e.dropping.Load() || stream != e.live.Load() {
 		return
 	}
 	img := e.mac.sampleImage(sample)
@@ -1571,15 +1576,17 @@ func (e *engine) stopStream() {
 		return
 	}
 	e.stream = 0
+	e.live.Store(0)
 	e.dropping.Store(true)
 	defer e.dropping.Store(false)
 	parts := e.parts
 	e.parts = streamParts{}
 	done := make(chan struct{})
-	var stopErr string
+	// 回调带着 NSError 是没停成（SCStream.h）：流可能还在往队列里交样本。按有没有错误对象判断，描述只用来记日志（可能是空的）
+	failed, stopErr := false, ""
 	block := objc.NewBlock(func(_ objc.Block, err objc.ID) {
-		// 回调带着 NSError 是没停成（SCStream.h）：流可能还在往队列里交样本
 		if err != 0 {
+			failed = true
 			stopErr = e.mac.goString(e.mac.init(err, e.mac.sel("localizedDescription")))
 		}
 		close(done)
@@ -1595,20 +1602,21 @@ func (e *engine) stopStream() {
 	}
 	block.Release()
 	e.mac.release(stream, e.mac.sel("release"))
-	if stopErr != "" {
+	if failed {
 		// 没确认停下：和超时一样，流用着的东西留着
 		e.logf("stop capture: %s", stopErr)
 		return
 	}
-	// 排空样本队列要等已经进了回调的样本编完；编码器排满、父进程不读管道时会一直等，不拿着 streamMu 等
+	// 排空样本队列要等已经进了回调的样本编完；编码器排满、父进程不读管道时会一直等，不拿着 streamMu 等。
+	// 这期间旧流的样本、停止回调按 live 认出来丢掉（onSample、streamDidStop），不会送进接着开的新流
 	go e.mac.releaseParts(parts)
 }
 
-func streamDidOutput(_ objc.ID, _ objc.SEL, _ objc.ID, sample unsafe.Pointer, typ int) {
+func streamDidOutput(_ objc.ID, _ objc.SEL, stream objc.ID, sample unsafe.Pointer, typ int) {
 	if typ != 0 || sample == nil || active == nil {
 		return
 	}
-	active.onSample(uintptr(sample))
+	active.onSample(uintptr(stream), uintptr(sample))
 }
 
 func screenLocked(_ objc.ID, _ objc.SEL, _ objc.ID) {
@@ -1631,11 +1639,12 @@ func displayReconfigured(_ uint32, flags uint32, _ uintptr) {
 	go active.onDisplaysChanged()
 }
 
-func streamDidStop(_ objc.ID, _ objc.SEL, _ objc.ID, nserr objc.ID) {
+func streamDidStop(_ objc.ID, _ objc.SEL, stream objc.ID, nserr objc.ID) {
 	if active == nil {
 		return
 	}
-	if active.stopping.Load() || active.dropping.Load() {
+	// 已经换下来的旧流迟到的停止：不是现在这个流停了，不回整屏、不结束
+	if active.stopping.Load() || active.dropping.Load() || uintptr(stream) != active.live.Load() {
 		return
 	}
 	msg := "capture stopped"
@@ -1647,7 +1656,7 @@ func streamDidStop(_ objc.ID, _ objc.SEL, _ objc.ID, nserr objc.ID) {
 	// 只看的窗口关掉时，系统不等每秒的检查就先停掉采集（找不到要捕获的窗口）：回到整块屏，不结束
 	if active.watching().ID != 0 {
 		active.logf("%s", msg)
-		go active.windowStreamStopped()
+		go active.windowStreamStopped(stream)
 		return
 	}
 	// 用户在菜单栏停了录屏：正常退出，这次观看结束。别的原因带着错误退出，常驻进程重新拉起子进程

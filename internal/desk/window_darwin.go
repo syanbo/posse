@@ -326,14 +326,14 @@ func (e *engine) rebuildWindowLocked(id uint32, pick bool) error {
 }
 
 // windowStreamStopped 是只看窗口时系统停掉了采集（多半是窗口关了）：这个流已经停了，不用再停，放掉后回到整块屏。
-func (e *engine) windowStreamStopped() {
+// stream 是报停止的那个流：拿到锁时已经换成别的流（手机刚切了屏、窗口）就不动。
+func (e *engine) windowStreamStopped(stream objc.ID) {
 	e.streamMu.Lock()
 	var err error
-	if w := e.watching(); w.ID != 0 && !e.stopping.Load() {
-		if e.stream != 0 {
-			e.mac.release(e.stream, e.mac.sel("release"))
-			e.stream = 0
-		}
+	if w := e.watching(); w.ID != 0 && !e.stopping.Load() && e.stream == stream {
+		e.live.Store(0)
+		e.mac.release(e.stream, e.mac.sel("release"))
+		e.stream = 0
 		// 这是从输出对象自己的 didStopWithError 回调过来的，它可能还在那个回调里：不放，留着（只在系统停掉窗口采集时漏一份）
 		e.parts = streamParts{}
 		err = e.windowGoneLocked(w.ID)
