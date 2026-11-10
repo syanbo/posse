@@ -885,9 +885,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesSaveToAlbum => '存到相册';
 
   @override
-  String filesSaveToAlbumFailed(String error) {
-    return '没存进相册：$error';
-  }
+  String get filesSaveToAlbumFailed => '没存进相册，稍后再试';
 
   @override
   String get filesSaveToAlbumNote => '下载到手机，放进相册的「Posse」相簿';
@@ -896,9 +894,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesSaveToDownloads => '存到下载';
 
   @override
-  String filesSaveToDownloadsFailed(String error) {
-    return '没存进下载目录：$error';
-  }
+  String get filesSaveToDownloadsFailed => '没存进下载目录，稍后再试';
 
   @override
   String get filesSaveToDownloadsNote => '下载到手机，放进「下载/Posse」，文件管理里能找到';
@@ -1891,9 +1887,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateButton => '更新';
 
   @override
-  String updateCantInstall(String detail) {
-    return '打不开安装：$detail';
-  }
+  String get updateCantInstall => '打不开安装，稍后再试';
 
   @override
   String updateCurrent(String version, String build) {

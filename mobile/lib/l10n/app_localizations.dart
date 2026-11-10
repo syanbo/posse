@@ -1634,11 +1634,11 @@ abstract class AppLocalizations {
   /// **'Save to Photos'**
   String get filesSaveToAlbum;
 
-  /// Save: error when saving to the photo library failed. {error} is the system’s message.
+  /// Save: error when saving to the photo library failed for a reason other than permission or space.
   ///
   /// In en, this message translates to:
-  /// **'Couldn’t save to Photos: {error}'**
-  String filesSaveToAlbumFailed(String error);
+  /// **'Couldn’t save to Photos. Try again later.'**
+  String get filesSaveToAlbumFailed;
 
   /// Save sheet: subtitle of Save to Photos.
   ///
@@ -1652,11 +1652,11 @@ abstract class AppLocalizations {
   /// **'Save to Downloads'**
   String get filesSaveToDownloads;
 
-  /// Save (Android): error when saving to Downloads failed. {error} is the system’s message.
+  /// Save (Android): error when saving to Downloads failed for a reason other than permission.
   ///
   /// In en, this message translates to:
-  /// **'Couldn’t save to Downloads: {error}'**
-  String filesSaveToDownloadsFailed(String error);
+  /// **'Couldn’t save to Downloads. Try again later.'**
+  String get filesSaveToDownloadsFailed;
 
   /// Save sheet (Android): subtitle of Save to Downloads.
   ///
@@ -3368,11 +3368,11 @@ abstract class AppLocalizations {
   /// **'Update'**
   String get updateButton;
 
-  /// Update sheet (Android): error when the system installer can’t be opened. {detail} is the reason the system gave, shown as-is.
+  /// Update sheet (Android): error when the system installer can’t be opened.
   ///
   /// In en, this message translates to:
-  /// **'Can’t open the installer: {detail}'**
-  String updateCantInstall(String detail);
+  /// **'Can’t open the installer. Try again later.'**
+  String get updateCantInstall;
 
   /// Update sheet: the installed version.
   ///

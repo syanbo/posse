@@ -935,9 +935,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesSaveToAlbum => 'Save to Photos';
 
   @override
-  String filesSaveToAlbumFailed(String error) {
-    return 'Couldn’t save to Photos: $error';
-  }
+  String get filesSaveToAlbumFailed =>
+      'Couldn’t save to Photos. Try again later.';
 
   @override
   String get filesSaveToAlbumNote =>
@@ -947,9 +946,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesSaveToDownloads => 'Save to Downloads';
 
   @override
-  String filesSaveToDownloadsFailed(String error) {
-    return 'Couldn’t save to Downloads: $error';
-  }
+  String get filesSaveToDownloadsFailed =>
+      'Couldn’t save to Downloads. Try again later.';
 
   @override
   String get filesSaveToDownloadsNote =>
@@ -1993,9 +1991,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateButton => 'Update';
 
   @override
-  String updateCantInstall(String detail) {
-    return 'Can’t open the installer: $detail';
-  }
+  String get updateCantInstall => 'Can’t open the installer. Try again later.';
 
   @override
   String updateCurrent(String version, String build) {

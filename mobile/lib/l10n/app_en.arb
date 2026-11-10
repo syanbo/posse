@@ -1255,14 +1255,9 @@
   "@filesSaveToAlbum": {
     "description": "Save sheet and viewer: action that saves an image or video to the photo library."
   },
-  "filesSaveToAlbumFailed": "Couldn’t save to Photos: {error}",
+  "filesSaveToAlbumFailed": "Couldn’t save to Photos. Try again later.",
   "@filesSaveToAlbumFailed": {
-    "description": "Save: error when saving to the photo library failed. {error} is the system’s message.",
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
+    "description": "Save: error when saving to the photo library failed for a reason other than permission or space."
   },
   "filesSaveToAlbumNote": "Download to the phone and put it in the “Posse” album in Photos",
   "@filesSaveToAlbumNote": {
@@ -1272,14 +1267,9 @@
   "@filesSaveToDownloads": {
     "description": "Save sheet and viewer (Android): action that saves a file to Downloads/Posse."
   },
-  "filesSaveToDownloadsFailed": "Couldn’t save to Downloads: {error}",
+  "filesSaveToDownloadsFailed": "Couldn’t save to Downloads. Try again later.",
   "@filesSaveToDownloadsFailed": {
-    "description": "Save (Android): error when saving to Downloads failed. {error} is the system’s message.",
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
+    "description": "Save (Android): error when saving to Downloads failed for a reason other than permission."
   },
   "filesSaveToDownloadsNote": "Download to the phone and put it in Downloads/Posse, where file managers can find it",
   "@filesSaveToDownloadsNote": {
@@ -2646,14 +2636,9 @@
   "@updateButton": {
     "description": "Update sheet: install button."
   },
-  "updateCantInstall": "Can’t open the installer: {detail}",
+  "updateCantInstall": "Can’t open the installer. Try again later.",
   "@updateCantInstall": {
-    "description": "Update sheet (Android): error when the system installer can’t be opened. {detail} is the reason the system gave, shown as-is.",
-    "placeholders": {
-      "detail": {
-        "type": "String"
-      }
-    }
+    "description": "Update sheet (Android): error when the system installer can’t be opened."
   },
   "updateCurrent": "Current {version} ({build})",
   "@updateCurrent": {

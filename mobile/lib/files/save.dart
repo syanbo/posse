@@ -143,12 +143,16 @@ Future<void> saveToPhone(
           SnackBar(content: Text(l.filesSavedToDownloads(saved ?? ''))),
         );
       } on PlatformException catch (e) {
+        // 系统给的原文是英文，界面只写界面语言的句子，原文留在日志里排查
+        if (e.code != 'denied') {
+          debugPrint('save to Downloads: ${e.code} ${e.message}');
+        }
         messenger.showSnackBar(
           SnackBar(
             content: Text(
               e.code == 'denied'
                   ? l.filesNoStorageAccess
-                  : l.filesSaveToDownloadsFailed(e.message ?? e.code),
+                  : l.filesSaveToDownloadsFailed,
             ),
           ),
         );
@@ -159,14 +163,13 @@ Future<void> saveToPhone(
       ShareParams(files: [XFile(named.path)], sharePositionOrigin: origin),
     );
   } on GalException catch (e) {
+    debugPrint('save to Photos: ${e.type.code} ${e.platformException.message}');
     messenger.showSnackBar(
       SnackBar(
         content: Text(switch (e.type) {
           GalExceptionType.accessDenied => l.filesNoAlbumAccess,
           GalExceptionType.notEnoughSpace => l.filesNoSpace,
-          _ => l.filesSaveToAlbumFailed(
-            e.platformException.message ?? e.type.code,
-          ),
+          _ => l.filesSaveToAlbumFailed,
         }),
       ),
     );
