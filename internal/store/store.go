@@ -449,6 +449,16 @@ func (s *Store) EndTerminal(id, state string, code *int, at time.Time) error {
 	return err
 }
 
+// ExitTerminalIfRunning 把还记着 running 的终端记为已退出，报告改没改（已经记过退出、lost 的不动）。
+func (s *Store) ExitTerminalIfRunning(id string, code int, at time.Time) (bool, error) {
+	res, err := s.db.Exec(`UPDATE terminals SET state='exited', exit_code=?, ended_at=? WHERE id=? AND state='running'`, code, ms(at), id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
 // MarkRunningLost 在常驻进程启动时调用：上一个进程托管的终端都已随之结束，keep 里的是交接过来的、还在运行。
 func (s *Store) MarkRunningLost(at time.Time, keep []string) (int64, error) {
 	q, args := notIn("id", keep)

@@ -365,6 +365,9 @@ func Run(ctx context.Context, cfg Config) error {
 		lockMu.Unlock()
 	}()
 
+	if in != nil {
+		d.recordEndedAdopted(in.batch.Terms)
+	}
 	if err := reconcileRecords(st, keep, in != nil); err != nil {
 		return err
 	}

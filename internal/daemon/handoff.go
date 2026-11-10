@@ -477,6 +477,25 @@ func (d *Daemon) adopt(in *incoming) error {
 	return nil
 }
 
+// recordEndedAdopted 补记交接前已经退出的终端：旧进程等 resumeSettle 才记退出（留给关机时的恢复），
+// 等到之前就交接出去、退出了，这些终端在库里还是 running，不补记会被 MarkRunningLost 记成 lost，
+// 列表里既有退出的它又有一个等着恢复的它，下次启动被「恢复」成新 shell。
+func (d *Daemon) recordEndedAdopted(terms []handoffTerm) {
+	for _, ht := range terms {
+		if !ht.Term.Ended {
+			continue
+		}
+		changed, err := d.store.ExitTerminalIfRunning(ht.Term.ID, ht.Term.ExitCode, time.Now())
+		if err != nil {
+			log.Printf("after handoff: terminal %s: record exit: %v", ht.Term.ID, err)
+			continue
+		}
+		if changed {
+			d.dropChatFolder(ht.Term.ID, ht.Term.Dir)
+		}
+	}
+}
+
 func (in *incoming) ids() []string {
 	var ids []string
 	for _, t := range in.batch.Terms {

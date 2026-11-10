@@ -141,3 +141,38 @@ func TestReconcileRecordsAfterHandoff(t *testing.T) {
 		t.Fatal("adopted terminal gone")
 	}
 }
+
+// 交接前几秒刚退出的终端（旧进程还在等 resumeSettle 才记退出）：新进程记成已退出，不当成等着恢复的 lost。
+func TestHandoffRecordsRecentExit(t *testing.T) {
+	defer func(v time.Duration) { resumeSettle = v }(resumeSettle)
+	resumeSettle = time.Hour // 旧进程的记录还没来得及写
+	d, w := newTestDaemon(t)
+	s, err := d.startTerminal(w, []string{"/bin/sh", "-c", "exit 3"}, "", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-s.Exited():
+	case <-time.After(5 * time.Second):
+		t.Fatal("terminal did not exit")
+	}
+	rec, _, err := s.Pause()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rec.Ended {
+		t.Fatal("exited terminal not exported as ended")
+	}
+	in := &incoming{batch: handoffBatch{Version: handoffVersion, Terms: []handoffTerm{{Term: rec}}}}
+	d.recordEndedAdopted(in.batch.Terms)
+	if err := reconcileRecords(d.store, in.ids(), true); err != nil {
+		t.Fatal(err)
+	}
+	lost, err := d.store.LostTerminals(w.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lost) != 0 {
+		t.Fatalf("exited terminal recorded as lost: %+v", lost)
+	}
+}
