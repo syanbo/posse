@@ -773,7 +773,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 	m := L(c)
 	targets, picked := v.commitTargets()
 	label := m.GitCommitFiles(picked)
-	tip := a.withKey(m.GitCommitSelectedTip(), "commit")
+	tip := a.withKey(m.GitCommitSelectedTip(), "sendMessage")
 	whole := ""
 	if len(targets) == 1 {
 		whole = targets[0].g.wholeCommit()
@@ -781,13 +781,13 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 	switch whole {
 	case "merge":
 		label = m.GitCommitMergeResult()
-		tip = a.withKey(m.GitWholeCommitTip(m.GitMerge()), "commit")
+		tip = a.withKey(m.GitWholeCommitTip(m.GitMerge()), "sendMessage")
 	case "cherry-pick":
 		label = m.GitCommitPickResult()
-		tip = a.withKey(m.GitWholeCommitTip("Cherry-pick"), "commit")
+		tip = a.withKey(m.GitWholeCommitTip("Cherry-pick"), "sendMessage")
 	case "revert":
 		label = m.GitCommitRevertResult()
-		tip = a.withKey(m.GitWholeCommitTip(m.GitRevert()), "commit")
+		tip = a.withKey(m.GitWholeCommitTip(m.GitRevert()), "sendMessage")
 	}
 	if len(targets) > 1 {
 		label = m.GitCommitFilesInRepos(picked, len(targets))
@@ -827,7 +827,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 			}
 			if busy || len(targets) == 0 || strings.TrimSpace(ch.message) == "" || ch.amend && !oneRepo {
 				btn.Disabled(true)
-			} else if btn.Clicked() || msg.Shortcut(ui.Cmd, ui.KeyEnter) {
+			} else if btn.Clicked() || a.pressedIn(msg, "sendMessage") {
 				a.commit(m, v)
 			}
 		})
