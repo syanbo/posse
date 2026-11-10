@@ -123,6 +123,8 @@ func (s *Server) Close() {
 	if srv != nil {
 		srv.Close()
 	}
+	var wg sync.WaitGroup
+	var slow []wire
 	for _, c := range conns {
 		// QUIC 连接当场关：后面关 Transport 只在本地销毁连接、不通知手机；交接、重启时新进程紧接着
 		// 听同一个端口，手机也收不到端口不可达，要等测延迟连续超时（十几秒）才发现断了
@@ -130,10 +132,30 @@ func (s *Server) Close() {
 			q.c.CloseNow()
 			continue
 		}
-		c.ws.Close(websocket.StatusGoingAway, "host shutting down")
+		// WebSocket 的关闭握手要等手机回一帧，断了网的手机不回，一条就要等 5 秒：一起关，限时等
+		slow = append(slow, c.ws)
+		wg.Go(func() { c.ws.Close(websocket.StatusGoingAway, "host shutting down") })
+	}
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(closeWait):
+		for _, w := range slow {
+			if n, ok := w.(interface{ CloseNow() error }); ok {
+				n.CloseNow()
+			}
+		}
 	}
 	s.closeQUIC()
 }
+
+// closeWait 是退出时等手机回关闭握手的时间：连着的手机（局域网、经中转）几十到几百毫秒就回，
+// 过了还没回的是断了网的，不再等（常驻进程退出、交接都在等这一步）
+var closeWait = time.Second
 
 // Pair 返回配对码（必要时开始监听）。rotate 时作废还没用过的旧码。
 // addr 为空时自动选 Tailscale 或局域网地址，写法见 ResolveEndpoint。
