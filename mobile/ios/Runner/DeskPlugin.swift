@@ -132,28 +132,32 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
       result(FlutterError(code: "bad_args", message: "bad key length", details: nil))
       return
     }
-    // 直连地址可以没有（经隧道连着、只能走中转），中转也可以没有，但不能都没有
-    var peers: [sockaddr_in] = []
-    if let host = args["host"] as? String, !host.isEmpty {
-      let port = (args["port"] as? NSNumber)?.intValue ?? 0
-      guard port > 0, port < 65536, let peer = deskResolve(host: host, port: UInt16(port)) else {
-        result(FlutterError(code: "bad_address", message: "cannot resolve \(host)", details: nil))
-        return
-      }
-      peers.append(peer)
-    }
-    var relay: sockaddr_in?
-    if let text = args["relay"] as? String, !text.isEmpty {
-      relay = deskResolveHostPort(text)
-    }
+    let host = args["host"] as? String ?? ""
+    let port = (args["port"] as? NSNumber)?.intValue ?? 0
+    let relayText = args["relay"] as? String ?? ""
     let relayToken = bytes(args["relayToken"])
     let nack = args["nack"] as? Bool ?? false
-    guard !peers.isEmpty || relay != nil else {
-      result(FlutterError(code: "bad_address", message: "no address to connect to", details: nil))
-      return
-    }
     control.async { [weak self] in
       guard let self else { return }
+      // 解析域名（getaddrinfo）会阻塞，放在 control 队列上，不卡界面
+      // 直连地址可以没有（经隧道连着、只能走中转），中转也可以没有，但不能都没有
+      var peers: [sockaddr_in] = []
+      if !host.isEmpty {
+        guard port > 0, port < 65536, let peer = deskResolve(host: host, port: UInt16(port)) else {
+          DispatchQueue.main.async {
+            result(FlutterError(code: "bad_address", message: "cannot resolve \(host)", details: nil))
+          }
+          return
+        }
+        peers.append(peer)
+      }
+      let relay = relayText.isEmpty ? nil : deskResolveHostPort(relayText)
+      guard !peers.isEmpty || relay != nil else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "bad_address", message: "no address to connect to", details: nil))
+        }
+        return
+      }
       let generation = self.stopSession()
       DispatchQueue.main.async {
         self.sessionLock.lock()
