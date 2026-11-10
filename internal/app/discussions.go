@@ -301,7 +301,7 @@ type memberForm struct {
 	id       string // 编辑的成员，空是新加
 	name     string
 	role     string
-	agent    int
+	agent    string // 选中的 agent（名字，不记位置：可选列表会变）
 	model    string
 	effort   string
 	ws       string
@@ -2507,7 +2507,7 @@ func (a *app) openMemberForm(d *discDetail, id string) {
 	choices := a.agentChoices()
 	if mem := d.member(id); mem != nil {
 		f.name, f.role, f.model, f.effort, f.ws = mem.Name, mem.Role, mem.Model, mem.Effort, mem.WorkspaceLabel
-		f.agent = max(0, slices.Index(choices, mem.Agent))
+		f.agent = mem.Agent
 		switch mem.Access {
 		case "":
 		case "all":
@@ -2521,6 +2521,9 @@ func (a *app) openMemberForm(d *discDetail, id string) {
 	} else {
 		// 默认名字是 agent 名加序号，同一家可以有多个成员
 		f.name = memberDefaultName(d, choices, 0)
+		if len(choices) > 0 {
+			f.agent = choices[0]
+		}
 	}
 	f.worktree = "discuss-" + randomSuffix()
 	a.disc.form = f
@@ -2575,6 +2578,14 @@ func (a *app) memberDialog(c *ui.Context) {
 			}
 			titleText(c, title, fsTitle)
 			choices := a.agentChoices()
+			// 成员现在用的 agent 停用了或没检测到时也列出来：只改职责、名字时不悄悄换掉它
+			if editing != nil && editing.Agent != "" && !slices.Contains(choices, editing.Agent) {
+				choices = append(choices, editing.Agent)
+			}
+			// 可选列表变了（检测完、停用了一家）时选中的那家不见了：退到第一个，并显示出来
+			if len(choices) > 0 && !slices.Contains(choices, f.agent) {
+				f.agent = choices[0]
+			}
 			isGit := false
 			for _, p := range a.projects {
 				if p.ID == d.info.ProjectID && p.Kind == "git" {
@@ -2590,10 +2601,12 @@ func (a *app) memberDialog(c *ui.Context) {
 					for _, ag := range choices {
 						labels = append(labels, agentTitle(ag))
 					}
-					prev := f.agent
-					segmented(c, &f.agent, m.DiscAgent(), labels...)
-					if f.agent != prev && editing == nil {
-						f.name = memberDefaultName(d, choices, f.agent)
+					sel := slices.Index(choices, f.agent)
+					prev := sel
+					segmented(c, &sel, m.DiscAgent(), labels...)
+					f.agent = choices[sel]
+					if sel != prev && editing == nil {
+						f.name = memberDefaultName(d, choices, sel)
 					}
 				}
 				fieldInput(c, &f.name, m.DiscMemberNamePlaceholder()).AutoFocus()
@@ -2655,7 +2668,7 @@ func (a *app) memberDialog(c *ui.Context) {
 				if pressable(accentButton(c, verb).Disabled(!ready || f.busy)).Clicked() && ready && !f.busy {
 					f.busy, f.sent = true, f.content()
 					params := map[string]any{"discussion": d.key, "name": strings.TrimSpace(f.name), "role": strings.TrimSpace(f.role),
-						"agent": choices[f.agent], "model": strings.TrimSpace(f.model), "effort": strings.TrimSpace(f.effort)}
+						"agent": f.agent, "model": strings.TrimSpace(f.model), "effort": strings.TrimSpace(f.effort)}
 					if d.collab != nil {
 						params["access"] = f.accessValue()
 					}

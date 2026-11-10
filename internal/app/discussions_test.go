@@ -760,3 +760,34 @@ func TestDiscussionSwitchWithPanelOpen(t *testing.T) {
 		t.Fatalf("selected %q", a.disc.sel)
 	}
 }
+
+// 成员用的 agent 被停用了（不在可选列表里）：编辑只改职责时不能悄悄换成第一项。
+func TestDiscussionMemberFormKeepsUnlistedAgent(t *testing.T) {
+	var mu sync.Mutex
+	var got string
+	a, tt, _ := discTester(t, map[string]rpc.Handler{"discussion.member.update": func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct{ Agent string }
+		json.Unmarshal(raw, &p)
+		mu.Lock()
+		got = p.Agent
+		mu.Unlock()
+		return map[string]any{"id": "mb2"}, nil
+	}})
+	mem := a.disc.d.members[1]
+	a.disabled = append(a.disabled, mem.Agent)
+	a.openMemberForm(a.disc.d, mem.ID)
+	a.disc.form.role = "只看测试"
+	tt.Frame()
+	if err := tt.Click("保存"); err != nil {
+		t.Fatalf("%v; texts %v", err, tt.Texts())
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for tt.Frame(); a.disc.form.busy && time.Now().Before(deadline); tt.Frame() {
+		time.Sleep(5 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if got != mem.Agent {
+		t.Fatalf("agent sent %q, want %q", got, mem.Agent)
+	}
+}
