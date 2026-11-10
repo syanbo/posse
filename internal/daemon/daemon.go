@@ -141,6 +141,20 @@ func (s *session) goneAgentPg() int {
 	return 0
 }
 
+// agentStillRuns 报告终端里的 agent 进程 name 还在：前台还是它，或者记着的进程组还活着
+// （agent 开着编辑器时前台让出去了）。
+func (s *session) agentStillRuns(name string) bool {
+	if pg := s.Foreground(); pg > 0 {
+		if found, _ := agent.OfProcess(pg); found == name {
+			return true
+		}
+	}
+	s.mu.Lock()
+	pg := s.agentPg
+	s.mu.Unlock()
+	return pg > 0 && s.goneAgentPg() == 0
+}
+
 // terminalHost 是托管终端的宿主；测试里直接构造的 Daemon 没设，用进程内的。
 func (d *Daemon) terminalHost() host.Host {
 	if d.host == nil {

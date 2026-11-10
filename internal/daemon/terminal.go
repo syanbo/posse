@@ -689,6 +689,13 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	}
 	st.At = time.Now()
 	st.Status = s.preferOSC(st.Status)
+	// Codex 结束别的会话时也报 SessionEnd，进程照样在跑：实测有它自己去结束几天前的旧会话的，还没发过消息
+	// （终端还没记下会话）时也分不清是不是自己的。hook 在 Codex 退出前同步调用，等一会儿看进程还在不在再定
+	if st.Status == agent.StatusExited && p.Agent == "codex" {
+		sid := st.SessionID
+		time.AfterFunc(codexEndGrace, func() { d.codexSessionEnded(s, sid) })
+		return map[string]bool{"ignored": true}, nil
+	}
 	// 摘掉 agent 的原因只记在这里：之后终端列表不再给 agentState，用户反馈"agent 不见了"时靠 daemon.log 查
 	if st.Status == agent.StatusExited {
 		log.Printf("terminal %s: %s %s ends session %s (terminal was on %s)", s.ID, p.Agent, p.Event, st.SessionID, s.Agent().SessionID)
@@ -715,6 +722,23 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	}
 	res.AgentState = st
 	return res, nil
+}
+
+// codexEndGrace 是 Codex 报 SessionEnd 后等它退出的时间：真退出时前台在这之前就回到了 shell。
+var codexEndGrace = 3 * time.Second
+
+// codexSessionEnded 在 Codex 报 SessionEnd 之后复查：进程还在就不是它退出了，不摘。
+func (d *Daemon) codexSessionEnded(s *session, sid string) {
+	if !s.Running() || s.agentName() != "codex" {
+		return
+	}
+	if s.agentStillRuns("codex") {
+		log.Printf("terminal %s: codex still running after SessionEnd of session %s (terminal is on %s), keeping it", s.ID, sid, s.Agent().SessionID)
+		return
+	}
+	log.Printf("terminal %s: codex SessionEnd ends session %s (terminal was on %s)", s.ID, sid, s.Agent().SessionID)
+	d.setAgent(s, host.AgentState{Status: agent.StatusExited, Event: "SessionEnd", SessionID: sid, At: time.Now()})
+	d.saveResume(s, false)
 }
 
 type hookEventResult struct {

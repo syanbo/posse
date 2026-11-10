@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -191,6 +193,47 @@ func TestOtherSessionEndKeepsAgent(t *testing.T) {
 	hook(t, d, s.ID, "SessionEnd", map[string]any{"session_id": "main", "reason": "prompt_input_exit"})
 	if info := d.terminalInfo(s); info.Agent != "" || s.Agent().Status != agent.StatusExited {
 		t.Fatalf("agent %q state %+v", info.Agent, s.Agent())
+	}
+}
+
+// Codex 报了 SessionEnd、进程却还在跑（结束的是别的会话）时不摘；进程不在了才按退出处理。
+func TestCodexSessionEndChecksProcess(t *testing.T) {
+	defer func(v time.Duration) { codexEndGrace = v }(codexEndGrace)
+	codexEndGrace = 50 * time.Millisecond
+	d, ws := newTestDaemon(t)
+	// 名叫 codex 的前台进程：认得出是 Codex 还在跑
+	fake := filepath.Join(t.TempDir(), "codex")
+	if err := os.Symlink("/bin/cat", fake); err != nil {
+		t.Fatal(err)
+	}
+	alive, err := d.startTerminal(ws, []string{fake}, "codex", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 前台是 cat，Codex 已经退出
+	gone, err := d.startTerminal(ws, []string{"/bin/cat"}, "codex", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []*session{alive, gone} {
+		// 还没发过消息、终端没记下会话时也照样复查
+		raw, _ := json.Marshal(map[string]any{"terminalId": s.ID, "agent": "codex", "event": "SessionEnd", "payload": map[string]any{"session_id": "other"}})
+		if _, err := d.hookEvent(context.Background(), raw); err != nil {
+			t.Fatal(err)
+		}
+		if s.agentName() != "codex" {
+			t.Fatalf("%s: agent dropped before the check", s.ID)
+		}
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for gone.agentName() != "" && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if gone.agentName() != "" || gone.Agent().Status != agent.StatusExited {
+		t.Fatalf("exited codex kept: %q %+v", gone.agentName(), gone.Agent())
+	}
+	if alive.agentName() != "codex" {
+		t.Fatal("running codex dropped")
 	}
 }
 
