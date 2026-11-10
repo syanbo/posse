@@ -124,7 +124,7 @@ func (s *Server) Close() {
 		srv.Close()
 	}
 	var wg sync.WaitGroup
-	var slow []wire
+	var slow []*conn
 	for _, c := range conns {
 		// QUIC 连接当场关：后面关 Transport 只在本地销毁连接、不通知手机；交接、重启时新进程紧接着
 		// 听同一个端口，手机也收不到端口不可达，要等测延迟连续超时（十几秒）才发现断了
@@ -133,7 +133,7 @@ func (s *Server) Close() {
 			continue
 		}
 		// WebSocket 的关闭握手要等手机回一帧，断了网的手机不回，一条就要等 5 秒：一起关，限时等
-		slow = append(slow, c.ws)
+		slow = append(slow, c)
 		wg.Go(func() { c.ws.Close(websocket.StatusGoingAway, "host shutting down") })
 	}
 	done := make(chan struct{})
@@ -144,11 +144,14 @@ func (s *Server) Close() {
 	select {
 	case <-done:
 	case <-time.After(closeWait):
-		for _, w := range slow {
-			if n, ok := w.(interface{ CloseNow() error }); ok {
-				n.CloseNow()
+		// 过时还没回的直接断开。不能用 CloseNow：websocket 库见已经在关就去等那次关闭握手，照样 5 秒。
+		// 结束读循环的 ctx：库在 ctx 结束时关掉底层连接，等着的关闭握手跟着返回
+		for _, c := range slow {
+			if c.cancel != nil {
+				c.cancel()
 			}
 		}
+		<-done
 	}
 	s.closeQUIC()
 }
@@ -267,7 +270,7 @@ func (s *Server) serveWS(w http.ResponseWriter, r *http.Request) {
 func (s *Server) serveWire(parent context.Context, w wire) {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	c := &conn{srv: s, ws: w, ctx: ctx, streams: map[string]context.CancelFunc{}, streamGen: map[string]uint64{}, uploads: map[string]*upload{}}
+	c := &conn{srv: s, ws: w, ctx: ctx, cancel: cancel, streams: map[string]context.CancelFunc{}, streamGen: map[string]uint64{}, uploads: map[string]*upload{}}
 	c.lastRead.Store(time.Now().UnixNano())
 	if err := c.handshake(); err != nil {
 		return
@@ -302,9 +305,11 @@ type wire interface {
 
 // conn 是一条已认证的手机连接。
 type conn struct {
-	srv    *Server
-	ws     wire
-	ctx    context.Context
+	srv *Server
+	ws  wire
+	ctx context.Context
+	// cancel 结束这条连接的 ctx：读循环正在 Read(ctx)，websocket 库见 ctx 结束就关掉底层连接
+	cancel context.CancelFunc
 	sess   *session
 	device Device
 
