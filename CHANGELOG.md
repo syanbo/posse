@@ -3,6 +3,14 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.32
+
+- 修复：Codex 还在运行时，终端偶尔被认作已退出，图标变回普通终端、侧栏里不见了（Codex 结束旧会话时也会发出退出通知）。现在收到通知后先确认 Codex 进程是否真的退出了。
+
+### English
+
+- Fix: a terminal running Codex was sometimes taken as exited, its icon turned back into a plain terminal and it vanished from the sidebar (Codex also sends an end notice when it closes an old session). Posse now checks that the Codex process really exited first.
+
 ## 0.1.31
 
 - 终端里的 Agent 被认作已退出时，`~/.posse/daemon.log` 会记下原因，方便排查「Agent 还在跑，图标却变回普通终端」这类问题。
