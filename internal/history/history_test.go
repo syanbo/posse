@@ -463,3 +463,41 @@ func TestParserVersionReparse(t *testing.T) {
 		t.Fatalf("session id changed: %v -> %v", before.ID, after.ID)
 	}
 }
+
+// 升级解析规则时某个文件读不了：那份的进度作废，权限好了之后文件没变也会重读，不一直留着旧规则的结果。
+func TestParserReparseRetriesFailedFile(t *testing.T) {
+	home := t.TempDir()
+	fixtures(t, home)
+	x := openIndex(t)
+	update(t, x, home)
+	ctx := context.Background()
+	var id int64
+	var path string
+	var size int64
+	if err := x.db.QueryRowContext(ctx, `SELECT id, path, size FROM sessions WHERE agent='claude' LIMIT 1`).Scan(&id, &path, &size); err != nil {
+		t.Fatal(err)
+	}
+	x.db.Exec(`UPDATE meta SET value='0' WHERE key='parser:claude'`)
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+	update(t, x, home)
+	var got int64
+	x.db.QueryRowContext(ctx, `SELECT size FROM sessions WHERE id=?`, id).Scan(&got)
+	if got != -1 {
+		t.Fatalf("unreadable file kept its old progress: size %d", got)
+	}
+	var ver string
+	x.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key='parser:claude'`).Scan(&ver)
+	if ver != parserVersions["claude"] {
+		t.Fatalf("parser version %q", ver)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	update(t, x, home)
+	x.db.QueryRowContext(ctx, `SELECT size FROM sessions WHERE id=?`, id).Scan(&got)
+	if got != size {
+		t.Fatalf("not reread after the file became readable: size %d, want %d", got, size)
+	}
+}

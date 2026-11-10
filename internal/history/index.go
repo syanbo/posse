@@ -99,6 +99,8 @@ func (x *Index) Update(ctx context.Context, roots Roots, progress func(Progress)
 		return err
 	}
 	seen := map[string]bool{}
+	// unsettled 是这次升级解析规则时有文件没重读成、也没能标记下次重读的 agent：不写新版本号，下次整家再重读
+	unsettled := map[string]bool{}
 	for i, src := range sources {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -113,6 +115,13 @@ func (x *Index) Update(ctx context.Context, roots Roots, progress func(Progress)
 			// 单个文件读不了（权限、半截写入）不影响其他文件，下次再试
 			if errors.Is(err, context.Canceled) {
 				return err
+			}
+			// 升级解析规则时这份没重读成：库里还是旧规则的结果和进度，文件没变的话下次会被当成读过了跳过。
+			// 把进度作废，下次整份重读；作废不了就不写这一家的新版本号
+			if redo[src.agent] && k.id != 0 {
+				if _, err := x.db.ExecContext(ctx, `UPDATE sessions SET size=-1, offset=? WHERE id=?`, int64(math.MaxInt64), k.id); err != nil {
+					unsettled[src.agent] = true
+				}
 			}
 		}
 		if progress != nil && (i%20 == 0 || i == len(sources)-1) {
@@ -130,6 +139,9 @@ func (x *Index) Update(ctx context.Context, roots Roots, progress func(Progress)
 		return err
 	}
 	for agent := range redo {
+		if unsettled[agent] {
+			continue
+		}
 		if _, err := x.db.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
 			"parser:"+agent, parserVersions[agent]); err != nil {
 			return err
