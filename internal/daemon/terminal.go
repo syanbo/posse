@@ -666,6 +666,7 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	// 不是终端里正在跑的会话退出，当成退出会把主会话摘掉，直到它下一个 hook 才挂回来
 	if p.Event == "SessionEnd" {
 		if sid, cur := agent.SessionOf(p.Payload), s.Agent().SessionID; sid != "" && cur != "" && sid != cur {
+			log.Printf("terminal %s: ignored %s SessionEnd of session %s (terminal is on %s)", s.ID, p.Agent, sid, cur)
 			return map[string]bool{"ignored": true}, nil
 		}
 	}
@@ -688,6 +689,10 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	}
 	st.At = time.Now()
 	st.Status = s.preferOSC(st.Status)
+	// 摘掉 agent 的原因只记在这里：之后终端列表不再给 agentState，用户反馈"agent 不见了"时靠 daemon.log 查
+	if st.Status == agent.StatusExited {
+		log.Printf("terminal %s: %s %s ends session %s (terminal was on %s)", s.ID, p.Agent, p.Event, st.SessionID, s.Agent().SessionID)
+	}
 	res := hookEventResult{}
 	// 任务提醒由 hook 交给 agent：不用等它空闲往终端里打字，也不会和用户的键入撞上
 	if agent.DeliversOn(p.Agent, p.Event, p.Payload) {
@@ -817,9 +822,12 @@ var subagentGrace = 20 * time.Second
 // checkAgentGone 发现 agent 进程已经不在时按退出处理。
 func (d *Daemon) checkAgentGone(s *session) {
 	pg := s.goneAgentPg()
+	name := s.agentName()
 	if pg == 0 || !s.Running() || !s.clearAgent(pg) {
 		return
 	}
+	_, args := agent.OfProcess(pg)
+	log.Printf("terminal %s: %s gone, process group %d is now %q", s.ID, name, pg, args)
 	s.SetAgent(host.AgentState{Status: agent.StatusExited, Event: "process", At: time.Now()})
 	s.markRead()
 	d.refreshAwake()
