@@ -334,6 +334,8 @@ func (e *engine) windowStreamStopped() {
 			e.mac.release(e.stream, e.mac.sel("release"))
 			e.stream = 0
 		}
+		// 这是从输出对象自己的 didStopWithError 回调过来的，它可能还在那个回调里：不放，留着（只在系统停掉窗口采集时漏一份）
+		e.parts = streamParts{}
 		err = e.windowGoneLocked(w.ID)
 	}
 	e.streamMu.Unlock()

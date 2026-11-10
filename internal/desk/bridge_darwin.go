@@ -87,6 +87,9 @@ type macAPI struct {
 	colorSpace   func(uintptr) uintptr
 	colorRelease func(uintptr)
 	queueCreate  func(unsafe.Pointer, uintptr) uintptr
+	queueRelease func(uintptr)
+	// queueSync 是 dispatch_sync_f：等队列里已经排着的任务跑完
+	queueSync func(uintptr, uintptr, uintptr)
 
 	// activeDisplays 是 CGGetActiveDisplayList；sendObj 是带一个对象参数的 objc_msgSend（objectForKey: 之类）
 	activeDisplays func(uint32, *uint32, *uint32) int32
@@ -255,6 +258,8 @@ func loadMac() (*macAPI, error) {
 
 	libsys := dl("/usr/lib/libSystem.B.dylib")
 	m.queueCreate = mustFn[func(unsafe.Pointer, uintptr) uintptr](libsys, "dispatch_queue_create")
+	m.queueRelease = mustFn[func(uintptr)](libsys, "dispatch_release")
+	m.queueSync = mustFn[func(uintptr, uintptr, uintptr)](libsys, "dispatch_sync_f")
 
 	vt := dl("/System/Library/Frameworks/VideoToolbox.framework/VideoToolbox")
 	m.vtCreate = mustFn[func(uintptr, int32, int32, uint32, uintptr, uintptr, uintptr, uintptr, uintptr, *uintptr) int32](vt, "VTCompressionSessionCreate")

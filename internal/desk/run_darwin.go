@@ -37,6 +37,9 @@ type engine struct {
 	stream   objc.ID
 	block    objc.Block
 	observer objc.ID
+	// parts 是 stream 用着的过滤器、输出对象（也是它的 delegate，SCStream 只弱引用它）和样本队列：
+	// 流确认停下、放掉之后才放，换屏、换窗口、缩放时不再每次漏一份
+	parts streamParts
 
 	// 开始时没有辅助功能权限：ticker 每秒复查，打开了报一次 StatusAccessibility，只由 ticker 读写
 	axWait bool
@@ -298,6 +301,29 @@ func (e *engine) displayFilter(display, content objc.ID) objc.ID {
 	return m.initFilterApps(m.alloc(m.clsFilter, m.sel("alloc")), m.sel("initWithDisplay:excludingApplications:exceptingWindows:"), display, apps, windows)
 }
 
+// streamParts 是一个采集流用着、要等流停下才能放的对象。
+type streamParts struct {
+	filter, del objc.ID
+	queue       uintptr
+}
+
+// releaseParts 放掉一个已经停下、放掉的流用过的东西。先在样本队列上排一个空任务等它跑完：
+// 停下之前排进去的样本回调还在队列里的话，会用到输出对象，不能先放。
+func (m *macAPI) releaseParts(p streamParts) {
+	if p.queue != 0 {
+		m.queueSync(p.queue, 0, drainCallback())
+	}
+	if p.filter != 0 {
+		m.release(p.filter, m.sel("release"))
+	}
+	if p.del != 0 {
+		m.release(p.del, m.sel("release"))
+	}
+	if p.queue != 0 {
+		m.queueRelease(p.queue)
+	}
+}
+
 func (e *engine) openStream(filter objc.ID) error {
 	m := e.mac
 	if filter == 0 {
@@ -309,15 +335,20 @@ func (e *engine) openStream(filter objc.ID) error {
 	m.release(cfg, m.sel("release"))
 	name := append([]byte("posse.desk.capture"), 0)
 	queue := m.queueCreate(unsafe.Pointer(&name[0]), 0)
+	parts := streamParts{filter: filter, del: del, queue: queue}
 	var nserr objc.ID
 	if !m.addOutput(stream, m.sel("addStreamOutput:type:sampleHandlerQueue:error:"), del, 0, queue, &nserr) {
 		msg := "could not add a stream output"
 		if nserr != 0 {
 			msg = m.goString(m.init(nserr, m.sel("localizedDescription")))
 		}
+		// 还没开始采集：流和它用的东西一起放掉
+		m.release(stream, m.sel("release"))
+		m.releaseParts(parts)
 		return fmt.Errorf("desk: %s", msg)
 	}
 	e.stream = stream
+	e.parts = parts
 	started := make(chan error, 1)
 	block := objc.NewBlock(func(_ objc.Block, err objc.ID) {
 		if err == 0 {
@@ -327,7 +358,10 @@ func (e *engine) openStream(filter objc.ID) error {
 		started <- fmt.Errorf("desk: %s", m.goString(m.init(err, m.sel("localizedDescription"))))
 	})
 	m.startCapture(stream, m.sel("startCaptureWithCompletionHandler:"), uintptr(block))
-	return <-started
+	err := <-started
+	// 完成回调只调一次，已经调过了
+	block.Release()
+	return err
 }
 
 // streamConfig 是采集设置：输出尺寸、像素格式、帧率上限。开采集和运行中改帧率共用。
@@ -1133,6 +1167,11 @@ func (mv *movie) finish(m *macAPI) {
 	}
 }
 
+// drainCallback 是给 dispatch_sync_f 的空函数，只建一次（purego 的回调个数有上限）
+var drainCallback = sync.OnceValue(func() uintptr {
+	return purego.NewCallback(func(uintptr) {})
+})
+
 var (
 	delegateClass   objc.ID
 	vtCallback      uintptr
@@ -1534,15 +1573,22 @@ func (e *engine) stopStream() {
 	e.stream = 0
 	e.dropping.Store(true)
 	defer e.dropping.Store(false)
+	parts := e.parts
+	e.parts = streamParts{}
 	done := make(chan struct{})
 	block := objc.NewBlock(func(_ objc.Block, _ objc.ID) { close(done) })
 	e.mac.stopCapture(stream, e.mac.sel("stopCaptureWithCompletionHandler:"), uintptr(block))
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
+		// 回调和样本还可能来：block 和流用着的东西都不能放，留着
 		e.logf("stop capture timed out")
+		e.mac.release(stream, e.mac.sel("release"))
+		return
 	}
+	block.Release()
 	e.mac.release(stream, e.mac.sel("release"))
+	e.mac.releaseParts(parts)
 }
 
 func streamDidOutput(_ objc.ID, _ objc.SEL, _ objc.ID, sample unsafe.Pointer, typ int) {
