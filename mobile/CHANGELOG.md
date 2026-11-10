@@ -3,6 +3,16 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.22
+
+- 修复：传大图、视频时 App 卡住、延迟一下子飙升。现在按电脑的确认控制发送速度，上传时按键和其他操作照常响应（需要电脑端 0.1.34 及以上，旧版电脑照旧）。
+- 配合电脑端 0.1.34：看桌面时在 iOS 模拟器、iPhone 镜像这类窗口里打字，数字和字母不再全变成 a。
+
+### English
+
+- Fix: the app froze and latency spiked while uploading a large image or video. Uploads are now paced by acknowledgements from your Mac, so keystrokes and other actions stay responsive (needs Posse for Mac 0.1.34 or later; older Macs behave as before).
+- With Posse for Mac 0.1.34: typing into windows such as the iOS Simulator or iPhone Mirroring while viewing the desktop no longer turns every digit and letter into "a".
+
 ## 0.1.21
 
 - 讨论模块重新整理：添加、编辑 Agent 改成整页表单，标签都在输入框上方；打开终端、继续、重启、移除放在编辑页底部。
