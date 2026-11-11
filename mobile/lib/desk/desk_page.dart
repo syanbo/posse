@@ -29,6 +29,7 @@ import 'status.dart';
 import 'toolbar.dart';
 import 'unlock.dart';
 import 'viewport.dart';
+import 'typing.dart';
 import 'wire.dart';
 
 const _markSize = 22.0;
@@ -79,8 +80,7 @@ class _DeskPageState extends State<DeskPage>
   final _marks = <_Mark>[];
   final _keyboard = FocusNode();
   final _input = TextEditingController.fromValue(_padded);
-  // 隐藏输入框上一次的内容，和这一次比出打了什么、删了几个
-  String _shadow = deskTypingPad;
+  final _typing = DeskTyping();
   final _chrome = DeskChrome();
   final _edges = DeskEdges();
   final _lease = Object();
@@ -1249,18 +1249,9 @@ class _DeskPageState extends State<DeskPage>
   }
 
   void _onTyped() {
-    final value = _input.value;
-    // 组字还没上屏时先留着，动了输入框的话中文输入法会被打断。
-    if (value.composing.isValid && !value.composing.isCollapsed) return;
-    final (deleted, text) = deskTypedDiff(_shadow, value.text);
-    _shadow = value.text;
-    // 攒得多了、垫着的零宽空格快删完了才重置：每次都清空会和系统输入法抢，打快了重复前缀
-    if (value.text.length > 64 ||
-        !value.text.startsWith(deskTypingPad.substring(2))) {
-      // 先改 _shadow：给 _input 赋值会当场再进一次这个回调，拿旧文字比会多删一遍
-      _shadow = deskTypingPad;
-      _input.value = _padded;
-    }
+    final (:deleted, added: text, :reset) = _typing.take(_input.value);
+    // 给 _input 赋值会当场再进一次这个回调，DeskTyping 已经按重置后的样子记好了
+    if (reset) _input.value = _padded;
     if (deleted == 0 && text.isEmpty) return;
     if (deleted > 0) {
       _link.batch(() {
