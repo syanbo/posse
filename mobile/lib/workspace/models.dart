@@ -1,24 +1,6 @@
-import '../l10n/l10n.dart';
 import '../ui/widgets.dart';
 
 const chatAgents = {'claude', 'codex', 'grok'};
-
-/// worktree.ps 里一个 agent 的摘要：首页据此显示谁在做什么，不用逐个订阅标签。
-class AgentPeek {
-  const AgentPeek({
-    required this.agent,
-    required this.state,
-    this.message,
-    this.tool,
-    this.updatedAt = 0,
-  });
-
-  final String agent;
-  final String state;
-  final String? message;
-  final String? tool;
-  final int updatedAt;
-}
 
 class WorktreeRow {
   const WorktreeRow({
@@ -27,12 +9,10 @@ class WorktreeRow {
     required this.name,
     required this.path,
     required this.branch,
-    required this.status,
     required this.live,
     this.terminals = 0,
     this.isMain = false,
     this.isWorktree = false,
-    this.agents = const [],
     this.lastActivityAt = 0,
     this.iconText = '',
     this.iconImage = '',
@@ -43,7 +23,6 @@ class WorktreeRow {
   final String name;
   final String path;
   final String branch;
-  final String status;
   final int live;
 
   /// 列得出来的终端数：在跑的加上一个常驻进程留下还没恢复的。旧常驻进程不给，和 [live] 一样。
@@ -52,17 +31,11 @@ class WorktreeRow {
 
   /// git worktree：posse 建的，或从别处加进来的。和桌面一样用分支图标。
   final bool isWorktree;
-  final List<AgentPeek> agents;
   final int lastActivityAt;
 
   /// 桌面侧栏给项目设的图标：文字或 emoji，或者一张图片的文件名（经 posse.projectIcon 取）。都空是默认的文件夹。
   final String iconText;
   final String iconImage;
-
-  String get subtitle {
-    if (branch.isNotEmpty) return branch;
-    return path;
-  }
 }
 
 class SessionTab {
@@ -99,26 +72,6 @@ class SessionTab {
       agent != null &&
       chatAgents.contains(agent) &&
       (sessionId?.isNotEmpty ?? false);
-
-  SessionTab copyWith({
-    String? state,
-    String? toolName,
-    String? prompt,
-    bool clearPrompt = false,
-  }) {
-    return SessionTab(
-      worktreeId: worktreeId,
-      title: title,
-      terminalId: terminalId,
-      agent: agent,
-      state: state ?? this.state,
-      sessionId: sessionId,
-      transcriptPath: transcriptPath,
-      toolName: clearPrompt ? null : toolName ?? this.toolName,
-      prompt: clearPrompt ? null : prompt ?? this.prompt,
-      posse: posse,
-    );
-  }
 }
 
 List<WorktreeRow> parseWorktrees(Object? raw) {
@@ -135,7 +88,6 @@ List<WorktreeRow> parseWorktrees(Object? raw) {
         name: item['displayName'] as String? ?? id,
         path: item['path'] as String? ?? '',
         branch: item['branch'] as String? ?? '',
-        status: item['status'] as String? ?? 'inactive',
         live: item['liveTerminalCount'] is num
             ? (item['liveTerminalCount'] as num).toInt()
             : 0,
@@ -150,7 +102,6 @@ List<WorktreeRow> parseWorktrees(Object? raw) {
             ? item['isWorktree'] as bool
             : item['isMainWorktree'] != true &&
                   (item['branch'] as String? ?? '').isNotEmpty,
-        agents: _agents(item['agents']),
         lastActivityAt: item['lastActivityAt'] is num
             ? (item['lastActivityAt'] as num).toInt()
             : 0,
@@ -162,28 +113,6 @@ List<WorktreeRow> parseWorktrees(Object? raw) {
           {'image': final String image} => image,
           _ => '',
         },
-      ),
-    );
-  }
-  return out;
-}
-
-List<AgentPeek> _agents(Object? raw) {
-  if (raw is! List) return const [];
-  final out = <AgentPeek>[];
-  for (final item in raw) {
-    if (item is! Map) continue;
-    final agent = item['agentType'];
-    if (agent is! String || agent.isEmpty) continue;
-    out.add(
-      AgentPeek(
-        agent: agent,
-        state: item['state'] as String? ?? '',
-        message: item['lastAssistantMessage'] as String?,
-        tool: item['toolName'] as String?,
-        updatedAt: item['updatedAt'] is num
-            ? (item['updatedAt'] as num).toInt()
-            : 0,
       ),
     );
   }
@@ -242,10 +171,3 @@ List<SessionTab>? tabsFromFrame(String worktreeId, Map<String, Object?> frame) {
   return parseTabs(worktreeId, frame['tabs']);
 }
 
-String statusLabel(AppLocalizations l, String status) => switch (status) {
-  'permission' => l.sessionStateWaiting,
-  'working' => l.sessionStateWorking,
-  'done' => l.sessionStateDone,
-  'active' => l.sessionStateIdle,
-  _ => l.workspaceNoSessions,
-};

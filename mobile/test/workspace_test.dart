@@ -1,6 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:posse_mobile/l10n/l10n.dart';
-import 'package:flutter/widgets.dart';
 import 'package:posse_mobile/workspace/models.dart';
 
 void main() {
@@ -38,25 +36,4 @@ void main() {
     expect(tabsFromFrame('p::w', {'type': 'updated'}), isNull);
   });
 
-  test('worktree rows keep the phone status names', () {
-    final rows = parseWorktrees([
-      {
-        'worktreeId': 'p::w',
-        'repo': 'posse',
-        'displayName': 'main',
-        'path': '/src/posse',
-        'branch': 'main',
-        'status': 'permission',
-        'liveTerminalCount': 1,
-      },
-    ]);
-    expect(rows.single.subtitle, 'main');
-    expect(
-      statusLabel(
-        lookupAppLocalizations(const Locale('zh')),
-        rows.single.status,
-      ),
-      '待处理',
-    );
-  });
 }

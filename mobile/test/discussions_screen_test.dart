@@ -534,7 +534,6 @@ void main() {
               name: 'main',
               path: '/other',
               branch: 'main',
-              status: '',
               live: 0,
             ),
             const WorktreeRow(
@@ -543,7 +542,6 @@ void main() {
               name: 'main',
               path: '/project',
               branch: 'main',
-              status: '',
               live: 0,
             ),
           ];

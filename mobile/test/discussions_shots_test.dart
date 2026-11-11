@@ -286,7 +286,6 @@ class _Model extends PosseAppModel {
       name: 'posse',
       path: '/posse',
       branch: 'main',
-      status: '',
       live: 0,
       isMain: true,
     ),
