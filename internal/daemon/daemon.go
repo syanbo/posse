@@ -630,7 +630,6 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("collab.rename", d.collabRename)
 	srv.Handle("profile.get", d.profileGet)
 	srv.Handle("profile.set", d.profileSet)
-	srv.Handle("profile.avatar", d.profileAvatar)
 	srv.HandleStream("terminal.attach", d.terminalAttach)
 }
 
