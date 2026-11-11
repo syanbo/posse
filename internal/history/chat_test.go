@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strings"
@@ -611,6 +613,180 @@ func TestReadBackwardLongLines(t *testing.T) {
 			if m.Offset != offs[k+i] {
 				t.Fatalf("limit %d: %s at %d, want %d", limit, m.ID, m.Offset, offs[k+i])
 			}
+		}
+	}
+}
+
+func grokMsg(s string) string { return fmt.Sprintf("{\"type\":\"assistant\",\"content\":%q}\n", s) }
+func grokUpd(s string, at int) string {
+	return fmt.Sprintf("{\"timestamp\":%d,\"params\":{\"update\":{\"sessionUpdate\":\"agent_message_chunk\",\"content\":{\"text\":%q}}}}\n", at, s)
+}
+
+func appendText(t *testing.T, path, s string) {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(s); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// sameAsFull 用 cur 从 pos 接着读，结果（消息、时间、位置、报错）要和此刻整份重读一样。
+func sameAsFull(t *testing.T, cur *ChatCursor, chat string, pos int64) int64 {
+	t.Helper()
+	want, wantNext, wantErr := ReadChatNew("grok", chat, pos)
+	got, next, err := cur.ReadNew("grok", chat, pos)
+	a, _ := json.Marshal(got)
+	b, _ := json.Marshal(want)
+	if string(a) != string(b) || next != wantNext || fmt.Sprint(err) != fmt.Sprint(wantErr) {
+		t.Fatalf("from %d:\n got %s next %d err %v\nwant %s next %d err %v", pos, a, next, err, b, wantNext, wantErr)
+	}
+	return next
+}
+
+// 接着读时两个文件出各种状况：updates 晚于对话写进来、任一文件同长度重写或换 inode、变短、
+// 暂时不见、换了会话、写到一半：都和整份重读一样。
+func TestChatCursorGrokEdges(t *testing.T) {
+	for _, name := range []string{"updates-late", "updates-rewrite-same-size", "updates-inode-replace", "chat-rewrite-same-size",
+		"chat-inode-replace", "updates-truncate", "chat-truncate-reset", "missing-chat-recover", "missing-updates-recover", "path-switch", "partial-lines"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			chat, up := filepath.Join(dir, "chat_history.jsonl"), filepath.Join(dir, "updates.jsonl")
+			os.WriteFile(chat, []byte(grokMsg("A")), 0o644)
+			u := grokUpd("A", 10) + grokUpd("A", 20)
+			if name == "updates-late" {
+				u = ""
+			}
+			os.WriteFile(up, []byte(u), 0o644)
+			var cur ChatCursor
+			pos := sameAsFull(t, &cur, chat, 0)
+			switch name {
+			case "updates-late":
+				appendText(t, up, grokUpd("A", 10)+grokUpd("A", 20))
+				appendText(t, chat, grokMsg("A"))
+			case "updates-rewrite-same-size":
+				os.WriteFile(up, []byte(grokUpd("A", 90)+grokUpd("A", 80)), 0o644)
+				appendText(t, chat, grokMsg("B"))
+			case "updates-inode-replace":
+				os.WriteFile(up+".new", []byte(grokUpd("A", 90)+grokUpd("A", 80)), 0o644)
+				os.Rename(up+".new", up)
+				appendText(t, chat, grokMsg("B"))
+			case "chat-rewrite-same-size":
+				os.WriteFile(chat, []byte(grokMsg("B")), 0o644)
+				appendText(t, chat, grokMsg("A"))
+			case "chat-inode-replace":
+				os.WriteFile(chat+".new", []byte(grokMsg("B")), 0o644)
+				os.Rename(chat+".new", chat)
+				appendText(t, chat, grokMsg("A"))
+			case "updates-truncate":
+				os.WriteFile(up, nil, 0o644)
+				appendText(t, chat, grokMsg("B"))
+			case "chat-truncate-reset":
+				os.WriteFile(chat, []byte(grokMsg("B")), 0o644)
+				pos = 0
+			case "missing-chat-recover":
+				os.Rename(chat, chat+".gone")
+				sameAsFull(t, &cur, chat, pos)
+				os.Rename(chat+".gone", chat)
+				appendText(t, chat, grokMsg("A"))
+			case "missing-updates-recover":
+				os.Rename(up, up+".gone")
+				appendText(t, chat, grokMsg("B"))
+				pos = sameAsFull(t, &cur, chat, pos)
+				os.Rename(up+".gone", up)
+				appendText(t, chat, grokMsg("A"))
+			case "path-switch":
+				dir2 := t.TempDir()
+				chat = filepath.Join(dir2, "chat_history.jsonl")
+				os.WriteFile(chat, []byte(grokMsg("Z")), 0o644)
+				os.WriteFile(filepath.Join(dir2, "updates.jsonl"), []byte(grokUpd("Z", 50)), 0o644)
+				pos = 0
+			case "partial-lines":
+				x := grokMsg("A")
+				appendText(t, chat, x[:len(x)/2])
+				pos = sameAsFull(t, &cur, chat, pos)
+				appendText(t, chat, x[len(x)/2:])
+				z := grokUpd("C", 30)
+				appendText(t, up, z[:len(z)/2])
+				pos = sameAsFull(t, &cur, chat, pos)
+				appendText(t, up, z[len(z)/2:])
+				appendText(t, chat, grokMsg("C"))
+			}
+			sameAsFull(t, &cur, chat, pos)
+		})
+	}
+}
+
+// 随机交错往两个文件追加（回复、用户消息、工具调用和结果，有时只写半行），偶尔整份重写成别的内容：
+// 每一步接着读的结果都和整份重读一样。
+func TestChatCursorGrokRandomInterleave(t *testing.T) {
+	texts := []string{"A", "AB", "ABC", "B", "BA", "C"}
+	for seed := uint64(1); seed <= 40; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 7))
+		dir := t.TempDir()
+		chat, up := filepath.Join(dir, "chat_history.jsonl"), filepath.Join(dir, "updates.jsonl")
+		os.WriteFile(chat, nil, 0o644)
+		os.WriteFile(up, nil, 0o644)
+		var cur ChatCursor
+		var pos int64
+		var chatHalf, updHalf string
+		ts, prompt, call := 100, 0, 0
+		chatLine := func() string {
+			switch rng.IntN(4) {
+			case 0:
+				prompt++
+				return fmt.Sprintf("{\"type\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"<user_query>q</user_query>\"}],\"prompt_index\":%d}\n", rng.IntN(prompt+1))
+			case 1:
+				call++
+				return fmt.Sprintf("{\"type\":\"assistant\",\"content\":%q,\"tool_calls\":[{\"id\":\"call-%d\",\"name\":\"x\",\"arguments\":\"{}\"}]}\n", texts[rng.IntN(len(texts))], rng.IntN(call+1))
+			case 2:
+				return fmt.Sprintf("{\"type\":\"tool_result\",\"tool_call_id\":\"call-%d\",\"content\":\"out\"}\n", rng.IntN(call+1))
+			}
+			return grokMsg(texts[rng.IntN(len(texts))])
+		}
+		updLine := func() string {
+			ts += 1 + rng.IntN(5)
+			switch rng.IntN(3) {
+			case 0:
+				return fmt.Sprintf("{\"timestamp\":%d,\"params\":{\"update\":{\"sessionUpdate\":\"user_message_chunk\",\"content\":{\"text\":\"q\"},\"_meta\":{\"promptIndex\":%d}}}}\n", ts, rng.IntN(prompt+2))
+			case 1:
+				return fmt.Sprintf("{\"timestamp\":%d,\"params\":{\"update\":{\"sessionUpdate\":\"tool_call\",\"toolCallId\":\"ws_x_call-%d\"}}}\n", ts, rng.IntN(call+2))
+			}
+			return grokUpd(texts[rng.IntN(len(texts))], ts)
+		}
+		write := func(path string, half *string, line string) {
+			if *half != "" {
+				appendText(t, path, *half)
+				*half = ""
+				return
+			}
+			if rng.IntN(5) == 0 {
+				cut := rng.IntN(len(line))
+				appendText(t, path, line[:cut])
+				*half = line[cut:]
+				return
+			}
+			appendText(t, path, line)
+		}
+		for step := 0; step < 120; step++ {
+			switch r := rng.IntN(20); {
+			case r < 8:
+				write(chat, &chatHalf, chatLine())
+			case r < 18:
+				write(up, &updHalf, updLine())
+			case r == 18:
+				// 回退成别的内容（像 grok 的回滚）：调用方看到变短会从头读
+				os.WriteFile(chat, []byte(chatLine()), 0o644)
+				chatHalf = ""
+				pos = 0
+			default:
+				os.WriteFile(up, []byte(updLine()), 0o644)
+				updHalf = ""
+			}
+			pos = sameAsFull(t, &cur, chat, pos)
 		}
 	}
 }

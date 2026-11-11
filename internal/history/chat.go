@@ -264,7 +264,7 @@ func readBackward(f *os.File, end int64, limit int, decode func([]byte, int64) *
 }
 
 func readGrokTail(path string, limit int, beforeOffset int64) (ChatPage, error) {
-	msgs, _, _, _, err := readGrokAll(path)
+	msgs, _, err := readGrokAll(path)
 	if err != nil {
 		return ChatPage{}, err
 	}
@@ -272,7 +272,8 @@ func readGrokTail(path string, limit int, beforeOffset int64) (ChatPage, error) 
 }
 
 // ChatCursor 记着一个对话流读到哪里。grok 的消息时间要从头对着 updates.jsonl 建，
-// 接着上一次的位置读时留着建好的时间表，只读两个文件新写的部分。
+// 接着上一次的位置读时留着建好的时间表和读过的记录里找时间用的部分，只读两个文件新写的部分；
+// 结果和每次整份重读一样。
 type ChatCursor struct {
 	grok *grokCursor
 }
@@ -281,7 +282,54 @@ type grokCursor struct {
 	path string
 	end  int64 // chat_history.jsonl 读到的位置
 	gt   *grokTimes
+	keys []grokKey // chat_history.jsonl 里 end 之前要找时间的记录，按顺序
 	last int64
+	chat fileMark // chat_history.jsonl 读过的 [0, end)
+	upd  fileMark // updates.jsonl 读过的 [0, gt.scanned)
+}
+
+// fileMark 认一个文件读过的前一段还是不是原来那些字节：同一个文件、没变短、
+// 大小没变时修改时间也没变，读过那段的头尾各 markLen 字节也和当时一样。
+// 认不出的只有原地改了读过那段的中间、头尾不变、文件又变长：两个文件都只往后追加，不会这样改。
+// 真碰上时新行照样从文件里读，消息、位置和 ID 不变，不丢不重，只有时间可能和整份重读不同
+// （对时间用的还是改之前的内容）。每次把读过的整段核对一遍要读完两个文件，最大的会话约 20 ms。
+type fileMark struct {
+	fi         os.FileInfo
+	end        int64
+	head, tail []byte
+}
+
+const markLen = 4 << 10
+
+func markFile(path string, end int64) (fileMark, bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		return fileMark{}, false
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || fi.Size() < end {
+		return fileMark{}, false
+	}
+	m := fileMark{fi: fi, end: end, head: make([]byte, min(end, markLen)), tail: make([]byte, min(end, markLen))}
+	if _, err := f.ReadAt(m.head, 0); err != nil {
+		return fileMark{}, false
+	}
+	if _, err := f.ReadAt(m.tail, end-int64(len(m.tail))); err != nil {
+		return fileMark{}, false
+	}
+	return m, true
+}
+
+func (m fileMark) still(path string) bool {
+	now, ok := markFile(path, m.end)
+	return ok && os.SameFile(m.fi, now.fi) &&
+		!(now.fi.Size() == m.fi.Size() && !now.fi.ModTime().Equal(m.fi.ModTime())) &&
+		bytes.Equal(m.head, now.head) && bytes.Equal(m.tail, now.tail)
+}
+
+func grokUpdatesPath(transcript string) string {
+	return filepath.Join(filepath.Dir(transcript), "updates.jsonl")
 }
 
 // ReadNew 和 ReadChatNew 一样。
@@ -289,23 +337,25 @@ func (c *ChatCursor) ReadNew(agent, path string, from int64) ([]ChatMessage, int
 	if agent != "grok" {
 		return ReadChatNew(agent, path, from)
 	}
-	g := c.grok
-	if g != nil && g.path == path && g.end == from && g.gt != nil && grokUpdatesSize(path) >= g.gt.scanned {
-		g.gt.extend(path)
-		msgs, consumed, err := readGrokLines(path, from, g.gt, &g.last)
-		if err != nil {
-			c.grok = nil
-			return nil, from, err
+	if g := c.grok; g != nil && g.path == path && g.end == from && g.chat.still(path) && g.upd.still(grokUpdatesPath(path)) {
+		if msgs, ok := g.next(); ok {
+			return msgs, g.end, nil
 		}
-		g.end = consumed
-		return msgs, consumed, nil
 	}
+	// 头一次、位置对不上、文件被换掉或改写过，或者接着读的过程中出了岔子：整份读
 	c.grok = nil
-	msgs, consumed, gt, last, err := readGrokAll(path)
+	g := &grokCursor{path: path}
+	st := &fileState{}
+	grokParser{}.prepare(path, st)
+	g.gt = st.grok
+	msgs, consumed, err := readGrokLines(path, 0, g.gt, &g.last, &g.keys)
 	if err != nil {
 		return nil, from, err
 	}
-	c.grok = &grokCursor{path: path, end: consumed, gt: gt, last: last}
+	g.end = consumed
+	if g.mark() {
+		c.grok = g
+	}
 	var out []ChatMessage
 	for _, m := range msgs {
 		if m.Offset >= from {
@@ -318,12 +368,38 @@ func (c *ChatCursor) ReadNew(agent, path string, from int64) ([]ChatMessage, int
 	return out, consumed, nil
 }
 
-func grokUpdatesSize(transcript string) int64 {
-	fi, err := os.Stat(filepath.Join(filepath.Dir(transcript), "updates.jsonl"))
-	if err != nil {
-		return -1
+// mark 记下两个文件读到哪里。updates.jsonl 不在时不留：每次整份读，和以前一样。
+func (g *grokCursor) mark() bool {
+	if g.gt == nil {
+		return false
 	}
-	return fi.Size()
+	var ok1, ok2 bool
+	g.chat, ok1 = markFile(g.path, g.end)
+	g.upd, ok2 = markFile(grokUpdatesPath(g.path), g.gt.scanned)
+	return ok1 && ok2
+}
+
+// next 接着读，ok 为 false 时调用方整份重读。updates.jsonl 有新内容时，读过的记录可能对上新写进来的分段、
+// 用到新的会话和调用时间：把它们按顺序重新对一遍，时间表和整份重读到这里时一样，再读新行。
+func (g *grokCursor) next() ([]ChatMessage, bool) {
+	before := g.gt.scanned
+	if !g.gt.extend(g.path) {
+		return nil, false
+	}
+	if g.gt.scanned != before {
+		g.gt.next, g.last = 0, 0
+		for _, k := range g.keys {
+			if at := g.gt.atKey(k); at != 0 {
+				g.last = at
+			}
+		}
+	}
+	msgs, consumed, err := readGrokLines(g.path, g.end, g.gt, &g.last, &g.keys)
+	if err != nil {
+		return nil, false
+	}
+	g.end = consumed
+	return msgs, g.mark()
 }
 
 func readGrokNew(path string, from int64) ([]ChatMessage, int64, error) {
@@ -331,16 +407,16 @@ func readGrokNew(path string, from int64) ([]ChatMessage, int64, error) {
 	return c.ReadNew("grok", path, from)
 }
 
-func readGrokAll(path string) ([]ChatMessage, int64, *grokTimes, int64, error) {
+func readGrokAll(path string) ([]ChatMessage, int64, error) {
 	st := &fileState{}
 	grokParser{}.prepare(path, st)
 	var last int64
-	msgs, consumed, err := readGrokLines(path, 0, st.grok, &last)
-	return msgs, consumed, st.grok, last, err
+	return readGrokLines(path, 0, st.grok, &last, nil)
 }
 
-// readGrokLines 从 from 起解 chat_history.jsonl 的完整行，返回读到的位置。
-func readGrokLines(path string, from int64, gt *grokTimes, last *int64) ([]ChatMessage, int64, error) {
+// readGrokLines 从 from 起解 chat_history.jsonl 的完整行，返回读到的位置。keys 不为 nil 时
+// 把找时间的记录接在后面。
+func readGrokLines(path string, from int64, gt *grokTimes, last *int64, keys *[]grokKey) ([]ChatMessage, int64, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, from, ErrChatNotFound
@@ -355,7 +431,7 @@ func readGrokLines(path string, from int64, gt *grokTimes, last *int64) ([]ChatM
 		off := prev
 		prev = from + n
 		raw := bytes.TrimRight(line, "\r\n")
-		if m := decodeGrokLine(raw, off, gt, last); m != nil {
+		if m := decodeGrokLine(raw, off, gt, last, keys); m != nil {
 			msgs = append(msgs, *m)
 		}
 	})
@@ -855,14 +931,17 @@ func codexItemLine(p *codexPayload, off, at int64) *ChatMessage {
 	}
 }
 
-func decodeGrokLine(raw []byte, off int64, gt *grokTimes, last *int64) *ChatMessage {
+func decodeGrokLine(raw []byte, off int64, gt *grokTimes, last *int64, keys *[]grokKey) *ChatMessage {
 	var r grokRecord
 	if json.Unmarshal(raw, &r) != nil || r.Type == "" {
 		return nil
 	}
 	at := int64(0)
-	if gt != nil {
-		at = gt.at(r)
+	if k, ok := grokKeyOf(r); ok && gt != nil {
+		at = gt.atKey(k)
+		if keys != nil {
+			*keys = append(*keys, k)
+		}
 	}
 	if at == 0 && last != nil {
 		at = *last

@@ -1013,13 +1013,47 @@ func (gt *grokTimes) at(r grokRecord) int64 {
 	if gt == nil {
 		return 0
 	}
+	k, ok := grokKeyOf(r)
+	if !ok {
+		return 0
+	}
+	return gt.atKey(k)
+}
+
+// grokKey 是一条记录里找时间用得到的部分：对话流接着读、updates.jsonl 又有新内容时，
+// 拿它把读过的记录重新对一遍，不用重读 chat_history.jsonl。
+type grokKey struct {
+	typ    string
+	prompt *int
+	text   string   // assistant 去掉首尾空白的正文
+	calls  []string // assistant 的调用 ID，tool_result 的那一个
+}
+
+// grokKeyOf 取出 r 找时间用的部分；ok 为 false 时 r 怎么都对不上时间。
+func grokKeyOf(r grokRecord) (grokKey, bool) {
 	switch r.Type {
 	case "user":
 		if r.PromptIndex != nil {
-			return gt.prompts[*r.PromptIndex]
+			return grokKey{typ: r.Type, prompt: r.PromptIndex}, true
 		}
 	case "assistant":
-		if t := strings.TrimSpace(textOf(r.Content)); t != "" {
+		k := grokKey{typ: r.Type, text: strings.TrimSpace(textOf(r.Content))}
+		for _, c := range r.ToolCalls {
+			k.calls = append(k.calls, grokCallID(c.ID))
+		}
+		return k, k.text != "" || len(k.calls) > 0
+	case "tool_result":
+		return grokKey{typ: r.Type, calls: []string{grokCallID(r.ToolCallID)}}, true
+	}
+	return grokKey{}, false
+}
+
+func (gt *grokTimes) atKey(k grokKey) int64 {
+	switch k.typ {
+	case "user":
+		return gt.prompts[*k.prompt]
+	case "assistant":
+		if t := k.text; t != "" {
 			for i := gt.next; i < len(gt.chunks); i++ {
 				if c := gt.chunks[i]; strings.HasPrefix(t, c.text) || strings.HasPrefix(c.text, t) {
 					gt.next, gt.matched = i+1, c.end
@@ -1027,13 +1061,13 @@ func (gt *grokTimes) at(r grokRecord) int64 {
 				}
 			}
 		}
-		for _, c := range r.ToolCalls {
-			if at := gt.tools[grokCallID(c.ID)]; at != 0 {
+		for _, id := range k.calls {
+			if at := gt.tools[id]; at != 0 {
 				return at
 			}
 		}
 	case "tool_result":
-		return gt.tools[grokCallID(r.ToolCallID)]
+		return gt.tools[k.calls[0]]
 	}
 	return 0
 }
