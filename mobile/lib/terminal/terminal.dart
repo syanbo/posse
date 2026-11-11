@@ -344,27 +344,34 @@ class _TerminalScreenState extends State<TerminalScreen>
       _heldCols = cols;
       _heldRows = rows;
       _heldDesk = desk;
-      stream.frames.listen((frame) {
-        if (!mounted || gen != _gen) return;
-        final sid = frame['streamId'];
-        final type = frame['type'];
-        // 重新订阅时没带配色（换到了旧版常驻进程）就退回照手机主题画
-        if (type == 'subscribed' || type == 'colors') {
-          final colors = TermColors.parse(frame['colors']);
-          if ((type == 'subscribed' || colors != null) && colors != _colors) {
-            setState(() => _colors = colors);
+      stream.frames.listen(
+        (frame) {
+          if (!mounted || gen != _gen) return;
+          final sid = frame['streamId'];
+          final type = frame['type'];
+          // 重新订阅时没带配色（换到了旧版常驻进程）就退回照手机主题画
+          if (type == 'subscribed' || type == 'colors') {
+            final colors = TermColors.parse(frame['colors']);
+            if ((type == 'subscribed' || colors != null) && colors != _colors) {
+              setState(() => _colors = colors);
+            }
           }
-        }
-        if (type == 'subscribed' && sid is num) {
-          for (final piece in _asm.accept(sid.toInt())) {
-            _applyPiece(piece);
+          if (type == 'subscribed' && sid is num) {
+            for (final piece in _asm.accept(sid.toInt())) {
+              _applyPiece(piece);
+            }
           }
-        }
-        if (frame['type'] == 'end') {
-          setState(() => _notice = context.l10n.terminalExited);
-        }
-        // 断线由重连接手，这里不提示。
-      }, onError: (Object _) {});
+          if (frame['type'] == 'end') {
+            setState(() => _notice = context.l10n.terminalExited);
+          }
+        },
+        onError: (Object error) {
+          // 订阅被拒的错误回复在订阅返回之后才到，从这里来；断线由重连接手，不提示
+          if (!mounted || gen != _gen) return;
+          if (error is RpcException && error.code == 'closed') return;
+          setState(() => _notice = friendlyError(error, context.l10n));
+        },
+      );
     } catch (error) {
       if (gen != _gen || !mounted) return;
       await _binary?.cancel();
