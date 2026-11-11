@@ -582,3 +582,35 @@ func TestChatCursorGrokMatchesFullRead(t *testing.T) {
 		t.Fatalf("rewritten: %+v %v", msgs, err)
 	}
 }
+
+// 往回读时跨好几块的长行（在文件头、中间、紧贴块边界）照样整行解出来，位置对得上。
+func TestReadBackwardLongLines(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "c.jsonl")
+	var b bytes.Buffer
+	var offs []int64
+	var ids []string
+	for i, n := range []int{3*chatChunk + 17, 10, chatChunk - 40, 5*chatChunk + 1, 1, 2 * chatChunk} {
+		offs = append(offs, int64(b.Len()))
+		id := "m" + itoa(i)
+		ids = append(ids, id)
+		b.WriteString(`{"type":"user","uuid":"` + id + `","message":{"content":"` + strings.Repeat("y", n) + `"}}` + "\n")
+	}
+	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for limit := 1; limit <= len(ids)+1; limit++ {
+		page, err := ReadChatTail("claude", "", path, limit, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		k := max(0, len(ids)-limit)
+		if chatIDs(page) != strings.Join(ids[k:], ",") || page.BeforeOffset != offs[k] || page.HasMore != (k > 0) {
+			t.Fatalf("limit %d: ids %s off %d more %v", limit, chatIDs(page), page.BeforeOffset, page.HasMore)
+		}
+		for i, m := range page.Messages {
+			if m.Offset != offs[k+i] {
+				t.Fatalf("limit %d: %s at %d, want %d", limit, m.ID, m.Offset, offs[k+i])
+			}
+		}
+	}
+}

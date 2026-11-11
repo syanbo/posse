@@ -185,9 +185,10 @@ func codexPaginated(path string) bool {
 func readBackward(f *os.File, end int64, limit int, decode func([]byte, int64) *ChatMessage) ([]ChatMessage, bool, error) {
 	want := limit + 1
 	var newest []ChatMessage
-	var pending []byte
+	// pending 是还没遇到行首的那一行已读出的几块，从后往前存：只在还没读到文件头（pos > 0）时留下，
+	// 下一轮接在前面一块读出来的后面。超长的行等读到行首再拼一次，不每块都复制一遍
+	var pending [][]byte
 	pos := end
-	// pending 只在还没读到文件头（pos > 0）时留下，下一轮接在前面一块读出来的后面
 	for len(newest) < want && pos > 0 {
 		n := int64(chatChunk)
 		if pos < n {
@@ -199,17 +200,24 @@ func readBackward(f *os.File, end int64, limit int, decode func([]byte, int64) *
 		}
 		pos -= n
 		dataOff := pos
-		data := make([]byte, 0, len(buf)+len(pending))
+		nl := bytes.IndexByte(buf, '\n')
+		if pos > 0 && nl < 0 {
+			pending = append(pending, buf)
+			continue
+		}
+		size := len(buf)
+		for _, p := range pending {
+			size += len(p)
+		}
+		data := make([]byte, 0, size)
 		data = append(data, buf...)
-		data = append(data, pending...)
+		for i := len(pending) - 1; i >= 0; i-- {
+			data = append(data, pending[i]...)
+		}
+		pending = pending[:0]
 		cut := 0
 		if pos > 0 {
-			nl := bytes.IndexByte(data, '\n')
-			if nl < 0 {
-				pending = append([]byte(nil), data...)
-				continue
-			}
-			pending = append([]byte(nil), data[:nl]...)
+			pending = append(pending, buf[:nl])
 			cut = nl + 1
 		}
 		type piece struct {
