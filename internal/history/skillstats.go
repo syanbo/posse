@@ -141,7 +141,7 @@ func scanSkillUses(agent, path string, fi os.FileInfo) skillCacheFile {
 			f.MCP[it.Server] = skillUses{N: it.Count, Last: f.Mtime}
 		}
 	}
-	// 有时间的会话按最后一次调用的时间算；事件只留最近的一段，最后一次一定在里面
+	// 有时间的会话按最后一次调用的时间算；事件每类只留最近的一段，早先调用过、最后一次已掉出这段的仍按文件修改时间算
 	for _, e := range u.Events {
 		if e.At.IsZero() || e.Failed {
 			continue

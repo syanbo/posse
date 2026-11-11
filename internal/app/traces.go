@@ -100,7 +100,7 @@ func pathSize(path string) int64 {
 	return n
 }
 
-// askRemoveWorkspaceTraces 删工作区前查一下它的痕迹：有就换成带勾选的确认框，没有照旧。
+// askRemoveWorkspace 删工作区前查一下它的痕迹：有就换成带勾选的确认框，没有照旧。
 func (a *app) askRemoveWorkspace(m locales.Messages, w workspace) {
 	body := m.TracesRemoveBody()
 	if w.Kind == "worktree" {

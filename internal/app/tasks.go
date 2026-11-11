@@ -763,7 +763,6 @@ func (a *app) diffLine(c *ui.Context, task taskInfo) {
 	})
 }
 
-// block 是详情里的一张卡片：标题加内容。
 // specMarkdown 返回任务说明解析好的 Markdown，只缓存正在看的这一份：说明不变时不必每帧重新解析。
 func (a *app) specMarkdown(spec string) []mdBlock {
 	if a.specMD.src != spec || a.specMD.blocks == nil {
@@ -772,6 +771,7 @@ func (a *app) specMarkdown(spec string) []mdBlock {
 	return a.specMD.blocks
 }
 
+// block 是详情里的一张卡片：标题加内容。
 func (a *app) block(c *ui.Context, label string, fn func()) {
 	card(c).Padding(cardPad).Gap(8).Children(func() {
 		cardTitle(c, label)

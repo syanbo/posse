@@ -567,7 +567,7 @@ func emptyCard(c *ui.Context) ui.Element {
 	return ui.Column(c).Background(colors(c.Theme()).card).Radius(rCard)
 }
 
-// titleText 是页面、对话框和卡片的标题，用 600 的字重。
+// titleText 是页面、对话框和卡片的标题，用 fwBold 字重（跟着设置里的字重走）。
 func titleText(c *ui.Context, text string, size float32) ui.Element {
 	return ui.Text(c, text).FontSize(size).FontWeight(fwBold)
 }

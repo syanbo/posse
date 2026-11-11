@@ -19,7 +19,7 @@ import (
 // 网页跑在系统的 WebContent 进程里，切到别的标签时页面留着，关掉标签才销毁。
 
 // webDoc 是网页标签的状态。跳转、载入、标题由页面事件更新；单页应用用 pushState 换地址不发事件，
-// 看得见时再每秒对一次（webPoll）。
+// 看得见时每画一帧对一次（syncWeb），webPoll 保证至少每秒画一帧。
 type webDoc struct {
 	id      int // posse web 里的标签编号，窗口进程内不重复
 	view    *mygo.WebView
@@ -177,7 +177,7 @@ func (a *app) reloadWeb(wd *webDoc) {
 	p.Reload()
 }
 
-// webPoll 是看得见时对一次导航状态的间隔：pushState、hash 跳转不发页面事件，停止载入有时也不发。
+// webPoll 是看得见时最多隔多久再画一帧、对一次导航状态：pushState、hash 跳转不发页面事件，停止载入有时也不发。
 const webPoll = time.Second
 
 // closeWeb 销毁网页标签和网页预览的页面。

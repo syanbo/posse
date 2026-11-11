@@ -894,13 +894,13 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 	}
 }
 
-// diffSeparator 是 diff 里折叠的未改动行：展开按钮和"N 行未改动"，点文字全部展开。
 // 组标题左边留 groupHeadPad，依次是展开箭头（miniBox）、勾选框（14）和组名，间隔 6；
 // groupTextIndent 让文件行（外边距 6）的勾选框和组名的文字对齐。
 const groupHeadPad = 12
 
 func groupTextIndent() float32 { return groupHeadPad + miniBox() + 6 + 14 + 6 - 6 }
 
+// diffSeparator 是 diff 里折叠的未改动行：展开按钮和"N 行未改动"，点文字全部展开。
 // 折叠行高 32（mygo 的 diffSeparatorHeight），减去内边距只剩 24：展开按钮用 miniBox，图标调大也放得下。
 func diffSeparator(c *ui.Context, sep ui.Element, s *editor.DiffSeparator) {
 	t := c.Theme()

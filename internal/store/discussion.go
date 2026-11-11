@@ -1326,7 +1326,7 @@ func (s *Store) DiscWorkers(key string) ([]string, error) {
 	return out, rows.Err()
 }
 
-// Executions 是讨论里的执行；ids 不为空时只取这些。
+// Executions 是讨论里的全部执行。
 func (s *Store) Executions(key string) ([]Execution, error) {
 	return collect(s.db, scanExecution, `SELECT `+execCols+` FROM disc_executions WHERE discussion=? ORDER BY created_at, rowid`, key)
 }
