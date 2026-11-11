@@ -44,7 +44,6 @@ class ChatMessage {
     required this.timestamp,
     required this.source,
     this.transcriptOffset,
-    this.parentId,
   });
 
   final String id;
@@ -53,7 +52,6 @@ class ChatMessage {
   final int? timestamp;
   final String source;
   final int? transcriptOffset;
-  final String? parentId;
 
   String get text => blocks
       .where((block) => block.type == 'text')
@@ -81,7 +79,6 @@ class ChatMessage {
       transcriptOffset: json['transcriptOffset'] is num
           ? (json['transcriptOffset'] as num).toInt()
           : null,
-      parentId: json['parentId'] as String?,
     );
   }
 }

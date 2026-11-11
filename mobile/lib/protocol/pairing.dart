@@ -7,16 +7,12 @@ class PairingOffer {
     required this.endpoints,
     required this.deviceToken,
     required this.publicKeyB64,
-    this.pairedDeviceId,
-    this.scope,
   });
 
   final String endpoint;
   final List<String> endpoints;
   final String deviceToken;
   final String publicKeyB64;
-  final String? pairedDeviceId;
-  final String? scope;
 
   /// 主地址在前，其余去重。没有 endpoints 时只连 endpoint。
   List<String> get dialUrls {
@@ -74,8 +70,6 @@ class PairingOffer {
       endpoints: extras,
       deviceToken: token,
       publicKeyB64: publicKey,
-      pairedDeviceId: map['pairedDeviceId'] as String?,
-      scope: map['scope'] as String?,
     );
   }
 }
