@@ -119,3 +119,35 @@ func TestUsageAgentDisabled(t *testing.T) {
 		t.Fatalf("status after enabling codex: %v", got)
 	}
 }
+
+// Codex 的 PostToolUse 按会话文件限频：间隔内的同一个文件不再读；过了间隔的旧文件记录被清掉，不一直攒着。
+func TestCodexUsageThrottlePrunes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CODEX_HOME", home)
+	d := &Daemon{}
+	d.cfg.Home = home
+	d.usage.store = usage.Open(home)
+	d.usage.codexAt = map[string]time.Time{}
+	old := time.Now().Add(-codexEvery - time.Second)
+	for _, p := range []string{"/old/a.jsonl", "/old/b.jsonl"} {
+		d.usage.codexAt[p] = old
+	}
+	hook := func(path string) {
+		d.usageHook("codex", "PostToolUse", json.RawMessage(`{"transcript_path":"`+path+`"}`))
+	}
+	hook("/new/c.jsonl")
+	d.usage.mu.Lock()
+	first, kept := d.usage.codexAt["/new/c.jsonl"], len(d.usage.codexAt)
+	d.usage.mu.Unlock()
+	if first.IsZero() || kept != 1 {
+		t.Fatalf("after first hook: %v", d.usage.codexAt)
+	}
+	hook("/new/c.jsonl")
+	d.usage.mu.Lock()
+	again := d.usage.codexAt["/new/c.jsonl"]
+	d.usage.mu.Unlock()
+	if !again.Equal(first) {
+		t.Fatal("hook within the interval read again")
+	}
+}

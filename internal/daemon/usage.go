@@ -133,6 +133,12 @@ func (d *Daemon) usageHook(agentName, event string, payload json.RawMessage) {
 		d.usage.mu.Lock()
 		due := event == "Stop" || time.Since(d.usage.codexAt[p.TranscriptPath]) >= codexEvery
 		if due {
+			// 超过间隔的项和没有一样，顺手删掉：每个 Codex 会话文件留一项，常驻进程不重启就一直攒着
+			for path, at := range d.usage.codexAt {
+				if time.Since(at) >= codexEvery {
+					delete(d.usage.codexAt, path)
+				}
+			}
 			d.usage.codexAt[p.TranscriptPath] = time.Now()
 		}
 		d.usage.mu.Unlock()
