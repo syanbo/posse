@@ -10,20 +10,46 @@ class _Mac {
   final runes = <int>[];
   var under = 0;
 
-  void back() => runes.isEmpty ? under++ : runes.removeLast();
-  void add(String s) => runes.addAll(s.runes);
+  /// 一共删了几次（退格）。
+  var backs = 0;
+
+  void back() {
+    backs++;
+    runes.isEmpty ? under++ : runes.removeLast();
+  }
+
+  /// 一共打了几个字。
+  var adds = 0;
+
+  void add(String s) {
+    adds += s.runes.length;
+    runes.addAll(s.runes);
+  }
+
   String get text => '${String.fromCharCodes(runes)}|$under';
 }
 
 /// 系统输入法：自己存着一份文字，每次编辑后把整个值交给框架；框架发来的重置晚 [lag] 次编辑才到
-/// （为空时只在 [arrive] 时到），到之前的编辑都是在旧文字上做的。[echo] 为真时平台收下重置后把值再回送一次。
-/// 框架这边照 EditableText：交来的值和框里一样就不往下交。
+/// （为空时只在 [arrive] 时到），到之前的编辑都是在旧文字上做的。[echo] 为真时平台收下重置后把值再回送一次，
+/// 给了 [echoes] 时每次到达随机回不回送。框架这边照 EditableText：交来的值和框里一样就不往下交。
+///
+/// [want] 是理想文档：用户在平台上的每次编辑直接作用在 Mac 上、从不重置（删掉垫字符也是删 Mac 上的字）；
+/// [got] 是照发出的退格和文字打出来的 Mac 缓冲。
 class _Ime {
-  _Ime({this.lag, this.echo = false});
+  _Ime({this.lag, this.echo = false, this.echoes});
 
   final int? lag;
   final bool echo;
-  final typing = DeskTyping();
+  final Random? echoes;
+
+  /// 有重置在路上、或者 DeskTyping 还有分不清的旧段时，做过全选删除、一次删好几个字、去掉垫字符：
+  /// 这些值对应两种可能，只保证不多删。
+  var ambiguous = false;
+
+  /// 为真时这几种操作只在状态清楚时做（不清楚时跳过）。
+  var careful = false;
+  var clock = Duration.zero;
+  late final typing = DeskTyping(now: () => clock);
   late TextEditingValue box = typing.padded;
   late String platform = box.text;
   TextRange composing = TextRange.empty;
@@ -51,8 +77,10 @@ class _Ime {
     platform = _sets.removeAt(0).$2;
     // 组字被重置打断，这段没上屏
     composing = TextRange.empty;
-    if (echo) _deliver();
+    if (echoes?.nextBool() ?? echo) _deliver();
   }
+
+  bool get _unsure => pending || !typing.settled;
 
   void _deliver() {
     final value = TextEditingValue(
@@ -83,6 +111,7 @@ class _Ime {
     _due();
     change();
     edits++;
+    clock += const Duration(milliseconds: 20);
     _deliver();
   }
 
@@ -121,50 +150,52 @@ class _Ime {
     want.add(word);
   });
 
-  /// 全选删掉框里的正文，Mac 上删同样多的字。框里只有垫字符、或者有重置在路上时不做：回送的空值分不清
-  /// 是删了哪一段，宁可少删（见 'select all while a reset is on the way deletes the least'）。
-  void selectAllDelete() {
+  /// 全选删掉：框里的字（垫字符也算）都删掉，理想文档里删同样多的字。
+  void selectAllDelete() => deleteMany(1 << 30);
+
+  /// 一次删掉末尾 [n] 个字（选中一段删掉、按词删）。
+  void deleteMany(int n) {
     _due();
-    if (pending) return;
     final runes = platform.runes.toList();
-    var pads = 0;
-    while (pads < runes.length && _invisible.contains(runes[pads])) {
-      pads++;
+    final k = min(n, runes.length);
+    if (k == 0) return;
+    if (k > 1 && _unsure) {
+      if (careful) return;
+      ambiguous = true;
     }
-    final n = runes.length - pads;
-    if (n == 0) return;
     _edit(() {
-      platform = '';
-      for (var i = 0; i < n; i++) {
+      platform = String.fromCharCodes(runes.sublist(0, runes.length - k));
+      for (var i = 0; i < k; i++) {
         want.back();
       }
     });
   }
 
-  /// 输入法把开头的垫字符去掉（[to] 为空）或换成 [to] 那种字，同时打了 [s]。有重置在路上时只打字：
-  /// 那时分不清是哪一段的垫字符被去掉，只保证少删（见 'values that start with neither pad'）。
+  /// 输入法把开头的垫字符去掉（[to] 为空）或换成 [to] 那种字，同时打了 [s]（假想的输入法）。
   void normalize(String s, {int? to}) {
     _due();
-    if (pending) return type(s);
-    _normalize(s, to);
-  }
-
-  void _normalize(String s, int? to) => _edit(() {
-    final runes = platform.runes.toList();
-    var pads = 0;
-    while (pads < runes.length && _invisible.contains(runes[pads])) {
-      pads++;
+    if (_unsure) {
+      if (careful) return;
+      ambiguous = true;
     }
-    final rest = String.fromCharCodes(runes.sublist(pads));
-    platform =
-        (to == null ? '' : String.fromCharCodes(List.filled(pads, to))) +
-        rest +
-        s;
-    want.add(s);
-  });
+    _edit(() {
+      final runes = platform.runes.toList();
+      var pads = 0;
+      while (pads < runes.length && _invisible.contains(runes[pads])) {
+        pads++;
+      }
+      final rest = String.fromCharCodes(runes.sublist(pads));
+      platform =
+          (to == null ? '' : String.fromCharCodes(List.filled(pads, to))) +
+          rest +
+          s;
+      want.add(s);
+    });
+  }
 
   /// 停一会儿：路上的重置都到了。
   void pause() {
+    clock += const Duration(seconds: 2);
     while (_sets.isNotEmpty) {
       arrive();
     }
@@ -446,10 +477,72 @@ void main() {
     }
   });
 
-  // 随机的打字、粘贴、中文和 emoji、退格、组字、停顿、重置后把框里的原样再打一遍，重置晚 0 到 3 次编辑才到，
-  // 平台收下后回不回送都试。
-  test('random typing matches what the keyboard took', () {
-    final r = Random(7);
+  // Codex 第 15 轮的六步最小反例：迟到 3 步、平台不回送、照 EditableText 过滤相同的值。
+  // 原来三次重置同时在路上、垫字符轮完复用，多删。任何回送组合下都不能多删。
+  test('codex six-step example never deletes more than the user did', () {
+    for (var mask = 0; mask < 32; mask++) {
+      final t = DeskTyping();
+      var platform = t.padded.text, box = platform;
+      var step = 0, arrivals = 0, user = 0, sent = 0;
+      final queue = <(int, String)>[];
+      void send(String s) {
+        if (s == box) return;
+        box = s;
+        final a = t.take(_v(s));
+        sent += a.deleted;
+        if (a.reset case final r?) {
+          queue.add((step + 3, r.text));
+          box = r.text;
+          t.take(r);
+        }
+      }
+
+      String erase(String s, int n) {
+        final a = s.runes.toList();
+        return String.fromCharCodes(a.take(max(0, a.length - n)));
+      }
+
+      for (final op in [
+        ('delete', 4),
+        ('append', 0),
+        ('clear', 0),
+        ('append', 0),
+        ('append', 0),
+        ('delete', 3),
+      ]) {
+        step++;
+        while (queue.isNotEmpty && queue.first.$1 <= step) {
+          platform = queue.removeAt(0).$2;
+          if ((mask & (1 << arrivals++)) != 0) send(platform);
+        }
+        switch (op.$1) {
+          case 'append':
+            platform += 'visible-literal';
+          case 'delete':
+            final n = min(platform.runes.length, op.$2);
+            user += n;
+            platform = erase(platform, n);
+          default:
+            user += platform.runes.length;
+            platform = '';
+        }
+        send(platform);
+        expect(sent, lessThanOrEqualTo(user), reason: 'mask $mask step $step');
+      }
+    }
+  });
+
+  // 端到端对照：用户的编辑直接作用在不重置的理想文档上，和照发出的事件打出来的 Mac 缓冲比。
+  // 随机的打字、粘贴、中文和 emoji、退格、一次删好几个、全选删除（可以好几次）、组字、停顿、重置后把刚才那段
+  // 再打一遍、输入法去掉或换掉垫字符；重置晚 0 到 5 次编辑才到，每次到达随机回不回送。
+  // 每一步发出的退格都不多于用户删的。
+  void editRandomly(
+    int seed, {
+    required bool careful,
+    void Function(_Ime ime, int round)? done,
+    void Function(String kind, int missed, int extra)? measure,
+  }) {
+    final r = Random(seed);
     String piece(int n) => String.fromCharCodes([
       for (var i = 0; i < n; i++)
         switch (r.nextInt(5)) {
@@ -458,11 +551,20 @@ void main() {
           _ => 0x61 + r.nextInt(26),
         },
     ]);
-    for (var round = 0; round < 400; round++) {
-      final ime = _Ime(lag: r.nextInt(4), echo: r.nextBool());
+    for (var round = 0; round < 600; round++) {
+      final ime = _Ime(lag: r.nextInt(6), echoes: Random(round))
+        ..careful = careful;
       var last = '';
       for (var step = 0; step < 120; step++) {
-        switch (r.nextInt(15)) {
+        final before = (
+          ime.got.backs,
+          ime.want.backs,
+          ime.got.adds,
+          ime.want.adds,
+          ime.ambiguous,
+        );
+        var kind = '';
+        switch (r.nextInt(16)) {
           case 0:
             last = piece(1 + r.nextInt(200));
             ime.type(last);
@@ -477,30 +579,84 @@ void main() {
             ime.commit(piece(1 + r.nextInt(2)));
           case 4:
             if (r.nextInt(4) == 0) ime.pause();
-          case 6:
-            ime.selectAllDelete();
-          case 7:
-            ime.normalize(
-              piece(1),
-              to: null,
-            );
           case 5:
-            // 真的又打了一遍刚才的一段（或它的开头）
             if (last.isNotEmpty) {
               ime.type(
                 r.nextBool() ? last : last.substring(0, last.length ~/ 2),
               );
             }
+          case 6:
+            kind = 'select all';
+            ime.selectAllDelete();
+          case 7:
+            kind = 'delete several';
+            ime.deleteMany(2 + r.nextInt(20));
+          case 8:
+            if (r.nextInt(3) == 0) {
+              kind = 'pads removed or swapped';
+              ime.normalize(
+                piece(1),
+                to: r.nextBool() ? null : _invisible[r.nextInt(3)],
+              );
+            }
           default:
             ime.type(piece(1));
         }
+        expect(
+          ime.got.backs,
+          lessThanOrEqualTo(ime.want.backs),
+          reason: 'round $round step $step: deleted more than the user did',
+        );
+        if (ime.ambiguous && !before.$5 && kind.isNotEmpty) {
+          measure?.call(
+            kind,
+            (ime.want.backs - before.$2) - (ime.got.backs - before.$1),
+            (ime.got.adds - before.$3) - (ime.want.adds - before.$4),
+          );
+        }
       }
       ime.pause();
-      expect(
-        ime.got.text,
-        ime.want.text,
-        reason: 'round $round lag ${ime.lag} echo ${ime.echo}',
-      );
+      done?.call(ime, round);
     }
+  }
+
+  // 分不清的操作只在状态清楚时做：每一轮最后都和理想文档完全一样。
+  test('random editing: the Mac buffer matches the ideal document', () {
+    var exact = 0;
+    editRandomly(
+      7,
+      careful: true,
+      done: (ime, round) {
+        if (ime.ambiguous) return;
+        exact++;
+        expect(
+          ime.got.text,
+          ime.want.text,
+          reason: 'round $round lag ${ime.lag}',
+        );
+      },
+    );
+    expect(exact, 600);
+  });
+
+  // 什么时候都可能做分不清的操作：照样不多删；每种第一次碰上时少删、多打了几个字记下来（报告里的实测上界）。
+  test('random editing with ambiguous edits never deletes more', () {
+    final worst = <String, (int, int)>{};
+    var rounds = 0;
+    editRandomly(
+      11,
+      careful: false,
+      done: (ime, round) {
+        if (ime.ambiguous) rounds++;
+      },
+      measure: (kind, missed, extra) {
+        final (m, e) = worst[kind] ?? (0, 0);
+        worst[kind] = (max(m, missed), max(e, extra));
+      },
+    );
+    // ignore: avoid_print
+    print(
+      'ambiguous rounds $rounds, worst (missed deletions, extra typed) per kind: $worst',
+    );
   });
 }

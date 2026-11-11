@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'wire.dart';
@@ -31,15 +32,36 @@ class _Chain {
 ///   一次按键的改动本来就小）；一样少取开头同类的（同一种垫字符，或者都没有），再取删得少的：往 Mac
 ///   多删比少删糟。开头是第 k 段垫字符的，不和更早的段比：系统按顺序收下重置，更早的段里没有这种字。
 ///
-/// 值接着哪段比就记在哪段上，更早的段作废。接着最新一段比的值、没有垫字符的值才会触发重置；新的垫字符
-/// 要和各段的、各段现在开头的字都不同，没有就先不重置，等系统收下了再说。
+/// 值接着哪段比就记在哪段上，比它早的段作废（系统按顺序一段段往下走）。重置发出后，看到开头是它的
+/// 垫字符的值之前不再重置，路上最多一个；新的垫字符和在的各段、它们现在开头的字都不同，旧段还可能
+/// 回送时不会复用。用户把新垫字符删光了就一直看不到它这一代的值：发出 1 秒后当它已经到了。
 class DeskTyping {
+  DeskTyping({Duration Function()? now}) : _now = now ?? _clock();
+
+  final Duration Function() _now;
   final _chains = [_Chain(_padChars[0])];
+
+  /// 发出去、还没看到它这一代的值（开头是它的垫字符）的重置：它的垫字符和发出的时间。
+  /// 有它在就不再重置，路上最多一个。
+  (int, Duration)? _flying;
+
+  /// 重置发出这么久还没看到它这一代的值（用户把新垫字符删光了、输入法去掉了），当它已经到了，允许再重置。
+  /// 平台消息在同一台手机上来回远用不了这么久；只决定什么时候能再重置，不影响怎么比。
+  static const _flyingFor = Duration(seconds: 1);
+
+  static Duration Function() _clock() {
+    final watch = Stopwatch()..start();
+    return () => watch.elapsed;
+  }
 
   /// 刚重置、框架给输入框赋值时当场回来的那一次。
   var _echo = false;
 
   _Chain get _current => _chains.last;
+
+  /// 没有重置在路上、也没有还分不清的旧段：这时的值都接着同一段比。
+  @visibleForTesting
+  bool get settled => _chains.length == 1 && _flying == null;
 
   /// 现在的垫字符：输入框一开始和每次重置都设成它。
   TextEditingValue get padded {
@@ -68,7 +90,7 @@ class DeskTyping {
     late (int, String) diff;
     if (lead == _current.char) {
       // 系统已经收下最近一次重置
-      diff = deskTypedDiff(_baseOf(_current), text);
+      diff = _typedDiff(_baseOf(_current), text);
     } else {
       // 开头的字不同（垫字符被换掉、去掉）本身也算一次改动
       (int, int, int) rank((int, String) d, String base) => (
@@ -76,16 +98,23 @@ class DeskTyping {
         _kind(base) == _kind(text) ? 0 : 1,
         d.$1,
       );
-      var base = _baseFor(_current, lead);
-      diff = _diff(base, text);
-      var best = rank(diff, base);
+      // 候选：各段记着的值；在路上的那段还有它刚被收下、只有垫字符的样子（系统可能已经悄悄收下了）。
       // 开头是第 k 段的垫字符：系统收下了第 k 段的重置，比它更早的段里没有这种字，不用比
       final from = _chains.indexWhere((c) => c.char == lead);
-      for (var i = _chains.length - 2; i >= (from < 0 ? 0 : from); i--) {
-        base = _baseFor(_chains[i], lead);
+      final candidates = [
+        for (var i = _chains.length - 1; i >= (from < 0 ? 0 : from); i--) ...[
+          (i, _baseFor(_chains[i], lead)),
+          if (_flying?.$1 == _chains[i].char &&
+              _chains[i].base != _padOf(_chains[i].char))
+            (i, _padOf(_chains[i].char)),
+        ],
+      ];
+      (int, int, int)? best;
+      for (final (i, base) in candidates) {
         final d = _diff(base, text);
         final r = rank(d, base);
-        if (r.$1 < best.$1 ||
+        if (best == null ||
+            r.$1 < best.$1 ||
             r.$1 == best.$1 &&
                 (r.$2 < best.$2 || r.$2 == best.$2 && r.$3 < best.$3)) {
           pick = i;
@@ -94,20 +123,26 @@ class DeskTyping {
         }
       }
     }
-    // 记在接着比的那段上。系统按顺序收下重置，走到了这一段，更早的段不会再有值
+    // 记在接着比的那段上。系统按顺序一段段往下走，走到了这一段，比它早的段不会再有值
     final chain = _chains[pick];
     chain.base = text;
     _chains.removeRange(0, pick);
+    if (_flying case (final char, final at)
+        when lead == char || _now() - at > _flyingFor) {
+      _flying = null;
+    }
     final (deleted, added) = diff;
     // 攒得多了、垫字符剩不到两个才重置：每次都清空的话路上那会儿的编辑每个字都会有。
-    // 没有垫字符的值接着哪段都可能（系统其实已经收下了更新的重置、垫字符又被去掉了），也重置：
-    // 新的垫字符和各段都不同，多一个在路上的重置分得开
+    // 有重置在路上时不重置，没有垫字符的值也一样：等看到它这一代的值再说。新的垫字符和在的各段、
+    // 它们现在开头的字都不同，旧段还可能回送时不会复用
     final pad = _padOf(_current.char);
     final free = _freeChar();
-    if ((identical(chain, _current) || _kind(text) == -1) &&
+    if (_flying == null &&
+        identical(chain, _current) &&
         free != null &&
         (text.length > 64 || !text.startsWith(pad.substring(2)))) {
       _chains.add(_Chain(free));
+      _flying = (free, _now());
       _echo = true;
       return (deleted: deleted, added: added, reset: padded);
     }
@@ -121,7 +156,9 @@ class DeskTyping {
     _chains
       ..clear()
       ..add(_Chain(-1, text));
-    _chains.add(_Chain(_freeChar()!));
+    final free = _freeChar()!;
+    _chains.add(_Chain(free));
+    _flying = (free, _now());
     _echo = true;
     return padded;
   }
@@ -146,15 +183,24 @@ class DeskTyping {
 }
 
 /// 从 [before] 编辑成 [after]。开头是同一种字时逐字比（用户自己打的字开头也可能是这几种字）；
-/// 不是时垫字符和正文分开：正文变了只算正文的差（垫字符被输入法去掉、换掉不算退格），正文没变时
-/// 垫字符少了几个就是几次退格。
+/// 不是时垫字符和正文分开比：打了字的，垫字符的增减不算（输入法把垫字符去掉、换掉）；只删了字的
+/// （退格、全选删除），少了的垫字符也是删掉的，各算一次退格。
 (int, String) _diff(String before, String after) {
-  if (_lead(before) == _lead(after)) return deskTypedDiff(before, after);
+  if (_lead(before) == _lead(after)) return _typedDiff(before, after);
   final (padsBefore, textBefore) = _splitPads(before);
   final (padsAfter, textAfter) = _splitPads(after);
   final (deleted, added) = deskTypedDiff(textBefore, textAfter);
-  if (deleted > 0 || added.isNotEmpty) return (deleted, added);
-  return (padsBefore > padsAfter ? padsBefore - padsAfter : 0, '');
+  if (added.isNotEmpty) return (deleted, added);
+  return (deleted + (padsBefore > padsAfter ? padsBefore - padsAfter : 0), '');
+}
+
+/// 逐字比。删掉的全是垫字符、同时又打了字的，是输入法把垫字符换掉了：一次按键不会既删又打，不算退格。
+(int, String) _typedDiff(String before, String after) {
+  final (deleted, added) = deskTypedDiff(before, after);
+  if (deleted == 0 || added.isEmpty) return (deleted, added);
+  final runes = before.runes.toList();
+  final gone = runes.sublist(runes.length - deleted);
+  return gone.every(_padChars.contains) ? (0, added) : (deleted, added);
 }
 
 /// 开头是哪种垫字符，不是垫字符的都算一类（-1）。
