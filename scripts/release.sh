@@ -107,7 +107,10 @@ if [ -n "$bump" ]; then
 fi
 
 out=build/release/$version
-rm -rf "$out"
+# 只清这次要重打的平台：重试时已发布平台的 dmg 还要留给 scripts/github-release.sh
+for arch in $archs; do
+	rm -rf "$out/darwin-$arch"
+done
 # 更新清单的地址按平台写进包里，已装的 arm64 版照旧读 update-darwin-arm64.json
 platforms=$(for arch in $archs; do printf 'darwin/%s,' "$arch"; done)
 MYGO_UPDATER_PRIVATE_KEY=$(cat "$key") go tool mygo build -platform "${platforms%,}" -o "$out"
