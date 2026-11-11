@@ -33,6 +33,23 @@ List<(int, String)> imageChunks(String encoded) {
   return out;
 }
 
+/// 在当前连接上跑一次上传：开始时才取连接（[current]，一般是 model.rpc），不用选文件、等确认之前拿到的那条。
+/// 开始时撞上连接正在换下来（[UploadRefused]）就在换上来的连接上重来一次；已经传了一部分之后断开的照常报错，不自动重传。
+Future<String> uploadOnCurrent(
+  PhoneRpc? Function() current,
+  Future<String> Function(PhoneRpc rpc) run,
+) async {
+  for (var attempt = 0; ; attempt++) {
+    final rpc = current();
+    if (rpc == null) throw RpcException('closed', 'connection closed');
+    try {
+      return await run(rpc);
+    } on UploadRefused {
+      if (attempt > 0) rethrow;
+    }
+  }
+}
+
 /// 把图片存到电脑的临时目录，返回路径。小图一次传完，大图按块传，每传完一块报一次进度。
 /// 整个过程记在这条连接的上传数里（[PhoneRpc.upload]）：换连接时旧连接等它传完再关。
 Future<String> uploadImage(

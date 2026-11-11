@@ -85,6 +85,8 @@ class _Mac {
     switch (request['method']) {
       case 'clipboard.startImageUpload':
         _reply(request['id'], {'uploadId': 'u1', 'blob': 5, 'ack': true});
+      case 'clipboard.saveImageAsTempFile':
+        _reply(request['id'], {'value': '/tmp/posse-small.png'});
       case 'clipboard.commitImageUpload':
         commits++;
         _reply(request['id'], {'value': '/tmp/posse-up.png'});
@@ -163,5 +165,44 @@ void main() {
     await failed;
     await closing;
     expect(mac.rpc.uploading, 0);
+  });
+
+  test('an upload refused by a draining connection restarts once on the current one', () async {
+    final old = _Mac();
+    final next = _Mac();
+    var current = old.rpc;
+    // 旧连接开始排空、还没换下来时 model.rpc 已经是新的
+    unawaited(
+      old.rpc.closeWhenIdle(
+        min: const Duration(milliseconds: 10),
+        max: const Duration(milliseconds: 10),
+      ),
+    );
+    var tried = <PhoneRpc>[];
+    final path = await uploadOnCurrent(
+      () {
+        final rpc = current;
+        current = next.rpc;
+        return rpc;
+      },
+      (rpc) {
+        tried.add(rpc);
+        return uploadImage(rpc, [1, 2, 3]);
+      },
+    );
+    expect(tried, [old.rpc, next.rpc]);
+    expect(path, '/tmp/posse-small.png');
+
+    // 传到一半断开的不自动重传
+    tried = [];
+    await expectLater(
+      uploadOnCurrent(() => next.rpc, (rpc) {
+        tried.add(rpc);
+        throw RpcException('closed', 'connection closed');
+      }),
+      throwsA(isA<RpcException>()),
+    );
+    expect(tried, hasLength(1));
+    await next.rpc.close();
   });
 }

@@ -420,20 +420,23 @@ class _ChatScreenState extends State<ChatScreen> {
   /// 视频和「文件」里的选了就传到电脑上，路径一个一行接在输入框后面，和图片的路径一样交给 agent 去读。
   /// 照片不走这里：先在输入框上面预览，发送时才传。
   Future<void> _attachFiles(List<XFile> files) async {
-    final rpc = _rpc;
-    if (files.isEmpty || rpc == null) return;
+    if (files.isEmpty || _rpc == null) return;
     final paths = <String>[];
     _attachRuns++;
     try {
       for (final (i, file) in files.indexed) {
         if (mounted) setState(() => _attach = (i, files.length, 0));
         paths.add(
-          await uploadFile(
-            rpc,
-            file,
-            onProgress: (done) {
-              if (mounted) setState(() => _attach = (i, files.length, done));
-            },
+          // 每份开始时取当前连接：选了几份、传第一份时换了连接，后面的走新连接
+          await uploadOnCurrent(
+            () => _rpc,
+            (rpc) => uploadFile(
+              rpc,
+              file,
+              onProgress: (done) {
+                if (mounted) setState(() => _attach = (i, files.length, done));
+              },
+            ),
           ),
         );
       }
@@ -562,12 +565,17 @@ class _ChatScreenState extends State<ChatScreen> {
         for (final (i, image) in images.indexed) {
           if (mounted) setState(() => _upload = (i, images.length, 0));
           paths.add(
-            _uploaded[image] ??= await uploadImage(
-              current,
-              image,
-              onProgress: (done) {
-                if (mounted) setState(() => _upload = (i, images.length, done));
-              },
+            _uploaded[image] ??= await uploadOnCurrent(
+              () => _rpc,
+              (rpc) => uploadImage(
+                rpc,
+                image,
+                onProgress: (done) {
+                  if (mounted) {
+                    setState(() => _upload = (i, images.length, done));
+                  }
+                },
+              ),
             ),
           );
         }

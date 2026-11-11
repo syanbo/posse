@@ -30,6 +30,10 @@ class _Rpc implements PhoneRpc {
   final commitGate = <int, Completer<void>>{};
   Completer<void>? saveGate;
 
+  /// 照 PhoneRpc.upload：换下来之后不接新的上传
+  var draining = false;
+  void Function()? onCommitted;
+
   @override
   Future<RpcStream> subscribe(
     String method,
@@ -37,7 +41,10 @@ class _Rpc implements PhoneRpc {
   ) async => RpcStream(method, const Stream.empty(), () async {});
 
   @override
-  Future<T> upload<T>(Future<T> Function() body) => body();
+  Future<T> upload<T>(Future<T> Function() body) {
+    if (draining) throw UploadRefused();
+    return body();
+  }
 
   @override
   Future<Map<String, Object?>> call(
@@ -63,6 +70,7 @@ class _Rpc implements PhoneRpc {
         final n = int.parse((params['uploadId'] as String).substring(1));
         await commitGate[n]?.future;
         if (n == failAt) throw RpcException('internal_error', 'disk full');
+        onCommitted?.call();
         return {'value': '/tmp/up$n.mov'};
     }
     return {};
@@ -75,7 +83,7 @@ class _Rpc implements PhoneRpc {
 class _Model extends PosseAppModel {
   _Model(this.fake)
     : super(store: MemoryPairingStore(), settingsStore: MemorySettingsStore());
-  final _Rpc fake;
+  _Rpc fake;
   @override
   PhoneRpc? get rpc => fake;
 }
@@ -199,6 +207,39 @@ void main() {
       final field = tester.widget<TextField>(find.byType(TextField));
       expect(field.controller!.text, contains('/tmp/up1.mov'));
       expect(field.controller!.text, contains('/tmp/up2.mov'));
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'a multi-file selection moves to the new connection after a switch',
+    (tester) async {
+      final old = _Rpc(failAt: 0);
+      final next = _Rpc(failAt: 0);
+      final model = _Model(old);
+      // 第一份传完时换了连接：旧的开始排空，model.rpc 换成新的
+      old.onCommitted = () {
+        old.draining = true;
+        model.fake = next;
+        model.notifyListeners();
+      };
+      ImagePickerPlatform.instance = _Picker([_video(1), _video(2)]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatScreen(model: model, tab: _tab),
+        ),
+      );
+      await tester.pump();
+      await _pickVideos(tester);
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+      expect(
+        next.started,
+        1,
+        reason: 'the second file stayed on the draining connection',
+      );
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, contains('/tmp/up1.mov'));
       await tester.pumpWidget(const SizedBox());
     },
   );

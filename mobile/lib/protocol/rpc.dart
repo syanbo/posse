@@ -67,6 +67,12 @@ class RpcException implements Exception {
   String toString() => '$code: $message';
 }
 
+/// [PhoneRpc.upload] 一开始就被拒：这条连接正在换下来或已经关了，一个字节都还没传。
+/// 换到当前连接重来是安全的（见 uploadOnCurrent）；传到一半断开的不是它，照常报错。
+class UploadRefused extends RpcException {
+  UploadRefused() : super('closed', 'connection closed');
+}
+
 class RpcStream {
   RpcStream(this.id, this.frames, this.cancel);
   final String id;
@@ -220,7 +226,7 @@ class PhoneRpc {
   /// 在这条连接上跑一次上传：[closeWhenIdle] 等它跑完再关，不受 max 限制。
   /// 连接已经在换下来或关了时直接报 closed，新的上传走新连接。
   Future<T> upload<T>(Future<T> Function() body) async {
-    if (_closed || _draining) throw RpcException('closed', 'connection closed');
+    if (_closed || _draining) throw UploadRefused();
     _uploads++;
     try {
       return await body();
