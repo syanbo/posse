@@ -17,6 +17,7 @@ import 'package:posse_mobile/workspace/models.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/protocol/rpc.dart';
 import 'package:posse_mobile/ui/theme.dart';
+import 'package:posse_mobile/ui/widgets.dart';
 
 import 'shot_fonts.dart';
 
@@ -299,6 +300,51 @@ void main() {
       model.dispose();
     },
   );
+
+  testWidgets('details show their own errors and keep polling', (t) async {
+    final rpc = DiscRpc();
+    final base = DiscRpc();
+    rpc.handler = (method, params) async {
+      if (method == 'discussion.archive') {
+        throw RpcException('conflict', 'archive refused for the test');
+      }
+      return base.call(method, params);
+    };
+    final model = DiscModel(rpc);
+    await t.pumpWidget(
+      MaterialApp(
+        home: DiscussionRoom(
+          api: DiscussionApi(model),
+          room: 'room',
+          self: 'self',
+        ),
+      ),
+    );
+    await t.pumpAndSettle();
+    await t.tap(find.byTooltip('讨论详情'));
+    await t.pumpAndSettle();
+    // 详情页开着：每 2 秒的轮询照常
+    final before = rpc.calls.where((c) => c.method == 'discussion.show').length;
+    await t.pump(const Duration(seconds: 5));
+    final after = rpc.calls.where((c) => c.method == 'discussion.show').length;
+    expect(
+      after,
+      greaterThan(before),
+      reason: 'polling stopped under the details page',
+    );
+    // 这一页上的操作没成：报错显示在这一页上
+    await t.scrollUntilVisible(find.text('归档'), 200);
+    await t.tap(find.text('归档'));
+    await t.pumpAndSettle();
+    await t.tap(find.widgetWithText(FilledButton, '归档').last);
+    await t.pumpAndSettle();
+    expect(find.textContaining('archive refused for the test'), findsOneWidget);
+    // 一次性的提示过一会儿自己消失
+    await t.pump(noticeLife + const Duration(seconds: 1));
+    await t.pumpWidget(const SizedBox());
+    await t.pumpAndSettle();
+    model.dispose();
+  });
 
   testWidgets('tapping an attachment twice downloads it once', (t) async {
     final rpc = DiscRpc();

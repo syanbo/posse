@@ -74,7 +74,15 @@ class _DiscussionRoomState extends State<DiscussionRoom>
   List<DiscJson> attachments = [];
   final localFiles = <String, XFile>{};
   DiscJson? pending;
-  Object? error;
+
+  /// 操作的报错。放在 notifier 里：详情页是压在上面的另一个页面，房间页 setState 不会重画它，
+  /// 它要自己听着，报错才看得见
+  final errorNote = ValueNotifier<Object?>(null);
+  Object? get error => errorNote.value;
+  set error(Object? value) => errorNote.value = value;
+
+  /// 详情页开着：房间页不是最上面的页面，轮询照常（加入申请、成员要跟着变）
+  var detailsOpen = false;
 
   /// 这台电脑的名字和头像（profile.get）；旧电脑没有这个接口时为空。
   DiscJson ownProfile = {};
@@ -105,7 +113,8 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     unawaited(start());
     unawaited(loadProfile());
     timer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (foreground && ModalRoute.of(context)?.isCurrent == true) {
+      if (foreground &&
+          (ModalRoute.of(context)?.isCurrent == true || detailsOpen)) {
         unawaited(poll());
       }
     });
@@ -173,6 +182,7 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     scroll.dispose();
     state.removeListener(changed);
     state.dispose();
+    errorNote.dispose();
     super.dispose();
   }
 
