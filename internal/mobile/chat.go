@@ -90,6 +90,7 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 	path := a.TranscriptPath
 	pos := int64(0)
 	var inode uint64
+	var cursor history.ChatCursor
 	announced, ready := false, false
 	delay := chatPoll
 	timer := time.NewTimer(delay)
@@ -156,7 +157,7 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 		timer.Reset(wait)
 	}
 	// 先发一帧，再进入轮询。文件还没出现时只有声明了 transcriptPending 才带 pending。
-	ok, wait := c.chatTick(reqID, &a, &path, &pos, &inode, &announced, &ready, &delay, draft.note)
+	ok, wait := c.chatTick(reqID, &a, &path, &pos, &inode, &cursor, &announced, &ready, &delay, draft.note)
 	if !ok {
 		return
 	}
@@ -177,7 +178,7 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 			}
 			continue
 		}
-		ok, wait = c.chatTick(reqID, &a, &path, &pos, &inode, &announced, &ready, &delay, draft.note)
+		ok, wait = c.chatTick(reqID, &a, &path, &pos, &inode, &cursor, &announced, &ready, &delay, draft.note)
 		if !ok {
 			return
 		}
@@ -205,7 +206,7 @@ func (c *conn) sessionTerminal(agentName, sessionID string) host.Terminal {
 
 // chatTick 看一眼文件。ok 为 false 表示流该停（发送失败）。wait 是这一轮之后再等多久：
 // 文件还没有时从 500ms 翻倍到 5s，已经有文件就保持 500ms。读到的消息另交给 seen。
-func (c *conn) chatTick(reqID string, a *chatSub, path *string, pos *int64, inode *uint64, announced, ready *bool, delay *time.Duration, seen func([]history.ChatMessage)) (bool, time.Duration) {
+func (c *conn) chatTick(reqID string, a *chatSub, path *string, pos *int64, inode *uint64, cursor *history.ChatCursor, announced, ready *bool, delay *time.Duration, seen func([]history.ChatMessage)) (bool, time.Duration) {
 	if *path == "" {
 		*path = history.TranscriptPath(a.Agent, a.SessionID, "")
 	}
@@ -264,7 +265,7 @@ func (c *conn) chatTick(reqID string, a *chatSub, path *string, pos *int64, inod
 	if fi.Size() == *pos {
 		return true, chatPoll
 	}
-	msgs, next, err := history.ReadChatNew(a.Agent, *path, *pos)
+	msgs, next, err := cursor.ReadNew(a.Agent, *path, *pos)
 	if err != nil {
 		ok := c.stream(reqID, map[string]any{"type": "error", "message": errtext.TextIn(c.language(), err)}) == nil
 		return ok, chatPoll

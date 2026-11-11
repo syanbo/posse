@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -255,18 +256,48 @@ func readBackward(f *os.File, end int64, limit int, decode func([]byte, int64) *
 }
 
 func readGrokTail(path string, limit int, beforeOffset int64) (ChatPage, error) {
-	msgs, _, err := readGrokAll(path)
+	msgs, _, _, _, err := readGrokAll(path)
 	if err != nil {
 		return ChatPage{}, err
 	}
 	return window(msgs, limit, beforeOffset), nil
 }
 
-func readGrokNew(path string, from int64) ([]ChatMessage, int64, error) {
-	msgs, consumed, err := readGrokAll(path)
+// ChatCursor 记着一个对话流读到哪里。grok 的消息时间要从头对着 updates.jsonl 建，
+// 接着上一次的位置读时留着建好的时间表，只读两个文件新写的部分。
+type ChatCursor struct {
+	grok *grokCursor
+}
+
+type grokCursor struct {
+	path string
+	end  int64 // chat_history.jsonl 读到的位置
+	gt   *grokTimes
+	last int64
+}
+
+// ReadNew 和 ReadChatNew 一样。
+func (c *ChatCursor) ReadNew(agent, path string, from int64) ([]ChatMessage, int64, error) {
+	if agent != "grok" {
+		return ReadChatNew(agent, path, from)
+	}
+	g := c.grok
+	if g != nil && g.path == path && g.end == from && g.gt != nil && grokUpdatesSize(path) >= g.gt.scanned {
+		g.gt.extend(path)
+		msgs, consumed, err := readGrokLines(path, from, g.gt, &g.last)
+		if err != nil {
+			c.grok = nil
+			return nil, from, err
+		}
+		g.end = consumed
+		return msgs, consumed, nil
+	}
+	c.grok = nil
+	msgs, consumed, gt, last, err := readGrokAll(path)
 	if err != nil {
 		return nil, from, err
 	}
+	c.grok = &grokCursor{path: path, end: consumed, gt: gt, last: last}
 	var out []ChatMessage
 	for _, m := range msgs {
 		if m.Offset >= from {
@@ -279,32 +310,54 @@ func readGrokNew(path string, from int64) ([]ChatMessage, int64, error) {
 	return out, consumed, nil
 }
 
-func readGrokAll(path string) ([]ChatMessage, int64, error) {
-	f, err := os.Open(path)
+func grokUpdatesSize(transcript string) int64 {
+	fi, err := os.Stat(filepath.Join(filepath.Dir(transcript), "updates.jsonl"))
 	if err != nil {
-		return nil, 0, ErrChatNotFound
+		return -1
 	}
-	defer f.Close()
+	return fi.Size()
+}
+
+func readGrokNew(path string, from int64) ([]ChatMessage, int64, error) {
+	var c ChatCursor
+	return c.ReadNew("grok", path, from)
+}
+
+func readGrokAll(path string) ([]ChatMessage, int64, *grokTimes, int64, error) {
 	st := &fileState{}
 	grokParser{}.prepare(path, st)
-	var msgs []ChatMessage
-	var prev int64
 	var last int64
-	consumed, _, err := scanLines(f, func(line []byte, n int64) {
+	msgs, consumed, err := readGrokLines(path, 0, st.grok, &last)
+	return msgs, consumed, st.grok, last, err
+}
+
+// readGrokLines 从 from 起解 chat_history.jsonl 的完整行，返回读到的位置。
+func readGrokLines(path string, from int64, gt *grokTimes, last *int64) ([]ChatMessage, int64, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, from, ErrChatNotFound
+	}
+	defer f.Close()
+	if _, err := f.Seek(from, io.SeekStart); err != nil {
+		return nil, from, err
+	}
+	var msgs []ChatMessage
+	prev := from
+	n, _, err := scanLines(f, func(line []byte, n int64) {
 		off := prev
-		prev = n
+		prev = from + n
 		raw := bytes.TrimRight(line, "\r\n")
-		if m := decodeGrokLine(raw, off, st.grok, &last); m != nil {
+		if m := decodeGrokLine(raw, off, gt, last); m != nil {
 			msgs = append(msgs, *m)
 		}
 	})
 	if err != nil {
-		return nil, 0, err
+		return nil, from, err
 	}
 	if msgs == nil {
 		msgs = []ChatMessage{}
 	}
-	return msgs, consumed, nil
+	return msgs, from + n, nil
 }
 
 func window(msgs []ChatMessage, limit int, beforeOffset int64) ChatPage {

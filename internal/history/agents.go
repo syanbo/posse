@@ -914,6 +914,8 @@ type grokTimes struct {
 	tools   map[string]int64
 	// matched 是最后一个对上的回复分段在 updates.jsonl 里的行尾位置
 	matched int64
+	// scanned 是 updates.jsonl 读到的位置（最后一个完整行之后）
+	scanned int64
 }
 
 type grokChunk struct {
@@ -931,20 +933,29 @@ var (
 // 这样和整份读时的 next 一致，新回复不会对上已经用过的分段。之前的用户消息和工具调用
 // 都已经对上过，不用再读。
 func (grokParser) prepare(transcript string, st *fileState) {
+	gt := &grokTimes{prompts: map[int]int64{}, tools: map[string]int64{}, matched: st.GrokUpdates, scanned: st.GrokUpdates}
+	if gt.extend(transcript) {
+		st.grok = gt
+	}
+}
+
+// extend 从 scanned 接着读 updates.jsonl 新写完的行。文件比 scanned 短（被重写过）时从头读。
+// 读不到文件返回 false。
+func (gt *grokTimes) extend(transcript string) bool {
 	f, err := os.Open(filepath.Join(filepath.Dir(transcript), "updates.jsonl"))
 	if err != nil {
-		return
+		return false
 	}
 	defer f.Close()
-	from := st.GrokUpdates
+	from := gt.scanned
 	if fi, err := f.Stat(); err != nil || fi.Size() < from {
 		from = 0
+		gt.matched = 0
 	}
 	if _, err := f.Seek(from, io.SeekStart); err != nil {
-		return
+		return false
 	}
-	gt := &grokTimes{prompts: map[int]int64{}, tools: map[string]int64{}, matched: from}
-	scanLines(f, func(line []byte, n int64) {
+	n, _, _ := scanLines(f, func(line []byte, n int64) {
 		if !hasFieldValue(line, grokUpdateKey, grokUpdateTypes) {
 			return
 		}
@@ -985,7 +996,8 @@ func (grokParser) prepare(transcript string, st *fileState) {
 			}
 		}
 	})
-	st.grok = gt
+	gt.scanned = from + n
+	return true
 }
 
 // grokCallID 取调用 ID 里 "call-" 起的部分：updates 里可能带 "ws_<uuid>_" 这样的前缀。

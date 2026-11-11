@@ -513,3 +513,72 @@ func TestReadChatTailCursor(t *testing.T) {
 		t.Fatalf("tool %+v", page.Messages[2])
 	}
 }
+
+// 对话流接着读 grok：分几轮往两个文件追加（含没写完的半行），ChatCursor 每轮只读新的部分，
+// 读出的消息、时间和位置要和每轮整份重读一样。
+func TestChatCursorGrokMatchesFullRead(t *testing.T) {
+	dir := t.TempDir()
+	chat := filepath.Join(dir, "chat_history.jsonl")
+	updates := filepath.Join(dir, "updates.jsonl")
+	writeFile(t, chat, `{"type":"system","content":"You are Grok"}`)
+	writeFile(t, updates, `{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"第一问"},"_meta":{"promptIndex":0}}}}`)
+	rounds := []struct{ upd, chat string }{
+		{`{"timestamp":1790000105,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"先读"}}}}` + "\n",
+			`{"type":"user","content":[{"type":"text","text":"<user_query>第一问</user_query>"}],"prompt_index":0}` + "\n"},
+		{`{"timestamp":1790000107,"params":{"update":{"sessionUpdate":"tool_call","toolCallId":"ws_x_call-a-1"}}}` + "\n" + `{"timestamp":17900`,
+			`{"type":"assistant","content":"先读配置。","tool_calls":[{"id":"call-a-1","name":"read_file","arguments":"{}"}]}` + "\n" + `{"type":"tool_res`},
+		{`00110,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"改好了"}}}}` + "\n",
+			`ult","tool_call_id":"call-a-1","content":"theme = Mocha"}` + "\n"},
+		{`{"timestamp":1790000120,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"第二问"},"_meta":{"promptIndex":1}}}}` + "\n",
+			`{"type":"assistant","content":"改好了。"}` + "\n" + `{"type":"user","content":[{"type":"text","text":"<user_query>第二问</user_query>"}],"prompt_index":1}` + "\n"},
+		{"", `{"type":"assistant","content":"没有对上的时间，沿用上一条"}` + "\n"},
+	}
+	add := func(path, s string) {
+		f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.WriteString(s)
+		f.Close()
+	}
+	var cur ChatCursor
+	var got []ChatMessage
+	var pos int64
+	for i, r := range rounds {
+		add(updates, r.upd)
+		add(chat, r.chat)
+		want, wantNext, err := ReadChatNew("grok", chat, pos)
+		if err != nil {
+			t.Fatal(err)
+		}
+		msgs, next, err := cur.ReadNew("grok", chat, pos)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, _ := json.Marshal(msgs)
+		b, _ := json.Marshal(want)
+		if string(a) != string(b) || next != wantNext {
+			t.Fatalf("round %d:\n got %s next %d\nwant %s next %d", i, a, next, b, wantNext)
+		}
+		if i > 0 && (cur.grok == nil || cur.grok.end != next) {
+			t.Fatalf("round %d: cursor not kept: %+v", i, cur.grok)
+		}
+		got = append(got, msgs...)
+		pos = next
+	}
+	full, err := ReadChatTail("grok", "", chat, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := json.Marshal(got)
+	b, _ := json.Marshal(full.Messages)
+	if string(a) != string(b) || len(got) != 6 {
+		t.Fatalf("accumulated %s\nfull %s", a, b)
+	}
+	// 文件被重写变短：位置对不上，整份重读
+	writeFile(t, chat, `{"type":"user","content":[{"type":"text","text":"<user_query>新的</user_query>"}],"prompt_index":0}`)
+	msgs, _, err := cur.ReadNew("grok", chat, 0)
+	if err != nil || len(msgs) != 1 || msgs[0].Timestamp == nil || *msgs[0].Timestamp != 1790000100000 {
+		t.Fatalf("rewritten: %+v %v", msgs, err)
+	}
+}
