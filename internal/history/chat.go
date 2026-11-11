@@ -83,7 +83,7 @@ func ReadChatTail(agent, sessionID, path string, limit int, beforeOffset int64) 
 	}
 	paged := agent == "codex" && codexPaginated(path)
 	msgs, more, err := readBackward(f, end, limit, func(line []byte, off int64) *ChatMessage {
-		return decodeChatLine(agent, line, off, paged, nil)
+		return decodeChatLine(agent, line, off, paged)
 	})
 	if err != nil {
 		return ChatPage{}, err
@@ -141,7 +141,7 @@ func ReadChatNew(agent, path string, from int64) (msgs []ChatMessage, next int64
 		} else {
 			complete = nil
 		}
-		if m := decodeChatLine(agent, bytes.TrimRight(line, "\r"), off, paged, nil); m != nil {
+		if m := decodeChatLine(agent, bytes.TrimRight(line, "\r"), off, paged); m != nil {
 			msgs = append(msgs, *m)
 		}
 		off += int64(len(line))
@@ -186,27 +186,21 @@ func readBackward(f *os.File, end int64, limit int, decode func([]byte, int64) *
 	var newest []ChatMessage
 	var pending []byte
 	pos := end
-	for len(newest) < want && (pos > 0 || len(pending) > 0) {
-		var data []byte
-		dataOff := pos
-		if pos > 0 {
-			n := int64(chatChunk)
-			if pos < n {
-				n = pos
-			}
-			buf := make([]byte, n)
-			if _, err := f.ReadAt(buf, pos-n); err != nil {
-				return nil, false, err
-			}
-			pos -= n
-			dataOff = pos
-			data = make([]byte, 0, len(buf)+len(pending))
-			data = append(data, buf...)
-			data = append(data, pending...)
-		} else {
-			data = pending
-			pending = nil
+	// pending 只在还没读到文件头（pos > 0）时留下，下一轮接在前面一块读出来的后面
+	for len(newest) < want && pos > 0 {
+		n := int64(chatChunk)
+		if pos < n {
+			n = pos
 		}
+		buf := make([]byte, n)
+		if _, err := f.ReadAt(buf, pos-n); err != nil {
+			return nil, false, err
+		}
+		pos -= n
+		dataOff := pos
+		data := make([]byte, 0, len(buf)+len(pending))
+		data = append(data, buf...)
+		data = append(data, pending...)
 		cut := 0
 		if pos > 0 {
 			nl := bytes.IndexByte(data, '\n')
@@ -337,7 +331,8 @@ func window(msgs []ChatMessage, limit int, beforeOffset int64) ChatPage {
 	return page
 }
 
-func decodeChatLine(agent string, raw []byte, off int64, paged bool, gt *grokTimes) *ChatMessage {
+// decodeChatLine 解一行 claude、codex、cursor 的会话记录。grok 的分两个文件存，走 readGrokTail、readGrokNew。
+func decodeChatLine(agent string, raw []byte, off int64, paged bool) *ChatMessage {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || raw[0] != '{' {
 		return nil
@@ -348,9 +343,6 @@ func decodeChatLine(agent string, raw []byte, off int64, paged bool, gt *grokTim
 		m = decodeClaudeLine(raw, off)
 	case "codex":
 		m = decodeCodexLine(raw, off, paged)
-	case "grok":
-		var last int64
-		m = decodeGrokLine(raw, off, gt, &last)
 	case "cursor":
 		m = decodeCursorLine(raw, off)
 	default:
