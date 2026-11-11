@@ -263,18 +263,19 @@ func (a *app) filesFor(w *workspace) *filesView {
 	if old != nil && old.root == filepath.Clean(w.Path) {
 		return old
 	}
-	// 目录换了要重建：旧的网页标签不会再显示，页面要销毁，不然 WebContent 进程一直在后台
-	if old != nil {
-		for _, d := range old.docs {
-			closeWeb(d)
-		}
-	}
 	v := &filesView{wsID: w.ID, root: filepath.Clean(w.Path), tree: files.NewTree(w.Path)}
 	newGitStates(v)
 	if a.files == nil {
 		a.files = map[string]*filesView{}
 	}
 	a.files[w.ID] = v
+	// 目录换了（在外面挪了地方，重新指定过）：打开的文档连同没保存的改动带过来
+	if old != nil {
+		a.carryDocs(w, old, v)
+		a.loadDirs(v, v.tree.SetExpanded(v.root, true))
+		a.saveFilesState(v)
+		return v
+	}
 	saved := a.state.Files[w.ID]
 	for _, d := range saved.Expanded {
 		if d == v.root || strings.HasPrefix(d, v.root+string(filepath.Separator)) {
@@ -293,6 +294,56 @@ func (a *app) filesFor(w *workspace) *filesView {
 	}
 	a.loadDirs(v, v.tree.SetExpanded(v.root, true))
 	return v
+}
+
+// carryDocs 把旧目录下打开的文档搬到新目录下（同一个文档对象，编辑器里没保存的改动不丢），
+// 分栏里的标签跟着改名。diff、比较、日志依据旧目录的仓库状态，关掉；网页标签不在目录下，照旧。
+func (a *app) carryDocs(w *workspace, old, v *filesView) {
+	rename := map[string]string{}
+	for _, d := range old.docs {
+		switch {
+		case d.web != nil:
+		case d.virtual():
+			continue
+		default:
+			if rel, err := filepath.Rel(old.root, d.path); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				from := docKey(d)
+				d.path = filepath.Join(v.root, rel)
+				rename[from] = docKey(d)
+			}
+			// 行号旁的改动标记和 Annotate 按旧仓库算的，重新取
+			d.blame, d.headBuf, d.headFor = nil, nil, ""
+		}
+		v.docs = append(v.docs, d)
+		if d == old.cur {
+			v.cur = d
+		}
+	}
+	if v.cur == nil && len(v.docs) > 0 {
+		v.cur = v.docs[len(v.docs)-1]
+	}
+	for _, dir := range old.tree.Expansions() {
+		if rel, err := filepath.Rel(old.root, dir); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+			v.tree.SetExpanded(filepath.Join(v.root, rel), true)
+		}
+	}
+	if st, ok := a.layoutOf(w.ID); ok && len(rename) > 0 {
+		st = st.clone()
+		for _, l := range st.Root.leaves(nil) {
+			for i, k := range l.Tabs {
+				if n, ok := rename[k]; ok {
+					l.Tabs[i] = n
+				}
+			}
+			if n, ok := rename[l.Active]; ok {
+				l.Active = n
+			}
+		}
+		a.setLayout(w.ID, st)
+	}
+	if n, ok := rename[a.activeTerm[w.ID]]; ok {
+		a.activeTerm[w.ID] = n
+	}
 }
 
 // filesActive 报告工作区选中的是不是文件标签。

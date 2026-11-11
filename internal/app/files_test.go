@@ -1440,3 +1440,52 @@ func TestRefreshListFailureCallsDone(t *testing.T) {
 		t.Fatal("done not called after the listing failed")
 	}
 }
+
+// 工作区目录在外面挪了地方、重新指定后：打开的文件带着没保存的改动换到新目录下，照样能存。
+func TestRelocateKeepsUnsavedEdits(t *testing.T) {
+	a := previewApp(t)
+	v := previewFiles(t, a, "README.md")
+	d := v.cur
+	d.ed.Insert("<!-- draft -->\n")
+	w := &a.workspaces[0]
+	moved := filepath.Join(t.TempDir(), "moved")
+	if err := os.Rename(v.root, moved); err != nil {
+		t.Fatal(err)
+	}
+	tt := newPreviewTester(a, true)
+	v.poll.at = time.Time{}
+	tt.Frame() // 目录不见了的那会儿照常画
+	w.Path = moved
+	tt.Frame()
+	tt.Frame()
+	nv := a.files[w.ID]
+	if nv == v || len(nv.docs) != 1 || nv.docs[0] != d || nv.cur != d {
+		t.Fatalf("docs not carried: %+v", nv.docs)
+	}
+	if d.path != filepath.Join(moved, "README.md") || !d.isModified() {
+		t.Fatalf("doc %s modified %v", d.path, d.isModified())
+	}
+	if !a.saveDoc(L(nil), d, false) {
+		t.Fatalf("save failed: %s", a.err)
+	}
+	b, _ := os.ReadFile(filepath.Join(moved, "README.md"))
+	if !strings.Contains(string(b), "<!-- draft -->") {
+		t.Fatalf("saved %q", b)
+	}
+}
+
+// 分栏里放着的文件跟着改名，换了目录也留在原来那格。
+func TestRelocateRenamesDocInColumns(t *testing.T) {
+	a, w := columnsApp()
+	v, docs := docsApp(t, a, w, "README.md", "main.go")
+	a.state.Panes = map[string]layoutState{"w1": twoCols([]string{"t1"}, []string{docKey(docs[0]), docKey(docs[1])}, 0)}
+	w.Path = "/moved"
+	nv := a.filesFor(w)
+	if nv == v || len(nv.docs) != 2 || nv.docs[0] != docs[0] || docs[0].path != "/moved/README.md" {
+		t.Fatalf("docs %+v", nv.docs)
+	}
+	st := a.state.Panes["w1"]
+	if p2 := st.leaf("p2"); p2 == nil || !slices.Equal(p2.Tabs, []string{docKey(docs[0]), docKey(docs[1])}) {
+		t.Fatalf("cell %+v", st.leaf("p2"))
+	}
+}
