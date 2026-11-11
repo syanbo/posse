@@ -229,11 +229,12 @@ func TestShortModel(t *testing.T) {
 	}
 }
 
-// setHome 在测试期间换掉缓存的主目录。
+// setHome 在测试期间换掉缓存的主目录。换之前、换回之前都等技能页的后台扫描读完它。
 func setHome(t *testing.T, home string) {
+	skillsWork.Wait()
 	old := homeDir
 	homeDir = home
-	t.Cleanup(func() { homeDir = old })
+	t.Cleanup(func() { skillsWork.Wait(); homeDir = old })
 }
 
 // 常驻进程不在时 socket 连不上，轮询据此才去拉起它。

@@ -27,7 +27,9 @@ func (a *app) readPosseSkills() {
 		return
 	}
 	p.reading = true
+	skillsWork.Add(1)
 	go func() {
+		defer skillsWork.Done()
 		st := skills.ReadPosse(homeDir)
 		a.update(func() {
 			p.st, p.read, p.reading = st, true, false

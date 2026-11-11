@@ -18,13 +18,14 @@ import (
 // 技能页的开关：点 Claude 的开关先弹框给 diff，确认后才写 settings.json，写完重扫显示已关闭。
 func TestSkillToggleConfirm(t *testing.T) {
 	home := t.TempDir()
+	skillsWork.Wait() // 前面测试起的扫描还在读 homeDir 这些
 	old := homeDir
 	homeDir = home
-	t.Cleanup(func() { homeDir = old })
+	t.Cleanup(func() { skillsWork.Wait(); homeDir = old })
 	t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
 	findCodex = func(string) string { return "" } // 不去问真的 codex、grok
 	findGrok = func(string) string { return "" }
-	t.Cleanup(func() { findCodex, findGrok = skills.FindCodex, skills.FindGrok })
+	t.Cleanup(func() { skillsWork.Wait(); findCodex, findGrok = skills.FindCodex, skills.FindGrok })
 	dir := filepath.Join(home, ".claude", "skills", "demo")
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: demo\ndescription: 测试用\n---\n"), 0o644)
@@ -111,12 +112,13 @@ func TestCreateProjectSkill(t *testing.T) {
 // 第一次统计用量还没算完时重扫（确认开关、刷新）：用量照样算完显示出来，不停在「正在统计」。
 func TestSkillStatsSurviveRescan(t *testing.T) {
 	home := t.TempDir()
+	skillsWork.Wait() // 前面测试起的扫描还在读 homeDir 这些
 	old := homeDir
 	homeDir = home
-	t.Cleanup(func() { homeDir = old })
+	t.Cleanup(func() { skillsWork.Wait(); homeDir = old })
 	findCodex = func(string) string { return "" }
 	findGrok = func(string) string { return "" }
-	t.Cleanup(func() { findCodex, findGrok = skills.FindCodex, skills.FindGrok })
+	t.Cleanup(func() { skillsWork.Wait(); findCodex, findGrok = skills.FindCodex, skills.FindGrok })
 	a := previewApp(t)
 	a.skills.visible = true
 	a.scanSkills()
@@ -135,9 +137,10 @@ func TestSkillStatsSurviveRescan(t *testing.T) {
 // 算完时页面关着就不留结果，下次开页重新算（读缓存）。
 func TestSkillStatsOneRunAcrossReopen(t *testing.T) {
 	home := t.TempDir()
+	skillsWork.Wait() // 前面测试起的扫描还在读 homeDir 这些
 	old := homeDir
 	homeDir = home
-	t.Cleanup(func() { homeDir = old })
+	t.Cleanup(func() { skillsWork.Wait(); homeDir = old })
 	findCodex = func(string) string { return "" }
 	findGrok = func(string) string { return "" }
 	var mu sync.Mutex
@@ -156,7 +159,12 @@ func TestSkillStatsOneRunAcrossReopen(t *testing.T) {
 		mu.Unlock()
 		return &history.UseStats{Skills: map[string]*history.SkillStat{"x": {Name: "x", Count: 3}}}, nil
 	}
-	t.Cleanup(func() { findCodex, findGrok, skillStats = skills.FindCodex, skills.FindGrok, history.SkillStats })
+	t.Cleanup(func() {
+		skillsWork.Wait()
+		findCodex, findGrok, skillStats = skills.FindCodex, skills.FindGrok, history.SkillStats
+	})
+	// 中途失败时还在等放行的统计也放掉，收尾的 Wait 才不会卡住（Cleanup 后登记的先跑）
+	t.Cleanup(func() { close(release) })
 	a := previewApp(t)
 	settle := func(done func() bool) {
 		t.Helper()

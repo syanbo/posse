@@ -7,6 +7,11 @@ import (
 )
 
 func TestPosseSkillsBar(t *testing.T) {
+	// 点「查看」会打开技能页、在后台扫技能：扫空的主目录，不去问真的 codex、grok，也不统计本机的会话
+	setHome(t, t.TempDir())
+	findCodex = func(string) string { return "" }
+	findGrok = func(string) string { return "" }
+	t.Cleanup(func() { skillsWork.Wait(); findCodex, findGrok = skills.FindCodex, skills.FindGrok })
 	a := previewApp(t)
 	tt := newPreviewTester(a, false)
 	// 没读过安装情况（测试不开窗口）时不出提示
@@ -25,6 +30,11 @@ func TestPosseSkillsBar(t *testing.T) {
 	tt.Frame()
 	if a.selected != skillsBoardID {
 		t.Fatalf("selected %q", a.selected)
+	}
+	// 扫描读回来的安装情况（空目录：都没装）交给界面之后再往下改状态，免得后到的结果盖掉
+	for range 2 {
+		skillsWork.Wait()
+		a.runPending()
 	}
 	// 关掉后这一版不再提示
 	if err := tt.Click("关闭提示"); err != nil {

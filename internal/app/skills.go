@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -77,6 +78,8 @@ var (
 	findGrok  = skills.FindGrok
 	// skillStats 是算技能用量的函数，测试里换掉
 	skillStats = history.SkillStats
+	// skillsWork 记着技能页起的后台扫描、统计：测试换回 homeDir、findCodex 这些之前等它们读完
+	skillsWork sync.WaitGroup
 )
 
 // skillsRefresh 是文件栏的技能页签开着时多久重扫一次：只是 stat 几个目录。
@@ -97,10 +100,14 @@ func (a *app) scanSkills() {
 	s.req++
 	s.loading = true
 	req := s.req
+	skillsWork.Add(1)
 	go func() {
+		defer skillsWork.Done()
 		codex := findCodex(homeDir)
 		// MCP 另起一路扫、扫完自己交给界面：grok 慢时不拖着技能列表
+		skillsWork.Add(1)
 		go func() {
+			defer skillsWork.Done()
 			mcp := skills.ScanMCP(context.Background(), skills.MCPOptions{Home: homeDir, Codex: codex, Grok: findGrok(homeDir)})
 			a.update(func() {
 				if s.req == req {
@@ -129,7 +136,9 @@ func (a *app) scanSkills() {
 		if a.home != "" {
 			cache = filepath.Join(a.home, "skill-usage.json")
 		}
+		skillsWork.Add(1)
 		go func() {
+			defer skillsWork.Done()
 			stats, _ := skillStats(context.Background(), history.Roots{Home: homeDir}, cache, func(done, total int) {
 				a.update(func() { s.statsDone, s.statsTotal = done, total })
 			})
