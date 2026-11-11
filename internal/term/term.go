@@ -325,7 +325,7 @@ func (t *Terminal) readLoop() {
 		n, err := t.pty.Read(buf)
 		if n > 0 {
 			t.smu.Lock()
-			title := ""
+			title, titled := "", false
 			t.tail = carry(t.tail, buf[:n])
 			// 在交给内核之前：探测的应答要先于内核对紧跟着的 CSI c 的应答写回去。界面接入时也由这里应答，
 			// 界面的内核同样不认识 7501
@@ -350,14 +350,15 @@ func (t *Terminal) readLoop() {
 				}
 				if t.titleDirty {
 					t.titleDirty = false
-					title = t.emu.Title()
+					title, titled = t.emu.Title(), true
 				}
 			}
 			t.broadcast(buf[:n])
 			t.smu.Unlock()
 			t.lastOutput.Store(time.Now().UnixNano())
 			t.idle.Reset(compressAfter)
-			if title != "" {
+			// 程序清空标题（OSC 2 带空串）也要送出去，不然一直留着旧标题
+			if titled {
 				t.setTitle(title)
 			}
 			if t.onProg != nil {
