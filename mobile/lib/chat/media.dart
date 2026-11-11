@@ -160,7 +160,7 @@ class _MediaScreenState extends State<MediaScreen> {
         });
       }
     } on RpcException catch (e) {
-      if (e.code == 'method_not_found') {
+      if (e.missingMethod) {
         _timer?.cancel();
         if (mounted) {
           setState(() => _error = context.l10n.chatMediaOldPosse);

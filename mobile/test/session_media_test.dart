@@ -241,27 +241,34 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('old desktop says it needs an update', (tester) async {
-    final rpc = _OldRpc();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: MediaScreen(model: _OldModel(rpc), tab: tab),
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-    expect(find.textContaining('版本太旧'), findsOneWidget);
-    await tester.pumpWidget(const SizedBox());
-  });
+  // 沿用 Orca 协议的旧版本回 unknown_method，同样算旧
+  for (final code in ['method_not_found', 'unknown_method']) {
+    testWidgets('old desktop says it needs an update ($code)', (tester) async {
+      final rpc = _OldRpc(code);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaScreen(model: _OldModel(rpc), tab: tab),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('版本太旧'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
 }
 
 class _OldRpc implements PhoneRpc {
+  _OldRpc(this.code);
+
+  final String code;
+
   @override
   Future<Map<String, Object?>> call(
     String method,
     Map<String, Object?> params, {
     Duration? timeout,
-  }) async => throw RpcException('method_not_found', 'Unknown method: $method');
+  }) async => throw RpcException(code, 'Unknown method: $method');
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;

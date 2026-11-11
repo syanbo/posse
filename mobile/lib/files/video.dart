@@ -272,7 +272,7 @@ class _VideoViewState extends State<VideoView> {
     } on VideoTooLarge {
       _fail((l) => l.filesVideoTooLarge);
     } on RpcException catch (e) {
-      if (e.code == 'method_not_found') {
+      if (e.missingMethod) {
         _fail((l) => l.filesVideoOldPosse);
       } else if (e.code == 'closed') {
         _fail((l) => l.filesDownloadDisconnected, resumable: true);

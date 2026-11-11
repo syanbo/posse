@@ -257,7 +257,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
       _fail(
         (l) => e.code == 'closed'
             ? l.filesDownloadDisconnected
-            : e.code == 'method_not_found'
+            : e.missingMethod
             ? l.filesDownloadOldPosse
             : friendlyError(e, l),
       );

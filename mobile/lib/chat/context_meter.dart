@@ -102,7 +102,7 @@ class _ContextMeterState extends State<ContextMeter> {
         setState(() => _percent = percent);
       }
     } on RpcException catch (e) {
-      if (e.code == 'method_not_found') _unsupported = true;
+      if (e.missingMethod) _unsupported = true;
     } catch (_) {
       // 断线之类，下一轮再读
     }

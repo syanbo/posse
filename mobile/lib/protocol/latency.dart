@@ -93,7 +93,7 @@ class LatencyMeter {
         if (_samples.length > 3) _samples.removeAt(0);
       }
     } on RpcException catch (e) {
-      if (e.code == 'method_not_found' || e.code == 'unknown_method') {
+      if (e.missingMethod) {
         _method = 'status.get';
       }
       // closed：连接已经断了，重连那边会处理

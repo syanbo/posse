@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/protocol/pairing.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/usage/usage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -205,7 +206,7 @@ void main() {
     var fail = false;
     Future<List<AgentUsage>> refresh() async {
       if (fail) {
-        throw Exception('method_not_found: Unknown method: usage.refresh');
+        throw RpcException('unknown_method', 'Unknown method: usage.refresh');
       }
       return [
         AgentUsage(

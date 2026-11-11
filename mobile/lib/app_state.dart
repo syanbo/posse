@@ -1191,7 +1191,7 @@ class PosseAppModel extends ChangeNotifier {
       _badge = null;
       _updateBadge();
     } on RpcException catch (e) {
-      pushStatus = e.code == 'unknown_method' || e.code == 'method_not_found'
+      pushStatus = e.missingMethod
           ? PushStatus.unsupportedComputer
           : PushStatus.failed;
     } catch (_) {

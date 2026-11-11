@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_state.dart';
 import '../l10n/l10n.dart';
+import '../protocol/rpc.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -392,7 +393,7 @@ class _UsageCardState extends State<UsageCard> {
       await prefs.setString(_cacheKey(id), jsonEncode(res));
     } catch (e) {
       // 旧版电脑端没有这个接口：不显示卡片。超时、断线这类留着上次的读数
-      if (!e.toString().contains('method_not_found')) return;
+      if (!(e is RpcException && e.missingMethod)) return;
       if (mounted && identical(rpc, widget.model.rpc) && _usages.isNotEmpty) {
         setState(() => _usages = const []);
       }
@@ -641,7 +642,7 @@ class _UsageSheetState extends State<UsageSheet> {
       if (!mounted) return;
       // 电脑上的 Posse 太旧没有这个接口时说清楚，别的错误照常写
       final l = context.l10n;
-      final old = e.toString().contains('method_not_found');
+      final old = e is RpcException && e.missingMethod;
       setState(
         () => _error = e is _NotConnected
             ? l.usageNotConnected

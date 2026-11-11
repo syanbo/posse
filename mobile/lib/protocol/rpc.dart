@@ -63,6 +63,10 @@ class RpcException implements Exception {
   final Object? data;
   final String code;
   final String message;
+
+  /// 电脑上的 posse 没有这个方法（太旧）。Posse 回 method_not_found，沿用 Orca 协议的旧版本回 unknown_method。
+  bool get missingMethod =>
+      code == 'method_not_found' || code == 'unknown_method';
   @override
   String toString() => '$code: $message';
 }
@@ -147,7 +151,7 @@ class PhoneRpc {
       });
     } on RpcException catch (error) {
       // 旧常驻进程没有这条扩展，照常使用它已经有的方法。
-      if (error.code == 'unknown_method' || error.code == 'method_not_found') {
+      if (error.missingMethod) {
         return;
       }
       rethrow;

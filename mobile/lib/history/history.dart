@@ -9,6 +9,7 @@ import '../chat/chat.dart';
 import '../chat/merge.dart';
 import '../chat/transcript.dart';
 import '../l10n/l10n.dart';
+import '../protocol/rpc.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -103,7 +104,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (!mounted || seq != _seq) return;
       setState(() {
         _loading = false;
-        _error = e is Exception && '$e'.contains('method_not_found')
+        _error = e is RpcException && e.missingMethod
             ? context.l10n.historyOldPosse
             : friendlyError(e, context.l10n);
       });
