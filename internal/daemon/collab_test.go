@@ -268,9 +268,11 @@ func TestCollabRevokeAndRejoin(t *testing.T) {
 		j, _ := m.store.Joined(p.disc.Key)
 		return j.State == store.PersonRemoved
 	})
-	if _, err := os.Stat(m.credentialPath(p.disc.Key)); !os.IsNotExist(err) {
-		t.Fatal("credential kept after removal")
-	}
+	// revokeLocal 先记状态再删凭据文件（常在另一个协程里），看到状态时文件可能还在
+	waitFor(t, "credential removed", func() bool {
+		_, err := os.Stat(m.credentialPath(p.disc.Key))
+		return os.IsNotExist(err)
+	})
 	// 本机已开始的一轮照常收尾，结果留在本机，不再交给房主
 	readAll(t, m, x)
 	call(t, m.taskDone, map[string]any{"task": x.TaskID, "caller": x.Worker, "execution": x.ID, "body": "late result"})
