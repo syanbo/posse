@@ -197,6 +197,21 @@ func (a *app) withImagePath(it imageItem, f func(path string) error) {
 	}()
 }
 
+// openPreview 用系统的预览打开 path，测试里换掉。
+var openPreview = func(path string) error { return exec.Command("open", "-a", "Preview", path).Run() }
+
+// openInPreview 用系统的预览打开图片。open 要等预览接手才退出（预览没开着时要先启动它），在后台等，不卡界面。
+func (a *app) openInPreview(it imageItem) {
+	a.withImagePath(it, func(path string) error {
+		go func() {
+			if err := openPreview(path); err != nil {
+				a.update(func() { a.err = errtext.Text(err) })
+			}
+		}()
+		return nil
+	})
+}
+
 // copyImage 把图片放进剪贴板：同一项里既有 PNG 数据（贴进聊天、文档这类认图片的地方）又有文件
 // （访达里粘贴得到文件，Posse 的终端里 ⌘V 贴的是路径，agent 当附件）。转 PNG 在后台做，大图要一会儿。
 func (a *app) copyImage(m locales.Messages, it imageItem) {
@@ -260,9 +275,7 @@ func (a *app) imageMenu(c *ui.Context, card ui.Element, it imageItem) {
 				a.withImagePath(it, mygo.Shell.OpenPath)
 			}
 		} else if m.Item(L(c).ImagesOpenInPreview()).Chosen() {
-			a.withImagePath(it, func(path string) error {
-				return exec.Command("open", "-a", "Preview", path).Run()
-			})
+			a.openInPreview(it)
 		}
 	})
 }
