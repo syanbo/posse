@@ -685,10 +685,6 @@ func (s *Store) SetArchived(key string, archived bool, at time.Time) error {
 
 // --- 成员
 
-func (s *Store) AddMember(m Member) error {
-	return s.withTx(func(tx *sql.Tx) error { return addMember(tx, m, "") })
-}
-
 // AddMemberOnce 是成员电脑经房主加自己的 Agent，client 是这次添加的请求 ID：上次房主加好了、应答却丢了，
 // 拥有者用同一个 ID 重发时返回已经加好的那个（dup），不再加一个。同一个 ID 的 Agent 已经移除、属于这个人之前的资格，
 // 或者设置和这次的不一样时报冲突：不复活、不覆盖。

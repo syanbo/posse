@@ -844,13 +844,6 @@ func (s *Store) JoinRequests(room string, pending bool) ([]JoinRequest, error) {
 	return collect(s.db, scanRequest, q+` ORDER BY created_at`, room)
 }
 
-// PendingRequestCount 是所有共享讨论里待批准的申请数（侧栏提醒）。
-func (s *Store) PendingRequestCount() int {
-	var n int
-	s.db.QueryRow(`SELECT COUNT(*) FROM collab_requests WHERE state='pending'`).Scan(&n)
-	return n
-}
-
 // ApproveRequest 批准申请：同一事务里绑定申请时的指纹、成员代际加一、申请记成已批准。
 // 已经处理过的申请返回原结果（重复批准不再加代）。
 func (s *Store) ApproveRequest(id string, at time.Time) (JoinRequest, error) {
@@ -1819,19 +1812,6 @@ func (s *Store) ApplySync(room, self string, b SyncBatch) (bool, error) {
 		return false, nil
 	}
 	return err == nil, err
-}
-
-// MirrorAttachments 是加入的讨论里所有消息的附件（相对 $POSSE_HOME 的缓存路径），后台按需下载。
-func (s *Store) MirrorAttachments(room string) ([]Attachment, error) {
-	msgs, err := collect(s.db, scanDiscMessage, `SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND attachments!='' ORDER BY seq DESC`, room)
-	if err != nil {
-		return nil, err
-	}
-	var out []Attachment
-	for _, m := range msgs {
-		out = append(out, m.Attachments...)
-	}
-	return out, nil
 }
 
 // AttachmentsAfter 是序号大于 seq 的消息上的附件（按序号，最多 limit 条消息），后台按游标增量下载。
