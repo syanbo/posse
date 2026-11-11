@@ -179,12 +179,12 @@ func WriteResult(conn net.Conn, result any) { writeResponse(conn, result, nil) }
 
 // Open 发起流式请求：读完回复行后返回连接，之后用帧通信。ctx 管拨号和等回复行，之后的帧不受它影响。
 func Open(ctx context.Context, socket, method string, params, out any) (net.Conn, *bufio.Reader, error) {
-	return request(ctx, socket, method, params, out)
+	return request(ctx, socket, method, params, out, true)
 }
 
 // Call 连接 socket 发起一次请求；out 为 nil 时丢弃结果。
 func Call(ctx context.Context, socket, method string, params, out any) error {
-	conn, _, err := request(ctx, socket, method, params, out)
+	conn, _, err := request(ctx, socket, method, params, out, false)
 	if err != nil {
 		return err
 	}
@@ -193,7 +193,9 @@ func Call(ctx context.Context, socket, method string, params, out any) error {
 }
 
 // request 发出请求并读回复行，成功时返回仍打开的连接；ctx 取消会中断等待回复。
-func request(ctx context.Context, socket, method string, params, out any) (_ net.Conn, _ *bufio.Reader, err error) {
+// keep 是调用方还要接着用这条连接（Open）：回复读完时 ctx 恰好到点的算失败。只要回复的（Call）
+// 已经拿到结果，照常算成功，不把做成了的操作报成超时。
+func request(ctx context.Context, socket, method string, params, out any, keep bool) (_ net.Conn, _ *bufio.Reader, err error) {
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "unix", socket)
 	if err != nil {
@@ -238,7 +240,7 @@ func request(ctx context.Context, socket, method string, params, out any) (_ net
 		}
 	}
 	// 回复刚读完时 ctx 恰好到点：连接已经或马上被关掉，不能当成接好了交出去
-	if !stop() {
+	if !stop() && keep {
 		return nil, nil, ctx.Err()
 	}
 	return conn, r, nil
