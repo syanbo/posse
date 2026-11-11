@@ -615,6 +615,8 @@ func (c *conn) dispatch(req request) error {
 		return c.deskWindowsRPC(req.ID)
 	case "desk.window":
 		return c.deskWindowRPC(req.ID, p)
+	case "desk.fps":
+		return c.deskFPSRPC(req.ID, p)
 	case "terminal.unsubscribe":
 		var a struct {
 			SubscriptionID string `json:"subscriptionId"`

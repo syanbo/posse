@@ -22,6 +22,7 @@ type DeskRequest struct {
 	LongEdge int      // 手机屏幕长边的像素，画面不比它大
 	Codecs   []string // 手机能硬解的编码，按偏好排
 	Display  uint32   // 手机记着的上次看的屏（CGDirectDisplayID），0 或已经不在了看主屏
+	FPS      uint32   // 手机手选的帧率上限（60、30、15），0 是跟着码率自动选
 }
 
 // DeskReady 是采集已经开始、UDP 已经在听。
@@ -40,6 +41,8 @@ type DeskReady struct {
 	Window func(id uint32) error `json:"-"`
 	// Windows 是当前能单独看的窗口（desk.windows），返回 {"windows":[...]} 的 JSON
 	Windows func(ctx context.Context) (json.RawMessage, error) `json:"-"`
+	// FPS 换手选的帧率上限（desk.fps），0 是回到自动；不重开采集，立即生效
+	FPS func(fps uint32) error `json:"-"`
 }
 
 // DeskEvent 是订阅期间推给手机的事件。Type 是 state 或 end；State、Reason 是固定的词，见 docs/features/mobile.md。
@@ -75,6 +78,8 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 		Height  int      `json:"height"`
 		Codecs  []string `json:"codecs"`
 		Display uint32   `json:"display"`
+		// 不按数字解：旧手机不带，带了认不出的值也只当自动，不让整个订阅失败
+		FPS json.RawMessage `json:"fps"`
 	}
 	if json.Unmarshal(raw, &p) != nil || p.Width <= 0 || p.Height <= 0 {
 		return c.fail(id, "bad_params", "width and height are required")
@@ -88,6 +93,7 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 		LongEdge: max(p.Width, p.Height),
 		Codecs:   p.Codecs,
 		Display:  p.Display,
+		FPS:      deskFPS(p.FPS),
 	}
 	// 一条连接同时只看一次，新的订阅换掉旧的
 	ctx, gen := c.startKeyedStream("desk")
@@ -125,6 +131,8 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 			"nack": true,
 			// 认 input 里的密码事件（desk.EventPassword）：手机看到才发，旧电脑照旧发文字加回车
 			"password": true,
+			// 认 subscribe 的 fps 和 desk.fps（手选帧率）：手机看到才显示入口
+			"fps": true,
 		}
 		if ready.Relay != "" {
 			frame["relay"] = ready.Relay
@@ -248,6 +256,44 @@ func (c *conn) deskWindowRPC(id string, raw json.RawMessage) error {
 		return c.fail(id, "unavailable", err.Error())
 	}
 	return c.reply(id, map[string]any{"requested": p.ID})
+}
+
+// deskFPS 把手机报的帧率规整成能手选的档位（60、30、15），缺省、别的数、不是数字都当自动（0）。
+func deskFPS(raw json.RawMessage) uint32 {
+	var v float64
+	if json.Unmarshal(raw, &v) != nil {
+		return 0
+	}
+	switch v {
+	case 60, 30, 15:
+		return uint32(v)
+	}
+	return 0
+}
+
+// deskFPSRPC 是 desk.fps：正在看桌面时换手选的帧率上限，fps 缺省或认不出的值是回到自动。
+// 只交给常驻进程就回，回复带上实际用的值。
+func (c *conn) deskFPSRPC(id string, raw json.RawMessage) error {
+	var p struct {
+		FPS json.RawMessage `json:"fps"`
+	}
+	if json.Unmarshal(raw, &p) != nil {
+		return c.fail(id, "bad_params", "params must be an object")
+	}
+	fps := deskFPS(p.FPS)
+	c.smu.Lock()
+	var set func(uint32) error
+	if c.desk != nil {
+		set = c.desk.FPS
+	}
+	c.smu.Unlock()
+	if set == nil {
+		return c.fail(id, "unavailable", "not watching the desktop")
+	}
+	if err := set(fps); err != nil {
+		return c.fail(id, "unavailable", err.Error())
+	}
+	return c.reply(id, map[string]any{"fps": fps})
 }
 
 func (c *conn) deskUnsubscribe(id string) error {

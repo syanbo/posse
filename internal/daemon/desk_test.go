@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -249,5 +250,101 @@ func TestDeskAccessibilityGranted(t *testing.T) {
 	}
 	if _, missing := d.deskStatus(); len(missing) != 0 {
 		t.Fatalf("missing %v", missing)
+	}
+}
+
+// teeControl 把写给子进程的控制消息另记一份。
+type teeControl struct {
+	io.WriteCloser
+	mu  sync.Mutex
+	log []byte
+}
+
+func (c *teeControl) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	c.log = append(c.log, p...)
+	c.mu.Unlock()
+	return c.WriteCloser.Write(p)
+}
+
+// fpsSeen 是到现在为止告诉子进程的帧率上限，依次排着。
+func (c *teeControl) fpsSeen(t *testing.T) []uint32 {
+	t.Helper()
+	c.mu.Lock()
+	r := strings.NewReader(string(c.log))
+	c.mu.Unlock()
+	var out []uint32
+	for r.Len() > 0 {
+		m, err := desk.ReadControl(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m.Kind == desk.CtrlFPS {
+			out = append(out, m.FPS)
+		}
+	}
+	return out
+}
+
+type teeDeskProc struct {
+	*fakeDeskProc
+	ctl *teeControl
+}
+
+func (p teeDeskProc) Control() io.WriteCloser { return p.ctl }
+
+// 订阅带的手选帧率在第一帧配置后告诉子进程，观看中经 ready.FPS 改；看完了再改回错误
+func TestDeskPinnedFPS(t *testing.T) {
+	var ctl *teeControl
+	withDeskSpawn(t, func(args []string) (deskProc, error) {
+		p := newFakeDeskProc(t, []desk.Frame{configFrame()}, true)
+		ctl = &teeControl{WriteCloser: p.cw}
+		return teeDeskProc{p, ctl}, nil
+	})
+	d := &Daemon{}
+	req := deskRequest()
+	req.FPS = 15
+	ready, err := d.deskStart(context.Background(), req, func(mobile.DeskEvent) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFPS := func(want []uint32) {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			got := ctl.fpsSeen(t)
+			if slices.Equal(got, want) {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("fps sent %v, want %v", got, want)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	waitFPS([]uint32{15})
+	if err := ready.FPS(30); err != nil {
+		t.Fatal(err)
+	}
+	waitFPS([]uint32{15, 30})
+	if err := ready.FPS(0); err != nil {
+		t.Fatal(err)
+	}
+	waitFPS([]uint32{15, 30, 60})
+	if _, err := d.deskStop(context.Background(), json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if viewer, _ := d.deskStatus(); viewer == "" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("still watching")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := ready.FPS(30); err == nil {
+		t.Fatal("chose a frame rate after the watch ended")
 	}
 }

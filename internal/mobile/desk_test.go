@@ -17,6 +17,7 @@ func TestDeskSubscribe(t *testing.T) {
 	punched := make(chan string, 1)
 	switched := make(chan uint32, 1)
 	windowed := make(chan uint32, 1)
+	pinned := make(chan uint32, 4)
 	h.desk = func(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error) {
 		if busy {
 			return DeskReady{}, DeskError("busy", "someone else")
@@ -39,6 +40,10 @@ func TestDeskSubscribe(t *testing.T) {
 			},
 			Window: func(id uint32) error {
 				windowed <- id
+				return nil
+			},
+			FPS: func(fps uint32) error {
+				pinned <- fps
 				return nil
 			},
 			Windows: func(ctx context.Context) (json.RawMessage, error) {
@@ -75,8 +80,12 @@ func TestDeskSubscribe(t *testing.T) {
 	if m := p.next(p.call("desk.windows", map[string]any{})); m["ok"] != false {
 		t.Fatalf("listed windows without watching: %v", m)
 	}
+	if m := p.next(p.call("desk.fps", map[string]any{"fps": 30})); m["ok"] != false {
+		t.Fatalf("chose a frame rate without watching: %v", m)
+	}
 
 	sub["display"] = 2
+	sub["fps"] = 30
 	id := p.call("desk.subscribe", sub)
 	ready := result(t, p.next(id))
 	if ready["type"] != "ready" || ready["port"] != float64(4321) || ready["codec"] != "hevc" {
@@ -84,6 +93,9 @@ func TestDeskSubscribe(t *testing.T) {
 	}
 	if ready["password"] != true {
 		t.Fatalf("ready without password capability: %v", ready)
+	}
+	if ready["fps"] != true {
+		t.Fatalf("ready without fps capability: %v", ready)
 	}
 	req := <-reqs
 	nonce, _ := base64.StdEncoding.DecodeString(ready["nonceB64"].(string))
@@ -95,8 +107,8 @@ func TestDeskSubscribe(t *testing.T) {
 	if len(req.Secret) != 64 || string(req.Secret[:32]) != string(c.sess.sendKey[:]) || string(req.Secret[32:]) != string(c.sess.recvKey[:]) {
 		t.Fatal("secret is not sendKey||recvKey")
 	}
-	if req.LongEdge != 2556 || req.Display != 2 {
-		t.Fatalf("long edge %d, display %d", req.LongEdge, req.Display)
+	if req.LongEdge != 2556 || req.Display != 2 || req.FPS != 30 {
+		t.Fatalf("long edge %d, display %d, fps %d", req.LongEdge, req.Display, req.FPS)
 	}
 	// 订阅流里有屏列表
 	for {
@@ -126,6 +138,28 @@ func TestDeskSubscribe(t *testing.T) {
 	if got := <-windowed; got != 77 {
 		t.Fatalf("window %d", got)
 	}
+	// desk.fps：只认 60、30、15，缺省和别的值都是回到自动
+	for _, c := range []struct {
+		params any
+		want   uint32
+	}{
+		{map[string]any{"fps": 15}, 15},
+		{map[string]any{"fps": 60}, 60},
+		{map[string]any{"fps": 45}, 0},
+		{map[string]any{"fps": "30"}, 0},
+		{map[string]any{}, 0},
+	} {
+		r := result(t, p.next(p.call("desk.fps", c.params)))
+		if r["fps"] != float64(c.want) {
+			t.Fatalf("desk.fps %v replied %v", c.params, r)
+		}
+		if got := <-pinned; got != c.want {
+			t.Fatalf("desk.fps %v set %d", c.params, got)
+		}
+	}
+	if m := p.next(p.call("desk.fps", []int{30})); m["ok"] != false {
+		t.Fatalf("desk.fps with an array: %v", m)
+	}
 	if ready["relay"] != "203.0.113.1:443" {
 		t.Fatalf("relay %v", ready["relay"])
 	}
@@ -149,5 +183,14 @@ func TestDeskSubscribe(t *testing.T) {
 	m := p.next(p.call("desk.subscribe", sub))
 	if e, _ := m["error"].(map[string]any); m["ok"] != false || e["code"] != "busy" {
 		t.Fatalf("busy %v", m)
+	}
+}
+
+// subscribe 的 fps 不按数字解：缺省、认不出的值、不是数字都当自动，不让订阅失败
+func TestDeskFPSParam(t *testing.T) {
+	for raw, want := range map[string]uint32{"": 0, "null": 0, "60": 60, "30": 30, "15": 15, "30.0": 30, "10": 0, "29.5": 0, `"30"`: 0, "true": 0, "-15": 0} {
+		if got := deskFPS(json.RawMessage(raw)); got != want {
+			t.Errorf("deskFPS(%s) = %d, want %d", raw, got, want)
+		}
 	}
 }

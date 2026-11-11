@@ -150,9 +150,11 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	// 子进程回的窗口列表；一次只问一个，问的人等不到就不要了
 	windows := make(chan []byte, 1)
 	var wmu sync.Mutex
+	fpsChanges := make(chan uint32)
 	go func() {
 		done <- desk.Serve(io.MultiReader(bytes.NewReader(head), frames), control, desk.CastConfig{
 			Conn: conn, ToMobile: toMobile, ToMac: toMac, IsRelay: conn.IsRelay,
+			FPS: req.FPS, FPSChanges: fpsChanges,
 			OnInput: desk.NewInputForwarder(control),
 			OnDisplays: func(ds desk.Displays) {
 				notify(mobile.DeskEvent{Type: "displays", Current: ds.Current, Displays: ds.List, Window: ds.Window, Gone: ds.Gone})
@@ -213,6 +215,14 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 		},
 		Window: func(id uint32) error {
 			return desk.WriteControl(control, desk.Control{Kind: desk.CtrlWindow, Window: id})
+		},
+		FPS: func(fps uint32) error {
+			select {
+			case fpsChanges <- fps:
+				return nil
+			case <-runCtx.Done():
+				return mobile.DeskError("unavailable", "not watching the desktop")
+			}
 		},
 		Windows: func(ctx context.Context) (json.RawMessage, error) {
 			wmu.Lock()
