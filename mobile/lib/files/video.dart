@@ -253,12 +253,19 @@ class _VideoViewState extends State<VideoView> {
             ? VideoViewType.platformView
             : VideoViewType.textureView,
       );
-      await player.initialize();
+      // 交给 _player 之前出错或页面关了，原生播放器要在这里释放：dispose 只放 _player，
+      // 漏掉的话页面关了还在后台播（有声音）
+      try {
+        await player.initialize();
+        if (!_disposed) await player.play();
+      } catch (_) {
+        await player.dispose();
+        rethrow;
+      }
       if (_disposed) {
         await player.dispose();
         return;
       }
-      await player.play();
       setState(() => _player = player);
     } on VideoCancelled {
       return;

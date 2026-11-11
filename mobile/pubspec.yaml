@@ -46,6 +46,8 @@ dev_dependencies:
   # 测试里换掉相册选择器（ImagePickerPlatform.instance），走对话页真实的附加流程
   image_picker_platform_interface: ^2.11.2
   plugin_platform_interface: ^2.1.8
+  # 测试里换掉播放器平台（VideoPlayerPlatform.instance），走 VideoView 真实的打开、释放流程
+  video_player_platform_interface: ^6.9.0
 
 flutter:
   uses-material-design: true
