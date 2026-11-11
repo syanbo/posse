@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"math"
 	"math/rand/v2"
+	"runtime"
 	"testing"
 
 	xdraw "golang.org/x/image/draw"
@@ -276,3 +277,101 @@ func screenshotLike(w, h int) *image.RGBA {
 }
 
 func c8(v float64) uint8 { return uint8(math.Max(0, math.Min(255, v))) }
+
+// naiveArea 是面积平均最直白的写法：对每个目标像素直接积分它盖住的源像素（预乘、float64），给逐像素对照用。
+func naiveArea(src image.Image, w, h int) *image.RGBA {
+	b := src.Bounds()
+	sw, sh := b.Dx(), b.Dy()
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+	fx, fy := float64(sw)/float64(w), float64(sh)/float64(h)
+	px := make([]float64, 4)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			var sum [4]float64
+			x0, x1 := float64(x)*fx, float64(x+1)*fx
+			y0, y1 := float64(y)*fy, float64(y+1)*fy
+			for sy := int(y0); sy < sh && float64(sy) < y1; sy++ {
+				oy := math.Min(y1, float64(sy+1)) - math.Max(y0, float64(sy))
+				for sx := int(x0); sx < sw && float64(sx) < x1; sx++ {
+					ox := math.Min(x1, float64(sx+1)) - math.Max(x0, float64(sx))
+					readRow(src, b.Min.X+sx, b.Min.Y+sy, 1, px)
+					for c := range 4 {
+						sum[c] += px[c] * ox * oy
+					}
+				}
+			}
+			a := clamp8(sum[3] / (fx * fy))
+			p := dst.Pix[dst.PixOffset(x, y):]
+			for c := range 3 {
+				p[c] = min(clamp8(sum[c]/(fx*fy)), a)
+			}
+			p[3] = a
+		}
+	}
+	return dst
+}
+
+// 和直接积分的写法逐像素对照：各种尺寸（不整除、1×N、N×1、缩很多、比源图窄一点），透明的随机图，
+// 分段读（宽过 areaChunk）也一样。两边浮点相加的顺序不同：预乘值的平均是有理数，常正好落在 .5 上，
+// 这时舍入方向可能不同，允许差 1，且这样的字节不到 1%。
+func TestAreaScaleMatchesNaive(t *testing.T) {
+	r := rand.New(rand.NewPCG(9, 10))
+	cases := append([][4]int{{areaChunk + 77, 3, 1001, 2}, {3, 5000, 2, 333}}, areaCases...)
+	for _, cs := range cases {
+		src := image.NewNRGBA(image.Rect(0, 0, cs[0], cs[1]))
+		for i := range src.Pix {
+			src.Pix[i] = uint8(r.IntN(256))
+		}
+		got, want := areaScale(src, cs[2], cs[3]), naiveArea(src, cs[2], cs[3])
+		diff := 0
+		for i := range got.Pix {
+			d := int(got.Pix[i]) - int(want.Pix[i])
+			if d > 1 || d < -1 {
+				t.Fatalf("%v byte %d: %d, want %d", cs, i, got.Pix[i], want.Pix[i])
+			}
+			if d != 0 {
+				diff++
+			}
+		}
+		if diff > len(got.Pix)/100+1 {
+			t.Fatalf("%v: %d of %d bytes off by one", cs, diff, len(got.Pix))
+		}
+	}
+}
+
+// lineImage 是 w×h、按坐标算颜色的图，不真分配像素：喂给 areaScale 看极窄、极宽的大图额外分配多少。
+type lineImage struct{ w, h int }
+
+func (l lineImage) ColorModel() color.Model { return color.RGBAModel }
+func (l lineImage) Bounds() image.Rectangle { return image.Rect(0, 0, l.w, l.h) }
+func (l lineImage) At(x, y int) color.Color { return l.RGBA64At(x, y) }
+func (l lineImage) RGBA64At(x, y int) color.RGBA64 {
+	v := uint16(uint8((x+y)*7)) * 257
+	return color.RGBA64{v, v / 2, 0xffff - v, 0xffff}
+}
+
+// 1×N 和 N×1 的大图：除了目标位图，分配的只有几行目标宽的累加器和一段源像素，和源图多高、多宽无关。
+func TestAreaScaleAllocationBounded(t *testing.T) {
+	alloc := func(f func()) uint64 {
+		var m0, m1 runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&m0)
+		f()
+		runtime.ReadMemStats(&m1)
+		return m1.TotalAlloc - m0.TotalAlloc
+	}
+	for _, tc := range []struct {
+		src  lineImage
+		w, h int
+	}{{lineImage{1, 4_000_000}, 1, 1000}, {lineImage{4_000_000, 1}, 1000, 1}, {lineImage{2000, 2000}, 700, 700}} {
+		var out *image.RGBA
+		n := alloc(func() { out = areaScale(tc.src, tc.w, tc.h) })
+		bitmap := uint64(len(out.Pix))
+		// 三行目标宽的 float64（每像素 4 个）、一段源像素，再加一点零头
+		bound := bitmap + uint64(3*4*8*tc.w) + uint64(4*8*areaChunk) + 64<<10
+		t.Logf("%dx%d -> %dx%d: allocated %d KB, bitmap %d KB", tc.src.w, tc.src.h, tc.w, tc.h, n>>10, bitmap>>10)
+		if n > bound {
+			t.Fatalf("%dx%d -> %dx%d: allocated %d B, bound %d B", tc.src.w, tc.src.h, tc.w, tc.h, n, bound)
+		}
+	}
+}

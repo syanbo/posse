@@ -6,38 +6,26 @@ import (
 	"math"
 )
 
+// areaChunk 是一次读进来的源像素个数：极宽的图也不把整行换成 float64。
+const areaChunk = 4096
+
 // areaScale 用面积平均把 src 缩到 w×h（两边都只缩不放）：每个目标像素是它盖住的那块源像素按覆盖面积的加权平均，
-// 在预乘 alpha 下算。按源图逐行流式累加，除了目标位图只用几行 float64 的累加器；
+// 在预乘 alpha 下算，float64 累加。按源图逐行、每行分段流式累加，各像素分到哪个目标像素当场按整数算，
+// 除了目标位图只用三行目标宽的累加器和一段源像素（实测见 area_test.go）。
 // CatmullRom 的中间缓冲是「目标宽 × 源图高」每格 32 字节，几千万像素的图要上 GB。
 func areaScale(src image.Image, w, h int) *image.RGBA {
 	b := src.Bounds()
 	sw, sh := b.Dx(), b.Dy()
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	cols := areaSpans(sw, w)
-	rows := areaSpans(sh, h)
-	// 每个目标列、目标行分到的权重总和，按它归一化（浮点累加的误差不带进亮度）
-	colSum := make([]float64, w)
-	for _, c := range cols {
-		colSum[c.a] += c.wa
-		if c.wb > 0 {
-			colSum[c.a+1] += c.wb
-		}
-	}
-	rowSum := make([]float64, h)
-	for _, r := range rows {
-		rowSum[r.a] += r.wa
-		if r.wb > 0 {
-			rowSum[r.a+1] += r.wb
-		}
-	}
-	line := make([]float64, 4*sw) // 当前源行，预乘后的 0～255
-	row := make([]float64, 4*w)   // 当前源行横向缩好的
+	// 每个目标像素盖住的源面积都是 (sw/w)·(sh/h)
+	k := float64(sw) / float64(w) * float64(sh) / float64(h)
+	line := make([]float64, 4*min(sw, areaChunk))
+	row := make([]float64, 4*w) // 当前源行横向缩好的
 	acc := [2][]float64{make([]float64, 4*w), make([]float64, 4*w)}
 	base := 0 // acc[0] 对着的目标行
 	flush := func(y int, buf []float64) {
 		out := dst.Pix[y*dst.Stride:]
 		for x := 0; x < w; x++ {
-			k := colSum[x] * rowSum[y]
 			a := clamp8(buf[4*x+3] / k)
 			for c := 0; c < 3; c++ {
 				// 预乘的颜色不能大于 alpha
@@ -47,24 +35,28 @@ func areaScale(src image.Image, w, h int) *image.RGBA {
 		}
 	}
 	for sy := 0; sy < sh; sy++ {
-		readRow(src, b.Min.X, b.Min.Y+sy, sw, line)
 		clear(row)
-		for sx, c := range cols {
-			p := line[4*sx : 4*sx+4]
-			q := row[4*c.a : 4*c.a+4]
-			q[0] += p[0] * c.wa
-			q[1] += p[1] * c.wa
-			q[2] += p[2] * c.wa
-			q[3] += p[3] * c.wa
-			if c.wb > 0 {
-				q = row[4*c.a+4 : 4*c.a+8]
-				q[0] += p[0] * c.wb
-				q[1] += p[1] * c.wb
-				q[2] += p[2] * c.wb
-				q[3] += p[3] * c.wb
+		for x0 := 0; x0 < sw; x0 += areaChunk {
+			n := min(areaChunk, sw-x0)
+			readRow(src, b.Min.X+x0, b.Min.Y+sy, n, line)
+			for i := 0; i < n; i++ {
+				c := spanOf(x0+i, sw, w)
+				p := line[4*i : 4*i+4]
+				q := row[4*c.a : 4*c.a+4]
+				q[0] += p[0] * c.wa
+				q[1] += p[1] * c.wa
+				q[2] += p[2] * c.wa
+				q[3] += p[3] * c.wa
+				if c.wb > 0 {
+					q = row[4*c.a+4 : 4*c.a+8]
+					q[0] += p[0] * c.wb
+					q[1] += p[1] * c.wb
+					q[2] += p[2] * c.wb
+					q[3] += p[3] * c.wb
+				}
 			}
 		}
-		r := rows[sy]
+		r := spanOf(sy, sh, h)
 		for r.a > base {
 			flush(base, acc[0])
 			acc[0], acc[1] = acc[1], acc[0]
@@ -93,22 +85,17 @@ type areaSpan struct {
 	wa, wb float64
 }
 
-// areaSpans 把 n 个源像素分到 m 个目标像素上（m <= n）：目标像素 i 盖住源坐标 [i·n/m, (i+1)·n/m)。
-// 按整数算边界，不让浮点误差把最后一列分到界外。
-func areaSpans(n, m int) []areaSpan {
-	out := make([]areaSpan, n)
-	for s := 0; s < n; s++ {
-		// 源像素 [s, s+1) 乘 m 之后是 [s·m, (s+1)·m)，目标像素 i 是 [i·n, (i+1)·n)
-		lo, hi := s*m, (s+1)*m
-		a := lo / n
-		edge := (a + 1) * n
-		if hi <= edge || a+1 >= m {
-			out[s] = areaSpan{a: min(a, m-1), wa: 1}
-			continue
-		}
-		out[s] = areaSpan{a: a, wa: float64(edge-lo) / float64(m), wb: float64(hi-edge) / float64(m)}
+// spanOf 是第 s 个源像素在 n 个源像素缩成 m 个（m <= n）时的分法：目标像素 i 盖住源坐标 [i·n/m, (i+1)·n/m)。
+// 按整数算边界，不让浮点误差把最后一个分到界外。
+func spanOf(s, n, m int) areaSpan {
+	// 源像素 [s, s+1) 乘 m 之后是 [s·m, (s+1)·m)，目标像素 i 是 [i·n, (i+1)·n)
+	lo, hi := s*m, (s+1)*m
+	a := lo / n
+	edge := (a + 1) * n
+	if hi <= edge || a+1 >= m {
+		return areaSpan{a: min(a, m-1), wa: 1}
 	}
-	return out
+	return areaSpan{a: a, wa: float64(edge-lo) / float64(m), wb: float64(hi-edge) / float64(m)}
 }
 
 func clamp8(v float64) uint8 {
@@ -143,6 +130,12 @@ func readRow(src image.Image, x0, y, n int, out []float64) {
 		for i := 0; i < n; i++ {
 			v := float64(p[i])
 			out[4*i], out[4*i+1], out[4*i+2], out[4*i+3] = v, v, v, 255
+		}
+	case image.RGBA64Image:
+		// 调色板、16 位、CMYK 这些：RGBA64At 不像 At 那样每个像素分配一次
+		for i := 0; i < n; i++ {
+			c := m.RGBA64At(x0+i, y) // 预乘的 0～65535
+			out[4*i], out[4*i+1], out[4*i+2], out[4*i+3] = float64(c.R)/257, float64(c.G)/257, float64(c.B)/257, float64(c.A)/257
 		}
 	default:
 		for i := 0; i < n; i++ {
