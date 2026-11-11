@@ -70,7 +70,7 @@ func TestConfigRoundTrip(t *testing.T) {
 
 func TestControlRoundTrip(t *testing.T) {
 	var buf bytes.Buffer
-	for _, c := range []Control{{Kind: CtrlKeyframe}, {Kind: CtrlBitrate, Bitrate: 7_500_000}, {Kind: CtrlStop}, {Kind: CtrlDisplay, Display: 69734662}, {Kind: CtrlFPS, FPS: 15}, {Kind: CtrlWindows}, {Kind: CtrlWindow, Window: 4242}} {
+	for _, c := range []Control{{Kind: CtrlKeyframe}, {Kind: CtrlBitrate, Bitrate: 7_500_000}, {Kind: CtrlDisplay, Display: 69734662}, {Kind: CtrlFPS, FPS: 15}, {Kind: CtrlWindows}, {Kind: CtrlWindow, Window: 4242}} {
 		if err := WriteControl(&buf, c); err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +78,7 @@ func TestControlRoundTrip(t *testing.T) {
 	if err := WriteControl(&buf, Control{Kind: 99}); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []Control{{Kind: CtrlKeyframe}, {Kind: CtrlBitrate, Bitrate: 7_500_000}, {Kind: CtrlStop}, {Kind: CtrlDisplay, Display: 69734662}, {Kind: CtrlFPS, FPS: 15}, {Kind: CtrlWindows}, {Kind: CtrlWindow, Window: 4242}, {Kind: 99}} {
+	for _, want := range []Control{{Kind: CtrlKeyframe}, {Kind: CtrlBitrate, Bitrate: 7_500_000}, {Kind: CtrlDisplay, Display: 69734662}, {Kind: CtrlFPS, FPS: 15}, {Kind: CtrlWindows}, {Kind: CtrlWindow, Window: 4242}, {Kind: 99}} {
 		got, err := ReadControl(&buf)
 		if err != nil {
 			t.Fatal(err)

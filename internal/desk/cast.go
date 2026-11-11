@@ -14,8 +14,6 @@ import (
 )
 
 const (
-	castListen = "127.0.0.1:47991"
-	castPeer   = "127.0.0.1:47990"
 	keyGap     = 250 * time.Millisecond
 	paceWindow = 16 * time.Millisecond
 	// 发送节奏的下限：码率压到最低时也不要慢于它，免得一个关键帧要发好几秒。只比码率下限高一点：

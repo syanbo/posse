@@ -197,13 +197,13 @@ func UnmarshalConfig(b []byte) (Config, error) {
 const (
 	CtrlKeyframe byte = 1
 	CtrlBitrate  byte = 2
-	CtrlStop     byte = 3
-	CtrlInput    byte = 4
-	CtrlDisplay  byte = 5
-	CtrlFPS      byte = 6
-	CtrlScale    byte = 7 // 画面长边除以几：1 原样，2 减半（码率低到 15 帧及以下时，关键帧小得多）
-	CtrlWindows  byte = 8 // 要窗口列表，子进程回一帧 KindWindows
-	CtrlWindow   byte = 9 // 只看这个窗口（CGWindowID）；CtrlDisplay 回到整块屏
+	// 3 以前是停止（CtrlStop），父进程从来不发、子进程靠控制管道关闭停下：别再挪作他用
+	CtrlInput   byte = 4
+	CtrlDisplay byte = 5
+	CtrlFPS     byte = 6
+	CtrlScale   byte = 7 // 画面长边除以几：1 原样，2 减半（码率低到 15 帧及以下时，关键帧小得多）
+	CtrlWindows byte = 8 // 要窗口列表，子进程回一帧 KindWindows
+	CtrlWindow  byte = 9 // 只看这个窗口（CGWindowID）；CtrlDisplay 回到整块屏
 )
 
 // Control 是父进程写给子进程的一条控制。码率只在 CtrlBitrate 时有意义，单位是比特每秒。

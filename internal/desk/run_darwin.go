@@ -1078,9 +1078,6 @@ func (e *engine) control() {
 			return
 		}
 		switch c.Kind {
-		case CtrlStop:
-			e.halt(nil)
-			return
 		case CtrlKeyframe:
 			e.force.Store(true)
 		case CtrlBitrate:
