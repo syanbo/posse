@@ -3,6 +3,38 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.35
+
+- 手机看桌面可以手选帧率：自动、60、30、15（手机端需要 0.1.23 及以上）。固定帧率时码率照常随网络调整。
+- Codex 终端里只打印了文件名的 `Viewed image xxx.png` 也能悬停预览、点击打开。
+- 文件标签预览大图不再吃掉几个 GB 内存：超过 1600 万像素的图换了更省内存的缩小方式；超过 5000 万像素或任一边超过 5 万像素的图不在窗口里预览，显示尺寸和「用默认应用打开」。
+- 项目目录已经不在时，也能移除它和它的 worktree 工作区：默认只移除记录、留下目录，要连目录一起删需要明确选择（命令行是 `--force`、`--discard-files`）。
+- 工作区重新指定目录后，打开的文件和没保存的改动跟到新目录，保存时不再误报磁盘冲突。
+- 更快：手机看 grok 对话、会话历史遇到超长行、程序输出超长转义序列、大仓库里边打字边搜索文件、技能页反复开关。Markdown 里的远程图片最多同时下载 4 张。
+- 修复：文件清单读不到时「转到定义」和文件栏检索会让窗口崩溃；中文界面下「转到定义」找不到时的提示是英文。
+- 修复：升级交接时开着特定终端模式的终端会让新的常驻进程崩溃；常驻进程不应答时终端一直空白，现在 30 秒后报错重连。
+- 修复：用手机看桌面，帧率自动降到 10 时码率只有目标的几分之一、画面发糊。
+- 修复：fish、csh、nushell 用户一键启动、恢复 Agent 和运行技能命令时报语法错误。
+- 修复：断了网的手机会让退出和升级交接多等几秒；看桌面切换屏幕或窗口时偶发的采集错误。
+- 局域网协作的记录定期清理，长期使用后数据库不再只增不减。
+- 以及一批来自全项目审查的稳定性修复。
+
+### English
+
+- You can now pick the frame rate when viewing the desktop from the phone: Auto, 60, 30 or 15 (needs Posse mobile 0.1.23 or later). With a fixed frame rate the bitrate still adapts to the network.
+- In a Codex terminal, `Viewed image xxx.png` lines that print only a file name can now be previewed on hover and opened with a click.
+- Previewing a large image in a file tab no longer takes gigabytes of memory: images over 16 megapixels are scaled down in a leaner way, and images over 50 megapixels or over 50,000 pixels on a side are not previewed in the window, which shows their size and "Open with Default App" instead.
+- A project whose folder is gone, and its worktree workspaces, can now be removed: by default only the records go and the folders stay, and deleting the folders too takes an explicit choice (`--force` and `--discard-files` on the command line).
+- After pointing a workspace at a new folder, open files and unsaved edits follow it, and saving no longer reports a false disk conflict.
+- Faster: viewing grok chats from the phone, session history with very long lines, programs that print very long escape sequences, searching files while typing in a large repository, and reopening the Skills page. Remote images in Markdown download at most 4 at a time.
+- Fix: Go to Definition and file search crashed the window when the file list could not be read; with the interface in Chinese, the "no definition found" hint was in English.
+- Fix: during an upgrade handoff, a terminal in a certain mode crashed the new background process; a terminal stayed blank when the background process did not answer, and now reports an error and reconnects after 30 seconds.
+- Fix: when viewing the desktop from the phone, the bitrate fell to a fraction of the target once the frame rate dropped to 10, blurring the picture.
+- Fix: one-click start and resume of agents and running skill commands failed with a syntax error for fish, csh and nushell users.
+- Fix: a phone that had lost its network made quitting and upgrade handoffs wait several seconds; occasional capture errors when switching displays or windows while viewing the desktop.
+- Records of LAN collaboration are now cleaned up periodically, so the database no longer only grows.
+- Plus a batch of stability fixes from a full review of the project.
+
 ## 0.1.34
 
 - 修复：用手机看桌面时，在 iOS 模拟器、iPhone 镜像这类窗口里用手机键盘打字，数字和字母全变成了 a。
