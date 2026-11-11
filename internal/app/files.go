@@ -592,7 +592,7 @@ func (a *app) loadDoc(d *fileDoc) {
 		if isImagePath(path) {
 			st := files.StatFile(path)
 			pi, anim, err := decodeDocImage(path)
-			if err == nil && pi.Size.X*pi.Size.Y > imageReleasePixels {
+			if err == nil && pi.Size.X*pi.Size.Y > imageBigPixels {
 				// 原尺寸的图和缩放缓冲这时已经没人引用了，最终的位图留着
 				debug.FreeOSMemory()
 			}
@@ -623,14 +623,14 @@ func (a *app) loadDoc(d *fileDoc) {
 	}()
 }
 
-// docImageMaxPixels 是文件标签预览的图片原尺寸上限：先按原尺寸整张解出来，再缩到 imageMaxPixels，
-// 缩放（CatmullRom）的中间缓冲按「缩后的宽 × 原图的高」每格 32 字节。实测 5000 万像素的 PNG 解码约 190 MB、
-// 缩放缓冲约 1.1 GB，合计约每像素 29 字节、只在解码那一会儿。手机 4800 万、5000 万像素的照片照常预览，再大的不解码
+// docImageMaxPixels 是文件标签预览的图片原尺寸上限：先按原尺寸整张解出来（约每像素 4 字节），再缩到 imageMaxPixels。
+// 手机 4800 万、5000 万像素的照片照常预览，再大的不解码
 const docImageMaxPixels = 50_000_000
 
-// imageReleasePixels 是解码后、关掉标签后要马上把内存还给系统的原图像素数：Go 不会很快把这么大的空闲内存还回去，
-// phys_footprint 会一直停在峰值附近
-const imageReleasePixels = 16_000_000
+// imageBigPixels 以上的原图算大图：缩小时用面积平均（CatmullRom 的中间缓冲是「缩后的宽 × 原图的高」每格 32 字节，
+// 5000 万像素缩一半要 1.1 GB），解完、关掉标签后马上把内存还给系统（Go 不会很快还这么大的空闲内存，
+// phys_footprint 会一直停在峰值附近）。以内的照旧用 CatmullRom
+const imageBigPixels = 16_000_000
 
 // imageTooLarge 是原尺寸超过 docImageMaxPixels、不预览的图片。
 type imageTooLarge struct{ w, h int }
@@ -650,7 +650,7 @@ func decodeDocImage(path string) (media.PreviewImage, *animPlayer, error) {
 	if anim, a, err := newAnimPlayer(b, 0); anim != nil && err == nil {
 		return media.PreviewImage{Img: anim.cur, Size: a.Size, Format: a.Format}, anim, nil
 	}
-	pi, err := media.DecodePreviewBytes(b, imageMaxPixels)
+	pi, err := media.DecodeLargePreviewBytes(b, imageMaxPixels, imageBigPixels)
 	return pi, nil, err
 }
 
@@ -869,7 +869,7 @@ func (a *app) dropDoc(v *filesView, d *fileDoc) {
 	if v.repos.followDoc == d {
 		v.repos.followDoc = nil
 	}
-	if d.imgInfo.w*d.imgInfo.h > imageReleasePixels && d.img != nil {
+	if d.imgInfo.w*d.imgInfo.h > imageBigPixels && d.img != nil {
 		// 等这一帧画完、不再引用它的位图，再把内存还给系统
 		time.AfterFunc(time.Second, debug.FreeOSMemory)
 	}

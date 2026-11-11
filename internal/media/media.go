@@ -406,6 +406,17 @@ func DecodePreview(path string, maxPixels int) (PreviewImage, error) {
 
 // DecodePreviewBytes 是 DecodePreview 解内存里的图片。
 func DecodePreviewBytes(data []byte, maxPixels int) (PreviewImage, error) {
+	return decodePreview(data, maxPixels, 0)
+}
+
+// DecodeLargePreviewBytes 和 DecodePreviewBytes 一样，只是原图超过 areaAbove 像素、又要缩小时改用面积平均
+// （areaScale）：CatmullRom 的中间缓冲是「目标宽 × 原图高」每格 32 字节，4800 万像素的照片缩一半要 1 GB 多。
+func DecodeLargePreviewBytes(data []byte, maxPixels, areaAbove int) (PreviewImage, error) {
+	return decodePreview(data, maxPixels, areaAbove)
+}
+
+// decodePreview 解码并缩到 maxPixels 以内；areaAbove 为 0 时一律用 CatmullRom。
+func decodePreview(data []byte, maxPixels, areaAbove int) (PreviewImage, error) {
 	src, format, err := decodeAny(data)
 	if err != nil {
 		return PreviewImage{}, err
@@ -420,6 +431,9 @@ func DecodePreviewBytes(data []byte, maxPixels int) (PreviewImage, error) {
 		// 宽高都不用缩、解出来已经是 RGBA（不透明的 PNG）：照拷一份逐字节相同，直接用，省一张原图大小的内存。
 		// 极窄的图宽缩不动、只有高要缩时不算（下面照旧按宽没变拷贝）
 		return PreviewImage{Img: rgba, Size: b.Size(), Format: format}, nil
+	}
+	if areaAbove > 0 && b.Dx()*b.Dy() > areaAbove && (w != b.Dx() || h != b.Dy()) {
+		return PreviewImage{Img: areaScale(src, w, h), Size: b.Size(), Format: format}, nil
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	if w == b.Dx() {
