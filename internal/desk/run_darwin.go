@@ -162,6 +162,8 @@ func runDarwin(o Options) error {
 	}
 	// 低延迟码率控制默认开着。UsingHardwareAcceleratedVideoEncoder 读回来经常是 false，
 	// 并不能说明这一路是软件编码，不用它决定开不开。
+	// 它有画质下限：码率不够时整帧丢掉，实际帧率可能只有上限（fpsLadder）的四到五成。关掉的话帧出满，
+	// 每帧却糊得多（台架上低档 SSIM 从约 0.8 掉到 0.3~0.55），桌面以文字为主，清楚优先，不关（2026-11-11 定）。
 	e.wantLow = true
 	active = e
 	logResponsible(o.Log)
