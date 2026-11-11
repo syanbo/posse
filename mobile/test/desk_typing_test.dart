@@ -121,6 +121,48 @@ class _Ime {
     want.add(word);
   });
 
+  /// 全选删掉框里的正文，Mac 上删同样多的字。框里只有垫字符、或者有重置在路上时不做：回送的空值分不清
+  /// 是删了哪一段，宁可少删（见 'select all while a reset is on the way deletes the least'）。
+  void selectAllDelete() {
+    _due();
+    if (pending) return;
+    final runes = platform.runes.toList();
+    var pads = 0;
+    while (pads < runes.length && _invisible.contains(runes[pads])) {
+      pads++;
+    }
+    final n = runes.length - pads;
+    if (n == 0) return;
+    _edit(() {
+      platform = '';
+      for (var i = 0; i < n; i++) {
+        want.back();
+      }
+    });
+  }
+
+  /// 输入法把开头的垫字符去掉（[to] 为空）或换成 [to] 那种字，同时打了 [s]。有重置在路上时只打字：
+  /// 那时分不清是哪一段的垫字符被去掉，只保证少删（见 'values that start with neither pad'）。
+  void normalize(String s, {int? to}) {
+    _due();
+    if (pending) return type(s);
+    _normalize(s, to);
+  }
+
+  void _normalize(String s, int? to) => _edit(() {
+    final runes = platform.runes.toList();
+    var pads = 0;
+    while (pads < runes.length && _invisible.contains(runes[pads])) {
+      pads++;
+    }
+    final rest = String.fromCharCodes(runes.sublist(pads));
+    platform =
+        (to == null ? '' : String.fromCharCodes(List.filled(pads, to))) +
+        rest +
+        s;
+    want.add(s);
+  });
+
   /// 停一会儿：路上的重置都到了。
   void pause() {
     while (_sets.isNotEmpty) {
@@ -140,6 +182,8 @@ class _Ime {
     }
   }
 }
+
+const _invisible = [0x200B, 0x2060, 0x2063];
 
 TextEditingValue _v(String s) => TextEditingValue(
   text: s,
@@ -308,6 +352,100 @@ void main() {
     expect(ime.box.text.length, lessThanOrEqualTo(64));
   });
 
+  // Codex 第 15 轮 generation_edges：重置已被系统收下（回送被 EditableText 挡掉）之后
+  // 全选删除只删垫字符那么多；输入法把垫字符去掉或换成别的再打 Z，不删旧文字。
+  test('values that start with neither pad', () {
+    final t = DeskTyping();
+    final a = t.take(_v('${t.padded.text}${'x' * 61}'));
+    t.take(a.reset!);
+    final got = t.take(_v(''));
+    expect((got.deleted, got.added), (a.reset!.text.runes.length, ''));
+    for (final normalized in ['', '\u200b' * 4, '\u2063' * 4]) {
+      final t = DeskTyping();
+      final a = t.take(_v('${t.padded.text}${'x' * 61}'));
+      t.take(a.reset!);
+      final got = t.take(_v('${normalized}Z'));
+      expect(
+        (got.deleted, got.added),
+        (0, 'Z'),
+        reason: normalized.runes.toString(),
+      );
+      // 之后照常：拉回一致，接着打字、退格都对
+      final ime = _Ime();
+      ime.type('x' * 61);
+      ime.arrive();
+      ime.normalize(
+        'Z',
+        to: normalized.isEmpty ? null : normalized.runes.first,
+      );
+      ime.pause();
+      ime.type('next');
+      for (var i = 0; i < 8; i++) {
+        ime.backspace();
+        ime.pause();
+      }
+      ime.type('end');
+      ime.pause();
+      expect(ime.got.text, ime.want.text, reason: normalized.runes.toString());
+    }
+  });
+
+  // 重置还在路上时旧文字的垫字符被删得只剩一个、删光，或全选删了：不多删。
+  test('late edits after the old pads are partly or fully gone', () {
+    for (final deletes in [1, 2, 3, 4, 5]) {
+      for (final selectAll in [false, true]) {
+        final ime = _Ime();
+        ime.type('ab');
+        for (var i = 0; i < 2; i++) {
+          ime.backspace();
+        }
+        // 垫字符剩不到两个时重置
+        for (var i = 0; i < deletes; i++) {
+          ime.backspace();
+        }
+        if (selectAll) ime.selectAllDelete();
+        ime.type('q');
+        ime.pause();
+        ime.type('w');
+        ime.pause();
+        expect(ime.got.text, ime.want.text, reason: '$deletes $selectAll');
+      }
+    }
+  });
+
+  // 重置在路上时全选删掉：空值可能是旧文字删光了，也可能是新垫字符删光了，拿不准，按少的删，不多删。
+  test('select all while a reset is on the way deletes the least', () {
+    final t = DeskTyping();
+    final a = t.take(_v('${t.padded.text}${'x' * 70}'));
+    t.take(a.reset!);
+    final got = t.take(_v(''));
+    expect((got.deleted, got.added), (4, ''));
+    // 之后照常
+    final next = t.take(got.reset ?? _v(''));
+    expect((next.deleted, next.added), (0, ''));
+  });
+
+  // 用户自己打的字开头就是这几种不可见字符，连着重置十次也照原样发。
+  test('user text starting with the pad characters', () {
+    for (final prefix in [
+      '\u200b',
+      '\u2060',
+      '\u2063',
+      '\u200b' * 4,
+      '\u2060' * 4,
+    ]) {
+      final t = DeskTyping();
+      var box = t.padded.text;
+      for (var i = 0; i < 10; i++) {
+        final text = '${prefix}batch$i-${'x' * 70}';
+        final r = t.take(_v(box + text));
+        expect((r.deleted, r.added), (0, text));
+        t.take(r.reset!);
+        box = r.reset!.text;
+      }
+    }
+  });
+
   // 随机的打字、粘贴、中文和 emoji、退格、组字、停顿、重置后把框里的原样再打一遍，重置晚 0 到 3 次编辑才到，
   // 平台收下后回不回送都试。
   test('random typing matches what the keyboard took', () {
@@ -324,7 +462,7 @@ void main() {
       final ime = _Ime(lag: r.nextInt(4), echo: r.nextBool());
       var last = '';
       for (var step = 0; step < 120; step++) {
-        switch (r.nextInt(13)) {
+        switch (r.nextInt(15)) {
           case 0:
             last = piece(1 + r.nextInt(200));
             ime.type(last);
@@ -339,6 +477,13 @@ void main() {
             ime.commit(piece(1 + r.nextInt(2)));
           case 4:
             if (r.nextInt(4) == 0) ime.pause();
+          case 6:
+            ime.selectAllDelete();
+          case 7:
+            ime.normalize(
+              piece(1),
+              to: null,
+            );
           case 5:
             // 真的又打了一遍刚才的一段（或它的开头）
             if (last.isNotEmpty) {
