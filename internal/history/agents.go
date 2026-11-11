@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -35,25 +37,43 @@ func discover(r Roots) []source {
 			out = append(out, source{agent: "codex", transcript: p, parser: codexParser{}})
 		}
 	}
-	// cursor 的标题、目录和时间在 ~/.cursor/chats/<md5(目录)>/<会话>/meta.json
-	cursorMeta := map[string]string{}
+	// cursor 的标题、目录和时间在 ~/.cursor/chats/<md5(目录)>/<会话>/meta.json。
+	// 会话 ID 会跨目录重复（本机实测有不同目录、不同标题的两个会话同一个 ID），所以一个 ID 可能有几份
+	cursorMeta := map[string][]string{}
 	for _, m := range globFiles(filepath.Join(r.Home, ".cursor", "chats", "*", "*", "meta.json")) {
-		cursorMeta[filepath.Base(filepath.Dir(m))] = m
+		id := filepath.Base(filepath.Dir(m))
+		cursorMeta[id] = append(cursorMeta[id], m)
 	}
-	// 还原目录要逐段 stat，只在文件真要重读、记录里又没有目录时才做，同一项目只做一次
+	// 还原目录要逐段 stat，只在文件真要重读、记录里又没有目录时，或者要在同 ID 的几份 meta 里挑时才做，同一项目只做一次
 	cursorDirs := map[string]string{}
+	dirOf := func(project string) string {
+		dir, ok := cursorDirs[project]
+		if !ok {
+			dir = cursorProjectDir(project)
+			cursorDirs[project] = dir
+		}
+		return dir
+	}
 	for _, p := range globFiles(filepath.Join(r.Home, ".cursor", "projects", "*", "agent-transcripts", "*", "*.jsonl")) {
-		src := source{agent: "cursor", transcript: p, meta: cursorMeta[sessionIDFromPath(p)], parser: cursorParser{}}
-		if src.meta == "" {
-			project := filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(p))))
-			src.cwd = func() string {
-				dir, ok := cursorDirs[project]
-				if !ok {
-					dir = cursorProjectDir(project)
-					cursorDirs[project] = dir
+		project := filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(p))))
+		src := source{agent: "cursor", transcript: p, parser: cursorParser{}}
+		switch metas := cursorMeta[sessionIDFromPath(p)]; len(metas) {
+		case 0:
+		case 1:
+			src.meta = metas[0]
+		default:
+			// 挑 chats 下目录名是这个项目目录 md5 的那份；还原不出目录就都不用，免得拿别的会话的标题
+			if dir := dirOf(project); dir != "" {
+				sum := md5.Sum([]byte(dir))
+				for _, m := range metas {
+					if filepath.Base(filepath.Dir(filepath.Dir(m))) == hex.EncodeToString(sum[:]) {
+						src.meta = m
+					}
 				}
-				return dir
 			}
+		}
+		if src.meta == "" {
+			src.cwd = func() string { return dirOf(project) }
 		}
 		out = append(out, src)
 	}

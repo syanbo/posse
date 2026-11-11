@@ -169,6 +169,7 @@ var parserVersions = map[string]string{
 	"claude": "4", // 用户在 agent 工作时插进来的话
 	"codex":  "2", // 记下模型
 	"grok":   "4", // 增量读取时回复不再对上已用过的分段
+	"cursor": "1", // 会话 ID 跨目录重复时各配各的 meta.json
 }
 
 // staleParsers 返回解析规则比索引里记录的新的 agent。
