@@ -192,7 +192,7 @@ func listError(lines []string) error {
 			for _, d := range lines[i+1:] {
 				d = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(d), "│"))
 				if d != "" && !strings.HasPrefix(d, "└") {
-					msg += "：" + d
+					msg += ": " + d
 					break
 				}
 			}

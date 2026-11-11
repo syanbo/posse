@@ -62,7 +62,7 @@ func TestParseList(t *testing.T) {
 	}
 
 	_, err = ParseList("◒  Cloning repository…..│\n■  Failed to clone repository\n│\n│  Authentication failed for https://github.com/a/b.git.\n│\n└  Installation failed\n\n\x1b[1G\x1b[J■  Canceled\n")
-	if err == nil || err.Error() != "Failed to clone repository：Authentication failed for https://github.com/a/b.git." {
+	if err == nil || err.Error() != "Failed to clone repository: Authentication failed for https://github.com/a/b.git." {
 		t.Errorf("克隆失败：%v", err)
 	}
 	_, err = ParseList("◇  No skills found\n│\n└  No valid skills found. Skills require a SKILL.md with name and description.\n")
