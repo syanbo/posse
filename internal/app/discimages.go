@@ -230,18 +230,30 @@ func (a *app) saveImageAs(m locales.Messages, abs string) {
 	if home, err := os.UserHomeDir(); err == nil {
 		def = filepath.Join(home, "Downloads", name)
 	}
-	dst, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: a.win, Title: m.ImagesSaveAs(), DefaultPath: def, CreateDirectories: true})
-	if err != nil || dst == "" || dst == abs {
-		return
-	}
-	go func() {
-		err := copyFileTo(abs, dst)
-		a.update(func() {
-			if err != nil {
-				a.err = errtext.Text(err)
-			}
-		})
-	}()
+	d := a.disc.d
+	a.inDialog(func() []string {
+		dst, err := saveDialog(mygo.SaveDialogOptions{Parent: a.win, Title: m.ImagesSaveAs(), DefaultPath: def, CreateDirectories: true})
+		if err != nil || dst == "" {
+			return nil
+		}
+		return []string{dst}
+	}, func(got []string) {
+		// 对话框开着时讨论被切走、删掉（附件跟着删）：不再存
+		if len(got) == 0 || got[0] == abs || a.disc.d != d {
+			return
+		}
+		if _, err := os.Stat(abs); err != nil {
+			return
+		}
+		go func() {
+			err := copyFileTo(abs, got[0])
+			a.update(func() {
+				if err != nil {
+					a.err = errtext.Text(err)
+				}
+			})
+		}()
+	})
 }
 
 // copyFileTo 先写到同目录的临时文件再改名：中途失败不留下半截的文件，也不毁掉被覆盖的那个。

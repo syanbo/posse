@@ -1867,20 +1867,51 @@ func (a *app) sendDiscAnswer(question, text string, typed bool) {
 
 // pickAttachments 选本机文件当附件；常驻进程发送时复制一份快照。
 func (a *app) pickAttachments(m locales.Messages) {
-	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: m.DiscAttachTitle(), ButtonLabel: m.DiscAttach(), Multiple: true})
-	if err != nil || len(paths) == 0 {
+	b := &a.disc
+	key, d := b.sel, b.d
+	a.inDialog(func() []string {
+		paths, err := openDialog(mygo.OpenDialogOptions{Parent: a.win, Title: m.DiscAttachTitle(), ButtonLabel: m.DiscAttach(), Multiple: true})
+		if err != nil {
+			return nil
+		}
+		return paths
+	}, func(paths []string) {
+		// 对话框开着时切走、删掉了这个讨论（换讨论会清掉草稿）：选的文件不放进别的草稿
+		if len(paths) == 0 || b.sel != key || b.d != d {
+			return
+		}
+		for _, p := range paths {
+			if !slices.Contains(b.atts, p) {
+				b.atts = append(b.atts, p)
+			}
+		}
+		if len(b.atts) > 10 {
+			b.atts = b.atts[:10]
+			a.err = m.DiscTooManyAttachments(10)
+		}
+	})
+}
+
+// openDialog、saveDialog 是系统的文件对话框（测试里换掉）。
+var (
+	openDialog = mygo.Dialog.Open
+	saveDialog = mygo.Dialog.Save
+)
+
+// inDialog 在协程里开系统文件对话框，选完由 done 在界面线程里处理：在 build 里同步调的话，等对话框时
+// 主线程转着嵌套的事件循环，和添加项目、重新指定目录一样放到协程里。已经开着一个时不再开。
+func (a *app) inDialog(show func() []string, done func([]string)) {
+	if a.dialogOpen {
 		return
 	}
-	b := &a.disc
-	for _, p := range paths {
-		if !slices.Contains(b.atts, p) {
-			b.atts = append(b.atts, p)
-		}
-	}
-	if len(b.atts) > 10 {
-		b.atts = b.atts[:10]
-		a.err = m.DiscTooManyAttachments(10)
-	}
+	a.dialogOpen = true
+	go func() {
+		got := show()
+		a.update(func() {
+			a.dialogOpen = false
+			done(got)
+		})
+	}()
 }
 
 // pastePrefix 是粘贴图片写的临时文件名开头：发出去、从草稿里去掉、离开讨论时删掉。

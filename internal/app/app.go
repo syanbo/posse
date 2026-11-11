@@ -408,6 +408,7 @@ type app struct {
 	exe         exeWatch
 	exeReplaced atomic.Bool // 轮询线程里只报一次
 	staleApp    bool
+	dialogOpen  bool       // 系统文件对话框开着（inDialog），不再开第二个
 	staleHidden bool       // 这次窗口里收起了重开提示，底栏齿轮旁留一个圆点
 	upd         selfUpdate // 自动更新的检查和下载（appupdate.go）
 	updating    bool       // 正在换包、交接常驻进程，接着重开窗口
