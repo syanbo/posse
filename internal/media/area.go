@@ -11,7 +11,8 @@ const areaChunk = 4096
 
 // areaScale 用面积平均把 src 缩到 w×h（两边都只缩不放）：每个目标像素是它盖住的那块源像素按覆盖面积的加权平均，
 // 在预乘 alpha 下算，float64 累加。按源图逐行、每行分段流式累加，各像素分到哪个目标像素当场按整数算，
-// 除了目标位图只用三行目标宽的累加器和一段源像素（实测见 area_test.go）。
+// 除了目标位图只用三行目标宽的累加器（每行 32 字节 × 目标宽，共三行）和一段源像素（实测见 area_test.go）；
+// 和目标宽成正比，调用方要限住边长（文件标签的 docImageMaxSide）。
 // CatmullRom 的中间缓冲是「目标宽 × 源图高」每格 32 字节，几千万像素的图要上 GB。
 func areaScale(src image.Image, w, h int) *image.RGBA {
 	b := src.Bounds()

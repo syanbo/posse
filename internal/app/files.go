@@ -627,12 +627,16 @@ func (a *app) loadDoc(d *fileDoc) {
 // 手机 4800 万、5000 万像素的照片照常预览，再大的不解码
 const docImageMaxPixels = 50_000_000
 
+// docImageMaxSide 是文件标签预览的图片任一边的上限：大图缩小（面积平均）的累加器是三行目标宽的 float64，
+// 每行 32 字节 × 目标宽，极宽的图（4000 万×1 缩到约 3200 万×1）光这三行就要约 3 GB，像素数没超也一样
+const docImageMaxSide = 50_000
+
 // imageBigPixels 以上的原图算大图：缩小时用面积平均（CatmullRom 的中间缓冲是「缩后的宽 × 原图的高」每格 32 字节，
 // 5000 万像素缩一半要 1.1 GB），解完、关掉标签后马上把内存还给系统（Go 不会很快还这么大的空闲内存，
 // phys_footprint 会一直停在峰值附近）。以内的照旧用 CatmullRom
 const imageBigPixels = 16_000_000
 
-// imageTooLarge 是原尺寸超过 docImageMaxPixels、不预览的图片。
+// imageTooLarge 是原尺寸超过 docImageMaxPixels 或任一边超过 docImageMaxSide、不预览的图片。
 type imageTooLarge struct{ w, h int }
 
 func (e imageTooLarge) Error() string { return fmt.Sprintf("image is %dx%d pixels", e.w, e.h) }
@@ -644,7 +648,8 @@ func decodeDocImage(path string) (media.PreviewImage, *animPlayer, error) {
 	if err != nil {
 		return media.PreviewImage{}, nil, err
 	}
-	if cfg, _, err := image.DecodeConfig(bytes.NewReader(b)); err == nil && cfg.Width*cfg.Height > docImageMaxPixels {
+	if cfg, _, err := image.DecodeConfig(bytes.NewReader(b)); err == nil &&
+		(cfg.Width*cfg.Height > docImageMaxPixels || cfg.Width > docImageMaxSide || cfg.Height > docImageMaxSide) {
 		return media.PreviewImage{}, nil, imageTooLarge{cfg.Width, cfg.Height}
 	}
 	if anim, a, err := newAnimPlayer(b, 0); anim != nil && err == nil {

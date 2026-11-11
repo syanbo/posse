@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -50,6 +51,17 @@ func TestDecodeDocImageLimit(t *testing.T) {
 		t.Fatal("truncated image decoded")
 	} else if _, ok := err.(imageTooLarge); ok {
 		t.Fatalf("exactly the limit refused: %v", err)
+	}
+	// 任一边超过 5 万像素也拦（缩小的累加器和目标宽成正比），正好 5 万的放行
+	for _, c := range []struct {
+		w, h  int
+		block bool
+	}{{50000, 1, false}, {50001, 1, true}, {1, 50001, true}, {1, 50000, false}} {
+		_, _, err := decodeDocImage(write(fmt.Sprintf("side-%dx%d.png", c.w, c.h), pngClaiming(c.w, c.h)))
+		big, blocked := err.(imageTooLarge)
+		if blocked != c.block || blocked && (big.w != c.w || big.h != c.h) {
+			t.Fatalf("%dx%d: %v, want blocked %v", c.w, c.h, err, c.block)
+		}
 	}
 	var b bytes.Buffer
 	png.Encode(&b, image.NewNRGBA(image.Rect(0, 0, 30, 20)))
