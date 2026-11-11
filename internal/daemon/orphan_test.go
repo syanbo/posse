@@ -214,3 +214,31 @@ func TestRemoveMultiRepoWhenSourcesGone(t *testing.T) {
 		t.Fatalf("project rm after its worktrees are gone: %v", err)
 	}
 }
+
+// worktrees 里中间一级是指到 home 外面的符号链接：路径字面上在里面，带 discard 也不删外面的目录；
+// 最后一级是链接时只删链接。
+func TestRemoveLeftoverBehindSymlink(t *testing.T) {
+	d, _ := newTestDaemon(t)
+	root := filepath.Join(d.cfg.Home, "worktrees")
+	outside := t.TempDir()
+	victim := filepath.Join(outside, "victim")
+	os.MkdirAll(victim, 0o755)
+	os.WriteFile(filepath.Join(victim, "keep"), []byte("x"), 0o644)
+	os.MkdirAll(root, 0o755)
+	if err := os.Symlink(outside, filepath.Join(root, "link-out")); err != nil {
+		t.Fatal(err)
+	}
+	through := filepath.Join(root, "link-out", "victim")
+	if left := d.removeLeftover(through, true); left != through || !exists(filepath.Join(victim, "keep")) {
+		t.Fatalf("through a link: left %q, outside directory there %v", left, exists(victim))
+	}
+
+	os.MkdirAll(filepath.Join(root, "proj"), 0o755)
+	last := filepath.Join(root, "proj", "ws")
+	if err := os.Symlink(victim, last); err != nil {
+		t.Fatal(err)
+	}
+	if left := d.removeLeftover(last, true); left != "" || !exists(filepath.Join(victim, "keep")) {
+		t.Fatalf("link as the last part: left %q, outside directory there %v", left, exists(victim))
+	}
+}

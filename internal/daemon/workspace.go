@@ -769,8 +769,14 @@ func (d *Daemon) removeLeftover(path string, discard bool) string {
 	if errors.Is(err, fs.ErrNotExist) {
 		return ""
 	}
-	root := filepath.Join(d.cfg.Home, "worktrees")
-	rel, relErr := filepath.Rel(root, filepath.Clean(path))
+	// 两边都解析符号链接再比：中间哪一级是指到外面的链接，字面上在里面、删的却是外面的目录。
+	// 最后一级不解析，它是链接时删掉的只是链接本身
+	root, rootErr := filepath.EvalSymlinks(filepath.Join(d.cfg.Home, "worktrees"))
+	parent, parentErr := filepath.EvalSymlinks(filepath.Dir(filepath.Clean(path)))
+	if rootErr != nil || parentErr != nil {
+		return path
+	}
+	rel, relErr := filepath.Rel(root, filepath.Join(parent, filepath.Base(path)))
 	if relErr != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return path
 	}
