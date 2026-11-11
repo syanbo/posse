@@ -850,6 +850,32 @@ func TestMobileOnlineMark(t *testing.T) {
 	}
 }
 
+// 清单过期、工作区目录被删掉后跳到定义：重列失败、拿到空清单，照「找不到定义」提示，不崩。
+func TestGoToDefinitionListFailed(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	chat := filepath.Join(root, "Chat.java")
+	os.WriteFile(chat, []byte("class Chat {\n  void init() {\n    Helper.open(this, 3);\n  }\n}\n"), 0o644)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	tt := newTester(a.build, 1200, 760)
+	a.openFile(w, chat, 0, [2]int{})
+	v := a.filesFor(w)
+	until(t, tt, "chat loaded", func() bool { return v.cur.kind == docText })
+	d := v.cur
+	until(t, tt, "listing done", func() bool { return !v.listing })
+	v.list, v.listAt = nil, time.Time{}
+	if err := os.RemoveAll(root); err != nil {
+		t.Fatal(err)
+	}
+	m := locales.In("zh-Hans")
+	a.goToDefinition(m, w, v, d, strings.Index(d.ed.Buffer.String(), "open(")+1)
+	until(t, tt, "definition finished", func() bool { return !v.def.running })
+	if d.hint != m.FilesNoDefinition("open") {
+		t.Fatalf("hint %q", d.hint)
+	}
+}
+
 // 跳到定义：⌘点击 `Helper.open` 跳到 Helper.java 里的声明并选中名字，⌃- 回到出发的位置；
 // 几处同名的声明弹出列表，回车跳到选中的那处
 func TestGoToDefinition(t *testing.T) {

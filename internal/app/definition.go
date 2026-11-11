@@ -130,6 +130,13 @@ func (a *app) goToDefinition(m locales.Messages, w *workspace, v *filesView, d *
 		}
 		overlay := editorOverlay(v)
 		l := v.list
+		if l == nil {
+			// 列文件失败（工作区目录没了这类），报错已经在错误条上：照找不到定义收起
+			cancel()
+			s.running = false
+			d.hint, d.hintAt = m.FilesNoDefinition(word), time.Now()
+			return
+		}
 		// 这个文件 import 的东西：import 进来的名字（或限定符是 import 的别名）优先去它来自的文件里找
 		named, all := files.Imports(l, v.root, d.path, snap.String())
 		q.Imported = all

@@ -58,7 +58,7 @@ func (q Query) Compile() (*regexp.Regexp, error) {
 // 结果每 batchEvery 交给 emit 一批（在调用 Search 的 goroutine 里），最后一批在返回前交出。
 // ctx 取消时尽快返回。返回是否因为命中太多而没搜完。
 func Search(ctx context.Context, l *List, q Query, overlay map[string]string, emit func([]Hit)) (truncated bool, err error) {
-	if q.Text == "" {
+	if q.Text == "" || l == nil {
 		return false, nil
 	}
 	re, err := q.Compile()

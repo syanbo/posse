@@ -160,7 +160,7 @@ func (l *List) walkOutside(ctx context.Context, isRepo map[string]bool) error {
 // ScopedList 返回限定在 dir（相对 Root）里检索时用的清单：清单里有 dir 下的文件就用它本身；一个都没有时
 // （被 git 忽略的目录，或不是 git 仓库时遍历跳过的 node_modules 这类）现列一遍那个目录，用户点名要搜的照搜。
 func ScopedList(ctx context.Context, l *List, dir string) (*List, error) {
-	if dir == "" {
+	if dir == "" || l == nil {
 		return l, nil
 	}
 	prefix := dir + string(filepath.Separator)

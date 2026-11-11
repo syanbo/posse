@@ -277,7 +277,8 @@ type lineHit struct {
 // 只在这些行上试声明模式，名字落在注释或字符串里的不算。有未保存改动的文件（overlay）搜编辑器里的内容。
 // 有带声明的结果时，别的文件里的弱匹配（赋值、字段、对象字面量的键）不列。结果按分数从高到低，分数相同按路径和行号。
 func FindDefinitions(ctx context.Context, l *List, overlay map[string]string, q DefinitionQuery) ([]Definition, error) {
-	if q.Word == "" {
+	// 没有清单（列文件失败、目录没了）：什么都找不到
+	if q.Word == "" || l == nil {
 		return nil, nil
 	}
 	words := []string{q.Word}

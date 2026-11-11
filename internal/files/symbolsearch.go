@@ -46,7 +46,7 @@ const (
 // 返回结果是否没看完（命中太多，只看了一部分）。
 func FindSymbols(ctx context.Context, l *List, overlay map[string]string, q SymbolQuery) ([]Symbol, bool, error) {
 	text := strings.TrimSpace(q.Text)
-	if text == "" {
+	if text == "" || l == nil {
 		return nil, false, nil
 	}
 	name := `([\pL\pN_$]*(?i:` + regexp.QuoteMeta(text) + `)[\pL\pN_$]*)`
