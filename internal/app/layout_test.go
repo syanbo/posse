@@ -465,3 +465,28 @@ func TestPrunePanes(t *testing.T) {
 		t.Fatalf("after grace %+v", ls)
 	}
 }
+
+// 一格的终端一时不在（交接）时又拆出一格：那格先收起，终端回来后进焦点格，总格数不超过 maxColumns。
+func TestSplitWhileCellHiddenStaysWithinMax(t *testing.T) {
+	a, w := columnsApp()
+	w.Terminals = []terminalInfo{{ID: "t1"}, {ID: "t2"}, {ID: "t3"}, {ID: "t4"}, {ID: "t5"}}
+	a.state.Panes = map[string]layoutState{"w1": {Root: paneNode{Split: splitH, Kids: []paneNode{
+		leaf("p1", "t1", "t5"), leaf("p2", "t2"), leaf("p3", "t3"), leaf("p4", "t4")}}, Focus: "p1"}}
+	a.activeTerm["w1"] = "t1"
+	all := w.Terminals
+	w.Terminals = []terminalInfo{all[0], all[1], all[2], all[4]}
+	frame(a, w)
+	if !a.canSplitWith("t5", 0, sideRight) {
+		t.Fatal("three cells shown: splitting should be allowed")
+	}
+	a.moveTab(w, "t5", 0, sideRight)
+	w.Terminals = all
+	frame(a, w)
+	st := a.state.Panes["w1"]
+	if n := len(st.Root.leaves(nil)); n > maxColumns || len(a.cols) > maxColumns {
+		t.Fatalf("%d cells saved, %d shown", n, len(a.cols))
+	}
+	if !slices.ContainsFunc(a.cols, func(c colView) bool { return slices.Contains(c.tabs, "t4") }) {
+		t.Fatal("t4 lost")
+	}
+}

@@ -738,7 +738,8 @@ func (a *app) canSplitWith(key string, i int, side dropSide) bool {
 	if len(a.cols) >= maxColumns && !(alone && from != i) {
 		return false
 	}
-	// 拆完两半都不能太小
+	// 拆完两半都不能太小。a.cols 不超过 maxColumns 格，i 不会越界：新格只经 moveTab 拆出，
+	// 它先收起暂时不显示的格（presentKeep）再插，终端回来后也凑不出第五格（TestSplitWhileCellHiddenStaysWithinMax）
 	if size := a.cellSize[i]; size != (ui.Point{}) {
 		if side.axis() == splitH && size.X < 2*colMinWidth() || side.axis() == splitV && size.Y < 2*rowMinHeight() {
 			return false
