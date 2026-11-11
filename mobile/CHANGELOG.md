@@ -3,6 +3,30 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.23
+
+- 看桌面可以手选帧率：悬浮球的「画面」里选自动、60、30、15，按电脑记住，观看中改了立即生效（需要电脑端 0.1.35 及以上）。
+- 修复：看桌面时一次输入或粘贴较长的文字，前面一段会重复发到电脑上。
+- 修复：终端打不开时一直转圈，现在显示电脑给出的原因。
+- 修复：换网络、换连接时正在上传的文件失败；上传大文件更快。
+- 修复：讨论里被电脑拒绝的发言之后输入框不能再用；讨论详情页自己操作出错时没有提示。
+- 修复：看桌面在弱网下确认迟迟不到时，连续输入越打越卡。
+- 修复：项目图标加载失败后不再重试；工作区列表偶尔停止刷新。
+- 修复：iOS、安卓看桌面在切换、退出时偶发的问题；按 IPv6 地址配对的电脑看不了桌面。
+- 以及一批来自全项目审查的稳定性修复。
+
+### English
+
+- Pick the frame rate when viewing the desktop: choose Auto, 60, 30 or 15 under Picture in the floating ball. It is remembered per computer and applies at once while viewing (needs Posse for Mac 0.1.35 or later).
+- Fix: typing or pasting a long piece of text while viewing the desktop sent its first part to the computer twice.
+- Fix: a terminal that could not open kept spinning; it now shows the reason the computer gave.
+- Fix: an upload in progress failed when the network or connection changed; large uploads are faster.
+- Fix: after the computer rejected a message in a discussion, the message box could not be used again; the discussion details page showed nothing when your own action failed.
+- Fix: on a weak network, typing while viewing the desktop got slower and slower when acknowledgements were late.
+- Fix: a project icon that failed to load was never retried; the workspace list occasionally stopped refreshing.
+- Fix: occasional problems when switching or leaving the desktop view on iOS and Android; the desktop could not be viewed on a computer paired by an IPv6 address.
+- Plus a batch of stability fixes from a full review of the project.
+
 ## 0.1.22
 
 - 修复：传大图、视频时 App 卡住、延迟一下子飙升。现在按电脑的确认控制发送速度，上传时按键和其他操作照常响应（需要电脑端 0.1.34 及以上，旧版电脑照旧）。
