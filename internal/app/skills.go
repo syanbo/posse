@@ -54,10 +54,11 @@ type skillsView struct {
 	onlyUpdates bool // 只看有新版本的
 
 	// 跨会话的用量，单独在后台算：第一次要把各家的会话文件都读一遍（几十秒），之后按文件缓存
-	stats        map[string]*history.SkillStat
-	mcpStats     map[string]*history.SkillStat // MCP 服务的用量，和技能同一遍算
+	stats    map[string]*history.SkillStat
+	mcpStats map[string]*history.SkillStat // MCP 服务的用量，和技能同一遍算
+	// 关掉技能页时在算的那一遍接着算，不另起：头一次要读完所有会话文件（几十秒），
+	// 关了又开再起一遍就是两遍同时读。算完时页面关着就不留结果，再开时读缓存很快
 	statsLoading bool
-	statsGen     int // 关掉技能页加一：之前在算的结果不要；页面开着时重扫不影响正在算的用量
 	statsDone    int
 	statsTotal   int
 }
@@ -74,6 +75,8 @@ type skillsPanelView struct {
 var (
 	findCodex = skills.FindCodex
 	findGrok  = skills.FindGrok
+	// skillStats 是算技能用量的函数，测试里换掉
+	skillStats = history.SkillStats
 )
 
 // skillsRefresh 是文件栏的技能页签开着时多久重扫一次：只是 stat 几个目录。
@@ -122,25 +125,17 @@ func (a *app) scanSkills() {
 	}()
 	if !s.statsLoading {
 		s.statsLoading = true
-		gen := s.statsGen
 		cache := ""
 		if a.home != "" {
 			cache = filepath.Join(a.home, "skill-usage.json")
 		}
 		go func() {
-			stats, _ := history.SkillStats(context.Background(), history.Roots{Home: homeDir}, cache, func(done, total int) {
-				a.update(func() {
-					if s.statsGen == gen {
-						s.statsDone, s.statsTotal = done, total
-					}
-				})
+			stats, _ := skillStats(context.Background(), history.Roots{Home: homeDir}, cache, func(done, total int) {
+				a.update(func() { s.statsDone, s.statsTotal = done, total })
 			})
 			a.update(func() {
-				if s.statsGen != gen {
-					return
-				}
 				s.statsLoading = false
-				if stats != nil {
+				if s.visible && stats != nil {
 					s.stats, s.mcpStats = stats.Skills, stats.MCP
 				}
 			})
@@ -179,8 +174,9 @@ func (s *skillsView) updateCount() int {
 func (a *app) releaseSkills() {
 	s := &a.skills
 	s.req++
-	*s = skillsView{req: s.req, statsGen: s.statsGen + 1, query: s.query, agent: s.agent, byUse: s.byUse, page: s.page,
-		updates: s.updates, checking: s.checking, checkReq: s.checkReq, onlyUpdates: s.onlyUpdates}
+	*s = skillsView{req: s.req, query: s.query, agent: s.agent, byUse: s.byUse, page: s.page,
+		updates: s.updates, checking: s.checking, checkReq: s.checkReq, onlyUpdates: s.onlyUpdates,
+		statsLoading: s.statsLoading, statsDone: s.statsDone, statsTotal: s.statsTotal}
 }
 
 func (a *app) skillsSidebarItem(c *ui.Context) ui.Element {

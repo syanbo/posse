@@ -1,13 +1,16 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"posse/internal/history"
 	"posse/internal/skills"
 	"posse/locales"
 )
@@ -126,6 +129,76 @@ func TestSkillStatsSurviveRescan(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("statsLoading %v stats %v", a.skills.statsLoading, a.skills.stats)
+}
+
+// 技能页关了又开：头一次统计用量还在算时不另起一遍，再开后照样拿到这一遍的结果；
+// 算完时页面关着就不留结果，下次开页重新算（读缓存）。
+func TestSkillStatsOneRunAcrossReopen(t *testing.T) {
+	home := t.TempDir()
+	old := homeDir
+	homeDir = home
+	t.Cleanup(func() { homeDir = old })
+	findCodex = func(string) string { return "" }
+	findGrok = func(string) string { return "" }
+	var mu sync.Mutex
+	running, calls, most := 0, 0, 0
+	release := make(chan struct{})
+	skillStats = func(ctx context.Context, roots history.Roots, cache string, progress func(int, int)) (*history.UseStats, error) {
+		mu.Lock()
+		calls++
+		running++
+		most = max(most, running)
+		mu.Unlock()
+		progress(1, 2)
+		<-release
+		mu.Lock()
+		running--
+		mu.Unlock()
+		return &history.UseStats{Skills: map[string]*history.SkillStat{"x": {Name: "x", Count: 3}}}, nil
+	}
+	t.Cleanup(func() { findCodex, findGrok, skillStats = skills.FindCodex, skills.FindGrok, history.SkillStats })
+	a := previewApp(t)
+	settle := func(done func() bool) {
+		t.Helper()
+		for range 300 {
+			a.runPending()
+			if done() {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatalf("stuck: loading %v stats %v", a.skills.statsLoading, a.skills.stats)
+	}
+	a.setSkillsVisible(true)
+	settle(func() bool { return a.skills.statsTotal == 2 })
+	a.releaseSkills() // 关页
+	a.setSkillsVisible(false)
+	a.setSkillsVisible(true) // 再开：还在算，不另起
+	if !a.skills.statsLoading || a.skills.statsTotal != 2 {
+		t.Fatalf("reopened: loading %v progress %d/%d", a.skills.statsLoading, a.skills.statsDone, a.skills.statsTotal)
+	}
+	release <- struct{}{}
+	settle(func() bool { return !a.skills.statsLoading })
+	if a.skills.stats["x"] == nil || calls != 1 || most != 1 {
+		t.Fatalf("after reopen: stats %v calls %d concurrent %d", a.skills.stats, calls, most)
+	}
+	// 算到一半关页，算完时页面关着：不留结果；再开重新算一遍
+	a.releaseSkills()
+	a.setSkillsVisible(false)
+	a.setSkillsVisible(true)
+	a.releaseSkills()
+	a.setSkillsVisible(false)
+	release <- struct{}{}
+	settle(func() bool { return !a.skills.statsLoading })
+	if a.skills.stats != nil {
+		t.Fatalf("closed page kept stats %v", a.skills.stats)
+	}
+	a.setSkillsVisible(true)
+	release <- struct{}{}
+	settle(func() bool { return !a.skills.statsLoading && a.skills.stats != nil })
+	if calls != 3 || most != 1 {
+		t.Fatalf("calls %d concurrent %d", calls, most)
+	}
 }
 
 func TestSkillStep(t *testing.T) {
