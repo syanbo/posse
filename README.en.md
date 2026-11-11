@@ -27,7 +27,7 @@
 ## Why Posse
 
 - **Close the window anytime; terminals keep running.** A single Go daemon hosts every terminal. Reopen the window and everything reattaches as it was, and upgrades don’t interrupt running agents.
-- **Light.** The window only attaches to terminals you can see, so it doesn’t get heavier as you open more agents. The download is about 13.5 MB and about 36 MB installed (Apple silicon; the Intel build is about 15 MB and 39 MB); the UI is drawn natively with [MyGo](https://github.com/egoist/mygo). The memory figure in the screenshot’s status bar is Posse plus the programs in its terminals (agents, MCP servers and so on).
+- **Light.** The window only attaches to terminals you can see, so it doesn’t get heavier as you open more agents. The download is about 13.5 MB and about 37 MB installed (Apple silicon; the Intel build is about 15 MB and 41 MB); the UI is drawn natively with [MyGo](https://github.com/egoist/mygo). The memory figure in the screenshot’s status bar is Posse plus the programs in its terminals (agents, MCP servers and so on).
 - **Leaves your agent config alone.** Status comes from hooks injected at launch; nothing is written into the hooks in `~/.claude` or `~/.codex`.
 
 ## Features
