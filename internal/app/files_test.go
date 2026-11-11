@@ -1478,7 +1478,7 @@ func TestRelocateKeepsUnsavedEdits(t *testing.T) {
 	d := v.cur
 	d.ed.Insert("<!-- draft -->\n")
 	w := &a.workspaces[0]
-	moved := filepath.Join(t.TempDir(), "moved")
+	moved := movedDir(t)
 	if err := os.Rename(v.root, moved); err != nil {
 		t.Fatal(err)
 	}
@@ -1527,7 +1527,7 @@ func TestRelocateUnchangedFileNoConflict(t *testing.T) {
 	d := v.cur
 	d.ed.Insert("<!-- draft -->\n")
 	w := &a.workspaces[0]
-	moved := filepath.Join(t.TempDir(), "moved")
+	moved := movedDir(t)
 	if err := os.Rename(v.root, moved); err != nil {
 		t.Fatal(err)
 	}
@@ -1552,6 +1552,21 @@ func TestRelocateUnchangedFileNoConflict(t *testing.T) {
 	}
 }
 
+// movedDir 是测试里把工作区挪过去的目录。换过去之后后台会在那里跑 git 查状态，测试结束时可能还在写 .git，
+// TempDir 收尾删目录会撞上：先删到删干净（这个 Cleanup 比 TempDir 的先跑）。
+func movedDir(t *testing.T) string {
+	moved := filepath.Join(t.TempDir(), "moved")
+	t.Cleanup(func() {
+		for range 100 {
+			if os.RemoveAll(moved) == nil {
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	})
+	return moved
+}
+
 // 新位置的文件确实和打开时不一样：照样报冲突。
 func TestRelocateChangedFileConflicts(t *testing.T) {
 	a := previewApp(t)
@@ -1559,7 +1574,7 @@ func TestRelocateChangedFileConflicts(t *testing.T) {
 	d := v.cur
 	d.ed.Insert("<!-- draft -->\n")
 	w := &a.workspaces[0]
-	moved := filepath.Join(t.TempDir(), "moved")
+	moved := movedDir(t)
 	if err := os.Rename(v.root, moved); err != nil {
 		t.Fatal(err)
 	}
