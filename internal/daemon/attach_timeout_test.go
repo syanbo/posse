@@ -23,7 +23,7 @@ func TestAttachTimeoutThenReattach(t *testing.T) {
 	}
 	d.exiting.Store(true)
 	d.closeAll()
-	if _, err := d.store.MarkRunningLost(time.Now(), nil); err != nil {
+	if _, err := d.store.MarkRunningLost(nil); err != nil {
 		t.Fatal(err)
 	}
 	d2 := &Daemon{cfg: d.cfg, store: d.store, terms: map[string]*session{}, tchanged: make(chan struct{}), launcher: d.launcher}

@@ -224,7 +224,7 @@ func (d *Daemon) onExit(id string, code int) {
 		if d.exiting.Load() {
 			return
 		}
-		if err := d.store.EndTerminal(id, "exited", &code, time.Now()); err != nil {
+		if err := d.store.EndTerminal(id, "exited"); err != nil {
 			log.Printf("terminal %s: record exit: %v", id, err)
 		}
 		d.dropChatFolder(id, dir)

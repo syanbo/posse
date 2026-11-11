@@ -470,7 +470,7 @@ func reconcileRecords(st *store.Store, keep []string, handoff bool) error {
 		run  func() error
 	}{
 		{"mark running terminals lost", func() error {
-			n, err := st.MarkRunningLost(time.Now(), keep)
+			n, err := st.MarkRunningLost(keep)
 			if err == nil && n > 0 {
 				log.Printf("%d terminals from the previous daemon are waiting to be restored", n)
 			}
@@ -801,8 +801,7 @@ func (d *Daemon) closeSession(s *session, grace time.Duration) {
 	d.mu.Unlock()
 	// 用户关的马上记成退出（onExit 要等 resumeSettle 才记）；常驻进程退出时关的留着恢复
 	if !d.exiting.Load() {
-		code := s.ExitCode()
-		if err := d.store.EndTerminal(s.ID, "exited", &code, time.Now()); err != nil {
+		if err := d.store.EndTerminal(s.ID, "exited"); err != nil {
 			log.Printf("terminal %s: record exit: %v", s.ID, err)
 		}
 		d.dropChatFolder(s.ID, s.Dir)

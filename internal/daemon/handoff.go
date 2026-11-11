@@ -485,7 +485,7 @@ func (d *Daemon) recordEndedAdopted(terms []handoffTerm) {
 		if !ht.Term.Ended {
 			continue
 		}
-		changed, err := d.store.ExitTerminalIfRunning(ht.Term.ID, ht.Term.ExitCode, time.Now())
+		changed, err := d.store.ExitTerminalIfRunning(ht.Term.ID)
 		if err != nil {
 			log.Printf("after handoff: terminal %s: record exit: %v", ht.Term.ID, err)
 			continue

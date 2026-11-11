@@ -45,7 +45,7 @@ func TestStore(t *testing.T) {
 	if err := s.AddTerminal(Terminal{ID: "t_1", WorkspaceID: ws[0].ID, Command: []string{"sh"}, State: "running", CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := s.MarkRunningLost(time.Now(), nil); err != nil || n != 1 {
+	if n, err := s.MarkRunningLost(nil); err != nil || n != 1 {
 		t.Fatalf("MarkRunningLost = %d, %v", n, err)
 	}
 	if err := s.AddTerminal(Terminal{ID: "t_2", WorkspaceID: ws[0].ID, Command: []string{"sh"}, State: "running", CreatedAt: time.Now()}); err != nil {
@@ -54,7 +54,7 @@ func TestStore(t *testing.T) {
 	if err := s.AddTerminal(Terminal{ID: "t_3", WorkspaceID: ws[0].ID, Command: []string{"sh"}, State: "running", CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.EndTerminal("t_3", "exited", nil, time.Now()); err != nil {
+	if err := s.EndTerminal("t_3", "exited"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.AddTerminal(Terminal{ID: "t_4", WorkspaceID: "w_gone", Command: []string{"sh"}, State: "lost", CreatedAt: time.Now()}); err != nil {
@@ -138,5 +138,76 @@ func TestMigrateTaskModel(t *testing.T) {
 			t.Fatalf("new task %+v", task)
 		}
 		s.Close()
+	}
+}
+
+// terminals 的 exit_code、ended_at 不再写，但列留着：旧版常驻进程（交接失败后接着跑的旧进程、降级）在新进程打开过的库上
+// 照旧写这两列，不能报 no such column；旧库里这两列有值也照常读写，再打开一次不出错。
+func TestTerminalEndColumnsKept(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"t_1", "t_2", "t_3"} {
+		if err := s.AddTerminal(Terminal{ID: id, WorkspaceID: "w_1", Command: []string{"sh"}, State: "running", CreatedAt: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 这一版自己记退出、记 lost、恢复时都不写这两列
+	if err := s.EndTerminal("t_1", "exited"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := s.ExitTerminalIfRunning("t_2"); err != nil || !ok {
+		t.Fatalf("ExitTerminalIfRunning = %v, %v", ok, err)
+	}
+	if n, err := s.MarkRunningLost(nil); err != nil || n != 1 {
+		t.Fatalf("MarkRunningLost = %d, %v", n, err)
+	}
+	var written int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM terminals WHERE exit_code IS NOT NULL OR ended_at IS NOT NULL`).Scan(&written); err != nil || written != 0 {
+		t.Fatalf("rows with exit_code or ended_at = %d, %v", written, err)
+	}
+	// 旧进程的写法（原样抄自上一版）在这一版建的库上照常执行
+	now := time.Now().UnixMilli()
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`UPDATE terminals SET state=?, exit_code=?, ended_at=? WHERE id=?`, []any{"exited", 3, now, "t_1"}},
+		{`UPDATE terminals SET state='exited', exit_code=?, ended_at=? WHERE id=? AND state='running'`, []any{0, now, "t_2"}},
+		{`UPDATE terminals SET state='lost', ended_at=? WHERE state='running'`, []any{now}},
+		{`UPDATE terminals SET command=?, agent=?, session_id=?, state='running', exit_code=NULL, ended_at=NULL WHERE id=? AND state='lost'`, []any{`["sh"]`, "", "", "t_3"}},
+	} {
+		if _, err := s.db.Exec(q.sql, q.args...); err != nil {
+			t.Fatalf("old daemon statement %q: %v", q.sql, err)
+		}
+	}
+	s.Close()
+	// 旧进程写过值的库再打开（两次）：照常读写
+	for range 2 {
+		s, err = Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.EndTerminal("t_3", "exited"); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.ReviveTerminal("t_3", []string{"zsh"}, "claude", "sid"); err != nil {
+			t.Fatal(err)
+		}
+		s.Close()
+	}
+	s, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var code sql.NullInt64
+	if err := s.db.QueryRow(`SELECT exit_code FROM terminals WHERE id='t_1'`).Scan(&code); err != nil || code.Int64 != 3 {
+		t.Fatalf("old exit_code = %v, %v", code, err)
+	}
+	if err := s.PruneTerminals(); err != nil {
+		t.Fatal(err)
 	}
 }

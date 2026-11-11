@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS terminals (
 	command TEXT NOT NULL,
 	agent TEXT NOT NULL DEFAULT '',
 	state TEXT NOT NULL,
+	-- 不再写也不读。留着给旧版常驻进程：交接失败时旧进程接着用新进程打开过的库，降级也一样，它们记退出时还写这两列
 	exit_code INTEGER,
 	created_at INTEGER NOT NULL,
 	ended_at INTEGER
@@ -378,7 +379,7 @@ func (s *Store) SetTerminalResume(id, agent, sessionID, cwd, label string) error
 // ReviveTerminal 把恢复了的终端改回运行中，名字和创建时间不变。
 func (s *Store) ReviveTerminal(id string, command []string, agent, sessionID string) error {
 	cmd, _ := json.Marshal(command)
-	_, err := s.db.Exec(`UPDATE terminals SET command=?, agent=?, session_id=?, state='running', exit_code=NULL, ended_at=NULL WHERE id=? AND state='lost'`,
+	_, err := s.db.Exec(`UPDATE terminals SET command=?, agent=?, session_id=?, state='running' WHERE id=? AND state='lost'`,
 		string(cmd), agent, sessionID, id)
 	return err
 }
@@ -444,14 +445,14 @@ func (s *Store) TerminalResume(id string) (Terminal, error) {
 	return t, err
 }
 
-func (s *Store) EndTerminal(id, state string, code *int, at time.Time) error {
-	_, err := s.db.Exec(`UPDATE terminals SET state=?, exit_code=?, ended_at=? WHERE id=?`, state, code, ms(at), id)
+func (s *Store) EndTerminal(id, state string) error {
+	_, err := s.db.Exec(`UPDATE terminals SET state=? WHERE id=?`, state, id)
 	return err
 }
 
 // ExitTerminalIfRunning 把还记着 running 的终端记为已退出，报告改没改（已经记过退出、lost 的不动）。
-func (s *Store) ExitTerminalIfRunning(id string, code int, at time.Time) (bool, error) {
-	res, err := s.db.Exec(`UPDATE terminals SET state='exited', exit_code=?, ended_at=? WHERE id=? AND state='running'`, code, ms(at), id)
+func (s *Store) ExitTerminalIfRunning(id string) (bool, error) {
+	res, err := s.db.Exec(`UPDATE terminals SET state='exited' WHERE id=? AND state='running'`, id)
 	if err != nil {
 		return false, err
 	}
@@ -460,9 +461,9 @@ func (s *Store) ExitTerminalIfRunning(id string, code int, at time.Time) (bool, 
 }
 
 // MarkRunningLost 在常驻进程启动时调用：上一个进程托管的终端都已随之结束，keep 里的是交接过来的、还在运行。
-func (s *Store) MarkRunningLost(at time.Time, keep []string) (int64, error) {
+func (s *Store) MarkRunningLost(keep []string) (int64, error) {
 	q, args := notIn("id", keep)
-	res, err := s.db.Exec(`UPDATE terminals SET state='lost', ended_at=? WHERE state='running'`+q, append([]any{ms(at)}, args...)...)
+	res, err := s.db.Exec(`UPDATE terminals SET state='lost' WHERE state='running'`+q, args...)
 	if err != nil {
 		return 0, err
 	}

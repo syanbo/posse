@@ -66,7 +66,7 @@ func TestRestoreAfterRestart(t *testing.T) {
 	// 常驻进程退出：关掉的终端不记成退出
 	d.exiting.Store(true)
 	d.closeAll()
-	if n, err := d.store.MarkRunningLost(time.Now(), nil); err != nil || n != 2 {
+	if n, err := d.store.MarkRunningLost(nil); err != nil || n != 2 {
 		t.Fatalf("MarkRunningLost = %d, %v", n, err)
 	}
 	if err := d.store.PruneTerminals(); err != nil {
@@ -173,7 +173,7 @@ func TestExitRecordedAfterSettle(t *testing.T) {
 	d.exiting.Store(true) // late 退出后马上开始退出：还在等待里
 	time.Sleep(2 * resumeSettle)
 
-	if n, err := d.store.MarkRunningLost(time.Now(), nil); err != nil || n != 1 {
+	if n, err := d.store.MarkRunningLost(nil); err != nil || n != 1 {
 		t.Fatalf("MarkRunningLost = %d, %v; want only the terminal that exited during shutdown", n, err)
 	}
 	if _, err := d.store.LostTerminal(late.ID); err != nil {
