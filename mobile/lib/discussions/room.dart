@@ -357,7 +357,15 @@ class _DiscussionRoomState extends State<DiscussionRoom>
           if (mounted) setState(() => error = retryError);
         }
       } else {
-        setState(() => error = e);
+        setState(() {
+          error = e;
+          // 电脑明确拒绝了（没有收下）：输入框放开，改了再发换一个请求 ID；结果不明时锁着，原样重试
+          if (!discResultUnknown(e)) {
+            pending = null;
+            clientId = '';
+          }
+        });
+        await save();
       }
     } finally {
       if (mounted) setState(() => sending = false);

@@ -107,6 +107,14 @@ class DiscussionApi {
   }
 }
 
+/// 请求失败时说不准电脑做了没有（断线、超时、电脑内部出错，或电脑明说结果未知）：
+/// 这时要用同一个请求 ID 原样重试；其余是电脑明确拒绝了，什么都没做，可以改了再发。
+bool discResultUnknown(Object error) {
+  if (error is! RpcException) return true;
+  return ['closed', 'timeout', 'internal_error'].contains(error.code) ||
+      discMap(error.data)['unknown'] == true;
+}
+
 /// 手机的草稿和已读独立保存，不修改桌面窗口的 ui.json。
 class DiscussionStorage {
   DiscussionStorage(this.computer, this.room);

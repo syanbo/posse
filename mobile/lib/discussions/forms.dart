@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
-import '../protocol/rpc.dart';
 import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -137,11 +136,7 @@ class _DiscussionFormState extends State<_DiscussionForm> {
       final result = await widget.api.call(widget.method, request!);
       if (mounted) Navigator.pop(context, result);
     } catch (e) {
-      final data = e is RpcException ? discMap(e.data) : <String, Object?>{};
-      final unknown =
-          e is! RpcException ||
-          ['closed', 'timeout', 'internal_error'].contains(e.code) ||
-          data['unknown'] == true;
+      final unknown = discResultUnknown(e);
       if (mounted) {
         setState(() {
           error = e;

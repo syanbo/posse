@@ -249,6 +249,57 @@ void main() {
       model.dispose();
     });
   }
+  testWidgets(
+    'a send the Mac refused unlocks the composer with a new request ID',
+    (t) async {
+      final rpc = DiscRpc();
+      final base = DiscRpc();
+      var refuse = true;
+      rpc.handler = (method, params) async {
+        if (method == 'discussion.post' && refuse) {
+          refuse = false;
+          throw RpcException(
+            'conflict',
+            'you can only send requests to your own agents',
+          );
+        }
+        return base.call(method, params);
+      };
+      final model = DiscModel(rpc);
+      await t.pumpWidget(
+        MaterialApp(
+          home: DiscussionRoom(
+            api: DiscussionApi(model),
+            room: 'room',
+            self: 'self',
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      await t.enterText(find.byType(TextField), 'first try');
+      await t.pump();
+      await t.tap(find.byTooltip('发送'));
+      await t.pumpAndSettle();
+      expect(t.widget<TextField>(find.byType(TextField)).enabled, isTrue);
+      await t.enterText(find.byType(TextField), 'second try');
+      await t.pump();
+      await t.tap(find.byTooltip('发送'));
+      await t.pumpAndSettle();
+      final posts = rpc.calls
+          .where((c) => c.method == 'discussion.post')
+          .toList();
+      expect(posts, hasLength(2));
+      expect(posts.last.params['body'], 'second try');
+      expect(
+        posts.last.params['clientId'],
+        isNot(posts.first.params['clientId']),
+      );
+      await t.pumpWidget(const SizedBox());
+      await t.pumpAndSettle();
+      model.dispose();
+    },
+  );
+
   testWidgets('tapping an attachment twice downloads it once', (t) async {
     final rpc = DiscRpc();
     final pending = Completer<DiscJson>();
