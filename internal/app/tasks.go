@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"log"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -309,10 +308,6 @@ func (a *app) askCloseTask(m locales.Messages, t taskInfo) {
 
 // viewDiff 在 worktree 里开一个终端显示相对分叉点的改动，看完留在 shell 里。
 func (a *app) viewDiff(t taskInfo) {
-	sh := os.Getenv("SHELL")
-	if sh == "" {
-		sh = "/bin/zsh"
-	}
 	diff := func(base string) string {
 		mb := "$(git merge-base " + agent.Quote(base) + " HEAD)"
 		return "git --no-pager diff --stat " + mb + " && git status --short && git diff " + mb
@@ -326,10 +321,10 @@ func (a *app) viewDiff(t taskInfo) {
 		}
 		script = strings.Join(parts, "; ")
 	}
-	script += "; exec " + agent.Quote(sh) + " -l"
 	go func() {
 		var term terminalInfo
-		if a.call("terminal.create", map[string]any{"workspace": t.WorkspaceID, "command": []string{sh, "-l", "-i", "-c", script}}, &term, 10*time.Second) != nil {
+		// 跑完换回用户的 shell；fish、csh 这类读不懂 POSIX 写法的由 ShellArgv 交给 /bin/sh
+		if a.call("terminal.create", map[string]any{"workspace": t.WorkspaceID, "command": agent.ShellArgv(script)}, &term, 10*time.Second) != nil {
 			return
 		}
 		a.refresh()
