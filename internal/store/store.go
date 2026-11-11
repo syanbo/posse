@@ -80,6 +80,8 @@ type Terminal struct {
 	EndedAt     *time.Time `json:"endedAt,omitempty"`
 }
 
+// terminals 的 exit_code、ended_at 不再写也不读，列留着：交接失败时旧进程接着用新进程打开过的库、降级到旧版时，
+// 旧进程记退出还写这两列，删掉的话它报 no such column，终端一直记着 running，下次启动被当成丢失恢复成新 shell。
 const schema = `
 CREATE TABLE IF NOT EXISTS projects (
 	id TEXT PRIMARY KEY,
@@ -107,7 +109,7 @@ CREATE TABLE IF NOT EXISTS terminals (
 	command TEXT NOT NULL,
 	agent TEXT NOT NULL DEFAULT '',
 	state TEXT NOT NULL,
-	-- 不再写也不读。留着给旧版常驻进程：交接失败时旧进程接着用新进程打开过的库，降级也一样，它们记退出时还写这两列
+	-- unused: kept for older daemons that still write them (failed handoff, downgrade)
 	exit_code INTEGER,
 	created_at INTEGER NOT NULL,
 	ended_at INTEGER
