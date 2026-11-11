@@ -548,8 +548,19 @@ struct DeskMiss {
 
 /// 专门的线程收 UDP。视频包在这里解密、拆 RTP、交给硬解，不经 Dart。
 final class DeskSession {
-  var onFrame: ((CVPixelBuffer) -> Void)?
-  var onStats: (([String: Any]) -> Void)?
+  /// 解出一帧（VideoToolbox 的回调线程）、出一份统计（收包线程）时调；主线程开始前设上，控制队列停止时清掉。
+  /// 读写都只在 callbackLock 里拷一下引用，回调本身在锁外调：解码线程不会去等控制队列
+  var onFrame: ((CVPixelBuffer) -> Void)? {
+    get { callbackLock.withLock { frameCallback } }
+    set { callbackLock.withLock { frameCallback = newValue } }
+  }
+  var onStats: (([String: Any]) -> Void)? {
+    get { callbackLock.withLock { statsCallback } }
+    set { callbackLock.withLock { statsCallback = newValue } }
+  }
+  private let callbackLock = NSLock()
+  private var frameCallback: ((CVPixelBuffer) -> Void)?
+  private var statsCallback: (([String: Any]) -> Void)?
 
   private let keys: DeskKeys
   /// 直连候选（局域网等）和中转，hello 发给全部；收到 Mac 的包后只回给那条路。
