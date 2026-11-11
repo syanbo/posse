@@ -54,7 +54,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
   private let method: FlutterMethodChannel
   private let events: FlutterEventChannel
   private let control = DispatchQueue(label: "posse.desk.control")
-  /// 主线程的暂停和 control 队列的 stop 都会碰到 session。只在这把锁里换引用。
+  /// 主线程的输入、打洞和 control 队列的 stop 都会碰到 session。只在这把锁里换引用。
   private let sessionLock = NSLock()
   private var texture: DeskTexture?
   private var session: DeskSession?
@@ -89,26 +89,12 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
     return nil
   }
 
-  /// 先把引用拷出来再调，避免和 stop 置空抢同一份 session。
-  private func setSessionPaused(_ value: Bool) {
-    sessionLock.lock()
-    let current = session
-    sessionLock.unlock()
-    current?.setPaused(value)
-  }
-
   private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "start":
       start(call.arguments, result: result)
     case "stop":
       stop(result: result)
-    case "pause":
-      setSessionPaused(true)
-      result(nil)
-    case "resume":
-      setSessionPaused(false)
-      result(nil)
     case "input":
       sendInput(call.arguments, result: result)
     case "punch":

@@ -85,14 +85,6 @@ class DeskPlugin(
         when (call.method) {
             "start" -> start(call, result)
             "stop" -> stop(result)
-            "pause" -> {
-                current()?.setPaused(true)
-                result.success(null)
-            }
-            "resume" -> {
-                current()?.setPaused(false)
-                result.success(null)
-            }
             "input" -> {
                 val plain = call.arguments as? ByteArray
                 if (plain == null) {

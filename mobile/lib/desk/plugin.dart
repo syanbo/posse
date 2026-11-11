@@ -152,10 +152,6 @@ class DeskReceiver {
   Future<void> punch(String addr) => _channel.invokeMethod<void>('punch', addr);
 
   Future<void> stop() => _channel.invokeMethod<void>('stop');
-
-  Future<void> pause() => _channel.invokeMethod<void>('pause');
-
-  Future<void> resume() => _channel.invokeMethod<void>('resume');
 }
 
 /// 顶边和底边的系统手势延后。只在 iOS 插件里有实现，安卓靠沉浸模式：边缘第一下只唤出系统栏。

@@ -149,11 +149,6 @@ void main() {
     expect(deskEventLine(zh, const DeskTextEvent('你好')), '文字 你好');
   });
 
-  test('endpoint brackets an ipv6 host', () {
-    expect(deskEndpoint('192.168.50.187', 47991), '192.168.50.187:47991');
-    expect(deskEndpoint('fe80::1', 47991), '[fe80::1]:47991');
-  });
-
   test('rotation keeps the desktop point under the view center', () {
     final view = DeskViewport(zoom: 2, panX: 0.25, panY: 0.25);
     final fromFit = fitContain(400, 200, 2);

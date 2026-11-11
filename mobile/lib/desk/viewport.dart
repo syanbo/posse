@@ -34,8 +34,6 @@ class DeskViewport {
     panX = panX.clamp(0.0, maxPan);
     panY = panY.clamp(0.0, maxPan);
   }
-
-  DeskViewport copy() => DeskViewport(zoom: zoom, panX: panX, panY: panY);
 }
 
 /// 转屏或键盘把视图尺寸改了之后，原来在视图中心的那个桌面点还留在中心。

@@ -10,19 +10,13 @@ const deskTestNonce = 'posse-desk-nonce';
 /// Mac 侧 `posse desk cast` 的默认端口。
 const deskDefaultPort = 47991;
 
-enum DeskCodec { hevc, h264 }
+enum DeskCodec { hevc }
 
 Uint8List deskTestSecretBytes() =>
     Uint8List.fromList(utf8.encode(deskTestSecret));
 
 Uint8List deskTestNonceBytes() =>
     Uint8List.fromList(utf8.encode(deskTestNonce));
-
-/// 调试里展示的地址。IPv6 要加括号，不然和端口粘在一起。
-String deskEndpoint(String host, int port) {
-  final shown = host.contains(':') ? '[$host]' : host;
-  return '$shown:$port';
-}
 
 int? parseDeskPort(String text) {
   final n = int.tryParse(text.trim());
