@@ -168,7 +168,10 @@ func (a *app) linkPath(v *termView, link string) (path string, local bool) {
 	if strings.Contains(link, "://") || strings.HasPrefix(link, "mailto:") {
 		return "", false
 	}
-	return resolveLinkPath(link, a.linkBase(v)), true
+	if p := resolveLinkPath(link, a.linkBase(v)); p != "" {
+		return p, true
+	}
+	return a.viewedImage(v, link), true
 }
 
 // imageTagRe 是 agent 输入框里粘贴的图片占位（终端插件认出的 [Image #N]）。发出去以后 Claude 把它输出成 OSC 8 链接，那时走 file://。

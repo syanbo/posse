@@ -326,6 +326,8 @@ type app struct {
 	linkCard *linkCard
 	// linkChecks 缓存终端里的链接能不能打开（文件还在不在），悬停时每帧都要问
 	linkChecks map[string]linkCheck
+	// viewed 按终端记 Codex 会话看过的图片路径，终端里只打印了文件名时靠它找到文件，见 viewed.go
+	viewed map[string]*viewedImages
 	// 悬停在终端里的图片链接上时预览：hoverImage 是图片路径，previews 是解码好的预览
 	hoverImage string
 	hoverTerm  string // 悬停的是哪个终端里的链接：分栏时预览只画在那一栏
