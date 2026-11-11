@@ -49,6 +49,24 @@ func loadProc() {
 	})
 }
 
+// pidCap 是第一次取进程列表的容量（测试调小它）。
+var pidCap = 8192
+
+// allPids 是全部进程号；取不到时为 nil。proc_listallpids 在缓冲不够时不报错，
+// 只填满缓冲、返回容量（kern.maxproc 调高后进程可能超过 8192），所以填满了就加倍重取。
+func allPids() []int32 {
+	for c := pidCap; ; c *= 2 {
+		pids := make([]int32, c)
+		n := listAllPids(unsafe.Pointer(&pids[0]), int32(c*4))
+		if n <= 0 {
+			return nil
+		}
+		if int(n) < c {
+			return pids[:n]
+		}
+	}
+}
+
 // runningIn 找出 dirs 里有进程正从中运行的目录。查不了进程时当作都有，宁可不删。
 func runningIn(dirs []string) map[string]bool {
 	busy := map[string]bool{}
@@ -59,16 +77,15 @@ func runningIn(dirs []string) map[string]bool {
 		}
 		return busy
 	}
-	pids := make([]int32, 8192)
-	n := listAllPids(unsafe.Pointer(&pids[0]), int32(len(pids)*4))
-	if n <= 0 {
+	pids := allPids()
+	if pids == nil {
 		for _, d := range dirs {
 			busy[d] = true
 		}
 		return busy
 	}
 	buf := make([]byte, 4096)
-	for _, pid := range pids[:min(int(n), len(pids))] {
+	for _, pid := range pids {
 		l := procPidPath(pid, unsafe.Pointer(&buf[0]), uint32(len(buf)))
 		if l <= 0 {
 			continue

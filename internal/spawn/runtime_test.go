@@ -221,3 +221,19 @@ func TestRunningIn(t *testing.T) {
 		t.Fatalf("busy %v", busy)
 	}
 }
+
+// 进程比第一次的容量多时，不能只看到前一截：launchd（pid 1）排在列表最后。
+func TestRunningInBeyondFirstBuffer(t *testing.T) {
+	defer func(c int) { pidCap = c }(pidCap)
+	pidCap = 16
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe, _ = filepath.EvalSymlinks(exe)
+	mine := filepath.Dir(exe)
+	busy := runningIn([]string{mine, "/sbin"})
+	if !busy[mine] || !busy["/sbin"] {
+		t.Fatalf("busy %v", busy)
+	}
+}
