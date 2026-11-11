@@ -3,8 +3,10 @@ package gitx
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -132,9 +134,30 @@ func TestBranchOps(t *testing.T) {
 	if err == nil {
 		t.Fatal("deleting unmerged branch should fail")
 	}
-	if !NotMerged(runErr(ctx, dir, "branch", "-d", "side")) {
+	if !NotMerged(err) {
 		t.Fatalf("not-merged error not recognized: %v", err)
 	}
+	// 常驻进程的入口：报错带命令前缀和 git 的原话（含 hint 行），和以前一字不差
+	raw := exec.Command("git", "branch", "-d", "side")
+	raw.Dir, raw.Env = dir, append(raw.Environ(), "LC_ALL=C")
+	stderr, _ := raw.CombinedOutput()
+	if want := "git branch -d side: " + strings.TrimSpace(string(stderr)); err.Error() != want {
+		t.Fatalf("daemon error changed:\n%s\nwant\n%s", err, want)
+	}
+	// 界面的入口：只留 git 的原话，没有命令前缀和 hint 行，照样认得出没合并
+	uiErr := DeleteLocalBranch(ctx, dir, "side", false)
+	var ge *Error
+	if !errors.As(uiErr, &ge) || !NotMerged(uiErr) {
+		t.Fatalf("ui delete: %T %v", uiErr, uiErr)
+	}
+	if msg := uiErr.Error(); strings.HasPrefix(msg, "git ") || strings.Contains(msg, "hint:") {
+		t.Fatalf("ui error %q", msg)
+	}
+	tip := Tip(ctx, dir, "refs/heads/side")
+	if err := DeleteLocalBranch(ctx, dir, "side", true); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, dir, "branch", "side", tip)
 	if err := MergeInto(ctx, dir, "side"); err != nil {
 		t.Fatal(err)
 	}
@@ -156,11 +179,6 @@ func TestBranchOps(t *testing.T) {
 	if _, ok := WorktreeOf(m, dir); ok {
 		t.Fatal("current worktree reported as other")
 	}
-}
-
-func runErr(ctx context.Context, dir string, args ...string) error {
-	_, err := runRaw(ctx, dir, nil, nil, args...)
-	return err
 }
 
 func TestTags(t *testing.T) {

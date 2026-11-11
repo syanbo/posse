@@ -512,3 +512,14 @@ func StashDropHash(ctx context.Context, dir, hash string) error {
 	}
 	return errors.New("this stash no longer exists")
 }
+
+// DeleteLocalBranch 是界面删本地分支：报错只留 git 自己的话（没有命令前缀和 hint 行），没合并时 NotMerged 认得出。
+// 常驻进程删工作区的分支仍用 DeleteBranch。
+func DeleteLocalBranch(ctx context.Context, dir, name string, force bool) error {
+	flag := "-d"
+	if force {
+		flag = "-D"
+	}
+	_, err := runRaw(ctx, dir, nil, nil, "branch", flag, name)
+	return err
+}

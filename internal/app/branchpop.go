@@ -789,7 +789,7 @@ func (a *app) askDeleteBranch(m locales.Messages, v *filesView, b gitx.Branch) {
 	var unmerged bool
 	a.gitDoThen(m, g, m.BranchDelete(), func(ctx context.Context, root string) error {
 		tip = gitx.Tip(ctx, root, "refs/heads/"+b.Name)
-		err := gitx.DeleteBranch(ctx, root, b.Name, false)
+		err := gitx.DeleteLocalBranch(ctx, root, b.Name, false)
 		if gitx.NotMerged(err) {
 			unmerged = true
 			return nil
@@ -802,7 +802,7 @@ func (a *app) askDeleteBranch(m locales.Messages, v *filesView, b gitx.Branch) {
 		}
 		a.confirm(m.BranchUnmergedTitle(b.Name), m.BranchUnmergedBody(), m.BranchForceDelete(), func() {
 			a.update(func() {
-				a.gitDoThen(m, g, m.BranchForceDeleteOperation(), func(ctx context.Context, root string) error { return gitx.DeleteBranch(ctx, root, b.Name, true) }, deleted)
+				a.gitDoThen(m, g, m.BranchForceDeleteOperation(), func(ctx context.Context, root string) error { return gitx.DeleteLocalBranch(ctx, root, b.Name, true) }, deleted)
 			})
 		})
 	})
