@@ -267,6 +267,14 @@
 - 界面上的报错按界面语言显示，不再露出英文原文和错误码。
 - 配合手机端 0.1.10。
 
+## 0.1.18
+
+- 侧栏项目列表上方新增「项目 | 运行中」切换：「运行中」把所有项目里的 agent 会话平铺成一列，按状态排好，第二行写项目和工作区。
+
+### English
+
+- A "Projects | Running" switch above the sidebar's project list: Running lays out the agent sessions of every project in one list, sorted by status, with the project and workspace on the second line.
+
 ## 0.1.17
 
 - 技能页新增「检查更新」：查出 npx skills 装的技能哪些有新版本，列表里标出来，可以只看它们，详情里的更新按钮跟着变醒目。
