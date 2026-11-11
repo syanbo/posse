@@ -109,6 +109,20 @@ class DeskTyping {
             (i, _padOf(_chains[i].char)),
         ],
       ];
+      // 有哪段的正文和这个值的正文开头一样，就是在那段上的普通编辑（改词尾、自动更正、选中一部分删掉），
+      // 不和只有垫字符的比：那样「重新打一遍」可能比「删几个再打」改动少。都不一样时（全选后重打、
+      // 全选删除）才一起比，分不清，取改动少的
+      final (_, words) = _splitPads(text);
+      bool shares(String base) {
+        final (_, mine) = _splitPads(base);
+        return mine.isNotEmpty &&
+            words.isNotEmpty &&
+            mine.runes.first == words.runes.first;
+      }
+
+      if (candidates.any((c) => shares(c.$2))) {
+        candidates.removeWhere((c) => _splitPads(c.$2).$2.isEmpty);
+      }
       (int, int, int)? best;
       for (final (i, base) in candidates) {
         final d = _diff(base, text);

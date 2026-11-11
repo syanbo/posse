@@ -153,13 +153,14 @@ class _Ime {
   /// 全选删掉：框里的字（垫字符也算）都删掉，理想文档里删同样多的字。
   void selectAllDelete() => deleteMany(1 << 30);
 
-  /// 一次删掉末尾 [n] 个字（选中一段删掉、按词删）。
+  /// 一次删掉末尾 [n] 个字（选中一段删掉、按词删），删到垫字符也照删。
   void deleteMany(int n) {
     _due();
     final runes = platform.runes.toList();
     final k = min(n, runes.length);
     if (k == 0) return;
-    if (k > 1 && _unsure) {
+    if (k > 1 && _unsure && runes.length - k <= _pads(runes)) {
+      // 状态不清楚时正文一个字都没留下（全选删除）：这个值对应两种可能，只保证不多删
       if (careful) return;
       ambiguous = true;
     }
@@ -169,6 +170,43 @@ class _Ime {
         want.back();
       }
     });
+  }
+
+  /// 在正文里选中从末尾数第 [k] 个字起的 [m] 个字，换成 [x]（改词尾、自动更正、中间选一段替换或删掉）。
+  /// 光标进不了看不见的垫字符，只选正文。Mac 上只能从末尾删：理想文档里删掉末尾 [k] 个字，
+  /// 再打 [x] 和没选中的后半截。
+  void replace(int k, int m, String x) {
+    _due();
+    final runes = platform.runes.toList();
+    final pads = _pads(runes);
+    k = min(k, runes.length - pads);
+    m = min(m, k);
+    if (k == 0 || m == 0 && x.isEmpty) return;
+    if (_unsure && k == runes.length - pads) {
+      // 从正文第一个字的位置起改（换掉、删掉、插在最前面）：和原来的正文没有公共前缀，
+      // 也可能是在新的一段上全选后重打，同上
+      if (careful) return;
+      ambiguous = true;
+    }
+    final tail = runes.sublist(runes.length - k + m);
+    _edit(() {
+      platform =
+          String.fromCharCodes(runes.sublist(0, runes.length - k)) +
+          x +
+          String.fromCharCodes(tail);
+      for (var i = 0; i < k; i++) {
+        want.back();
+      }
+      want.add(x + String.fromCharCodes(tail));
+    });
+  }
+
+  static int _pads(List<int> runes) {
+    var n = 0;
+    while (n < runes.length && _invisible.contains(runes[n])) {
+      n++;
+    }
+    return n;
   }
 
   /// 输入法把开头的垫字符去掉（[to] 为空）或换成 [to] 那种字，同时打了 [s]（假想的输入法）。
@@ -532,6 +570,33 @@ void main() {
     }
   });
 
+  // Codex 第 15 轮：全选删掉发出重置、还没到时又打了 abcde，再选中后缀 bcde 换成 X（自动更正就会这样改词尾）。
+  // 是在 abcde 上的普通编辑：删 4 打 X，不是在只有垫字符的新段上重打 aX。
+  test('replacing a word ending while a reset is on the way', () {
+    final t = DeskTyping();
+    t.take(_v('${t.padded.text}abcde'));
+    final cleared = t.take(_v(''));
+    expect(cleared.reset, isNotNull);
+    t.take(cleared.reset!);
+    expect(t.take(_v('abcde')).added, 'abcde');
+    final got = t.take(_v('aX'));
+    expect((got.deleted, got.added), (4, 'X'));
+    for (final lag in [null, 1, 3]) {
+      final ime = _Ime(lag: lag)..careful = true;
+      ime.type('abcde');
+      ime.selectAllDelete();
+      ime.type('abcde');
+      ime.replace(4, 4, 'X');
+      ime.replace(1, 1, '');
+      ime.type('bc');
+      ime.replace(1, 0, 'yz');
+      ime.pause();
+      ime.type('end');
+      ime.pause();
+      expect(ime.got.text, ime.want.text, reason: 'lag $lag');
+    }
+  });
+
   // 端到端对照：用户的编辑直接作用在不重置的理想文档上，和照发出的事件打出来的 Mac 缓冲比。
   // 随机的打字、粘贴、中文和 emoji、退格、一次删好几个、全选删除（可以好几次）、组字、停顿、重置后把刚才那段
   // 再打一遍、输入法去掉或换掉垫字符；重置晚 0 到 5 次编辑才到，每次到达随机回不回送。
@@ -564,7 +629,7 @@ void main() {
           ime.ambiguous,
         );
         var kind = '';
-        switch (r.nextInt(16)) {
+        switch (r.nextInt(17)) {
           case 0:
             last = piece(1 + r.nextInt(200));
             ime.type(last);
@@ -591,6 +656,15 @@ void main() {
           case 7:
             kind = 'delete several';
             ime.deleteMany(2 + r.nextInt(20));
+          case 9:
+            // 改词尾（自动更正）、中间选一段换掉或删掉
+            kind = 'replace part';
+            final k = 1 + r.nextInt(12);
+            ime.replace(
+              k,
+              1 + r.nextInt(k),
+              r.nextBool() ? piece(1 + r.nextInt(6)) : '',
+            );
           case 8:
             if (r.nextInt(3) == 0) {
               kind = 'pads removed or swapped';
