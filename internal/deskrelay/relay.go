@@ -284,6 +284,10 @@ func (s *Server) register(token [TokenLen]byte, role byte, from netip.AddrPort, 
 			}
 		}
 	}
+	// 同一个会话里换了身份也摘：两个身份都指着这个地址时，它发的包会被原样转回给它自己
+	if other := RoleMac + RolePhone - role; sess.addr[other] == from {
+		sess.addr[other] = netip.AddrPort{}
+	}
 	if prev := sess.addr[role]; prev.IsValid() && prev != from {
 		delete(s.byAddr, prev)
 	}

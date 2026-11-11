@@ -283,3 +283,36 @@ func TestSaveConfigPrivate(t *testing.T) {
 		t.Fatalf("desk.json mode %v %v", fi.Mode(), err)
 	}
 }
+
+// 同一个地址在同一个会话里换了身份：不留在旧身份上，它发的包不转回给它自己，
+// 对端重新登记后照常互转。
+func TestRelaySwitchRoleSameAddress(t *testing.T) {
+	srvConn := listen(t)
+	go NewServer(srvConn).Serve()
+	srv := srvConn.LocalAddr().(*net.UDPAddr)
+	a, b := listen(t), listen(t)
+	token := bytes.Repeat([]byte{5}, TokenLen)
+
+	a.WriteToUDP(Register(RoleMac, token), srv)
+	read(t, a)
+	a.WriteToUDP(Register(RolePhone, token), srv)
+	if !IsAck(read(t, a), RolePhone) {
+		t.Fatal("no ack after switching role")
+	}
+	a.WriteToUDP([]byte{1, 2}, srv)
+	a.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+	if n, err := a.Read(make([]byte, 64)); err == nil {
+		t.Fatalf("got %d bytes of its own packet back", n)
+	}
+
+	b.WriteToUDP(Register(RoleMac, token), srv)
+	read(t, b)
+	a.WriteToUDP([]byte{3}, srv)
+	if got := read(t, b); !bytes.Equal(got, []byte{3}) {
+		t.Fatalf("mac got %v", got)
+	}
+	b.WriteToUDP([]byte{4}, srv)
+	if got := read(t, a); !bytes.Equal(got, []byte{4}) {
+		t.Fatalf("phone got %v", got)
+	}
+}
