@@ -79,6 +79,13 @@ class _ChatScreenState extends State<ChatScreen> {
   /// 正在上传的图片：第几张、共几张、这一张传了多少。没在传时为空。
   (int, int, double)? _upload;
 
+  /// 附加视频、文件的上传进度（第几个、共几个、这个传了多少）。和发送时传图片的 [_upload] 分开记：
+  /// 附加还没传完时可以先发一条，两边不互相盖掉进度、也不替对方收起进度条
+  (int, int, double)? _attach;
+
+  /// 正在跑的附加次数：上一次还在传时又选了一次，先传完的那次不收起进度条
+  var _attachRuns = 0;
+
   /// 选好、还没发出去的图片。发出去时按顺序存到电脑的临时目录，再把路径写进终端。
   final _pending = <Uint8List>[];
 
@@ -416,23 +423,32 @@ class _ChatScreenState extends State<ChatScreen> {
     final rpc = _rpc;
     if (files.isEmpty || rpc == null) return;
     final paths = <String>[];
+    _attachRuns++;
     try {
       for (final (i, file) in files.indexed) {
-        if (mounted) setState(() => _upload = (i, files.length, 0));
+        if (mounted) setState(() => _attach = (i, files.length, 0));
         paths.add(
           await uploadFile(
             rpc,
             file,
             onProgress: (done) {
-              if (mounted) setState(() => _upload = (i, files.length, done));
+              if (mounted) setState(() => _attach = (i, files.length, done));
             },
           ),
         );
       }
     } finally {
-      if (mounted) setState(() => _upload = null);
+      // 中间某个传失败了，已经传上去的几个照样接进输入框（报错由调用方显示）
+      _attachRuns--;
+      if (mounted) {
+        if (_attachRuns == 0) setState(() => _attach = null);
+        _appendPaths(paths);
+      }
     }
-    if (!mounted) return;
+  }
+
+  void _appendPaths(List<String> paths) {
+    if (paths.isEmpty) return;
     final text = _input.text;
     final lines = paths.map(shellPath).join('\n');
     _input.text = text.isEmpty || text.endsWith('\n')
@@ -779,7 +795,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                     // 提示、上传进度、「新消息」都浮在列表底部，不挤动列表
-                    if (_notice != null || _upload != null || _newBelow)
+                    if (_notice != null ||
+                        (_upload ?? _attach) != null ||
+                        _newBelow)
                       Positioned(
                         left: 0,
                         right: 0,
@@ -794,9 +812,14 @@ class _ChatScreenState extends State<ChatScreen> {
                                 onClose: () => _flash(null),
                               ),
                             if (_notice != null &&
-                                (_upload != null || _newBelow))
+                                ((_upload ?? _attach) != null || _newBelow))
                               const SizedBox(height: 8),
-                            if (_upload case (final i, final n, final done))
+                            // 正在发送时显示发送的进度，附加的接着在后台传
+                            if (_upload ?? _attach case (
+                              final i,
+                              final n,
+                              final done,
+                            ))
                               UploadBar(index: i, count: n, done: done)
                             else if (_newBelow)
                               Center(child: _newBelowButton(c)),
