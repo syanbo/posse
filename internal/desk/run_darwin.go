@@ -81,6 +81,7 @@ type engine struct {
 	bitrateSet  atomic.Bool
 	forceDict   uintptr
 	frameNumber uint64
+	lastPTS     int64 // 上一帧的编码时间戳（距 born 的纳秒），encodeMu 保护
 
 	pendMu sync.Mutex
 	pend   map[uint64]*stamp
@@ -122,6 +123,7 @@ type stamp struct {
 	capture  int64
 	start    time.Time
 	number   uint64
+	pts      int64 // 编码时间戳，距 born 的纳秒
 	returned atomic.Bool
 }
 
@@ -707,6 +709,20 @@ func (e *engine) refineOnce() bool {
 	return true
 }
 
+// ptsScale 是编码时间戳的时间基：纳秒。
+const ptsScale = 1_000_000_000
+
+// minPTSStep 是相邻两帧时间戳至少差多少：同一时刻交来两帧（refine 补编和新帧挨着）时编码器要严格递增。
+const minPTSStep = int64(time.Millisecond)
+
+// nextPTS 是下一帧的时间戳：按真实时间，不比上一帧大时往后挪一步。
+func nextPTS(last, now int64) int64 {
+	if now <= last {
+		return last + minPTSStep
+	}
+	return now
+}
+
 // encode 把一帧交给编码器，不管 img 的引用计数。
 func (e *engine) encode(img, session uintptr) {
 	e.encodeMu.Lock()
@@ -714,7 +730,9 @@ func (e *engine) encode(img, session uintptr) {
 	if e.bitrateSet.CompareAndSwap(true, false) {
 		e.applyBitrate(session, e.bitrate.Load())
 	}
-	st := &stamp{session: session, capture: time.Now().UnixNano(), start: time.Now(), number: atomic.AddUint64(&e.frameNumber, 1)}
+	now := time.Now()
+	e.lastPTS = nextPTS(e.lastPTS, now.Sub(e.born).Nanoseconds())
+	st := &stamp{session: session, capture: now.UnixNano(), start: now, number: atomic.AddUint64(&e.frameNumber, 1), pts: e.lastPTS}
 	e.pendMu.Lock()
 	e.pend[st.number] = st
 	e.pendMu.Unlock()
@@ -722,10 +740,15 @@ func (e *engine) encode(img, session uintptr) {
 	if e.force.CompareAndSwap(true, false) {
 		props = e.forceDict
 	}
-	pts := cmMake(int64(st.number), 60)
+	// 码率控制和 DataRateLimits 按时间戳算：按帧号当 60 帧标的话，帧率上限 10 时实际码率只有目标的
+	// 1/4 到 3/5（TestEncoderHoldsRateAtLowFPS）。按采到的真实时间标；换编码器、refine 补编都接着这条时间轴
+	fps := e.fpsCap.Load()
+	if fps == 0 {
+		fps = 60
+	}
 	var flags uint32
 	// 时长无效时 DataRateLimits 不生效，第一帧关键帧会远超 100ms 窗口。
-	status := e.mac.vtEncode(session, img, pts, cmMake(1, 60), props, uintptr(st.number), &flags)
+	status := e.mac.vtEncode(session, img, cmMake(st.pts, ptsScale), cmMake(1, int32(fps)), props, uintptr(st.number), &flags)
 	st.returned.Store(true)
 	if status != 0 {
 		e.pendMu.Lock()
@@ -783,7 +806,7 @@ func vtOut(_, source uintptr, status int32, _ uint32, sample uintptr) {
 		key = true
 	}
 	if e.mov != nil {
-		e.mov.append(e.mac, sample)
+		e.mov.append(e.mac, sample, st.pts)
 	}
 	if len(payload) == 0 {
 		return
@@ -1165,7 +1188,8 @@ func (e *engine) openMovie() error {
 	return nil
 }
 
-func (mv *movie) append(m *macAPI, sample uintptr) {
+// append 写进一个样本；pts 是它的编码时间戳，第一帧从它开始计时。
+func (mv *movie) append(m *macAPI, sample uintptr, pts int64) {
 	if mv.input == 0 {
 		format := m.sampleFormat(sample)
 		input := m.writerInput(m.clsInput, m.sel("assetWriterInputWithMediaType:outputSettings:sourceFormatHint:"), m.string("vide"), 0, format)
@@ -1178,7 +1202,7 @@ func (mv *movie) append(m *macAPI, sample uintptr) {
 		if !m.startWriting(mv.writer, m.sel("startWriting")) {
 			return
 		}
-		m.startSession(mv.writer, m.sel("startSessionAtSourceTime:"), cmMake(0, 60))
+		m.startSession(mv.writer, m.sel("startSessionAtSourceTime:"), cmMake(pts, ptsScale))
 		mv.input = input
 	}
 	if !m.appendSample(mv.input, m.sel("appendSampleBuffer:"), sample) {
