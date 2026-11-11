@@ -80,7 +80,9 @@ func (c *conn) fileMethod(req request, p json.RawMessage) bool {
 }
 
 // joinRel 把手机给的相对路径接到工作区目录上，拒绝绝对路径和 ..（Orca 的 isSafeMobileRelativePath）。
-// 空路径是工作区根目录，只有 allowRoot 时可以。
+// 空路径是工作区根目录，只有 allowRoot 时可以。不解析符号链接：文件页有意跟随工作区里指向别处的链接
+// （和桌面文件树一样画成带箭头的图标、能点开）；配对的手机本来就能在终端里读任何文件，这里不是权限边界。
+// Git 页的 readInside 收紧到仓库里，是因为它只该看仓库里的文件。
 func joinRel(root, rel string, allowRoot bool) (string, error) {
 	rel = strings.ReplaceAll(rel, `\`, "/")
 	if rel == "" && allowRoot {

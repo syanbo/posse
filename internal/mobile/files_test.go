@@ -2,6 +2,7 @@ package mobile
 
 import (
 	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,5 +96,27 @@ func TestWriteTimeoutGrowsWithSize(t *testing.T) {
 	// 10 MB 的图片预览线上约 18 MB：按每秒 64 KB 也要给到 5 分钟上下，而不是一刀切的 15 秒
 	if got := writeTimeout(18 << 20); got < 4*time.Minute {
 		t.Fatalf("18 MB message %v", got)
+	}
+}
+
+// 文件页有意跟随工作区里指向别处的符号链接（和桌面文件树一样）；只挡绝对路径和字面的 ..。
+// 配对的手机本来就能在终端里读任何文件，这不是漏洞，别收紧成 Git 页 readInside 那样。
+func TestPhoneFilesFollowSymlinks(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	os.WriteFile(filepath.Join(outside, "notes.md"), []byte("shared"), 0o644)
+	if err := os.Symlink(outside, filepath.Join(root, "shared")); err != nil {
+		t.Fatal(err)
+	}
+	res, err := readReply(root, fileParams{RelativePath: "shared/notes.md"})
+	if err != nil {
+		t.Fatalf("symlinked file: %v", err)
+	}
+	if !strings.Contains(fmt.Sprint(res), "shared") {
+		t.Fatalf("content %v", res)
+	}
+	for _, rel := range []string{"../x", "/etc/hosts", "a/../../x"} {
+		if _, err := readReply(root, fileParams{RelativePath: rel}); err == nil {
+			t.Fatalf("%s was not refused", rel)
+		}
 	}
 }
