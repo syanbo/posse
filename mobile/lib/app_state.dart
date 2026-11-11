@@ -1070,15 +1070,31 @@ class PosseAppModel extends ChangeNotifier {
   var _worktreeSeq = 0;
   var _worktreeApplied = 0;
   var _worktreeInflight = 0;
+  DateTime? _worktreeSentAt;
+
+  /// 轮询最多等上一轮这么久：请求的超时从发出去之后才开始计，发送本身卡住时那一轮可能永远不结束，
+  /// 不能让它把之后的轮询永久挡住。两个请求各有 20 秒超时，上限比它们加起来长一点
+  static const worktreePollWait = Duration(seconds: 45);
+
+  /// 测试换掉的时钟。
+  @visibleForTesting
+  DateTime Function() worktreeClock = DateTime.now;
 
   /// 拉工作区列表和各工作区的标签。几轮同时在路上时只用最新发出的那轮：慢线路上先发的后回来，不盖掉新的。
-  /// [poll] 是定时轮询：上一轮还没回来就不再发（每个请求都有超时，卡住的那轮总会结束）；
+  /// [poll] 是定时轮询：上一轮还没回来（发出不到 [worktreePollWait]）就不再发；
   /// 回到前台、操作之后的刷新照常马上发。
   Future<void> refreshWorktrees({bool poll = false}) async {
     final current = rpc;
     if (current == null) return;
-    if (poll && _worktreeInflight > 0) return;
+    final sent = _worktreeSentAt;
+    if (poll &&
+        _worktreeInflight > 0 &&
+        sent != null &&
+        worktreeClock().difference(sent) < worktreePollWait) {
+      return;
+    }
     final seq = ++_worktreeSeq;
+    _worktreeSentAt = worktreeClock();
     _worktreeInflight++;
     try {
       await _refreshWorktrees(current, seq);

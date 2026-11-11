@@ -83,4 +83,26 @@ void main() {
       );
     },
   );
+
+  test(
+    'a round stuck in sending stops holding back the poll after the cap',
+    () async {
+      final rpc = _SlowRpc();
+      final model = _Model(rpc);
+      var now = DateTime(2026, 11, 11, 10);
+      model.worktreeClock = () => now;
+      // 这一轮一直不回来（发送卡住时回复超时还没开始计）
+      unawaited(model.refreshWorktrees(poll: true));
+      now = now.add(const Duration(seconds: 30));
+      await model.refreshWorktrees(poll: true);
+      expect(rpc.pending, hasLength(1));
+      now = now.add(PosseAppModel.worktreePollWait);
+      unawaited(model.refreshWorktrees(poll: true));
+      expect(
+        rpc.pending,
+        hasLength(2),
+        reason: 'a stuck round blocked the poll forever',
+      );
+    },
+  );
 }
