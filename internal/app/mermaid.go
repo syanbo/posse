@@ -78,13 +78,6 @@ func diagramOf(c *ui.Context, src string) *diagram.Diagram {
 	return nil
 }
 
-// diagramsPending 报告还有没有在画的图（离屏预览等它画完再截图）。
-func diagramsPending() bool {
-	diagrams.Lock()
-	defer diagrams.Unlock()
-	return diagrams.pending > 0
-}
-
 // diagramView 把图按原始大小居中画出来，比栏宽就等比缩小。
 func diagramView(c *ui.Context, d *diagram.Diagram) {
 	w, h := d.Size()

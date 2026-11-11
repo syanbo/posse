@@ -185,13 +185,13 @@ func TestRepoRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	top, _ := filepath.EvalSymlinks(filepath.Join(real, "repo"))
-	if got := repoRoot(link, top); got != link {
+	if got := gitx.ShownRoot(link, top); got != link {
 		t.Errorf("root: %q", got)
 	}
-	if got := repoRoot(filepath.Join(link, "sub"), top); got != link {
+	if got := gitx.ShownRoot(filepath.Join(link, "sub"), top); got != link {
 		t.Errorf("subdir workspace: %q", got)
 	}
-	if got := repoRoot(link, ""); got != "" {
+	if got := gitx.ShownRoot(link, ""); got != "" {
 		t.Errorf("not a repo: %q", got)
 	}
 }
@@ -278,7 +278,7 @@ func TestBranchPopupAndCompare(t *testing.T) {
 
 	// 和当前分支比较：两边独有的提交，选中提交看文件，点文件看 diff；底部的日志浮层先收起
 	a.setLogPanel(true)
-	a.openCompare(w, v, "feat", "main", false)
+	a.openCompare(w, "feat", "main", false)
 	if a.logPanelOpen() {
 		t.Fatal("log panel still open over the compare view")
 	}
@@ -314,7 +314,7 @@ func TestBranchPopupAndCompare(t *testing.T) {
 		t.Fatalf("added file diff: old %q new %q", v.cur.diff.oldRev, v.cur.diff.state.New.String())
 	}
 	// 和工作区比较
-	a.openCompare(w, v, "feat", "main", true)
+	a.openCompare(w, "feat", "main", true)
 	until(t, tt, "files compare", func() bool { return v.cur.kind == docCompare && tt.HasText("工作区和 feat 有 2 个文件不同") })
 
 	// 删除没合并的分支：问一次强制删除；删掉后提示里可以恢复
@@ -905,7 +905,7 @@ func TestAutoFetch(t *testing.T) {
 	}
 	v := a.openFilesPanel(w, sideChanges)
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
-	a.openCompare(w, v, "origin/main", "main", false)
+	a.openCompare(w, "origin/main", "main", false)
 	d := v.cur
 	until(t, tt, "compare", func() bool { return d.kind == docCompare || d.err != "" })
 	if d.err != "" {
@@ -1948,7 +1948,7 @@ func TestCompareSplit(t *testing.T) {
 	v := a.filesFor(w)
 	a.loadBranches(v.git)
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
-	a.openCompare(w, v, "feat", "main", false)
+	a.openCompare(w, "feat", "main", false)
 	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare && v.cur.comp.onlyCur != nil })
 	top, ok1 := tt.Find("存在于")
 	if !ok1 {
@@ -2211,7 +2211,7 @@ func TestComparePick(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	a.loadBranches(v.git)
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
-	a.openCompare(w, v, "feat", "main", false)
+	a.openCompare(w, "feat", "main", false)
 	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare })
 	cd := v.cur.comp
 
@@ -2256,7 +2256,7 @@ func TestComparePickUsesRepoBranch(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	a.loadBranches(v.git)
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
-	a.openCompare(w, v, "feat", "main", false)
+	a.openCompare(w, "feat", "main", false)
 	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare })
 	cd := v.cur.comp
 	w.Branch = "outer-repo-branch"
@@ -2284,7 +2284,7 @@ func TestComparePickMany(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	a.loadBranches(v.git)
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
-	a.openCompare(w, v, "feat", "main", false)
+	a.openCompare(w, "feat", "main", false)
 	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare && len(v.cur.comp.onlyOther) == 4 })
 	cd := v.cur.comp
 

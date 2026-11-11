@@ -195,9 +195,6 @@ func (g *gitState) changeCount() int {
 	return len(g.status.Entries)
 }
 
-// repoRoot 把 git 给的仓库根目录换成工作区路径的写法，见 gitx.ShownRoot。
-func repoRoot(ws, top string) string { return gitx.ShownRoot(ws, top) }
-
 // relPath 把绝对路径换成相对仓库根目录的路径；不在仓库里时返回空。
 func (g *gitState) relPath(abs string) string {
 	if g.repo == "" {

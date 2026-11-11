@@ -313,19 +313,15 @@ func windowShort(m locales.Messages, minutes int) string {
 }
 
 // planBar 是进度条：画已用或剩余的那一段，快用完时是红色。
-func (a *app) planBar(c *ui.Context, w usage.Window, width, height float32) {
+func (a *app) planBar(c *ui.Context, w usage.Window) {
+	const height = 5
 	t := c.Theme()
 	fill := t.Accent
 	if w.Percent >= planUrgent {
 		fill = t.Danger
 	}
 	v := a.shown(w)
-	bar := ui.Box(c).Height(height).Radius(full(height)).Background(colors(t).fill).Shrink(0)
-	if width > 0 {
-		bar.Width(width)
-	} else {
-		bar.Grow(1)
-	}
+	bar := ui.Box(c).Height(height).Radius(full(height)).Background(colors(t).fill).Shrink(0).Grow(1)
 	bar.Children(func() {
 		if v > 0 {
 			ui.Box(c).Height(height).Radius(full(height)).WidthPercent(float32(max(v, 3))).Background(fill)
@@ -386,7 +382,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 					// 一个窗口一行：名称、进度条、百分比、重置时间
 					ui.Row(c.Key(fmt.Sprint(j))).Gap(8).AlignItems(ui.Center).Children(func() {
 						ui.Text(c, windowName(L(c), w)).FontSize(fsSmall).Width(planNameWidth()).Shrink(0).SingleLine()
-						a.planBar(c, w, 0, 5)
+						a.planBar(c, w)
 						ui.Text(c, pctText(a.shown(w))).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).
 							Width(pctW).Shrink(0).TextAlign(ui.End).SingleLine()
 						ui.Text(c, resetText(L(c), w.ResetsAt, now)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).

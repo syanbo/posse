@@ -146,11 +146,6 @@ func loadUIState(home string) uiState {
 	return s
 }
 
-// saveUIState 先写临时文件再改名，窗口中途退出也不会留下半个文件。
-func saveUIState(home string, s uiState) error {
-	return saveUIStateSeq(home, s, uiSaveSeq.Add(1))
-}
-
 // 每次保存在后台协程里写，连着改几下就有几个协程同时写：共用的临时文件会被写成两份内容拼起来，
 // 晚开始的协程也可能先写完、被早的盖掉。按发起的顺序编号，一次只写一个，比已写的旧就不写。
 var (

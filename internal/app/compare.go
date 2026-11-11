@@ -59,10 +59,10 @@ func compareKey(root, other, cur string, files bool) string {
 	return "compare:" + other + ".." + cur + "@" + root
 }
 
-func (a *app) openCompare(w *workspace, v *filesView, other, cur string, files bool) {
+func (a *app) openCompare(w *workspace, other, cur string, files bool) {
 	// 比较要整块地方看上下两栏，底部的日志浮层盖着下半截，先收起
 	a.setLogPanel(false)
-	v = a.showFiles(w)
+	v := a.showFiles(w)
 	key := compareKey(v.git.repo, other, cur, files)
 	for _, d := range v.docs {
 		if d.path == key {

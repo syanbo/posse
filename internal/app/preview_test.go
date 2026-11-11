@@ -429,7 +429,7 @@ func previewCompare(t *testing.T, a *app) {
 	v := a.filesFor(w)
 	a.loadBranches(v.git) // 顺带查出仓库根目录
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
-	a.openCompare(w, v, "feat", "main", false)
+	a.openCompare(w, "feat", "main", false)
 	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare })
 	cd := v.cur.comp
 	a.selectCommit(v.git.repo, &cd.commit, cd.onlyOther[0])

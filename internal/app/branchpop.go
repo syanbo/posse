@@ -685,11 +685,11 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		m.Separator()
 		if m.Item(lm.BranchCompareWith(curName)).Icon(iconDiff).Chosen() {
 			done()
-			a.openCompare(w, v, b.Name, curName, false)
+			a.openCompare(w, b.Name, curName, false)
 		}
 		if m.Item(lm.BranchCompareWorkspace()).Chosen() {
 			done()
-			a.openCompare(w, v, b.Name, curName, true)
+			a.openCompare(w, b.Name, curName, true)
 		}
 		m.Separator()
 		if m.Item(lm.BranchRebaseOnto(curName, b.Name)).Chosen() {
