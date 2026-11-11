@@ -1,6 +1,6 @@
 import '../l10n/l10n.dart';
 
-/// 交给 Mac 的输入。这一步只记在本地，UDP 的 input 类型第 4 步再发。
+/// 手势认出的输入：观看页记进日志，再编成 UDP 的 input 包发给 Mac。
 sealed class DeskEvent {
   const DeskEvent();
 }

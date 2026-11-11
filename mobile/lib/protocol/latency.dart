@@ -46,7 +46,7 @@ class LatencyMeter {
     return sorted[sorted.length ~/ 2];
   }
 
-  /// 最近一次 ping 超时、期间也没收到任何数据。
+  /// 最近一次 ping 超时、期间也没收到任何请求的回复（推送不算）。
   bool get unresponsive => _missed > 0;
 
   void start() {

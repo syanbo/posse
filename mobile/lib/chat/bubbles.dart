@@ -34,7 +34,6 @@ Widget _mine(BuildContext context, Widget body) {
   );
 }
 
-/// 刚发出去、agent 还没写进会话文件的话。样子和自己的话一样，时间处写发送中或已发送。
 /// 倒序列表离视觉顶部不到这么远就读更早的一页。
 const earlierThreshold = 120.0;
 
@@ -73,6 +72,7 @@ class EarlierRow extends StatelessWidget {
   }
 }
 
+/// 刚发出去、agent 还没写进会话文件的话。样子和自己的话一样，时间处写发送中或已发送。
 class EchoBubble extends StatelessWidget {
   const EchoBubble({super.key, required this.echo});
 

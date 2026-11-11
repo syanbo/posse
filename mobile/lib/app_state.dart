@@ -663,7 +663,7 @@ class PosseAppModel extends ChangeNotifier {
   /// 和电脑之间的往返延迟，没连上或还没测到时为空。
   Duration? get latency => link?.rpc == null ? null : link?.meter?.latency;
 
-  /// 最近一次测延迟超时，期间也没收到电脑的任何数据。
+  /// 最近一次测延迟超时，期间也没收到电脑对任何请求的回复（推送不算）。
   bool get unresponsive =>
       link?.rpc != null && (link?.meter?.unresponsive ?? false);
 

@@ -1584,7 +1584,7 @@ class _DisconnectedList extends StatelessWidget {
   }
 }
 
-/// 工作区详情：改动和文件两页。会话都在首页工作区下面，这里不再重复。
+/// 工作区详情：改动、文件和历史三页。会话都在首页工作区下面，这里不再重复。
 class TabScreen extends StatefulWidget {
   const TabScreen({
     super.key,

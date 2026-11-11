@@ -115,11 +115,11 @@ class PosseLink {
     this.phone,
   }) : networkSignatures = networkSignatures ?? const Stream.empty();
 
-  /// 每次尝试（连上加握手）最多等多久。
-
   final PairingOffer offer;
   final SocketConnector connect;
   final Stream<String> networkSignatures;
+
+  /// 每次尝试（连上加握手）最多等多久。
   final Duration attemptTimeout;
 
   /// 每次握手时报给电脑的手机身份，见 [PhoneRpc.declareCapabilities]。

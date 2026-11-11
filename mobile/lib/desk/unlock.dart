@@ -231,7 +231,7 @@ class DeskPasswordStore {
     try {
       await _channel.invokeMethod<void>('forget', {'key': key});
     } on Object {
-      // 没有原生层（测试、安卓）就是没记着。
+      // 没有原生层（测试）就是没记着。
     }
   }
 }

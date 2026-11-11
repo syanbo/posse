@@ -13,8 +13,8 @@ String? routeLabel(AppLocalizations l, String? url) {
 }
 
 /// 和电脑的往返时间（[PosseAppModel.latency]）：信号格加毫秒数，不写单位，省出胶囊里电脑名的位置。
-/// 满格绿色，两格灰色，一格（300 ms 起，经跨境隧道连电脑时常见）琥珀色；ping 超时、期间也没收到数据
-/// 是红色空格加「无响应」。还没测到时不占位置。会话页状态行末尾和首页电脑胶囊里都用它。
+/// 满格绿色，两格灰色，一格（300 ms 起，经跨境隧道连电脑时常见）琥珀色；ping 超时、期间也没收到
+/// 任何请求的回复是红色空格加「无响应」。还没测到时不占位置。会话页状态行末尾和首页电脑胶囊里都用它。
 class LatencyLabel extends StatelessWidget {
   const LatencyLabel({
     super.key,
