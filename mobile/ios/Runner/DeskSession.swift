@@ -34,7 +34,7 @@ struct DeskKeys {
   let toMobile: SymmetricKey
   let toMac: SymmetricKey
 
-  /// 和 tools/deskrecv、internal/desk 的 HKDF 一致：info 是 posse-desk/v1，前 32 字节给手机收，后 32 字节给手机发。
+  /// 和 internal/desk 的 HKDF 一致：info 是 posse-desk/v1，前 32 字节给手机收，后 32 字节给手机发。
   static func derive(secret: Data, nonce: Data) -> DeskKeys {
     let out = HKDF<SHA256>.deriveKey(
       inputKeyMaterial: SymmetricKey(data: secret),
@@ -118,7 +118,7 @@ private func beU64(_ data: Data, _ offset: Int) -> UInt64 {
   return UInt64(bigEndian: value)
 }
 
-/// 1024 位滑动窗口，和 WireGuard、deskrecv 一样：乱序照收，重复的和落在窗口前的丢掉。
+/// 1024 位滑动窗口，和 WireGuard 一样：乱序照收，重复的和落在窗口前的丢掉。
 private final class DeskReplay {
   private var last: UInt64 = 0
   private var bits = [UInt64](repeating: 0, count: 16)

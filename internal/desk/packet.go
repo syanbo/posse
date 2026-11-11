@@ -45,7 +45,7 @@ func DeriveKeys(secret, sessionNonce []byte) (toMobile, toMac [32]byte, err erro
 	return toMobile, toMac, nil
 }
 
-// TestKeys 是 desk cast 和 tools/deskrecv 共用的本机密钥。
+// TestKeys 是 desk cast 和 tools/desksession 共用的本机密钥。
 func TestKeys() (toMobile, toMac [32]byte) {
 	toMobile, toMac, err := DeriveKeys([]byte(testSecret), []byte(testNonce))
 	if err != nil {

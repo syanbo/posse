@@ -1,7 +1,7 @@
 // Command deskshape forwards UDP and can drop, delay, and rate-limit it.
 // It stands in for dnctl/pfctl when those need root.
 //
-// posse listens on --forward. Point deskrecv's hello at --listen.
+// posse listens on --forward. Point the receiver's hello (tools/desksession) at --listen.
 //
 //	go run ./tools/deskshape --listen 127.0.0.1:45991 --forward 127.0.0.1:47991 \
 //	    --rate 5Mbps --loss 0.02 --delay 30ms --queue 100ms --unlimit-after 25s --seed 1
@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	listen := flag.String("listen", "127.0.0.1:45991", "address deskrecv sends to")
+	listen := flag.String("listen", "127.0.0.1:45991", "address the receiver sends to")
 	forward := flag.String("forward", "127.0.0.1:47991", "address posse listens on")
 	rate := flag.String("rate", "0", "rate limit in bits/s (0 = unlimited, 5Mbps and 500kbps accepted)")
 	loss := flag.Float64("loss", 0, "independent drop probability on each packet")

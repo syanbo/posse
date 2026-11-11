@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import '../protocol/e2ee.dart';
 
-/// 和 `posse desk cast`、`tools/deskrecv`、`tools/desksession` 共用的验收材料。正式观看不用它。
+/// 和 `posse desk cast`、`tools/desksession` 共用的验收材料。正式观看不用它。
 const deskTestSecret = 'posse-desk-test-secret-32bytes!';
 const deskTestNonce = 'posse-desk-nonce';
 

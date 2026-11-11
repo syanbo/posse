@@ -79,7 +79,7 @@ fun deskResolve(host: String, port: Int): InetSocketAddress? {
     }
 }
 
-/// 1024 位滑动窗口，和 WireGuard、deskrecv 一样：乱序照收，重复的和落在窗口前的丢掉。
+/// 1024 位滑动窗口，和 WireGuard 一样：乱序照收，重复的和落在窗口前的丢掉。
 private class DeskReplay {
     private var last = 0L
     private var bits = LongArray(16)

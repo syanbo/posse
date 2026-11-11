@@ -75,7 +75,7 @@ void main() {
     expect(rect, const Rect.fromLTWH(-200, -100, 800, 400));
   });
 
-  test('test key bytes match deskrecv, and port parsing rejects the ends', () {
+  test('test key bytes match desk cast, and port parsing rejects the ends', () {
     expect(utf8.encode(deskTestSecret).length, 31);
     expect(deskTestSecretBytes(), utf8.encode(deskTestSecret));
     expect(deskTestNonceBytes().length, 16);
