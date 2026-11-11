@@ -743,8 +743,7 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// 快捷键栏的「发送文件」：相册里的照片或视频、拍照、「文件」App 里的，传到电脑上后把路径打进终端。
   Future<void> _sendFile() async {
-    final rpc = widget.model.rpc;
-    if (rpc == null || _busy) return;
+    if (widget.model.rpc == null || _busy) return;
     // 选文件的面板和相册都不需要键盘，挡着反而看不见
     _focus.unfocus();
     setState(() => _busy = true);
@@ -759,12 +758,16 @@ class _TerminalScreenState extends State<TerminalScreen>
       });
       final String path;
       try {
-        path = await uploadFile(
-          rpc,
-          file,
-          onProgress: (done) {
-            if (mounted) setState(() => _upload = done);
-          },
+        // 选完才取连接：选文件期间可能升级、重连过
+        path = await uploadOnCurrent(
+          () => widget.model.rpc,
+          (rpc) => uploadFile(
+            rpc,
+            file,
+            onProgress: (done) {
+              if (mounted) setState(() => _upload = done);
+            },
+          ),
         );
       } finally {
         if (mounted) setState(() => _upload = null);
@@ -781,8 +784,7 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// 文字交给终端自己的粘贴（不回车）。图片上传后只把路径打进去，和发送图片一样。
   Future<void> _pasteClipboard() async {
-    final rpc = widget.model.rpc;
-    if (rpc == null || _busy) return;
+    if (widget.model.rpc == null || _busy) return;
     setState(() => _busy = true);
     try {
       final paste = await readClipboardPaste();
@@ -792,7 +794,7 @@ class _TerminalScreenState extends State<TerminalScreen>
         return;
       }
       if (paste.isImage) {
-        await _typeImagePath(rpc, paste.image!);
+        await _typeImagePath(paste.image!);
         return;
       }
       _flash(context.l10n.terminalClipboardEmpty);
@@ -803,19 +805,22 @@ class _TerminalScreenState extends State<TerminalScreen>
     }
   }
 
-  Future<void> _typeImagePath(PhoneRpc rpc, Uint8List bytes) async {
+  Future<void> _typeImagePath(Uint8List bytes) async {
     setState(() {
       _upload = 0;
       _uploadFile = false;
     });
     final String path;
     try {
-      path = await uploadImage(
-        rpc,
-        bytes,
-        onProgress: (done) {
-          if (mounted) setState(() => _upload = done);
-        },
+      path = await uploadOnCurrent(
+        () => widget.model.rpc,
+        (rpc) => uploadImage(
+          rpc,
+          bytes,
+          onProgress: (done) {
+            if (mounted) setState(() => _upload = done);
+          },
+        ),
       );
     } finally {
       if (mounted) setState(() => _upload = null);
