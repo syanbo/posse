@@ -30,6 +30,9 @@ class PosseApp extends StatefulWidget {
 
 class _PosseAppState extends State<PosseApp> with WidgetsBindingObserver {
   final _keyboard = KeyboardDismisser();
+  // 主题只看深浅，建一次：模型每次通知根部都重建，不用每次都重新算两套
+  final _light = posseTheme(Brightness.light);
+  final _dark = posseTheme(Brightness.dark);
   bool _splash = true;
 
   @override
@@ -117,8 +120,8 @@ class _PosseAppState extends State<PosseApp> with WidgetsBindingObserver {
           ],
         );
       },
-      theme: posseTheme(Brightness.light),
-      darkTheme: posseTheme(Brightness.dark),
+      theme: _light,
+      darkTheme: _dark,
       // 默认深色，可在设置里换成浅色或跟随系统
       themeMode: switch (widget.model.settings.theme) {
         'light' => ThemeMode.light,

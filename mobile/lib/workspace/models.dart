@@ -36,6 +36,21 @@ class WorktreeRow {
   /// 桌面侧栏给项目设的图标：文字或 emoji，或者一张图片的文件名（经 posse.projectIcon 取）。都空是默认的文件夹。
   final String iconText;
   final String iconImage;
+
+  /// 每个字段都一样。定时轮询拉回来的和上次一样时不通知界面（[sameWorktrees]），加字段要加在这里。
+  bool sameAs(WorktreeRow o) =>
+      id == o.id &&
+      repo == o.repo &&
+      name == o.name &&
+      path == o.path &&
+      branch == o.branch &&
+      live == o.live &&
+      terminals == o.terminals &&
+      isMain == o.isMain &&
+      isWorktree == o.isWorktree &&
+      lastActivityAt == o.lastActivityAt &&
+      iconText == o.iconText &&
+      iconImage == o.iconImage;
 }
 
 class SessionTab {
@@ -72,6 +87,44 @@ class SessionTab {
       agent != null &&
       chatAgents.contains(agent) &&
       (sessionId?.isNotEmpty ?? false);
+
+  /// 每个字段都一样，见 [WorktreeRow.sameAs]。加字段要加在这里。
+  bool sameAs(SessionTab o) =>
+      worktreeId == o.worktreeId &&
+      title == o.title &&
+      terminalId == o.terminalId &&
+      agent == o.agent &&
+      state == o.state &&
+      sessionId == o.sessionId &&
+      transcriptPath == o.transcriptPath &&
+      toolName == o.toolName &&
+      prompt == o.prompt &&
+      posse == o.posse;
+}
+
+/// 两份工作区列表逐项、按顺序完全一样。
+bool sameWorktrees(List<WorktreeRow> a, List<WorktreeRow> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (!a[i].sameAs(b[i])) return false;
+  }
+  return true;
+}
+
+/// 两份各工作区的标签完全一样：同样的工作区、各自的标签逐项按顺序一样。
+bool sameTabs(
+  Map<String, List<SessionTab>> a,
+  Map<String, List<SessionTab>> b,
+) {
+  if (a.length != b.length) return false;
+  for (final e in a.entries) {
+    final other = b[e.key];
+    if (other == null || other.length != e.value.length) return false;
+    for (var i = 0; i < other.length; i++) {
+      if (!e.value[i].sameAs(other[i])) return false;
+    }
+  }
+  return true;
 }
 
 List<WorktreeRow> parseWorktrees(Object? raw) {
@@ -170,4 +223,3 @@ List<SessionTab>? tabsFromFrame(String worktreeId, Map<String, Object?> frame) {
   if (frame['tabs'] is! List) return null;
   return parseTabs(worktreeId, frame['tabs']);
 }
-

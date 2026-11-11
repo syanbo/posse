@@ -1115,13 +1115,17 @@ class PosseAppModel extends ChangeNotifier {
     _worktreeSentAt = worktreeClock();
     _worktreeInflight++;
     try {
-      await _refreshWorktrees(current, seq);
+      await _refreshWorktrees(current, seq, poll: poll);
     } finally {
       _worktreeInflight--;
     }
   }
 
-  Future<void> _refreshWorktrees(PhoneRpc current, int seq) async {
+  Future<void> _refreshWorktrees(
+    PhoneRpc current,
+    int seq, {
+    bool poll = false,
+  }) async {
     try {
       final result = await current.call('worktree.ps', {'limit': 10000});
       final rows = parseWorktrees(result['worktrees']);
@@ -1137,11 +1141,22 @@ class PosseAppModel extends ChangeNotifier {
       ]);
       if (!identical(current, rpc) || seq < _worktreeApplied) return;
       _worktreeApplied = seq;
+      final next = {for (var i = 0; i < live.length; i++) live[i].id: lists[i]};
+      // 定时轮询拉回来的和上次完全一样：界面没什么可变的，不通知（整个根部会跟着重建一遍、多画一帧）。
+      // 别的刷新照旧通知：调用方可能先改了别的状态，靠这次刷新带出去
+      final unchanged =
+          poll &&
+          error == null &&
+          !tabsStale &&
+          sameWorktrees(worktrees, rows) &&
+          sameTabs(tabs, next);
       worktrees = rows;
-      tabs = {for (var i = 0; i < live.length; i++) live[i].id: lists[i]};
+      tabs = next;
       tabsStale = false;
       error = null;
+      // 角标还看推送开没开，照旧每轮都算（值没变不动）
       _updateBadge();
+      if (unchanged) return;
     } catch (caught) {
       // 换了连接（升级到 QUIC、重连）后旧连接上的失败不算：新连接马上会再拉一次。
       // 比已经用上的结果早发的那轮失败了也不算
