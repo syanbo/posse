@@ -69,3 +69,32 @@ func TestTypeUnicodeUsesLayoutKeys(t *testing.T) {
 		t.Fatalf("held right shift: %v", *log)
 	}
 }
+
+// 只看一个窗口时：纯键盘、文字的批不去问窗口服务器要位置，带鼠标或滚轮的照旧每批都取。
+func TestRefreshBoundsOnlyForPointerEvents(t *testing.T) {
+	asks := 0
+	m := &macAPI{
+		cgWindowList:  func(uint32, uint32) uintptr { asks++; return 0 },
+		mainDisplay:   func() uint32 { return 1 },
+		displayBounds: func(uint32) cgRect { return cgRect{W: 100, H: 100} },
+	}
+	in := &injector{mac: m, window: func() (uint32, int32) { return 7, 1 }}
+	for _, c := range []struct {
+		events []Event
+		ask    bool
+	}{
+		{[]Event{{Kind: EventKeyDown}, {Kind: EventKeyUp}}, false},
+		{[]Event{{Kind: EventText, Text: "a"}}, false},
+		{[]Event{{Kind: EventPassword, Text: "x"}}, false},
+		{[]Event{{Kind: EventMove}}, true},
+		{[]Event{{Kind: EventText, Text: "a"}, {Kind: EventDown}}, true},
+		{[]Event{{Kind: EventUp}}, true},
+		{[]Event{{Kind: EventScroll, DY: 1}}, true},
+	} {
+		asks = 0
+		in.refreshFor(c.events)
+		if (asks > 0) != c.ask {
+			t.Fatalf("%+v: asked window server %d times", c.events, asks)
+		}
+	}
+}

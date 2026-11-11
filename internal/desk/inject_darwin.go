@@ -125,7 +125,7 @@ func (e *engine) applyInput(events []Event) {
 		if in.missing {
 			return
 		}
-		in.refreshBounds()
+		in.refreshFor(events)
 		for _, ev := range events {
 			in.one(ev, now)
 		}
@@ -245,6 +245,19 @@ func (in *injector) prepare() {
 	in.haveLayout = len(in.layout) > 0
 	if !in.haveLayout {
 		in.logf("keyboard layout unavailable; shortcuts will be skipped")
+	}
+}
+
+// refreshFor 在这批事件要用到位置时（鼠标、滚轮）重取位置。纯键盘、文字的批不用：
+// 只看一个窗口时取一次要问窗口服务器，约 300 µs。
+func (in *injector) refreshFor(events []Event) {
+	for _, ev := range events {
+		switch ev.Kind {
+		case EventKeyDown, EventKeyUp, EventText, EventPassword:
+		default:
+			in.refreshBounds()
+			return
+		}
 	}
 }
 
