@@ -37,7 +37,7 @@ internal/rpc        unix socket 协议：每连接一次请求，请求/响应�
 internal/daemon     常驻进程：项目、工作区、终端的 RPC 处理；task.go 是多 agent 编排；desk.go 是手机看桌面的会话（同一时间一台，拉起采集子进程、收发 UDP）
 internal/host       常驻进程和手机操作终端的边界（Host、Terminal 接口），包着 internal/term 的进程内实现；升级交接（Pause 导出、Adopt 重建）也在这层，方案见 docs/plans/terminal-host.md
 internal/term       PTY + libghostty-vt 维护屏幕状态；接入时给界面快照和输出流
-internal/vt         libghostty-vt 绑定，复制自 MyGo 后只留常驻进程用得到的部分（键鼠编码、选区已删，RenderState 只在测试里）；snapshot.go 逐格生成快照内容
+internal/vt         libghostty-vt 绑定，复制自 MyGo 后只留常驻进程用得到的部分（键鼠编码、选区、视口滚动和常驻进程不处理的通知回调已删，剪贴板写入一律拒绝，RenderState 只在测试里）；snapshot.go 逐格生成快照内容
 internal/client     CLI 与界面共用的客户端：拉起常驻进程、接入终端（Conn）
 internal/store      SQLite（modernc，纯 Go）：项目、工作区、终端记录；task.go 是任务和消息
 internal/history    会话历史：读 claude/codex/cursor/grok 的会话文件，增量索引进 $POSSE_HOME/history.db（FTS5），搜索和摘要；也给技能与工具面板统计用量、扫描会话里的图片和视频

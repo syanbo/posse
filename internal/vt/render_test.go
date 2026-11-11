@@ -189,3 +189,5 @@ func (r *RenderState) CellStyle(x int) Style {
 		Invisible: s.invisible, Strikethrough: s.strikethrough, Overline: s.overline, Underline: int(s.underline),
 	}
 }
+
+func cbool(r uintptr) bool { return byte(r) != 0 }

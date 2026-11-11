@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"runtime"
-	"strings"
 	"sync"
 	"unsafe"
 )
@@ -26,27 +25,13 @@ type Effects struct {
 	// WritePTY answers the program, as to a query of the cursor's
 	// position. p is only valid during the call.
 	WritePTY func(p []byte)
-	Bell     func()
-	// TitleChanged and PwdChanged tell that Title or Pwd changed.
+	// TitleChanged tells that Title changed.
 	TitleChanged func()
-	PwdChanged   func()
-	// RenderHold tells that the program started or ended a synchronized
-	// update (mode 2026), during which the screen should not show.
-	RenderHold func(held bool)
-	// Clipboard writes text to the clipboard (OSC 52), and reports
-	// whether it did. primary is the selection clipboard of X11.
-	Clipboard func(text string, primary bool) bool
 	// Size reports the size of the screen in cells and of a cell in
 	// pixels, for size reports.
 	Size func() (cols, rows, cellWidth, cellHeight int)
 	// Dark reports whether the colors are dark, for color scheme reports.
 	Dark func() bool
-	// Notify shows a desktop notification (OSC 9, OSC 777).
-	Notify func(title, body string)
-	// Progress reports the progress of the program (OSC 9;4): state is
-	// 0 to remove it, 1 to set it to progress (0 to 100), 2 for an error,
-	// 3 for indeterminate progress and 4 paused.
-	Progress func(state, progress int)
 }
 
 // terminals finds the terminal of a callback by its userdata.
@@ -64,30 +49,22 @@ func terminalOf(id uintptr) *Terminal {
 
 // Terminal options and data (GhosttyTerminalOption, GhosttyTerminalData).
 const (
-	optUserdata            = 0
-	optWritePTY            = 1
-	optBell                = 2
-	optTitleChanged        = 5
-	optSize                = 6
-	optColorScheme         = 7
-	optDeviceAttributes    = 8
-	optColorForeground     = 11
-	optColorBackground     = 12
-	optColorCursor         = 13
-	optColorPalette        = 14
-	optKittyImageLimit     = 15
-	optDefaultCursorStyle  = 22
-	optDefaultCursorBlink  = 23
-	optPwdChanged          = 25
-	optClipboardWrite      = 26
-	optScrollbackMaxBytes  = 27
-	optDesktopNotification = 29
-	optProgressReport      = 30
-	optModeDefault         = 33
-	optMode                = 34
-	optTerminfoName        = 37
-	optResizePullBack      = 40
-	optRenderHold          = 41
+	optUserdata           = 0
+	optWritePTY           = 1
+	optTitleChanged       = 5
+	optSize               = 6
+	optColorScheme        = 7
+	optDeviceAttributes   = 8
+	optColorForeground    = 11
+	optColorBackground    = 12
+	optColorCursor        = 13
+	optColorPalette       = 14
+	optKittyImageLimit    = 15
+	optClipboardWrite     = 26
+	optScrollbackMaxBytes = 27
+	optModeDefault        = 33
+	optMode               = 34
+	optTerminfoName       = 37
 
 	dataCols           = 1
 	dataRows           = 2
@@ -97,7 +74,6 @@ const (
 	dataScrollbar      = 9
 	dataMouseTracking  = 11
 	dataTitle          = 12
-	dataPwd            = 13
 	dataViewportActive = 32
 	dataMode           = 37
 	dataMouseShape     = 41
@@ -122,16 +98,11 @@ func NewTerminal(cols, rows int, effects Effects) (*Terminal, error) {
 	terminals.Unlock()
 	t.setValue(optUserdata, t.id)
 	t.setValue(optWritePTY, cbWritePTY)
-	t.setValue(optBell, cbBell)
 	t.setValue(optTitleChanged, cbTitleChanged)
-	t.setValue(optPwdChanged, cbPwdChanged)
-	t.setValue(optRenderHold, cbRenderHold)
 	t.setValue(optClipboardWrite, cbClipboardWrite)
 	t.setValue(optSize, cbSize)
 	t.setValue(optColorScheme, cbColorScheme)
 	t.setValue(optDeviceAttributes, cbDeviceAttributes)
-	t.setValue(optDesktopNotification, cbDesktopNotification)
-	t.setValue(optProgressReport, cbProgressReport)
 	// Images of the Kitty graphics protocol are not drawn: refuse them,
 	// so that programs fall back to something else.
 	var limit uint64
@@ -197,9 +168,6 @@ func (t *Terminal) Cursor() (x, y int) {
 	return int(cx), int(cy)
 }
 
-// Reset resets the terminal fully (RIS).
-func (t *Terminal) Reset() { call(fnTerminalReset, t.h) }
-
 // SetColors sets the default colors, which programs may change: the
 // foreground, the background, the cursor's (nil for the text's) and the
 // palette of 256 colors (nil for Ghostty's).
@@ -231,22 +199,6 @@ func (t *Terminal) SetTerminfoName(name string) {
 	t.set(optTerminfoName, unsafe.Pointer(&s))
 }
 
-// CursorStyle is the shape of the cursor.
-type CursorStyle int32
-
-const (
-	CursorBar CursorStyle = iota
-	CursorBlock
-	CursorUnderline
-	CursorBlockHollow
-)
-
-// SetDefaultCursor sets the cursor that programs reset to (DECSCUSR 0).
-func (t *Terminal) SetDefaultCursor(s CursorStyle, blink bool) {
-	t.set(optDefaultCursorStyle, unsafe.Pointer(&s))
-	t.set(optDefaultCursorBlink, unsafe.Pointer(&blink))
-}
-
 func (t *Terminal) str(data int) string {
 	var s cString
 	if t.get(data, unsafe.Pointer(&s)) != nil {
@@ -257,10 +209,6 @@ func (t *Terminal) str(data int) string {
 
 // Title returns the title programs set (OSC 0, OSC 2).
 func (t *Terminal) Title() string { return t.str(dataTitle) }
-
-// Pwd returns the working directory the shell reported (OSC 7), as it
-// reported it: a file URL, or a path.
-func (t *Terminal) Pwd() string { return t.str(dataPwd) }
 
 // Mode is a GhosttyMode: a DEC private mode, or an ANSI one with bit 15.
 type Mode uint16
@@ -282,30 +230,10 @@ func (t *Terminal) Mode(m Mode) bool {
 	return t.get(dataMode, unsafe.Pointer(&c)) == nil && c.value
 }
 
-// SetMode sets a mode.
-func (t *Terminal) SetMode(m Mode, v bool) {
-	c := modeConfig{mode: uint16(m), value: v}
-	t.set(optMode, unsafe.Pointer(&c))
-}
-
 // SetModeDefault sets a mode, and the value a reset restores.
 func (t *Terminal) SetModeDefault(m Mode, v bool) {
 	c := modeConfig{mode: uint16(m), value: v}
 	t.set(optModeDefault, unsafe.Pointer(&c))
-}
-
-// MouseTracking reports whether a program asked for mouse events.
-func (t *Terminal) MouseTracking() bool {
-	var v bool
-	return t.get(dataMouseTracking, unsafe.Pointer(&v)) == nil && v
-}
-
-// MouseShape returns the pointer shape a program asked for (OSC 22), a
-// GhosttyMouseShape.
-func (t *Terminal) MouseShape() int {
-	var v int32
-	t.get(dataMouseShape, unsafe.Pointer(&v))
-	return int(v)
 }
 
 // AltScreen reports whether the alternate screen shows, as in full-screen
@@ -322,37 +250,11 @@ func (t *Terminal) Scrollbar() Scrollbar {
 	return s
 }
 
-// AtBottom reports whether the viewport follows the active screen, rather
-// than showing the scrollback.
-func (t *Terminal) AtBottom() bool {
-	var v bool
-	return t.get(dataViewportActive, unsafe.Pointer(&v)) != nil || v
-}
-
-// ScrollToTop, ScrollToBottom, ScrollBy and ScrollToRow move the viewport:
-// to the top of the scrollback, to the active screen, by rows (negative
-// up), or to show row first.
-func (t *Terminal) ScrollToTop()    { terminalScrollViewport(t.h, scrollViewport{tag: 0}) }
-func (t *Terminal) ScrollToBottom() { terminalScrollViewport(t.h, scrollViewport{tag: 1}) }
-func (t *Terminal) ScrollBy(rows int) {
-	terminalScrollViewport(t.h, scrollViewport{tag: 2, value: [2]uint64{uint64(int64(rows))}})
-}
-func (t *Terminal) ScrollToRow(row int) {
-	terminalScrollViewport(t.h, scrollViewport{tag: 3, value: [2]uint64{uint64(max(row, 0))}})
-}
-
 // CellAt returns the cell at column x of row y of the viewport.
 func (t *Terminal) CellAt(x, y int) (GridRef, bool) {
 	ref := GridRef{size: unsafe.Sizeof(GridRef{})}
 	p := point{tag: 1, x: uint16(max(0, min(x, 0xFFFF))), y: uint32(max(y, 0))}
 	return ref, terminalGridRef(t.h, p, &ref) == 0
-}
-
-// SetResizePullBack sets whether growing the screen pulls rows back from
-// the scrollback, which a pseudo-terminal keeping its own screen, as
-// Windows' ConPTY, cannot follow.
-func (t *Terminal) SetResizePullBack(v bool) {
-	t.set(optResizePullBack, unsafe.Pointer(&v))
 }
 
 // RowText returns the text of row y of the viewport, and the column of
@@ -400,32 +302,6 @@ func (t *Terminal) Hyperlink(ref GridRef) string {
 		return ""
 	}
 	return string(buf[:n])
-}
-
-// SetSelection selects s, or nothing when s is nil.
-func (t *Terminal) SetSelection(s *Selection) {
-	t.set(21, unsafe.Pointer(s))
-}
-
-// SelectAll returns a selection of everything, scrollback included.
-func (t *Terminal) SelectAll() (Selection, bool) {
-	s := Selection{size: unsafe.Sizeof(Selection{})}
-	return s, ok(call(fnSelectAll, t.h, uintptr(unsafe.Pointer(&s))))
-}
-
-// SelectionText returns the text of the selection, with soft-wrapped lines
-// joined and trailing spaces trimmed, as Ghostty copies it.
-func (t *Terminal) SelectionText() (string, bool) {
-	var p, n uintptr
-	opts := selectionFormatOptions{size: unsafe.Sizeof(selectionFormatOptions{}), unwrap: true, trim: true}
-	if selectionFormatAlloc(t.h, 0, opts, &p, &n) != 0 {
-		return "", false
-	}
-	s := goString(p, n)
-	if p != 0 {
-		call(fnFree, 0, p, n)
-	}
-	return s, true
 }
 
 // Text returns the text of the screen and its scrollback, with
@@ -490,8 +366,7 @@ func clamp16(v int) int { return max(1, min(v, 0xFFFF)) }
 
 // The callbacks of every terminal, made once: purego's are never freed.
 var (
-	cbWritePTY, cbBell, cbTitleChanged, cbPwdChanged, cbRenderHold, cbClipboardWrite, cbSize,
-	cbColorScheme, cbDeviceAttributes, cbDesktopNotification, cbProgressReport uintptr
+	cbWritePTY, cbTitleChanged, cbClipboardWrite, cbSize, cbColorScheme, cbDeviceAttributes uintptr
 )
 
 func makeCallbacks() {
@@ -501,51 +376,17 @@ func makeCallbacks() {
 		}
 		return 0
 	})
-	cbBell = newCallback(func(_, id uintptr) uintptr {
-		if t := terminalOf(id); t != nil && t.effects.Bell != nil {
-			t.effects.Bell()
-		}
-		return 0
-	})
 	cbTitleChanged = newCallback(func(_, id uintptr) uintptr {
 		if t := terminalOf(id); t != nil && t.effects.TitleChanged != nil {
 			t.effects.TitleChanged()
 		}
 		return 0
 	})
-	cbPwdChanged = newCallback(func(_, id uintptr) uintptr {
-		if t := terminalOf(id); t != nil && t.effects.PwdChanged != nil {
-			t.effects.PwdChanged()
-		}
-		return 0
-	})
-	cbRenderHold = newCallback(func(_, id, held uintptr) uintptr {
-		if t := terminalOf(id); t != nil && t.effects.RenderHold != nil {
-			t.effects.RenderHold(cbool(held))
-		}
-		return 0
-	})
-	cbClipboardWrite = newCallback(func(_, id, req uintptr) uintptr {
+	// Programs may not write the clipboard (OSC 52): the daemon has no
+	// clipboard to write. Answered, so that a program asking learns it.
+	cbClipboardWrite = newCallback(func(_, _, req uintptr) uintptr {
 		w := (*clipboardWrite)(mem(req))
 		reply := clipboardWriteReply{size: unsafe.Sizeof(clipboardWriteReply{}), result: 1} // denied
-		t := terminalOf(id)
-		if t != nil && t.effects.Clipboard != nil {
-			// No contents clears the clipboard; otherwise the first plain
-			// text, else the first text of another kind, is written.
-			text, found := "", w.contentsLen == 0
-			for _, c := range unsafe.Slice((*clipboardContent)(mem(w.contents)), w.contentsLen) {
-				mime := goString(c.mime.ptr, c.mime.len)
-				if strings.HasPrefix(mime, "text/plain") || strings.HasPrefix(mime, "text/") && !found {
-					text, found = goString(c.data.ptr, c.data.len), true
-				}
-			}
-			switch {
-			case !found:
-				reply.result = 2 // unsupported
-			case t.effects.Clipboard(text, w.location != 0):
-				reply.result = 0
-			}
-		}
 		call(w.reply, req, uintptr(unsafe.Pointer(&reply)))
 		return 0
 	})
@@ -577,19 +418,5 @@ func makeCallbacks() {
 		*da = deviceAttributes{conformance: 62, numFeatures: 1, deviceType: 1, firmware: 10}
 		da.features[0] = 22
 		return 1
-	})
-	cbDesktopNotification = newCallback(func(_, id, req uintptr) uintptr {
-		if t := terminalOf(id); t != nil && t.effects.Notify != nil {
-			n := (*desktopNotification)(mem(req))
-			t.effects.Notify(goString(n.title.ptr, n.title.len), goString(n.body.ptr, n.body.len))
-		}
-		return 0
-	})
-	cbProgressReport = newCallback(func(_, id, req uintptr) uintptr {
-		if t := terminalOf(id); t != nil && t.effects.Progress != nil {
-			p := (*progressReport)(mem(req))
-			t.effects.Progress(int(p.state), int(p.progress))
-		}
-		return 0
 	})
 }

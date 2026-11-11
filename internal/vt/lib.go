@@ -25,10 +25,10 @@ var lib struct {
 
 // Symbols called with integer and pointer arguments only, through call.
 var (
-	fnTerminalNew, fnTerminalFree, fnTerminalReset, fnTerminalResize, fnTerminalSet, fnTerminalGet,
+	fnTerminalNew, fnTerminalFree, fnTerminalResize, fnTerminalSet, fnTerminalGet,
 	fnTerminalVTWrite, fnTerminalCompress, fnTerminalCompressionActivity uintptr
 
-	fnFree, fnSelectAll uintptr
+	fnFree uintptr
 
 	fnGridRefHyperlinkURI, fnGridRefGraphemes, fnGridRefCell, fnTypeJSON, fnFormatterFormatAlloc, fnFormatterFree uintptr
 
@@ -36,16 +36,14 @@ var (
 	fnGridRefStyle, fnGridRefRow, fnRowDataGet uintptr
 
 	// Bound with registerFunc below: they take structs or floats.
-	fnTerminalScrollViewport, fnTerminalGridRef, fnSelectionFormatAlloc, fnFormatterTerminalNew uintptr
+	fnTerminalGridRef, fnFormatterTerminalNew uintptr
 )
 
 // Functions taking structs or floats by value, which purego passes as the
 // platform's C ABI does.
 var (
-	terminalScrollViewport func(t uintptr, v scrollViewport)
-	terminalGridRef        func(t uintptr, p point, out *GridRef) int32
-	selectionFormatAlloc   func(t uintptr, alloc uintptr, opts selectionFormatOptions, out *uintptr, n *uintptr) int32
-	formatterTerminalNew   func(alloc uintptr, out *uintptr, t uintptr, opts formatterOptions) int32
+	terminalGridRef      func(t uintptr, p point, out *GridRef) int32
+	formatterTerminalNew func(alloc uintptr, out *uintptr, t uintptr, opts formatterOptions) int32
 )
 
 var symbols = []struct {
@@ -54,18 +52,14 @@ var symbols = []struct {
 }{
 	{"ghostty_terminal_new", &fnTerminalNew},
 	{"ghostty_terminal_free", &fnTerminalFree},
-	{"ghostty_terminal_reset", &fnTerminalReset},
 	{"ghostty_terminal_resize", &fnTerminalResize},
 	{"ghostty_terminal_set", &fnTerminalSet},
 	{"ghostty_terminal_get", &fnTerminalGet},
 	{"ghostty_terminal_vt_write", &fnTerminalVTWrite},
 	{"ghostty_terminal_compress", &fnTerminalCompress},
 	{"ghostty_terminal_compression_activity", &fnTerminalCompressionActivity},
-	{"ghostty_terminal_scroll_viewport", &fnTerminalScrollViewport},
 	{"ghostty_terminal_grid_ref", &fnTerminalGridRef},
 	{"ghostty_free", &fnFree},
-	{"ghostty_terminal_select_all", &fnSelectAll},
-	{"ghostty_terminal_selection_format_alloc", &fnSelectionFormatAlloc},
 	{"ghostty_grid_ref_hyperlink_uri", &fnGridRefHyperlinkURI},
 	{"ghostty_grid_ref_graphemes", &fnGridRefGraphemes},
 	{"ghostty_grid_ref_cell", &fnGridRefCell},
@@ -104,9 +98,7 @@ func load(path string) error {
 	if err := checkLayouts(); err != nil {
 		return fmt.Errorf("%s is not a libghostty-vt this package binds: %w", path, err)
 	}
-	registerFunc(&terminalScrollViewport, fnTerminalScrollViewport)
 	registerFunc(&terminalGridRef, fnTerminalGridRef)
-	registerFunc(&selectionFormatAlloc, fnSelectionFormatAlloc)
 	registerFunc(&formatterTerminalNew, fnFormatterTerminalNew)
 	makeCallbacks()
 	return nil
@@ -164,10 +156,6 @@ func result(r uintptr) error {
 // ok reports whether a function returning GhosttyResult succeeded.
 func ok(r uintptr) bool { return int32(r) == 0 }
 
-// cbool reads a C bool returned in a register, whose upper bits are
-// undefined.
-func cbool(r uintptr) bool { return byte(r) != 0 }
-
 // mem converts an address the library gave into a pointer.
 func mem(p uintptr) unsafe.Pointer { return *(*unsafe.Pointer)(unsafe.Pointer(&p)) }
 
@@ -222,14 +210,13 @@ var enums = []struct {
 	typ, name string
 	value     int64
 }{
-	{"GhosttyRenderStateCursorVisualStyle", "BLOCK_HOLLOW", int64(CursorBlockHollow)},
 	{"GhosttyCellWide", "SPACER_HEAD", int64(SpacerHead)},
 	{"GhosttyStyleColorTag", "RGB", colorRGB},
 	// 快照的 sgr 直接把下划线样式值写成 SGR 4:n 的参数
 	{"GhosttySgrUnderline", "DASHED", 5},
-	{"GhosttyTerminalScrollViewportTag", "ROW", 3},
 	{"GhosttyPointTag", "VIEWPORT", 1},
-	{"GhosttyClipboardWriteResult", "UNSUPPORTED", 2},
+	// 剪贴板写入一律回「拒绝」（terminal.go 的 cbClipboardWrite）
+	{"GhosttyClipboardWriteResult", "DENIED", 1},
 }
 
 type fieldInfo struct {
