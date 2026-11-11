@@ -5921,6 +5921,22 @@ func (msgs Messages) GitChanges() string {
 	return Catalog.Format(msgs.locale, "gitChanges", nil)
 }
 
+// GitCherryPick says "Cherry-pick"
+// in the language the app shows.
+//
+// Git: the cherry-pick action (menu item, button, and the operation name in
+// confirmations). Kept as Git's word.
+func GitCherryPick() string { return In(i18n.Locale()).GitCherryPick() }
+
+// GitCherryPick says "Cherry-pick"
+// in the language of msgs.
+//
+// Git: the cherry-pick action (menu item, button, and the operation name in
+// confirmations). Kept as Git's word.
+func (msgs Messages) GitCherryPick() string {
+	return Catalog.Format(msgs.locale, "gitCherryPick", nil)
+}
+
 // GitCloseEscape says "Close Esc"
 // in the language the app shows.
 //

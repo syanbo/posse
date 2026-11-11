@@ -381,6 +381,7 @@
   "gitChangePosition": "第 {index} / {count} 处",
   "gitChangeStats": "第 {index} / {count} 处  +{added} −{deleted}",
   "gitChanges": "改动",
+  "gitCherryPick": "Cherry-pick",
   "gitCloseEscape": "关闭 Esc",
   "gitCollapseAll": "全部收起",
   "gitCollapseGroup": "收起{group}",

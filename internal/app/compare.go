@@ -318,14 +318,14 @@ func (a *app) comparePick(c *ui.Context, w *workspace, v *filesView, cd *compare
 	default:
 		tip = m.CompareCherryPickMany(len(hashes), target)
 	}
-	b := quietIconButton(c, iconCherryPick, "Cherry-pick", compactBox(), smallIcon()).Tooltip(m.CompareCherryPickTip(tip))
+	b := quietIconButton(c, iconCherryPick, m.GitCherryPick(), compactBox(), smallIcon()).Tooltip(m.CompareCherryPickTip(tip))
 	if target == "" {
 		b.Disabled(true)
 		return
 	}
 	if b.Clicked() {
-		a.guardAgent(m, w, "Cherry-pick", func() {
-			a.gitDo(m, v.repoOrGone(cd.root), "Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, hashes...) })
+		a.guardAgent(m, w, m.GitCherryPick(), func() {
+			a.gitDo(m, v.repoOrGone(cd.root), m.GitCherryPick(), func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, hashes...) })
 		})
 	}
 }

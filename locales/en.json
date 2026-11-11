@@ -2390,6 +2390,10 @@
   "@gitChanges": {
     "description": "Group header for changed files in the Changes view, and the diff tab label for workspace changes against HEAD."
   },
+  "gitCherryPick": "Cherry-pick",
+  "@gitCherryPick": {
+    "description": "Git: the cherry-pick action (menu item, button, and the operation name in confirmations). Kept as Git's word."
+  },
   "gitCloseEscape": "Close Esc",
   "@gitCloseEscape": {
     "description": "Tooltip of the close button of the editor's gutter change popup; Esc is the key that closes it."

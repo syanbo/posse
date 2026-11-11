@@ -737,8 +737,8 @@ func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		a.askNewBranch(lm, w, v, ci.Hash)
 	}
 	m.Separator()
-	if m.Item("Cherry-pick").Icon(iconCherryPick).Chosen() {
-		do("Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, ci.Hash) })
+	if m.Item(lm.GitCherryPick()).Icon(iconCherryPick).Chosen() {
+		do(lm.GitCherryPick(), func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, ci.Hash) })
 	}
 	m.Submenu(lm.LogResetHere(), func(sm *popMenu) {
 		if sm.Item(lm.LogSoftReset()).Chosen() {

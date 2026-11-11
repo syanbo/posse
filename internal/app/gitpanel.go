@@ -784,7 +784,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 		tip = a.withKey(m.GitWholeCommitTip(m.GitMerge()), "sendMessage")
 	case "cherry-pick":
 		label = m.GitCommitPickResult()
-		tip = a.withKey(m.GitWholeCommitTip("Cherry-pick"), "sendMessage")
+		tip = a.withKey(m.GitWholeCommitTip(m.GitCherryPick()), "sendMessage")
 	case "revert":
 		label = m.GitCommitRevertResult()
 		tip = a.withKey(m.GitWholeCommitTip(m.GitRevert()), "sendMessage")
