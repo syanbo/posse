@@ -180,6 +180,7 @@ type Server struct {
 	byIP      map[string]int         // 来源地址 → 未绑定的陌生连接
 	known     map[string]int         // 成员身份 → 未绑定的连接
 	joins     map[string][]time.Time // 地址 → 最近的加入申请时间（限流）
+	joinSweep time.Time              // 上次清掉 joins 里一分钟没再申请的地址
 	stopped   atomic.Bool
 	// Now 是房主的时钟（测试里换掉，验证心跳超时只用于显示）
 	Now func() time.Time
@@ -296,14 +297,25 @@ func (s *Server) Close() {
 }
 
 // AllowJoin 是加入申请的限流：同一地址一分钟最多 joinPerMinute 次。
+// 按单个地址计，IPv6 在同一 /64 里换地址能绕过；有意不按 /64 归并：局域网里各设备通常共用一个 /64，
+// 归并后一台设备刷申请就挤掉同网段所有人，而能随意换 IPv6 地址的设备在 IPv4 下同样能换地址。
 func (s *Server) AllowJoin(addr string) bool {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		host = addr
 	}
-	now := time.Now()
+	now := s.now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// 只申请过一次的地址不会再来清自己的记录，每分钟扫一遍，免得一直攒着
+	if now.Sub(s.joinSweep) >= time.Minute {
+		s.joinSweep = now
+		for h, ts := range s.joins {
+			if len(ts) == 0 || now.Sub(ts[len(ts)-1]) >= time.Minute {
+				delete(s.joins, h)
+			}
+		}
+	}
 	var keep []time.Time
 	for _, t := range s.joins[host] {
 		if now.Sub(t) < time.Minute {
