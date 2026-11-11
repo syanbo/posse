@@ -199,6 +199,22 @@ class DeskWireEvent {
   final int hid;
   final int mods;
   final String text;
+
+  // 编好的字节和编的时候的序号：没确认的事件每个包都重带，不用每次重编（序号变了才重编）
+  Uint8List? _wire;
+  var _wireSeq = -1;
+}
+
+/// [event] 编成的字节，放不进一条明文的照样给出（调用方按长度判断）；编不了的抛 [DeskWireException]。
+Uint8List _eventBytes(DeskWireEvent event) {
+  final cached = event._wire;
+  if (cached != null && event._wireSeq == event.seq) return cached;
+  final out = BytesBuilder(copy: false);
+  _writeEvent(out, event);
+  final bytes = out.toBytes();
+  event._wire = bytes;
+  event._wireSeq = event.seq;
+  return bytes;
 }
 
 Uint8List encodeDeskInput(List<DeskWireEvent> events) {
@@ -221,32 +237,48 @@ Uint8List encodeDeskInput(List<DeskWireEvent> events) {
 }
 
 /// 按发生顺序切成若干条不超过上限的明文。单条放不进就丢掉这一条。
+/// 每条事件只编一次、按长度往包里装：和逐个试着整批重编（放得下就加进去，放不下就先发掉手里的）切法相同、
+/// 字节相同，确认迟迟不到、攒了几百条没确认的事件时不是平方级。
 List<Uint8List> encodeDeskPackets(List<DeskWireEvent> events) {
   final out = <Uint8List>[];
-  var batch = <DeskWireEvent>[];
-  for (final event in events) {
-    Uint8List? next;
-    try {
-      next = encodeDeskInput([...batch, event]);
-    } on DeskWireException {
-      next = null;
+  final batch = <Uint8List>[];
+  var size = 2; // 版本号和事件数各一个字节
+  void send() {
+    final packet = Uint8List(size);
+    packet[0] = 1;
+    packet[1] = batch.length;
+    var off = 2;
+    for (final b in batch) {
+      packet.setRange(off, off + b.length, b);
+      off += b.length;
     }
-    if (next != null) {
-      batch.add(event);
+    out.add(packet);
+    batch.clear();
+    size = 2;
+  }
+
+  for (final event in events) {
+    Uint8List? bytes;
+    try {
+      bytes = _eventBytes(event);
+    } on DeskWireException {
+      bytes = null;
+    }
+    if (bytes != null &&
+        batch.length < 255 &&
+        size + bytes.length <= deskInputLimit) {
+      batch.add(bytes);
+      size += bytes.length;
       continue;
     }
-    if (batch.isNotEmpty) {
-      out.add(encodeDeskInput(batch));
-      batch = [];
-    }
-    try {
-      encodeDeskInput([event]);
-      batch = [event];
-    } on DeskWireException {
-      // 一条就超长，发不出去。
+    if (batch.isNotEmpty) send();
+    // 一条就超长、或者编不了：发不出去，丢掉
+    if (bytes != null && 2 + bytes.length <= deskInputLimit) {
+      batch.add(bytes);
+      size += bytes.length;
     }
   }
-  if (batch.isNotEmpty) out.add(encodeDeskInput(batch));
+  if (batch.isNotEmpty) send();
   return out;
 }
 
