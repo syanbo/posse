@@ -182,6 +182,10 @@ const webPoll = time.Second
 
 // closeWeb 销毁网页标签和网页预览的页面。
 func closeWeb(d *fileDoc) {
+	// 文档不要了：预览里还在排队的远程图片不再下载
+	if d.mdImgs != nil {
+		d.mdImgs.close()
+	}
 	if d.web != nil && d.web.view != nil {
 		d.web.view.Destroy()
 		d.web.view = nil

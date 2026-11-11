@@ -26,7 +26,14 @@ type mdImages struct {
 	dir, root string
 	mu        sync.Mutex
 	m         map[string]*mdImgEntry
+	closed    chan struct{} // 文档关掉时关闭：排队等下载名额的图不再发请求
+	closeOnce sync.Once
 }
+
+// errMDClosed 是文档关掉了、没去下载的图。不会显示：文档已经不在了。
+var errMDClosed = errors.New("document closed")
+
+func (l *mdImages) close() { l.closeOnce.Do(func() { close(l.closed) }) }
 
 type mdImgEntry struct {
 	src  ui.ImageSource
@@ -55,7 +62,7 @@ const mdFetchSlots = 4
 var mdFetching = make(chan struct{}, mdFetchSlots)
 
 func newMDImages(dir, root string) *mdImages {
-	return &mdImages{dir: dir, root: root, m: map[string]*mdImgEntry{}}
+	return &mdImages{dir: dir, root: root, m: map[string]*mdImgEntry{}, closed: make(chan struct{})}
 }
 
 // get 返回图片现在的样子，第一次问时在后台开始载入，载完重画。
@@ -102,8 +109,18 @@ func (l *mdImages) read(src string) ([]byte, string, error) {
 		s, err := url.PathUnescape(body)
 		return []byte(s), head, err
 	case webURL(src):
-		mdFetching <- struct{}{}
+		// 排队时文档关了就不下了，让出位置；已经在下载的照常下完
+		select {
+		case mdFetching <- struct{}{}:
+		case <-l.closed:
+			return nil, "", errMDClosed
+		}
 		defer func() { <-mdFetching }()
+		select {
+		case <-l.closed:
+			return nil, "", errMDClosed
+		default:
+		}
 		resp, err := mdHTTP.Get(src)
 		if err != nil {
 			return nil, "", err
