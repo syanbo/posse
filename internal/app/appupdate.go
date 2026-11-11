@@ -325,11 +325,24 @@ func (a *app) installUpdate(s *mygo.Staged, wait time.Duration) error {
 // restartToUpdate 是「重启更新」：先处理未保存的文件，再换包、交接常驻进程、重开窗口。
 func (a *app) restartToUpdate(m locales.Messages) {
 	if docs := a.dirtyDocs(); len(docs) > 0 {
-		a.askUnsaved(docs, func() { a.restartToUpdate(m) })
+		// 答过了（保存或不保存）就往下走，不再查一遍：选了不保存的文件还是改过的
+		a.askUnsaved(docs, func() { a.installAndRelaunch(m) })
 		return
 	}
+	a.installAndRelaunch(m)
+}
+
+func (a *app) installAndRelaunch(m locales.Messages) {
+	decided := docVersions(a.dirtyDocs())
 	s := a.takeStaged()
 	if s == nil {
+		// 包已经换好（上次重开前问文件时取消了）：直接重开
+		a.upd.mu.Lock()
+		installed := a.upd.installed
+		a.upd.mu.Unlock()
+		if installed {
+			relaunchNow(a, m)
+		}
 		return
 	}
 	a.updating = true
@@ -342,10 +355,29 @@ func (a *app) restartToUpdate(m locales.Messages) {
 				a.err = m.UpdateInstallError(errtext.Text(err))
 				return
 			}
-			// 等交接的这段时间里可能又改了文件，重开前再问一次
-			a.relaunch(m)
+			// 等交接的这段时间里可能又改了文件，重开前再问一次；刚选过不保存、之后没再改的不问
+			var docs []*fileDoc
+			for _, d := range a.dirtyDocs() {
+				if v, ok := decided[d]; !ok || v != d.ed.Buffer.Version() {
+					docs = append(docs, d)
+				}
+			}
+			if len(docs) > 0 {
+				a.askUnsaved(docs, func() { relaunchNow(a, m) })
+				return
+			}
+			relaunchNow(a, m)
 		})
 	}()
+}
+
+// docVersions 记下文件当时的缓冲区版本，之后看有没有再改过。
+func docVersions(docs []*fileDoc) map[*fileDoc]uint64 {
+	out := map[*fileDoc]uint64{}
+	for _, d := range docs {
+		out[d] = d.ed.Buffer.Version()
+	}
+	return out
 }
 
 // installOnQuit 在退出、事件循环停下后换上已经下好的版本，下次打开就是新版本。

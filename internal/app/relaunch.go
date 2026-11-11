@@ -72,11 +72,14 @@ func (a *app) checkReplaced() {
 // 终端都在常驻进程里，不受影响；新窗口的包比常驻进程新时会照常自动交接。
 func (a *app) relaunch(m locales.Messages) {
 	if docs := a.dirtyDocs(); len(docs) > 0 {
-		a.askUnsaved(docs, func() { a.doRelaunch(m) })
+		a.askUnsaved(docs, func() { relaunchNow(a, m) })
 		return
 	}
-	a.doRelaunch(m)
+	relaunchNow(a, m)
 }
+
+// relaunchNow 是真正退出重开的那一步（测试里换掉，免得真的退出）。
+var relaunchNow = (*app).doRelaunch
 
 func (a *app) doRelaunch(m locales.Messages) {
 	args := []string{"-n"}
