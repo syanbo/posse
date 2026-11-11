@@ -43,11 +43,6 @@ func CodexList(ctx context.Context, codex, dir string) ([]CodexSkill, error) {
 	return out, nil
 }
 
-// CodexSetEnabled 经 app-server 开关一个技能（Codex 写进自己的 config.toml 的 [[skills.config]]）。
-func CodexSetEnabled(ctx context.Context, codex, name string, enabled bool) error {
-	return codexCall(ctx, codex, "skills/config/write", map[string]any{"name": name, "enabled": enabled}, nil)
-}
-
 // codexCall 拉起 codex app-server，握手后调一个方法，把结果解进 out。
 func codexCall(ctx context.Context, codex, method string, params any, out any) error {
 	cmd := exec.CommandContext(ctx, codex, "app-server")

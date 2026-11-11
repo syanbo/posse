@@ -23,7 +23,7 @@ xingkongliang/skills-manager、jiweiyeah/Skills-Manager、Shpigford/chops、runk
 
 - 窗口进程实现，常驻进程不参与，不改协议。纯逻辑在 `internal/skills`（扫描、解析 frontmatter、算各家状态、读写各家配置），界面在 `internal/app/skills.go`。
 - 一个技能一行，按解开链接后的路径去重。每行：名字、描述、来源（用户、项目、插件、系统；`npx skills` 装的带锁文件里的来源）、各家状态（启用 / 关了 / 读不到）。各家状态按上表的读取规则和开关算，Codex 用 `skills/list` 的结果。
-- 开关只写各家自己的配置：Claude 写 `skillOverrides`，Codex 调 `skills/config/write`，Grok 写 `[skills] disabled`；Cursor 只显示，不给开关。读改写保留原有内容和格式，原子保存，写之前比对磁盘戳，变了重读。
+- 开关只写各家自己的配置：Claude 写 `skillOverrides`，Codex 直接写 `config.toml` 的 `[[skills.config]]`（和它自己 `skills/config/write` 写出来的一样，不为开关拉起 app-server），Grok 写 `[skills] disabled`；Cursor 只显示，不给开关。读改写保留原有内容和格式，原子保存，写之前比对磁盘戳，变了重读。
 - 改全局配置前一律弹框确认：写明要改的文件和改动（diff），确认后才写；装、删、更新弹框写明要跑的完整命令。
 - 装、删、更新交给 `npx -y skills@<固定版本> … -g`，带 `DISABLE_TELEMETRY=1`，在当前工作区新开的 shell 标签里跑（窗口进程的 PATH 里没有 nvm 的 node，交互提示和报错也看得见），标签里的程序退出后重新扫描。
 - 两个入口，各管一层：
