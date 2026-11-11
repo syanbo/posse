@@ -50,6 +50,24 @@ func serve(t *testing.T, cfg *tls.Config) string {
 	return ln.Addr().String()
 }
 
+// serverWith 是房主的配置，另外把每次握手的客户端指纹交给 check（测试用来看到指纹、模拟撤销）。
+func serverWith(t *testing.T, id Identity, check func(fp string) error) *tls.Config {
+	t.Helper()
+	cfg, err := ServerConfig(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner := cfg.VerifyConnection
+	cfg.VerifyConnection = func(cs tls.ConnectionState) error {
+		if err := inner(cs); err != nil {
+			return err
+		}
+		fp, _ := PeerFingerprint(cs)
+		return check(fp)
+	}
+	return cfg
+}
+
 func dial(addr string, cfg *tls.Config) (tls.ConnectionState, error) {
 	c, err := tls.Dial("tcp", addr, cfg)
 	if err != nil {
@@ -67,15 +85,12 @@ func TestTLSPinsBothSides(t *testing.T) {
 	host, member, stranger := identityIn(t), identityIn(t), identityIn(t)
 	var mu sync.Mutex
 	var seen []string
-	srv, err := ServerConfig(host, func(fp string) error {
+	srv := serverWith(t, host, func(fp string) error {
 		mu.Lock()
 		seen = append(seen, fp)
 		mu.Unlock()
 		return nil
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	addr := serve(t, srv)
 	cli, _ := ClientConfig(member, host.ID, nil)
 	if _, err := dial(addr, cli); err != nil {
@@ -103,7 +118,7 @@ func TestTLSResumptionStillChecks(t *testing.T) {
 	host, member := identityIn(t), identityIn(t)
 	var revoked atomic.Bool
 	var checks atomic.Int32
-	srv, _ := ServerConfig(host, func(fp string) error {
+	srv := serverWith(t, host, func(fp string) error {
 		checks.Add(1)
 		if revoked.Load() {
 			return errors.New("revoked")
@@ -141,7 +156,7 @@ func TestTLSResumptionStillChecks(t *testing.T) {
 func TestTLSRejectsForeignKeys(t *testing.T) {
 	host, stranger := identityIn(t), identityIn(t)
 	var got []string
-	srv, _ := ServerConfig(host, func(fp string) error { got = append(got, fp); return nil })
+	srv := serverWith(t, host, func(fp string) error { got = append(got, fp); return nil })
 	addr := serve(t, srv)
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)}

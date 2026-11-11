@@ -244,7 +244,7 @@ func (s *Server) once(f func()) func() {
 
 // Listen 在 addr（如 ":6791"）上监听。端口被占用时返回明确的错误。
 func (s *Server) Listen(addr string) error {
-	cfg, err := ServerConfig(s.id, nil)
+	cfg, err := ServerConfig(s.id)
 	if err != nil {
 		return err
 	}

@@ -49,9 +49,9 @@ func PeerFingerprint(cs tls.ConnectionState) (string, error) {
 	return Fingerprint(pub)
 }
 
-// ServerConfig 是房主一侧：要求客户端出示证书（证明持钥），指纹交给 check。
-// check 在每次握手（包括会话恢复）时都被调用；未知身份是否放行（只开放加入申请）由 check 和应用层决定。
-func ServerConfig(id Identity, check func(fingerprint string) error) (*tls.Config, error) {
+// ServerConfig 是房主一侧：要求客户端出示证书（证明持钥），只接受 Ed25519 安装身份。
+// 每次握手（包括会话恢复）都核对；未知身份是否放行（只开放加入申请）由应用层按指纹决定。
+func ServerConfig(id Identity) (*tls.Config, error) {
 	cert, err := Certificate(id, time.Now())
 	if err != nil {
 		return nil, err
@@ -61,14 +61,8 @@ func ServerConfig(id Identity, check func(fingerprint string) error) (*tls.Confi
 		Certificates: []tls.Certificate{cert},
 		ClientAuth:   tls.RequireAnyClientCert,
 		VerifyConnection: func(cs tls.ConnectionState) error {
-			fp, err := PeerFingerprint(cs)
-			if err != nil {
-				return err
-			}
-			if check != nil {
-				return check(fp)
-			}
-			return nil
+			_, err := PeerFingerprint(cs)
+			return err
 		},
 	}, nil
 }
