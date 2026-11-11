@@ -2,6 +2,7 @@ package term
 
 import (
 	"bytes"
+	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"
@@ -212,5 +213,36 @@ func TestAdoptInBandResize(t *testing.T) {
 	nt.Resume()
 	if !nt.ContainsText("ready") {
 		t.Fatal("adopted terminal lost its screen")
+	}
+}
+
+// 输出在任意位置被切成几次读：每次留下的尾巴都和把读到为止的全部字节一次切出来的一样
+// （接着上次找结尾的路径和从头扫的结果相同）。
+func TestCarrySplitAnywhere(t *testing.T) {
+	stream := []byte("a\x1b[38;5;1m中\x1b]2;标题\x07b\x1b]8;;http://x\x1b\\链接\x1b]8;;\x1b\\\x1bPq#0\x1b\\\x1b(B\x1b_apc\x1b\\😀\x1b]10;?\x1b\\end")
+	check := func(cuts []int) {
+		var tail []byte
+		prev := 0
+		for _, c := range append(cuts, len(stream)) {
+			tail = carry(tail, stream[prev:c])
+			want := stream[safeCut(stream[:c]):c]
+			if string(tail) != string(want) {
+				t.Fatalf("cuts %v at %d: tail %q, want %q", cuts, c, tail, want)
+			}
+			prev = c
+		}
+	}
+	for i := 0; i <= len(stream); i++ {
+		for j := i; j <= len(stream); j++ {
+			check([]int{i, j})
+		}
+	}
+	rng := rand.New(rand.NewPCG(1, 2))
+	for range 2000 {
+		var cuts []int
+		for c := rng.IntN(4); c < len(stream); c += 1 + rng.IntN(4) {
+			cuts = append(cuts, c)
+		}
+		check(cuts)
 	}
 }

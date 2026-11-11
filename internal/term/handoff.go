@@ -218,71 +218,77 @@ func Adopt(o Options, s State, f *os.File) (*Terminal, error) {
 
 // safeCut 返回 b 里最后一个"解析器回到起点"的位置，之后的字节是没写完的转义序列或半个 UTF-8 字符。
 func safeCut(b []byte) int {
-	safe, i := 0, 0
+	i := 0
 	for i < len(b) {
-		c := b[i]
-		switch {
-		case c == 0x1b:
-			j := i + 1
-			if j >= len(b) {
-				return safe
-			}
-			switch b[j] {
-			case '[':
-				j++
-				for j < len(b) && !(b[j] >= 0x40 && b[j] <= 0x7e) {
-					j++
-				}
-				if j >= len(b) {
-					return safe
-				}
-				j++
-			case ']', 'P', 'X', '^', '_':
-				j++
-				for {
-					if j >= len(b) {
-						return safe
-					}
-					if b[j] == 0x07 && b[i+1] == ']' {
-						j++
-						break
-					}
-					if b[j] == 0x1b && j+1 < len(b) && b[j+1] == '\\' {
-						j += 2
-						break
-					}
-					if b[j] == 0x1b && j+1 >= len(b) {
-						return safe
-					}
-					j++
-				}
-			default:
-				for j < len(b) && b[j] >= 0x20 && b[j] <= 0x2f {
-					j++
-				}
-				if j >= len(b) {
-					return safe
-				}
-				j++
-			}
-			i = j
-		case c >= 0xc0:
-			n := 2
-			if c >= 0xf0 {
-				n = 4
-			} else if c >= 0xe0 {
-				n = 3
-			}
-			if i+n > len(b) {
-				return safe
-			}
-			i += n
-		default:
-			i++
+		e := seqEnd(b, i, i)
+		if e < 0 {
+			break
 		}
-		safe = i
+		i = e
 	}
-	return safe
+	return i
+}
+
+// seqEnd 返回从 b[i] 起的这一个转义序列或字符结束后的位置，没写完返回 -1。
+// 已知它在 from 之前还没结束时从 from 附近接着找：长 OSC 分很多次读到时不用每次从头扫。
+func seqEnd(b []byte, i, from int) int {
+	c := b[i]
+	switch {
+	case c == 0x1b:
+		j := i + 1
+		if j >= len(b) {
+			return -1
+		}
+		switch b[j] {
+		case '[':
+			j = max(i+2, from)
+			for j < len(b) && !(b[j] >= 0x40 && b[j] <= 0x7e) {
+				j++
+			}
+			if j >= len(b) {
+				return -1
+			}
+			return j + 1
+		case ']', 'P', 'X', '^', '_':
+			// 上次停在末尾的 ESC 可能和这次的第一个字节凑成 ST，从它重看
+			for j = max(i+2, from-1); ; j++ {
+				if j >= len(b) {
+					return -1
+				}
+				if b[j] == 0x07 && b[i+1] == ']' {
+					return j + 1
+				}
+				if b[j] == 0x1b && j+1 < len(b) && b[j+1] == '\\' {
+					return j + 2
+				}
+				if b[j] == 0x1b && j+1 >= len(b) {
+					return -1
+				}
+			}
+		default:
+			j = max(j, from)
+			for j < len(b) && b[j] >= 0x20 && b[j] <= 0x2f {
+				j++
+			}
+			if j >= len(b) {
+				return -1
+			}
+			return j + 1
+		}
+	case c >= 0xc0:
+		n := 2
+		if c >= 0xf0 {
+			n = 4
+		} else if c >= 0xe0 {
+			n = 3
+		}
+		if i+n > len(b) {
+			return -1
+		}
+		return i + n
+	default:
+		return i + 1
+	}
 }
 
 // carry 记下读到的输出末尾没写完的那截（tail 是上次剩下的），在持有 smu 时调用。
@@ -298,8 +304,16 @@ func carry(tail, p []byte) []byte {
 		}
 		return append(tail, p[c:]...)
 	}
+	// tail 从一个没写完的序列开头起：接着上次扫到的地方找它的结尾，之后的部分照常切
 	all := append(tail, p...)
-	c := safeCut(all)
+	e := seqEnd(all, 0, len(tail))
+	if e < 0 {
+		if len(all) > maxTail {
+			return nil
+		}
+		return all
+	}
+	c := e + safeCut(all[e:])
 	if c == len(all) || len(all)-c > maxTail {
 		return nil
 	}
