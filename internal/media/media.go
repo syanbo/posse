@@ -416,6 +416,11 @@ func DecodePreviewBytes(data []byte, maxPixels int) (PreviewImage, error) {
 		k := math.Sqrt(float64(maxPixels) / float64(n))
 		w, h = max(int(float64(w)*k), 1), max(int(float64(h)*k), 1)
 	}
+	if rgba, ok := src.(*image.RGBA); ok && w == b.Dx() && h == b.Dy() && b.Min == (image.Point{}) && rgba.Stride == 4*w {
+		// 宽高都不用缩、解出来已经是 RGBA（不透明的 PNG）：照拷一份逐字节相同，直接用，省一张原图大小的内存。
+		// 极窄的图宽缩不动、只有高要缩时不算（下面照旧按宽没变拷贝）
+		return PreviewImage{Img: rgba, Size: b.Size(), Format: format}, nil
+	}
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	if w == b.Dx() {
 		draw.Draw(dst, dst.Bounds(), src, b.Min, draw.Src)

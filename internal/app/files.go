@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"time"
@@ -591,6 +592,10 @@ func (a *app) loadDoc(d *fileDoc) {
 		if isImagePath(path) {
 			st := files.StatFile(path)
 			pi, anim, err := decodeDocImage(path)
+			if err == nil && pi.Size.X*pi.Size.Y > imageReleasePixels {
+				// 原尺寸的图和缩放缓冲这时已经没人引用了，最终的位图留着
+				debug.FreeOSMemory()
+			}
 			a.update(func() {
 				d.base, d.seen = st, st
 				if big, ok := err.(imageTooLarge); ok {
@@ -618,9 +623,14 @@ func (a *app) loadDoc(d *fileDoc) {
 	}()
 }
 
-// docImageMaxPixels 是文件标签预览的图片原尺寸上限：解码时先按原尺寸整张解出来再缩，
-// 1 亿像素以内最坏约 400 MB 的短时分配（相机照片照常预览），再大的不解码。
-const docImageMaxPixels = 100_000_000
+// docImageMaxPixels 是文件标签预览的图片原尺寸上限：先按原尺寸整张解出来，再缩到 imageMaxPixels，
+// 缩放（CatmullRom）的中间缓冲按「缩后的宽 × 原图的高」每格 32 字节。实测 5000 万像素的 PNG 解码约 190 MB、
+// 缩放缓冲约 1.1 GB，合计约每像素 29 字节、只在解码那一会儿。手机 4800 万、5000 万像素的照片照常预览，再大的不解码
+const docImageMaxPixels = 50_000_000
+
+// imageReleasePixels 是解码后、关掉标签后要马上把内存还给系统的原图像素数：Go 不会很快把这么大的空闲内存还回去，
+// phys_footprint 会一直停在峰值附近
+const imageReleasePixels = 16_000_000
 
 // imageTooLarge 是原尺寸超过 docImageMaxPixels、不预览的图片。
 type imageTooLarge struct{ w, h int }
@@ -854,6 +864,14 @@ func (a *app) dropDoc(v *filesView, d *fileDoc) {
 	i := slices.Index(v.docs, d)
 	if i < 0 {
 		return
+	}
+	// followDoc 只用来看当前标签换了没有：最后一个文件关掉后它不再更新，会一直拽着关掉的文档（大图的位图上百 MB）
+	if v.repos.followDoc == d {
+		v.repos.followDoc = nil
+	}
+	if d.imgInfo.w*d.imgInfo.h > imageReleasePixels && d.img != nil {
+		// 等这一帧画完、不再引用它的位图，再把内存还给系统
+		time.AfterFunc(time.Second, debug.FreeOSMemory)
 	}
 	// 分了栏：选中的换成同一格挨着的标签（可能是终端），不跳到别的格。要在拿掉文件之前算，才知道谁挨着它
 	if w := a.workspace(v.wsID); w != nil {

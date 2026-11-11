@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/jpeg"
 	"image/png"
 	"os"
@@ -254,5 +255,37 @@ func TestCodexSnapshotRewrite(t *testing.T) {
 	}
 	if got, err := ReadImage(made[0]); err != nil || !bytes.Equal(got, raw) {
 		t.Fatalf("replacement read: %v", err)
+	}
+}
+
+// 不用缩小的不透明 PNG（解出来就是 RGBA）直接交回，像素和原来拷一份的逐字节相同；带透明的（NRGBA）照旧换成预乘的 RGBA。
+func TestDecodePreviewNoCopySamePixels(t *testing.T) {
+	opaque := image.NewRGBA(image.Rect(0, 0, 37, 21))
+	for i := range opaque.Pix {
+		opaque.Pix[i] = uint8(i * 7)
+	}
+	for i := 3; i < len(opaque.Pix); i += 4 {
+		opaque.Pix[i] = 255
+	}
+	translucent := image.NewNRGBA(image.Rect(0, 0, 9, 5))
+	for i := range translucent.Pix {
+		translucent.Pix[i] = uint8(i * 13)
+	}
+	for _, img := range []image.Image{opaque, translucent} {
+		var b bytes.Buffer
+		png.Encode(&b, img)
+		src, _, err := image.Decode(bytes.NewReader(b.Bytes()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := image.NewRGBA(src.Bounds())
+		draw.Draw(want, want.Bounds(), src, src.Bounds().Min, draw.Src)
+		pi, err := DecodePreviewBytes(b.Bytes(), 1<<20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(pi.Img.Pix, want.Pix) || pi.Img.Rect != want.Rect || pi.Size != src.Bounds().Size() {
+			t.Fatalf("%T: pixels differ", src)
+		}
 	}
 }

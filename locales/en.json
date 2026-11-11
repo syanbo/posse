@@ -1871,7 +1871,7 @@
   },
   "filesImageTooLarge": "The image is {width}×{height} pixels and isn’t previewed here",
   "@filesImageTooLarge": {
-    "description": "File tab message: the image is too large to preview (over 100 million pixels). width and height are its size in pixels.",
+    "description": "File tab message: the image is too large to preview (over 50 million pixels). width and height are its size in pixels.",
     "placeholders": {
       "width": {
         "type": "int"
