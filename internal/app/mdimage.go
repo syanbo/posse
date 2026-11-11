@@ -48,6 +48,12 @@ var errSVGText = errors.New("svg with text")
 
 var mdHTTP = &http.Client{Timeout: mdFetchTime}
 
+// mdFetchSlots 是同时下载的远程图片数：一篇文档里几十张徽章、截图时不一起发请求、一起占着内存（每张最多 mdMaxDownload）。
+// 排队不算进超时，拿到名额才开始计时
+const mdFetchSlots = 4
+
+var mdFetching = make(chan struct{}, mdFetchSlots)
+
 func newMDImages(dir, root string) *mdImages {
 	return &mdImages{dir: dir, root: root, m: map[string]*mdImgEntry{}}
 }
@@ -96,6 +102,8 @@ func (l *mdImages) read(src string) ([]byte, string, error) {
 		s, err := url.PathUnescape(body)
 		return []byte(s), head, err
 	case webURL(src):
+		mdFetching <- struct{}{}
+		defer func() { <-mdFetching }()
 		resp, err := mdHTTP.Get(src)
 		if err != nil {
 			return nil, "", err
