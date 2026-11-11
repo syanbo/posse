@@ -1,7 +1,9 @@
 package store
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -117,11 +119,11 @@ func pendingView(t *testing.T, s *Store) string {
 // 讨论不在了的房间的行删掉，还在的讨论的去重键不动；再清一次什么都不改。
 func TestCollabCleanKeepsOutboxBehaviour(t *testing.T) {
 	a, b := cleanFixture(t), cleanFixture(t)
-	n, err := a.PruneCollabOrphans()
+	n, err := a.PruneCollabOrphans(t.Context())
 	if err != nil || n != 6 {
 		t.Fatalf("PruneCollabOrphans = %d, %v; want 6", n, err)
 	}
-	n, err = a.ClearOutboxPayloads(time.Now().Add(-30 * 24 * time.Hour))
+	n, err = a.ClearOutboxPayloads(t.Context(), time.Now().Add(-30*24*time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,15 +159,15 @@ func TestCollabCleanKeepsOutboxBehaviour(t *testing.T) {
 	if hostKeys != 1 {
 		t.Fatalf("host dedupe keys of a live room = %d, want 1", hostKeys)
 	}
-	if n, err := a.ClearOutboxPayloads(time.Now().Add(-30 * 24 * time.Hour)); err != nil || n != 0 {
+	if n, err := a.ClearOutboxPayloads(t.Context(), time.Now().Add(-30*24*time.Hour)); err != nil || n != 0 {
 		t.Fatalf("second clear = %d, %v", n, err)
 	}
-	if n, err := a.PruneCollabOrphans(); err != nil || n != 0 {
+	if n, err := a.PruneCollabOrphans(t.Context()); err != nil || n != 0 {
 		t.Fatalf("second prune = %d, %v", n, err)
 	}
 
 	// 两边做同样的事，结果一样
-	b.PruneCollabOrphans()
+	b.PruneCollabOrphans(t.Context())
 	same := func(step string) {
 		t.Helper()
 		if ra, rb := outboxRows(t, a), outboxRows(t, b); !reflect.DeepEqual(ra, rb) {
@@ -223,5 +225,28 @@ func TestCollabCleanKeepsOutboxBehaviour(t *testing.T) {
 	rows.Close()
 	if !reflect.DeepEqual(seqs, []int64{1, 2, 3, 4}) {
 		t.Fatalf("x_old_done seqs = %v, want 1..4", seqs)
+	}
+}
+
+// 清理在批与批之间歇一下；ctx 结束了在批间停下，下次接着清。
+func TestCollabCleanStopsBetweenBatches(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for i := range 1200 {
+		if _, err := s.db.Exec(`INSERT INTO collab_outbox(exec,seq,room,kind,payload,digest,state,created_at) VALUES(?,1,'host/gone','state','{}','d','sent',0)`, fmt.Sprint("g", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	n, err := s.PruneCollabOrphans(ctx)
+	if !errors.Is(err, context.Canceled) || n != collabCleanBatch {
+		t.Fatalf("cancelled prune = %d, %v; want one batch and context.Canceled", n, err)
+	}
+	if n, err := s.PruneCollabOrphans(t.Context()); err != nil || n != 1200-collabCleanBatch {
+		t.Fatalf("prune after = %d, %v", n, err)
 	}
 }

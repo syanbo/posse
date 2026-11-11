@@ -129,12 +129,12 @@ func (d *Daemon) collabCleanLoop(ctx context.Context) {
 	t := time.NewTicker(24 * time.Hour)
 	defer t.Stop()
 	for {
-		if n, err := d.store.PruneCollabOrphans(); err != nil {
+		if n, err := d.store.PruneCollabOrphans(ctx); err != nil {
 			log.Printf("collaboration: prune orphan rows: %v", err)
 		} else if n > 0 {
 			log.Printf("collaboration: removed %d rows of discussions that are gone", n)
 		}
-		if n, err := d.store.ClearOutboxPayloads(time.Now().Add(-outboxKeep)); err != nil {
+		if n, err := d.store.ClearOutboxPayloads(ctx, time.Now().Add(-outboxKeep)); err != nil {
 			log.Printf("collaboration: clear outbox: %v", err)
 		} else if n > 0 {
 			log.Printf("collaboration: cleared %d delivered outbox events", n)

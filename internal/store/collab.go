@@ -10,6 +10,7 @@ package store
 // 所有校验都在事务里：撤销、代际、归属和写入一起提交。
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -748,12 +749,28 @@ var collabRoomTables = []string{
 	"collab_intents", "collab_accepts", "collab_outbox", "collab_add_workspaces",
 }
 
-// collabCleanBatch 是清理时一条语句改的行数：每批自己一个事务，不长时间占着写锁。
+// collabCleanBatch 是清理时一条语句改的行数：每批自己一个事务，不长时间占着写锁。批与批之间歇
+// collabCleanPause，让排着队的写入先走：交接时新旧两个常驻进程同时开着这个库，首尾相接的话另一个连接
+// 抢不到写锁（实测 20 万行时被饿到 3 秒）。
 const collabCleanBatch = 500
+
+var collabCleanPause = 50 * time.Millisecond
+
+// cleanPause 在两批之间歇一下；ctx 结束了返回它的错误，清理停下，下次接着清。
+func cleanPause(ctx context.Context) error {
+	t := time.NewTimer(collabCleanPause)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
 
 // PruneCollabOrphans 删掉讨论已经不在了的房间在各协作表里的行，返回删了几行。
 // 讨论只有 DropMirror 会删（它同时删这些行），这里清它以前留下的。
-func (s *Store) PruneCollabOrphans() (int64, error) {
+func (s *Store) PruneCollabOrphans(ctx context.Context) (int64, error) {
 	var total int64
 	for _, t := range collabRoomTables {
 		for {
@@ -766,6 +783,9 @@ func (s *Store) PruneCollabOrphans() (int64, error) {
 			if n < collabCleanBatch {
 				break
 			}
+			if err := cleanPause(ctx); err != nil {
+				return total, err
+			}
 		}
 	}
 	return total, nil
@@ -777,7 +797,7 @@ var endedExecStates = []string{ExecDone, ExecFailed, ExecInterrupted, ExecStoppe
 // ClearOutboxPayloads 清掉 outbox 里用不着了的事件内容（回复正文这些），行、序号、摘要和状态都留着，返回清了几行。
 // 只清：已交出或被拒收的（pending 的要补发，读的是内容）、所属执行在 before 之前就结束了的。每个执行最近一条
 // 状态事件的内容也留着：addOutbox 拿它判断新的状态事件是不是重复。下一条序号按 MAX(seq) 取，和内容无关。
-func (s *Store) ClearOutboxPayloads(before time.Time) (int64, error) {
+func (s *Store) ClearOutboxPayloads(ctx context.Context, before time.Time) (int64, error) {
 	var total int64
 	for {
 		res, err := s.db.Exec(`UPDATE collab_outbox SET payload='' WHERE rowid IN (
@@ -792,6 +812,9 @@ func (s *Store) ClearOutboxPayloads(before time.Time) (int64, error) {
 		total += n
 		if n < collabCleanBatch {
 			return total, nil
+		}
+		if err := cleanPause(ctx); err != nil {
+			return total, err
 		}
 	}
 }
