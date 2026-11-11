@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,9 +9,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -590,6 +593,37 @@ func cmdTerminalClose(e *env, args []string) error {
 	})
 }
 
+// maxHookPayload 是交给常驻进程的 hook 输入上限。
+const maxHookPayload = 1 << 20
+
+// readHookInput 读完 agent 交来的 hook 输入。超过 limit 的（大多是工具的输出 tool_response）从最大的
+// 顶层字段丢起，直到不超过 limit：整份丢掉的话 agent_id、session_id 也没了，子 agent 的事件会记到主 agent 上。
+func readHookInput(r io.Reader, limit int) []byte {
+	head, _ := io.ReadAll(io.LimitReader(r, int64(limit)+1))
+	if len(head) <= limit {
+		return head
+	}
+	var fields map[string]json.RawMessage
+	if json.NewDecoder(io.MultiReader(bytes.NewReader(head), r)).Decode(&fields) != nil {
+		return nil
+	}
+	size := 2
+	for k, v := range fields {
+		size += len(k) + len(v) + 4 // 引号、冒号、逗号
+	}
+	keys := slices.Collect(maps.Keys(fields))
+	slices.SortFunc(keys, func(a, b string) int { return len(fields[b]) - len(fields[a]) })
+	for _, k := range keys {
+		if size <= limit {
+			break
+		}
+		size -= len(k) + len(fields[k]) + 4
+		delete(fields, k)
+	}
+	out, _ := json.Marshal(fields)
+	return out
+}
+
 // cmdHook 由 agent 的 hooks 调用：不能拖慢或打断 agent，所以从不拉起常驻进程，出错也返回 0。
 func cmdHook(e *env, args []string) error {
 	if len(args) < 2 {
@@ -600,7 +634,7 @@ func cmdHook(e *env, args []string) error {
 		return nil
 	}
 	id := os.Getenv("POSSE_TERMINAL_ID")
-	payload, _ := io.ReadAll(io.LimitReader(os.Stdin, 1<<20))
+	payload := readHookInput(os.Stdin, maxHookPayload)
 	// Cursor 要从 stdout 读一个 JSON 回应，空对象表示不干预（不放行也不拦截）；
 	// 其他 agent 不能有随意的输出，Claude 会把它注入模型上下文，只写它认的回应
 	cursorReply := "{}"
