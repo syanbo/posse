@@ -196,7 +196,7 @@ func (a *app) forgetTrashed(v *filesView, path string, dir bool) {
 	for _, d := range gone {
 		a.dropDoc(v, d)
 	}
-	v.listAt = time.Time{}
+	a.invalidateList(v)
 	if len(v.search.hits) > 0 {
 		a.startSearch(v, 0)
 	}

@@ -34,6 +34,9 @@ const (
 	imageMaxPx = 2400 // 图片按这个宽度解码，2 倍屏下 1200pt
 )
 
+// listRepos 列工作区的文件，测试里换掉
+var listRepos = files.ListRepos
+
 type docKind uint8
 
 const (
@@ -233,6 +236,8 @@ type filesView struct {
 	listFailAt   time.Time // 上次列文件失败的时间：每帧都会来要清单，失败后等一个周期再试
 	listErr      error     // 列文件失败还没报：后台没有界面语言，由下一帧的视图（reportListErr）写进错误条
 	listing      bool
+	listGen      int      // 每起一遍列文件加一：只认最后起的那遍
+	listWait     []func() // 等着正在列的那遍的回调
 	docs         []*fileDoc
 	cur          *fileDoc
 	side         int // 文件栏：sideFiles、sideChanges
@@ -442,6 +447,8 @@ func (a *app) reportListErr(c *ui.Context, v *filesView) {
 }
 
 // refreshList 在后台重列文件清单；force 为假时清单还新鲜就不列。done 在界面线程、清单就绪后调用。
+// 正在列时不另起一遍，done 排到这一遍后面：清单本来就允许旧到 listMaxAge，这一遍是之后才开始的；
+// 清单在列的过程中失效了（invalidateList）会马上重起一遍。force 且带 done 时照旧另起一遍。
 func (a *app) refreshList(v *filesView, force bool, done func()) {
 	if !force && v.list != nil && time.Since(v.listAt) < listMaxAge {
 		if done != nil {
@@ -449,10 +456,26 @@ func (a *app) refreshList(v *filesView, force bool, done func()) {
 		}
 		return
 	}
-	// 后台每帧来要的，失败后等一个周期再试；用户操作要的（带 done）照常重试
-	if v.listing && done == nil || !force && done == nil && time.Since(v.listFailAt) < listMaxAge {
+	if v.listing && !(force && done != nil) {
+		if done != nil {
+			v.listWait = append(v.listWait, done)
+		}
 		return
 	}
+	// 后台每帧来要的，失败后等一个周期再试；用户操作要的（带 done）照常重试
+	if !force && done == nil && time.Since(v.listFailAt) < listMaxAge {
+		return
+	}
+	if done != nil {
+		v.listWait = append(v.listWait, done)
+	}
+	a.startList(v)
+}
+
+// startList 起一遍列文件。之前还没列完的那遍作废，排着的回调由这一遍交回。
+func (a *app) startList(v *filesView) {
+	v.listGen++
+	gen := v.listGen
 	v.listing = true
 	root := v.root
 	var repos []string
@@ -461,9 +484,12 @@ func (a *app) refreshList(v *filesView, force bool, done func()) {
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		l, err := files.ListRepos(ctx, root, repos)
+		l, err := listRepos(ctx, root, repos)
 		cancel()
 		a.update(func() {
+			if v.listGen != gen {
+				return
+			}
 			v.listing = false
 			if err != nil {
 				v.listFailAt = time.Now()
@@ -472,11 +498,21 @@ func (a *app) refreshList(v *filesView, force bool, done func()) {
 				v.list, v.listAt, v.listFailAt = l, time.Now(), time.Time{}
 			}
 			// 失败了也交回去：等着的搜索、跳到定义拿上一份清单接着做，没有清单的收起「搜索中」，报错已经在错误条上
-			if done != nil {
+			wait := v.listWait
+			v.listWait = nil
+			for _, done := range wait {
 				done()
 			}
 		})
 	}()
+}
+
+// invalidateList 让清单下次用到时重列（删了文件、目录）。正在列的那遍可能是删之前开始的，作废重起。
+func (a *app) invalidateList(v *filesView) {
+	v.listAt = time.Time{}
+	if v.listing {
+		a.startList(v)
+	}
 }
 
 // openFile 打开文件并切过去，标签常驻；line 从 1 起，0 表示不跳行。
