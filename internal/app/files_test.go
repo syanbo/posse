@@ -1594,3 +1594,24 @@ func TestRelocateChangedFileConflicts(t *testing.T) {
 		t.Fatalf("conflict %v deleted %v", d.conflict, d.deleted)
 	}
 }
+
+// 编辑器的「转到定义」回调是按键时才调的，不在构建这一帧里：提示照界面语言写，不退成英文源文本。
+func TestGoToDefinitionHintLanguage(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	chat := filepath.Join(root, "Chat.java")
+	os.WriteFile(chat, []byte("class Chat {\n  void init() {\n    Helper.open(this, 3);\n  }\n}\n"), 0o644)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	tt := newTester(a.build, 1200, 760)
+	a.openFile(w, chat, 0, [2]int{})
+	v := a.filesFor(w)
+	until(t, tt, "chat loaded", func() bool { return v.cur.kind == docText })
+	d := v.cur
+	until(t, tt, "editor built", func() bool { return d.ed.OnDefinition != nil })
+	d.ed.OnDefinition(strings.Index(d.ed.Buffer.String(), "open(") + 1)
+	until(t, tt, "definition finished", func() bool { return !v.def.running && d.hint != "" })
+	if want := locales.In("zh-Hans").FilesNoDefinition("open"); d.hint != want {
+		t.Fatalf("hint %q, want %q", d.hint, want)
+	}
+}

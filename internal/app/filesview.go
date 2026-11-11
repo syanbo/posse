@@ -463,7 +463,9 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		d.ed.Font, d.ed.LineHeight, d.ed.BoldWeight = a.editorFont(), a.state.EditorLineHeight, a.editorBoldWeight()
 		d.ed.Bindings = a.editorBindings()
 		d.ed.OnChangeClick = func(i int, _ float32) { d.change = &changePop{index: i} }
-		d.ed.OnDefinition = func(off int) { a.goToDefinition(L(c), w, v, d, off) }
+		// 界面语言在这一帧里取好：回调是按键时才调的，那时 c 已经不在构建里，取到的是英文
+		m := L(c)
+		d.ed.OnDefinition = func(off int) { a.goToDefinition(m, w, v, d, off) }
 		d.ed.LinkAt = func(off int) (int, int) { return linkRange(d, off) }
 		// 包一层：改动卡片按行的位置浮在编辑器上面
 		ui.Box(c).Grow(1).Children(func() {
@@ -835,7 +837,8 @@ func (a *app) markdownPreview(c *ui.Context, w *workspace, d *fileDoc) {
 			ui.Row(c).Padding(20, 24, 32, 24).Justify(ui.Center).Children(func() {
 				size := a.mdSize()
 				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820 * size / defaultEditorFontSize).Selectable().Children(func() {
-					mdView{find: f, size: size, imgs: d.mdImgs, wiki: func(target string) { a.openWiki(L(c), w, d.path, target) }}.page(c, d.md)
+					m := L(c)
+					mdView{find: f, size: size, imgs: d.mdImgs, wiki: func(target string) { a.openWiki(m, w, d.path, target) }}.page(c, d.md)
 				})
 			})
 		})
