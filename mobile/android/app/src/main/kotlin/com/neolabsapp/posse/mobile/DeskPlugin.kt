@@ -206,6 +206,7 @@ class DeskPlugin(
         synchronized(lock) {
             if (generation != gen) {
                 producer.release()
+                created.discard()
                 result.error("cancelled", "connection cancelled", null)
                 return
             }

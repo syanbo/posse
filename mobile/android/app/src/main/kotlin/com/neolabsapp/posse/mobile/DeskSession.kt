@@ -718,6 +718,13 @@ class DeskSession(
         synchronized(flagLock) { stopped = true }
     }
 
+    /// 建好了却没开始（停止抢在前面，代数变了）：收包线程没起来，它收尾时关的解码线程和发送线程在这里关。
+    fun discard() {
+        if (thread != null) return
+        sender.shutdown()
+        decoder.shutdown()
+    }
+
     fun setPaused(value: Boolean) {
         synchronized(flagLock) {
             if (value) {
