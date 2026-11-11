@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -67,8 +68,7 @@ func (c *conn) subscribeTerminal(id string, p json.RawMessage) error {
 	if t == nil {
 		return errorf("not_found", "terminal %s not found", a.Terminal)
 	}
-	// HoldSize 的 key 要能区分同时看着的几路流；之后宿主独立成进程时它会跨进程传，所以用字符串
-	key := fmt.Sprintf("mobile:%p", new(byte))
+	key := holdKey()
 	// 手机看着的时候终端按手机屏幕排版，离开后恢复成界面的尺寸
 	if v := a.Viewport; v != nil && v.Cols >= 20 && v.Rows >= 8 && t.Running() {
 		t.HoldSize(key, min(v.Cols, 500), min(v.Rows, 200))
@@ -76,6 +76,12 @@ func (c *conn) subscribeTerminal(id string, p json.RawMessage) error {
 	go c.terminalStream(c.startStream(id), id, t, key)
 	return nil
 }
+
+// holdKey 是一路流在 HoldSize 里的 key：要能区分同时看着的几路流，之后宿主独立成进程时它会跨进程传，所以用字符串。
+// 不用临时对象的地址：没人持有它，GC 后新分配的会落在同一个地址上，撞上还在看的另一路。
+func holdKey() string { return fmt.Sprintf("mobile:%d", holdSeq.Add(1)) }
+
+var holdSeq atomic.Uint64
 
 // terminalStream 先发快照再推实时输出。尺寸变了（另一台手机或界面）就重发一份快照，手机据此重排。
 func (c *conn) terminalStream(ctx context.Context, id string, t host.Terminal, key string) {
