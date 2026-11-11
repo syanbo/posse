@@ -258,6 +258,9 @@ func (t *Terminal) newEmu(cols, rows, scrollback int) (*vt.Terminal, error) {
 	if scrollback == 0 {
 		scrollback = DefaultScrollback
 	}
+	// Size 回调读这个内核自己：Adopt 和 pullBack 往新内核里重放快照时 t.emu 还是 nil 或旧的那个，
+	// 快照里带着 CSI ? 2048 h（程序开过尺寸通知）时内核马上要尺寸
+	var emu *vt.Terminal
 	emu, err := vt.NewTerminal(cols, rows, vt.Effects{
 		WritePTY: func(p []byte) {
 			if !t.answer.Load() {
@@ -269,8 +272,14 @@ func (t *Terminal) newEmu(cols, rows, scrollback int) (*vt.Terminal, error) {
 			}
 		},
 		TitleChanged: func() { t.titleDirty = true },
-		Size:         func() (int, int, int, int) { c, r := t.emu.Size(); return c, r, 8, 16 },
-		Dark:         func() bool { return t.colors.Load().Dark() },
+		Size: func() (int, int, int, int) {
+			if emu == nil {
+				return cols, rows, 8, 16
+			}
+			c, r := emu.Size()
+			return c, r, 8, 16
+		},
+		Dark: func() bool { return t.colors.Load().Dark() },
 	})
 	if err != nil {
 		return nil, fmt.Errorf("terminal emulator: %w", err)

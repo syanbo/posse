@@ -1,6 +1,7 @@
 package term
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 	"time"
@@ -186,4 +187,30 @@ func TestAdoptRestoresDeskSize(t *testing.T) {
 	defer nt.Close(time.Second)
 	nt.Resume()
 	waitFor(t, "desk size", func() bool { c, r := nt.Size(); return c == 100 && r == 30 })
+}
+
+// 程序开过尺寸通知（CSI ? 2048 h）时快照里带着它，新内核重放时马上要尺寸：t.emu 那时还没换上。
+func TestAdoptInBandResize(t *testing.T) {
+	tm, err := Start(Options{ID: "t_ib", Dir: t.TempDir(), Command: []string{"/bin/sh", "-c", "printf '\\033[?2048hready\\n'; sleep 30"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	waitFor(t, "ready", func() bool { return tm.ContainsText("ready") })
+	st, f, err := tm.Pause()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(st.Snapshot, []byte("\x1b[?2048h")) {
+		t.Fatalf("snapshot lost the mode: %q", st.Snapshot)
+	}
+	nt, err := Adopt(Options{}, st, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nt.Close(time.Second)
+	nt.Resume()
+	if !nt.ContainsText("ready") {
+		t.Fatal("adopted terminal lost its screen")
+	}
 }
