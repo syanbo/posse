@@ -827,7 +827,7 @@ class PosseAppModel extends ChangeNotifier {
       if (gen != _connectGen) return false;
       _poll?.cancel();
       _poll = Timer.periodic(const Duration(seconds: 3), (_) {
-        if (!appAway) unawaited(refreshWorktrees());
+        if (!appAway) unawaited(refreshWorktrees(poll: true));
       });
       return true;
     } catch (caught) {
@@ -1066,9 +1066,28 @@ class PosseAppModel extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshWorktrees() async {
+  /// 发出过几轮 [refreshWorktrees]、已经用上的是第几轮的结果、还有几轮在路上。
+  var _worktreeSeq = 0;
+  var _worktreeApplied = 0;
+  var _worktreeInflight = 0;
+
+  /// 拉工作区列表和各工作区的标签。几轮同时在路上时只用最新发出的那轮：慢线路上先发的后回来，不盖掉新的。
+  /// [poll] 是定时轮询：上一轮还没回来就不再发（每个请求都有超时，卡住的那轮总会结束）；
+  /// 回到前台、操作之后的刷新照常马上发。
+  Future<void> refreshWorktrees({bool poll = false}) async {
     final current = rpc;
     if (current == null) return;
+    if (poll && _worktreeInflight > 0) return;
+    final seq = ++_worktreeSeq;
+    _worktreeInflight++;
+    try {
+      await _refreshWorktrees(current, seq);
+    } finally {
+      _worktreeInflight--;
+    }
+  }
+
+  Future<void> _refreshWorktrees(PhoneRpc current, int seq) async {
     try {
       final result = await current.call('worktree.ps', {'limit': 10000});
       final rows = parseWorktrees(result['worktrees']);
@@ -1082,15 +1101,18 @@ class PosseAppModel extends ChangeNotifier {
               // 单个工作区读失败时沿用上一次的，不让整页报错
               .catchError((Object _) => tabs[row.id] ?? const <SessionTab>[]),
       ]);
-      if (!identical(current, rpc)) return;
+      if (!identical(current, rpc) || seq < _worktreeApplied) return;
+      _worktreeApplied = seq;
       worktrees = rows;
       tabs = {for (var i = 0; i < live.length; i++) live[i].id: lists[i]};
       tabsStale = false;
       error = null;
       _updateBadge();
     } catch (caught) {
-      // 换了连接（升级到 QUIC、重连）后旧连接上的失败不算：新连接马上会再拉一次
-      if (!identical(current, rpc)) return;
+      // 换了连接（升级到 QUIC、重连）后旧连接上的失败不算：新连接马上会再拉一次。
+      // 比已经用上的结果早发的那轮失败了也不算
+      if (!identical(current, rpc) || seq < _worktreeApplied) return;
+      _worktreeApplied = seq;
       error = caught;
     }
     notifyListeners();
