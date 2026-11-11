@@ -159,6 +159,8 @@
   "deskFailScreenPermission": "请到 Mac 上允许屏幕录制",
   "deskForgetPassword": "忘掉密码",
   "deskFpsStill": "静止",
+  "deskFrameRate": "帧率",
+  "deskFrameRateAuto": "自动",
   "deskGestureClick": "单击",
   "deskGestureDismiss": "点任意处关掉，模式在设置「看桌面」里换",
   "deskGestureDrag": "拖动",

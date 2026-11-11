@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app_state.dart';
 import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -9,11 +10,14 @@ import 'displays.dart';
 typedef DeskPick = ({bool window, int id});
 
 /// 选看什么：上面是屏（多块时按真实排布画出各块，块里写名字和分辨率，点哪块切哪块），下面是当前空间里的窗口，
-/// [windows] 打开时现要。返回选中的，取消为 null。
+/// [windows] 打开时现要。最上面是帧率（[fps] 为 null 时电脑不支持手选、不显示，0 是自动），
+/// 选了经 [onFps] 立即交出去、面板不关。返回选中的屏或窗口，取消为 null。
 Future<DeskPick?> pickDeskView(
   BuildContext context,
   DeskDisplays displays, {
   required Future<List<DeskWindow>> windows,
+  int? fps,
+  ValueChanged<int>? onFps,
 }) {
   return showModalBottomSheet<DeskPick>(
     context: context,
@@ -37,6 +41,8 @@ Future<DeskPick?> pickDeskView(
           child: SingleChildScrollView(
             child: Column(
               children: [
+                if (fps != null && onFps != null)
+                  _FpsChoice(fps: fps, onChanged: onFps),
                 Section(
                   title: sheet.l10n.deskEntireScreen,
                   inset: 48,
@@ -138,6 +144,47 @@ Future<DeskPick?> pickDeskView(
       );
     },
   );
+}
+
+/// 帧率一行：自动和 [deskFpsChoices] 几档，选中的跟着点击换，不等电脑回。
+class _FpsChoice extends StatefulWidget {
+  const _FpsChoice({required this.fps, required this.onChanged});
+
+  final int fps;
+  final ValueChanged<int> onChanged;
+
+  @override
+  State<_FpsChoice> createState() => _FpsChoiceState();
+}
+
+class _FpsChoiceState extends State<_FpsChoice> {
+  late int _fps = widget.fps;
+
+  @override
+  Widget build(BuildContext context) {
+    const values = [0, ...deskFpsChoices];
+    return Section(
+      title: context.l10n.deskFrameRate,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(10),
+          child: Segmented(
+            key: const Key('desk-fps'),
+            labels: [
+              context.l10n.deskFrameRateAuto,
+              for (final v in deskFpsChoices) '$v',
+            ],
+            selected: values.indexOf(_fps).clamp(0, values.length - 1),
+            onChanged: (i) {
+              if (values[i] == _fps) return;
+              setState(() => _fps = values[i]);
+              widget.onChanged(values[i]);
+            },
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 String _resolution(AppLocalizations l, DeskDisplay d) => d.main

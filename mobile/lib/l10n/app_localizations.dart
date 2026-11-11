@@ -1052,6 +1052,18 @@ abstract class AppLocalizations {
   /// **'Still'**
   String get deskFpsStill;
 
+  /// Remote Desktop › screen picker: section title for choosing the Mac's capture frame rate cap (Auto, 60, 30, 15).
+  ///
+  /// In en, this message translates to:
+  /// **'Frame Rate'**
+  String get deskFrameRate;
+
+  /// Remote Desktop › screen picker › Frame Rate: segment that lets the Mac pick the frame rate from the network bitrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get deskFrameRateAuto;
+
   /// Remote Desktop › gesture help: action name.
   ///
   /// In en, this message translates to:

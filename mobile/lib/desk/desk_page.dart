@@ -18,6 +18,7 @@ import 'display_picker.dart';
 import 'displays.dart';
 import 'direct.dart';
 import 'events.dart';
+import 'frame_rate.dart';
 import 'gestures.dart';
 import 'hint.dart';
 import 'key_bar.dart';
@@ -152,6 +153,8 @@ class _DeskPageState extends State<DeskPage>
   bool _nack = false;
   // 电脑认密码事件（ready 里带 password）：锁屏判断和只投给锁屏都在 Mac 上做
   bool _passwordEvent = false;
+  // 电脑认手选帧率（ready 里带 fps）：画面面板里才有帧率一行
+  bool _fpsChoice = false;
   final _unlockGate = DeskUnlockGate();
   // 等待结束时重画胶囊，按钮从「正在解锁」变回来
   Timer? _unlockTick;
@@ -714,13 +717,15 @@ class _DeskPageState extends State<DeskPage>
     final pixels = _screenPixels();
     final RpcStream stream;
     try {
-      stream = await rpc.subscribe('desk.subscribe', {
-        'width': pixels.$1,
-        'height': pixels.$2,
-        // 插件只会解 HEVC。
-        'codecs': ['hevc'],
-        'display': ?widget.model.settings.deskDisplays[_computerKey],
-      });
+      stream = await rpc.subscribe(
+        'desk.subscribe',
+        deskSubscribeParams(
+          widget.model.settings,
+          _computerKey,
+          width: pixels.$1,
+          height: pixels.$2,
+        ),
+      );
     } on Object {
       if (!mounted || gen != _gen) return;
       setState(() => _fail = 'rpc');
@@ -802,17 +807,26 @@ class _DeskPageState extends State<DeskPage>
     _pokeBar();
     final rpc = _rpcNow;
     if (rpc == null) return;
+    final key = _computerKey;
     final pick = await pickDeskView(
       context,
       _displays,
       windows: rpc.call('desk.windows', const {}).then(DeskWindow.parseList),
+      fps: deskFpsOffer(_fpsChoice, widget.model.settings, key),
+      onFps: (fps) => unawaited(
+        chooseDeskFps(
+          widget.model,
+          key,
+          fps,
+          call: identical(rpc, _rpcNow) ? rpc.call : null,
+        ),
+      ),
     );
     if (!mounted || pick == null || !identical(rpc, _rpcNow)) return;
     if (pick.window) {
       if (pick.id == _displays.window?.id) return;
     } else {
       if (pick.id == _displays.current && _displays.window == null) return;
-      final key = _computerKey;
       if (key != null) {
         widget.model.updateSettings((s) => s.deskDisplays[key] = pick.id);
       }
@@ -877,6 +891,7 @@ class _DeskPageState extends State<DeskPage>
     _relay = relay is String && relay.isNotEmpty ? relay : null;
     _nack = frame['nack'] == true;
     _passwordEvent = frame['password'] == true;
+    _fpsChoice = frame['fps'] == true;
     _relayToken = null;
     if (_relay != null && relayTokenB64 is String) {
       try {

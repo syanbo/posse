@@ -140,6 +140,9 @@ class PrefsPairingStore implements PairingStore {
 /// 看桌面设置的版本。1 起看桌面不再是实验，默认打开、用触控板。
 const deskVersion = 1;
 
+/// 看桌面能手选的帧率上限，和 Mac 认的一样；不在里面的是自动。
+const deskFpsChoices = [60, 30, 15];
+
 /// 手机上的偏好。存在 SharedPreferences 的 posse.settings 里，和配对分开。
 class AppSettings {
   AppSettings({
@@ -166,9 +169,11 @@ class AppSettings {
     this.pushAsked = false,
     this.backgroundKeep = false,
     Map<String, int>? deskDisplays,
+    Map<String, int>? deskFps,
     List<BarKey>? barKeys,
   }) : barKeys = barKeys ?? defaultBarKeys(),
-       deskDisplays = deskDisplays ?? {};
+       deskDisplays = deskDisplays ?? {},
+       deskFps = deskFps ?? {};
 
   /// dark、light 或 system。默认深色。
   String theme;
@@ -219,6 +224,10 @@ class AppSettings {
   /// 下次看时订阅带上，那块屏不在了电脑看主屏。
   Map<String, int> deskDisplays;
 
+  /// 每台电脑在看桌面里手选的帧率上限（60、30、15），键同 [deskDisplays]；没有就是自动（Mac 按码率选）。
+  /// 下次看时订阅带上。
+  Map<String, int> deskFps;
+
   /// 这台手机的安装 ID，第一次启动时生成。电脑靠它把同一台手机扫过的几个码认成一台。
   String phoneId;
 
@@ -257,6 +266,7 @@ class AppSettings {
     'homeByStatus': homeByStatus,
     'skippedUpdateBuild': skippedUpdateBuild,
     'deskDisplays': deskDisplays,
+    'deskFps': deskFps,
     'phoneId': phoneId,
     'pushWaiting': pushWaiting,
     'pushDone': pushDone,
@@ -334,6 +344,14 @@ class AppSettings {
         out.deskDisplays = {
           for (final MapEntry(:key, :value) in displays.entries)
             if (key is String && value is int) key: value,
+        };
+      }
+      final fps = map['deskFps'];
+      if (fps is Map) {
+        out.deskFps = {
+          for (final MapEntry(:key, :value) in fps.entries)
+            if (key is String && deskFpsChoices.contains(value))
+              key: value as int,
         };
       }
       final phoneId = map['phoneId'];

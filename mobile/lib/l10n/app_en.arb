@@ -846,6 +846,14 @@
   "@deskFpsStill": {
     "description": "Remote Desktop: floating bar label in place of the frame rate when the picture isn’t changing."
   },
+  "deskFrameRate": "Frame Rate",
+  "@deskFrameRate": {
+    "description": "Remote Desktop › screen picker: section title for choosing the Mac's capture frame rate cap (Auto, 60, 30, 15)."
+  },
+  "deskFrameRateAuto": "Auto",
+  "@deskFrameRateAuto": {
+    "description": "Remote Desktop › screen picker › Frame Rate: segment that lets the Mac pick the frame rate from the network bitrate."
+  },
   "deskGestureClick": "Click",
   "@deskGestureClick": {
     "description": "Remote Desktop › gesture help: action name."
