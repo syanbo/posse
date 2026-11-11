@@ -92,6 +92,18 @@ type CastConfig struct {
 	Verbose bool
 	// IsRelay 认出中转服务器的地址。手机同时向直连地址和中转发包时，直连还通就不换到中转
 	IsRelay func(net.Addr) bool
+	// FPS 是手机手选的帧率上限（60、30、15），0 是跟着码率自动选；FPSChanges 送来观看中的改动，取值同上
+	FPS        uint32
+	FPSChanges <-chan uint32
+}
+
+// PinnedFPS 把手机报来的帧率规整成能手选的档位，别的值都当自动（0）。
+func PinnedFPS(v int64) uint32 {
+	switch v {
+	case 60, 30, 15:
+		return uint32(v)
+	}
+	return 0
 }
 
 // Serve 一直发到子进程的管道结束、手机超时不报或 Conn 被关掉。
@@ -111,7 +123,7 @@ func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
 	c := &caster{
 		conn: cfg.Conn, sealAEAD: sealAEAD, openAEAD: openAEAD, control: control,
 		onStatus: cfg.OnStatus, onDisplays: cfg.OnDisplays, onWindows: cfg.OnWindows, onInput: cfg.OnInput, verbose: cfg.Verbose, isRelay: cfg.IsRelay,
-		bitrate: start, fps: 60, fullBit: start, codec: CodecHEVC,
+		bitrate: start, fps: 60, autoFPS: 60, pinned: PinnedFPS(int64(cfg.FPS)), fullBit: start, codec: CodecHEVC,
 		stopped: make(chan struct{}), quietDeadline: now.Add(helloWait),
 	}
 	c.rate.reset(now, start, relayCeil)
@@ -119,6 +131,18 @@ func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
 	go func() { readDone <- c.readFrames(frames) }()
 	go c.recv()
 	go c.beat()
+	if cfg.FPSChanges != nil {
+		go func() {
+			for {
+				select {
+				case <-c.stopped:
+					return
+				case v := <-cfg.FPSChanges:
+					c.pin(v)
+				}
+			}
+		}()
+	}
 	var errRun error
 	select {
 	case errRun = <-readDone:
@@ -194,12 +218,14 @@ type caster struct {
 	keySend            time.Duration // 上一个关键帧发了多久，关键帧请求的间隔按它拉长
 	mu                 sync.Mutex
 	bitrate            uint32
-	fps                uint32 // 告诉采集子进程的帧率上限，跟着码率走（fpsFor）；mu 保护
+	fps                uint32 // 告诉采集子进程的帧率上限：手选了是 pinned，否则是 autoFPS；mu 保护
+	autoFPS            uint32 // 按码率该用的帧率上限（fpsFor），手选时照样跟着码率算，画面减不减半看它；mu 保护
+	pinned             uint32 // 手机手选的帧率上限，0 是自动；mu 保护
 	fullBit            uint32 // 这个画面的满码率（PictureBitrate），帧率档位按它的比例算；mu 保护
 	fullW, fullH       int    // 这个画面不降分辨率时的尺寸，直连的起始码率按它算；mu 保护
 	haveConfig         bool
 	direct             bool   // 手机直连（不经中转）：起始码率和上限放开到 DirectBitrate、rateCeil；mu 保护
-	scale              uint32 // 告诉子进程的长边除数，最低一档帧率时为 2；fpsMu 保护
+	scale              uint32 // 告诉子进程的长边除数，码率落到 15 帧那档及以下时为 2；fpsMu 保护
 	fpsMu              sync.Mutex
 	rate               rateState
 	sendGap            time.Duration
@@ -866,20 +892,36 @@ func (c *caster) onReport(plain []byte) {
 func (c *caster) applyFPS(bitrate uint32) {
 	c.fpsMu.Lock()
 	defer c.fpsMu.Unlock()
+	c.applyFPSLocked(bitrate)
+}
+
+// applyFPSLocked 调用方持有 fpsMu。
+func (c *caster) applyFPSLocked(bitrate uint32) {
 	c.mu.Lock()
-	next := fpsFor(bitrate, c.fullBit, c.fps)
+	cur := c.autoFPS
+	if cur == 0 {
+		cur = 60
+	}
+	auto := fpsFor(bitrate, c.fullBit, cur)
+	c.autoFPS = auto
+	next := auto
+	if c.pinned != 0 {
+		next = c.pinned
+	}
 	changed := next != c.fps
 	c.fps = next
+	pinned := c.pinned
 	c.mu.Unlock()
 	if changed {
-		log.Printf("desk: frame rate cap %d at bitrate %d", next, bitrate)
+		log.Printf("desk: frame rate cap %d at bitrate %d (pinned %d)", next, bitrate, pinned)
 		_ = WriteControl(c.control, Control{Kind: CtrlFPS, FPS: next})
 	}
-	// 降到 15 帧及以下时画面长边减半：关键帧的大小大致跟像素数走，小到三分之一上下，慢链路上才发得完整。
+	// 码率落到 15 帧那一档及以下时画面长边减半：关键帧的大小大致跟像素数走，小到三分之一上下，慢链路上才发得完整。
 	// 在手机上看，整屏缩在手机宽度里，减半看着差别不大。硬件编码器出关键帧不看码率，满尺寸的关键帧
-	// 实测有 200 KB，所以要回到 30 帧（码率约 1.9 Mbps 以上）才升回满尺寸，那时半秒左右能发完
+	// 实测有 200 KB，所以要回到 30 帧那档（码率约 1.9 Mbps 以上）才升回满尺寸，那时半秒左右能发完。
+	// 看的是按码率该用的档位，不是手选的帧率：手选 15 帧不该把好网络上的画面减半，手选 60 帧也不该让慢链路发满尺寸
 	scale := uint32(1)
-	if next <= 15 {
+	if auto <= 15 {
 		scale = 2
 	}
 	if c.scale == 0 {
@@ -890,6 +932,19 @@ func (c *caster) applyFPS(bitrate uint32) {
 		log.Printf("desk: picture scale 1/%d at bitrate %d", scale, bitrate)
 		_ = WriteControl(c.control, Control{Kind: CtrlScale, Scale: scale})
 	}
+}
+
+// pin 换手选的帧率上限（0 是回到自动），立即按现在的码率重新定帧率上限告诉子进程。
+func (c *caster) pin(fps uint32) {
+	fps = PinnedFPS(int64(fps))
+	c.fpsMu.Lock()
+	defer c.fpsMu.Unlock()
+	c.mu.Lock()
+	c.pinned = fps
+	bitrate := c.bitrate
+	c.mu.Unlock()
+	log.Printf("desk: frame rate chosen by the phone: %d", fps)
+	c.applyFPSLocked(bitrate)
 }
 
 // resync 把码率、帧率上限和长边除数告诉新拉起的子进程：它按默认值起步，这边记着的是告诉旧子进程的。
