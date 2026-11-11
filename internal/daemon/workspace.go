@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -150,8 +151,13 @@ func (d *Daemon) projectRm(ctx context.Context, raw json.RawMessage) (any, error
 	if err != nil {
 		return nil, err
 	}
+	// 项目目录已经没了：git 删不了它的 worktree，force 时连同 worktree 工作区一起移除，只删记录和残留目录
+	gone := projectGone(proj, ws)
 	for _, w := range ws {
-		if w.Kind == "worktree" {
+		if w.Kind == "worktree" && !(gone && p.Force) {
+			if gone {
+				return nil, rpc.Errorf(rpc.CodeConflict, "project directory %s no longer exists; pass force to remove it with its worktree workspaces", proj.Path)
+			}
 			return nil, rpc.Errorf(rpc.CodeConflict, "project has worktree workspace %q; remove it first", w.Name)
 		}
 		if running := d.runningIn(w.ID); running > 0 && !p.Force {
@@ -161,6 +167,9 @@ func (d *Daemon) projectRm(ctx context.Context, raw json.RawMessage) (any, error
 	for _, w := range ws {
 		d.closeWorkspaceTerminals(w.ID)
 		d.store.DeleteEndedTerminals(w.ID)
+		if w.Kind == "worktree" {
+			d.removeLeftover(w.Path)
+		}
 	}
 	if err := d.store.DeleteProject(proj.ID); err != nil {
 		return nil, err
@@ -513,16 +522,23 @@ func (d *Daemon) workspaceRm(ctx context.Context, raw json.RawMessage) (any, err
 		if err != nil {
 			return nil, err
 		}
+		gone := repoGone(proj.Path)
+		if gone && !p.Force {
+			return nil, rpc.Errorf(rpc.CodeConflict, "project directory %s no longer exists; pass force to remove the workspace anyway", proj.Path)
+		}
 		if out, err := gitx.Dirty(ctx, w.Path); err == nil && out != "" && !p.Force {
 			return nil, rpc.Errorf(rpc.CodeConflict, "worktree has uncommitted changes; pass force to discard:\n%s", out)
 		}
 		d.closeWorkspaceTerminals(w.ID)
-		if _, statErr := os.Stat(w.Path); statErr == nil {
+		if gone {
+			// 仓库没了，git worktree remove 和删分支都做不了：只删记录和 Posse 建的残留目录
+			d.removeLeftover(w.Path)
+		} else if _, statErr := os.Stat(w.Path); statErr == nil {
 			if err := gitx.RemoveWorktree(ctx, proj.Path, w.Path, p.Force); err != nil {
 				return nil, rpc.Errorf(rpc.CodeConflict, "%v", err)
 			}
 		}
-		if p.DeleteBranch && w.Branch != "" {
+		if p.DeleteBranch && w.Branch != "" && !gone {
 			if err := gitx.DeleteBranch(ctx, proj.Path, w.Branch, p.Force); err != nil {
 				return nil, rpc.Errorf(rpc.CodeConflict, "worktree removed but %v", err)
 			}
@@ -696,4 +712,47 @@ func (d *Daemon) mustRunning(s *session) error {
 		return rpc.Errorf(rpc.CodeConflict, "%v (exit code %d)", errExited, s.ExitCode())
 	}
 	return nil
+}
+
+// repoGone 报告仓库目录或它的 .git 已经不存在（被删或挪走）。
+func repoGone(dir string) bool {
+	for _, p := range []string{dir, filepath.Join(dir, ".git")} {
+		if _, err := os.Stat(p); errors.Is(err, fs.ErrNotExist) {
+			return true
+		}
+	}
+	return false
+}
+
+// projectGone 报告项目的仓库已经不在了：单仓库看项目目录，多仓库工作区看它用到的每个仓库。
+func projectGone(proj store.Project, ws []store.Workspace) bool {
+	if _, err := os.Stat(proj.Path); errors.Is(err, fs.ErrNotExist) {
+		return true
+	}
+	for _, w := range ws {
+		if w.Kind != "worktree" {
+			continue
+		}
+		if len(w.Repos) == 0 {
+			return repoGone(proj.Path)
+		}
+		for _, r := range w.Repos {
+			if !repoGone(r.Source) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// removeLeftover 删掉仓库已经不在的 worktree 工作区留下的目录：只删 $POSSE_HOME/worktrees 里面的，
+// 记录里的路径指到别处（attach 进来的、被改过的）就不碰。
+func (d *Daemon) removeLeftover(path string) {
+	root := filepath.Join(d.cfg.Home, "worktrees")
+	rel, err := filepath.Rel(root, filepath.Clean(path))
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return
+	}
+	os.RemoveAll(path)
 }

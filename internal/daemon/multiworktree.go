@@ -162,6 +162,16 @@ func reposDirty(ctx context.Context, w store.Workspace) bool {
 // removeRepoWorktrees 删多仓库 worktree 工作区：先查所有仓库都没有未提交的改动，再从里往外逐个删，
 // 最后删掉工作区目录（只剩建 worktree 时补的空目录；force 时连同别的文件）。left 是没删掉的工作区目录（里面还有别的文件）。
 func (d *Daemon) removeRepoWorktrees(ctx context.Context, w store.Workspace, force, deleteBranch bool) (left string, err error) {
+	// 仓库已经没了（项目目录被删或挪走）的：git 删不了它的 worktree，force 时跳过，最后只删 Posse 建的残留目录
+	var gone []string
+	for _, r := range w.Repos {
+		if repoGone(r.Source) {
+			gone = append(gone, r.Source)
+		}
+	}
+	if len(gone) > 0 && !force {
+		return "", rpc.Errorf(rpc.CodeConflict, "repository %s no longer exists; pass force to remove the workspace anyway", strings.Join(gone, ", "))
+	}
 	if !force {
 		var dirty []string
 		for _, r := range w.Repos {
@@ -181,6 +191,9 @@ func (d *Daemon) removeRepoWorktrees(ctx context.Context, w store.Workspace, for
 	for i := len(w.Repos) - 1; i >= 0; i-- {
 		r := w.Repos[i]
 		dir := repoDir(w.Path, r.Path)
+		if slices.Contains(gone, r.Source) {
+			continue
+		}
 		if _, err := os.Stat(dir); err == nil {
 			// 里面放过别的仓库的 worktree：它刚被删掉，外层看到的是删掉的子模块、软链或空目录，
 			// 前面已经查过没有别的改动，强制删
@@ -201,7 +214,9 @@ func (d *Daemon) removeRepoWorktrees(ctx context.Context, w store.Workspace, for
 	if len(errs) > 0 {
 		return "", rpc.Errorf(rpc.CodeConflict, "%s", strings.Join(errs, "\n"))
 	}
-	if force {
+	if len(gone) > 0 {
+		d.removeLeftover(w.Path)
+	} else if force {
 		os.RemoveAll(w.Path)
 	} else {
 		removeEmptyDirs(w.Path)
