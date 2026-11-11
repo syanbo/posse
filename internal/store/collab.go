@@ -741,6 +741,61 @@ func (s *Store) PruneInvites(before time.Time) (int64, error) {
 	return res.RowsAffected()
 }
 
+// collabRoomTables 是按房间存的协作表，讨论不在了这些行就没用了。collab_uploads 不在里面：
+// 行里记着临时文件，由 StaleUploads、UnusedUploads 连文件一起收拾。
+var collabRoomTables = []string{
+	"collab_people", "collab_invites", "collab_requests", "collab_events", "collab_joined",
+	"collab_intents", "collab_accepts", "collab_outbox", "collab_add_workspaces",
+}
+
+// collabCleanBatch 是清理时一条语句改的行数：每批自己一个事务，不长时间占着写锁。
+const collabCleanBatch = 500
+
+// PruneCollabOrphans 删掉讨论已经不在了的房间在各协作表里的行，返回删了几行。
+// 讨论只有 DropMirror 会删（它同时删这些行），这里清它以前留下的。
+func (s *Store) PruneCollabOrphans() (int64, error) {
+	var total int64
+	for _, t := range collabRoomTables {
+		for {
+			res, err := s.db.Exec(`DELETE FROM `+t+` WHERE rowid IN (SELECT rowid FROM `+t+` WHERE room NOT IN (SELECT key FROM discussions) LIMIT ?)`, collabCleanBatch)
+			if err != nil {
+				return total, err
+			}
+			n, _ := res.RowsAffected()
+			total += n
+			if n < collabCleanBatch {
+				break
+			}
+		}
+	}
+	return total, nil
+}
+
+// endedExecStates 是执行的终态：不再有新的执行事件。
+var endedExecStates = []string{ExecDone, ExecFailed, ExecInterrupted, ExecStopped, ExecCancelled, ExecMerged, ExecRevoked}
+
+// ClearOutboxPayloads 清掉 outbox 里用不着了的事件内容（回复正文这些），行、序号、摘要和状态都留着，返回清了几行。
+// 只清：已交出或被拒收的（pending 的要补发，读的是内容）、所属执行在 before 之前就结束了的。每个执行最近一条
+// 状态事件的内容也留着：addOutbox 拿它判断新的状态事件是不是重复。下一条序号按 MAX(seq) 取，和内容无关。
+func (s *Store) ClearOutboxPayloads(before time.Time) (int64, error) {
+	var total int64
+	for {
+		res, err := s.db.Exec(`UPDATE collab_outbox SET payload='' WHERE rowid IN (
+			SELECT o.rowid FROM collab_outbox o JOIN disc_executions x ON x.id=o.exec
+			WHERE o.state<>'pending' AND o.payload<>'' AND x.state IN `+inList(endedExecStates)+` AND x.ended_at < ?
+				AND NOT (o.kind='state' AND o.seq=(SELECT MAX(seq) FROM collab_outbox l WHERE l.exec=o.exec AND l.kind='state'))
+			LIMIT ?)`, ms(before), collabCleanBatch)
+		if err != nil {
+			return total, err
+		}
+		n, _ := res.RowsAffected()
+		total += n
+		if n < collabCleanBatch {
+			return total, nil
+		}
+	}
+}
+
 // CreateInvite 记下一份邀请：只存凭据哈希，十分钟（按房主时钟）有效，只能用一次。
 func (s *Store) CreateInvite(room, id, secretHash, role string, expires, at time.Time) error {
 	return s.withTx(func(tx *sql.Tx) error {
@@ -1863,11 +1918,10 @@ func (s *Store) DropMirror(room string) error {
 		if n > 0 {
 			return nil
 		}
-		if _, err := tx.Exec(`DELETE FROM collab_joined WHERE room=?`, room); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(`DELETE FROM collab_people WHERE room=?`, room); err != nil {
-			return err
+		for _, t := range collabRoomTables {
+			if _, err := tx.Exec(`DELETE FROM `+t+` WHERE room=?`, room); err != nil {
+				return err
+			}
 		}
 		_, err := tx.Exec(`DELETE FROM discussions WHERE key=? AND mirror=1`, room)
 		if err == nil {

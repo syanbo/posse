@@ -109,6 +109,7 @@ func (d *Daemon) collabStart(ctx context.Context) {
 	d.collabEnsure()
 	go d.collabPushLoop(ctx)
 	go d.pruneAvatars()
+	go d.collabCleanLoop(ctx)
 	// 邀请十分钟有效，没人用的过期了就留着没用。多留 inviteKeep：这期间有人再贴它，报的是「已过期」而不是「无效」
 	if n, err := d.store.PruneInvites(time.Now().Add(-inviteKeep)); err != nil {
 		log.Printf("collaboration: prune invites: %v", err)
@@ -119,6 +120,32 @@ func (d *Daemon) collabStart(ctx context.Context) {
 
 // inviteKeep 是过期、没用过的邀请还留多久。
 const inviteKeep = 7 * 24 * time.Hour
+
+// outboxKeep 是执行结束后 outbox 里的事件内容还留多久。
+const outboxKeep = 30 * 24 * time.Hour
+
+// collabCleanLoop 启动时和之后每天一次：清掉讨论已经不在了的协作记录，和结束了一阵的执行在 outbox 里的事件内容。
+func (d *Daemon) collabCleanLoop(ctx context.Context) {
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		if n, err := d.store.PruneCollabOrphans(); err != nil {
+			log.Printf("collaboration: prune orphan rows: %v", err)
+		} else if n > 0 {
+			log.Printf("collaboration: removed %d rows of discussions that are gone", n)
+		}
+		if n, err := d.store.ClearOutboxPayloads(time.Now().Add(-outboxKeep)); err != nil {
+			log.Printf("collaboration: clear outbox: %v", err)
+		} else if n > 0 {
+			log.Printf("collaboration: cleared %d delivered outbox events", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
 
 // collabEnsure 让服务和连接循环和库里一致：有共享的讨论就监听，没有就停；每个加入中的房间有一个连接循环。
 func (d *Daemon) collabEnsure() {
