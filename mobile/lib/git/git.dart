@@ -70,36 +70,6 @@ Future<GitCheckoutResult> gitCheckout(
       .then(parseGitCheckout);
 }
 
-/// 单独打开的改动页。工作区页里用的是不带顶栏的 GitPane。
-class GitScreen extends StatelessWidget {
-  const GitScreen({
-    super.key,
-    required this.title,
-    required this.loadStatus,
-    required this.loadDiff,
-    this.onOpenFile,
-  });
-
-  final String title;
-  final Future<GitStatusView> Function() loadStatus;
-  final Future<GitDiffView> Function(GitFileChange file) loadDiff;
-  final void Function(String path)? onOpenFile;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: SideSafe(
-        child: GitPane(
-          loadStatus: loadStatus,
-          loadDiff: loadDiff,
-          onOpenFile: onOpenFile,
-        ),
-      ),
-    );
-  }
-}
-
 /// 改动多久自己刷新一次，和首页的工作区列表一样。
 const gitPoll = Duration(seconds: 3);
 

@@ -6,6 +6,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'git_screen.dart';
+
 import 'package:posse_mobile/app_state.dart';
 import 'package:posse_mobile/chat/chat.dart';
 import 'package:posse_mobile/chat/composer.dart';
@@ -15,7 +18,6 @@ import 'package:posse_mobile/chat/prompt.dart';
 import 'package:posse_mobile/chat/tools.dart';
 import 'package:posse_mobile/files/files.dart';
 import 'package:posse_mobile/files/save.dart';
-import 'package:posse_mobile/git/git.dart';
 import 'package:posse_mobile/git/status.dart';
 import 'package:posse_mobile/history/history.dart';
 import 'package:posse_mobile/l10n/l10n.dart';

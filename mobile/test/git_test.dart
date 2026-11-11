@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'git_screen.dart';
+
 import 'package:posse_mobile/git/git.dart';
 import 'package:posse_mobile/git/status.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
