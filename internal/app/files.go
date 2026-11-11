@@ -310,6 +310,8 @@ func (a *app) carryDocs(w *workspace, old, v *filesView) {
 				from := docKey(d)
 				d.path = filepath.Join(v.root, rel)
 				rename[from] = docKey(d)
+				// 旧路径消失时轮询记下的"没了"不算数：新路径按打开时的磁盘戳比，只是挪了目录的文件戳不变
+				d.seen, d.deleted = d.base, false
 			}
 			// 行号旁的改动标记和 Annotate 按旧仓库算的，重新取
 			d.blame, d.headBuf, d.headFor = nil, nil, ""
@@ -712,7 +714,8 @@ func (a *app) diskChanged(d *fileDoc, st files.Stamp, c files.Content, err error
 		d.deleted = false
 		a.loadDoc(d)
 	case d.isModified():
-		d.deleted, d.conflict = false, true
+		// 磁盘回到了打开时的样子（目录挪走又挪回来），不算冲突
+		d.deleted, d.conflict = false, !st.Same(d.base)
 	default:
 		a.applyContent(d, c, err)
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/client"
+	"posse/internal/files"
 	"posse/locales"
 )
 
@@ -1487,5 +1488,65 @@ func TestRelocateRenamesDocInColumns(t *testing.T) {
 	st := a.state.Panes["w1"]
 	if p2 := st.leaf("p2"); p2 == nil || !slices.Equal(p2.Tabs, []string{docKey(docs[0]), docKey(docs[1])}) {
 		t.Fatalf("cell %+v", st.leaf("p2"))
+	}
+}
+
+// 目录只是被挪走再重新指定，文件字节没变：带着未保存修改的文档不算冲突，也不再标成已删除。
+func TestRelocateUnchangedFileNoConflict(t *testing.T) {
+	a := previewApp(t)
+	v := previewFiles(t, a, "README.md")
+	d := v.cur
+	d.ed.Insert("<!-- draft -->\n")
+	w := &a.workspaces[0]
+	moved := filepath.Join(t.TempDir(), "moved")
+	if err := os.Rename(v.root, moved); err != nil {
+		t.Fatal(err)
+	}
+	// 挪走后先轮询到旧路径没了
+	a.diskChanged(d, files.StatFile(d.path), files.Content{}, nil)
+	if !d.deleted {
+		t.Fatal("old path not marked deleted")
+	}
+	w.Path = moved
+	a.filesFor(w)
+	if d.deleted || d.conflict {
+		t.Fatalf("after relocate deleted %v conflict %v", d.deleted, d.conflict)
+	}
+	if st := files.StatFile(d.path); !st.Same(d.seen) {
+		t.Fatal("poll would see a change at the new path")
+	}
+	// 就算轮询照样报上来（目录挪走又挪回原处时就是这样），戳和打开时一样也不算冲突
+	c, err := files.ReadFile(d.path)
+	a.diskChanged(d, files.StatFile(d.path), c, err)
+	if d.conflict || d.deleted || !d.isModified() {
+		t.Fatalf("conflict %v deleted %v modified %v", d.conflict, d.deleted, d.isModified())
+	}
+}
+
+// 新位置的文件确实和打开时不一样：照样报冲突。
+func TestRelocateChangedFileConflicts(t *testing.T) {
+	a := previewApp(t)
+	v := previewFiles(t, a, "README.md")
+	d := v.cur
+	d.ed.Insert("<!-- draft -->\n")
+	w := &a.workspaces[0]
+	moved := filepath.Join(t.TempDir(), "moved")
+	if err := os.Rename(v.root, moved); err != nil {
+		t.Fatal(err)
+	}
+	a.diskChanged(d, files.StatFile(d.path), files.Content{}, nil)
+	if err := os.WriteFile(filepath.Join(moved, "README.md"), []byte("changed by someone else\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	w.Path = moved
+	a.filesFor(w)
+	st := files.StatFile(d.path)
+	if st.Same(d.seen) {
+		t.Fatal("poll would miss the change at the new path")
+	}
+	c, err := files.ReadFile(d.path)
+	a.diskChanged(d, st, c, err)
+	if !d.conflict || d.deleted {
+		t.Fatalf("conflict %v deleted %v", d.conflict, d.deleted)
 	}
 }
