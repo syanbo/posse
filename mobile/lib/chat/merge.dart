@@ -3,7 +3,6 @@ import 'models.dart';
 /// 手机自己判断出的会话流报错，存代号，显示时由会话页按界面语言写（[AppliedFrame.error]）；
 /// 电脑发来的报错已按手机的语言翻好，原样存。
 const chatReadFailed = 'chat.readFailed';
-const chatStreamEnded = 'chat.streamEnded';
 
 class ChatMerger {
   List<ChatMessage> list = [];
@@ -144,7 +143,6 @@ AppliedFrame applyStreamFrame({
           chatReadFailed,
     );
   }
-  if (type == 'end') return const AppliedFrame.error(chatStreamEnded);
   if (type != 'snapshot' && type != 'replacement' && type != 'appended') {
     return const AppliedFrame.ignored();
   }

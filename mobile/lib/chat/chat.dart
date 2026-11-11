@@ -755,7 +755,6 @@ class _ChatScreenState extends State<ChatScreen> {
               if (_window.error case final error?)
                 NoticeBar(switch (error) {
                   chatReadFailed => context.l10n.chatReadFailed,
-                  chatStreamEnded => context.l10n.chatStreamEnded,
                   _ => error,
                 }),
               Expanded(
