@@ -160,6 +160,9 @@ void main() {
       max: const Duration(milliseconds: 50),
     );
     await Future<void>.delayed(const Duration(milliseconds: 100));
+    // 过了上限还开着（上传在跑）；是连接自己断了，不是排空到点关掉的
+    expect(mac.socket.closed, isFalse, reason: 'closed under a running upload');
+    expect(mac.rpc.uploading, 1);
     // 旧连接自己断了
     await mac.socket.incoming.close();
     await failed;
