@@ -73,11 +73,8 @@ func TestOpenHugeImageShowsTooLarge(t *testing.T) {
 	if v.cur.imgInfo.w != 8000 || v.cur.imgInfo.h != 7000 || v.cur.img != nil {
 		t.Fatalf("doc %+v img %v", v.cur.imgInfo, v.cur.img)
 	}
-	tt.Frame()
 	want := locales.In("zh-Hans").FilesImageTooLarge(8000, 7000)
-	if !tt.HasText(want) {
-		t.Fatalf("message %q not shown: %q", want, tt.Texts())
-	}
+	until(t, tt, "too-large message", func() bool { return tt.HasText(want) })
 	if tt.HasText(locales.In("zh-Hans").FilesTooLarge(files.MaxSize >> 20)) {
 		t.Fatal("text-file message shown for an image")
 	}

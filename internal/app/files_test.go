@@ -865,9 +865,12 @@ func TestGoToDefinitionListFailed(t *testing.T) {
 	d := v.cur
 	until(t, tt, "listing done", func() bool { return !v.listing })
 	v.list, v.listAt = nil, time.Time{}
-	if err := os.RemoveAll(root); err != nil {
-		t.Fatal(err)
-	}
+	// 后台查 git 状态的进程可能正往 .git 里写，删到删干净为止
+	until(t, tt, "workspace removed", func() bool {
+		os.RemoveAll(root)
+		_, err := os.Stat(root)
+		return os.IsNotExist(err)
+	})
 	m := locales.In("zh-Hans")
 	a.goToDefinition(m, w, v, d, strings.Index(d.ed.Buffer.String(), "open(")+1)
 	until(t, tt, "definition finished", func() bool { return !v.def.running })
