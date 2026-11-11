@@ -159,6 +159,23 @@ func (h mobileHost) Terminal(id string) host.Terminal {
 	return s.Terminal
 }
 
+// SessionTerminal 和在 State 里按会话 ID 找一样只看还在运行的终端；有几个时取最早开的。
+func (h mobileHost) SessionTerminal(agentName, sessionID string) host.Terminal {
+	h.d.mu.Lock()
+	ss := make([]*session, 0, len(h.d.terms))
+	for _, s := range h.d.terms {
+		ss = append(ss, s)
+	}
+	h.d.mu.Unlock()
+	sortSessions(ss)
+	for _, s := range ss {
+		if s.Running() && s.Agent().SessionID == sessionID && (agentName == "" || s.agentName() == agentName) {
+			return s.Terminal
+		}
+	}
+	return nil
+}
+
 func (h mobileHost) Restore(id string) host.Terminal {
 	s, err := h.d.session(id)
 	if err != nil {

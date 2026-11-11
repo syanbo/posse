@@ -51,6 +51,17 @@ func (h *fakeHost) Desk(ctx context.Context, req DeskRequest, notify func(DeskEv
 	return h.desk(ctx, req, notify)
 }
 
+func (h *fakeHost) SessionTerminal(agentName, sessionID string) host.Terminal {
+	for _, w := range h.State().Workspaces {
+		for _, t := range w.Terminals {
+			if t.SessionID == sessionID && (agentName == "" || t.Agent == agentName) {
+				return h.Terminal(t.ID)
+			}
+		}
+	}
+	return nil
+}
+
 func (h *fakeHost) State() State {
 	h.mu.Lock()
 	defer h.mu.Unlock()

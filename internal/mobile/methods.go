@@ -23,6 +23,9 @@ import (
 type Host interface {
 	State() State
 	Terminal(id string) host.Terminal // 没有时为 nil
+	// SessionTerminal 是正在运行这个 agent 会话的终端，没有时为 nil。agent 为空时不看是哪个 agent。
+	// 对话流每轮、终端每次有输出都要找一次，不经 State（查库、读每个工作区的 HEAD）
+	SessionTerminal(agent, sessionID string) host.Terminal
 	// Restore 拉起上一个常驻进程留下、还没恢复的终端（Terminal.Lost），拉不起来或没有时为 nil
 	Restore(id string) host.Terminal
 	// View 记下手机开始看这个会话（终端页或会话页），算看过；返回的函数在不看时调用

@@ -7,9 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"posse/internal/history"
+	"posse/internal/host"
 	"posse/internal/rpc"
+	"posse/internal/term"
 )
 
 // 手机端历史转给常驻进程的 history.* 接口：列表、搜索和原来一样；继续一个不存在的会话报 not_found。
@@ -101,4 +104,50 @@ func TestSendKeysFollowCursorMode(t *testing.T) {
 	waitScreen(t, s, "ready")
 	call(t, d.terminalSend, map[string]any{"terminal": info.ID, "keys": []string{"up"}})
 	waitScreen(t, s, "033   O   A")
+}
+
+// 手机对话流按会话 ID 找终端：和以前从 State 里找的结果一样（只看还在运行的、对上 agent，
+// 同一会话开在几个终端里时取最早开的），只是不查库、不读 HEAD。
+func TestMobileSessionTerminalMatchesState(t *testing.T) {
+	d, w := newTestDaemon(t)
+	start := func(cmd, agentName, sid string) *session {
+		s, err := d.startTerminal(w, []string{"/bin/sh", "-c", cmd}, "", 80, 24)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.mu.Lock()
+		s.agent = agentName
+		s.mu.Unlock()
+		s.SetAgent(term.AgentState{Status: "idle", SessionID: sid})
+		time.Sleep(5 * time.Millisecond)
+		return s
+	}
+	exited := start("exit 0", "claude", "s-dup")
+	first := start("sleep 30", "claude", "s-dup")
+	start("sleep 30", "claude", "s-dup")
+	codex := start("sleep 30", "codex", "s-codex")
+	waitFor(t, "exited terminal stops", func() bool { return !exited.Running() })
+	h := mobileHost{d}
+	viaState := func(agentName, sid string) host.Terminal {
+		for _, mw := range h.State().Workspaces {
+			for _, mt := range mw.Terminals {
+				if mt.SessionID == sid && (agentName == "" || mt.Agent == agentName) {
+					return h.Terminal(mt.ID)
+				}
+			}
+		}
+		return nil
+	}
+	for _, q := range [][2]string{{"claude", "s-dup"}, {"", "s-dup"}, {"codex", "s-dup"}, {"codex", "s-codex"}, {"", "s-codex"}, {"claude", "s-codex"}, {"claude", "nope"}} {
+		got, want := h.SessionTerminal(q[0], q[1]), viaState(q[0], q[1])
+		if got != want {
+			t.Fatalf("%v: got %v, want %v", q, got, want)
+		}
+	}
+	if got := h.SessionTerminal("claude", "s-dup"); got == nil || got.Info().ID != first.ID {
+		t.Fatalf("duplicate session: got %v, want the earliest running %s", got, first.ID)
+	}
+	if got := h.SessionTerminal("codex", "s-codex"); got == nil || got.Info().ID != codex.ID {
+		t.Fatalf("codex session: %v", got)
+	}
 }

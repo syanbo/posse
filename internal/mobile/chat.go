@@ -193,15 +193,7 @@ func (c *conn) sessionTerminal(agentName, sessionID string) host.Terminal {
 	if sessionID == "" {
 		return nil
 	}
-	st := c.srv.host.State()
-	for _, w := range st.Workspaces {
-		for _, t := range w.Terminals {
-			if t.SessionID == sessionID && (agentName == "" || t.Agent == agentName) {
-				return c.srv.host.Terminal(t.ID)
-			}
-		}
-	}
-	return nil
+	return c.srv.host.SessionTerminal(agentName, sessionID)
 }
 
 // chatTick 看一眼文件。ok 为 false 表示流该停（发送失败）。wait 是这一轮之后再等多久：
