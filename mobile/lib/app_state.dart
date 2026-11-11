@@ -623,17 +623,16 @@ class PosseAppModel extends ChangeNotifier {
   /// 项目图标的图片，键是文件名：桌面每次导入都换一个名字，取过的不会过期。正在取的值是 null。
   final Map<String, Uint8List?> _projectIcons = {};
 
-  /// 取失败的图标和失败的时间：首页每 3 秒重建一次，隔一会儿再取，不每次重建都去要。
-  final Map<String, DateTime> _iconFailed = {};
+  /// 取失败、等着再取的图标：首页每 3 秒重建一次，等的时候不每次重建都去要；
+  /// 到时候自己再取，不指望首页正好被别的原因重建。
+  final Map<String, Timer> _iconRetry = {};
+  static const _iconRetryAfter = Duration(seconds: 30);
+  var _disposed = false;
 
   /// 项目图标的图片；还没取过就向电脑要，取到后刷新界面。
   Uint8List? projectIcon(String name) {
     if (_projectIcons.containsKey(name)) return _projectIcons[name];
-    final failed = _iconFailed[name];
-    if (failed != null &&
-        DateTime.now().difference(failed) < const Duration(seconds: 30)) {
-      return null;
-    }
+    if (_iconRetry.containsKey(name)) return null;
     final current = rpc;
     if (current == null) return null;
     _projectIcons[name] = null;
@@ -642,15 +641,25 @@ class PosseAppModel extends ChangeNotifier {
         .then((res) {
           final data = res['data'];
           if (data is! String) throw const FormatException('no data');
+          if (_disposed) return;
           _projectIcons[name] = base64Decode(data);
-          _iconFailed.remove(name);
           notifyListeners();
         })
         .catchError((Object _) {
+          if (_disposed) return;
           _projectIcons.remove(name);
-          _iconFailed[name] = DateTime.now();
+          _iconRetry[name]?.cancel();
+          _iconRetry[name] = Timer(_iconRetryAfter, () => _retryIcon(name));
         });
     return null;
+  }
+
+  /// 首页上还用着这张图标才再取。断线或在后台时不取：重连、回到前台都会通知，首页重建时再取。
+  void _retryIcon(String name) {
+    _iconRetry.remove(name);
+    if (_disposed || appAway || rpc == null) return;
+    if (!worktrees.any((r) => r.iconImage == name)) return;
+    projectIcon(name);
   }
 
   /// 有运行中终端的工作区的标签，首页照桌面侧栏把会话直接列在工作区下面。
@@ -1288,8 +1297,12 @@ class PosseAppModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _connectGen++;
     _poll?.cancel();
+    for (final t in _iconRetry.values) {
+      t.cancel();
+    }
     unawaited(link?.close());
     super.dispose();
   }
