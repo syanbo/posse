@@ -396,6 +396,9 @@ type app struct {
 	confirmBody  string
 	confirmVerb  string // 确认按钮的文字，说清楚会发生什么
 	confirmDo    func()
+	// confirmAltVerb、confirmAltDo 是确认框的另一个动作（confirmChoice），排在确认按钮左边；为空时没有
+	confirmAltVerb string
+	confirmAltDo   func()
 
 	traces tracesView // agent 痕迹的确认框（traces.go）
 
@@ -1316,6 +1319,34 @@ func (a *app) askRemoveProject(m locales.Messages, w workspace) {
 			worktrees = append(worktrees, x.Name)
 		}
 	}
+	gone := w.Missing
+	for _, x := range a.byProject[w.ProjectID] {
+		if x.Kind == "worktree" && a.repoGone(x) {
+			gone = true
+		}
+	}
+	if len(worktrees) > 0 && gone {
+		// 项目目录不在了（也可能是磁盘没挂载）：git 删不了它的 worktree，常驻进程带 force 时连同 worktree 工作区一起移除
+		var paths []string
+		for _, x := range a.byProject[w.ProjectID] {
+			if x.Kind == "worktree" && !x.Missing {
+				paths = append(paths, x.Path)
+			}
+		}
+		remove := func(discard bool) func() {
+			return func() {
+				a.call("project.rm", map[string]any{"project": w.ProjectID, "force": true, "discardFiles": discard}, nil, 30*time.Second)
+				a.refresh()
+			}
+		}
+		if len(paths) == 0 {
+			a.confirm(m.AppRemoveProjectConfirm(w.Project), m.AppRemoveProjectBody(), m.CommonRemove(), remove(false))
+			return
+		}
+		a.confirmChoice(m.AppOrphanProjectTitle(w.Project), m.AppOrphanProjectBody(strings.Join(paths, "\n")),
+			m.AppOrphanKeepFiles(), remove(false), m.AppOrphanDeleteFiles(), remove(true))
+		return
+	}
 	if len(worktrees) > 0 {
 		a.err = m.AppRemoveWorktreesFirst(w.Project, strings.Join(worktrees, m.AppListSeparator()))
 		return
@@ -1342,6 +1373,49 @@ func showBranches(ws []workspace) {
 			}
 		}
 	}
+}
+
+// repoGone 报告 worktree 工作区 w 用的仓库已经不在了（项目目录被删、挪走，或所在的磁盘没挂载）。
+// 这时 git 删不了它，也查不了它目录里有没有没提交的改动。
+func (a *app) repoGone(w workspace) bool {
+	main := ""
+	for _, x := range a.byProject[w.ProjectID] {
+		if x.Kind == "main" {
+			main = x.Path
+		}
+	}
+	if main == "" {
+		return false
+	}
+	missing := func(p string) bool {
+		_, err := os.Stat(p)
+		return errors.Is(err, fs.ErrNotExist)
+	}
+	if missing(main) {
+		return true
+	}
+	if len(w.Repos) == 0 {
+		return missing(filepath.Join(main, ".git"))
+	}
+	for _, r := range w.Repos {
+		if missing(filepath.Join(main, r.Path)) {
+			return true
+		}
+	}
+	return false
+}
+
+// askRemoveOrphan 删仓库已经不在的 worktree 工作区：两个动作，默认只移除记录、留着目录（可能只是磁盘没挂载），
+// 另一个连同 $POSSE_HOME/worktrees 里的目录一起删。
+func (a *app) askRemoveOrphan(m locales.Messages, w workspace) {
+	remove := func(discard bool) func() {
+		return func() {
+			a.call("workspace.rm", map[string]any{"workspace": w.ID, "force": true, "discardFiles": discard}, nil, 30*time.Second)
+			a.refresh()
+		}
+	}
+	a.confirmChoice(m.AppOrphanWorkspaceTitle(displayName(&w)), m.AppOrphanWorkspaceBody(w.Path),
+		m.AppOrphanKeepFiles(), remove(false), m.AppOrphanDeleteFiles(), remove(true))
 }
 
 // askRemoveMissing 移除目录已经不在的工作区：只删记录，不碰分支；项目目录不在时移除的是整个项目。
@@ -1399,7 +1473,14 @@ func nearestDir(path string) string {
 
 func (a *app) confirm(title, body, verb string, do func()) {
 	a.confirmTitle, a.confirmBody, a.confirmVerb, a.confirmDo = title, body, verb, do
+	a.confirmAltVerb, a.confirmAltDo = "", nil
 	a.confirming = true
+}
+
+// confirmChoice 是有两个动作的确认框：verb、do 是稳妥的那个，打开时选中它（回车按它）；alt 是会丢东西的那个。
+func (a *app) confirmChoice(title, body, verb string, do func(), altVerb string, alt func()) {
+	a.confirm(title, body, verb, do)
+	a.confirmAltVerb, a.confirmAltDo = altVerb, alt
 }
 
 func (a *app) addProject(m locales.Messages) {

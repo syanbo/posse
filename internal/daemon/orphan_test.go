@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -32,9 +33,122 @@ func gitInit(t *testing.T, dir string) {
 	}
 }
 
-// 项目目录被删掉以后：worktree 工作区带 force 能删（只删记录和 $POSSE_HOME/worktrees 里的残留目录），
-// 项目带 force 连同 worktree 工作区一起移除；不带 force 照旧报错，但提示可以加 force。
+// rmOut 调一个删除的处理函数，返回它的回复（转成 JSON 再读回来，和 CLI、窗口看到的一样）。
+func rmOut(t *testing.T, h func(context.Context, json.RawMessage) (any, error), params map[string]any) map[string]any {
+	t.Helper()
+	raw, _ := json.Marshal(params)
+	res, err := h(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("%v: %v", params, err)
+	}
+	b, _ := json.Marshal(res)
+	var out map[string]any
+	json.Unmarshal(b, &out)
+	return out
+}
+
+// orphanProject 建一个 git 项目和几个 worktree 工作区，每个工作区里放一个没提交的文件，再删掉项目目录。
+func orphanProject(t *testing.T, d *Daemon, name string, wts ...string) (store.Project, map[string]store.Workspace) {
+	t.Helper()
+	ctx := context.Background()
+	repo := filepath.Join(d.cfg.Home, "src", name)
+	gitInit(t, repo)
+	proj := store.Project{ID: store.NewID("p_"), Name: name, Path: repo, Kind: "git", CreatedAt: time.Now()}
+	if err := d.store.AddProject(proj); err != nil {
+		t.Fatal(err)
+	}
+	ws := map[string]store.Workspace{}
+	for _, n := range wts {
+		w, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: n, Mode: "worktree", NoSetup: true})
+		if err != nil || w.Kind != "worktree" {
+			t.Fatalf("create %s: %+v %v", n, w, err)
+		}
+		os.WriteFile(filepath.Join(w.Path, "draft.txt"), []byte("not committed\n"), 0o644)
+		ws[n] = w
+	}
+	if err := os.RemoveAll(repo); err != nil {
+		t.Fatal(err)
+	}
+	return proj, ws
+}
+
+func exists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
+// 项目目录不在了（被删、挪走，或磁盘没挂载）：worktree 工作区带 force 只删记录、留下目录并告诉调用方，
+// 再带 discardFiles 才连目录一起删；目录本来就不在或是空的直接算清理掉了；$POSSE_HOME/worktrees 外面的不碰。
 func TestRemoveWhenProjectDirGone(t *testing.T) {
+	d, _ := newTestDaemon(t)
+	_, ws := orphanProject(t, d, "repo", "keep", "discard", "empty", "other")
+	keep, discard, empty, other := ws["keep"], ws["discard"], ws["empty"], ws["other"]
+
+	err := rmCall(d.workspaceRm, map[string]any{"workspace": keep.ID})
+	if err == nil || !strings.Contains(err.Error(), "pass force") {
+		t.Fatalf("rm without force: %v", err)
+	}
+	out := rmOut(t, d.workspaceRm, map[string]any{"workspace": keep.ID, "force": true, "deleteBranch": true})
+	if _, err := d.store.Workspace(keep.ID); err == nil {
+		t.Fatal("workspace record kept")
+	}
+	if !exists(filepath.Join(keep.Path, "draft.txt")) || out["left"] != keep.Path || out["repoGone"] != true {
+		t.Fatalf("force without discardFiles: reply %v, directory there %v", out, exists(keep.Path))
+	}
+
+	out = rmOut(t, d.workspaceRm, map[string]any{"workspace": discard.ID, "force": true, "discardFiles": true})
+	if exists(discard.Path) || out["left"] != nil {
+		t.Fatalf("discardFiles: reply %v, directory there %v", out, exists(discard.Path))
+	}
+
+	os.RemoveAll(empty.Path)
+	os.MkdirAll(empty.Path, 0o755)
+	out = rmOut(t, d.workspaceRm, map[string]any{"workspace": empty.ID, "force": true})
+	if exists(empty.Path) || out["left"] != nil {
+		t.Fatalf("empty leftover: reply %v, directory there %v", out, exists(empty.Path))
+	}
+
+	// 记录指到 home 外面：带 discardFiles 也不碰，回复里照样说目录还在
+	outside := filepath.Join(t.TempDir(), "outside")
+	os.MkdirAll(outside, 0o755)
+	os.WriteFile(filepath.Join(outside, "keep"), []byte("x"), 0o644)
+	if err := d.store.SetWorkspacePath(other.ID, outside, other.Branch); err != nil {
+		t.Fatal(err)
+	}
+	out = rmOut(t, d.workspaceRm, map[string]any{"workspace": other.ID, "force": true, "discardFiles": true})
+	if !exists(filepath.Join(outside, "keep")) || out["left"] != outside {
+		t.Fatalf("outside home: reply %v, directory there %v", out, exists(outside))
+	}
+}
+
+// 项目目录不在了：project rm 不带 force 提示可以加；带 force 连同 worktree 工作区一起移除，
+// 目录留着、回复里列出来；再带 discardFiles 才删目录。
+func TestRemoveProjectWhenDirGone(t *testing.T) {
+	d, _ := newTestDaemon(t)
+	proj, ws := orphanProject(t, d, "kept", "a", "b")
+	err := rmCall(d.projectRm, map[string]any{"project": proj.ID})
+	if err == nil || !strings.Contains(err.Error(), "pass force") {
+		t.Fatalf("project rm without force: %v", err)
+	}
+	out := rmOut(t, d.projectRm, map[string]any{"project": proj.ID, "force": true})
+	if _, err := d.store.FindProject(proj.ID); err == nil {
+		t.Fatal("project kept")
+	}
+	left, _ := out["left"].([]any)
+	if len(left) != 2 || out["repoGone"] != true || !exists(ws["a"].Path) || !exists(ws["b"].Path) {
+		t.Fatalf("force without discardFiles: reply %v", out)
+	}
+
+	proj, ws = orphanProject(t, d, "gone", "a", "b")
+	out = rmOut(t, d.projectRm, map[string]any{"project": proj.ID, "force": true, "discardFiles": true})
+	if exists(ws["a"].Path) || exists(ws["b"].Path) || out["left"] != nil {
+		t.Fatalf("discardFiles: reply %v", out)
+	}
+}
+
+// 仓库还在：discardFiles 不起作用，带不带结果都和以前一样（git 删掉 worktree，回复只有 removed）；
+// project rm --force 照旧要求先删 worktree 工作区。
+func TestRemoveWithRepoPresentUnchanged(t *testing.T) {
 	d, _ := newTestDaemon(t)
 	ctx := context.Background()
 	repo := filepath.Join(d.cfg.Home, "src", "repo")
@@ -43,66 +157,27 @@ func TestRemoveWhenProjectDirGone(t *testing.T) {
 	if err := d.store.AddProject(proj); err != nil {
 		t.Fatal(err)
 	}
-	mk := func(name string) store.Workspace {
-		w, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: name, Mode: "worktree", NoSetup: true})
-		if err != nil || w.Kind != "worktree" {
-			t.Fatalf("create %s: %+v %v", name, w, err)
+	for _, discard := range []bool{false, true} {
+		w, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: "w" + strconv.FormatBool(discard), Mode: "worktree", NoSetup: true})
+		if err != nil {
+			t.Fatal(err)
 		}
-		return w
+		out := rmOut(t, d.workspaceRm, map[string]any{"workspace": w.ID, "force": true, "discardFiles": discard})
+		if exists(w.Path) || len(out) != 1 || out["removed"] != w.ID {
+			t.Fatalf("discardFiles %v: reply %v, directory there %v", discard, out, exists(w.Path))
+		}
 	}
-	feat, other, third := mk("feat"), mk("other"), mk("third")
-	// other 的记录指到 home 外面：删记录时不碰那个目录
-	outside := filepath.Join(t.TempDir(), "outside")
-	os.MkdirAll(outside, 0o755)
-	os.WriteFile(filepath.Join(outside, "keep"), []byte("x"), 0o644)
-	if err := d.store.SetWorkspacePath(other.ID, outside, other.Branch); err != nil {
+	if _, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: "x", Mode: "worktree", NoSetup: true}); err != nil {
 		t.Fatal(err)
 	}
-
-	// 项目目录还在：project rm --force 照旧要求先删 worktree 工作区
-	if err := rmCall(d.projectRm, map[string]any{"project": proj.ID, "force": true}); err == nil || !strings.Contains(err.Error(), "remove it first") {
-		t.Fatalf("project rm with the directory present: %v", err)
-	}
-
-	if err := os.RemoveAll(repo); err != nil {
-		t.Fatal(err)
-	}
-	err := rmCall(d.workspaceRm, map[string]any{"workspace": feat.ID})
-	if err == nil || !strings.Contains(err.Error(), "pass force") {
-		t.Fatalf("rm without force: %v", err)
-	}
-	if err := rmCall(d.workspaceRm, map[string]any{"workspace": feat.ID, "force": true, "deleteBranch": true}); err != nil {
-		t.Fatalf("rm --force: %v", err)
-	}
-	if _, err := d.store.Workspace(feat.ID); err == nil {
-		t.Fatal("workspace record kept")
-	}
-	if _, err := os.Stat(feat.Path); !os.IsNotExist(err) {
-		t.Fatalf("leftover directory kept: %v", err)
-	}
-	if err := rmCall(d.workspaceRm, map[string]any{"workspace": other.ID, "force": true}); err != nil {
-		t.Fatalf("rm --force of a workspace pointing outside home: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(outside, "keep")); err != nil {
-		t.Fatalf("directory outside $POSSE_HOME/worktrees touched: %v", err)
-	}
-
-	err = rmCall(d.projectRm, map[string]any{"project": proj.ID})
-	if err == nil || !strings.Contains(err.Error(), "pass force") {
-		t.Fatalf("project rm without force: %v", err)
-	}
-	if err := rmCall(d.projectRm, map[string]any{"project": proj.ID, "force": true}); err != nil {
-		t.Fatalf("project rm --force: %v", err)
-	}
-	if _, err := d.store.FindProject(proj.ID); err == nil {
-		t.Fatal("project kept")
-	}
-	if _, err := os.Stat(third.Path); !os.IsNotExist(err) {
-		t.Fatalf("leftover of %s kept: %v", third.Name, err)
+	for _, discard := range []bool{false, true} {
+		if err := rmCall(d.projectRm, map[string]any{"project": proj.ID, "force": true, "discardFiles": discard}); err == nil || !strings.Contains(err.Error(), "remove it first") {
+			t.Fatalf("project rm with the directory present: %v", err)
+		}
 	}
 }
 
-// 多仓库 worktree 工作区：仓库所在的项目目录没了，带 force 一样能删。
+// 多仓库 worktree 工作区：仓库所在的项目目录没了，带 force 只删记录、留目录，带 discardFiles 连目录删。
 func TestRemoveMultiRepoWhenSourcesGone(t *testing.T) {
 	d, _ := newTestDaemon(t)
 	ctx := context.Background()
@@ -113,21 +188,27 @@ func TestRemoveMultiRepoWhenSourcesGone(t *testing.T) {
 	if err := d.store.AddProject(proj); err != nil {
 		t.Fatal(err)
 	}
-	w, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: "feat", Repos: []string{"a", "b"}, NoSetup: true})
-	if err != nil {
-		t.Fatal(err)
+	var ws []store.Workspace
+	for _, n := range []string{"keep", "discard"} {
+		w, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: n, Repos: []string{"a", "b"}, NoSetup: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ws = append(ws, w)
 	}
 	if err := os.RemoveAll(dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := rmCall(d.workspaceRm, map[string]any{"workspace": w.ID}); err == nil || !strings.Contains(err.Error(), "pass force") {
+	if err := rmCall(d.workspaceRm, map[string]any{"workspace": ws[0].ID}); err == nil || !strings.Contains(err.Error(), "pass force") {
 		t.Fatalf("rm without force: %v", err)
 	}
-	if err := rmCall(d.workspaceRm, map[string]any{"workspace": w.ID, "force": true, "deleteBranch": true}); err != nil {
-		t.Fatalf("rm --force: %v", err)
+	out := rmOut(t, d.workspaceRm, map[string]any{"workspace": ws[0].ID, "force": true, "deleteBranch": true})
+	if !exists(ws[0].Path) || out["left"] != ws[0].Path || out["repoGone"] != true {
+		t.Fatalf("force without discardFiles: reply %v", out)
 	}
-	if _, err := os.Stat(w.Path); !os.IsNotExist(err) {
-		t.Fatalf("leftover directory kept: %v", err)
+	out = rmOut(t, d.workspaceRm, map[string]any{"workspace": ws[1].ID, "force": true, "discardFiles": true})
+	if exists(ws[1].Path) || out["left"] != nil {
+		t.Fatalf("discardFiles: reply %v", out)
 	}
 	if err := rmCall(d.projectRm, map[string]any{"project": proj.ID}); err != nil {
 		t.Fatalf("project rm after its worktrees are gone: %v", err)

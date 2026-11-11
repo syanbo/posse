@@ -268,6 +268,7 @@ func cmdProjectSet(e *env, args []string) error {
 func cmdProjectRm(e *env, args []string) error {
 	fs := flag.NewFlagSet("project rm", flag.ContinueOnError)
 	force := fs.Bool("force", false, "")
+	discard := fs.Bool("discard-files", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -275,8 +276,12 @@ func cmdProjectRm(e *env, args []string) error {
 	if err := need(pos, 1, "project rm"); err != nil {
 		return err
 	}
-	return e.do("project.rm", map[string]any{"project": absPath(pos[0]), "force": *force}, nil, func() {
+	var r struct{ Left []string }
+	return e.do("project.rm", map[string]any{"project": absPath(pos[0]), "force": *force, "discardFiles": *discard}, &r, func() {
 		fmt.Fprintf(e.out, "removed project %s (files kept)\n", pos[0])
+		for _, l := range r.Left {
+			fmt.Fprintf(e.out, "kept %s: the project directory is gone, so its uncommitted changes cannot be checked (pass --discard-files to delete it)\n", l)
+		}
 	})
 }
 
@@ -422,6 +427,7 @@ func cmdWorkspaceRm(e *env, args []string) error {
 	fs := flag.NewFlagSet("workspace rm", flag.ContinueOnError)
 	force := fs.Bool("force", false, "")
 	delBranch := fs.Bool("delete-branch", false, "")
+	discard := fs.Bool("discard-files", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -429,10 +435,15 @@ func cmdWorkspaceRm(e *env, args []string) error {
 	if err := need(pos, 1, "workspace rm"); err != nil {
 		return err
 	}
-	var r struct{ Left string }
-	return e.do("workspace.rm", map[string]any{"workspace": pos[0], "force": *force, "deleteBranch": *delBranch}, &r, func() {
+	var r struct {
+		Left     string
+		RepoGone bool
+	}
+	return e.do("workspace.rm", map[string]any{"workspace": pos[0], "force": *force, "deleteBranch": *delBranch, "discardFiles": *discard}, &r, func() {
 		fmt.Fprintf(e.out, "removed workspace %s\n", pos[0])
-		if r.Left != "" {
+		if r.Left != "" && r.RepoGone {
+			fmt.Fprintf(e.out, "kept %s: the project directory is gone, so its uncommitted changes cannot be checked (pass --discard-files to delete it)\n", r.Left)
+		} else if r.Left != "" {
 			fmt.Fprintf(e.out, "kept %s: it still has other files (pass --force to delete them)\n", r.Left)
 		}
 	})

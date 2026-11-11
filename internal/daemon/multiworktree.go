@@ -161,16 +161,16 @@ func reposDirty(ctx context.Context, w store.Workspace) bool {
 
 // removeRepoWorktrees 删多仓库 worktree 工作区：先查所有仓库都没有未提交的改动，再从里往外逐个删，
 // 最后删掉工作区目录（只剩建 worktree 时补的空目录；force 时连同别的文件）。left 是没删掉的工作区目录（里面还有别的文件）。
-func (d *Daemon) removeRepoWorktrees(ctx context.Context, w store.Workspace, force, deleteBranch bool) (left string, err error) {
-	// 仓库已经没了（项目目录被删或挪走）的：git 删不了它的 worktree，force 时跳过，最后只删 Posse 建的残留目录
+func (d *Daemon) removeRepoWorktrees(ctx context.Context, w store.Workspace, force, deleteBranch, discard bool) (left string, repoGone bool, err error) {
+	// 仓库已经没了（项目目录被删或挪走、磁盘没挂载）的：git 删不了它的 worktree，force 时跳过；留下的目录要 discard 才删
 	var gone []string
 	for _, r := range w.Repos {
-		if repoGone(r.Source) {
+		if isRepoGone(r.Source) {
 			gone = append(gone, r.Source)
 		}
 	}
 	if len(gone) > 0 && !force {
-		return "", rpc.Errorf(rpc.CodeConflict, "repository %s no longer exists; pass force to remove the workspace anyway", strings.Join(gone, ", "))
+		return "", false, rpc.Errorf(rpc.CodeConflict, "repository %s no longer exists; pass force to remove the workspace anyway", strings.Join(gone, ", "))
 	}
 	if !force {
 		var dirty []string
@@ -183,7 +183,7 @@ func (d *Daemon) removeRepoWorktrees(ctx context.Context, w store.Workspace, for
 			}
 		}
 		if len(dirty) > 0 {
-			return "", rpc.Errorf(rpc.CodeConflict, "worktree has uncommitted changes; pass force to discard:\n%s", strings.Join(dirty, "\n"))
+			return "", false, rpc.Errorf(rpc.CodeConflict, "worktree has uncommitted changes; pass force to discard:\n%s", strings.Join(dirty, "\n"))
 		}
 	}
 	d.closeWorkspaceTerminals(w.ID)
@@ -212,11 +212,12 @@ func (d *Daemon) removeRepoWorktrees(ctx context.Context, w store.Workspace, for
 		}
 	}
 	if len(errs) > 0 {
-		return "", rpc.Errorf(rpc.CodeConflict, "%s", strings.Join(errs, "\n"))
+		return "", false, rpc.Errorf(rpc.CodeConflict, "%s", strings.Join(errs, "\n"))
 	}
 	if len(gone) > 0 {
-		d.removeLeftover(w.Path)
-	} else if force {
+		return d.removeLeftover(w.Path, discard), true, nil
+	}
+	if force {
 		os.RemoveAll(w.Path)
 	} else {
 		removeEmptyDirs(w.Path)
@@ -224,7 +225,7 @@ func (d *Daemon) removeRepoWorktrees(ctx context.Context, w store.Workspace, for
 	if _, err := os.Stat(w.Path); err == nil {
 		left = w.Path
 	}
-	return left, nil
+	return left, false, nil
 }
 
 // removeEmptyDirs 从下往上删掉 dir 里的空目录（含 dir 本身），有文件的留着。

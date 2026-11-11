@@ -393,6 +393,108 @@ func (msgs Messages) AppNoticeWaiting(agent string) string {
 	return Catalog.Format(msgs.locale, "appNoticeWaiting", map[string]any{"agent": agent})
 }
 
+// AppOrphanDeleteFiles says "Delete Folders Too"
+// in the language the app shows.
+//
+// Button: remove the workspace or project and delete the worktree folders
+// left in Posse’s data directory.
+func AppOrphanDeleteFiles() string { return In(i18n.Locale()).AppOrphanDeleteFiles() }
+
+// AppOrphanDeleteFiles says "Delete Folders Too"
+// in the language of msgs.
+//
+// Button: remove the workspace or project and delete the worktree folders
+// left in Posse’s data directory.
+func (msgs Messages) AppOrphanDeleteFiles() string {
+	return Catalog.Format(msgs.locale, "appOrphanDeleteFiles", nil)
+}
+
+// AppOrphanKeepFiles says "Remove Only"
+// in the language the app shows.
+//
+// Button: remove the workspace or project from Posse but keep its folders
+// on disk. The default choice.
+func AppOrphanKeepFiles() string { return In(i18n.Locale()).AppOrphanKeepFiles() }
+
+// AppOrphanKeepFiles says "Remove Only"
+// in the language of msgs.
+//
+// Button: remove the workspace or project from Posse but keep its folders
+// on disk. The default choice.
+func (msgs Messages) AppOrphanKeepFiles() string {
+	return Catalog.Format(msgs.locale, "appOrphanKeepFiles", nil)
+}
+
+// AppOrphanProjectBody says "Posse can’t find the project directory (the disk may not be mounted, or the directory was moved). Its worktree work…"
+// in the language the app shows.
+//
+// Confirmation body: the project directory is missing; paths lists the
+// worktree folders that would be deleted, one per line.
+func AppOrphanProjectBody(paths string) string { return In(i18n.Locale()).AppOrphanProjectBody(paths) }
+
+// AppOrphanProjectBody says "Posse can’t find the project directory (the disk may not be mounted, or the directory was moved). Its worktree work…"
+// in the language of msgs.
+//
+// Confirmation body: the project directory is missing; paths lists the
+// worktree folders that would be deleted, one per line.
+func (msgs Messages) AppOrphanProjectBody(paths string) string {
+	return Catalog.Format(msgs.locale, "appOrphanProjectBody", map[string]any{"paths": paths})
+}
+
+// AppOrphanProjectTitle says "Remove project {project}?"
+// in the language the app shows.
+//
+// Confirmation title before removing a project whose directory can’t be
+// found, together with its worktree workspaces.
+func AppOrphanProjectTitle(project string) string {
+	return In(i18n.Locale()).AppOrphanProjectTitle(project)
+}
+
+// AppOrphanProjectTitle says "Remove project {project}?"
+// in the language of msgs.
+//
+// Confirmation title before removing a project whose directory can’t be
+// found, together with its worktree workspaces.
+func (msgs Messages) AppOrphanProjectTitle(project string) string {
+	return Catalog.Format(msgs.locale, "appOrphanProjectTitle", map[string]any{"project": project})
+}
+
+// AppOrphanWorkspaceBody says "Posse can’t find the project directory (the disk may not be mounted, or the directory was moved), so it can’t che…"
+// in the language the app shows.
+//
+// Confirmation body: the project directory is missing; path is the
+// workspace folder that would be deleted.
+func AppOrphanWorkspaceBody(path string) string {
+	return In(i18n.Locale()).AppOrphanWorkspaceBody(path)
+}
+
+// AppOrphanWorkspaceBody says "Posse can’t find the project directory (the disk may not be mounted, or the directory was moved), so it can’t che…"
+// in the language of msgs.
+//
+// Confirmation body: the project directory is missing; path is the
+// workspace folder that would be deleted.
+func (msgs Messages) AppOrphanWorkspaceBody(path string) string {
+	return Catalog.Format(msgs.locale, "appOrphanWorkspaceBody", map[string]any{"path": path})
+}
+
+// AppOrphanWorkspaceTitle says "Remove workspace {workspace}?"
+// in the language the app shows.
+//
+// Confirmation title before removing a worktree workspace whose project
+// directory can’t be found.
+func AppOrphanWorkspaceTitle(workspace string) string {
+	return In(i18n.Locale()).AppOrphanWorkspaceTitle(workspace)
+}
+
+// AppOrphanWorkspaceTitle says "Remove workspace {workspace}?"
+// in the language of msgs.
+//
+// Confirmation title before removing a worktree workspace whose project
+// directory can’t be found.
+func (msgs Messages) AppOrphanWorkspaceTitle(workspace string) string {
+	return Catalog.Format(msgs.locale, "appOrphanWorkspaceTitle", map[string]any{"workspace": workspace})
+}
+
 // AppPasteImageError says "Couldn’t paste the image: {error}"
 // in the language the app shows.
 //

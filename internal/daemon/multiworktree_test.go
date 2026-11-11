@@ -237,7 +237,7 @@ func TestMultiRepoWorktreeLeftFiles(t *testing.T) {
 	}
 	os.WriteFile(filepath.Join(w.Path, "keep.txt"), []byte("x\n"), 0o644)
 	out, err := d.workspaceRm(ctx, mustJSON(map[string]any{"workspace": w.ID}))
-	if err != nil || out.(map[string]string)["left"] != w.Path {
+	if err != nil || out.(map[string]any)["left"] != w.Path {
 		t.Fatalf("rm %v %v", out, err)
 	}
 	if _, err := os.Stat(filepath.Join(w.Path, "a")); err == nil {

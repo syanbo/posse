@@ -177,6 +177,50 @@
       }
     }
   },
+  "appOrphanDeleteFiles": "Delete Folders Too",
+  "@appOrphanDeleteFiles": {
+    "description": "Button: remove the workspace or project and delete the worktree folders left in Posse’s data directory."
+  },
+  "appOrphanKeepFiles": "Remove Only",
+  "@appOrphanKeepFiles": {
+    "description": "Button: remove the workspace or project from Posse but keep its folders on disk. The default choice."
+  },
+  "appOrphanProjectBody": "Posse can’t find the project directory (the disk may not be mounted, or the directory was moved). Its worktree workspaces are removed too, and their folders can’t be checked for uncommitted changes. Deleting the folders loses them:\n{paths}",
+  "@appOrphanProjectBody": {
+    "description": "Confirmation body: the project directory is missing; paths lists the worktree folders that would be deleted, one per line.",
+    "placeholders": {
+      "paths": {
+        "type": "String"
+      }
+    }
+  },
+  "appOrphanProjectTitle": "Remove project {project}?",
+  "@appOrphanProjectTitle": {
+    "description": "Confirmation title before removing a project whose directory can’t be found, together with its worktree workspaces.",
+    "placeholders": {
+      "project": {
+        "type": "String"
+      }
+    }
+  },
+  "appOrphanWorkspaceBody": "Posse can’t find the project directory (the disk may not be mounted, or the directory was moved), so it can’t check {path} for uncommitted changes. Deleting the folder loses them.",
+  "@appOrphanWorkspaceBody": {
+    "description": "Confirmation body: the project directory is missing; path is the workspace folder that would be deleted.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "appOrphanWorkspaceTitle": "Remove workspace {workspace}?",
+  "@appOrphanWorkspaceTitle": {
+    "description": "Confirmation title before removing a worktree workspace whose project directory can’t be found.",
+    "placeholders": {
+      "workspace": {
+        "type": "String"
+      }
+    }
+  },
   "appPasteImageError": "Couldn’t paste the image: {error}",
   "@appPasteImageError": {
     "description": "Error bar: saving a pasted clipboard image for the terminal failed.",

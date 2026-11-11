@@ -2644,8 +2644,16 @@ func (a *app) confirmDialog(c *ui.Context) {
 						a.confirming = false
 					}
 				}
+				var alt ui.Element
+				if a.confirmAltDo != nil {
+					alt = confirmButton(c, pressable(textButton(c, a.confirmAltVerb)))
+					if alt.Clicked() {
+						a.confirming = false
+						go a.confirmAltDo()
+					}
+				}
 				ok := confirmButton(c, pressable(accentButton(c, a.confirmVerb)))
-				if a.confirmDo == nil {
+				if a.confirmDo == nil || a.confirmAltDo != nil {
 					ok.AutoFocus()
 				}
 				if ok.Clicked() {
@@ -2654,7 +2662,20 @@ func (a *app) confirmDialog(c *ui.Context) {
 						go a.confirmDo()
 					}
 				}
-				if a.confirmDo != nil {
+				if a.confirmDo != nil && a.confirmAltDo != nil {
+					if cancel.Shortcut(0, ui.KeyRight) {
+						alt.Focus()
+					}
+					if alt.Shortcut(0, ui.KeyLeft) {
+						cancel.Focus()
+					}
+					if alt.Shortcut(0, ui.KeyRight) {
+						ok.Focus()
+					}
+					if ok.Shortcut(0, ui.KeyLeft) {
+						alt.Focus()
+					}
+				} else if a.confirmDo != nil {
 					if cancel.Shortcut(0, ui.KeyRight) {
 						ok.Focus()
 					}
