@@ -254,6 +254,30 @@ void main() {
     expect(find.textContaining('后文', findRichText: true), findsOneWidget);
   });
 
+  testWidgets(
+    'a user-written x-md tag is not taken as an internal placeholder',
+    (tester) async {
+      final model = PosseAppModel(store: MemoryPairingStore());
+      const data = '''
+<div>
+<x-md>自己写的标签</x-md>
+<x-md i="7"></x-md>
+
+中间的段落
+
+</div>
+
+结尾段落
+''';
+      await tester.pumpWidget(_app(_doc(model, (_) {}, data: data)));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('自己写的标签', findRichText: true), findsOneWidget);
+      expect(find.textContaining('中间的段落', findRichText: true), findsOneWidget);
+      expect(find.textContaining('结尾段落', findRichText: true), findsOneWidget);
+    },
+  );
+
   test('image sources follow GitHub', () {
     MdImageSource? src(String s) =>
         mdImageSource(s, worktree: 'w1', docPath: 'docs/guide.md');

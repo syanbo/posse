@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html;
 import 'package:markdown/markdown.dart' as md;
@@ -16,6 +18,10 @@ class HtmlDoc {
 
   late final List<md.Node> nodes;
   final blocks = <HtmlBlock>[];
+
+  /// HTML 块中间夹着的 Markdown 块先写成占位的 `<x-md>`，带上这次转换的随机记号：
+  /// 用户自己在 Markdown 里写的 `<x-md>` 对不上记号，当认不出的标签只留内容，不会去取不存在的块
+  final _mark = _nonce();
 
   md.Element _ref(String tag, HtmlBlock b) {
     _linkImages(b.blocks, null);
@@ -51,7 +57,7 @@ class HtmlDoc {
           src.writeln(text);
           _trackTags(text, open);
         } else {
-          src.write('<x-md i="${embedded.length}"></x-md>');
+          src.write('<x-md i="${embedded.length}" k="$_mark"></x-md>');
           embedded.add(_block(k));
         }
         if (open.isEmpty) {
@@ -345,7 +351,7 @@ class _Blocks {
       return;
     }
     switch (tag) {
-      case 'x-md':
+      case 'x-md' when n.attributes['k'] == conv.doc._mark:
         block(conv.embedded[int.parse(n.attributes['i']!)]);
       case 'img':
         final img = _img(n.attributes);
@@ -680,4 +686,9 @@ List<md.Node> _linkImages(List<md.Node> nodes, String? href) {
     }
   }
   return nodes;
+}
+
+String _nonce() {
+  final r = Random.secure();
+  return List.generate(4, (_) => r.nextInt(1 << 32).toRadixString(16)).join();
 }
