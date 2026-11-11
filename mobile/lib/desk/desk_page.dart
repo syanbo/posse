@@ -65,11 +65,6 @@ class _Mark {
   var solid = false;
 }
 
-const _padded = TextEditingValue(
-  text: deskTypingPad,
-  selection: TextSelection.collapsed(offset: deskTypingPad.length),
-);
-
 class _DeskPageState extends State<DeskPage>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late final DeskReceiver _receiver = widget.receiver ?? DeskReceiver();
@@ -79,8 +74,8 @@ class _DeskPageState extends State<DeskPage>
   final _watch = Stopwatch();
   final _marks = <_Mark>[];
   final _keyboard = FocusNode();
-  final _input = TextEditingController.fromValue(_padded);
   final _typing = DeskTyping();
+  late final _input = TextEditingController.fromValue(_typing.padded);
   final _chrome = DeskChrome();
   final _edges = DeskEdges();
   final _lease = Object();
@@ -563,6 +558,9 @@ class _DeskPageState extends State<DeskPage>
 
   void _keyboardChanged() {
     final up = _keyboard.hasFocus;
+    if (up) {
+      if (_typing.reopened(_input.text) case final pad?) _input.value = pad;
+    }
     if (!mounted || up == _keyboardUp) return;
     setState(() => _keyboardUp = up);
   }
@@ -1250,8 +1248,8 @@ class _DeskPageState extends State<DeskPage>
 
   void _onTyped() {
     final (:deleted, added: text, :reset) = _typing.take(_input.value);
-    // 给 _input 赋值会当场再进一次这个回调，DeskTyping 已经按重置后的样子记好了
-    if (reset) _input.value = _padded;
+    // 给 _input 赋值会当场再进一次这个回调，DeskTyping 认得这一次
+    if (reset != null) _input.value = reset;
     if (deleted == 0 && text.isEmpty) return;
     if (deleted > 0) {
       _link.batch(() {
