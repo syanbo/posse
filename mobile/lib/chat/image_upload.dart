@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:image_picker/image_picker.dart' show XFile;
 
@@ -291,11 +292,16 @@ Future<String> _uploadFile(
   if (blob is num) {
     final sender = UploadSender(rpc, blob.toInt(), acked: start['ack'] == true);
     var sent = 0;
-    var buf = <int>[];
+    // 攒在 Uint8List 里：可增长的 List<int> 每个字节占 8 字节、逐个拷，几百 MB 的视频要好几秒 CPU
+    var buf = Uint8List(bulkChunk);
+    var n = 0;
     Future<void> flush() async {
-      await sender.send(buf);
-      sent += buf.length;
-      buf = <int>[];
+      // 发出去的这块不再动，下一块另起一个
+      final chunk = n == bulkChunk ? buf : Uint8List.sublistView(buf, 0, n);
+      buf = Uint8List(bulkChunk);
+      n = 0;
+      await sender.send(chunk);
+      sent += chunk.length;
       onProgress?.call(min(sent / size, 0.99));
     }
 
@@ -303,13 +309,14 @@ Future<String> _uploadFile(
       await for (final piece in file.openRead()) {
         var off = 0;
         while (off < piece.length) {
-          final take = min(bulkChunk - buf.length, piece.length - off);
-          buf.addAll(piece.sublist(off, off + take));
+          final take = min(bulkChunk - n, piece.length - off);
+          buf.setRange(n, n + take, piece, off);
+          n += take;
           off += take;
-          if (buf.length == bulkChunk) await flush();
+          if (n == bulkChunk) await flush();
         }
       }
-      if (buf.isNotEmpty) await flush();
+      if (n > 0) await flush();
     } catch (_) {
       unawaited(_abortUpload(rpc, id));
       rethrow;

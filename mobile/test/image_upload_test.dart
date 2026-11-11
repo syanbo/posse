@@ -291,4 +291,62 @@ void main() {
     expect(uploadName(photo), photo);
     expect(uploadName('报告.pdf'), '报告.pdf');
   });
+
+  // 文件片段大小不一（奇数、比一块大、正好一块、单字节）：发出的每一块和原来按 List<int> 攒的写法逐字节一样，
+  // 先发的块在后面接着攒时也不会被改动。
+  test('file chunks match the old chunking for any piece sizes', () async {
+    final bytes = Uint8List.fromList(
+      List.generate(bulkChunk * 5 + 12345, (i) => (i * 7 + i ~/ 300) % 256),
+    );
+    for (final sizes in [
+      [1000],
+      [bulkChunk],
+      [bulkChunk * 2 + 3],
+      [1, 70000, 3, bulkChunk - 1],
+    ]) {
+      // 原来的写法
+      final want = <List<int>>[];
+      var buf = <int>[];
+      await for (final piece in _PiecedFile(bytes, sizes).openRead()) {
+        var off = 0;
+        while (off < piece.length) {
+          final take = (bulkChunk - buf.length).clamp(0, piece.length - off);
+          buf.addAll(piece.sublist(off, off + take));
+          off += take;
+          if (buf.length == bulkChunk) {
+            want.add(buf);
+            buf = <int>[];
+          }
+        }
+      }
+      if (buf.isNotEmpty) want.add(buf);
+
+      final rpc = _BulkRpc();
+      await uploadFile(rpc, _PiecedFile(bytes, sizes));
+      expect(rpc.chunks.length, want.length, reason: '$sizes');
+      for (var i = 0; i < want.length; i++) {
+        expect(rpc.chunks[i], want[i], reason: '$sizes chunk $i');
+      }
+    }
+  });
+}
+
+/// 读文件时按 [sizes] 轮流切成片段交出来（openRead 交来的片段大小不固定）。
+class _PiecedFile extends XFile {
+  _PiecedFile(this.data, this.sizes) : super.fromData(data, name: 'clip.mov');
+  final Uint8List data;
+  final List<int> sizes;
+
+  @override
+  Future<int> length() async => data.length;
+
+  @override
+  Stream<Uint8List> openRead([int? start, int? end]) async* {
+    var off = 0;
+    for (var i = 0; off < data.length; i++) {
+      final n = sizes[i % sizes.length].clamp(1, data.length - off);
+      yield Uint8List.sublistView(data, off, off + n);
+      off += n;
+    }
+  }
 }
