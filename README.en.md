@@ -11,7 +11,7 @@
 
 <h3 align="center">Download Posse for Mac: <a href="https://posse.shaoyan.uk/Posse.dmg">Apple silicon</a> · <a href="https://posse.shaoyan.uk/Posse-Intel.dmg">Intel</a></h3>
 
-<p align="center">macOS 13+ · ~13 MB download</p>
+<p align="center">macOS 13+ · ~13.5 MB download</p>
 
 <p align="center">
   <img src="docs/assets/readme/hero.png" alt="Posse: the sidebar lists agent sessions and their status by project; the main area is split between Claude Code, a terminal and a README preview" width="100%" />
@@ -27,7 +27,7 @@
 ## Why Posse
 
 - **Close the window anytime; terminals keep running.** A single Go daemon hosts every terminal. Reopen the window and everything reattaches as it was, and upgrades don’t interrupt running agents.
-- **Light.** The window only attaches to terminals you can see, so it doesn’t get heavier as you open more agents. The download is about 12 MB and about 32 MB installed; the UI is drawn natively with [MyGo](https://github.com/egoist/mygo). The memory figure in the screenshot’s status bar is Posse plus the programs in its terminals (agents, MCP servers and so on).
+- **Light.** The window only attaches to terminals you can see, so it doesn’t get heavier as you open more agents. The download is about 13.5 MB and about 36 MB installed (Apple silicon; the Intel build is about 15 MB and 39 MB); the UI is drawn natively with [MyGo](https://github.com/egoist/mygo). The memory figure in the screenshot’s status bar is Posse plus the programs in its terminals (agents, MCP servers and so on).
 - **Leaves your agent config alone.** Status comes from hooks injected at launch; nothing is written into the hooks in `~/.claude` or `~/.codex`.
 
 ## Features

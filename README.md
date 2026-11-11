@@ -11,7 +11,7 @@
 
 <h3 align="center">下载 Posse for Mac：<a href="https://posse.shaoyan.uk/Posse.dmg">Apple 芯片</a> · <a href="https://posse.shaoyan.uk/Posse-Intel.dmg">Intel 芯片</a></h3>
 
-<p align="center">macOS 13+ · 安装包约 13 MB</p>
+<p align="center">macOS 13+ · 安装包约 13.5 MB</p>
 
 <p align="center">
   <img src="docs/assets/readme/hero.png" alt="Posse：侧栏按项目列出 agent 会话和状态，主区域分栏放着 Claude Code、终端和 README 的预览" width="100%" />
@@ -27,7 +27,7 @@
 ## 为什么是 Posse
 
 - **窗口随时关，终端不断。** 所有终端由一个 Go 常驻进程托管，重开窗口原样接上，升级也不打断正在跑的 agent。
-- **轻。** 窗口只接入看得见的终端，开再多 agent 也不跟着变重；安装包约 12 MB，装好约 32 MB，界面用 [MyGo](https://github.com/egoist/mygo) 原生自绘。截图底栏的内存数是 Posse 加上各终端里程序（agent、MCP 等）的合计。
+- **轻。** 窗口只接入看得见的终端，开再多 agent 也不跟着变重；安装包约 13.5 MB，装好约 36 MB（Apple 芯片版；Intel 版约 15 MB、39 MB），界面用 [MyGo](https://github.com/egoist/mygo) 原生自绘。截图底栏的内存数是 Posse 加上各终端里程序（agent、MCP 等）的合计。
 - **不碰你的 agent 配置。** 状态靠启动时注入的 hooks 拿到，不往 `~/.claude`、`~/.codex` 的配置里写 hooks。
 
 ## 特性
