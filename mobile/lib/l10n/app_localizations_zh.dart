@@ -255,9 +255,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatStateWorking => '工作中';
 
   @override
-  String get chatStreamEnded => '会话流结束了';
-
-  @override
   String get chatStreaming => '正在输出';
 
   @override
@@ -1571,9 +1568,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sessionStarting => '正在启动…';
 
   @override
-  String get sessionStateDone => '完成';
-
-  @override
   String get sessionStateIdle => '空闲';
 
   @override
@@ -2095,9 +2089,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get workspaceMain => '主工作区';
 
   @override
-  String get workspaceNoSessions => '没有会话';
-
-  @override
   String get workspaceTabChanges => '改动';
 
   @override
@@ -2179,9 +2170,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discResume => '继续已领取的请求';
 
   @override
-  String get discOwner => '拥有者';
-
-  @override
   String get discKey => '关键消息';
 
   @override
@@ -2203,25 +2191,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discMessageHint => '在讨论中发言…';
 
   @override
-  String get discNoTarget => '普通发言';
-
-  @override
-  String get discTarget => '@ Agent 执行';
-
-  @override
-  String get discMention => '提醒参与者';
-
-  @override
-  String get discEarlier => '加载更早的消息';
-
-  @override
   String get discLater => '加载更新的消息';
 
   @override
   String get discLatest => '跳到最新';
-
-  @override
-  String get discNewMessages => '有新消息';
 
   @override
   String get discReadOnly => '此讨论已归档，只能阅读';
@@ -2287,9 +2260,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discOpenWorker => '打开 worker 终端';
 
   @override
-  String get discAttachments => '附件';
-
-  @override
   String get discAddFile => '添加文件';
 
   @override
@@ -2314,12 +2284,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discEditDraftWarning => '上一条消息可能已经发出。请先查看讨论，再发送新消息。';
 
   @override
-  String get discUploading => '正在上传附件…';
-
-  @override
-  String get discSending => '正在发送…';
-
-  @override
   String get discOnline => '在线';
 
   @override
@@ -2327,9 +2291,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get discNoMessages => '还没有消息';
-
-  @override
-  String get discUnread => '未读';
 
   @override
   String get discWaiting => '等待你回答';

@@ -334,10 +334,6 @@
   "@chatStateWorking": {
     "description": "Chat: status line while the agent is working."
   },
-  "chatStreamEnded": "The session stream ended",
-  "@chatStreamEnded": {
-    "description": "Chat: notice when the computer closed the session stream."
-  },
   "chatStreaming": "Writing",
   "@chatStreaming": {
     "description": "Chat: label next to the agent name while its reply is still streaming."
@@ -2228,10 +2224,6 @@
   "@sessionStarting": {
     "description": "New Session: button label while starting."
   },
-  "sessionStateDone": "Done",
-  "@sessionStateDone": {
-    "description": "Workspace status: the agent finished."
-  },
   "sessionStateIdle": "Idle",
   "@sessionStateIdle": {
     "description": "Session status: the agent is idle."
@@ -2974,10 +2966,6 @@
   "@workspaceMain": {
     "description": "Name of the workspace that is the project folder itself."
   },
-  "workspaceNoSessions": "No Sessions",
-  "@workspaceNoSessions": {
-    "description": "Workspace status when it has no sessions."
-  },
   "workspaceTabChanges": "Changes",
   "@workspaceTabChanges": {
     "description": "Workspace page: segment for Git changes."
@@ -3086,10 +3074,6 @@
   "@discResume": {
     "description": "Mobile discussions: Continue queued requests"
   },
-  "discOwner": "Owner",
-  "@discOwner": {
-    "description": "Mobile discussions: Owner"
-  },
   "discKey": "Key messages",
   "@discKey": {
     "description": "Mobile discussions: Key messages"
@@ -3118,22 +3102,6 @@
   "@discMessageHint": {
     "description": "Mobile discussions: Message the discussion…"
   },
-  "discNoTarget": "Message only",
-  "@discNoTarget": {
-    "description": "Mobile discussions: Message only"
-  },
-  "discTarget": "Ask an agent",
-  "@discTarget": {
-    "description": "Mobile discussions: Ask an agent"
-  },
-  "discMention": "Mention a person",
-  "@discMention": {
-    "description": "Mobile discussions: Mention a person"
-  },
-  "discEarlier": "Load earlier messages",
-  "@discEarlier": {
-    "description": "Mobile discussions: Load earlier messages"
-  },
   "discLater": "Load newer messages",
   "@discLater": {
     "description": "Mobile discussions: Load newer messages"
@@ -3141,10 +3109,6 @@
   "discLatest": "Jump to latest",
   "@discLatest": {
     "description": "Mobile discussions: Jump to latest"
-  },
-  "discNewMessages": "New messages",
-  "@discNewMessages": {
-    "description": "Mobile discussions: New messages"
   },
   "discReadOnly": "This discussion is archived",
   "@discReadOnly": {
@@ -3230,10 +3194,6 @@
   "@discOpenWorker": {
     "description": "Mobile discussions: Open worker terminal"
   },
-  "discAttachments": "Attachments",
-  "@discAttachments": {
-    "description": "Mobile discussions: Attachments"
-  },
   "discAddFile": "Add a file",
   "@discAddFile": {
     "description": "Mobile discussions: Add a file"
@@ -3266,14 +3226,6 @@
   "@discEditDraftWarning": {
     "description": "Mobile discussions: The previous message may already have been sent. Check the discussion before sending a new message."
   },
-  "discUploading": "Uploading attachment…",
-  "@discUploading": {
-    "description": "Mobile discussions: Uploading attachment…"
-  },
-  "discSending": "Sending…",
-  "@discSending": {
-    "description": "Mobile discussions: Sending…"
-  },
   "discOnline": "Online",
   "@discOnline": {
     "description": "Mobile discussions: Online"
@@ -3285,10 +3237,6 @@
   "discNoMessages": "No messages yet",
   "@discNoMessages": {
     "description": "Mobile discussions: No messages yet"
-  },
-  "discUnread": "Unread",
-  "@discUnread": {
-    "description": "Mobile discussions: Unread"
   },
   "discWaiting": "Needs your answer",
   "@discWaiting": {

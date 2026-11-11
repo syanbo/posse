@@ -512,12 +512,6 @@ abstract class AppLocalizations {
   /// **'Working'**
   String get chatStateWorking;
 
-  /// Chat: notice when the computer closed the session stream.
-  ///
-  /// In en, this message translates to:
-  /// **'The session stream ended'**
-  String get chatStreamEnded;
-
   /// Chat: label next to the agent name while its reply is still streaming.
   ///
   /// In en, this message translates to:
@@ -2852,12 +2846,6 @@ abstract class AppLocalizations {
   /// **'Starting…'**
   String get sessionStarting;
 
-  /// Workspace status: the agent finished.
-  ///
-  /// In en, this message translates to:
-  /// **'Done'**
-  String get sessionStateDone;
-
   /// Session status: the agent is idle.
   ///
   /// In en, this message translates to:
@@ -3650,12 +3638,6 @@ abstract class AppLocalizations {
   /// **'Main Workspace'**
   String get workspaceMain;
 
-  /// Workspace status when it has no sessions.
-  ///
-  /// In en, this message translates to:
-  /// **'No Sessions'**
-  String get workspaceNoSessions;
-
   /// Workspace page: segment for Git changes.
   ///
   /// In en, this message translates to:
@@ -3818,12 +3800,6 @@ abstract class AppLocalizations {
   /// **'Continue queued requests'**
   String get discResume;
 
-  /// Mobile discussions: Owner
-  ///
-  /// In en, this message translates to:
-  /// **'Owner'**
-  String get discOwner;
-
   /// Mobile discussions: Key messages
   ///
   /// In en, this message translates to:
@@ -3866,30 +3842,6 @@ abstract class AppLocalizations {
   /// **'Message the discussion…'**
   String get discMessageHint;
 
-  /// Mobile discussions: Message only
-  ///
-  /// In en, this message translates to:
-  /// **'Message only'**
-  String get discNoTarget;
-
-  /// Mobile discussions: Ask an agent
-  ///
-  /// In en, this message translates to:
-  /// **'Ask an agent'**
-  String get discTarget;
-
-  /// Mobile discussions: Mention a person
-  ///
-  /// In en, this message translates to:
-  /// **'Mention a person'**
-  String get discMention;
-
-  /// Mobile discussions: Load earlier messages
-  ///
-  /// In en, this message translates to:
-  /// **'Load earlier messages'**
-  String get discEarlier;
-
   /// Mobile discussions: Load newer messages
   ///
   /// In en, this message translates to:
@@ -3901,12 +3853,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Jump to latest'**
   String get discLatest;
-
-  /// Mobile discussions: New messages
-  ///
-  /// In en, this message translates to:
-  /// **'New messages'**
-  String get discNewMessages;
 
   /// Mobile discussions: This discussion is archived
   ///
@@ -4034,12 +3980,6 @@ abstract class AppLocalizations {
   /// **'Open worker terminal'**
   String get discOpenWorker;
 
-  /// Mobile discussions: Attachments
-  ///
-  /// In en, this message translates to:
-  /// **'Attachments'**
-  String get discAttachments;
-
   /// Mobile discussions: Add a file
   ///
   /// In en, this message translates to:
@@ -4088,18 +4028,6 @@ abstract class AppLocalizations {
   /// **'The previous message may already have been sent. Check the discussion before sending a new message.'**
   String get discEditDraftWarning;
 
-  /// Mobile discussions: Uploading attachment…
-  ///
-  /// In en, this message translates to:
-  /// **'Uploading attachment…'**
-  String get discUploading;
-
-  /// Mobile discussions: Sending…
-  ///
-  /// In en, this message translates to:
-  /// **'Sending…'**
-  String get discSending;
-
   /// Mobile discussions: Online
   ///
   /// In en, this message translates to:
@@ -4117,12 +4045,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No messages yet'**
   String get discNoMessages;
-
-  /// Mobile discussions: Unread
-  ///
-  /// In en, this message translates to:
-  /// **'Unread'**
-  String get discUnread;
 
   /// Mobile discussions: Needs your answer
   ///

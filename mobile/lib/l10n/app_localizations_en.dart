@@ -264,9 +264,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatStateWorking => 'Working';
 
   @override
-  String get chatStreamEnded => 'The session stream ended';
-
-  @override
   String get chatStreaming => 'Writing';
 
   @override
@@ -1659,9 +1656,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sessionStarting => 'Starting…';
 
   @override
-  String get sessionStateDone => 'Done';
-
-  @override
   String get sessionStateIdle => 'Idle';
 
   @override
@@ -2226,9 +2220,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get workspaceMain => 'Main Workspace';
 
   @override
-  String get workspaceNoSessions => 'No Sessions';
-
-  @override
   String get workspaceTabChanges => 'Changes';
 
   @override
@@ -2310,9 +2301,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discResume => 'Continue queued requests';
 
   @override
-  String get discOwner => 'Owner';
-
-  @override
   String get discKey => 'Key messages';
 
   @override
@@ -2334,25 +2322,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discMessageHint => 'Message the discussion…';
 
   @override
-  String get discNoTarget => 'Message only';
-
-  @override
-  String get discTarget => 'Ask an agent';
-
-  @override
-  String get discMention => 'Mention a person';
-
-  @override
-  String get discEarlier => 'Load earlier messages';
-
-  @override
   String get discLater => 'Load newer messages';
 
   @override
   String get discLatest => 'Jump to latest';
-
-  @override
-  String get discNewMessages => 'New messages';
 
   @override
   String get discReadOnly => 'This discussion is archived';
@@ -2420,9 +2393,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discOpenWorker => 'Open worker terminal';
 
   @override
-  String get discAttachments => 'Attachments';
-
-  @override
   String get discAddFile => 'Add a file';
 
   @override
@@ -2449,12 +2419,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'The previous message may already have been sent. Check the discussion before sending a new message.';
 
   @override
-  String get discUploading => 'Uploading attachment…';
-
-  @override
-  String get discSending => 'Sending…';
-
-  @override
   String get discOnline => 'Online';
 
   @override
@@ -2462,9 +2426,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get discNoMessages => 'No messages yet';
-
-  @override
-  String get discUnread => 'Unread';
 
   @override
   String get discWaiting => 'Needs your answer';
