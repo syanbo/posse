@@ -168,7 +168,6 @@ func waitAck(ctx context.Context, r *RelayConn) error {
 			return fmt.Errorf("mquic: relay %s did not answer", r.relay)
 		}
 		if addr.Port == r.relay.Port && addr.IP.Equal(r.relay.IP) && deskrelay.IsAck(buf[:n], deskrelay.RolePhone) {
-			r.acked.Store(true)
 			return nil
 		}
 	}

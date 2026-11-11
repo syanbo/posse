@@ -25,7 +25,6 @@ type RelayConn struct {
 
 	done   chan struct{}
 	once   sync.Once
-	acked  atomic.Bool
 	denied atomic.Bool
 	public atomic.Pointer[netip.AddrPort] // 最近一次探测回来的公网地址
 
@@ -71,12 +70,6 @@ func (r *RelayConn) keepalive(every time.Duration) {
 	}
 }
 
-// Acked 是中转有没有回过执。
-func (r *RelayConn) Acked() bool { return r.acked.Load() }
-
-// Relay 是中转的地址。
-func (r *RelayConn) Relay() *net.UDPAddr { return r.relay }
-
 func (r *RelayConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	for {
 		n, addr, err := r.conn.ReadFromUDP(b)
@@ -99,7 +92,6 @@ func (r *RelayConn) control(b []byte, from *net.UDPAddr) {
 		return
 	}
 	if r.reg != nil && deskrelay.IsAck(b, r.role) {
-		r.acked.Store(true)
 		r.denied.Store(false)
 	}
 	if r.reg != nil && deskrelay.IsDenied(b, r.role) && !r.denied.Swap(true) {
@@ -116,8 +108,6 @@ func (r *RelayConn) Public(ctx context.Context, reading bool) (netip.AddrPort, e
 	r.public.Store(nil)
 	probe := deskrelay.Probe()
 	buf := make([]byte, 64)
-	tick := time.NewTicker(300 * time.Millisecond)
-	defer tick.Stop()
 	for {
 		if _, err := r.conn.WriteToUDP(probe, r.relay); err != nil {
 			return netip.AddrPort{}, err
