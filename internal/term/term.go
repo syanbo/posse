@@ -523,6 +523,13 @@ func (t *Terminal) updateAnswer() {
 	t.answer.Store(true)
 }
 
+// Subscribers 是现在接入着的个数（测试核对接入断开后不留订阅者）。
+func (t *Terminal) Subscribers() int {
+	t.smu.Lock()
+	defer t.smu.Unlock()
+	return len(t.subs)
+}
+
 func (t *Terminal) Detach(s *Subscriber) {
 	t.smu.Lock()
 	defer t.smu.Unlock()

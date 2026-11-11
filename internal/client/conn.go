@@ -34,6 +34,10 @@ type Conn struct {
 	exitCode atomic.Int64
 }
 
+// attachTimeout 是接入等常驻进程回第一行的期限：常驻进程收了连接却一直不回时，Read 报错，窗口照常重新接入。
+// 回复前要恢复终端（拉起进程）、生成快照，回滚区大、机器忙时要几秒，所以给得宽。
+var attachTimeout = 30 * time.Second
+
 func (c *Client) Attach(id string) *Conn {
 	k := &Conn{c: c, id: id, ready: make(chan struct{}), closed: make(chan struct{})}
 	// 视图通常很快就会设置尺寸；万一没有，按常驻进程现有尺寸接入
@@ -52,7 +56,7 @@ func (k *Conn) open(cols, rows int) bool {
 			return
 		default:
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), attachTimeout)
 		defer cancel()
 		conn, r, err := rpc.Open(ctx, k.c.Socket, "terminal.attach", map[string]any{"terminal": k.id, "cols": cols, "rows": rows}, nil)
 		k.wmu.Lock()

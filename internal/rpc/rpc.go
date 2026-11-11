@@ -177,14 +177,14 @@ func writeResponse(conn net.Conn, result any, err error) {
 // WriteResult 是流式处理器在切换到帧之前的成功回复。
 func WriteResult(conn net.Conn, result any) { writeResponse(conn, result, nil) }
 
-// Open 发起流式请求：读完回复行后返回连接，之后用帧通信。
+// Open 发起流式请求：读完回复行后返回连接，之后用帧通信。ctx 管拨号和等回复行，之后的帧不受它影响。
 func Open(ctx context.Context, socket, method string, params, out any) (net.Conn, *bufio.Reader, error) {
-	return request(ctx, socket, method, params, out, false)
+	return request(ctx, socket, method, params, out)
 }
 
 // Call 连接 socket 发起一次请求；out 为 nil 时丢弃结果。
 func Call(ctx context.Context, socket, method string, params, out any) error {
-	conn, _, err := request(ctx, socket, method, params, out, true)
+	conn, _, err := request(ctx, socket, method, params, out)
 	if err != nil {
 		return err
 	}
@@ -192,8 +192,8 @@ func Call(ctx context.Context, socket, method string, params, out any) error {
 	return nil
 }
 
-// request 发出请求并读回复行，成功时返回仍打开的连接；watch 为 true 时 ctx 取消会中断等待回复。
-func request(ctx context.Context, socket, method string, params, out any, watch bool) (_ net.Conn, _ *bufio.Reader, err error) {
+// request 发出请求并读回复行，成功时返回仍打开的连接；ctx 取消会中断等待回复。
+func request(ctx context.Context, socket, method string, params, out any) (_ net.Conn, _ *bufio.Reader, err error) {
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "unix", socket)
 	if err != nil {
@@ -204,10 +204,8 @@ func request(ctx context.Context, socket, method string, params, out any, watch 
 			conn.Close()
 		}
 	}()
-	if watch {
-		stop := context.AfterFunc(ctx, func() { conn.Close() })
-		defer stop()
-	}
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
 	req := Request{Method: method}
 	if params != nil {
 		if req.Params, err = json.Marshal(params); err != nil {
@@ -222,7 +220,7 @@ func request(ctx context.Context, socket, method string, params, out any, watch 
 	r := bufio.NewReader(conn)
 	line, err := r.ReadBytes('\n')
 	if err != nil {
-		if watch && ctx.Err() != nil {
+		if ctx.Err() != nil {
 			return nil, nil, ctx.Err()
 		}
 		return nil, nil, fmt.Errorf("read response: %w: %w", ErrNoResponse, err)
@@ -238,6 +236,10 @@ func request(ctx context.Context, socket, method string, params, out any, watch 
 		if err = json.Unmarshal(resp.Result, out); err != nil {
 			return nil, nil, err
 		}
+	}
+	// 回复刚读完时 ctx 恰好到点：连接已经或马上被关掉，不能当成接好了交出去
+	if !stop() {
+		return nil, nil, ctx.Err()
 	}
 	return conn, r, nil
 }

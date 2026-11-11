@@ -199,6 +199,7 @@ func (l *local) Resize(cols, rows int)         { l.t.Resize(cols, rows) }
 func (l *local) HoldSize(key string, c, r int) { l.t.HoldSize(key, c, r) }
 func (l *local) ReleaseSize(key string)        { l.t.ReleaseSize(key) }
 func (l *local) SizeHeld() bool                { return l.t.SizeHeld() }
+func (l *local) Subscribers() int              { return l.t.Subscribers() }
 func (l *local) CursorKeysApp() bool           { return l.t.CursorKeysApp() }
 func (l *local) BracketedPaste() bool          { return l.t.BracketedPaste() }
 func (l *local) ReclaimSize()                  { l.t.ReclaimSize() }
