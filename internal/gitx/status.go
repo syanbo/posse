@@ -92,12 +92,6 @@ type Entry struct {
 // IsDir 报告这一项是目录：子模块，或者未跟踪的嵌套仓库（-uall 也进不去，git 报成带斜杠的路径）。
 func (e Entry) IsDir() bool { return e.Submodule || strings.HasSuffix(e.Path, "/") }
 
-// Staged 报告暂存区有这个文件的改动。
-func (e Entry) Staged() bool { return !e.Untracked && !e.Conflict && e.X != '.' }
-
-// Unstaged 报告工作区有没暂存的改动。
-func (e Entry) Unstaged() bool { return !e.Untracked && !e.Conflict && e.Y != '.' }
-
 // Status 是一个工作区的 git 状态。
 type Status struct {
 	Head      string // 当前分支；分离 HEAD 时为空

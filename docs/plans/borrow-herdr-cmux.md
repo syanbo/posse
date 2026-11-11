@@ -55,7 +55,7 @@
 
 ### 现状
 
-- `agent.Known` 只有 claude、codex、grok、cursor（`internal/agent/agent.go`）。用户自己启动的 agent 靠进程名识别（`agent.FromProcess`）、状态只靠标题（`TitleOnlyStatus`）。
+- `agent.Known` 只有 claude、codex、grok、cursor（`internal/agent/agent.go`）。用户自己启动的 agent 靠进程名识别（`agent.OfProcess`）、状态只靠标题（`TitleOnlyStatus`）。
 - 其它 agent（Gemini CLI、opencode、Copilot CLI、Amp、Qwen Code 等）现在被当成普通终端。
 
 ### 关键决策

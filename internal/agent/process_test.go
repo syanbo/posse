@@ -22,8 +22,8 @@ func TestFromProcess(t *testing.T) {
 		{[]string{"vim", "a.go"}, ""},
 		{nil, ""},
 	} {
-		if got := FromProcess(c.args); got != c.want {
-			t.Errorf("FromProcess(%q) = %q, want %q", c.args, got, c.want)
+		if got := fromProcess("", c.args); got != c.want {
+			t.Errorf("fromProcess(%q) = %q, want %q", c.args, got, c.want)
 		}
 	}
 }

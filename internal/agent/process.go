@@ -8,17 +8,14 @@ import (
 	"posse/internal/procmem"
 )
 
-// FromProcess 按终端前台进程的 argv 认出是哪个 agent，认不出返回空。
-// 用户在 shell 里自己敲命令启动的 agent 只能这样认出来。
-func FromProcess(args []string) string { return fromProcess("", args) }
-
 // OfProcess 认出进程 pid 是哪个 agent，同时返回它的 argv（取会话 ID 用）。
 func OfProcess(pid int) (string, []string) {
 	exe, args := procmem.ExeArgs(pid)
 	return fromProcess(exe, args), args
 }
 
-// fromProcess 同 FromProcess，exe 是 exec 时给的路径，可以为空。
+// fromProcess 按终端前台进程的 argv 认出是哪个 agent，认不出返回空；exe 是 exec 时给的路径，可以为空。
+// 用户在 shell 里自己敲命令启动的 agent 只能这样认出来。
 func fromProcess(exe string, args []string) string {
 	switch procmem.Name(args) {
 	case "claude":
