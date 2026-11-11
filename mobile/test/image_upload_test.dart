@@ -32,6 +32,9 @@ class _UploadRpc implements PhoneRpc {
   }
 
   @override
+  Future<T> upload<T>(Future<T> Function() body) => body();
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 

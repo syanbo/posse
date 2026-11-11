@@ -34,7 +34,14 @@ List<(int, String)> imageChunks(String encoded) {
 }
 
 /// 把图片存到电脑的临时目录，返回路径。小图一次传完，大图按块传，每传完一块报一次进度。
+/// 整个过程记在这条连接的上传数里（[PhoneRpc.upload]）：换连接时旧连接等它传完再关。
 Future<String> uploadImage(
+  PhoneRpc rpc,
+  List<int> bytes, {
+  UploadProgress? onProgress,
+}) => rpc.upload(() => _uploadImage(rpc, bytes, onProgress: onProgress));
+
+Future<String> _uploadImage(
   PhoneRpc rpc,
   List<int> bytes, {
   UploadProgress? onProgress,
@@ -240,8 +247,14 @@ String imagePath(Map<String, Object?> result) {
 const _maxBase64Upload = 32 << 20;
 
 /// 把手机上的一个文件（照片、视频、「文件」里的）存到电脑上，返回路径。带上文件名，电脑用原名保存；
-/// 从文件流式读、按二进制帧发，几百 MB 的视频也不整个读进内存。
+/// 从文件流式读、按二进制帧发，几百 MB 的视频也不整个读进内存。换连接时旧连接等它传完再关（[PhoneRpc.upload]）。
 Future<String> uploadFile(
+  PhoneRpc rpc,
+  XFile file, {
+  UploadProgress? onProgress,
+}) => rpc.upload(() => _uploadFile(rpc, file, onProgress: onProgress));
+
+Future<String> _uploadFile(
   PhoneRpc rpc,
   XFile file, {
   UploadProgress? onProgress,

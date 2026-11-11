@@ -176,6 +176,8 @@ class PhoneRpc {
     String method,
     Map<String, Object?> params,
   ) async {
+    // 正在换下来（closeWhenIdle）：新的订阅走新连接
+    if (_draining) throw RpcException('closed', 'connection closed');
     final id = 'rpc-${++_n}';
     final controller = StreamController<Map<String, Object?>>();
     _subs[id] = (frame) {
@@ -208,18 +210,40 @@ class PhoneRpc {
     return result;
   }
 
+  /// 正在跑的上传数（[upload]）。上传的编号和分段是这条连接上的，换不到别的连接。
+  int get uploading => _uploads;
+  var _uploads = 0;
+
+  /// 已经在换下来（[closeWhenIdle]）：不再接新的上传和订阅。
+  var _draining = false;
+
+  /// 在这条连接上跑一次上传：[closeWhenIdle] 等它跑完再关，不受 max 限制。
+  /// 连接已经在换下来或关了时直接报 closed，新的上传走新连接。
+  Future<T> upload<T>(Future<T> Function() body) async {
+    if (_closed || _draining) throw RpcException('closed', 'connection closed');
+    _uploads++;
+    try {
+      return await body();
+    } finally {
+      _uploads--;
+    }
+  }
+
   /// 换到更好的连接时关旧的：等页面在新连接上订阅好、退掉这里的订阅，进行中的请求也回完，再关（最多 [max]）。
   /// 至少等 [min]：页面换连接要等到下一帧，一开始这里看着是空闲的。直接关的话，电脑先收到断开、
   /// 把终端改回电脑上的尺寸，再被新订阅改回手机尺寸，agent 白白重画两次。
+  /// 有上传在跑时不管 [max]，等上传跑完（或这条连接自己断了）再关：上传换不到新连接上。
   Future<void> closeWhenIdle({
     Duration min = const Duration(milliseconds: 500),
     Duration max = const Duration(seconds: 10),
   }) async {
+    _draining = true;
     final deadline = DateTime.now().add(max);
     await Future<void>.delayed(min);
-    while ((_wait.isNotEmpty || _subs.isNotEmpty) &&
-        !_ended &&
-        DateTime.now().isBefore(deadline)) {
+    while (!_ended &&
+        (_uploads > 0 ||
+            (_wait.isNotEmpty || _subs.isNotEmpty) &&
+                DateTime.now().isBefore(deadline))) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
     await close();
