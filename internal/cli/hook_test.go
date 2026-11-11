@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -103,4 +105,58 @@ func TestHookLargePayloadKeepsAttribution(t *testing.T) {
 
 type hookParams struct {
 	Payload json.RawMessage `json:"payload"`
+}
+
+// 极大的截断 JSON 或不是对象的 JSON：解析时只读到 maxHookInput 为止，剩下的读掉不留，不带 payload。
+func TestHookInputHardCap(t *testing.T) {
+	defer func(n int) { maxHookInput = n }(maxHookInput)
+	maxHookInput = 4 << 20
+	for _, prefix := range []string{`{"session_id":"s1","tool_response":"`, `[`} {
+		var unit string
+		if prefix == "[" {
+			unit = "1,"
+		} else {
+			unit = "x"
+		}
+		r := &capReader{prefix: prefix, unit: unit, n: 10 * maxHookInput}
+		var before, after runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&before)
+		got := readHookInput(r, maxHookPayload)
+		runtime.ReadMemStats(&after)
+		if got != nil {
+			t.Fatalf("%s: payload %d bytes", prefix, len(got))
+		}
+		if r.left() != 0 {
+			t.Fatalf("%s: %d bytes left unread", prefix, r.left())
+		}
+		if alloc := after.TotalAlloc - before.TotalAlloc; alloc > uint64(6*maxHookInput) {
+			t.Fatalf("%s: allocated %d MB for a %d MB input", prefix, alloc>>20, r.n>>20)
+		}
+	}
+}
+
+// capReader 给出 prefix 后重复 unit，共 n 字节，不在内存里攒着。
+type capReader struct {
+	prefix, unit string
+	n, off       int
+}
+
+func (r *capReader) left() int { return r.n - r.off }
+
+func (r *capReader) Read(p []byte) (int, error) {
+	if r.off >= r.n {
+		return 0, io.EOF
+	}
+	k := 0
+	for k < len(p) && r.off < r.n {
+		if r.off < len(r.prefix) {
+			p[k] = r.prefix[r.off]
+		} else {
+			p[k] = r.unit[(r.off-len(r.prefix))%len(r.unit)]
+		}
+		k++
+		r.off++
+	}
+	return k, nil
 }

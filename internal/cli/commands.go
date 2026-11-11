@@ -596,6 +596,10 @@ func cmdTerminalClose(e *env, args []string) error {
 // maxHookPayload 是交给常驻进程的 hook 输入上限。
 const maxHookPayload = 1 << 20
 
+// maxHookInput 是超过 maxHookPayload 时最多读进内存去拆字段的输入。解析时峰值内存约是输入的 3.5 倍
+// （实测 20 MB 约 100 MB），32 MB 封顶约 120 MB；更大的（多半是截断或不是对象的 JSON）不带 payload 照样发事件。
+var maxHookInput = 32 << 20
+
 // readHookInput 读完 agent 交来的 hook 输入。超过 limit 的（大多是工具的输出 tool_response）从最大的
 // 顶层字段丢起，直到不超过 limit：整份丢掉的话 agent_id、session_id 也没了，子 agent 的事件会记到主 agent 上。
 func readHookInput(r io.Reader, limit int) []byte {
@@ -604,7 +608,11 @@ func readHookInput(r io.Reader, limit int) []byte {
 		return head
 	}
 	var fields map[string]json.RawMessage
-	if json.NewDecoder(io.MultiReader(bytes.NewReader(head), r)).Decode(&fields) != nil {
+	rest := io.LimitReader(r, int64(maxHookInput-len(head)))
+	err := json.NewDecoder(io.MultiReader(bytes.NewReader(head), rest)).Decode(&fields)
+	// 剩下的读掉丢弃，不留在内存里：提前关掉 stdin 的话 agent 写入时遇到管道断开
+	io.Copy(io.Discard, r)
+	if err != nil {
 		return nil
 	}
 	size := 2
