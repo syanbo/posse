@@ -296,6 +296,7 @@
   "filesFindingDefinition": "正在查找 {name} 的定义…",
   "filesFormatJSON": "格式化 JSON",
   "filesGitLogTab": "Git 日志",
+  "filesImageTooLarge": "图片 {width}×{height} 像素，太大，不在这里预览",
   "filesIncludePlaceholder": "包含，如 *.go, src/",
   "filesIsDirectory": "这是一个目录",
   "filesJSONAlreadyFormatted": "已经是格式化好的",

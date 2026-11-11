@@ -4629,6 +4629,24 @@ func (msgs Messages) FilesGitLogTab() string {
 	return Catalog.Format(msgs.locale, "filesGitLogTab", nil)
 }
 
+// FilesImageTooLarge says "The image is {width}×{height} pixels and isn’t previewed here"
+// in the language the app shows.
+//
+// File tab message: the image is too large to preview (over 100 million
+// pixels). width and height are its size in pixels.
+func FilesImageTooLarge(width int, height int) string {
+	return In(i18n.Locale()).FilesImageTooLarge(width, height)
+}
+
+// FilesImageTooLarge says "The image is {width}×{height} pixels and isn’t previewed here"
+// in the language of msgs.
+//
+// File tab message: the image is too large to preview (over 100 million
+// pixels). width and height are its size in pixels.
+func (msgs Messages) FilesImageTooLarge(width int, height int) string {
+	return Catalog.Format(msgs.locale, "filesImageTooLarge", map[string]any{"width": width, "height": height})
+}
+
 // FilesIncludePlaceholder says "Include, e.g. *.go, src/"
 // in the language the app shows.
 //

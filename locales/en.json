@@ -1869,6 +1869,18 @@
   "@filesGitLogTab": {
     "description": "Name of the tab that shows the Git Log of the whole repository."
   },
+  "filesImageTooLarge": "The image is {width}×{height} pixels and isn’t previewed here",
+  "@filesImageTooLarge": {
+    "description": "File tab message: the image is too large to preview (over 100 million pixels). width and height are its size in pixels.",
+    "placeholders": {
+      "width": {
+        "type": "int"
+      },
+      "height": {
+        "type": "int"
+      }
+    }
+  },
   "filesIncludePlaceholder": "Include, e.g. *.go, src/",
   "@filesIncludePlaceholder": {
     "description": "Placeholder of the include-files field in the Files Panel search."

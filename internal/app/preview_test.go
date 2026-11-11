@@ -421,6 +421,19 @@ func previewImageDoc(t *testing.T, a *app, zoom float32) {
 	v.poll.at = time.Now().Add(time.Hour)
 }
 
+// previewHugeImageDoc 在文件标签里打开一张原尺寸 20000×15000 的图（只有文件头是这么写的）。
+func previewHugeImageDoc(t *testing.T, a *app) {
+	root := filesWorkspace(t, a)
+	path := filepath.Join(root, "huge.png")
+	os.WriteFile(path, pngClaiming(20000, 15000), 0o644)
+	w := &a.workspaces[0]
+	tt := newTester(a.build, 1200, 760)
+	a.openFile(w, path, 0, [2]int{})
+	v := a.files[w.ID]
+	until(t, tt, "too large", func() bool { return v.cur.kind == docTooLarge })
+	v.poll.at = time.Now().Add(time.Hour)
+}
+
 // previewCompare 打开 feat 和 main 的比较，选中 feat 独有的那个提交。
 func previewCompare(t *testing.T, a *app) {
 	branchWorkspace(t, a)
@@ -1283,6 +1296,11 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewImageDoc(t, a, 2)
 		savePNG(t, newPreviewTester(a, dark), "files-image-zoom-"+suffix+".png")
+
+		// 原图超过 1 亿像素：不解码，写明尺寸
+		a = previewApp(t)
+		previewHugeImageDoc(t, a)
+		savePNG(t, newPreviewTester(a, dark), "files-image-too-large-"+suffix+".png")
 
 		a = previewApp(t)
 		previewLog(t, a)

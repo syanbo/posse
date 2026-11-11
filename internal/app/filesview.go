@@ -497,7 +497,11 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	case docBinary:
 		docMessage(c, d, L(c).FilesBinaryNoContent())
 	case docTooLarge:
-		docMessage(c, d, L(c).FilesTooLarge(files.MaxSize>>20))
+		if d.imgInfo.w > 0 {
+			docMessage(c, d, L(c).FilesImageTooLarge(d.imgInfo.w, d.imgInfo.h))
+		} else {
+			docMessage(c, d, L(c).FilesTooLarge(files.MaxSize>>20))
+		}
 	case docError:
 		docMessage(c, d, d.errText(L(c)))
 	}

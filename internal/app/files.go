@@ -1,7 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"image"
 	"io"
 	"os"
 	"path"
@@ -590,6 +593,10 @@ func (a *app) loadDoc(d *fileDoc) {
 			pi, anim, err := decodeDocImage(path)
 			a.update(func() {
 				d.base, d.seen = st, st
+				if big, ok := err.(imageTooLarge); ok {
+					d.kind, d.imgInfo = docTooLarge, imageInfo{w: big.w, h: big.h, bytes: st.Size}
+					return
+				}
 				if err != nil {
 					d.kind, d.err, d.errMsg = docError, errtext.Text(err), nil
 					return
@@ -611,11 +618,24 @@ func (a *app) loadDoc(d *fileDoc) {
 	}()
 }
 
+// docImageMaxPixels 是文件标签预览的图片原尺寸上限：解码时先按原尺寸整张解出来再缩，
+// 1 亿像素以内最坏约 400 MB 的短时分配（相机照片照常预览），再大的不解码。
+const docImageMaxPixels = 100_000_000
+
+// imageTooLarge 是原尺寸超过 docImageMaxPixels、不预览的图片。
+type imageTooLarge struct{ w, h int }
+
+func (e imageTooLarge) Error() string { return fmt.Sprintf("image is %dx%d pixels", e.w, e.h) }
+
 // decodeDocImage 解码文件标签里预览的图片；动图另外给出播放器，pi.Img 是它的第一帧。
+// 只有系统认得的格式（Go 读不出尺寸）照旧解码。
 func decodeDocImage(path string) (media.PreviewImage, *animPlayer, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return media.PreviewImage{}, nil, err
+	}
+	if cfg, _, err := image.DecodeConfig(bytes.NewReader(b)); err == nil && cfg.Width*cfg.Height > docImageMaxPixels {
+		return media.PreviewImage{}, nil, imageTooLarge{cfg.Width, cfg.Height}
 	}
 	if anim, a, err := newAnimPlayer(b, 0); anim != nil && err == nil {
 		return media.PreviewImage{Img: anim.cur, Size: a.Size, Format: a.Format}, anim, nil
