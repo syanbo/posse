@@ -159,18 +159,19 @@ func (h mobileHost) Terminal(id string) host.Terminal {
 	return s.Terminal
 }
 
-// SessionTerminal 和在 State 里按会话 ID 找一样只看还在运行的终端；有几个时取最早开的。
+// SessionTerminal 和从 State 里按会话 ID 找选到同一个：按工作区的顺序、工作区里按终端开的先后，
+// 只看还在运行的。只查一次工作区列表，不读各工作区的 HEAD、不查任务。
 func (h mobileHost) SessionTerminal(agentName, sessionID string) host.Terminal {
-	h.d.mu.Lock()
-	ss := make([]*session, 0, len(h.d.terms))
-	for _, s := range h.d.terms {
-		ss = append(ss, s)
+	ws, err := h.d.store.Workspaces("")
+	if err != nil {
+		return nil
 	}
-	h.d.mu.Unlock()
-	sortSessions(ss)
-	for _, s := range ss {
-		if s.Running() && s.Agent().SessionID == sessionID && (agentName == "" || s.agentName() == agentName) {
-			return s.Terminal
+	byWS := h.d.sessionsByWorkspace()
+	for _, w := range ws {
+		for _, s := range byWS[w.ID] {
+			if s.Running() && s.Agent().SessionID == sessionID && (agentName == "" || s.agentName() == agentName) {
+				return s.Terminal
+			}
 		}
 	}
 	return nil

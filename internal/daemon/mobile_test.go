@@ -12,6 +12,7 @@ import (
 	"posse/internal/history"
 	"posse/internal/host"
 	"posse/internal/rpc"
+	"posse/internal/store"
 	"posse/internal/term"
 )
 
@@ -106,11 +107,21 @@ func TestSendKeysFollowCursorMode(t *testing.T) {
 	waitScreen(t, s, "033   O   A")
 }
 
-// 手机对话流按会话 ID 找终端：和以前从 State 里找的结果一样（只看还在运行的、对上 agent，
-// 同一会话开在几个终端里时取最早开的），只是不查库、不读 HEAD。
+// 手机对话流按会话 ID 找终端：和以前从 State 里找的结果一样（按工作区的顺序、工作区里按开的先后，
+// 只看还在运行的、对上 agent），只是不读 HEAD、不查任务。同一会话开在几个工作区的终端里时，
+// 选的是前面那个工作区里的，不是最早开的。
 func TestMobileSessionTerminalMatchesState(t *testing.T) {
-	d, w := newTestDaemon(t)
-	start := func(cmd, agentName, sid string) *session {
+	d, w1 := newTestDaemon(t)
+	extra := func(name string, after time.Duration) store.Workspace {
+		w := w1
+		w.ID, w.Name, w.Kind, w.CreatedAt = store.NewID("w_"), name, "folder", w1.CreatedAt.Add(after)
+		if err := d.store.AddWorkspace(w); err != nil {
+			t.Fatal(err)
+		}
+		return w
+	}
+	w2, w3 := extra("second", time.Second), extra("third", 2*time.Second)
+	start := func(w store.Workspace, cmd, agentName, sid string) *session {
 		s, err := d.startTerminal(w, []string{"/bin/sh", "-c", cmd}, "", 80, 24)
 		if err != nil {
 			t.Fatal(err)
@@ -122,11 +133,15 @@ func TestMobileSessionTerminalMatchesState(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 		return s
 	}
-	exited := start("exit 0", "claude", "s-dup")
-	first := start("sleep 30", "claude", "s-dup")
-	start("sleep 30", "claude", "s-dup")
-	codex := start("sleep 30", "codex", "s-codex")
-	waitFor(t, "exited terminal stops", func() bool { return !exited.Running() })
+	// 最早开的在后面的工作区里；前面的工作区里有已退出的、agent 不同的，和后开的那个
+	earliest := start(w2, "sleep 30", "grok", "dup")
+	start(w3, "sleep 30", "grok", "dup")
+	exited := start(w1, "exit 0", "grok", "dup")
+	start(w1, "sleep 30", "codex", "dup")
+	later := start(w1, "sleep 30", "grok", "dup")
+	start(w3, "sleep 30", "claude", "only3")
+	start(w2, "exit 0", "claude", "gone")
+	waitFor(t, "exited terminals stop", func() bool { return !exited.Running() })
 	h := mobileHost{d}
 	viaState := func(agentName, sid string) host.Terminal {
 		for _, mw := range h.State().Workspaces {
@@ -138,16 +153,13 @@ func TestMobileSessionTerminalMatchesState(t *testing.T) {
 		}
 		return nil
 	}
-	for _, q := range [][2]string{{"claude", "s-dup"}, {"", "s-dup"}, {"codex", "s-dup"}, {"codex", "s-codex"}, {"", "s-codex"}, {"claude", "s-codex"}, {"claude", "nope"}} {
+	for _, q := range [][2]string{{"grok", "dup"}, {"", "dup"}, {"codex", "dup"}, {"claude", "dup"}, {"claude", "only3"}, {"", "only3"}, {"grok", "only3"}, {"claude", "gone"}, {"", "nope"}} {
 		got, want := h.SessionTerminal(q[0], q[1]), viaState(q[0], q[1])
 		if got != want {
 			t.Fatalf("%v: got %v, want %v", q, got, want)
 		}
 	}
-	if got := h.SessionTerminal("claude", "s-dup"); got == nil || got.Info().ID != first.ID {
-		t.Fatalf("duplicate session: got %v, want the earliest running %s", got, first.ID)
-	}
-	if got := h.SessionTerminal("codex", "s-codex"); got == nil || got.Info().ID != codex.ID {
-		t.Fatalf("codex session: %v", got)
+	if got := h.SessionTerminal("grok", "dup"); got == nil || got.Info().ID != later.ID || later.ID == earliest.ID {
+		t.Fatalf("session in two workspaces: got %v, want %s from the earlier workspace (earliest opened is %s)", got, later.ID, earliest.ID)
 	}
 }
