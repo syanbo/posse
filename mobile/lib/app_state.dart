@@ -350,8 +350,8 @@ class AppSettings {
       if (fps is Map) {
         out.deskFps = {
           for (final MapEntry(:key, :value) in fps.entries)
-            if (key is String && deskFpsChoices.contains(value))
-              key: value as int,
+            if (key is String && value is int && deskFpsChoices.contains(value))
+              key: value,
         };
       }
       final phoneId = map['phoneId'];

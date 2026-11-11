@@ -94,6 +94,13 @@ void main() {
       ).deskFps,
       {'c': 30},
     );
+    // 小数写法的档位只丢这一项，后面的设置照常读
+    final after = AppSettings.decode(
+      '{"deskFps":{"pk":30.0},"phoneId":"kept","pushDone":true}',
+    );
+    expect(after.deskFps, isEmpty);
+    expect(after.phoneId, 'kept');
+    expect(after.pushDone, isTrue);
   });
 
   test(
