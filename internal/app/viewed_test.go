@@ -17,6 +17,15 @@ func execLine(t *testing.T, js string) string {
 	return string(b) + "\n"
 }
 
+func imageViewLine(t *testing.T, kind, path string) string {
+	t.Helper()
+	b, err := json.Marshal(map[string]any{"type": "event_msg", "payload": map[string]any{"type": kind, "item": map[string]any{"type": "ImageView", "id": "exec-1", "path": path}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b) + "\n"
+}
+
 // Codex 的会话文件里 exec 的 view_image 调用带着完整路径：双引号（带转义）、单引号、相对路径都认，
 // 没写完的行留到下一次，别的行里提到 view_image 不算。
 func TestReadViewedImages(t *testing.T) {
@@ -41,6 +50,16 @@ func TestReadViewedImages(t *testing.T) {
 	os.WriteFile(transcript, []byte(first+half), 0o644)
 	if got, next := readViewedImages(transcript, next, "/base"); len(got) != 1 || got[0] != "/out/03.png" || next != int64(len(first)+len(half)) {
 		t.Fatalf("after the line was finished: %q next %d", got, next)
+	}
+	// 新版 Codex 看完图有 ImageView 事件，代码里拼出来的路径也在：file:// 要解码，相对的、别的事件不算
+	events := execLine(t, `for (const n of names) image((await tools.view_image({path: dir + "/" + n})).image_url);`) +
+		imageViewLine(t, "item_completed", "file:///tmp/set%201/04-follow.jpg") +
+		imageViewLine(t, "item_completed", "/tmp/plain.png") +
+		imageViewLine(t, "item_completed", "rel.png") +
+		imageViewLine(t, "item_started", "file:///tmp/started.png")
+	os.WriteFile(transcript, []byte(first+half+events), 0o644)
+	if got, _ := readViewedImages(transcript, int64(len(first)+len(half)), ""); len(got) != 2 || got[0] != "/tmp/set 1/04-follow.jpg" || got[1] != "/tmp/plain.png" {
+		t.Fatalf("ImageView events: %q", got)
 	}
 	// 文件换成更短的：从头读
 	os.WriteFile(transcript, []byte(half), 0o644)

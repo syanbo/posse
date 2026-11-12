@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,8 +17,9 @@ import (
 )
 
 // Codex 看图时只打印文件名（Viewed image 04-home.png），图片常不在终端的目录里，按相对路径找不到。
-// 完整路径在会话文件里：看图是 exec 里的一句 tools.view_image({path:"…"})。这里按终端记下这些路径，
-// 相对路径找不到时拿它们的结尾去对。路径是代码拼出来的（变量、循环）时认不出，那行就不是链接。
+// 完整路径在会话文件里：看完图有一条 item_completed 的 ImageView 事件，带解析好的 file:// 路径（代码里拼出来的也在）；
+// 没有这条事件的旧版只能读 exec 代码里 tools.view_image({path:"…"}) 的字面量。这里按终端记下这些路径，
+// 相对路径找不到时拿它们的结尾去对。
 type viewedImages struct {
 	transcript string
 	off        int64     // 会话文件读到的位置
@@ -117,7 +119,8 @@ func readViewedImages(transcript string, off int64, base string) (paths []string
 			return paths, next
 		}
 		next += int64(len(line))
-		if !bytes.Contains(line, []byte("view_image")) {
+		event := bytes.Contains(line, []byte(`"ImageView"`))
+		if !event && !bytes.Contains(line, []byte("view_image")) {
 			continue
 		}
 		var l struct {
@@ -125,9 +128,22 @@ func readViewedImages(transcript string, off int64, base string) (paths []string
 			Payload struct {
 				Type  string `json:"type"`
 				Input string `json:"input"`
+				Item  struct {
+					Type string `json:"type"`
+					Path string `json:"path"`
+				} `json:"item"`
 			} `json:"payload"`
 		}
-		if json.Unmarshal(line, &l) != nil || l.Type != "response_item" || l.Payload.Type != "custom_tool_call" {
+		if json.Unmarshal(line, &l) != nil {
+			continue
+		}
+		if event && l.Type == "event_msg" && l.Payload.Type == "item_completed" && l.Payload.Item.Type == "ImageView" {
+			if p := imageViewPath(l.Payload.Item.Path); p != "" {
+				paths = append(paths, p)
+			}
+			continue
+		}
+		if l.Type != "response_item" || l.Payload.Type != "custom_tool_call" {
 			continue
 		}
 		for _, m := range viewImageCall.FindAllStringSubmatch(l.Payload.Input, -1) {
@@ -150,4 +166,19 @@ func readViewedImages(transcript string, off int64, base string) (paths []string
 			paths = append(paths, filepath.Clean(p))
 		}
 	}
+}
+
+// imageViewPath 把 ImageView 事件的路径（file:// 网址，也接受普通绝对路径）换成本地绝对路径，认不出返回空。
+func imageViewPath(s string) string {
+	if strings.HasPrefix(s, "file://") {
+		u, err := url.Parse(s)
+		if err != nil {
+			return ""
+		}
+		s = u.Path
+	}
+	if !filepath.IsAbs(s) {
+		return ""
+	}
+	return filepath.Clean(s)
 }
