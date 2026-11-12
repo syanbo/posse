@@ -64,6 +64,29 @@ func TestCodexExpiredWindow(t *testing.T) {
 	}
 }
 
+func TestPlanRefreshKeepsLayout(t *testing.T) {
+	a := previewApp(t)
+	a.daemon.Usage = &planStatus{Usages: []usage.Usage{{Agent: "codex", Plan: "Plus", UpdatedAt: time.Now().UnixMilli(),
+		Windows: []usage.Window{{Minutes: 300, Percent: 10}}}}}
+	a.planOpen = true
+	tt := newPreviewTester(a, false)
+	before, ok := tt.Find("剩余")
+	if !ok {
+		t.Fatal("usage panel not visible")
+	}
+	a.planBusy = true
+	a.daemon.Usage.CodexReading = true
+	tt.Frame()
+	during, _ := tt.Find("剩余")
+	a.planBusy = false
+	a.daemon.Usage.CodexReading = false
+	tt.Frame()
+	after, _ := tt.Find("剩余")
+	if during != before || after != before {
+		t.Fatalf("refresh moved the panel header: before=%+v during=%+v after=%+v", before, during, after)
+	}
+}
+
 func TestPreviewPlanFreshness(t *testing.T) {
 	if os.Getenv("POSSE_PREVIEW_DIR") == "" {
 		t.Skip("set POSSE_PREVIEW_DIR to render previews")
@@ -84,6 +107,10 @@ func TestPreviewPlanFreshness(t *testing.T) {
 		a.state.UsageRemaining = true
 		a.planOpen = true
 		savePNG(t, newPreviewTester(a, dark), "plan-stale-"+suffix+".png")
+		a.planBusy = true
+		a.daemon.Usage.CodexReading = true
+		savePNG(t, newPreviewTester(a, dark), "plan-refreshing-"+suffix+".png")
+		a.planBusy = false
 		a.daemon.Usage = &planStatus{CodexError: "codex: usage query timed out"}
 		savePNG(t, newPreviewTester(a, dark), "plan-unavailable-"+suffix+".png")
 	}

@@ -365,7 +365,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 			titleText(c, L(c).UsageTitle(), fsTitle).Grow(1)
 			// 查询进行中按钮换成转圈
 			if a.planBusy {
-				ui.Row(c.Key("plan-refreshing")).Size(buttonBox(), buttonBox()).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
+				ui.Row(c.Key("plan-refreshing")).Size(buttonBox(), buttonBox()).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).AlignItems(ui.Center).
 					Tooltip(L(c).UsageRefreshing()).Children(func() { ui.Spinner(c).Label(L(c).UsageRefreshing()) })
 			} else if pressable(iconButtonSized(c.Key("plan-refresh"), iconRefresh, L(c).UsageRefreshTip(), buttonBox(), iconSize)).Clicked() {
 				a.refreshPlan(L(c))
@@ -395,7 +395,10 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 						ui.Text(c, strings.Replace(u.Plan, "/mo", L(c).UsagePerMonth(), 1)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 					}
 					ui.Spacer(c)
-					if u.UpdatedAt > 0 {
+					// 刷新状态占用读数时间的位置，避免临时加行使底部浮层上下跳动。
+					if u.Agent == "codex" && a.daemon.Usage != nil && a.daemon.Usage.CodexReading {
+						ui.Text(c, L(c).UsageRefreshing()).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+					} else if u.UpdatedAt > 0 {
 						ui.Text(c, planReadingAge(L(c), u, now)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).
 							Tooltip(L(c).UsageReadAt(L(c).AppDateTime(time.UnixMilli(u.UpdatedAt).Local())))
 					}
@@ -403,8 +406,6 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 				if u.Agent == "codex" {
 					if st := a.daemon.Usage; st != nil {
 						switch {
-						case st.CodexReading:
-							ui.Text(c, L(c).UsageRefreshing()).FontSize(fsSmall).TextColor(t.TextMuted)
 						case st.CodexError != "":
 							ui.Text(c, L(c).UsageQueryFailed(errtext.Message(st.CodexError))).FontSize(fsSmall).TextColor(t.Danger)
 						case st.CodexOff:
