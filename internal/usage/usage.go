@@ -1,6 +1,6 @@
 // Package usage 记录各 agent 套餐的用量（5 小时、每周、计费周期这些窗口用了多少、什么时候重置）。
 // 读数只在 agent 运行时顺带得到：Claude 的 statusLine 输入和它自己的缓存、Codex 会话文件、Grok 的日志；
-// 只有 Cursor 本地没有，在它用过之后向 Cursor 查一次。
+// Codex、Cursor 也可直接查询在线额度。
 package usage
 
 import (
@@ -16,6 +16,7 @@ import (
 
 // Window 是一个限额窗口。
 type Window struct {
+	Unknown  bool    `json:"unknown,omitempty"`  // Codex 的窗口已重置但尚未取得新读数，只给调用方、不落盘
 	Percent  float64 `json:"percent"`            // 已用，0–100
 	Minutes  int     `json:"minutes,omitempty"`  // 窗口长度，0 是不知道
 	ResetsAt int64   `json:"resetsAt,omitempty"` // 重置时间，Unix 毫秒，0 是不知道
@@ -208,7 +209,7 @@ type file struct {
 	Usages    []Usage `json:"usages"`
 	Off       bool    `json:"off,omitempty"`       // 整个关掉：不读、不查、不显示
 	CursorOff bool    `json:"cursorOff,omitempty"` // 不向 Cursor 查询
-	CodexOff  bool    `json:"codexOff,omitempty"`  // 不让 Codex 查重置卡
+	CodexOff  bool    `json:"codexOff,omitempty"`  // 不向 ChatGPT 查询 Codex 额度和重置卡
 }
 
 // Store 保存各家的最近读数，存在 usage.json 里，常驻进程重启后还在。
@@ -265,7 +266,8 @@ func (s *Store) UpdatedAt(agent string) int64 {
 	return 0
 }
 
-// List 返回各家的读数。已经过了重置时间的窗口按用完归零：下一个窗口要等 agent 再用才知道从哪开始。
+// List 返回各家的读数。Codex 已过重置时间的窗口标成未知，不能据旧值断言新窗口未使用；
+// 其余 agent 沿用原有的到期清零。只改变返回值，不修改保存的读数。
 func (s *Store) List(now time.Time) []Usage {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -275,7 +277,11 @@ func (s *Store) List(now time.Time) []Usage {
 		u.Windows = slices.Clone(u.Windows)
 		for i, w := range u.Windows {
 			if w.ResetsAt > 0 && w.ResetsAt <= ms {
-				u.Windows[i] = Window{Minutes: w.Minutes, Name: w.Name, At: w.At}
+				if u.Agent == "codex" {
+					u.Windows[i].Unknown = true
+				} else {
+					u.Windows[i] = Window{Minutes: w.Minutes, Name: w.Name, At: w.At}
+				}
 			}
 		}
 		out = append(out, u)

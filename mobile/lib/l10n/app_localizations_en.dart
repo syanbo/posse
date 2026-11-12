@@ -2095,6 +2095,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String get usagePerMonth => '/mo';
 
   @override
+  String get usageOldValue => 'Old reading';
+
+  @override
+  String get usagePendingUpdate => 'Pending update';
+
+  @override
+  String get usageReading => 'Updating…';
+
+  @override
+  String get usageQueryDisabled =>
+      'Online queries are off. Showing the last reading.';
+
+  @override
+  String get usageCodexLoginRequired =>
+      'On your computer, run codex login and sign in with ChatGPT, then refresh usage.';
+
+  @override
+  String get usageCodexFileStorageRequired =>
+      'Codex usage requires file login storage. Set cli_auth_credentials_store to file on your computer, then run codex login again.';
+
+  @override
+  String get usageCodexDetailsFailed =>
+      'Usage updated, but reset card details couldn’t be read. Showing the last card reading; try refreshing later.';
+
+  @override
+  String get usageCodexReadFailed =>
+      'Couldn’t update Codex usage. Try again later.';
+
+  @override
+  String usageOldReading(String time) {
+    return 'Old reading · $time';
+  }
+
+  @override
   String usageReadingFrom(String time) {
     return 'Reading from $time';
   }
@@ -2164,7 +2198,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get usageSheetNote =>
-      'Usage updates as agents run on the computer. Cursor usage and Codex reset cards aren’t stored locally; the computer checks them after each one runs.';
+      'Usage updates as agents run on the computer. When online queries are enabled, opening this sheet also checks Codex usage. Expired windows wait for a new reading.';
 
   @override
   String usageShownPercent(String kind, String percent) {

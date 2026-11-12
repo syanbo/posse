@@ -4,6 +4,33 @@ package errtext
 // 只收界面上会出现的；只有 agent 经 CLI 才碰得到的（task 编排的提示等）不收。
 // 按顺序匹配、第一条匹配上的生效，越具体的放越前面。
 var zh = [][2]string{
+	// Codex 套餐查询
+	{"codex: login expired; run codex login again", "Codex 登录已过期，请运行 codex login 重新登录"},
+	{"codex: no rate limits in response", "Codex 没有返回套餐额度"},
+	{"codex: could not read reset credits: %w", "读取 Codex 重置卡失败：{1}"},
+	{"codex: invalid usage endpoint", "Codex 用量查询地址无效"},
+	{"codex: usage request failed", "无法连接 Codex 用量服务，请稍后重试"},
+	{"codex: usage request returned HTTP %d", "Codex 用量服务返回 HTTP {1}"},
+	{"codex: could not read usage response", "读取 Codex 用量回复失败"},
+	{"codex: invalid usage response", "Codex 用量回复格式无效"},
+	{"codex: could not read auth storage configuration", "读取 Codex 登录存储配置失败"},
+	{"codex: usage requires file auth storage; keyring, auto and ephemeral storage are not supported", "Codex 在线用量查询需要文件登录存储，暂不支持 keyring、auto 和 ephemeral"},
+	{"codex: not logged in; run codex login", "Codex 尚未登录，请运行 codex login"},
+	{"codex: could not read auth.json", "读取 Codex 登录文件失败"},
+	{"codex: invalid auth.json; run codex login again", "Codex 登录文件无效，请运行 codex login 重新登录"},
+	{"codex: usage requires ChatGPT login; run codex login", "Codex 套餐用量需要 ChatGPT 登录，请运行 codex login"},
+	{"codex: ChatGPT account ID is missing; run codex login again", "缺少 ChatGPT 账号标识，请运行 codex login 重新登录"},
+	{"codex: unsupported OAuth login; run codex login again", "不支持此 Codex 登录来源，请运行 codex login 重新登录"},
+	{"codex: invalid token endpoint", "Codex 登录续期地址无效"},
+	{"codex: token refresh request failed", "Codex 登录续期请求失败，请稍后重试"},
+	{"codex: token refresh returned HTTP %d", "Codex 登录续期服务返回 HTTP {1}"},
+	{"codex: could not read token refresh response", "读取 Codex 登录续期回复失败"},
+	{"codex: invalid token refresh response", "Codex 登录续期回复格式无效"},
+	{"codex: could not lock auth.json", "无法锁定 Codex 登录文件，请稍后重试"},
+	{"codex: could not save refreshed login", "保存 Codex 续期登录失败"},
+	{"codex: usage query timed out", "Codex 用量查询超时，请稍后重试"},
+	{"codex: reset credits query timed out", "读取 Codex 重置卡超时，额度已更新，请稍后重试"},
+	{"unsupported usage agent", "不支持查询此 Agent 的用量"},
 	// 手机端讨论
 	{"invalid discussion report range", "汇报文件读取范围无效，文件必须不超过 20 MiB"},
 	{"discussion report not found", "讨论汇报文件不存在或已移除"},

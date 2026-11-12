@@ -245,8 +245,8 @@ func (h mobileHost) RecordGit(r mobile.GitRecord) {
 	}
 }
 
-func (h mobileHost) RefreshUsage(ctx context.Context) (any, error) {
-	return h.d.usageRefresh(ctx, nil)
+func (h mobileHost) RefreshUsage(ctx context.Context, params json.RawMessage) (any, error) {
+	return h.d.usageRefresh(ctx, params)
 }
 
 func (h mobileHost) History(ctx context.Context, method string, params json.RawMessage) (any, error) {

@@ -3506,6 +3506,60 @@ abstract class AppLocalizations {
   /// **'/mo'**
   String get usagePerMonth;
 
+  /// Plan Usage home card: Codex reading is more than five minutes old.
+  ///
+  /// In en, this message translates to:
+  /// **'Old reading'**
+  String get usageOldValue;
+
+  /// Plan Usage: an expired Codex window has no current reading; replaces its percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending update'**
+  String get usagePendingUpdate;
+
+  /// Plan Usage: Codex usage is being read.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating…'**
+  String get usageReading;
+
+  /// Plan Usage: Codex online queries are disabled on the computer.
+  ///
+  /// In en, this message translates to:
+  /// **'Online queries are off. Showing the last reading.'**
+  String get usageQueryDisabled;
+
+  /// Plan Usage: Codex login is missing, expired or unsupported; directs the user to log in again.
+  ///
+  /// In en, this message translates to:
+  /// **'On your computer, run codex login and sign in with ChatGPT, then refresh usage.'**
+  String get usageCodexLoginRequired;
+
+  /// Plan Usage: Codex keyring, auto and ephemeral credential storage cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Codex usage requires file login storage. Set cli_auth_credentials_store to file on your computer, then run codex login again.'**
+  String get usageCodexFileStorageRequired;
+
+  /// Plan Usage: main Codex usage succeeded but reset credit details failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage updated, but reset card details couldn’t be read. Showing the last card reading; try refreshing later.'**
+  String get usageCodexDetailsFailed;
+
+  /// Plan Usage: Codex usage read failed; previous readings remain visible if available.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t update Codex usage. Try again later.'**
+  String get usageCodexReadFailed;
+
+  /// Plan Usage: Codex reading is more than five minutes old; time is the age of the last successful reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Old reading · {time}'**
+  String usageOldReading(String time);
+
   /// Plan Usage sheet: second line under a pool’s reset time, the age of that pool’s own reading.
   ///
   /// In en, this message translates to:
@@ -3569,7 +3623,7 @@ abstract class AppLocalizations {
   /// Plan Usage sheet: note at the bottom.
   ///
   /// In en, this message translates to:
-  /// **'Usage updates as agents run on the computer. Cursor usage and Codex reset cards aren’t stored locally; the computer checks them after each one runs.'**
+  /// **'Usage updates as agents run on the computer. When online queries are enabled, opening this sheet also checks Codex usage. Expired windows wait for a new reading.'**
   String get usageSheetNote;
 
   /// Plan Usage sheet: percentage after a bar; kind is Used or Remaining, percent includes %.

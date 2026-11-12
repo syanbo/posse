@@ -44,6 +44,292 @@ void main() {
     expect(us[1].spend?.limit, 40000);
   });
 
+  test('Codex unknown preserves the reading and follows cached reset time', () {
+    final now = DateTime(2026, 11, 12, 12);
+    final status = UsageStatus.fromJson({
+      'codexError': 'read failed',
+      'codexReading': true,
+      'usages': [
+        {
+          'agent': 'codex',
+          'updatedAt': now
+              .subtract(const Duration(minutes: 6))
+              .millisecondsSinceEpoch,
+          'windows': [
+            {
+              'percent': 96,
+              'minutes': 300,
+              'resetsAt': now
+                  .subtract(const Duration(seconds: 1))
+                  .millisecondsSinceEpoch,
+            },
+            {'percent': 81, 'minutes': 10080, 'unknown': true},
+          ],
+        },
+      ],
+    });
+    expect(en.usagePendingUpdate, 'Pending update');
+    expect(en.usageOldValue, 'Old reading');
+    expect(zh.usageOldReading('6 分钟前'), '旧值 · 6 分钟前');
+    expect(status.codexError, 'read failed');
+    expect(status.codexReading, isTrue);
+    expect(status.codexOff, isFalse);
+    expect(UsageStatus.fromJson({'codexOff': true}).codexOff, isTrue);
+    final u = status.usages.single;
+    expect(u.windows.first.percent, 96);
+    expect(u.windows.first.resetsAt, now.subtract(const Duration(seconds: 1)));
+    expect(u.windowUnknown(u.windows.first, now), isTrue);
+    expect(u.windowUnknown(u.windows.last, now), isTrue);
+    expect(
+      u.windowUnknown(
+        u.windows.first,
+        now.subtract(const Duration(minutes: 1)),
+      ),
+      isFalse,
+    );
+    expect(u.stale(now), isTrue);
+    expect(u.stale(u.updatedAt.add(const Duration(minutes: 5))), isFalse);
+    final claude = AgentUsage(
+      agent: 'claude',
+      windows: u.windows,
+      updatedAt: u.updatedAt,
+    );
+    expect(claude.windowUnknown(claude.windows.first, now), isFalse);
+    expect(claude.stale(now), isFalse);
+  });
+
+  testWidgets('unknown windows hide percentages and urgency in both modes', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final u = AgentUsage(
+      agent: 'codex',
+      windows: [
+        UsageWindow(
+          percent: 96,
+          minutes: 300,
+          resetsAt: now.subtract(const Duration(minutes: 1)),
+        ),
+        UsageWindow(
+          percent: 0,
+          minutes: 10080,
+          unknown: true,
+          resetsAt: now.add(const Duration(hours: 2)),
+        ),
+      ],
+      updatedAt: now.subtract(const Duration(minutes: 6)),
+    );
+    for (final remaining in [false, true]) {
+      usageRemaining.value = remaining;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.light),
+          home: Scaffold(body: UsageSheet(usages: [u])),
+        ),
+      );
+      expect(find.text('待更新'), findsNWidgets(2));
+      expect(find.textContaining('96%'), findsNothing);
+      expect(find.text('已重置'), findsNothing);
+      expect(find.textContaining('4%'), findsNothing);
+      expect(find.textContaining('100%'), findsNothing);
+      expect(find.textContaining('后重置'), findsNothing);
+      for (final bar in tester.widgetList<UsageBar>(find.byType(UsageBar))) {
+        expect(bar.percent, 0);
+        expect(bar.urgent, isFalse);
+      }
+      expect(find.textContaining('旧值 · '), findsOneWidget);
+      final label = tester.widget<Text>(find.text('待更新').first);
+      expect(
+        label.style?.color,
+        isNot(posseTheme(Brightness.light).colorScheme.error),
+      );
+    }
+    usageRemaining.value = false;
+  });
+
+  testWidgets('Codex failure without windows stays visible and localized', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.light),
+        home: const Scaffold(
+          body: UsageCardView(
+            usages: [],
+            codexError: 'unexpected upstream response',
+          ),
+        ),
+      ),
+    );
+    expect(find.text('待更新'), findsOneWidget);
+    await tester.tap(find.byType(UsageCardView));
+    await tester.pumpAndSettle();
+    expect(find.text('Codex'), findsOneWidget);
+    expect(find.text('Codex 用量更新失败，请稍后重试。'), findsOneWidget);
+    expect(find.textContaining('unexpected upstream response'), findsNothing);
+  });
+
+  testWidgets('opening details checks Codex and manual refresh still works', (
+    tester,
+  ) async {
+    var automatic = 0;
+    var manual = 0;
+    final now = DateTime.now();
+    final u = AgentUsage(
+      agent: 'codex',
+      windows: const [UsageWindow(percent: 17, minutes: 300)],
+      updatedAt: now,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.light),
+        home: Scaffold(
+          body: UsageCardView(
+            usages: [u],
+            onCodexRefresh: () async {
+              automatic++;
+              return UsageStatus(usages: [u], codexError: 'read failed');
+            },
+            onRefresh: () async {
+              manual++;
+              return UsageStatus(usages: [u]);
+            },
+          ),
+        ),
+      ),
+    );
+    expect(automatic, 0);
+    await tester.tap(find.byType(UsageCardView));
+    await tester.pumpAndSettle();
+    expect(automatic, 1);
+    expect(manual, 0);
+    expect(find.text('已用 17%'), findsOneWidget);
+    expect(find.text('Codex 用量更新失败，请稍后重试。'), findsOneWidget);
+    await tester.tap(find.byTooltip('刷新'));
+    await tester.pumpAndSettle();
+    expect(manual, 1);
+    expect(find.text('Codex 用量更新失败，请稍后重试。'), findsNothing);
+  });
+
+  testWidgets(
+    'disabled Codex skips automatic queries and follows refresh state',
+    (tester) async {
+      var automatic = 0;
+      var off = false;
+      final usages = [
+        AgentUsage(
+          agent: 'codex',
+          windows: const [UsageWindow(percent: 17, minutes: 300)],
+          updatedAt: DateTime.now(),
+        ),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.light),
+          home: Scaffold(
+            body: UsageCardView(
+              usages: usages,
+              codexOff: true,
+              onCodexRefresh: () async {
+                automatic++;
+                return const UsageStatus();
+              },
+              onRefresh: () async => UsageStatus(usages: usages, codexOff: off),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byType(UsageCardView));
+      await tester.pumpAndSettle();
+      expect(automatic, 0);
+      expect(find.text(zh.usageQueryDisabled), findsOneWidget);
+      await tester.tap(find.byTooltip('刷新'));
+      await tester.pumpAndSettle();
+      expect(find.text(zh.usageQueryDisabled), findsNothing);
+      off = true;
+      await tester.tap(find.byTooltip('刷新'));
+      await tester.pumpAndSettle();
+      expect(find.text(zh.usageQueryDisabled), findsOneWidget);
+      expect(automatic, 0);
+    },
+  );
+
+  testWidgets('disabled Codex does not create a card or sheet placeholder', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.light),
+        home: Scaffold(
+          body: UsageCardView(
+            codexOff: true,
+            usages: [
+              AgentUsage(
+                agent: 'claude',
+                windows: const [UsageWindow(percent: 42, minutes: 300)],
+                updatedAt: DateTime.now(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(find.text('42%'), findsOneWidget);
+    expect(find.text(zh.usagePendingUpdate), findsNothing);
+    await tester.tap(find.byType(UsageCardView));
+    await tester.pumpAndSettle();
+    expect(find.text('Claude'), findsOneWidget);
+    expect(find.text('Codex'), findsNothing);
+    expect(find.text(zh.usageQueryDisabled), findsNothing);
+    expect(find.text(zh.usagePendingUpdate), findsNothing);
+  });
+
+  testWidgets('Codex errors explain the required action without raw errors', (
+    tester,
+  ) async {
+    final cases = {
+      'codex: reset credits query timed out': zh.usageCodexDetailsFailed,
+      'codex: login expired; run codex login again': zh.usageCodexLoginRequired,
+      'codex: not logged in; run codex login': zh.usageCodexLoginRequired,
+      'codex: invalid auth.json; run codex login again':
+          zh.usageCodexLoginRequired,
+      'codex: usage requires ChatGPT login; run codex login':
+          zh.usageCodexLoginRequired,
+      'codex: ChatGPT account ID is missing; run codex login again':
+          zh.usageCodexLoginRequired,
+      'codex: unsupported OAuth login; run codex login again':
+          zh.usageCodexLoginRequired,
+      'codex: usage requires file auth storage; keyring, auto and ephemeral storage are not supported':
+          zh.usageCodexFileStorageRequired,
+      'codex: could not read reset credits: context deadline exceeded':
+          zh.usageCodexDetailsFailed,
+      'codex: usage request returned HTTP 500': zh.usageCodexReadFailed,
+      'socket closed': zh.errorConnectionLost,
+    };
+    for (final entry in cases.entries) {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.light),
+          home: Scaffold(
+            body: UsageSheet(
+              key: ValueKey(entry.key),
+              usages: const [],
+              codexError: entry.key,
+            ),
+          ),
+        ),
+      );
+      expect(find.text(entry.value), findsOneWidget);
+      expect(find.text(entry.key), findsNothing);
+    }
+    expect(zh.usageCodexLoginRequired, contains('codex login'));
+    expect(
+      zh.usageCodexFileStorageRequired,
+      contains('cli_auth_credentials_store'),
+    );
+    expect(zh.usageCodexDetailsFailed, contains('用量已更新'));
+  });
+
   test('labels windows like the desktop', () {
     expect(windowLabel(zh, 300), '5 小时');
     expect(windowLabel(zh, 10080), '每周');
@@ -204,18 +490,20 @@ void main() {
 
   testWidgets('sheet refresh swaps in the new readings', (tester) async {
     var fail = false;
-    Future<List<AgentUsage>> refresh() async {
+    Future<UsageStatus> refresh() async {
       if (fail) {
         throw RpcException('unknown_method', 'Unknown method: usage.refresh');
       }
-      return [
-        AgentUsage(
-          agent: 'codex',
-          plan: 'Plus',
-          windows: const [UsageWindow(percent: 30, minutes: 300)],
-          updatedAt: DateTime.now(),
-        ),
-      ];
+      return UsageStatus(
+        usages: [
+          AgentUsage(
+            agent: 'codex',
+            plan: 'Plus',
+            windows: const [UsageWindow(percent: 30, minutes: 300)],
+            updatedAt: DateTime.now(),
+          ),
+        ],
+      );
     }
 
     await tester.pumpWidget(
@@ -254,11 +542,24 @@ void main() {
     final offer = PairingOffer.parse(code);
     SharedPreferences.setMockInitialValues({
       'usage.cache.${computerId(offer)}': jsonEncode({
+        'codexOff': true,
         'usages': [
           {
             'agent': 'claude',
             'windows': [
               {'percent': 42, 'minutes': 300},
+            ],
+          },
+          {
+            'agent': 'codex',
+            'windows': [
+              {
+                'percent': 99,
+                'minutes': 300,
+                'resetsAt': DateTime.now()
+                    .subtract(const Duration(minutes: 1))
+                    .millisecondsSinceEpoch,
+              },
             ],
           },
         ],
@@ -279,5 +580,11 @@ void main() {
     // 还没连上（rpc 为空）就显示上次的读数，连上后原地换数，下面的列表不跳
     expect(model.rpc, isNull);
     expect(find.text('42%'), findsOneWidget);
+    expect(find.text('99%'), findsNothing);
+    expect(find.text('待更新'), findsOneWidget);
+    await tester.tap(find.byType(UsageCardView));
+    await tester.pumpAndSettle();
+    expect(find.text(zh.usageQueryDisabled), findsOneWidget);
+    expect(find.text(zh.usageNotConnected), findsNothing);
   });
 }

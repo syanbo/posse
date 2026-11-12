@@ -29,6 +29,7 @@ class UsageWindow {
     this.resetsAt,
     this.name = '',
     this.at,
+    this.unknown = false,
   });
 
   final double percent;
@@ -36,6 +37,7 @@ class UsageWindow {
   final DateTime? resetsAt;
   final String name;
   final DateTime? at;
+  final bool unknown;
 
   factory UsageWindow.fromJson(Map<String, Object?> j) => UsageWindow(
     percent: (j['percent'] as num?)?.toDouble() ?? 0,
@@ -43,6 +45,7 @@ class UsageWindow {
     resetsAt: _ms(j['resetsAt']),
     name: j['name'] as String? ?? '',
     at: _ms(j['at']),
+    unknown: j['unknown'] == true,
   );
 }
 
@@ -126,6 +129,14 @@ class AgentUsage {
     );
   }
 
+  bool windowUnknown(UsageWindow w, DateTime now) =>
+      w.unknown ||
+      (agent == 'codex' && w.resetsAt != null && !w.resetsAt!.isAfter(now));
+
+  bool stale(DateTime now) =>
+      agent == 'codex' &&
+      now.difference(updatedAt) > const Duration(minutes: 5);
+
   /// 要显示的窗口，和桌面端 planWindows 一致：Cursor 有分池时照它的控制台只列两池，
   /// 总的百分比按 Auto 池折算，远低于两池，并排看着像算错了。
   List<UsageWindow> get shownWindows {
@@ -139,6 +150,7 @@ class AgentUsage {
   /// 还没用过，照样写 5 小时，不换成每周。
   UsageWindow get headWindow {
     final ws = shownWindows;
+    if (ws.isEmpty) return const UsageWindow(percent: 0, unknown: true);
     for (final w in ws) {
       if (w.name.isEmpty && WindowKind.of(w.minutes) == WindowKind.fiveHours) {
         return w;
@@ -225,6 +237,71 @@ List<AgentUsage> parseUsages(Map<String, Object?> res) => [
   for (final u in (res['usages'] as List?) ?? const [])
     AgentUsage.fromJson((u as Map).cast<String, Object?>()),
 ];
+
+/// 读取状态与读数分开：失败时仍保留上次成功读取的时间和数值。
+class UsageStatus {
+  const UsageStatus({
+    this.usages = const [],
+    this.codexError = '',
+    this.codexReading = false,
+    this.codexOff = false,
+  });
+
+  factory UsageStatus.fromJson(Map<String, Object?> res) => UsageStatus(
+    usages: parseUsages(res),
+    codexError: res['codexError'] as String? ?? '',
+    codexReading: res['codexReading'] == true,
+    codexOff: res['codexOff'] == true,
+  );
+
+  final List<AgentUsage> usages;
+  final String codexError;
+  final bool codexReading;
+  final bool codexOff;
+}
+
+String _usageError(Object error, AppLocalizations l) {
+  final raw = error is RpcException ? error.message : '$error';
+  if (raw.startsWith('codex: could not read reset credits:') ||
+      raw == 'codex: reset credits query timed out') {
+    return l.usageCodexDetailsFailed;
+  }
+  if (raw ==
+      'codex: usage requires file auth storage; keyring, auto and ephemeral storage are not supported') {
+    return l.usageCodexFileStorageRequired;
+  }
+  if (const {
+    'codex: login expired; run codex login again',
+    'codex: not logged in; run codex login',
+    'codex: invalid auth.json; run codex login again',
+    'codex: usage requires ChatGPT login; run codex login',
+    'codex: ChatGPT account ID is missing; run codex login again',
+    'codex: unsupported OAuth login; run codex login again',
+  }.contains(raw)) {
+    return l.usageCodexLoginRequired;
+  }
+  final friendly = friendlyError(error, l);
+  return friendly != raw ? friendly : l.usageCodexReadFailed;
+}
+
+List<AgentUsage> _visibleUsages(
+  List<AgentUsage> usages,
+  String codexError,
+  bool codexReading,
+) {
+  final shown = usages.where((u) => u.windows.isNotEmpty).toList();
+  if ((codexError.isNotEmpty || codexReading) &&
+      !shown.any((u) => u.agent == 'codex')) {
+    shown.add(
+      AgentUsage(
+        agent: 'codex',
+        windows: const [],
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+      ),
+    );
+  }
+  return shown;
+}
 
 /// 窗口的名字，和桌面端 windowLabel 一致。
 String windowLabel(AppLocalizations l, int minutes) {
@@ -326,7 +403,7 @@ class UsageCard extends StatefulWidget {
 }
 
 class _UsageCardState extends State<UsageCard> {
-  List<AgentUsage> _usages = const [];
+  UsageStatus _status = const UsageStatus();
   Timer? _timer;
   Object? _rpc;
   String? _computer;
@@ -341,7 +418,10 @@ class _UsageCardState extends State<UsageCard> {
     unawaited(loadUsageMode());
     // 读数只在电脑上的 agent 运行时变，一分钟取一次足够
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (!appAway) _load();
+      if (!appAway) {
+        setState(() {});
+        _load();
+      }
     });
   }
 
@@ -357,7 +437,7 @@ class _UsageCardState extends State<UsageCard> {
     if (id != _computer) {
       _computer = id;
       _fresh = false;
-      if (_usages.isNotEmpty) setState(() => _usages = const []);
+      setState(() => _status = const UsageStatus());
       if (id != null) unawaited(_loadCached(id));
     }
     final rpc = widget.model.rpc;
@@ -375,8 +455,10 @@ class _UsageCardState extends State<UsageCard> {
       return;
     }
     try {
-      final us = parseUsages((jsonDecode(raw) as Map).cast<String, Object?>());
-      setState(() => _usages = us);
+      final status = UsageStatus.fromJson(
+        (jsonDecode(raw) as Map).cast<String, Object?>(),
+      );
+      setState(() => _status = status);
     } catch (_) {}
   }
 
@@ -388,14 +470,14 @@ class _UsageCardState extends State<UsageCard> {
       final res = await rpc.call('usage.get', {});
       if (!mounted || !identical(rpc, widget.model.rpc)) return;
       _fresh = true;
-      setState(() => _usages = parseUsages(res));
+      setState(() => _status = UsageStatus.fromJson(res));
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_cacheKey(id), jsonEncode(res));
     } catch (e) {
       // 旧版电脑端没有这个接口：不显示卡片。超时、断线这类留着上次的读数
       if (!(e is RpcException && e.missingMethod)) return;
-      if (mounted && identical(rpc, widget.model.rpc) && _usages.isNotEmpty) {
-        setState(() => _usages = const []);
+      if (mounted && identical(rpc, widget.model.rpc)) {
+        setState(() => _status = const UsageStatus());
       }
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_cacheKey(id));
@@ -404,30 +486,36 @@ class _UsageCardState extends State<UsageCard> {
 
   static String _cacheKey(String computer) => 'usage.cache.$computer';
 
-  /// 详情里的刷新：电脑上各家马上取一次（Codex、Cursor 要联网，最长半分钟），首页卡片一起换上新读数。
-  Future<List<AgentUsage>> _refresh() async {
+  /// 手动刷新所有读数；打开详情只补查 Codex，由电脑端限频。
+  Future<UsageStatus> _refresh({bool codexOnly = false}) async {
     final rpc = widget.model.rpc;
     if (rpc == null) throw const _NotConnected();
     final res = await rpc.call(
       'usage.refresh',
-      {},
+      codexOnly ? {'agent': 'codex', 'force': false} : {},
       timeout: const Duration(seconds: 50),
     );
-    final us = parseUsages(res);
+    final status = UsageStatus.fromJson(res);
     if (mounted && identical(rpc, widget.model.rpc)) {
       _fresh = true;
-      setState(() => _usages = us);
+      setState(() => _status = status);
       if (_computer case final id?) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_cacheKey(id), jsonEncode(res));
       }
     }
-    return us;
+    return status;
   }
 
   @override
-  Widget build(BuildContext context) =>
-      UsageCardView(usages: _usages, onRefresh: _refresh);
+  Widget build(BuildContext context) => UsageCardView(
+    usages: _status.usages,
+    codexError: _status.codexError,
+    codexReading: _status.codexReading,
+    codexOff: _status.codexOff,
+    onRefresh: _refresh,
+    onCodexRefresh: () => _refresh(codexOnly: true),
+  );
 }
 
 /// 刷新时电脑没连上，详情里按界面语言写。
@@ -437,14 +525,26 @@ class _NotConnected implements Exception {
 
 /// 卡片的样子，和取数据分开，测试和截图直接给读数。
 class UsageCardView extends StatelessWidget {
-  const UsageCardView({super.key, required this.usages, this.onRefresh});
+  const UsageCardView({
+    super.key,
+    required this.usages,
+    this.codexError = '',
+    this.codexReading = false,
+    this.codexOff = false,
+    this.onRefresh,
+    this.onCodexRefresh,
+  });
 
   final List<AgentUsage> usages;
-  final Future<List<AgentUsage>> Function()? onRefresh;
+  final Future<UsageStatus> Function()? onRefresh;
+  final Future<UsageStatus> Function()? onCodexRefresh;
+  final String codexError;
+  final bool codexReading;
+  final bool codexOff;
 
   @override
   Widget build(BuildContext context) {
-    final shown = usages.where((u) => u.windows.isNotEmpty).toList();
+    final shown = _visibleUsages(usages, codexError, codexReading);
     if (shown.isEmpty) return const SizedBox.shrink();
     final c = PosseColors.of(context);
     return ValueListenableBuilder(
@@ -475,7 +575,14 @@ class UsageCardView extends StatelessWidget {
             constraints: BoxConstraints(
               maxHeight: MediaQuery.sizeOf(context).height * 0.85,
             ),
-            builder: (_) => UsageSheet(usages: shown, onRefresh: onRefresh),
+            builder: (_) => UsageSheet(
+              usages: shown,
+              codexError: codexError,
+              codexReading: codexReading,
+              codexOff: codexOff,
+              onRefresh: onRefresh,
+              onCodexRefresh: onCodexRefresh,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
@@ -520,7 +627,8 @@ class _UsageChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
     final w = usage.headWindow;
-    final urgent = w.percent >= usageUrgent;
+    final unknown = usage.windowUnknown(w, DateTime.now());
+    final urgent = !unknown && w.percent >= usageUrgent;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -532,7 +640,9 @@ class _UsageChip extends StatelessWidget {
         ),
         const SizedBox(width: 4),
         Text(
-          '${shownPercent(w, remaining).round()}%',
+          unknown
+              ? context.l10n.usagePendingUpdate
+              : '${shownPercent(w, remaining).round()}%',
           style: TextStyle(
             fontSize: Fs.small,
             fontWeight: Fw.medium,
@@ -540,6 +650,14 @@ class _UsageChip extends StatelessWidget {
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
+        if (usage.stale(DateTime.now()) &&
+            usage.updatedAt.millisecondsSinceEpoch > 0) ...[
+          const SizedBox(width: 4),
+          Text(
+            context.l10n.usageOldValue,
+            style: TextStyle(fontSize: Fs.small, color: c.muted),
+          ),
+        ],
       ],
     );
   }
@@ -613,43 +731,89 @@ double _textWidth(BuildContext context, String text, TextStyle style) {
 
 /// 点开卡片的详情：每家的套餐、各窗口的进度和重置时间、读数时间。
 class UsageSheet extends StatefulWidget {
-  const UsageSheet({super.key, required this.usages, this.onRefresh});
+  const UsageSheet({
+    super.key,
+    required this.usages,
+    this.codexError = '',
+    this.codexReading = false,
+    this.codexOff = false,
+    this.onRefresh,
+    this.onCodexRefresh,
+  });
 
   final List<AgentUsage> usages;
 
   /// 顶栏的刷新按钮，没有时不显示；返回新的读数
-  final Future<List<AgentUsage>> Function()? onRefresh;
+  final Future<UsageStatus> Function()? onRefresh;
+  final Future<UsageStatus> Function()? onCodexRefresh;
+  final String codexError;
+  final bool codexReading;
+  final bool codexOff;
 
   @override
   State<UsageSheet> createState() => _UsageSheetState();
 }
 
 class _UsageSheetState extends State<UsageSheet> {
-  late List<AgentUsage> usages = widget.usages;
+  late UsageStatus _status = UsageStatus(
+    usages: widget.usages,
+    codexError: widget.codexError,
+    codexReading: widget.codexReading,
+    codexOff: widget.codexOff,
+  );
+  Timer? _timer;
+  String _codexRefreshError = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!appAway) setState(() {});
+    });
+    if (widget.onCodexRefresh != null && !_status.codexOff) {
+      unawaited(_refresh(codexOnly: true));
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
   bool _refreshing = false;
   String _error = '';
 
-  Future<void> _refresh() async {
+  Future<void> _refresh({bool codexOnly = false}) async {
+    if (codexOnly && _status.codexOff) return;
     setState(() {
       _refreshing = true;
       _error = '';
+      _codexRefreshError = '';
     });
     try {
-      final us = await widget.onRefresh!();
+      final status = await (codexOnly
+          ? widget.onCodexRefresh!()
+          : widget.onRefresh!());
       if (!mounted) return;
-      setState(() => usages = us.where((u) => u.windows.isNotEmpty).toList());
+      setState(() => _status = status);
     } catch (e) {
       if (!mounted) return;
       // 电脑上的 Posse 太旧没有这个接口时说清楚，别的错误照常写
       final l = context.l10n;
       final old = e is RpcException && e.missingMethod;
-      setState(
-        () => _error = e is _NotConnected
+      setState(() {
+        final message = e is _NotConnected
             ? l.usageNotConnected
             : old
             ? l.usageOldPosse
-            : friendlyError(e, l),
-      );
+            : _usageError(e, l);
+        if (codexOnly) {
+          _codexRefreshError = message;
+        } else {
+          _error = message;
+        }
+      });
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
@@ -665,6 +829,14 @@ class _UsageSheetState extends State<UsageSheet> {
     final c = PosseColors.of(context);
     final l = context.l10n;
     final now = DateTime.now();
+    final codexError = _codexRefreshError.isNotEmpty
+        ? _codexRefreshError
+        : _status.codexError;
+    final usages = _visibleUsages(
+      _status.usages,
+      codexError,
+      _status.codexReading || _refreshing,
+    );
     // 两列宽度按当前语言最长的文字量，至少是中文排好的宽度，英文的 Remaining 不折行
     final segmentedWidth = math.max<double>(
       128.0,
@@ -768,11 +940,40 @@ class _UsageSheetState extends State<UsageSheet> {
                 ] else
                   const Spacer(),
                 Text(
-                  agoText(l, u.updatedAt, now),
+                  u.updatedAt.millisecondsSinceEpoch == 0
+                      ? ''
+                      : u.stale(now)
+                      ? l.usageOldReading(agoText(l, u.updatedAt, now))
+                      : agoText(l, u.updatedAt, now),
                   style: TextStyle(fontSize: Fs.small, color: c.muted),
                 ),
               ],
             ),
+            if (u.agent == 'codex' && _status.codexOff) ...[
+              const SizedBox(height: 8),
+              Text(
+                l.usageQueryDisabled,
+                style: TextStyle(fontSize: Fs.small, color: c.muted),
+              ),
+            ],
+            if (u.agent == 'codex' &&
+                !_status.codexOff &&
+                (_status.codexReading || _refreshing)) ...[
+              const SizedBox(height: 8),
+              Text(
+                l.usageReading,
+                style: TextStyle(fontSize: Fs.small, color: c.muted),
+              ),
+            ],
+            if (u.agent == 'codex' && codexError.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                _codexRefreshError.isNotEmpty
+                    ? _codexRefreshError
+                    : _usageError(codexError, l),
+                style: TextStyle(fontSize: Fs.small, color: c.danger),
+              ),
+            ],
             for (final w in u.shownWindows) ...[
               const SizedBox(height: 12),
               Row(
@@ -784,7 +985,14 @@ class _UsageSheetState extends State<UsageSheet> {
                     ),
                   ),
                   Text(
-                    resetText(l, w.resetsAt, now, h24: use24Hour(context)),
+                    u.windowUnknown(w, now)
+                        ? ''
+                        : resetText(
+                            l,
+                            w.resetsAt,
+                            now,
+                            h24: use24Hour(context),
+                          ),
                     style: TextStyle(fontSize: Fs.small, color: c.muted),
                   ),
                 ],
@@ -805,23 +1013,31 @@ class _UsageSheetState extends State<UsageSheet> {
                 children: [
                   Expanded(
                     child: UsageBar(
-                      percent: shownPercent(w, remaining),
-                      urgent: w.percent >= usageUrgent,
+                      percent: u.windowUnknown(w, now)
+                          ? 0
+                          : shownPercent(w, remaining),
+                      urgent:
+                          !u.windowUnknown(w, now) && w.percent >= usageUrgent,
                     ),
                   ),
                   const SizedBox(width: 8),
                   SizedBox(
                     width: percentWidth,
                     child: Text(
-                      l.usageShownPercent(
-                        remaining ? l.usageRemaining : l.usageUsed,
-                        '${shownPercent(w, remaining).round()}%',
-                      ),
+                      u.windowUnknown(w, now)
+                          ? l.usagePendingUpdate
+                          : l.usageShownPercent(
+                              remaining ? l.usageRemaining : l.usageUsed,
+                              '${shownPercent(w, remaining).round()}%',
+                            ),
                       textAlign: TextAlign.end,
                       style: TextStyle(
                         fontSize: Fs.small,
                         fontWeight: Fw.medium,
-                        color: w.percent >= usageUrgent ? c.danger : c.text,
+                        color:
+                            !u.windowUnknown(w, now) && w.percent >= usageUrgent
+                            ? c.danger
+                            : c.text,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),

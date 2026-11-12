@@ -251,19 +251,6 @@ func TestCursorPools(t *testing.T) {
 	}
 }
 
-// 回应照 codex app-server 0.163 的 account/rateLimits/read 实际返回（去掉了 ID）。
-func TestCodexRateLimits(t *testing.T) {
-	raw := `{"ordinaryUsageAllowed":true,"rateLimits":{"limitId":"codex","primary":{"usedPercent":2,"windowDurationMins":300,"resetsAt":1792446937},"secondary":{"usedPercent":8,"windowDurationMins":10080,"resetsAt":1792900210},"credits":{"hasCredits":false},"planType":"plus"},
-		"rateLimitResetCredits":{"availableCount":3,"credits":[{"status":"available","expiresAt":1793292156},{"status":"available","expiresAt":1792693790},{"status":"redeemed","expiresAt":1790000000}]}}`
-	u, ok := codexRateLimits([]byte(raw), time.UnixMilli(1792430000000))
-	if !ok || u.Plan != "Plus" || len(u.Windows) != 2 || u.Windows[0].Percent != 2 {
-		t.Fatalf("got %+v", u)
-	}
-	if u.Resets == nil || u.Resets.Count != 3 || u.Resets.ExpiresAt != 1792693790000 {
-		t.Fatalf("resets %+v", u.Resets)
-	}
-}
-
 func TestCursorPlan(t *testing.T) {
 	raw := `{"planInfo":{"planName":"Ultra","price":"$200/mo","billingCycleEnd":"1794853147000"}}`
 	if got := cursorPlan([]byte(raw)); got != "Ultra $200/mo" {

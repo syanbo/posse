@@ -40,7 +40,7 @@ type Host interface {
 	// Usage 是各 agent 的套餐用量，和 daemon.status 里给窗口的一样
 	Usage() any
 	// RefreshUsage 让各家马上取一次用量（同窗口的刷新），做完返回新的读数；Codex、Cursor 要联网，最长半分钟
-	RefreshUsage(ctx context.Context) (any, error)
+	RefreshUsage(ctx context.Context, params json.RawMessage) (any, error)
 	// Desk 开始一次看桌面：采集起来、UDP 听上之后返回。之后一直运行到 ctx 结束或出错，
 	// 期间经 notify 推状态，结束时恰好推一次 Type 为 end 的事件（ctx 结束也推）。
 	// 错误用 DeskError 带上错误码。
@@ -660,7 +660,7 @@ func (c *conn) dispatch(req request) error {
 		go func() {
 			ctx, cancel := context.WithTimeout(c.ctx, 45*time.Second)
 			defer cancel()
-			res, err := c.srv.host.RefreshUsage(ctx)
+			res, err := c.srv.host.RefreshUsage(ctx, p)
 			c.replyOrFail(req.ID, res, err)
 		}()
 		return nil

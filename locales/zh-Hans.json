@@ -1554,7 +1554,7 @@
   "upgradeMismatch": "常驻进程的版本和窗口不一致，读不到项目：到设置 › 关于 更新常驻进程，终端不会断开。（{error}）",
   "upgradeRunning": "常驻进程的版本和窗口不一致，正在更新常驻进程，终端不会断开…",
   "upgradeTooOld": "常驻进程的版本太旧，读不到项目，也不支持不断开终端的更新：到设置 › 关于 重启常驻进程。（{error}）",
-  "usageCodexQuery": "查询 Codex 重置卡",
+  "usageCodexQuery": "查询 Codex 套餐用量",
   "usageCursorModels": "Cursor 模型",
   "usageCursorQuery": "查询 Cursor 用量",
   "usageDaemonRequired": "更新常驻进程后可用。",
@@ -1571,7 +1571,7 @@
   "usageReadAt": "读数来自 agent 最近一次运行：{time}",
   "usageReadingAge": "{time}的读数",
   "usageRefreshError": "刷新套餐用量失败：{error}",
-  "usageRefreshNote": "Agent 运行时顺带更新，点右上角的刷新马上查一次；Claude 没有可查的接口，只读它自己的缓存。",
+  "usageRefreshNote": "打开详情时自动查询 Codex，点刷新立即查询；Claude 只读取它自己的缓存。",
   "usageRefreshTip": "立即查询各家用量",
   "usageRefreshing": "正在查询",
   "usageRemaining": "剩余",
@@ -1582,7 +1582,7 @@
   "usageResetInHours": "{count, plural, other {# 小时后重置}}",
   "usageResetInHoursMinutes": "{hours} 小时 {minutes} 分钟后重置",
   "usageResetInMinutes": "{count, plural, other {# 分钟后重置}}",
-  "usageSettingsNote": "关掉后底栏和手机都不显示，常驻进程也不再读取和查询；上面关掉的 agent 同样不显示、不读取。打开时底栏显示各 agent 套餐用了多少，在 agent 运行时顺带更新：Claude、Codex、Grok 读它们自己留在本地的记录。下面两项本地没有，要向它们查（至少隔 5 分钟）：Cursor 在常驻进程启动和它用过之后，用 cursor-agent 存在钥匙串里的登录信息去查；Codex 的重置卡在它用过之后，由 Codex 用自己的登录去查。",
+  "usageSettingsNote": "关掉后桌面和手机都不显示，常驻进程也不再读取和查询；上面关掉的 agent 同样不显示、不读取。Claude 和 Grok 读取本地记录。Codex 使用它的登录信息直接查询 ChatGPT，在启动、使用后和打开用量详情时更新，至少隔 1 分钟，也接收本地会话读数。Cursor 在启动和使用后查询，至少隔 5 分钟，使用 cursor-agent 存在钥匙串里的登录信息。",
   "usageShares": "本周用量用在 {shares}{stale}",
   "usageShowLabel": "显示套餐用量",
   "usageShownPercent": "{kind} {percent}",
@@ -1861,5 +1861,10 @@
   "settingsProfileOffline": "房主上线后自动发送",
   "settingsProfileUnsupported": "房主的 Posse 版本太旧，显示不了",
   "discEditProfile": "编辑名字和头像…",
-  "settingsProfileImageError": "这张图用不了，请选 20 MB 以内的 PNG 或 JPEG。"
+  "settingsProfileImageError": "这张图用不了，请选 20 MB 以内的 PNG 或 JPEG。",
+  "usageAwaitingUpdate": "待更新",
+  "usageUnknownShort": "—",
+  "usageOutdated": "旧读数：{age}",
+  "usageQueryFailed": "更新失败：{error}",
+  "usageQueryDisabled": "在线查询已关闭，显示上次读数。"
 }

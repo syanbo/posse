@@ -2800,6 +2800,39 @@
   "@usagePerMonth": {
     "description": "Plan Usage: replaces “/mo” in a plan’s monthly price."
   },
+  "usageOldValue": "Old reading",
+  "@usageOldValue": {
+    "description": "Plan Usage home card: Codex reading is more than five minutes old."
+  },
+  "usagePendingUpdate": "Pending update",
+  "@usagePendingUpdate": {
+    "description": "Plan Usage: an expired Codex window has no current reading; replaces its percentage."
+  },
+  "usageReading": "Updating…",
+  "@usageReading": {
+    "description": "Plan Usage: Codex usage is being read."
+  },
+  "usageQueryDisabled": "Online queries are off. Showing the last reading.",
+  "@usageQueryDisabled": {"description": "Plan Usage: Codex online queries are disabled on the computer."},
+  "usageCodexLoginRequired": "On your computer, run codex login and sign in with ChatGPT, then refresh usage.",
+  "@usageCodexLoginRequired": {"description": "Plan Usage: Codex login is missing, expired or unsupported; directs the user to log in again."},
+  "usageCodexFileStorageRequired": "Codex usage requires file login storage. Set cli_auth_credentials_store to file on your computer, then run codex login again.",
+  "@usageCodexFileStorageRequired": {"description": "Plan Usage: Codex keyring, auto and ephemeral credential storage cannot be read."},
+  "usageCodexDetailsFailed": "Usage updated, but reset card details couldn’t be read. Showing the last card reading; try refreshing later.",
+  "@usageCodexDetailsFailed": {"description": "Plan Usage: main Codex usage succeeded but reset credit details failed."},
+  "usageCodexReadFailed": "Couldn’t update Codex usage. Try again later.",
+  "@usageCodexReadFailed": {
+    "description": "Plan Usage: Codex usage read failed; previous readings remain visible if available."
+  },
+  "usageOldReading": "Old reading · {time}",
+  "@usageOldReading": {
+    "description": "Plan Usage: Codex reading is more than five minutes old; time is the age of the last successful reading.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "usageReadingFrom": "Reading from {time}",
   "@usageReadingFrom": {
     "description": "Plan Usage sheet: second line under a pool’s reset time, the age of that pool’s own reading.",
@@ -2895,7 +2928,7 @@
       }
     }
   },
-  "usageSheetNote": "Usage updates as agents run on the computer. Cursor usage and Codex reset cards aren’t stored locally; the computer checks them after each one runs.",
+  "usageSheetNote": "Usage updates as agents run on the computer. When online queries are enabled, opening this sheet also checks Codex usage. Expired windows wait for a new reading.",
   "@usageSheetNote": {
     "description": "Plan Usage sheet: note at the bottom."
   },

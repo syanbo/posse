@@ -8392,7 +8392,7 @@
       }
     }
   },
-  "usageCodexQuery": "Query Codex Reset Cards",
+  "usageCodexQuery": "Query Codex Plan Usage",
   "@usageCodexQuery": {
     "description": "Plan Usage settings or status popover: label for CodexQuery."
   },
@@ -8513,7 +8513,7 @@
       }
     }
   },
-  "usageRefreshNote": "Usage updates when agents run. Refresh in the top right to check now. Claude has no query API, so only its own cache is read.",
+  "usageRefreshNote": "Codex checks online when this panel opens. Refresh to check now. Claude only reads its own cache.",
   "@usageRefreshNote": {
     "description": "Plan Usage settings or status popover: explanation for RefreshNote."
   },
@@ -8599,7 +8599,7 @@
       }
     }
   },
-  "usageSettingsNote": "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. Agents turned off above are likewise hidden and not read. When on, plan usage updates as agents run: Claude, Codex, and Grok use their local records. The two options below require online queries, at least five minutes apart. Cursor usage is checked when the daemon starts and after Cursor runs, using cursor-agent credentials in Keychain. Codex checks reset cards after it runs, using its own sign-in.",
+  "usageSettingsNote": "When off, usage is hidden on desktop and phone, and the daemon stops reading and querying it. Disabled agents are also excluded. Claude and Grok use local records. Codex uses its sign-in to query ChatGPT at startup, after use, and when usage details open, at least one minute apart; its local session readings also update usage. Cursor queries at startup and after use, at least five minutes apart, using cursor-agent credentials in Keychain.",
   "@usageSettingsNote": {
     "description": "Plan Usage settings or status popover: explanation for SettingsNote."
   },
@@ -10037,5 +10037,35 @@
   "settingsProfileImageError": "Couldn’t use this image. Choose a PNG or JPEG under 20 MB.",
   "@settingsProfileImageError": {
     "description": "Error after picking an avatar image that can't be read."
+  },
+  "usageAwaitingUpdate": "Awaiting update",
+  "@usageAwaitingUpdate": {
+    "description": "An allowance window has reset but no current reading has been fetched."
+  },
+  "usageUnknownShort": "—",
+  "@usageUnknownShort": {
+    "description": "Compact status bar value when the current allowance is unknown."
+  },
+  "usageOutdated": "Outdated: {age}",
+  "@usageOutdated": {
+    "description": "Time of an old Codex allowance reading.",
+    "placeholders": {
+      "age": {
+        "type": "String"
+      }
+    }
+  },
+  "usageQueryFailed": "Update failed: {error}",
+  "@usageQueryFailed": {
+    "description": "Allowance query failed; any figures shown are the last successful reading.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "usageQueryDisabled": "Online queries are off; showing the last reading.",
+  "@usageQueryDisabled": {
+    "description": "Codex online queries are disabled in Settings."
   }
 }

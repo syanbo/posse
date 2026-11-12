@@ -201,6 +201,72 @@ Future<void> _shot(WidgetTester tester, GlobalKey key, String path) async {
 void main() {
   final dir = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
 
+  testWidgets('expired Codex screenshots', (tester) async {
+    await loadShotFonts(tester);
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    final now = DateTime.now();
+    for (final lang in ['zh', 'en']) {
+      for (final dark in [false, true]) {
+        for (final state in ['off', 'login', 'details']) {
+          final key = GlobalKey();
+          await tester.pumpWidget(
+            RepaintBoundary(
+              key: key,
+              child: MaterialApp(
+                debugShowCheckedModeBanner: false,
+                theme: posseTheme(dark ? Brightness.dark : Brightness.light),
+                locale: Locale(lang),
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: Scaffold(
+                  body: SafeArea(
+                    child: UsageSheet(
+                      usages: [
+                        AgentUsage(
+                          agent: 'codex',
+                          plan: 'Plus',
+                          windows: [
+                            UsageWindow(
+                              percent: 96,
+                              minutes: 300,
+                              resetsAt: now.subtract(
+                                const Duration(minutes: 2),
+                              ),
+                            ),
+                            UsageWindow(
+                              percent: 32,
+                              minutes: 10080,
+                              resetsAt: now.add(const Duration(days: 2)),
+                            ),
+                          ],
+                          updatedAt: now.subtract(const Duration(minutes: 8)),
+                        ),
+                      ],
+                      codexOff: state == 'off',
+                      codexError: switch (state) {
+                        'login' =>
+                          'codex: login expired; run codex login again',
+                        'details' => 'codex: could not read reset credits: context deadline exceeded',
+                        _ => '',
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          await _shot(
+            tester,
+            key,
+            '$dir/mobile-codex-$state-$lang-${dark ? 'dark' : 'light'}.png',
+          );
+        }
+      }
+    }
+  }, skip: dir.isEmpty);
+
   testWidgets('usage screenshots', (tester) async {
     await loadShotFonts(tester);
     await tester.binding.setSurfaceSize(const Size(390, 844));

@@ -171,7 +171,8 @@ type app struct {
 	workspaces []workspace
 	tasks      []taskInfo
 	daemon     daemonStatus
-	planBusy   bool // 套餐用量正在刷新
+	planBusy   bool      // 套餐用量正在刷新
+	planAutoAt time.Time // 用量浮层上次自动补查的时间
 	selfKB     int64
 	termKB     int64 // 所有终端进程树的内存，底栏的总内存要加上它
 	loaded     bool

@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"slices"
 	"sync"
 	"time"
@@ -17,11 +16,11 @@ import (
 	"posse/internal/usage"
 )
 
-// 套餐用量：agent 运行时顺带更新，不轮询。
+// 套餐用量：agent 运行时顺带更新；Codex 在启动和打开用量详情时也主动查询。
 //   - Claude：posse statusline 经 usage.report 报上 statusLine 的输入；Stop 时和 statusLine 上报时（至少隔 claudeCacheEvery）
 //     看一眼 Claude 自己的缓存（~/.claude.json）：看 /usage 只更新缓存、不触发 Stop，之后 statusLine 会跑
-//   - Codex：Stop、PostToolUse 时读会话文件末尾的 rate_limits；重置卡只有 Codex 自己知道，
-//     Stop 之后拉起 codex app-server 问一次，至少隔 codexAskEvery
+//   - Codex：Stop、PostToolUse 时读会话文件末尾的 rate_limits；启动、Stop 和打开详情时
+//     直接查 ChatGPT 的额度及重置卡，至少隔 codexAskEvery
 //   - Grok：标题变化时增量读它的日志
 //   - Cursor：启动时和 stop 时向 Cursor 查一次，至少隔 cursorEvery
 //   - 界面点刷新（usage.refresh）时各家都马上取一次，不管间隔
@@ -30,7 +29,7 @@ import (
 const (
 	cursorEvery      = 5 * time.Minute
 	claudeCacheEvery = 5 * time.Second
-	codexAskEvery    = 5 * time.Minute
+	codexAskEvery    = time.Minute
 	grokEvery        = 3 * time.Second
 	codexEvery       = 5 * time.Second
 )
@@ -49,16 +48,19 @@ type usageState struct {
 	cursorBusy   bool
 	cursorDenied bool // 读钥匙串要弹授权窗：本次常驻进程运行期间不再试
 	codexAskAt   time.Time
-	codexBusy    bool
+	codexPending chan struct{}
+	codexError   string
 	disabled     []string // 上次给界面读数时关掉的 agent，用来认出重新打开的
 }
 
 // usageStatus 随 daemon.status 给界面。
 type usageStatus struct {
-	Usages    []usage.Usage `json:"usages"`
-	Off       bool          `json:"off"`
-	CursorOff bool          `json:"cursorOff"`
-	CodexOff  bool          `json:"codexOff"`
+	Usages       []usage.Usage `json:"usages"`
+	Off          bool          `json:"off"`
+	CursorOff    bool          `json:"cursorOff"`
+	CodexOff     bool          `json:"codexOff"`
+	CodexError   string        `json:"codexError,omitempty"`
+	CodexReading bool          `json:"codexReading,omitempty"`
 }
 
 func (d *Daemon) openUsage() {
@@ -69,13 +71,14 @@ func (d *Daemon) openUsage() {
 	go d.usageStart()
 }
 
-// usageStart 从各家本地留下的记录里取最近的一份（都只读本地文件），常驻进程启动和设置里重新打开时各做一次。
+// usageStart 读取本地记录并补查 Codex、Cursor，常驻进程启动和设置里重新打开时各做一次。
 func (d *Daemon) usageStart() {
 	if !d.usageOn() {
 		return
 	}
 	d.claudeCacheUsage()
 	d.codexLatest()
+	go d.codexAsk(context.Background(), false)
 	d.grokUsage(true)
 	// Cursor 本地没有用量，不查就要等到下次用 Cursor 才有
 	d.cursorUsage(false)
@@ -110,8 +113,14 @@ func (d *Daemon) usageStatus() *usageStatus {
 	if reopened {
 		go d.usageStart()
 	}
+	d.usage.mu.Lock()
+	codexError, codexReading := d.usage.codexError, d.usage.codexPending != nil
+	d.usage.mu.Unlock()
+	if slices.Contains(off, "codex") || d.usage.store.CodexOff() {
+		codexError, codexReading = "", false
+	}
 	list := slices.DeleteFunc(d.usage.store.List(time.Now()), func(u usage.Usage) bool { return slices.Contains(off, u.Agent) })
-	return &usageStatus{Usages: list, CursorOff: d.usage.store.CursorOff(), CodexOff: d.usage.store.CodexOff()}
+	return &usageStatus{Usages: list, CursorOff: d.usage.store.CursorOff(), CodexOff: d.usage.store.CodexOff(), CodexError: codexError, CodexReading: codexReading}
 }
 
 // usageHook 在 hook 事件之后看要不要更新用量；都在后台做，不拖慢 hook。
@@ -127,6 +136,9 @@ func (d *Daemon) usageHook(agentName, event string, payload json.RawMessage) {
 			TranscriptPath string `json:"transcript_path"`
 		}
 		json.Unmarshal(payload, &p)
+		if event == "Stop" {
+			go d.codexAsk(context.Background(), false)
+		}
 		if p.TranscriptPath == "" {
 			return
 		}
@@ -150,9 +162,6 @@ func (d *Daemon) usageHook(agentName, event string, payload json.RawMessage) {
 					d.usage.store.Update(u)
 				}
 			}()
-		}
-		if event == "Stop" {
-			go d.codexAsk(false)
 		}
 	case agentName == "cursor" && event == "stop":
 		go d.cursorUsage(false)
@@ -251,36 +260,54 @@ func (d *Daemon) cursorUsage(force bool) {
 	s.store.Update(u)
 }
 
-// codexAsk 让 Codex 自己查一次限额和重置卡。force 是用户点了刷新，不管间隔。
-func (d *Daemon) codexAsk(force bool) {
+// codexAsk 查询 ChatGPT 的限额和重置卡。同一时刻的查询共用结果，调用方结束只停止等待，
+// 不取消其他调用方正在等的查询；联网本身有超时。失败也记住尝试时间，避免打开详情后逐帧重试。
+func (d *Daemon) codexAsk(ctx context.Context, force bool) {
 	s := &d.usage
 	if !d.usageAgentOn("codex") || s.store.CodexOff() {
 		return
 	}
 	s.mu.Lock()
-	if s.codexBusy || (!force && time.Since(s.codexAskAt) < codexAskEvery) {
-		s.mu.Unlock()
-		return
+	done := s.codexPending
+	if done == nil {
+		if !force && time.Since(s.codexAskAt) < codexAskEvery {
+			s.mu.Unlock()
+			return
+		}
+		done = make(chan struct{})
+		s.codexPending, s.codexAskAt = done, time.Now()
+		go func() {
+			queryCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			u, err := usage.FetchCodex(queryCtx, s.http, usage.CodexHome(), time.Now())
+			// 重置卡明细失败不妨碍已取到的主额度更新，附属项保留原读数。
+			s.store.Update(u)
+			if err != nil {
+				log.Printf("codex usage: %v", err)
+			}
+			s.mu.Lock()
+			s.codexError = ""
+			if err != nil {
+				s.codexError = err.Error()
+				if errors.Is(err, context.DeadlineExceeded) {
+					if u.Agent == "" {
+						s.codexError = "codex: usage query timed out"
+					} else {
+						// 已有主读数时只有重置卡明细失败。
+						s.codexError = "codex: reset credits query timed out"
+					}
+				}
+			}
+			s.codexPending = nil
+			close(done)
+			s.mu.Unlock()
+		}()
 	}
-	s.codexBusy, s.codexAskAt = true, time.Now()
 	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		s.codexBusy = false
-		s.mu.Unlock()
-	}()
-	codex, err := exec.LookPath("codex")
-	if err != nil {
-		return
+	select {
+	case <-done:
+	case <-ctx.Done():
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	u, err := usage.CodexRemote(ctx, codex, time.Now())
-	if err != nil {
-		log.Printf("codex usage: %v", err)
-		return
-	}
-	s.store.Update(u)
 }
 
 type usageReportParams struct {
@@ -319,6 +346,26 @@ func (d *Daemon) usageRefresh(ctx context.Context, raw json.RawMessage) (any, er
 	if d.usage.store.Off() {
 		return d.usageStatus(), nil
 	}
+	var p struct {
+		Agent string `json:"agent"`
+		Force *bool  `json:"force"`
+	}
+	if len(raw) > 0 {
+		if err := rpc.Decode(raw, &p); err != nil {
+			return nil, err
+		}
+	}
+	if p.Agent != "" && p.Agent != "codex" {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "unsupported usage agent")
+	}
+	force := p.Force == nil || *p.Force
+	if p.Agent == "codex" {
+		d.codexAsk(ctx, force)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return d.usageStatus(), nil
+	}
 	d.usage.mu.Lock()
 	d.usage.claudeMod = time.Time{}
 	d.usage.mu.Unlock()
@@ -327,7 +374,7 @@ func (d *Daemon) usageRefresh(ctx context.Context, raw json.RawMessage) (any, er
 		d.claudeCacheUsage,
 		func() {
 			d.codexLatest()
-			d.codexAsk(true)
+			d.codexAsk(ctx, force)
 		},
 		func() { d.grokUsage(true) },
 		func() { d.cursorUsage(true) },
@@ -339,6 +386,9 @@ func (d *Daemon) usageRefresh(ctx context.Context, raw json.RawMessage) (any, er
 		}()
 	}
 	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return d.usageStatus(), nil
 }
 

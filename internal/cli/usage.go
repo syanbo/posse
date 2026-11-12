@@ -19,9 +19,13 @@ import (
 
 func cmdUsage(e *env, args []string) error {
 	var st struct {
-		Usages []plan.Usage `json:"usages"`
+		Usages     []plan.Usage `json:"usages"`
+		CodexError string       `json:"codexError"`
 	}
 	return e.do("usage.get", nil, &st, func() {
+		if st.CodexError != "" {
+			fmt.Fprintln(e.out, "codex usage refresh failed:", st.CodexError)
+		}
 		if len(st.Usages) == 0 {
 			fmt.Fprintln(e.out, "no usage yet: it updates as Claude, Codex, Grok or Cursor run in Posse")
 			return
@@ -37,6 +41,10 @@ func cmdUsage(e *env, args []string) error {
 				name := windowName(w.Minutes)
 				if w.Name != "" {
 					name = w.Name + " " + name
+				}
+				if w.Unknown {
+					fmt.Fprintf(e.out, "  %-10s awaiting update\n", name)
+					continue
 				}
 				line := fmt.Sprintf("  %-10s %3.0f%% used", name, w.Percent)
 				if w.ResetsAt > 0 {

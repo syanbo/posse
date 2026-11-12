@@ -23063,13 +23063,13 @@ func (msgs Messages) UpgradeTooOld(error string) string {
 	return Catalog.Format(msgs.locale, "upgradeTooOld", map[string]any{"error": error})
 }
 
-// UsageCodexQuery says "Query Codex Reset Cards"
+// UsageCodexQuery says "Query Codex Plan Usage"
 // in the language the app shows.
 //
 // Plan Usage settings or status popover: label for CodexQuery.
 func UsageCodexQuery() string { return In(i18n.Locale()).UsageCodexQuery() }
 
-// UsageCodexQuery says "Query Codex Reset Cards"
+// UsageCodexQuery says "Query Codex Plan Usage"
 // in the language of msgs.
 //
 // Plan Usage settings or status popover: label for CodexQuery.
@@ -23323,13 +23323,13 @@ func (msgs Messages) UsageRefreshError(error string) string {
 	return Catalog.Format(msgs.locale, "usageRefreshError", map[string]any{"error": error})
 }
 
-// UsageRefreshNote says "Usage updates when agents run. Refresh in the top right to check now. Claude has no query API, so only its own cache …"
+// UsageRefreshNote says "Codex checks online when this panel opens. Refresh to check now. Claude only reads its own cache."
 // in the language the app shows.
 //
 // Plan Usage settings or status popover: explanation for RefreshNote.
 func UsageRefreshNote() string { return In(i18n.Locale()).UsageRefreshNote() }
 
-// UsageRefreshNote says "Usage updates when agents run. Refresh in the top right to check now. Claude has no query API, so only its own cache …"
+// UsageRefreshNote says "Codex checks online when this panel opens. Refresh to check now. Claude only reads its own cache."
 // in the language of msgs.
 //
 // Plan Usage settings or status popover: explanation for RefreshNote.
@@ -23491,13 +23491,13 @@ func (msgs Messages) UsageResetInMinutes(count int) string {
 	return Catalog.Format(msgs.locale, "usageResetInMinutes", map[string]any{"count": count})
 }
 
-// UsageSettingsNote says "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. Agents turned …"
+// UsageSettingsNote says "When off, usage is hidden on desktop and phone, and the daemon stops reading and querying it. Disabled agents are als…"
 // in the language the app shows.
 //
 // Plan Usage settings or status popover: explanation for SettingsNote.
 func UsageSettingsNote() string { return In(i18n.Locale()).UsageSettingsNote() }
 
-// UsageSettingsNote says "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. Agents turned …"
+// UsageSettingsNote says "When off, usage is hidden on desktop and phone, and the daemon stops reading and querying it. Disabled agents are als…"
 // in the language of msgs.
 //
 // Plan Usage settings or status popover: explanation for SettingsNote.
@@ -27537,4 +27537,76 @@ func SettingsProfileImageError() string { return In(i18n.Locale()).SettingsProfi
 // Error after picking an avatar image that can't be read.
 func (msgs Messages) SettingsProfileImageError() string {
 	return Catalog.Format(msgs.locale, "settingsProfileImageError", nil)
+}
+
+// UsageAwaitingUpdate says "Awaiting update"
+// in the language the app shows.
+//
+// An allowance window has reset but no current reading has been fetched.
+func UsageAwaitingUpdate() string { return In(i18n.Locale()).UsageAwaitingUpdate() }
+
+// UsageAwaitingUpdate says "Awaiting update"
+// in the language of msgs.
+//
+// An allowance window has reset but no current reading has been fetched.
+func (msgs Messages) UsageAwaitingUpdate() string {
+	return Catalog.Format(msgs.locale, "usageAwaitingUpdate", nil)
+}
+
+// UsageUnknownShort says "—"
+// in the language the app shows.
+//
+// Compact status bar value when the current allowance is unknown.
+func UsageUnknownShort() string { return In(i18n.Locale()).UsageUnknownShort() }
+
+// UsageUnknownShort says "—"
+// in the language of msgs.
+//
+// Compact status bar value when the current allowance is unknown.
+func (msgs Messages) UsageUnknownShort() string {
+	return Catalog.Format(msgs.locale, "usageUnknownShort", nil)
+}
+
+// UsageOutdated says "Outdated: {age}"
+// in the language the app shows.
+//
+// Time of an old Codex allowance reading.
+func UsageOutdated(age string) string { return In(i18n.Locale()).UsageOutdated(age) }
+
+// UsageOutdated says "Outdated: {age}"
+// in the language of msgs.
+//
+// Time of an old Codex allowance reading.
+func (msgs Messages) UsageOutdated(age string) string {
+	return Catalog.Format(msgs.locale, "usageOutdated", map[string]any{"age": age})
+}
+
+// UsageQueryFailed says "Update failed: {error}"
+// in the language the app shows.
+//
+// Allowance query failed; any figures shown are the last successful
+// reading.
+func UsageQueryFailed(error string) string { return In(i18n.Locale()).UsageQueryFailed(error) }
+
+// UsageQueryFailed says "Update failed: {error}"
+// in the language of msgs.
+//
+// Allowance query failed; any figures shown are the last successful
+// reading.
+func (msgs Messages) UsageQueryFailed(error string) string {
+	return Catalog.Format(msgs.locale, "usageQueryFailed", map[string]any{"error": error})
+}
+
+// UsageQueryDisabled says "Online queries are off; showing the last reading."
+// in the language the app shows.
+//
+// Codex online queries are disabled in Settings.
+func UsageQueryDisabled() string { return In(i18n.Locale()).UsageQueryDisabled() }
+
+// UsageQueryDisabled says "Online queries are off; showing the last reading."
+// in the language of msgs.
+//
+// Codex online queries are disabled in Settings.
+func (msgs Messages) UsageQueryDisabled() string {
+	return Catalog.Format(msgs.locale, "usageQueryDisabled", nil)
 }

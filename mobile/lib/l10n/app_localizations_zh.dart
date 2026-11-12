@@ -1988,6 +1988,37 @@ class AppLocalizationsZh extends AppLocalizations {
   String get usagePerMonth => '/月';
 
   @override
+  String get usageOldValue => '旧值';
+
+  @override
+  String get usagePendingUpdate => '待更新';
+
+  @override
+  String get usageReading => '正在更新…';
+
+  @override
+  String get usageQueryDisabled => '在线查询已关闭，显示上次读数';
+
+  @override
+  String get usageCodexLoginRequired =>
+      '请在电脑上运行 codex login，用 ChatGPT 账号重新登录后刷新用量。';
+
+  @override
+  String get usageCodexFileStorageRequired =>
+      'Codex 用量查询只支持 file 登录存储。请在电脑上将 cli_auth_credentials_store 设为 file，再运行 codex login 登录。';
+
+  @override
+  String get usageCodexDetailsFailed => '用量已更新，但重置卡明细读取失败。显示上次重置卡读数，请稍后刷新重试。';
+
+  @override
+  String get usageCodexReadFailed => 'Codex 用量更新失败，请稍后重试。';
+
+  @override
+  String usageOldReading(String time) {
+    return '旧值 · $time';
+  }
+
+  @override
   String usageReadingFrom(String time) {
     return '$time的读数';
   }
@@ -2045,7 +2076,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get usageSheetNote =>
-      '电脑上的 agent 运行时顺带更新；Cursor 用量和 Codex 重置卡本地没有，在它们用过之后电脑会查一次。';
+      '电脑上的 agent 运行时顺带更新；开启在线查询时，打开详情也会补查 Codex；窗口过期后等待新读数。';
 
   @override
   String usageShownPercent(String kind, String percent) {

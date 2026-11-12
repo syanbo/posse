@@ -19,10 +19,12 @@ import (
 // planStatus 是常驻进程记下的各家套餐用量（internal/daemon/usage.go），随 daemon.status 来；
 // 旧常驻进程没有这个字段时为空。
 type planStatus struct {
-	Usages    []usage.Usage `json:"usages"`
-	Off       bool          `json:"off"` // 设置里整个关掉了：状态栏不显示，常驻进程也不读
-	CursorOff bool          `json:"cursorOff"`
-	CodexOff  bool          `json:"codexOff"`
+	Usages       []usage.Usage `json:"usages"`
+	Off          bool          `json:"off"` // 设置里整个关掉了：状态栏不显示，常驻进程也不读
+	CursorOff    bool          `json:"cursorOff"`
+	CodexOff     bool          `json:"codexOff"`
+	CodexError   string        `json:"codexError,omitempty"`
+	CodexReading bool          `json:"codexReading,omitempty"`
 }
 
 // 用量到这里用红色：快要被限流了。
@@ -169,6 +171,9 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 			shown = append(shown, u)
 		}
 	}
+	if (st.CodexError != "" || st.CodexReading) && !slices.ContainsFunc(shown, func(u usage.Usage) bool { return u.Agent == "codex" }) {
+		shown = append(shown, usage.Usage{Agent: "codex"})
+	}
 	if len(shown) == 0 {
 		ui.Text(c, L(c).UsageEmpty()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, chipPad).SingleLine()
 		return
@@ -184,14 +189,14 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 		for _, u := range shown {
 			w := headWindow(u)
 			color := t.Text
-			if w.Percent >= planUrgent {
+			if !w.Unknown && w.Percent >= planUrgent {
 				color = t.Danger
 			}
 			ui.Row(c.Key(u.Agent)).Gap(4).AlignItems(ui.Center).Shrink(0).
 				Children(func() {
 					agentIcon(c, u.Agent, smallIcon())
 					ui.Text(c, windowShort(L(c), w.Minutes)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
-					ui.Text(c, percentText(a.shown(w))).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).SingleLine()
+					ui.Text(c, planPercent(L(c), a, w)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).SingleLine()
 				})
 		}
 	})
@@ -204,6 +209,15 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 // planWindows 是这一家要显示的窗口。Cursor 有分池时照它的控制台和 Magpie 只列两池：
 // 总的 totalPercentUsed 按 Auto 池折算，远低于两池，和它们并排看着像算错了。
 func planWindows(u usage.Usage) []usage.Window {
+	if u.Agent == "codex" {
+		ws := slices.Clone(u.Windows)
+		for i, w := range ws {
+			if w.ResetsAt > 0 && w.ResetsAt <= time.Now().UnixMilli() {
+				ws[i].Unknown = true
+			}
+		}
+		return ws
+	}
 	if u.Agent != "cursor" {
 		return u.Windows
 	}
@@ -230,6 +244,9 @@ func headWindow(u usage.Usage) usage.Window {
 	}
 	if u.Agent == "claude" {
 		return usage.Window{Minutes: 300}
+	}
+	if len(ws) == 0 {
+		return usage.Window{Unknown: true}
 	}
 	head := ws[0]
 	if head.Name != "" {
@@ -317,10 +334,13 @@ func (a *app) planBar(c *ui.Context, w usage.Window) {
 	const height = 5
 	t := c.Theme()
 	fill := t.Accent
-	if w.Percent >= planUrgent {
+	if !w.Unknown && w.Percent >= planUrgent {
 		fill = t.Danger
 	}
 	v := a.shown(w)
+	if w.Unknown {
+		v = 0
+	}
 	bar := ui.Box(c).Height(height).Radius(full(height)).Background(colors(t).fill).Shrink(0).Grow(1)
 	bar.Children(func() {
 		if v > 0 {
@@ -333,8 +353,12 @@ func (a *app) planBar(c *ui.Context, w usage.Window) {
 func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 	t := c.Theme()
 	now := time.Now()
-	// 倒计时和"几分钟前"按分钟走
+	// 打开的浮层也补查，不能靠后台更新恰好触发重建；失败时同样等一分钟再试。
 	c.After(time.Minute)
+	if st := a.daemon.Usage; a.c != nil && st != nil && !st.CodexOff && !slices.Contains(a.disabled, "codex") && !a.planBusy && time.Since(a.planAutoAt) >= time.Minute {
+		a.planAutoAt = now
+		a.refreshPlanQuery(L(c), map[string]any{"agent": "codex", "force": false})
+	}
 	// 浮窗至少和底下整排一样宽，面板跟着撑满
 	ui.Column(c).MinWidth(420).Grow(1).AlignSelf(ui.Stretch).Gap(12).Padding(8, 8, 6, 8).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -371,21 +395,35 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 						ui.Text(c, strings.Replace(u.Plan, "/mo", L(c).UsagePerMonth(), 1)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 					}
 					ui.Spacer(c)
-					ui.Text(c, ago(L(c), time.UnixMilli(u.UpdatedAt))).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).
-						Tooltip(L(c).UsageReadAt(L(c).AppDateTime(time.UnixMilli(u.UpdatedAt).Local())))
+					if u.UpdatedAt > 0 {
+						ui.Text(c, planReadingAge(L(c), u, now)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).
+							Tooltip(L(c).UsageReadAt(L(c).AppDateTime(time.UnixMilli(u.UpdatedAt).Local())))
+					}
 				})
+				if u.Agent == "codex" {
+					if st := a.daemon.Usage; st != nil {
+						switch {
+						case st.CodexReading:
+							ui.Text(c, L(c).UsageRefreshing()).FontSize(fsSmall).TextColor(t.TextMuted)
+						case st.CodexError != "":
+							ui.Text(c, L(c).UsageQueryFailed(errtext.Message(st.CodexError))).FontSize(fsSmall).TextColor(t.Danger)
+						case st.CodexOff:
+							ui.Text(c, L(c).UsageQueryDisabled()).FontSize(fsSmall).TextColor(t.TextMuted)
+						}
+					}
+				}
 				for j, w := range planWindows(u) {
 					color := t.Text
-					if w.Percent >= planUrgent {
+					if !w.Unknown && w.Percent >= planUrgent {
 						color = t.Danger
 					}
 					// 一个窗口一行：名称、进度条、百分比、重置时间
 					ui.Row(c.Key(fmt.Sprint(j))).Gap(8).AlignItems(ui.Center).Children(func() {
 						ui.Text(c, windowName(L(c), w)).FontSize(fsSmall).Width(planNameWidth()).Shrink(0).SingleLine()
 						a.planBar(c, w)
-						ui.Text(c, pctText(a.shown(w))).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).
+						ui.Text(c, planWindowPercent(L(c), a, w)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).
 							Width(pctW).Shrink(0).TextAlign(ui.End).SingleLine()
-						ui.Text(c, resetText(L(c), w.ResetsAt, now)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
+						ui.Text(c, planResetText(L(c), w, now)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
 							Width(sz(138)).Shrink(0).TextAlign(ui.End).SingleLine()
 					})
 					// 分池和总额度不是同一份读数（Claude 的 Fable 只在用户看 /usage 时更新）
@@ -406,12 +444,20 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 
 // refreshPlan 让常驻进程马上向各家取一次用量，做完才回（Codex、Cursor 要联网，最长半分钟）。
 func (a *app) refreshPlan(m locales.Messages) {
+	a.planAutoAt = time.Now()
+	a.refreshPlanQuery(m, nil)
+}
+
+func (a *app) refreshPlanQuery(m locales.Messages, params map[string]any) {
+	if a.planBusy {
+		return
+	}
 	a.planBusy = true
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
 		var st planStatus
-		err := a.c.Call(ctx, "usage.refresh", nil, &st)
+		err := a.c.Call(ctx, "usage.refresh", params, &st)
 		a.update(func() {
 			a.planBusy = false
 			var re *rpc.Error
@@ -427,7 +473,7 @@ func (a *app) refreshPlan(m locales.Messages) {
 	}()
 }
 
-// planSettings 是设置页里两项查询的开关：Cursor 用量和 Codex 重置卡本地没有，要在它们用过之后查一次。
+// planSettings 控制 Cursor 用量和 Codex 在线额度查询，本地会话读数仍可更新。
 func (a *app) planSettings(c *ui.Context) {
 	st := a.daemon.Usage
 	settingsCard(c, L(c).UsageTitle(), L(c).UsageSettingsNote(), func() {
@@ -473,3 +519,36 @@ func (a *app) setUsageQuery(key string, on bool) {
 
 // planNameWidth 是用量窗口一行里名称列的宽度。
 func planNameWidth() float32 { return sz(84) }
+
+// planPercent 在过期窗口不再暗示剩余或已用百分比，状态栏用紧凑的占位。
+func planPercent(m locales.Messages, a *app, w usage.Window) string {
+	if w.Unknown {
+		return m.UsageUnknownShort()
+	}
+	return percentText(a.shown(w))
+}
+
+func planWindowPercent(m locales.Messages, a *app, w usage.Window) string {
+	if w.Unknown {
+		return m.UsageAwaitingUpdate()
+	}
+	return m.UsageShownPercent(a.shownWord(m), percentText(a.shown(w)))
+}
+
+func planResetText(m locales.Messages, w usage.Window, now time.Time) string {
+	if w.Unknown {
+		return ""
+	}
+	return resetText(m, w.ResetsAt, now)
+}
+
+func planReadingAge(m locales.Messages, u usage.Usage, now time.Time) string {
+	if u.UpdatedAt == 0 {
+		return ""
+	}
+	age := ago(m, time.UnixMilli(u.UpdatedAt))
+	if u.Agent == "codex" && now.Sub(time.UnixMilli(u.UpdatedAt)) > 5*time.Minute {
+		return m.UsageOutdated(age)
+	}
+	return age
+}
