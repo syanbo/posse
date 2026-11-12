@@ -3,6 +3,20 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.36
+
+- Codex 套餐额度改为直接在线查询，启动、结束一轮任务和打开详情时自动补查，支持手动刷新。
+- 额度详情明确标出旧读数和查询失败；过了重置时间但还没有新读数时显示「待更新」，不再推算成剩余 100%。接口回复不完整时保留缓存，重置卡明细失败不影响主额度更新。
+- 修复刷新套餐用量时浮层上下抖动。
+- 修复 Codex 只输出文件名的 `Viewed image` 仍无法预览的问题，包括代码动态拼接出的图片路径。
+
+### English
+
+- Codex plan usage is now queried directly online, with automatic checks at startup, after a turn and when opening usage details, plus manual refresh.
+- Usage details identify stale readings and query failures. Expired windows show “Awaiting update” until a new reading arrives instead of assuming 100% remaining. Incomplete responses preserve cached readings, and reset card detail failures do not block quota updates.
+- Fix: refreshing plan usage no longer makes the popover jump vertically.
+- Fix: Codex `Viewed image` entries containing only a file name can now be previewed, including image paths constructed dynamically in code.
+
 ## 0.1.35
 
 - 手机看桌面可以手选帧率：自动、60、30、15（手机端需要 0.1.23 及以上）。固定帧率时码率照常随网络调整。
