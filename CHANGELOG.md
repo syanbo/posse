@@ -3,6 +3,20 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.37
+
+- 修复手机顶部 Claude 上下文占比与终端状态栏不一致的问题，优先使用 Claude 官方读数，正确处理第三方模型名称、分块回复和压缩后的用量。
+- 会话改名后，标签、侧栏和悬停提示跟随新会话标题；重命名输入框保留完整标题，任务标题不再遮住显式会话标题。
+- 修复数据库繁忙时改名可能阻塞终端输出，以及改名失败重试时旧名字覆盖新会话标题的问题。
+- 图片面板先显示卡片，再分批补充缩略图，优先加载最新图片，避免旧扫描结果混入重开的面板；会话记录尚未就绪时明确提示等待同步。
+
+### English
+
+- Fix: the mobile Claude context meter now prefers Claude's own readings to match the terminal status line, with support for provider model names, chunked replies and context compaction.
+- Session renames now update tabs, the sidebar and tooltips. Rename fields preserve the full title, and task titles no longer override explicit session titles.
+- Fix: renaming no longer blocks terminal output while the database is busy, and failed rename retries no longer override newer session titles.
+- The image panel now shows cards before loading thumbnails in batches, prioritizes the newest images, keeps stale scan results out of reopened panels and indicates when session records are still waiting to sync.
+
 ## 0.1.36
 
 - Codex 套餐额度改为直接在线查询，启动、结束一轮任务和打开详情时自动补查，支持手动刷新。
