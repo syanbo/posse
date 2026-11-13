@@ -3,6 +3,20 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.26
+
+- 看桌面的清晰度和帧率改为紧凑入口，选项以浮层展开，不再挤动屏幕与窗口列表；展开、切组和收起带过渡动画，选完保持面板打开。
+- 修复打开或刷新套餐用量时面板上下跳动的问题。
+- 文件树按 Git 状态上色，父目录汇总改动、忽略项淡化，与桌面保持一致；未跟踪文件使用 WebStorm 配色，与冲突红色区分（文件树上色需要 Mac 0.1.40 及以上）。
+- 文件页可见时自动刷新，支持嵌套仓库和软链；Git 状态读取失败仍可浏览，切后台或换连接后停止旧目录请求。
+
+### English
+
+- Remote desktop quality and frame rate now use compact controls with floating options that do not shift the display and window lists. Opening, switching and closing animate smoothly, and selecting a value keeps the panel open.
+- Fixed layout jumps when opening or refreshing plan usage.
+- The file tree now matches desktop Git status colors, highlights changed parent folders and dims ignored entries. Untracked files use WebStorm colors, distinct from conflict red (file tree colors require Posse for Mac 0.1.40 or later).
+- Files refresh automatically while visible, including nested repositories and symlinks. Browsing remains available when Git status fails, and pending directory requests stop when the app enters the background or changes connections.
+
 ## 0.1.25
 
 - 看桌面的工具条始终展开，可用拖柄自由移动，松手不吸边，横竖屏位置分别记住；返回和 FPS 固定在画面上方，不占用画面空间，键盘弹出时自动避让。
