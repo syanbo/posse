@@ -634,7 +634,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deskGestureTapAtPointer => '单指轻点，点在指针处';
 
   @override
-  String get deskGestureThreeFingerDrag => '三指滑动，或轻点后马上按住滑';
+  String get deskGestureThreeFingerDrag => '三指滑动';
 
   @override
   String get deskGestureTitle => '手势';

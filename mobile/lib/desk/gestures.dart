@@ -26,10 +26,6 @@ const deskPointerMaxGain = 2.5;
 /// 触控板模式拖动中松手后，左键再按住这么久：手指放回来接着拖，屏幕小也能拖得远。
 const deskDragGrace = Duration(seconds: 1);
 
-/// 触控板模式轻点后再按下，按住超过这么久没滑就抬起，算没拖成，不发双击：
-/// 标题栏上双击会缩放窗口。
-const deskTapHold = Duration(milliseconds: 200);
-
 /// 松手后滚轮速度的时间常数，约 0.7 秒收完。
 const deskFlickTau = 0.18;
 const deskFlickStop = 20.0;
@@ -93,10 +89,9 @@ class _Flick {
 /// 看桌面的手势：直接点按，或把屏幕当触控板（[trackpad]）。不读时钟，时间由调用方传入。
 ///
 /// 触控板模式下单指滑动按相对位移移动 [cursor]，点按、右键、拖动、滚动都落在指针上，
-/// 放大后视口跟着指针走，不再单指平移。拖动是三指滑动，或轻点后 [deskMultiTap] 内
-/// 再按住滑动，不用长按：手指放上去停一下再滑是常见的移指针动作。拖动中几根手指
-/// 都按中点走、不加速；全部松手后左键再按住 [deskDragGrace]，期间放回手指（几根都行）
-/// 滑动接着拖，轻点一下或等它过去才松开。
+/// 放大后视口跟着指针走，不再单指平移。拖动只认三指滑动，按中点走、不加速；
+/// 全部松手后左键再按住 [deskDragGrace]，期间放回三指接着拖。
+/// 一、两指开始普通操作前先松开左键；多指逐个落下或抬起时的抖动不算操作。
 class DeskGestures {
   DeskGestures({
     required this.width,
@@ -121,7 +116,6 @@ class DeskGestures {
   /// 触控板模式下 Mac 指针在整屏上的位置。Mac 不报指针在哪，从画面中间开始。
   DeskPoint cursor = const DeskPoint(0.5, 0.5);
   Duration? _moveAt;
-  var _tapDrag = false;
 
   /// 拖动中松手的时刻，左键还按着。
   Duration? _graceFrom;
@@ -163,7 +157,10 @@ class DeskGestures {
 
   /// 手指按着时不换模式，免得一个手势前后两种算法。
   set trackpad(bool on) {
-    if (_fingers.isEmpty) _trackpad = on;
+    if (_fingers.isEmpty && _trackpad != on) {
+      _releaseGrace();
+      _trackpad = on;
+    }
   }
 
   /// 指针在视图里的位置。
@@ -202,14 +199,25 @@ class DeskGestures {
   }
 
   void down(int id, double x, double y, Duration time) {
+    final grace = _graceFrom;
+    if (grace != null && time - grace > deskDragGrace) _releaseGrace();
     _fingers[id] = _Finger(x, y, time);
     if (_ignore) return;
     _flick = null;
     if (_pad) {
+      _preparePadRemainder(time);
       _padFrom = _centroid();
+      if (_fingers.length > 3) {
+        _clearPad();
+        onEvent(DeskDragEvent(DeskDragPhase.up, cursor));
+        _ignore = true;
+      }
       return;
     }
-    if (_graceFrom != null) {
+    // 三指的 down 逐个到来；先辨认手指数，不能第一指落下就接着拖。
+    if (_graceFrom != null && _fingers.length == 3) {
+      _endTwo(time, still: false, abandon: true);
+      _clearOne();
       _graceFrom = null;
       _pad = true;
       _resumed = true;
@@ -237,10 +245,6 @@ class DeskGestures {
       _armed = false;
       _edgeAt = null;
       _moveAt = time;
-      _tapDrag =
-          _trackpad &&
-          _lastTapScreen != null &&
-          time - _lastTapTime <= deskMultiTap;
       return;
     }
     if (!_trackpad && !_anyOnPicture()) return;
@@ -256,9 +260,18 @@ class DeskGestures {
     finger.x = x;
     finger.y = y;
     if (_pad) {
-      if (finger.distanceFromOrigin() > deskSlop) _padMoved = true;
-      _padStep(time);
-      return;
+      if (_fingers.length == 3) {
+        if (finger.distanceFromOrigin() > deskSlop) _padMoved = true;
+        _padStep(time);
+        return;
+      }
+      if (_pairStill()) return;
+      _clearPad();
+      onEvent(DeskDragEvent(DeskDragPhase.up, cursor));
+    }
+    if (_graceFrom != null) {
+      if (_pairStill()) return;
+      _releaseGrace();
     }
     if (_three case final from?) {
       if ((_centroid() - from).distance <= deskSlop) return;
@@ -273,11 +286,7 @@ class DeskGestures {
     if (_oneId != id || _one == null) return;
     if (_one == _One.pending) {
       if (finger.distanceFromOrigin() <= deskSlop) return;
-      if (_trackpad && _tapDrag) {
-        _clearOne();
-        _startPad(Offset(finger.originX, finger.originY), time);
-        return;
-      } else if (_trackpad) {
+      if (_trackpad) {
         _one = _One.pointing;
         _nudge(finger.x - finger.originX, finger.y - finger.originY, time);
         onEvent(DeskPointEvent(cursor));
@@ -308,9 +317,12 @@ class DeskGestures {
     finger.x = x;
     finger.y = y;
     if (_pad) {
-      if (finger.distanceFromOrigin() > deskSlop) _padMoved = true;
-      _padStep(time);
+      if (_fingers.length == 3) {
+        if (finger.distanceFromOrigin() > deskSlop) _padMoved = true;
+        _padStep(time);
+      }
       _fingers.remove(id);
+      _preparePadRemainder(time);
       if (_fingers.isNotEmpty) {
         _padFrom = _centroid();
         return;
@@ -319,6 +331,7 @@ class DeskGestures {
       _ignore = false;
       return;
     }
+    _releaseGrace();
     if (_three != null) {
       // 三指还没滑开就抬起一根：这一下不认
       _fingers.remove(id);
@@ -341,7 +354,10 @@ class DeskGestures {
 
   void cancel(int id, Duration time) {
     final finger = _fingers.remove(id);
+    _releaseGrace();
     if (_pad) {
+      _clearOne();
+      _endTwo(time, still: false, abandon: true);
       _clearPad();
       onEvent(DeskDragEvent(DeskDragPhase.up, cursor));
       _ignore = _fingers.isNotEmpty;
@@ -417,6 +433,24 @@ class DeskGestures {
       onEvent(DeskDragEvent(DeskDragPhase.up, cursor));
     } else {
       _graceFrom = time;
+    }
+  }
+
+  // 抬指事件逐个到来：先为剩余手指建立普通手势基线，滑开后才释放拖动。
+  void _preparePadRemainder(Duration time) {
+    _clearOne();
+    _endTwo(time, still: false, abandon: true);
+    for (final finger in _fingers.values) {
+      finger.originX = finger.x;
+      finger.originY = finger.y;
+      finger.downAt = time;
+    }
+    if (_fingers.length == 1) {
+      _one = _One.pending;
+      _oneId = _fingers.keys.single;
+      _moveAt = time;
+    } else if (_fingers.length == 2) {
+      _beginTwo(time);
     }
   }
 
@@ -560,12 +594,7 @@ class DeskGestures {
       onEvent(DeskDragEvent(DeskDragPhase.up, _dragPoint(finger)));
     } else if (_one == _One.pending &&
         finger.distanceFromOrigin() <= deskSlop) {
-      if (_tapDrag && time - finger.downAt > deskTapHold) {
-        // 想拖没拖成，也不跟下一次轻点连成双击
-        _lastTapScreen = null;
-      } else {
-        _tap(finger.x, finger.y, time);
-      }
+      _tap(finger.x, finger.y, time);
     }
     _clearOne();
   }
@@ -623,7 +652,6 @@ class DeskGestures {
   }
 
   void _clearOne() {
-    _tapDrag = false;
     _one = null;
     _oneId = null;
     _armed = false;

@@ -661,8 +661,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deskGestureTapAtPointer => 'Tap one finger; clicks at the pointer';
 
   @override
-  String get deskGestureThreeFingerDrag =>
-      'Slide three fingers, or tap then hold and slide';
+  String get deskGestureThreeFingerDrag => 'Slide three fingers';
 
   @override
   String get deskGestureTitle => 'Gestures';

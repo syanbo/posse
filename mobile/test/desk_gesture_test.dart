@@ -396,7 +396,7 @@ void main() {
   });
 
   test(
-    'trackpad: tap-then-slide drags and two-finger tap act at the cursor',
+    'trackpad: tap-then-slide only points and two-finger tap uses the cursor',
     () {
       final g = _gestures()..gestures.trackpad = true;
       _tap(g, 50, 50, 0);
@@ -405,14 +405,9 @@ void main() {
       g.move(1, 70, 50, const Duration(milliseconds: 600));
       g.up(1, 70, 50, const Duration(milliseconds: 700));
       g.advance(const Duration(milliseconds: 1800));
-      final drag = [for (final e in g.events) e as DeskDragEvent];
-      expect(drag.map((e) => e.phase), [
-        DeskDragPhase.down,
-        DeskDragPhase.move,
-        DeskDragPhase.up,
-      ]);
-      expect(drag[0].at.x, closeTo(0.5, 1e-9));
-      expect(drag[2].at.x, closeTo(0.55, 1e-9));
+      final point = g.events.single as DeskPointEvent;
+      expect(point.at.x, closeTo(0.55, 1e-9));
+      expect(g.gestures.buttonHeld, isFalse);
 
       g.events.clear();
       g.down(1, 10, 10, const Duration(seconds: 1));
@@ -435,53 +430,120 @@ void main() {
     expect(tap.at.x, closeTo(0.9, 1e-9));
   });
 
-  test('trackpad: lifting mid-drag keeps the button for a moment', () {
-    List<DeskDragPhase> phases(_Harness g) => [
-      for (final e in g.events) (e as DeskDragEvent).phase,
-    ];
-    _Harness dragged() {
-      final g = _gestures()..gestures.trackpad = true;
-      _tap(g, 50, 50, 0);
-      g.events.clear();
-      g.down(1, 50, 50, const Duration(milliseconds: 200));
-      g.move(1, 90, 50, const Duration(milliseconds: 600));
-      g.up(1, 90, 50, const Duration(milliseconds: 700));
-      return g;
-    }
-
-    // 放回来接着拖
-    final resume = dragged();
-    expect(phases(resume), [DeskDragPhase.down, DeskDragPhase.move]);
-    expect(resume.gestures.buttonHeld, isTrue);
-    resume.down(1, 50, 50, const Duration(milliseconds: 1000));
-    resume.move(1, 90, 50, const Duration(milliseconds: 1400));
-    resume.up(1, 90, 50, const Duration(milliseconds: 1500));
-    expect(phases(resume), [
-      DeskDragPhase.down,
-      DeskDragPhase.move,
-      DeskDragPhase.move,
-    ]);
-    expect(resume.gestures.cursor.x, closeTo(0.7, 1e-9));
-
-    // 等过了才松开
-    final wait = dragged();
-    wait.advance(const Duration(milliseconds: 1700));
+  test('trackpad: grace expires or releases before a normal tap', () {
+    final wait = _gestures()..gestures.trackpad = true;
+    _threeDrag(wait);
+    wait.advance(const Duration(milliseconds: 1300));
     expect(wait.gestures.buttonHeld, isTrue);
     expect(
-      wait.gestures.graceLeft(const Duration(milliseconds: 1200)),
+      wait.gestures.graceLeft(const Duration(milliseconds: 800)),
       closeTo(0.5, 1e-9),
     );
-    wait.advance(const Duration(milliseconds: 1701));
-    expect(phases(wait).last, DeskDragPhase.up);
+    wait.advance(const Duration(milliseconds: 1301));
+    expect((wait.events.last as DeskDragEvent).phase, DeskDragPhase.up);
     expect(wait.gestures.buttonHeld, isFalse);
     expect(wait.needsTick, isFalse);
 
-    // 放回来轻点一下就松开，不再单击
-    final tap = dragged();
-    _tap(tap, 200, 100, 1000);
-    expect(phases(tap).last, DeskDragPhase.up);
-    expect(tap.gestures.buttonHeld, isFalse);
+    for (final count in [1, 2]) {
+      final tap = _gestures()..gestures.trackpad = true;
+      _threeDrag(tap);
+      tap.events.clear();
+      for (var id = 1; id <= count; id++) {
+        tap.down(id, 100.0 + id * 40, 100, const Duration(milliseconds: 800));
+      }
+      for (var id = 1; id <= count; id++) {
+        tap.up(id, 100.0 + id * 40, 100, const Duration(milliseconds: 850));
+      }
+      expect((tap.events.first as DeskDragEvent).phase, DeskDragPhase.up);
+      expect(tap.events.length, 2);
+      expect(
+        tap.events.last,
+        count == 1 ? isA<DeskTapEvent>() : isA<DeskRightClickEvent>(),
+      );
+      expect(tap.gestures.buttonHeld, isFalse);
+    }
   });
+
+  test('trackpad: one or two fingers release before moving during grace', () {
+    for (final count in [1, 2]) {
+      final g = _gestures()..gestures.trackpad = true;
+      _threeDrag(g);
+      g.events.clear();
+      for (var id = 1; id <= count; id++) {
+        g.down(id, 100.0 + id * 40, 100, const Duration(milliseconds: 800));
+      }
+      for (var id = 1; id <= count; id++) {
+        g.move(id, 100.0 + id * 40, 130, const Duration(milliseconds: 900));
+      }
+      expect((g.events.first as DeskDragEvent).phase, DeskDragPhase.up);
+      expect(g.events.whereType<DeskDragEvent>().length, 1);
+      expect(g.events.whereType<DeskPointEvent>(), isNotEmpty);
+      if (count == 2) expect(g.events.whereType<DeskScrollEvent>(), isNotEmpty);
+      expect(g.gestures.buttonHeld, isFalse);
+    }
+  });
+
+  test(
+    'trackpad: lifting down to one or two fingers stops dragging on movement',
+    () {
+      for (final count in [1, 2]) {
+        final g = _gestures()..gestures.trackpad = true;
+        _threeDrag(g, lift: false);
+        for (var id = 3; id > count; id--) {
+          g.up(id, 140.0 + id * 40, 100, const Duration(milliseconds: 300));
+        }
+        g.events.clear();
+        for (var id = 1; id <= count; id++) {
+          g.move(id, 140.0 + id * 40, 130, const Duration(milliseconds: 400));
+        }
+        expect((g.events.first as DeskDragEvent).phase, DeskDragPhase.up);
+        expect(g.events.whereType<DeskDragEvent>().length, 1);
+        expect(g.events.whereType<DeskPointEvent>(), isNotEmpty);
+        if (count == 2) {
+          expect(g.events.whereType<DeskScrollEvent>(), isNotEmpty);
+        }
+        expect(g.gestures.buttonHeld, isFalse);
+      }
+    },
+  );
+
+  test(
+    'trackpad: extra finger, cancellation and mode change release the button',
+    () {
+      final extra = _gestures()..gestures.trackpad = true;
+      _threeDrag(extra, lift: false);
+      extra.down(4, 300, 100, const Duration(milliseconds: 300));
+      expect((extra.events.last as DeskDragEvent).phase, DeskDragPhase.up);
+      expect(extra.gestures.buttonHeld, isFalse);
+
+      for (final lift in [false, true]) {
+        final g = _gestures()..gestures.trackpad = true;
+        _threeDrag(g, lift: lift);
+        if (lift) g.down(1, 100, 100, const Duration(milliseconds: 400));
+        g.gestures.cancel(1, const Duration(milliseconds: 500));
+        expect((g.events.last as DeskDragEvent).phase, DeskDragPhase.up);
+        expect(g.gestures.buttonHeld, isFalse);
+      }
+
+      final mode = _gestures()..gestures.trackpad = true;
+      _threeDrag(mode);
+      mode.gestures.trackpad = false;
+      expect((mode.events.last as DeskDragEvent).phase, DeskDragPhase.up);
+      expect(mode.gestures.buttonHeld, isFalse);
+    },
+  );
+
+  test(
+    'trackpad: late touches cannot resume an expired drag without a tick',
+    () {
+      final g = _gestures()..gestures.trackpad = true;
+      _threeDrag(g);
+      g.events.clear();
+      g.down(1, 100, 100, const Duration(milliseconds: 1400));
+      expect((g.events.single as DeskDragEvent).phase, DeskDragPhase.up);
+      expect(g.gestures.buttonHeld, isFalse);
+    },
+  );
   test('trackpad: a drag is not accelerated and buzzes once', () {
     var armed = 0;
     late _Harness g;
@@ -495,23 +557,21 @@ void main() {
       ),
     );
     g.gestures.trackpad = true;
-    _tap(g, 50, 50, 0);
-    g.down(1, 50, 50, const Duration(milliseconds: 100));
-    g.move(1, 90, 50, const Duration(milliseconds: 120));
+    _threeDrag(g, lift: false, moveAt: 20);
     expect(g.gestures.cursor.x, closeTo(0.6, 1e-9));
     expect(armed, 1);
   });
 
   test(
-    'trackpad: holding the second tap still and lifting is not a double click',
+    'trackpad: holding still does not arm a drag or suppress a double click',
     () {
       final g = _gestures()..gestures.trackpad = true;
       _tap(g, 50, 50, 0);
       g.down(1, 50, 50, const Duration(milliseconds: 100));
       g.up(1, 50, 50, const Duration(milliseconds: 400));
-      expect(g.events.whereType<DeskTapEvent>().map((e) => e.clicks), [1]);
-      _tap(g, 50, 50, 450);
-      expect(g.events.whereType<DeskTapEvent>().map((e) => e.clicks), [1, 1]);
+      expect(g.events.whereType<DeskTapEvent>().map((e) => e.clicks), [1, 2]);
+      expect(g.events.whereType<DeskDragEvent>(), isEmpty);
+      expect(g.gestures.buttonHeld, isFalse);
 
       // 按得快还是双击
       final quick = _gestures()..gestures.trackpad = true;
@@ -578,6 +638,20 @@ void main() {
       expect(tap.gestures.cursor.x, 0.5);
     },
   );
+}
+
+void _threeDrag(_Harness g, {bool lift = true, int moveAt = 200}) {
+  for (final id in [1, 2, 3]) {
+    g.down(id, 100.0 + id * 40, 100, Duration.zero);
+  }
+  for (final id in [1, 2, 3]) {
+    g.move(id, 140.0 + id * 40, 100, Duration(milliseconds: moveAt));
+  }
+  if (lift) {
+    for (final id in [1, 2, 3]) {
+      g.up(id, 140.0 + id * 40, 100, const Duration(milliseconds: 300));
+    }
+  }
 }
 
 class _Harness {

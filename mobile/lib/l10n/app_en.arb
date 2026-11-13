@@ -910,7 +910,7 @@
   "@deskGestureTapAtPointer": {
     "description": "Remote Desktop › gesture help: how to click in trackpad mode."
   },
-  "deskGestureThreeFingerDrag": "Slide three fingers, or tap then hold and slide",
+  "deskGestureThreeFingerDrag": "Slide three fingers",
   "@deskGestureThreeFingerDrag": {
     "description": "Remote Desktop › gesture help: how to drag in trackpad mode."
   },

@@ -1151,7 +1151,7 @@ abstract class AppLocalizations {
   /// Remote Desktop › gesture help: how to drag in trackpad mode.
   ///
   /// In en, this message translates to:
-  /// **'Slide three fingers, or tap then hold and slide'**
+  /// **'Slide three fingers'**
   String get deskGestureThreeFingerDrag;
 
   /// Remote Desktop: title of the gesture help and tooltip of its button in the floating bar.
