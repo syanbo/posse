@@ -28,7 +28,7 @@ type imagesView struct {
 	madeAll int         // agent 生成的一共几张
 	found   bool        // 找到了会话文件；没找到时内嵌的图片列不出来，不能说没有图片
 	// round 标记正在进行的这一轮扫描：面板关掉再打开后终端 ID 一样，靠它认出上一轮的结果
-	round  *struct{}
+	round  *byte
 	poll   panelPoll
 	failed map[string]bool // 解码失败的图片，不再重试
 	tab    int             // 顶部的分段：0 是 agent 生成的，1 是粘贴的
@@ -87,7 +87,8 @@ func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 		have[it.Key] = it.thumb
 	}
 	skip := maps.Clone(v.failed)
-	round := &struct{}{}
+	// 标记必须占实际内存，零大小对象可能共用地址，无法隔离扫描轮次。
+	round := new(byte)
 	v.round = round
 	go func() {
 		p, m := scanner.Scan()

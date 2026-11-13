@@ -141,3 +141,47 @@ func TestImagesDropsStaleRound(t *testing.T) {
 		t.Fatalf("stale round applied: made %d", len(a.images.made))
 	}
 }
+
+func TestImagesReopenedPanelRejectsPreviousScan(t *testing.T) {
+	oldPath := writeClaudeImages(t, 2)
+	newPath := writeClaudeImages(t, 1)
+	a := &app{}
+	cur := &terminalInfo{ID: "t1", Agent: "claude", AgentState: &agentState{SessionID: "s1", TranscriptPath: oldPath}}
+	newTester(func(c *ui.Context) { a.pollImages(c, cur) }, 100, 100).Frame()
+	// 留住上一轮完整的列表、首张缩略图和最后一批结果，模拟 UI 尚未处理它们就重新打开面板。
+	deadline := time.Now().Add(5 * time.Second)
+	var old []func()
+	for {
+		a.pendingMu.Lock()
+		if len(a.pending) >= 3 {
+			old, a.pending = a.pending, nil
+		}
+		a.pendingMu.Unlock()
+		if old != nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("old scan did not publish all batches")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	a.images = imagesView{}
+	cur.AgentState = &agentState{SessionID: "s2", TranscriptPath: newPath}
+	newTester(func(c *ui.Context) { a.pollImages(c, cur) }, 100, 100).Frame()
+	for _, apply := range old {
+		apply()
+	}
+	if len(a.images.made) != 0 || !a.images.poll.busy || !a.images.poll.at.IsZero() {
+		t.Fatalf("previous scan updated the reopened panel: made=%d busy=%v at=%v", len(a.images.made), a.images.poll.busy, a.images.poll.at)
+	}
+	for a.images.poll.busy {
+		a.runPending()
+		if time.Now().After(deadline) {
+			t.Fatal("new scan did not finish")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if len(a.images.made) != 1 {
+		t.Fatalf("new scan made %d images", len(a.images.made))
+	}
+}
