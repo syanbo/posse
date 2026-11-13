@@ -586,6 +586,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deskFpsStill => '静止';
 
   @override
+  String get deskQuality => '清晰度';
+
+  @override
+  String get deskQualityAuto => '自动';
+
+  @override
   String get deskFrameRate => '帧率';
 
   @override

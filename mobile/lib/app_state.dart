@@ -142,6 +142,7 @@ const deskVersion = 1;
 
 /// 看桌面能手选的帧率上限，和 Mac 认的一样；不在里面的是自动。
 const deskFpsChoices = [60, 30, 15];
+const deskResolutionChoices = [720, 1080, 1440];
 
 /// 手机上的偏好。存在 SharedPreferences 的 posse.settings 里，和配对分开。
 class AppSettings {
@@ -170,10 +171,12 @@ class AppSettings {
     this.backgroundKeep = false,
     Map<String, int>? deskDisplays,
     Map<String, int>? deskFps,
+    Map<String, int>? deskResolution,
     List<BarKey>? barKeys,
   }) : barKeys = barKeys ?? defaultBarKeys(),
        deskDisplays = deskDisplays ?? {},
-       deskFps = deskFps ?? {};
+       deskFps = deskFps ?? {},
+       deskResolution = deskResolution ?? {};
 
   /// dark、light 或 system。默认深色。
   String theme;
@@ -228,6 +231,9 @@ class AppSettings {
   /// 下次看时订阅带上。
   Map<String, int> deskFps;
 
+  /// 按电脑公钥保存的清晰度，缺省为自动，与帧率独立。
+  Map<String, int> deskResolution;
+
   /// 这台手机的安装 ID，第一次启动时生成。电脑靠它把同一台手机扫过的几个码认成一台。
   String phoneId;
 
@@ -267,6 +273,7 @@ class AppSettings {
     'skippedUpdateBuild': skippedUpdateBuild,
     'deskDisplays': deskDisplays,
     'deskFps': deskFps,
+    'deskResolution': deskResolution,
     'phoneId': phoneId,
     'pushWaiting': pushWaiting,
     'pushDone': pushDone,
@@ -351,6 +358,16 @@ class AppSettings {
         out.deskFps = {
           for (final MapEntry(:key, :value) in fps.entries)
             if (key is String && value is int && deskFpsChoices.contains(value))
+              key: value,
+        };
+      }
+      final resolution = map['deskResolution'];
+      if (resolution is Map) {
+        out.deskResolution = {
+          for (final MapEntry(:key, :value) in resolution.entries)
+            if (key is String &&
+                value is int &&
+                deskResolutionChoices.contains(value))
               key: value,
         };
       }

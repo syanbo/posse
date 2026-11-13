@@ -389,8 +389,10 @@ type conn struct {
 	chatWatch map[string]chatWatch
 
 	// 正在看的桌面（打洞、切屏的入口），这次观看结束时清掉；gen 认出是哪次订阅设的
-	desk    *DeskReady
-	deskGen uint64
+	desk               *DeskReady
+	deskGen            uint64
+	deskCtx            context.Context
+	deskResolutionBusy bool // 一条连接最多一个等待清晰度更新的协程
 
 	nextBlob atomic.Uint32 // 大块字段的编号（bulk.go）
 	lastRead atomic.Int64  // 最近一次收到手机的帧（UnixNano），判断写卡住时连接还活没活着

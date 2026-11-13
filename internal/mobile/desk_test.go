@@ -18,6 +18,7 @@ func TestDeskSubscribe(t *testing.T) {
 	switched := make(chan uint32, 1)
 	windowed := make(chan uint32, 1)
 	pinned := make(chan uint32, 4)
+	resolutions := make(chan uint32, 8)
 	h.desk = func(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error) {
 		if busy {
 			return DeskReady{}, DeskError("busy", "someone else")
@@ -40,6 +41,13 @@ func TestDeskSubscribe(t *testing.T) {
 			},
 			Window: func(id uint32) error {
 				windowed <- id
+				return nil
+			},
+			Resolution: func(_ context.Context, resolution uint32) error {
+				if resolution == 1440 {
+					return DeskError("unavailable", "could not change desktop resolution")
+				}
+				resolutions <- resolution
 				return nil
 			},
 			FPS: func(fps uint32) error {
@@ -86,6 +94,7 @@ func TestDeskSubscribe(t *testing.T) {
 
 	sub["display"] = 2
 	sub["fps"] = 30
+	sub["resolution"] = 1440
 	id := p.call("desk.subscribe", sub)
 	ready := result(t, p.next(id))
 	if ready["type"] != "ready" || ready["port"] != float64(4321) || ready["codec"] != "hevc" {
@@ -106,6 +115,9 @@ func TestDeskSubscribe(t *testing.T) {
 	c := onlyConn(t, srv)
 	if len(req.Secret) != 64 || string(req.Secret[:32]) != string(c.sess.sendKey[:]) || string(req.Secret[32:]) != string(c.sess.recvKey[:]) {
 		t.Fatal("secret is not sendKey||recvKey")
+	}
+	if req.Resolution != 1440 || ready["resolution"] != true {
+		t.Fatalf("resolution request/ready: %+v %v", req, ready)
 	}
 	if req.LongEdge != 2556 || req.Display != 2 || req.FPS != 30 {
 		t.Fatalf("long edge %d, display %d, fps %d", req.LongEdge, req.Display, req.FPS)
@@ -160,6 +172,38 @@ func TestDeskSubscribe(t *testing.T) {
 	if m := p.next(p.call("desk.fps", []int{30})); m["ok"] != false {
 		t.Fatalf("desk.fps with an array: %v", m)
 	}
+	// desk.resolution：只认 720、1080、1440，缺省和别的值都是回到自动
+	for _, c := range []struct {
+		params any
+		want   uint32
+	}{
+		{map[string]any{"resolution": 720}, 720},
+		{map[string]any{"resolution": 1080}, 1080},
+		{map[string]any{"resolution": 45}, 0},
+		{map[string]any{"resolution": "30"}, 0},
+		{map[string]any{}, 0},
+	} {
+		r := result(t, p.next(p.call("desk.resolution", c.params)))
+		if r["resolution"] != float64(c.want) {
+			t.Fatalf("desk.resolution %v replied %v", c.params, r)
+		}
+		if got := <-resolutions; got != c.want {
+			t.Fatalf("desk.resolution %v set %d", c.params, got)
+		}
+	}
+	if m := p.next(p.call("desk.resolution", []int{30})); m["ok"] != false {
+		t.Fatalf("desk.resolution with an array: %v", m)
+	}
+	for _, params := range []any{true, "720"} {
+		if m := p.next(p.call("desk.resolution", params)); m["ok"] != false {
+			t.Fatalf("accepted malformed resolution params %v: %v", params, m)
+		}
+	}
+	if m := p.next(p.call("desk.resolution", map[string]any{"resolution": 1440})); m["ok"] != false {
+		t.Fatalf("hidden resolution failure: %v", m)
+	} else if e, _ := m["error"].(map[string]any); e["message"] != "清晰度切换失败，请重试" {
+		t.Fatalf("unfriendly failure: %v", e)
+	}
 	if ready["relay"] != "203.0.113.1:443" {
 		t.Fatalf("relay %v", ready["relay"])
 	}
@@ -191,6 +235,14 @@ func TestDeskFPSParam(t *testing.T) {
 	for raw, want := range map[string]uint32{"": 0, "null": 0, "60": 60, "30": 30, "15": 15, "30.0": 30, "10": 0, "29.5": 0, `"30"`: 0, "true": 0, "-15": 0} {
 		if got := deskFPS(json.RawMessage(raw)); got != want {
 			t.Errorf("deskFPS(%s) = %d, want %d", raw, got, want)
+		}
+	}
+}
+
+func TestDeskResolutionParam(t *testing.T) {
+	for raw, want := range map[string]uint32{"": 0, "null": 0, "0": 0, "720": 720, "1080": 1080, "1440": 1440, "1080.0": 1080, "1080.5": 0, "2160": 0, `"720"`: 0, "true": 0, "-720": 0} {
+		if got := deskResolution(json.RawMessage(raw)); got != want {
+			t.Errorf("deskResolution(%s)=%d, want %d", raw, got, want)
 		}
 	}
 }

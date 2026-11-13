@@ -15,26 +15,27 @@ import (
 
 func init() {
 	commands = append(commands,
-		command{"desk helper", "Capture the main display and write encoded frames to stdout", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--display ID] [--selftest] [--input-test] [--quiet]", cmdDeskHelper},
-		command{"desk spawn", "Run the desktop helper as its own responsible process", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--input-test]", cmdDeskSpawn},
-		command{"desk cast", "Send the desktop helper to a UDP receiver", "[--addr HOST:PORT] [--seconds N] [--codec hevc|h264] [--long-edge N] [--exclude-app BUNDLE_ID]", cmdDeskCast},
+		command{"desk helper", "Capture the main display and write encoded frames to stdout", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--resolution 0|720|1080|1440] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--display ID] [--selftest] [--input-test] [--quiet]", cmdDeskHelper},
+		command{"desk spawn", "Run the desktop helper as its own responsible process", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--resolution 0|720|1080|1440] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--input-test]", cmdDeskSpawn},
+		command{"desk cast", "Send the desktop helper to a UDP receiver", "[--addr HOST:PORT] [--seconds N] [--codec hevc|h264] [--long-edge N] [--resolution 0|720|1080|1440] [--exclude-app BUNDLE_ID]", cmdDeskCast},
 	)
 }
 
 // deskOpts 是 desk helper、spawn、cast 共用的参数。
 type deskOpts struct {
-	seconds   int
-	codec     string
-	bench     bool
-	probe     bool
-	mov       string
-	selfTest  bool
-	inputTest bool
-	quiet     bool
-	addr      string
-	longEdge  int
-	exclude   []string
-	display   uint
+	seconds    int
+	codec      string
+	bench      bool
+	probe      bool
+	mov        string
+	selfTest   bool
+	inputTest  bool
+	quiet      bool
+	addr       string
+	resolution int
+	longEdge   int
+	exclude    []string
+	display    uint
 }
 
 func deskFlags(args []string) (deskOpts, error) {
@@ -51,6 +52,7 @@ func deskFlags(args []string) (deskOpts, error) {
 	fs.BoolVar(&o.quiet, "quiet", false, "")
 	fs.StringVar(&o.addr, "addr", "127.0.0.1:47991", "")
 	fs.IntVar(&o.longEdge, "long-edge", 0, "")
+	fs.IntVar(&o.resolution, "resolution", 0, "")
 	fs.UintVar(&o.display, "display", 0, "")
 	var ex multiFlag
 	fs.Var(&ex, "exclude-app", "")
@@ -96,6 +98,9 @@ func (o deskOpts) helperArgs() []string {
 	if o.longEdge > 0 {
 		args = append(args, "--long-edge", strconv.Itoa(o.longEdge))
 	}
+	if r := desk.PinnedResolution(int64(o.resolution)); r != 0 {
+		args = append(args, "--resolution", strconv.Itoa(int(r)))
+	}
 	for _, id := range o.exclude {
 		args = append(args, "--exclude-app", id)
 	}
@@ -110,7 +115,7 @@ func cmdDeskHelper(_ *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	return desk.Run(desk.Options{Seconds: o.seconds, Codec: o.codec, Bench: o.bench, Probe: o.probe, Mov: o.mov, SelfTest: o.selfTest, InputTest: o.inputTest, Quiet: o.quiet, LongEdge: o.longEdge, Exclude: o.exclude, Display: uint32(o.display)})
+	return desk.Run(desk.Options{Seconds: o.seconds, Codec: o.codec, Bench: o.bench, Probe: o.probe, Mov: o.mov, SelfTest: o.selfTest, InputTest: o.inputTest, Quiet: o.quiet, LongEdge: o.longEdge, Resolution: desk.PinnedResolution(int64(o.resolution)), Exclude: o.exclude, Display: uint32(o.display)})
 }
 
 func cmdDeskSpawn(_ *env, args []string) error {
@@ -133,7 +138,9 @@ func cmdDeskCast(_ *env, args []string) error {
 	defer proc.Control.Close()
 	defer proc.Frames.Close()
 	done := make(chan error, 1)
-	go func() { done <- desk.Cast(proc.Frames, proc.Control, o.addr) }()
+	go func() {
+		done <- desk.Cast(proc.Frames, proc.Control, o.addr, desk.PinnedResolution(int64(o.resolution)))
+	}()
 	if o.seconds > 0 {
 		time.AfterFunc(time.Duration(o.seconds)*time.Second, func() { proc.Control.Close() })
 	}

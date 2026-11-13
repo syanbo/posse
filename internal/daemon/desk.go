@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"posse/internal/desk"
@@ -105,8 +106,10 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 			args = append(args, "--exclude-app", id)
 		}
 	}
+	var resolution atomic.Uint32
+	resolution.Store(desk.PinnedResolution(int64(req.Resolution)))
 	spawn := func(display uint32) (deskProc, []byte, byte, error) {
-		proc, head, status, err := deskSpawnFirst(deskSpawnArgs(args, display))
+		proc, head, status, err := deskSpawnFirst(append(deskSpawnArgs(args, display), "--resolution", strconv.Itoa(int(resolution.Load()))))
 		if status != 0 {
 			d.deskNoteStatus(status)
 		}
@@ -151,10 +154,12 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	windows := make(chan []byte, 1)
 	var wmu sync.Mutex
 	fpsChanges := make(chan uint32)
+	resolutionChanges := make(chan desk.ResolutionChange)
 	go func() {
 		done <- desk.Serve(io.MultiReader(bytes.NewReader(head), frames), control, desk.CastConfig{
 			Conn: conn, ToMobile: toMobile, ToMac: toMac, IsRelay: conn.IsRelay,
 			FPS: req.FPS, FPSChanges: fpsChanges,
+			Resolution: req.Resolution, ResolutionChanges: resolutionChanges,
 			OnInput: desk.NewInputForwarder(control),
 			OnDisplays: func(ds desk.Displays) {
 				notify(mobile.DeskEvent{Type: "displays", Current: ds.Current, Displays: ds.List, Window: ds.Window, Gone: ds.Gone})
@@ -219,6 +224,30 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 		FPS: func(fps uint32) error {
 			select {
 			case fpsChanges <- fps:
+				return nil
+			case <-runCtx.Done():
+				return mobile.DeskError("unavailable", "not watching the desktop")
+			}
+		},
+		Resolution: func(ctx context.Context, value uint32) error {
+			value = desk.PinnedResolution(int64(value))
+			change := desk.ResolutionChange{Resolution: value, Done: make(chan error, 1)}
+			select {
+			case resolutionChanges <- change:
+				resolution.Store(value)
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-runCtx.Done():
+				return mobile.DeskError("unavailable", "not watching the desktop")
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case err := <-change.Done:
+				if err != nil {
+					log.Printf("desk: change resolution: %v", err)
+					return mobile.DeskError("unavailable", "could not change desktop resolution")
+				}
 				return nil
 			case <-runCtx.Done():
 				return mobile.DeskError("unavailable", "not watching the desktop")

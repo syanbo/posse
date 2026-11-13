@@ -96,7 +96,7 @@ func TestDeskBench(t *testing.T) {
 				e.encMu.Unlock()
 				e.logf("frame rate cap %d", c.FPS)
 			case CtrlScale:
-				if c.Scale == 0 || c.Scale > 4 || e.scale.Swap(c.Scale) == c.Scale {
+				if c.Scale == 0 || c.Scale > 4 || e.picture.Swap(pictureSetting(0, c.Scale)) == pictureSetting(0, c.Scale) {
 					continue
 				}
 				w, h := fullW/int(c.Scale)&^1, fullH/int(c.Scale)&^1

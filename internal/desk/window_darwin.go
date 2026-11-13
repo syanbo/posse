@@ -215,48 +215,78 @@ func (e *engine) writeWindows() {
 	e.write(Frame{Kind: KindWindows, CaptureUnixNano: time.Now().UnixNano(), Payload: b})
 }
 
-// switchWindow 是手机选了只看一个窗口。窗口已经不在了就留在现在看的画面上。
-func (e *engine) switchWindow(id uint32) {
-	e.streamMu.Lock()
-	var err error
-	switch {
-	case e.locked.Load():
-		// 锁屏界面不在窗口里，解锁后再换过去
-		e.lockWin = id
-		e.logf("window %d after unlock", id)
-	case !e.stopping.Load() && e.stream != 0:
-		err = e.rebuildWindowLocked(id, true)
+type captureTarget struct {
+	window bool
+	id     uint32
+}
+
+// selectTarget 在控制入口记最新意图；慢采集和辅助功能留给后台，不能依赖 goroutine 抢锁的先后。
+func (e *engine) selectTarget(window bool, id uint32) {
+	e.target.Store(&captureTarget{window: window, id: id})
+	go e.switchTarget()
+}
+
+func (e *engine) applyTargetLocked() (*captureTarget, error) {
+	target := e.target.Load()
+	if target == nil || target == e.appliedTarget || e.stopping.Load() || e.stream == 0 {
+		return nil, nil
 	}
+	e.appliedTarget = target
+	e.activePicture = e.picture.Load()
+	if !target.window {
+		e.lockWin = 0
+		return target, e.displayLocked(target.id, false)
+	}
+	if e.locked.Load() {
+		e.lockWin = target.id
+		return target, nil
+	}
+	return target, e.rebuildWindowLocked(target.id, true)
+}
+
+func (e *engine) switchTarget() {
+	e.streamMu.Lock()
+	target, err := e.applyTargetLocked()
 	e.streamMu.Unlock()
 	if err != nil {
 		e.halt(err)
 		return
 	}
+	if target == nil {
+		return
+	}
 	e.writeDisplays()
-	// 不拿着 streamMu：辅助功能的调用在对方 App 卡住时要等好几秒
-	if w := e.watching(); w.ID == id {
+	// 辅助功能可能等几秒，既不占采集锁，也不替已过时的选择提窗。
+	if w := e.watching(); target.window && w.ID == target.id && e.target.Load() == target {
 		e.mac.withPool(func() {
-			if err := e.mac.raiseWindow(w.pid, id); err != nil {
-				e.logf("raise window %d: %v", id, err)
+			if err := e.mac.raiseWindow(w.pid, target.id); err != nil {
+				e.logf("raise window %d: %v", target.id, err)
 			}
 		})
 	}
 }
 
+// rebuildWatching 同时服务窗口轮询和清晰度重建；清晰度只在目标改变时通知，普通缩放不重置手机指针。
+func (e *engine) rebuildWatching(rebuild func() error, notify func(), dimensions bool) error {
+	before := e.watching()
+	if err := rebuild(); err != nil {
+		return err
+	}
+	after := e.watching()
+	if before.ID != after.ID || dimensions && (before.pw != after.pw || before.ph != after.ph) {
+		notify()
+	}
+	return nil
+}
+
 // checkWindow 每秒看一次正在看的窗口：大小变了按新尺寸重开，关掉、最小化、切到别的空间了回到整块屏，
 // 这两种都告诉手机。只挪了位置不用重开，注入下次按下时会取新位置。
 func (e *engine) checkWindow() {
-	before := e.watching()
-	if before.ID == 0 {
+	if e.watching().ID == 0 {
 		return
 	}
-	if err := e.rebuildDisplay(0); err != nil {
+	if err := e.rebuildWatching(func() error { return e.rebuildDisplay(0) }, e.writeDisplays, true); err != nil {
 		e.halt(err)
-		return
-	}
-	after := e.watching()
-	if after.ID != before.ID || after.pw != before.pw || after.ph != before.ph {
-		e.writeDisplays()
 	}
 }
 
@@ -285,7 +315,7 @@ func (e *engine) rebuildWindowLocked(id uint32, pick bool) error {
 		}
 	}
 	pw, ph := windowPixels(info.W, info.H, disp)
-	tw, th := Fit(pw, ph, e.longEdge())
+	tw, th := e.fit(pw, ph, false)
 	next := watched{
 		Window: Window{ID: id, App: cleanName(info.App), Title: cleanName(info.Title), Width: info.W, Height: info.H, Display: dispID},
 		pid:    info.PID, x: info.X, y: info.Y, pw: pw, ph: ph,
@@ -293,6 +323,7 @@ func (e *engine) rebuildWindowLocked(id uint32, pick bool) error {
 	cur := e.watching()
 	if !pick && cur.ID == id && tw == e.width && th == e.height {
 		e.setWatched(next)
+		e.writeChangedConfig(pw, ph)
 		if dispID != 0 {
 			e.displayID = dispID
 			e.shown.Store(dispID)

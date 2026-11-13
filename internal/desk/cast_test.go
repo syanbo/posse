@@ -23,7 +23,7 @@ func TestCastStopsWithoutHello(t *testing.T) {
 	t.Cleanup(func() { pw.Close() })
 	addr := freeUDP(t)
 	start := time.Now()
-	err := Cast(pr, io.Discard, addr)
+	err := Cast(pr, io.Discard, addr, 0)
 	if !errors.Is(err, ErrNoHello) {
 		t.Fatalf("err = %v", err)
 	}
@@ -45,7 +45,7 @@ func TestCastQuietStartsAfterHello(t *testing.T) {
 	addr := freeUDP(t)
 	done := make(chan error, 1)
 	start := time.Now()
-	go func() { done <- Cast(pr, io.Discard, addr) }()
+	go func() { done <- Cast(pr, io.Discard, addr, 0) }()
 
 	select {
 	case err := <-done:
@@ -99,7 +99,7 @@ func TestCastReportResetsQuiet(t *testing.T) {
 	addr := freeUDP(t)
 	done := make(chan error, 1)
 	start := time.Now()
-	go func() { done <- Cast(pr, io.Discard, addr) }()
+	go func() { done <- Cast(pr, io.Discard, addr, 0) }()
 	time.Sleep(30 * time.Millisecond)
 
 	conn, err := net.Dial("udp", addr)
@@ -165,7 +165,7 @@ func TestCastReportWithoutHello(t *testing.T) {
 	t.Cleanup(func() { pw.Close() })
 	addr := freeUDP(t)
 	done := make(chan error, 1)
-	go func() { done <- Cast(pr, io.Discard, addr) }()
+	go func() { done <- Cast(pr, io.Discard, addr, 0) }()
 	time.Sleep(30 * time.Millisecond)
 
 	conn, err := net.Dial("udp", addr)
@@ -232,7 +232,7 @@ func TestCastPausesAndResumes(t *testing.T) {
 	}()
 	addr := freeUDP(t)
 	done := make(chan error, 1)
-	go func() { done <- Cast(pr, ctrlW, addr) }()
+	go func() { done <- Cast(pr, ctrlW, addr, 0) }()
 	time.Sleep(30 * time.Millisecond)
 	conn, err := net.Dial("udp", addr)
 	if err != nil {
@@ -701,7 +701,7 @@ func TestRestartedHelperGetsTheCurrentSettings(t *testing.T) {
 	if err := WriteFrame(pw, Frame{Kind: KindStatus, Payload: []byte{StatusRestarted}}); err != nil {
 		t.Fatal(err)
 	}
-	want := []Control{{Kind: CtrlBitrate, Bitrate: 900_000}, {Kind: CtrlFPS, FPS: 15}, {Kind: CtrlScale, Scale: 2}}
+	want := []Control{{Kind: CtrlBitrate, Bitrate: 900_000}, {Kind: CtrlFPS, FPS: 15}, {Kind: CtrlResolution, Scale: 2}}
 	for _, w := range want {
 		select {
 		case x := <-got:

@@ -17,12 +17,13 @@ import (
 type DeskRequest struct {
 	Device string // 手机的名字，桌面手机页显示"谁在看"
 	// Secret 和 Nonce 派生 UDP 两个方向的密钥（desk.DeriveKeys）
-	Secret   []byte
-	Nonce    []byte
-	LongEdge int      // 手机屏幕长边的像素，画面不比它大
-	Codecs   []string // 手机能硬解的编码，按偏好排
-	Display  uint32   // 手机记着的上次看的屏（CGDirectDisplayID），0 或已经不在了看主屏
-	FPS      uint32   // 手机手选的帧率上限（60、30、15），0 是跟着码率自动选
+	Secret     []byte
+	Nonce      []byte
+	LongEdge   int      // 手机屏幕长边的像素，只限制自动清晰度
+	Codecs     []string // 手机能硬解的编码，按偏好排
+	Display    uint32   // 手机记着的上次看的屏（CGDirectDisplayID），0 或已经不在了看主屏
+	FPS        uint32   // 手机手选的帧率上限（60、30、15），0 是跟着码率自动选
+	Resolution uint32   // 720、1080、1440，0 是自动
 }
 
 // DeskReady 是采集已经开始、UDP 已经在听。
@@ -42,7 +43,8 @@ type DeskReady struct {
 	// Windows 是当前能单独看的窗口（desk.windows），返回 {"windows":[...]} 的 JSON
 	Windows func(ctx context.Context) (json.RawMessage, error) `json:"-"`
 	// FPS 换手选的帧率上限（desk.fps），0 是回到自动；不重开采集，立即生效
-	FPS func(fps uint32) error `json:"-"`
+	FPS        func(fps uint32) error              `json:"-"`
+	Resolution func(context.Context, uint32) error `json:"-"`
 }
 
 // DeskEvent 是订阅期间推给手机的事件。Type 是 state 或 end；State、Reason 是固定的词，见 docs/features/mobile.md。
@@ -79,7 +81,8 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 		Codecs  []string `json:"codecs"`
 		Display uint32   `json:"display"`
 		// 不按数字解：旧手机不带，带了认不出的值也只当自动，不让整个订阅失败
-		FPS json.RawMessage `json:"fps"`
+		FPS        json.RawMessage `json:"fps"`
+		Resolution json.RawMessage `json:"resolution"`
 	}
 	if json.Unmarshal(raw, &p) != nil || p.Width <= 0 || p.Height <= 0 {
 		return c.fail(id, "bad_params", "width and height are required")
@@ -87,13 +90,14 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 	nonce := make([]byte, 16)
 	rand.Read(nonce)
 	req := DeskRequest{
-		Device:   c.device.Name,
-		Secret:   c.sess.deskSecret(),
-		Nonce:    nonce,
-		LongEdge: max(p.Width, p.Height),
-		Codecs:   p.Codecs,
-		Display:  p.Display,
-		FPS:      deskFPS(p.FPS),
+		Device:     c.device.Name,
+		Secret:     c.sess.deskSecret(),
+		Nonce:      nonce,
+		LongEdge:   max(p.Width, p.Height),
+		Codecs:     p.Codecs,
+		Display:    p.Display,
+		FPS:        deskFPS(p.FPS),
+		Resolution: deskResolution(p.Resolution),
 	}
 	// 一条连接同时只看一次，新的订阅换掉旧的
 	ctx, gen := c.startKeyedStream("desk")
@@ -132,14 +136,15 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 			// 认 input 里的密码事件（desk.EventPassword）：手机看到才发，旧电脑照旧发文字加回车
 			"password": true,
 			// 认 subscribe 的 fps 和 desk.fps（手选帧率）：手机看到才显示入口
-			"fps": true,
+			"fps":        true,
+			"resolution": true,
 		}
 		if ready.Relay != "" {
 			frame["relay"] = ready.Relay
 			frame["relayTokenB64"] = base64.StdEncoding.EncodeToString(ready.RelayToken)
 		}
 		c.smu.Lock()
-		c.desk, c.deskGen = &ready, gen
+		c.desk, c.deskGen, c.deskCtx = &ready, gen, ctx
 		c.smu.Unlock()
 		defer func() {
 			c.smu.Lock()
@@ -294,6 +299,62 @@ func (c *conn) deskFPSRPC(id string, raw json.RawMessage) error {
 		return c.fail(id, "unavailable", err.Error())
 	}
 	return c.reply(id, map[string]any{"fps": fps})
+}
+
+// deskResolution 把手机报的清晰度规整成能手选的档位（720、1080、1440），缺省、别的数、不是数字都当自动（0）。
+func deskResolution(raw json.RawMessage) uint32 {
+	var v float64
+	if json.Unmarshal(raw, &v) != nil {
+		return 0
+	}
+	switch v {
+	case 720, 1080, 1440:
+		return uint32(v)
+	}
+	return 0
+}
+
+var deskResolutionTimeout = 3 * time.Second
+
+// deskResolutionRPC 不占住连接的请求循环；一条连接只留一个有期限的等待。
+func (c *conn) deskResolutionRPC(id string, raw json.RawMessage) error {
+	var p *struct {
+		Resolution json.RawMessage `json:"resolution"`
+	}
+	if json.Unmarshal(raw, &p) != nil || p == nil {
+		return c.fail(id, "bad_params", "params must be an object")
+	}
+	resolution := deskResolution(p.Resolution)
+	c.smu.Lock()
+	if c.desk == nil || c.desk.Resolution == nil || c.deskCtx.Err() != nil {
+		c.smu.Unlock()
+		return c.fail(id, "unavailable", "not watching the desktop")
+	}
+	if c.deskResolutionBusy {
+		c.smu.Unlock()
+		return c.fail(id, "busy", "desktop resolution change is already in progress")
+	}
+	set, gen := c.desk.Resolution, c.deskGen
+	ctx, cancel := context.WithTimeout(c.deskCtx, deskResolutionTimeout)
+	c.deskResolutionBusy = true
+	c.smu.Unlock()
+	go func() {
+		defer cancel()
+		err := set(ctx, resolution)
+		c.smu.Lock()
+		stale := c.deskGen != gen || c.streamGen["desk"] != gen
+		c.deskResolutionBusy = false
+		c.smu.Unlock()
+		switch {
+		case stale || ctx.Err() == context.Canceled:
+			c.fail(id, "unavailable", "not watching the desktop")
+		case ctx.Err() == context.DeadlineExceeded:
+			c.fail(id, "timeout", "desktop resolution change timed out")
+		default:
+			c.replyOrFail(id, map[string]any{"resolution": resolution}, err)
+		}
+	}()
+	return nil
 }
 
 func (c *conn) deskUnsubscribe(id string) error {

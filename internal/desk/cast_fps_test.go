@@ -150,7 +150,7 @@ func TestResyncKeepsPinnedFPS(t *testing.T) {
 	if f, ok := lastOf(cs, CtrlFPS); ok && f.FPS != 60 {
 		t.Fatalf("resync sent fps %d", f.FPS)
 	}
-	if s, ok := lastOf(cs, CtrlScale); !ok || s.Scale != 2 {
+	if s, ok := lastOf(cs, CtrlResolution); !ok || s.Scale != 2 {
 		t.Fatalf("resync lost the half picture: %v", cs)
 	}
 }

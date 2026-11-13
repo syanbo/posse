@@ -313,6 +313,10 @@ var zh = [][2]string{
 	// 看桌面（常驻进程按用户选的语言写的默认人名、恢复终端时打的一行也在这里）
 	{"%s is watching this computer’s desktop", "{1} 正在看这台电脑的桌面"},
 	{"Posse is not allowed to record the screen yet", "还没允许 Posse 录制屏幕"},
+	{"could not change desktop resolution", "清晰度切换失败，请重试"},
+	{"desktop resolution change is already in progress", "清晰度正在切换，请稍后重试"},
+	{"desktop resolution change timed out", "清晰度切换超时，请重试"},
+	{"not watching the desktop", "当前没有在看桌面"},
 	{"this computer supports none of the codecs the phone reported", "手机报的编码电脑都不支持"},
 	{"Phone", "手机"},
 	{"— Posse restored the previous terminal —", "— Posse 已恢复上次的终端 —"},

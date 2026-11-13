@@ -611,6 +611,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deskFpsStill => 'Still';
 
   @override
+  String get deskQuality => 'Resolution';
+
+  @override
+  String get deskQualityAuto => 'Auto';
+
+  @override
   String get deskFrameRate => 'Frame Rate';
 
   @override

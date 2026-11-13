@@ -153,7 +153,7 @@ func TestDeskHelperRestartsAfterExit(t *testing.T) {
 	mu.Lock()
 	args, second := strings.Join(spawned[1], " "), procs[1]
 	mu.Unlock()
-	if !strings.HasSuffix(args, "--display 7") {
+	if !strings.Contains(args, "--display 7") {
 		t.Fatalf("restart args %q", args)
 	}
 	select {

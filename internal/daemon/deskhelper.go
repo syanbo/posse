@@ -41,6 +41,7 @@ type deskHelper struct {
 	mu       sync.Mutex
 	proc     deskProc
 	closing  bool
+	windowID uint32 // 采集恢复后接着看原窗口
 	display  uint32 // 正在看的屏，重建时接着看它
 	restarts []time.Time
 }
@@ -134,7 +135,7 @@ func (h *deskHelper) pump(proc deskProc) error {
 	}
 }
 
-// note 记下重建时要用的：正在看哪块屏。
+// note 保留采集侧明确报出的恢复目标；锁屏临时整屏与主动选屏不能混为一谈。
 func (h *deskHelper) note(f desk.Frame) {
 	if f.Kind != desk.KindDisplays {
 		return
@@ -143,6 +144,10 @@ func (h *deskHelper) note(f desk.Frame) {
 	if json.Unmarshal(f.Payload, &ds) == nil && ds.Current != 0 {
 		h.mu.Lock()
 		h.display = ds.Current
+		h.windowID = ds.RestoreWindow
+		if ds.Window != nil {
+			h.windowID = ds.Window.ID
+		}
 		h.mu.Unlock()
 	}
 }
@@ -188,6 +193,15 @@ func (h *deskHelper) restart(cause error) error {
 			stopDeskProc(proc)
 			return io.EOF
 		}
+		if h.windowID != 0 {
+			if err := desk.WriteControl(proc.Control(), desk.Control{Kind: desk.CtrlWindow, Window: h.windowID}); err != nil {
+				h.mu.Unlock()
+				stopDeskProc(proc)
+				cause = err
+				continue
+			}
+		}
+		// 先交恢复意图再接新控制；采集侧按最新目标执行，异步重建不依赖协程调度顺序。
 		h.proc = proc
 		h.mu.Unlock()
 		restarted := desk.Frame{Kind: desk.KindStatus, CaptureUnixNano: time.Now().UnixNano(), Payload: []byte{desk.StatusRestarted}}

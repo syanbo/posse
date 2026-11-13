@@ -137,10 +137,11 @@ type Display struct {
 // Displays 是 KindDisplays 负载：所有的屏和正在看的那块。只看一个窗口时 Window 是那个窗口，
 // Current 是它所在的屏；Gone 是正在看的窗口关掉或最小化了，退回了整块屏。
 type Displays struct {
-	Current uint32    `json:"current"`
-	List    []Display `json:"displays"`
-	Window  *Window   `json:"window,omitempty"`
-	Gone    bool      `json:"gone,omitempty"`
+	Current       uint32    `json:"current"`
+	List          []Display `json:"displays"`
+	Window        *Window   `json:"window,omitempty"`
+	Gone          bool      `json:"gone,omitempty"`
+	RestoreWindow uint32    `json:"restoreWindow,omitempty"` // 锁屏临时看整屏时，解锁后应回到的窗口
 }
 
 // Window 是 Mac 上一个可以单独看的窗口。宽高是点数，Display 是它中心所在的屏。
@@ -198,26 +199,28 @@ const (
 	CtrlKeyframe byte = 1
 	CtrlBitrate  byte = 2
 	// 3 以前是停止（CtrlStop），父进程从来不发、子进程靠控制管道关闭停下：别再挪作他用
-	CtrlInput   byte = 4
-	CtrlDisplay byte = 5
-	CtrlFPS     byte = 6
-	CtrlScale   byte = 7 // 画面长边除以几：1 原样，2 减半（码率低到 15 帧及以下时，关键帧小得多）
-	CtrlWindows byte = 8 // 要窗口列表，子进程回一帧 KindWindows
-	CtrlWindow  byte = 9 // 只看这个窗口（CGWindowID）；CtrlDisplay 回到整块屏
+	CtrlInput      byte = 4
+	CtrlDisplay    byte = 5
+	CtrlFPS        byte = 6
+	CtrlScale      byte = 7  // 画面长边除以几：1 原样，2 减半（码率低到 15 帧及以下时，关键帧小得多）
+	CtrlWindows    byte = 8  // 要窗口列表，子进程回一帧 KindWindows
+	CtrlWindow     byte = 9  // 只看这个窗口（CGWindowID）；CtrlDisplay 回到整块屏
+	CtrlResolution byte = 10 // 清晰度和自动缩放一起更新，避免中间档位重建
 )
 
 // Control 是父进程写给子进程的一条控制。码率只在 CtrlBitrate 时有意义，单位是比特每秒。
 // Events 只在 CtrlInput 时有意义，是去重之后要执行的事件。Display 只在 CtrlDisplay 时有意义，是要切到的屏。
-// FPS 只在 CtrlFPS 时有意义，是每秒最多采几帧。Scale 只在 CtrlScale 时有意义，是长边除以几。
-// Window 只在 CtrlWindow 时有意义，是要看的窗口。
+// FPS 只在 CtrlFPS 时有意义，是每秒最多采几帧。Scale 是长边除数，由 CtrlScale 或 CtrlResolution 携带。
+// Resolution 只在 CtrlResolution 时有意义，和 Scale 一起应用。Window 只在 CtrlWindow 时有意义，是要看的窗口。
 type Control struct {
-	Kind    byte
-	Bitrate uint32
-	Events  []Event
-	Display uint32
-	FPS     uint32
-	Scale   uint32
-	Window  uint32
+	Kind       byte
+	Bitrate    uint32
+	Events     []Event
+	Display    uint32
+	FPS        uint32
+	Scale      uint32
+	Window     uint32
+	Resolution uint32
 }
 
 // WriteControl 写成 4 字节长度加内容。长度包含类型字节。
@@ -234,6 +237,9 @@ func WriteControl(w io.Writer, c Control) error {
 		body = controlU32(c.Kind, c.Scale)
 	case CtrlWindow:
 		body = controlU32(c.Kind, c.Window)
+	case CtrlResolution:
+		body = append(controlU32(c.Kind, c.Resolution), make([]byte, 4)...)
+		binary.LittleEndian.PutUint32(body[5:], c.Scale)
 	case CtrlInput:
 		ev, err := EncodeInput(c.Events)
 		if err != nil {
@@ -282,6 +288,12 @@ func ReadControl(r io.Reader) (Control, error) {
 	}
 	c := Control{Kind: buf[0]}
 	switch c.Kind {
+	case CtrlResolution:
+		if len(buf) != 9 {
+			return Control{}, fmt.Errorf("desk: control %d has %d bytes, want 9", c.Kind, len(buf))
+		}
+		c.Resolution = binary.LittleEndian.Uint32(buf[1:5])
+		c.Scale = binary.LittleEndian.Uint32(buf[5:9])
 	case CtrlBitrate, CtrlDisplay, CtrlFPS, CtrlScale, CtrlWindow:
 		if len(buf) != 5 {
 			return Control{}, fmt.Errorf("desk: control %d has %d bytes, want 5", c.Kind, len(buf))
@@ -327,6 +339,41 @@ func Fit(w, h, longEdge int) (int, int) {
 		scale = float64(longEdge) / float64(long)
 	}
 	return evenDim(w, scale), evenDim(h, scale)
+}
+
+// PinnedResolution 将未知档位规整为自动。
+func PinnedResolution(v int64) uint32 {
+	switch v {
+	case 720, 1080, 1440:
+		return uint32(v)
+	}
+	return 0
+}
+
+func pictureSetting(resolution, scale uint32) uint64 {
+	resolution = PinnedResolution(int64(resolution))
+	if resolution != 0 || scale < 1 || scale > 4 {
+		scale = 1
+	}
+	return uint64(resolution)<<32 | uint64(scale)
+}
+
+// FitResolution 固定档同时限制两边，方向跟着采集源，自动档沿用长边和弱网缩放。
+func FitResolution(w, h, longEdge int, resolution, scale uint32) (int, int) {
+	resolution = PinnedResolution(int64(resolution))
+	if resolution == 0 {
+		return Fit(w, h, max(longEdge/int(max(scale, 1)), 2))
+	}
+	if w < 2 || h < 2 {
+		return 2, 2
+	}
+	mw, mh := int(resolution)*16/9, int(resolution)
+	if w < h {
+		mw, mh = mh, mw
+	}
+	ratio := min(1.0, float64(mw)/float64(w), float64(mh)/float64(h))
+	// 固定档向下取整，避免奇数源或比例取整后越过矩形上限。
+	return max(2, int(float64(w)*ratio)/2*2), max(2, int(float64(h)*ratio)/2*2)
 }
 
 // DirectBitrate 是直连时的起始码率，照 Moonlight 的默认值（getDefaultBitrate）：按像素数在

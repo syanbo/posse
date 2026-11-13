@@ -1052,6 +1052,18 @@ abstract class AppLocalizations {
   /// **'Still'**
   String get deskFpsStill;
 
+  /// Remote Desktop > screen picker: transmitted picture resolution, independent of frame rate.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolution'**
+  String get deskQuality;
+
+  /// Remote Desktop > Resolution: adapt picture size to the phone and network.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get deskQualityAuto;
+
   /// Remote Desktop › screen picker: section title for choosing the Mac's capture frame rate cap (Auto, 60, 30, 15).
   ///
   /// In en, this message translates to:

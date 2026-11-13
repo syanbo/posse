@@ -191,6 +191,99 @@ void main() {
     expect(tester.getSize(find.byType(BottomSheet)).height, sheetHeight);
   });
 
+  testWidgets(
+    'a lost window dismisses the picker but resolution changes keep it open',
+    (tester) async {
+      final screen = <String, Object?>{
+        ..._frame,
+        'displays': [(_frame['displays']! as List).first],
+      };
+      final target = ValueNotifier(DeskDisplays.parse(screen));
+      addTearDown(target.dispose);
+      final resolutions = <int>[];
+      DeskPick? picked;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.dark),
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ValueListenableBuilder<DeskDisplays>(
+                valueListenable: target,
+                builder: (context, state, _) => Stack(
+                  children: [
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: TextButton(
+                        onPressed: () async {
+                          picked = await pickDeskView(
+                            context,
+                            target.value,
+                            target: target,
+                            windows: Future.value(_windows),
+                            resolution: 0,
+                            onResolution: (value) async {
+                              resolutions.add(value);
+                            },
+                          );
+                        },
+                        child: const Text('open'),
+                      ),
+                    ),
+                    if (state.gone)
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Text(context.l10n.deskWindowGone),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('desk-window-42')));
+      await tester.tap(find.byKey(const Key('desk-window-42')));
+      await tester.pumpAndSettle();
+      expect(picked, (window: true, id: 42));
+      // 和页面一样把订阅里的 displays 交给监听器，窗口列表仍是打开时的快照。
+      target.value = DeskDisplays.parse({
+        ...screen,
+        'window': _rawWindows.first,
+      });
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('desk-window-42')),
+          matching: find.byIcon(Icons.check_rounded),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('720p'));
+      target.value = DeskDisplays.parse({
+        ...screen,
+        'window': {..._rawWindows.first, 'w': 800, 'h': 600},
+      });
+      await tester.pumpAndSettle();
+      expect(resolutions, [720]);
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(find.text(zh.deskWindowGone), findsNothing);
+      target.value = DeskDisplays.parse({...screen, 'gone': true});
+      await tester.pumpAndSettle();
+      expect(target.value.window, isNull);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byKey(const Key('desk-window-42')), findsNothing);
+      expect(find.text(zh.deskWindowGone).hitTestable(), findsOneWidget);
+      expect(picked, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test('windows parse and a lost window is flagged', () {
     final list = DeskWindow.parseList({
       'windows': [

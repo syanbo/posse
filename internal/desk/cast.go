@@ -50,14 +50,14 @@ var ErrNoHello = errors.New("desk: no hello for 60s")
 
 // Cast 从采集管道读帧，加密后发到 addr。对端先发 hello。control 写给采集子进程。
 // 用固定测试密钥，给还没接进常驻进程的命令行试跑用。
-func Cast(frames io.Reader, control io.Writer, addr string) error {
+func Cast(frames io.Reader, control io.Writer, addr string, resolution uint32) error {
 	conn, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return err
 	}
 	log.Printf("desk: listening %s", conn.LocalAddr())
 	toMobile, toMac := TestKeys()
-	return Serve(frames, control, CastConfig{Conn: conn, ToMobile: toMobile, ToMac: toMac, Verbose: true})
+	return Serve(frames, control, CastConfig{Conn: conn, ToMobile: toMobile, ToMac: toMac, Verbose: true, Resolution: resolution})
 }
 
 // LockWriter 让几处同时写控制管道时每条消息完整写完：改码率、要关键帧、转发输入在不同的协程里，
@@ -93,8 +93,16 @@ type CastConfig struct {
 	// IsRelay 认出中转服务器的地址。手机同时向直连地址和中转发包时，直连还通就不换到中转
 	IsRelay func(net.Addr) bool
 	// FPS 是手机手选的帧率上限（60、30、15），0 是跟着码率自动选；FPSChanges 送来观看中的改动，取值同上
-	FPS        uint32
-	FPSChanges <-chan uint32
+	FPS               uint32
+	FPSChanges        <-chan uint32
+	Resolution        uint32
+	ResolutionChanges <-chan ResolutionChange
+}
+
+// ResolutionChange 的结果只表示控制管道写入结果，采集重建失败仍由观看流报告。
+type ResolutionChange struct {
+	Resolution uint32
+	Done       chan error
 }
 
 // PinnedFPS 把手机报来的帧率规整成能手选的档位，别的值都当自动（0）。
@@ -124,14 +132,15 @@ func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
 		conn: cfg.Conn, sealAEAD: sealAEAD, openAEAD: openAEAD, control: control,
 		onStatus: cfg.OnStatus, onDisplays: cfg.OnDisplays, onWindows: cfg.OnWindows, onInput: cfg.OnInput, verbose: cfg.Verbose, isRelay: cfg.IsRelay,
 		bitrate: start, fps: 60, autoFPS: 60, pinned: PinnedFPS(int64(cfg.FPS)), fullBit: start, codec: CodecHEVC,
-		stopped: make(chan struct{}), quietDeadline: now.Add(helloWait),
+		resolution: PinnedResolution(int64(cfg.Resolution)),
+		stopped:    make(chan struct{}), quietDeadline: now.Add(helloWait),
 	}
 	c.rate.reset(now, start, relayCeil)
 	readDone := make(chan error, 1)
 	go func() { readDone <- c.readFrames(frames) }()
 	go c.recv()
 	go c.beat()
-	if cfg.FPSChanges != nil {
+	if cfg.FPSChanges != nil || cfg.ResolutionChanges != nil {
 		go func() {
 			for {
 				select {
@@ -139,6 +148,13 @@ func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
 					return
 				case v := <-cfg.FPSChanges:
 					c.pin(v)
+				case v := <-cfg.ResolutionChanges:
+					err := c.chooseResolution(v.Resolution)
+					select {
+					case v.Done <- err:
+					case <-c.stopped:
+						return
+					}
 				}
 			}
 		}()
@@ -226,6 +242,7 @@ type caster struct {
 	haveConfig         bool
 	direct             bool   // 手机直连（不经中转）：起始码率和上限放开到 DirectBitrate、rateCeil；mu 保护
 	scale              uint32 // 告诉子进程的长边除数，码率落到 15 帧那档及以下时为 2；fpsMu 保护
+	resolution         uint32 // fpsMu 保护
 	fpsMu              sync.Mutex
 	rate               rateState
 	sendGap            time.Duration
@@ -355,27 +372,10 @@ func (c *caster) readFrames(frames io.Reader) error {
 		case KindConfig:
 			cfg, err := UnmarshalConfig(f.Payload)
 			if err == nil {
-				// 满尺寸没变是我们自己降、升了分辨率（CtrlScale）：码率照旧，编码器重开后按它自己的起始码率跑，
-				// 再告诉它一遍。满尺寸变了是新画面（开始、切屏、改分辨率），从这个画面的满码率起步
-				full := PictureBitrate(cfg.FullWidth, cfg.FullHeight)
+				c.configure(cfg)
 				c.mu.Lock()
-				c.codec = cfg.Codec
-				rescaled := c.haveConfig && full == c.fullBit
-				c.haveConfig = true
-				if !rescaled {
-					c.fullW, c.fullH = cfg.FullWidth, cfg.FullHeight
-					start, ceil := c.startLocked()
-					c.bitrate = start
-					c.rate.reset(time.Now(), start, ceil)
-					c.fullBit = full
-				}
 				bitrate := c.bitrate
 				c.mu.Unlock()
-				// 新画面也要告诉子进程：它重开编码器时按自己记着的码率起步，和这里的起始码率不一定一样
-				_ = WriteControl(c.control, Control{Kind: CtrlBitrate, Bitrate: bitrate})
-				if !rescaled {
-					c.applyFPS(bitrate)
-				}
 				name := "hevc"
 				if cfg.Codec == CodecH264 {
 					name = "h264"
@@ -921,7 +921,7 @@ func (c *caster) applyFPSLocked(bitrate uint32) {
 	// 实测有 200 KB，所以要回到 30 帧那档（码率约 1.9 Mbps 以上）才升回满尺寸，那时半秒左右能发完。
 	// 看的是按码率该用的档位，不是手选的帧率：手选 15 帧不该把好网络上的画面减半，手选 60 帧也不该让慢链路发满尺寸
 	scale := uint32(1)
-	if auto <= 15 {
+	if auto <= 15 && c.resolution == 0 {
 		scale = 2
 	}
 	if c.scale == 0 {
@@ -932,6 +932,51 @@ func (c *caster) applyFPSLocked(bitrate uint32) {
 		log.Printf("desk: picture scale 1/%d at bitrate %d", scale, bitrate)
 		_ = WriteControl(c.control, Control{Kind: CtrlScale, Scale: scale})
 	}
+}
+
+// configure 按真实基准尺寸更新预算；已有网络测量在切档、切源和恢复时都保留。
+func (c *caster) configure(cfg Config) {
+	c.fpsMu.Lock()
+	defer c.fpsMu.Unlock()
+	c.mu.Lock()
+	c.codec = cfg.Codec
+	changed := !c.haveConfig || cfg.FullWidth != c.fullW || cfg.FullHeight != c.fullH
+	if changed {
+		c.fullW, c.fullH = cfg.FullWidth, cfg.FullHeight
+		c.fullBit = PictureBitrate(c.fullW, c.fullH)
+		start, ceil := c.startLocked()
+		if !c.haveConfig {
+			c.bitrate = start
+			c.rate.reset(time.Now(), start, ceil)
+		} else {
+			c.rate.setCeiling(ceil)
+			c.bitrate = min(c.bitrate, start, ceil)
+			c.rate.bitrate = c.bitrate
+			c.rate.peak = min(c.rate.peak, start)
+		}
+	}
+	c.haveConfig = true
+	bitrate := c.bitrate
+	c.mu.Unlock()
+	_ = WriteControl(c.control, Control{Kind: CtrlBitrate, Bitrate: bitrate})
+	if changed {
+		c.applyFPSLocked(bitrate)
+	}
+}
+
+func (c *caster) chooseResolution(resolution uint32) error {
+	c.fpsMu.Lock()
+	defer c.fpsMu.Unlock()
+	c.resolution = PinnedResolution(int64(resolution))
+	c.mu.Lock()
+	auto := c.autoFPS
+	c.mu.Unlock()
+	c.scale = 1
+	if c.resolution == 0 && auto > 0 && auto <= 15 {
+		c.scale = 2
+	}
+	log.Printf("desk: resolution chosen by the phone: %d, scale 1/%d", c.resolution, c.scale)
+	return WriteControl(c.control, Control{Kind: CtrlResolution, Resolution: c.resolution, Scale: c.scale})
 }
 
 // pin 换手选的帧率上限（0 是回到自动），立即按现在的码率重新定帧率上限告诉子进程。
@@ -959,9 +1004,7 @@ func (c *caster) resync() {
 	if fps > 0 && fps < 60 {
 		_ = WriteControl(c.control, Control{Kind: CtrlFPS, FPS: fps})
 	}
-	if c.scale > 1 {
-		_ = WriteControl(c.control, Control{Kind: CtrlScale, Scale: c.scale})
-	}
+	_ = WriteControl(c.control, Control{Kind: CtrlResolution, Resolution: c.resolution, Scale: max(c.scale, 1)})
 }
 
 // askKey 让子进程出一个关键帧。两次请求至少隔 keyGap，慢链路上还要隔上一个关键帧发送时长的两倍；

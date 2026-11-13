@@ -52,8 +52,10 @@ type engine struct {
 	shown atomic.Uint32
 	// fpsCap 是每秒最多采几帧，父进程按码率改（CtrlFPS），0 是 60
 	fpsCap atomic.Uint32
-	// scale 是画面长边除以几（CtrlScale），0 和 1 都是原样
-	scale atomic.Uint32
+	// picture 的高位是清晰度、低位是自动缩放；控制循环先存最新值，再异步重建。
+	picture       atomic.Uint64
+	activePicture uint64 // streamMu 保护，一次重建使用同一份设置
+	fullW, fullH  int
 	// locked 是 Mac 锁着屏：照常采集，打字按键码注入
 	locked   atomic.Bool
 	dropping atomic.Bool
@@ -62,7 +64,9 @@ type engine struct {
 	winMu sync.Mutex
 	win   watched
 	// lockWin 是锁屏时只看着的窗口：锁屏界面不在窗口里，锁屏期间看主屏，解锁后换回它。在 streamMu 下读写
-	lockWin uint32
+	target        atomic.Pointer[captureTarget]
+	appliedTarget *captureTarget // streamMu 保护
+	lockWin       uint32
 	// gone 是正在看的窗口没了、退回了整块屏，下一次报屏列表时告诉手机
 	gone atomic.Bool
 	// checking 是每秒的窗口检查还没做完，不叠着做
@@ -160,6 +164,8 @@ func runDarwin(o Options) error {
 		pend: map[uint64]*stamp{}, stop: make(chan struct{}), wake: make(chan struct{}, 1),
 		nalLen: 4, born: time.Now(),
 	}
+	e.activePicture = pictureSetting(o.Resolution, 1)
+	e.picture.Store(e.activePicture)
 	// 低延迟码率控制默认开着。UsingHardwareAcceleratedVideoEncoder 读回来经常是 false，
 	// 并不能说明这一路是软件编码，不用它决定开不开。
 	// 它有画质下限：码率不够时整帧丢掉，实际帧率可能只有上限（fpsLadder）的四到五成。关掉的话帧出满，
@@ -266,24 +272,32 @@ func (e *engine) gotContent(content objc.ID, msg string) {
 		e.halt(fmt.Errorf("desk: no main display"))
 		return
 	}
+	// 配置帧先于采集流交出去，父进程可能立刻补发恢复设置；让重建等初始流打开后再执行。
+	e.streamMu.Lock()
+	if e.stopping.Load() {
+		e.streamMu.Unlock()
+		return
+	}
+	e.activePicture = e.picture.Load()
 	e.displayID = chosen
 	e.shown.Store(chosen)
-	tw, th := Fit(pw, ph, e.longEdge())
+	tw, th := e.fit(pw, ph, false)
 	e.width, e.height = tw, th
 	codec := CodecHEVC
 	if e.opt.Codec == "h264" {
 		codec = CodecH264
 	}
 	if err := e.openEncoder(codec); err != nil {
+		e.streamMu.Unlock()
 		e.halt(err)
 		return
 	}
 	e.writeConfig()
 	if err := e.openMovie(); err != nil {
+		e.streamMu.Unlock()
 		e.halt(err)
 		return
 	}
-	e.streamMu.Lock()
 	err := e.openStream(e.displayFilter(display, content))
 	e.streamMu.Unlock()
 	if err != nil {
@@ -907,29 +921,53 @@ func (e *engine) writeConfig() {
 	if w := e.watching(); w.ID != 0 {
 		pw, ph = w.pw, w.ph
 	}
-	fw, fh := Fit(pw, ph, e.opt.LongEdge)
+	fw, fh := e.fit(pw, ph, true)
+	e.fullW, e.fullH = fw, fh
 	e.write(Frame{
 		Kind: KindConfig, CaptureUnixNano: time.Now().UnixNano(),
 		Payload: MarshalConfig(Config{Codec: e.codec, Width: e.width, Height: e.height, FullWidth: fw, FullHeight: fh}),
 	})
 }
 
-// longEdge 是现在的输出长边：手机给的上限，码率压到最低一档时减半（CtrlScale）。
-func (e *engine) longEdge() int {
-	if s := int(e.scale.Load()); s > 1 {
-		return max(e.opt.LongEdge/s, 2)
+func (e *engine) fit(w, h int, full bool) (int, int) {
+	v := e.activePicture
+	scale := uint32(v)
+	if full {
+		scale = 1
 	}
-	return e.opt.LongEdge
+	return FitResolution(w, h, e.opt.LongEdge, uint32(v>>32), scale)
 }
 
-// setScale 改画面长边的除数，按新尺寸重开编码器和采集（和改分辨率走同一条路）。
-func (e *engine) setScale(scale uint32) {
-	if scale == 0 || scale > 4 || e.scale.Swap(scale) == scale {
+// setPicture 在控制循环里按到达顺序记最新选择，重建协程只读它，旧协程不会覆盖新选择。
+func (e *engine) setPicture(resolution, scale uint32) {
+	v := pictureSetting(resolution, scale)
+	if e.picture.Swap(v) == v {
 		return
 	}
-	e.logf("picture scale 1/%d", scale)
-	if err := e.rebuildDisplay(0); err != nil {
-		e.halt(err)
+	e.rebuildPicture()
+}
+
+func (e *engine) setScale(scale uint32) {
+	if scale == 0 || scale > 4 {
+		return
+	}
+	v := e.picture.Load()
+	e.setPicture(uint32(v>>32), scale)
+}
+
+func (e *engine) rebuildPicture() {
+	go func() {
+		if err := e.rebuildWatching(func() error { return e.rebuildDisplay(0) }, e.writeDisplays, false); err != nil {
+			e.halt(err)
+		}
+	}()
+}
+
+// writeChangedConfig 补报同输出、不同基准的切换，不必重开编码器。
+func (e *engine) writeChangedConfig(pw, ph int) {
+	fw, fh := e.fit(pw, ph, true)
+	if fw != e.fullW || fh != e.fullH {
+		e.writeConfig()
 	}
 }
 
@@ -938,7 +976,8 @@ func (e *engine) write(f Frame) {
 	err := WriteFrame(e.out, f)
 	e.writeMu.Unlock()
 	if err != nil {
-		e.halt(nil)
+		// 配置帧在采集锁内写出，退出清理也要拿这把锁。
+		go e.halt(nil)
 	}
 }
 
@@ -1112,15 +1151,17 @@ func (e *engine) control() {
 			e.applyInput(c.Events)
 		case CtrlDisplay:
 			// 重开采集要等 ScreenCaptureKit 回调，不挡后面的输入
-			go e.switchDisplay(c.Display)
+			e.selectTarget(false, c.Display)
 		case CtrlFPS:
 			go e.setFPS(c.FPS)
 		case CtrlScale:
-			go e.setScale(c.Scale)
+			e.setScale(c.Scale)
+		case CtrlResolution:
+			e.setPicture(c.Resolution, c.Scale)
 		case CtrlWindows:
 			go e.writeWindows()
 		case CtrlWindow:
-			go e.switchWindow(c.Window)
+			e.selectTarget(true, c.Window)
 		}
 	}
 }
@@ -1431,28 +1472,25 @@ func (e *engine) onDisplaysChanged() {
 	e.writeDisplays()
 }
 
-// switchDisplay 是手机选了另一块屏。那块屏不在了（刚拔掉）就留在现在这块。
-func (e *engine) switchDisplay(id uint32) {
-	if err := e.rebuildDisplay(id); err != nil {
-		e.halt(err)
-		return
-	}
-	e.writeDisplays()
-}
-
 // writeDisplays 把所有的屏、正在看的那块和只看的窗口报给父进程。
 func (e *engine) writeDisplays() {
 	var list []Display
 	e.mac.withPool(func() { list = e.displayList() })
-	ds := Displays{Current: e.shown.Load(), List: list, Gone: e.gone.Swap(false)}
-	if w := e.watching(); w.ID != 0 {
-		ds.Window = &w.Window
-	}
-	b, err := json.Marshal(ds)
+	e.streamMu.Lock()
+	defer e.streamMu.Unlock()
+	b, err := json.Marshal(e.displaysLocked(list))
 	if err != nil {
 		return
 	}
 	e.write(Frame{Kind: KindDisplays, CaptureUnixNano: time.Now().UnixNano(), Payload: b})
+}
+
+func (e *engine) displaysLocked(list []Display) Displays {
+	ds := Displays{Current: e.shown.Load(), List: list, Gone: e.gone.Swap(false), RestoreWindow: e.lockWin}
+	if w := e.watching(); w.ID != 0 {
+		ds.Window = &w.Window
+	}
+	return ds
 }
 
 // rebuildDisplay 换到 want 这块屏重新采，want 为 0 是留在现在看的画面上（只看窗口时按窗口现在的大小重开）。
@@ -1460,6 +1498,11 @@ func (e *engine) writeDisplays() {
 func (e *engine) rebuildDisplay(want uint32) error {
 	e.streamMu.Lock()
 	defer e.streamMu.Unlock()
+	return e.rebuildDisplayLocked(want)
+}
+
+func (e *engine) rebuildDisplayLocked(want uint32) error {
+	e.activePicture = e.picture.Load()
 	if e.stopping.Load() || e.stream == 0 {
 		return nil
 	}
@@ -1489,9 +1532,10 @@ func (e *engine) displayLocked(want uint32, force bool) error {
 		id = e.mac.mainDisplay()
 	}
 	pw, ph := e.mac.displayPixels(id)
-	tw, th := Fit(pw, ph, e.longEdge())
+	tw, th := e.fit(pw, ph, false)
 	windowed := e.watching().ID != 0
 	if !force && !windowed && id == e.displayID && tw == e.width && th == e.height {
+		e.writeChangedConfig(pw, ph)
 		return nil
 	}
 	e.logf("display %d %dx%d -> %d %dx%d", e.displayID, e.width, e.height, id, tw, th)

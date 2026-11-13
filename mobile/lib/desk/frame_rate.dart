@@ -14,6 +14,7 @@ Map<String, Object?> deskSubscribeParams(
   'codecs': ['hevc'],
   'display': ?s.deskDisplays[key],
   'fps': ?s.deskFps[key],
+  'resolution': ?s.deskResolution[key],
 };
 
 /// 画面面板里帧率一行的当前值（0 是自动）。电脑的 ready 没带 `fps: true`（旧电脑）时为 null，不显示这一行。

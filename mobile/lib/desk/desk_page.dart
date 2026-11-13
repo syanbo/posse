@@ -19,6 +19,7 @@ import 'displays.dart';
 import 'direct.dart';
 import 'events.dart';
 import 'frame_rate.dart';
+import 'resolution.dart';
 import 'gestures.dart';
 import 'hint.dart';
 import 'key_bar.dart';
@@ -110,7 +111,8 @@ class _DeskPageState extends State<DeskPage>
   bool _punchAsked = false;
 
   /// Mac 上的屏和正在看的那块，订阅流里的 displays 事件给。旧电脑不给，一直是空的。
-  DeskDisplays _displays = DeskDisplays.none;
+  final _displayState = ValueNotifier<DeskDisplays>(DeskDisplays.none);
+  DeskDisplays get _displays => _displayState.value;
   int? _texture;
   // 失败的代号、结束的 reason（文字见 status.dart），显示时才按界面语言取
   String? _fail;
@@ -150,6 +152,8 @@ class _DeskPageState extends State<DeskPage>
   bool _passwordEvent = false;
   // 电脑认手选帧率（ready 里带 fps）：画面面板里才有帧率一行
   bool _fpsChoice = false;
+  bool _resolutionChoice = false;
+  final _resolution = DeskResolutionChoice();
   final _unlockGate = DeskUnlockGate();
   // 等待结束时重画胶囊，按钮从「正在解锁」变回来
   Timer? _unlockTick;
@@ -164,7 +168,13 @@ class _DeskPageState extends State<DeskPage>
   var _hintOpen = false;
   var _keyboardUp = false;
   var _stopped = false;
-  var _gen = 0;
+  final _watchGeneration = ValueNotifier<int>(0);
+  int get _gen => _watchGeneration.value;
+  set _gen(int value) {
+    _resolution.cancelPending();
+    _watchGeneration.value = value;
+  }
+
   SystemUiMode? _ui;
 
   @override
@@ -250,6 +260,9 @@ class _DeskPageState extends State<DeskPage>
       unawaited(restoreDeskOrientation());
       unawaited(_edges.set(false));
     }
+    _resolution.dispose();
+    _watchGeneration.dispose();
+    _displayState.dispose();
     super.dispose();
   }
 
@@ -691,7 +704,7 @@ class _DeskPageState extends State<DeskPage>
     _statsTick.value = const DeskStats();
     setState(() {
       // 可能换了一台电脑，等这次订阅报来的屏
-      _displays = DeskDisplays.none;
+      _displayState.value = DeskDisplays.none;
       _fail = null;
       _endNote = null;
       _noAccess = false;
@@ -788,7 +801,7 @@ class _DeskPageState extends State<DeskPage>
             displays.window?.id != _displays.window?.id) {
           _gestures.cursor = const DeskPoint(0.5, 0.5);
         }
-        setState(() => _displays = displays);
+        setState(() => _displayState.value = displays);
         if (displays.gone) _note(context.l10n.deskWindowGone);
       case 'end':
         final reason = frame['reason'];
@@ -806,21 +819,42 @@ class _DeskPageState extends State<DeskPage>
     final rpc = _rpcNow;
     if (rpc == null) return;
     final key = _computerKey;
+    final gen = _gen;
     final pick = await pickDeskView(
       context,
       _displays,
       windows: rpc.call('desk.windows', const {}).then(DeskWindow.parseList),
+      generation: _watchGeneration,
+      target: _displayState,
+      resolution: deskResolutionOffer(
+        _resolutionChoice,
+        widget.model.settings,
+        key,
+      ),
+      onResolution: (value) => _resolution.choose(
+        widget.model,
+        key,
+        value,
+        call: (method, params) {
+          if (!identical(rpc, _rpcNow) || gen != _gen) {
+            throw const PhoneError(PhoneError.notConnected);
+          }
+          return rpc.call(method, params);
+        },
+      ),
       fps: deskFpsOffer(_fpsChoice, widget.model.settings, key),
       onFps: (fps) => unawaited(
         chooseDeskFps(
           widget.model,
           key,
           fps,
-          call: identical(rpc, _rpcNow) ? rpc.call : null,
+          call: identical(rpc, _rpcNow) && gen == _gen ? rpc.call : null,
         ),
       ),
     );
-    if (!mounted || pick == null || !identical(rpc, _rpcNow)) return;
+    if (!mounted || pick == null || gen != _gen || !identical(rpc, _rpcNow)) {
+      return;
+    }
     if (pick.window) {
       if (pick.id == _displays.window?.id) return;
     } else {
@@ -890,6 +924,7 @@ class _DeskPageState extends State<DeskPage>
     _nack = frame['nack'] == true;
     _passwordEvent = frame['password'] == true;
     _fpsChoice = frame['fps'] == true;
+    _resolutionChoice = frame['resolution'] == true;
     _relayToken = null;
     if (_relay != null && relayTokenB64 is String) {
       try {

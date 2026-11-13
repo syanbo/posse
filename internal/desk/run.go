@@ -27,6 +27,8 @@ type Options struct {
 	Exclude []string
 	// LongEdge 是输出长边的像素上限，0 用 1920。
 	LongEdge int
+	// Resolution 为固定矩形上限的档位，0 沿用 LongEdge。
+	Resolution uint32
 	// Quiet 不每秒记编码统计，结束时仍记一行汇总。常驻进程拉起时用：日志进 daemon.log
 	Quiet bool
 	// Display 是开始时看哪块屏（CGDirectDisplayID），0 或已经不在了用主屏
