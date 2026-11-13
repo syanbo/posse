@@ -264,6 +264,8 @@ void main() {
         ),
         findsOneWidget,
       );
+      await tester.tap(find.byKey(const Key('desk-resolution')));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('720p'));
       target.value = DeskDisplays.parse({
         ...screen,

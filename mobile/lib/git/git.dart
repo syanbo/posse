@@ -802,7 +802,8 @@ class _ModeSwitch extends StatelessWidget {
 Color _nameColor(PosseColors c, ChangeKind kind) => switch (kind) {
   ChangeKind.added => c.sage,
   ChangeKind.deleted => c.muted,
-  ChangeKind.untracked || ChangeKind.conflict => c.gitDanger,
+  ChangeKind.untracked => c.gitUntracked,
+  ChangeKind.conflict => c.gitDanger,
   ChangeKind.modified || ChangeKind.renamed => c.sky,
 };
 

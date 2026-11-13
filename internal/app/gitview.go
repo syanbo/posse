@@ -1006,23 +1006,11 @@ func (g *gitState) treeMarks() map[string]byte {
 	if g.status == nil {
 		return nil
 	}
-	g.marks = map[string]byte{}
-	for _, e := range g.status.Entries {
-		mark := statusLetter(e)
-		switch mark {
-		case 'A', '?', 'U':
-		default:
-			mark = 'M'
-		}
-		abs := g.absPath(e.Path)
-		g.marks[abs] = mark
-		for dir := filepath.Dir(abs); len(dir) > len(g.repo); dir = filepath.Dir(dir) {
-			if _, ok := g.marks[dir]; ok {
-				break
-			}
-			g.marks[dir] = 'M'
-		}
+	var shownPath func(string) string
+	if g.v != nil {
+		shownPath = g.v.shownPath
 	}
+	g.marks = gitx.RepoTreeMarks(gitx.Repo{Root: g.repo, Aliases: g.aliases}, g.status.Entries, shownPath)
 	return g.marks
 }
 

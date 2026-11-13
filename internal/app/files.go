@@ -485,6 +485,7 @@ func (a *app) startList(v *filesView) {
 	var repos []string
 	for _, g := range v.repos.list {
 		repos = append(repos, g.repo)
+		repos = append(repos, g.aliases...)
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

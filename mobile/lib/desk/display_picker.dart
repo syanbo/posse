@@ -70,114 +70,113 @@ Future<DeskPick?> pickDeskView(
           top: false,
           child: SizedBox(
             height: height,
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  if (resolution != null && onResolution != null)
-                    _ResolutionChoice(
-                      value: resolution,
-                      onChanged: onResolution,
-                    ),
-                  if (fps != null && onFps != null)
-                    _FpsChoice(fps: fps, onChanged: onFps),
-                  Section(
-                    title: sheet.l10n.deskEntireScreen,
-                    inset: 48,
-                    children: [
-                      // 多块屏只画排布图，名字和分辨率写在各块里
-                      if (displays.several)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                          child: SizedBox(
-                            height: 150,
-                            child: DeskDisplayMap(
-                              displays: displays,
-                              onPick: (id) => pick((window: false, id: id)),
-                            ),
-                          ),
-                        )
-                      else
-                        for (final d in displays.list)
-                          RowTile(
-                            key: Key('desk-display-${d.id}'),
-                            leading: Icon(
-                              Icons.desktop_windows_rounded,
-                              size: Ic.medium,
-                              color: d.id == displays.current
-                                  ? c.accent
-                                  : c.muted,
-                            ),
-                            title: Text(
-                              deskDisplayName(sheet.l10n, displays, d),
-                            ),
-                            subtitle: Text(_resolution(sheet.l10n, d)),
-                            trailing:
-                                watching == null && d.id == displays.current
-                                ? Icon(
-                                    Icons.check_rounded,
-                                    size: Ic.medium,
-                                    color: c.accent,
-                                  )
-                                : null,
-                            chevron: false,
-                            onTap: () => pick((window: false, id: d.id)),
-                          ),
-                    ],
-                  ),
-                  FutureBuilder<List<DeskWindow>>(
-                    future: windows,
-                    builder: (context, snap) {
-                      final list = snap.data;
-                      return Section(
-                        title: context.l10n.deskWindows,
-                        inset: 48,
-                        children: [
-                          if (snap.connectionState != ConnectionState.done)
-                            _Note(
-                              key: const Key('desk-windows-loading'),
-                              context.l10n.deskListingWindows,
-                            )
-                          else if (snap.hasError)
-                            _Note(context.l10n.deskWindowsError)
-                          else if (list == null || list.isEmpty)
-                            _Note(context.l10n.deskWindowsEmpty)
-                          else
-                            for (final w in list)
-                              RowTile(
-                                key: Key('desk-window-${w.id}'),
-                                leading: _AppIcon(
-                                  w,
-                                  color: w.id == watching?.id
-                                      ? c.accent
-                                      : c.muted,
-                                ),
-                                title: Text(
-                                  w.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle: Text(
-                                  w.title.isNotEmpty
-                                      ? w.app
-                                      : '${w.width.round()} × ${w.height.round()}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: w.id == watching?.id
-                                    ? Icon(
-                                        Icons.check_rounded,
-                                        size: Ic.medium,
-                                        color: c.accent,
-                                      )
-                                    : null,
-                                chevron: false,
-                                onTap: () => pick((window: true, id: w.id)),
+            child: _StreamChoices(
+              resolution: resolution,
+              onResolution: onResolution,
+              fps: fps,
+              onFps: onFps,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Section(
+                      title: sheet.l10n.deskEntireScreen,
+                      inset: 48,
+                      children: [
+                        // 多块屏只画排布图，名字和分辨率写在各块里
+                        if (displays.several)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                            child: SizedBox(
+                              height: 150,
+                              child: DeskDisplayMap(
+                                displays: displays,
+                                onPick: (id) => pick((window: false, id: id)),
                               ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
+                            ),
+                          )
+                        else
+                          for (final d in displays.list)
+                            RowTile(
+                              key: Key('desk-display-${d.id}'),
+                              leading: Icon(
+                                Icons.desktop_windows_rounded,
+                                size: Ic.medium,
+                                color: d.id == displays.current
+                                    ? c.accent
+                                    : c.muted,
+                              ),
+                              title: Text(
+                                deskDisplayName(sheet.l10n, displays, d),
+                              ),
+                              subtitle: Text(_resolution(sheet.l10n, d)),
+                              trailing:
+                                  watching == null && d.id == displays.current
+                                  ? Icon(
+                                      Icons.check_rounded,
+                                      size: Ic.medium,
+                                      color: c.accent,
+                                    )
+                                  : null,
+                              chevron: false,
+                              onTap: () => pick((window: false, id: d.id)),
+                            ),
+                      ],
+                    ),
+                    FutureBuilder<List<DeskWindow>>(
+                      future: windows,
+                      builder: (context, snap) {
+                        final list = snap.data;
+                        return Section(
+                          title: context.l10n.deskWindows,
+                          inset: 48,
+                          children: [
+                            if (snap.connectionState != ConnectionState.done)
+                              _Note(
+                                key: const Key('desk-windows-loading'),
+                                context.l10n.deskListingWindows,
+                              )
+                            else if (snap.hasError)
+                              _Note(context.l10n.deskWindowsError)
+                            else if (list == null || list.isEmpty)
+                              _Note(context.l10n.deskWindowsEmpty)
+                            else
+                              for (final w in list)
+                                RowTile(
+                                  key: Key('desk-window-${w.id}'),
+                                  leading: _AppIcon(
+                                    w,
+                                    color: w.id == watching?.id
+                                        ? c.accent
+                                        : c.muted,
+                                  ),
+                                  title: Text(
+                                    w.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: Text(
+                                    w.title.isNotEmpty
+                                        ? w.app
+                                        : '${w.width.round()} × ${w.height.round()}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  trailing: w.id == watching?.id
+                                      ? Icon(
+                                          Icons.check_rounded,
+                                          size: Ic.medium,
+                                          color: c.accent,
+                                        )
+                                      : null,
+                                  chevron: false,
+                                  onTap: () => pick((window: true, id: w.id)),
+                                ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -190,30 +189,45 @@ Future<DeskPick?> pickDeskView(
   }
 }
 
-class _ResolutionChoice extends StatefulWidget {
-  const _ResolutionChoice({required this.value, required this.onChanged});
+class _StreamChoices extends StatefulWidget {
+  const _StreamChoices({
+    required this.child,
+    this.resolution,
+    this.onResolution,
+    this.fps,
+    this.onFps,
+  });
 
-  final int value;
-  final Future<void> Function(int) onChanged;
+  final Widget child;
+  final int? resolution;
+  final Future<void> Function(int)? onResolution;
+  final int? fps;
+  final ValueChanged<int>? onFps;
 
   @override
-  State<_ResolutionChoice> createState() => _ResolutionChoiceState();
+  State<_StreamChoices> createState() => _StreamChoicesState();
 }
 
-class _ResolutionChoiceState extends State<_ResolutionChoice> {
-  late int _value = widget.value;
+class _StreamChoicesState extends State<_StreamChoices> {
+  late int _resolution = widget.resolution ?? 0;
+  late int _fps = widget.fps ?? 0;
   Object? _error;
   int _generation = 0;
+  bool? _editingResolution;
 
-  Future<void> _choose(int value) async {
-    if (value == _value && _error == null) return;
+  void _toggle(bool resolution) => setState(() {
+    _editingResolution = _editingResolution == resolution ? null : resolution;
+  });
+
+  Future<void> _chooseResolution(int value) async {
+    if (value == _resolution && _error == null) return;
     final gen = ++_generation;
     setState(() {
-      _value = value;
+      _resolution = value;
       _error = null;
     });
     try {
-      await widget.onChanged(value);
+      await widget.onResolution!(value);
     } on Object catch (error) {
       // 旧请求的迟到错误不覆盖后来的选择；偏好仍保留，下次订阅重试。
       if (mounted && gen == _generation) setState(() => _error = error);
@@ -222,73 +236,322 @@ class _ResolutionChoiceState extends State<_ResolutionChoice> {
 
   @override
   Widget build(BuildContext context) {
-    const values = [0, ...deskResolutionChoices];
-    return Section(
-      title: context.l10n.deskQuality,
+    final resolutionLabels = {
+      0: context.l10n.deskQualityAuto,
+      for (final v in deskResolutionChoices) v: '${v}p',
+    };
+    final fpsLabels = {
+      0: context.l10n.deskFrameRateAuto,
+      for (final v in deskFpsChoices) v: '$v',
+    };
+    final c = PosseColors.of(context);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final editing = _editingResolution;
+    final hasChoices =
+        (widget.resolution != null && widget.onResolution != null) ||
+        (widget.fps != null && widget.onFps != null);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.all(10),
-          child: Segmented(
-            key: const Key('desk-resolution'),
-            labels: [
-              context.l10n.deskQualityAuto,
-              for (final v in deskResolutionChoices) '${v}p',
-            ],
-            selected: values.indexOf(_value).clamp(0, values.length - 1),
-            onChanged: (i) => _choose(values[i]),
-          ),
-        ),
-        if (_error case final error?)
+        if (hasChoices)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Text(
-              friendlyError(error, context.l10n),
-              key: const Key('desk-resolution-error'),
-              style: TextStyle(color: PosseColors.of(context).danger),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (widget.resolution != null && widget.onResolution != null)
+                  _StreamChoice(
+                    key: const Key('desk-resolution'),
+                    title: context.l10n.deskQuality,
+                    value:
+                        resolutionLabels[_resolution] ?? resolutionLabels[0]!,
+                    values: resolutionLabels.values,
+                    expanded: editing == true,
+                    onPressed: () => _toggle(true),
+                  ),
+                if (widget.fps != null && widget.onFps != null)
+                  _StreamChoice(
+                    key: const Key('desk-fps'),
+                    title: context.l10n.deskFrameRate,
+                    value: fpsLabels[_fps] ?? fpsLabels[0]!,
+                    values: fpsLabels.values,
+                    expanded: editing == false,
+                    onPressed: () => _toggle(false),
+                  ),
+              ],
             ),
           ),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) => Stack(
+              fit: StackFit.expand,
+              children: [
+                widget.child,
+                if (editing != null)
+                  GestureDetector(
+                    key: const Key('desk-stream-dismiss'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _editingResolution = null),
+                  ),
+                // 浮层不参与列表布局，展开、切组和收起都不挤动屏幕与窗口行。
+                Positioned(
+                  top: 0,
+                  left: 16,
+                  right: 16,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    reverseDuration: const Duration(milliseconds: 120),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    layoutBuilder: (current, previous) => Stack(
+                      alignment: Alignment.topCenter,
+                      children: [
+                        for (final child in previous)
+                          IgnorePointer(child: ExcludeSemantics(child: child)),
+                        ?current,
+                      ],
+                    ),
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: reduceMotion
+                          ? child
+                          : SlideTransition(
+                              position: Tween(
+                                begin: const Offset(0, -0.08),
+                                end: Offset.zero,
+                              ).animate(animation),
+                              child: child,
+                            ),
+                    ),
+                    child: editing == null
+                        ? const SizedBox.shrink()
+                        : Material(
+                            key: ValueKey(editing),
+                            color: c.raised,
+                            shadowColor: c.shadow,
+                            elevation: 4,
+                            borderRadius: BorderRadius.circular(Rd.card),
+                            clipBehavior: Clip.antiAlias,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxHeight: constraints.maxHeight,
+                              ),
+                              child: SingleChildScrollView(
+                                child: _StreamOptions(
+                                  value: editing ? _resolution : _fps,
+                                  labels: editing
+                                      ? resolutionLabels
+                                      : fpsLabels,
+                                  onChanged: (value) {
+                                    setState(() => _editingResolution = null);
+                                    if (editing) {
+                                      _chooseResolution(value);
+                                    } else if (value != _fps) {
+                                      setState(() => _fps = value);
+                                      widget.onFps!(value);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                if (_error case final error?)
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 8,
+                    child: Material(
+                      color: c.raised,
+                      borderRadius: BorderRadius.circular(Rd.input),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(
+                          friendlyError(error, context.l10n),
+                          key: const Key('desk-resolution-error'),
+                          style: TextStyle(color: c.danger),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
 }
 
-/// 帧率一行：自动和 [deskFpsChoices] 几档，选中的跟着点击换，不等电脑回。
-class _FpsChoice extends StatefulWidget {
-  const _FpsChoice({required this.fps, required this.onChanged});
+class _StreamChoice extends StatelessWidget {
+  const _StreamChoice({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.values,
+    required this.expanded,
+    required this.onPressed,
+  });
 
-  final int fps;
-  final ValueChanged<int> onChanged;
-
-  @override
-  State<_FpsChoice> createState() => _FpsChoiceState();
-}
-
-class _FpsChoiceState extends State<_FpsChoice> {
-  late int _fps = widget.fps;
+  final String title;
+  final String value;
+  final Iterable<String> values;
+  final bool expanded;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    const values = [0, ...deskFpsChoices];
-    return Section(
-      title: context.l10n.deskFrameRate,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(10),
-          child: Segmented(
-            key: const Key('desk-fps'),
-            labels: [
-              context.l10n.deskFrameRateAuto,
-              for (final v in deskFpsChoices) '$v',
-            ],
-            selected: values.indexOf(_fps).clamp(0, values.length - 1),
-            onChanged: (i) {
-              if (values[i] == _fps) return;
-              setState(() => _fps = values[i]);
-              widget.onChanged(values[i]);
-            },
-          ),
+    final c = PosseColors.of(context);
+    final textStyle = Theme.of(context).textTheme.bodyMedium!
+        .copyWith(fontSize: Fs.body, fontWeight: Fw.body);
+    var valueWidth = 0.0;
+    for (final label in values) {
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: textStyle),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      if (painter.width > valueWidth) valueWidth = painter.width;
+      painter.dispose();
+    }
+    return Semantics(
+      expanded: expanded,
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          backgroundColor: expanded ? c.tint : Colors.transparent,
+          foregroundColor: expanded ? c.accent : c.text,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          textStyle: textStyle,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
-      ],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(color: expanded ? c.accent : c.muted),
+                  ),
+                  // 给最长档位留宽，选值后入口不变宽，也不会把另一入口挤到下一行。
+                  SizedBox(
+                    width: valueWidth,
+                    child: Text(
+                      value,
+                      style: TextStyle(color: expanded ? c.accent : c.text),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            AnimatedRotation(
+              turns: expanded ? 0.5 : 0,
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              child: Icon(
+                Icons.expand_more_rounded,
+                size: Ic.small,
+                color: expanded ? c.accent : c.faint,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StreamOptions extends StatelessWidget {
+  const _StreamOptions({
+    required this.value,
+    required this.labels,
+    required this.onChanged,
+  });
+
+  final int value;
+  final Map<int, String> labels;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = PosseColors.of(context);
+    final style = Theme.of(context).textTheme.bodyMedium!
+        .copyWith(fontSize: Fs.body, fontWeight: Fw.body);
+    return DecoratedBox(
+      key: const Key('desk-stream-options'),
+      decoration: BoxDecoration(
+        color: c.fill,
+        borderRadius: BorderRadius.circular(Rd.input),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            var widest = 0.0;
+            for (final label in labels.values) {
+              final text = TextPainter(
+                text: TextSpan(text: label, style: style),
+                textDirection: Directionality.of(context),
+                textScaler: MediaQuery.textScalerOf(context),
+              )..layout();
+              if (text.width > widest) widest = text.width;
+              text.dispose();
+            }
+            // 根据当前语言和字号决定列数，大字时仍保留完整档位名称。
+            final available = ((constraints.maxWidth + 4) / (widest + 24 + 4))
+                .floor();
+            final columns = available >= labels.length
+                ? labels.length
+                : (available >= 2 ? 2 : 1);
+            final width = (constraints.maxWidth - 4 * (columns - 1)) / columns;
+            return Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                for (final entry in labels.entries)
+                  SizedBox(
+                    width: width,
+                    child: Semantics(
+                      selected: entry.key == value,
+                      child: TextButton(
+                        key: Key('desk-stream-option-${entry.key}'),
+                        onPressed: () => onChanged(entry.key),
+                        style: TextButton.styleFrom(
+                          backgroundColor: entry.key == value
+                              ? c.tint
+                              : Colors.transparent,
+                          foregroundColor: entry.key == value
+                              ? c.accent
+                              : c.text,
+                          textStyle: style,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(Rd.button),
+                          ),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(entry.value),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 }

@@ -48,6 +48,9 @@ type fileParams struct {
 func (c *conn) fileMethod(req request, p json.RawMessage) bool {
 	var run func(root string, a fileParams) (any, error)
 	switch req.Method {
+	case "files.tree":
+		c.async(req.ID, func() error { return c.fileTree(req.ID, p) })
+		return true
 	case "files.readDir":
 		run = readDirReply
 	case "files.list":

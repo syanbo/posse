@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -210,6 +211,60 @@ void main() {
     expect(manual, 1);
     expect(find.text('Codex 用量更新失败，请稍后重试。'), findsNothing);
   });
+
+  for (final hasCodex in [false, true]) {
+    testWidgets('refresh keeps sheet and bars still with Codex=$hasCodex', (
+      tester,
+    ) async {
+      final usages = [
+        AgentUsage(
+          agent: 'claude',
+          windows: const [UsageWindow(percent: 42, minutes: 300)],
+          updatedAt: DateTime.now(),
+        ),
+        if (hasCodex)
+          AgentUsage(
+            agent: 'codex',
+            windows: const [UsageWindow(percent: 17, minutes: 300)],
+            updatedAt: DateTime.now(),
+          ),
+      ];
+      final automatic = Completer<UsageStatus>();
+      final manual = Completer<UsageStatus>();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.light),
+          home: Scaffold(
+            body: UsageCardView(
+              usages: usages,
+              onCodexRefresh: () => automatic.future,
+              onRefresh: () => manual.future,
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byType(UsageCardView));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      final sheet = tester.getRect(find.byType(BottomSheet));
+      final bars = tester.getTopLeft(find.byType(UsageBar).last);
+      expect(find.text('Codex'), hasCodex ? findsOneWidget : findsNothing);
+      if (hasCodex) expect(find.text(zh.usageReading), findsOneWidget);
+      automatic.complete(UsageStatus(usages: usages));
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.byType(BottomSheet)), sheet);
+      expect(tester.getTopLeft(find.byType(UsageBar).last), bars);
+      await tester.tap(find.byTooltip(zh.commonRefresh));
+      await tester.pump();
+      expect(tester.getRect(find.byType(BottomSheet)), sheet);
+      expect(tester.getTopLeft(find.byType(UsageBar).last), bars);
+      manual.complete(UsageStatus(usages: usages));
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.byType(BottomSheet)), sheet);
+      expect(tester.getTopLeft(find.byType(UsageBar).last), bars);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets(
     'disabled Codex skips automatic queries and follows refresh state',

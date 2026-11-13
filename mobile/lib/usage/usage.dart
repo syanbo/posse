@@ -835,7 +835,7 @@ class _UsageSheetState extends State<UsageSheet> {
     final usages = _visibleUsages(
       _status.usages,
       codexError,
-      _status.codexReading || _refreshing,
+      _status.codexReading,
     );
     // 两列宽度按当前语言最长的文字量，至少是中文排好的宽度，英文的 Remaining 不折行
     final segmentedWidth = math.max<double>(
@@ -888,7 +888,7 @@ class _UsageSheetState extends State<UsageSheet> {
                   visualDensity: VisualDensity.compact,
                   onPressed: _refreshing ? null : _refresh,
                   icon: _refreshing
-                      ? HexSpinner(color: c.muted)
+                      ? HexSpinner(size: Ic.medium, color: c.muted)
                       : Icon(
                           Icons.refresh_rounded,
                           size: Ic.medium,
@@ -939,8 +939,13 @@ class _UsageSheetState extends State<UsageSheet> {
                   ),
                 ] else
                   const Spacer(),
+                // 查询状态占用原来的时间位置，自动补查前后不增减一行。
                 Text(
-                  u.updatedAt.millisecondsSinceEpoch == 0
+                  u.agent == 'codex' &&
+                          !_status.codexOff &&
+                          (_status.codexReading || _refreshing)
+                      ? l.usageReading
+                      : u.updatedAt.millisecondsSinceEpoch == 0
                       ? ''
                       : u.stale(now)
                       ? l.usageOldReading(agoText(l, u.updatedAt, now))
@@ -953,15 +958,6 @@ class _UsageSheetState extends State<UsageSheet> {
               const SizedBox(height: 8),
               Text(
                 l.usageQueryDisabled,
-                style: TextStyle(fontSize: Fs.small, color: c.muted),
-              ),
-            ],
-            if (u.agent == 'codex' &&
-                !_status.codexOff &&
-                (_status.codexReading || _refreshing)) ...[
-              const SizedBox(height: 8),
-              Text(
-                l.usageReading,
                 style: TextStyle(fontSize: Fs.small, color: c.muted),
               ),
             ],

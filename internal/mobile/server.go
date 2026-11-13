@@ -388,6 +388,8 @@ type conn struct {
 	// 这条连接上还开着的对话订阅。键是流的 key，值是它看着的终端。
 	chatWatch map[string]chatWatch
 
+	treeList treeListCache
+
 	// 正在看的桌面（打洞、切屏的入口），这次观看结束时清掉；gen 认出是哪次订阅设的
 	desk               *DeskReady
 	deskGen            uint64

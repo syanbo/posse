@@ -164,35 +164,41 @@ void main() {
     await _openPicker(tester, fps: 30, onFps: picked.add);
     expect(find.byKey(const Key('desk-fps')), findsOneWidget);
     expect(find.text('帧率'), findsOneWidget);
+    expect(find.text('30'), findsOneWidget);
+    expect(find.text('15'), findsNothing);
+    Future<void> openMenu() async {
+      await tester.tap(find.byKey(const Key('desk-fps')));
+      await tester.pumpAndSettle();
+    }
+
+    await openMenu();
     for (final label in ['自动', '60', '30', '15']) {
       expect(
         find.descendant(
-          of: find.byKey(const Key('desk-fps')),
+          of: find.byKey(const Key('desk-stream-options')),
           matching: find.text(label),
         ),
         findsOneWidget,
       );
     }
-    final c = PosseColors.of(tester.element(find.byKey(const Key('desk-fps'))));
-    Color colorOf(String label) => tester
-        .widget<Text>(
-          find.descendant(
-            of: find.byKey(const Key('desk-fps')),
-            matching: find.text(label),
-          ),
-        )
-        .style!
-        .color!;
-    expect(colorOf('30'), c.accent);
-    expect(colorOf('自动'), c.muted);
+    final selected = tester.widget<TextButton>(
+      find.byKey(const Key('desk-stream-option-30')),
+    );
+    final colors = PosseColors.of(
+      tester.element(find.byKey(const Key('desk-fps'))),
+    );
+    expect(selected.style!.backgroundColor!.resolve({}), colors.tint);
 
     await tester.tap(find.text('15'));
     await tester.pumpAndSettle();
-    // 面板不关，选中的跟着换
+    expect(find.byKey(const Key('desk-stream-options')), findsNothing);
     expect(find.byKey(const Key('desk-fps')), findsOneWidget);
-    expect(colorOf('15'), c.accent);
-    // 再点同一档不重复发
-    await tester.tap(find.text('15'));
+    expect(find.text('15'), findsOneWidget);
+    // 再点同一档不重复发。
+    await openMenu();
+    await tester.tap(find.byKey(const Key('desk-stream-option-15')));
+    await tester.pumpAndSettle();
+    await openMenu();
     await tester.tap(find.text('自动'));
     await tester.pumpAndSettle();
     expect(picked, [15, 0]);

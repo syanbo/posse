@@ -418,7 +418,7 @@ func (v *filesView) treeMarks() map[string]byte {
 	}
 	rs.marksOf = rs.marksOf[:0]
 	// 工作区就是这个仓库（或在它里面）：直接用它的
-	if len(rs.list) == 1 && !strings.HasPrefix(rs.list[0].repo, v.root+string(filepath.Separator)) {
+	if len(rs.list) == 1 && len(rs.list[0].aliases) == 0 && !strings.HasPrefix(rs.list[0].repo, v.root+string(filepath.Separator)) {
 		rs.marksOf = append(rs.marksOf, rs.list[0].status)
 		rs.marks = rs.list[0].treeMarks()
 		return rs.marks
@@ -426,21 +426,7 @@ func (v *filesView) treeMarks() map[string]byte {
 	rs.marks = map[string]byte{}
 	for _, g := range rs.list {
 		rs.marksOf = append(rs.marksOf, g.status)
-		gm := g.treeMarks()
-		for p, m := range gm {
-			// 外层仓库的目录标记不盖住嵌套仓库里文件的标记
-			if _, ok := rs.marks[p]; !ok || m != 'M' {
-				rs.marks[p] = m
-			}
-		}
-		// 有改动的仓库：它的目录和上面的普通目录（到工作区为止）也标出来，收起时看得见哪里有改动
-		if len(gm) > 0 {
-			for dir := g.repo; len(dir) > len(v.root) && strings.HasPrefix(dir, v.root+string(filepath.Separator)); dir = filepath.Dir(dir) {
-				if _, ok := rs.marks[dir]; !ok {
-					rs.marks[dir] = 'M'
-				}
-			}
-		}
+		gitx.MergeRepoTreeMarks(rs.marks, v.root, gitx.Repo{Root: g.repo, Aliases: g.aliases}, g.treeMarks())
 	}
 	return rs.marks
 }

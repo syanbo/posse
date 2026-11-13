@@ -31,6 +31,12 @@ var zh = [][2]string{
 	{"codex: usage query timed out", "Codex 用量查询超时，请稍后重试"},
 	{"codex: reset credits query timed out", "读取 Codex 重置卡超时，额度已更新，请稍后重试"},
 	{"unsupported usage agent", "不支持查询此 Agent 的用量"},
+	// 手机文件树
+	{"invalid file tree parameters", "文件树参数无效"},
+	{"Git status unavailable: %s", "Git 状态暂不可用：{1}"},
+	{"directory is too large to list", "目录内容过多，无法列出"},
+	{"file tree response is too large", "文件树回复过大"},
+	{"too many file tree directories (maximum %d)", "一次最多读取 {1} 个文件目录"},
 	// 手机端讨论
 	{"invalid discussion report range", "汇报文件读取范围无效，文件必须不超过 20 MiB"},
 	{"discussion report not found", "讨论汇报文件不存在或已移除"},

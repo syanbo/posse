@@ -21,7 +21,7 @@ const _langs = ['zh', 'en'];
 
 MaterialApp _app(String lang, bool dark, Widget home) => MaterialApp(
   debugShowCheckedModeBanner: false,
-  theme: posseTheme(dark ? Brightness.dark : Brightness.light),
+  theme: shotTheme(posseTheme(dark ? Brightness.dark : Brightness.light)),
   locale: Locale(lang),
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
@@ -114,6 +114,10 @@ void main() {
   }, skip: dir.isEmpty);
 
   testWidgets('desk picker and unlock screenshots', (tester) async {
+    final shadows = debugDisableShadows;
+    debugDisableShadows = false;
+    addTearDown(() => debugDisableShadows = shadows);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await loadShotFonts(tester);
     await tester.binding.setSurfaceSize(const Size(390, 844));
     for (final lang in _langs) {
@@ -141,6 +145,10 @@ void main() {
                               context,
                               _displays,
                               windows: Future.value(const []),
+                              resolution: 1080,
+                              onResolution: (_) async {},
+                              fps: 0,
+                              onFps: (_) {},
                             ),
                             child: const Text('picker'),
                           ),
@@ -161,6 +169,21 @@ void main() {
         await tester.tap(find.text('picker'));
         await tester.pumpAndSettle();
         await _shot(tester, key, '$dir/desk-picker-$mode$tail.png');
+        await tester.tap(find.byKey(const Key('desk-resolution')));
+        await tester.pumpAndSettle();
+        await _shot(tester, key, '$dir/desk-picker-menu-$mode$tail.png');
+        await tester.tap(find.byKey(const Key('desk-stream-option-1080')));
+        await tester.pumpAndSettle();
+        await tester.binding.setSurfaceSize(const Size(844, 390));
+        await tester.pumpAndSettle();
+        await _shot(tester, key, '$dir/desk-picker-landscape-$mode$tail.png');
+        await tester.binding.setSurfaceSize(const Size(320, 700));
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        await tester.pumpAndSettle();
+        await _shot(tester, key, '$dir/desk-picker-large-text-$mode$tail.png');
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+        await tester.binding.setSurfaceSize(const Size(390, 844));
+        await tester.pumpAndSettle();
         await tester.tapAt(const Offset(20, 20));
         await tester.pumpAndSettle();
         await tester.tap(find.text('unlock'));
@@ -170,5 +193,6 @@ void main() {
         await tester.pumpAndSettle();
       }
     }
+    debugDisableShadows = shadows;
   }, skip: dir.isEmpty);
 }

@@ -62,15 +62,27 @@ class _Rpc implements PhoneRpc {
     Map<String, Object?> params, {
     Duration? timeout,
   }) async => {
-    'value': [
-      for (final n in _names)
-        {
-          'name': _clean(n),
-          'isDirectory': n.endsWith('/'),
-          // 名字带 @ 的是符号链接
-          'isSymlink': n.contains('@'),
-        },
-    ],
+    'directories': {
+      '': {
+        'entries': [
+          for (final n in _names)
+            {
+              'name': _clean(n),
+              'isDirectory': n.endsWith('/'),
+              // 名字带 @ 的是符号链接
+              'isSymlink': n.contains('@'),
+              'gitStatus': switch (_clean(n)) {
+                'main.go' || 'lib' => 'M',
+                'app.ts' => 'A',
+                'index.js' => '?',
+                'main.dart' => 'U',
+                _ => '',
+              },
+              'ignored': _clean(n) == 'dist.zip',
+            },
+        ],
+      },
+    },
   };
 
   @override
@@ -120,5 +132,6 @@ void main() {
             .writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
+    await tester.pumpWidget(const SizedBox());
   });
 }

@@ -144,12 +144,14 @@ type palette struct {
 	shadow ui.Color   // 浮层、提示的投影
 	scrim  ui.Color   // 压在图片、视频上的深色底
 	data   []ui.Color // 数据色：提交图的线、分支比较的两边、用量的分类；依次取
+
+	gitUntracked ui.Color // WebStorm themes/expUI/expUI_{dark,light}Scheme.xml 的 FILESTATUS_UNKNOWN
 }
 
 func colors(t *ui.Theme) palette {
 	if t.Dark {
 		p := palette{
-			honey: ui.Hex("#F2AA2E"), sage: ui.Hex("#8DBB92"),
+			honey: ui.Hex("#F2AA2E"), sage: ui.Hex("#8DBB92"), gitUntracked: ui.Hex("#E88F89"),
 			side: ui.Hex("#2A2A27"), canvas: ui.Hex("#171716"), card: t.Background, band: ui.Hex("#1C1C1B"), raised: ui.Hex("#2A2A27"),
 			shade: ui.RGBA(0, 0, 0, 0.18), code: ui.Hex("#141413"),
 			line: ui.RGBA(255, 255, 255, 0.08), wash: ui.RGBA(255, 255, 255, 0.05),
@@ -160,7 +162,7 @@ func colors(t *ui.Theme) palette {
 		return p.derive(t)
 	}
 	p := palette{
-		honey: ui.Hex("#B5700E"), sage: ui.Hex("#3E8A4C"),
+		honey: ui.Hex("#B5700E"), sage: ui.Hex("#3E8A4C"), gitUntracked: ui.Hex("#B23247"),
 		side: ui.Hex("#F3F2EF"), canvas: ui.Hex("#F4F3F0"), card: t.Background, band: ui.Hex("#F8F7F5"), raised: ui.Hex("#FFFFFF"),
 		shade: ui.RGBA(0, 0, 0, 0.03), code: ui.Hex("#F5F4F1"),
 		line: ui.RGBA(0, 0, 0, 0.08), wash: ui.RGBA(0, 0, 0, 0.04),

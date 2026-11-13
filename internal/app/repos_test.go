@@ -59,6 +59,10 @@ func multiRepoWorkspace(t *testing.T, a *app) (root string) {
 func TestMultiRepoWorkspace(t *testing.T) {
 	a := previewApp(t)
 	root := multiRepoWorkspace(t, a)
+	alias := filepath.Join(root, "zz-ext")
+	if err := os.Symlink(filepath.Join(root, "ext"), alias); err != nil {
+		t.Fatal(err)
+	}
 	w := &a.workspaces[0]
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
@@ -87,8 +91,13 @@ func TestMultiRepoWorkspace(t *testing.T) {
 	}
 	// 文件树：各仓库的改动都标出来（软链的写法）
 	marks := v.treeMarks()
-	if marks[filepath.Join(repoA, "main.go")] != 'M' || marks[filepath.Join(repoExt, "lib.go")] != 'M' || marks[repoExt] != 'M' {
+	if marks[filepath.Join(repoA, "main.go")] != 'M' || marks[filepath.Join(repoExt, "lib.go")] != 'M' || marks[repoExt] != 'M' || marks[filepath.Join(alias, "lib.go")] != 'M' || marks[alias] != 'M' {
 		t.Fatalf("marks %v", marks)
+	}
+	a.refreshList(v, true, nil)
+	until(t, tt, "alias list", func() bool { return v.list != nil && !v.listing })
+	if v.list.Ignored(filepath.Join(alias, "lib.go"), false) {
+		t.Fatal("tracked file through alias marked ignored")
 	}
 
 	// 打开软链过去的仓库里的文件：当前仓库跟过去，分支按钮、行号旁的改动都是它的

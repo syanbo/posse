@@ -94,7 +94,9 @@ void main() {
         'renamed-modified.txt': c.sky,
         'added-modified.txt': c.sky,
         'renamed-deleted.txt': c.muted,
-        'untracked.txt': red,
+        'untracked.txt': dark
+            ? const Color(0xFFE88F89)
+            : const Color(0xFFB23247),
         'conflict.txt': red,
       };
       final status = parseGitStatus({

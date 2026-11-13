@@ -134,9 +134,13 @@ class PosseColors extends ThemeExtension<PosseColors> {
   /// 语义色的淡底（提醒、错误、强调的条和块）。
   Color soft(Color color) => color.withValues(alpha: dark ? 0.16 : 0.10);
 
-  /// Git 未跟踪和冲突沿用桌面 letterColor 的 MyGo Danger，和通用危险色分开。
+  /// Git 冲突沿用桌面 letterColor 的 MyGo Danger，和通用危险色分开。
   Color get gitDanger =>
       dark ? const Color(0xFFEF4444) : const Color(0xFFDC2626);
+
+  /// WebStorm 内置 Dark/Light 配色的 FILESTATUS_UNKNOWN，未跟踪不使用冲突色。
+  Color get gitUntracked =>
+      dark ? const Color(0xFFE88F89) : const Color(0xFFB23247);
 
   /// 盖在桌面画面上的工具条、提示：半透明卡片底。
   Color get glass => card.withValues(alpha: 0.94);

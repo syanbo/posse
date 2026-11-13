@@ -262,22 +262,16 @@ func letterColor(c *ui.Context, letter byte) ui.Color {
 		return colors(t).sage
 	case 'D':
 		return t.TextMuted
-	case '?', 'U':
+	case '?':
+		return colors(t).gitUntracked
+	case 'U':
 		return t.Danger
 	}
 	return colors(t).sky
 }
 
 func statusLetter(e gitx.Entry) byte {
-	switch {
-	case e.Untracked:
-		return '?'
-	case e.Conflict:
-		return 'U'
-	case e.Y != '.':
-		return e.Y
-	}
-	return e.X
+	return gitx.StatusLetter(e)
 }
 
 // changeRow 画改动列表的一行。

@@ -207,7 +207,7 @@ void main() {
     final now = DateTime.now();
     for (final lang in ['zh', 'en']) {
       for (final dark in [false, true]) {
-        for (final state in ['off', 'login', 'details']) {
+        for (final state in ['off', 'login', 'details', 'reading']) {
           final key = GlobalKey();
           await tester.pumpWidget(
             RepaintBoundary(
@@ -243,6 +243,7 @@ void main() {
                         ),
                       ],
                       codexOff: state == 'off',
+                      codexReading: state == 'reading',
                       codexError: switch (state) {
                         'login' =>
                           'codex: login expired; run codex login again',

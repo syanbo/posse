@@ -1721,7 +1721,11 @@ class _TabScreenState extends State<TabScreen> {
                   if (!_seen.contains(1))
                     const SizedBox.shrink()
                   else
-                    FilesPane(model: widget.model, worktree: row.id),
+                    FilesPane(
+                      model: widget.model,
+                      worktree: row.id,
+                      active: _page == 1,
+                    ),
                   if (!_seen.contains(2))
                     const SizedBox.shrink()
                   else

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
@@ -29,6 +30,8 @@ class FileEntry {
     required this.name,
     required this.dir,
     this.link = false,
+    this.gitStatus = '',
+    this.ignored = false,
   });
 
   final String path;
@@ -37,6 +40,23 @@ class FileEntry {
 
   /// 符号链接（指向目录的照样能展开）。旧电脑不给 isSymlink 时当普通文件。
   final bool link;
+
+  /// 电脑端与桌面文件树共用的状态标记，文件夹的汇总也由电脑计算。
+  final String gitStatus;
+  final bool ignored;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FileEntry &&
+      path == other.path &&
+      name == other.name &&
+      dir == other.dir &&
+      link == other.link &&
+      gitStatus == other.gitStatus &&
+      ignored == other.ignored;
+
+  @override
+  int get hashCode => Object.hash(path, name, dir, link, gitStatus, ignored);
 }
 
 /// files.readDir 的结果：目录在前，各按名字排。
@@ -53,6 +73,11 @@ List<FileEntry> parseDir(String parent, Object? raw) {
         name: name,
         dir: item['isDirectory'] == true,
         link: item['isSymlink'] == true,
+        gitStatus: switch (item['gitStatus']) {
+          'M' || 'A' || '?' || 'U' => item['gitStatus'] as String,
+          _ => '',
+        },
+        ignored: item['ignored'] == true,
       ),
     );
   }
@@ -162,10 +187,16 @@ Future<void> _download(
 
 /// 工作区的文件：照桌面端文件栏的树，目录点一下就地展开，文件点开看内容、长按存到手机，顶上可以按路径找。只读。
 class FilesPane extends StatefulWidget {
-  const FilesPane({super.key, required this.model, required this.worktree});
+  const FilesPane({
+    super.key,
+    required this.model,
+    required this.worktree,
+    this.active = true,
+  });
 
   final PosseAppModel model;
   final String worktree;
+  final bool active;
 
   @override
   State<FilesPane> createState() => _FilesPaneState();
@@ -176,49 +207,284 @@ class _FilesPaneState extends State<FilesPane> {
   final _open = <String>{};
   final _loading = <String>{};
   String? _error;
+  String? _gitError;
 
   /// 读失败的子目录和报错：在它下面占一行，点一下重读。不记下来的话展开后什么都没有，看着像空文件夹
   final _failed = <String, String>{};
 
+  Timer? _poll;
+  PhoneRpc? _rpc;
+  String? _computer;
+  bool _treeSupported = true;
+  bool _reading = false;
+  int _generation = 0;
+  final _queued = <String>{};
+
   @override
   void initState() {
     super.initState();
-    _load('');
+    _rpc = widget.model.rpc;
+    _computer = widget.model.activeId;
+    widget.model.addListener(_onModel);
+    if (widget.active) {
+      _loading.add('');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.active) _load('');
+      });
+    }
+    _poll = Timer.periodic(const Duration(seconds: 3), (_) => _tick());
   }
 
-  Future<void> _load(String dir) async {
-    final rpc = widget.model.rpc;
-    if (rpc == null) {
-      setState(() => _error = context.l10n.errorNotConnected);
+  @override
+  void didUpdateWidget(FilesPane old) {
+    super.didUpdateWidget(old);
+    if (!identical(old.model, widget.model)) {
+      old.model.removeListener(_onModel);
+      widget.model.addListener(_onModel);
+    }
+    if (old.worktree != widget.worktree ||
+        !identical(old.model, widget.model)) {
+      _reset(clear: true);
+    } else if (widget.active && !old.active) {
+      _tick();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.model.removeListener(_onModel);
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  void _onModel() {
+    if (identical(_rpc, widget.model.rpc) &&
+        _computer == widget.model.activeId) {
       return;
     }
-    setState(() => _loading.add(dir));
+    _reset(clear: _computer != widget.model.activeId);
+  }
+
+  void _reset({required bool clear}) {
+    _generation++;
+    _rpc = widget.model.rpc;
+    _computer = widget.model.activeId;
+    _treeSupported = true;
+    _reading = false;
+    _queued.clear();
+    setState(() {
+      _loading.clear();
+      if (clear) {
+        _children.clear();
+        _open.clear();
+        _failed.clear();
+        _error = null;
+        _gitError = null;
+      }
+    });
+    _tick();
+  }
+
+  List<String> _visibleDirs() => [
+    '',
+    for (final (entry, _, _) in _rows())
+      if (entry != null && entry.dir && _open.contains(entry.path)) entry.path,
+  ];
+
+  void _tick() {
+    if (!mounted ||
+        !widget.active ||
+        appAway ||
+        _reading ||
+        widget.model.rpc == null) {
+      return;
+    }
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
+    _loadDirs(_visibleDirs(), quiet: _children.isNotEmpty);
+  }
+
+  Future<void> _load(String dir) => _loadDirs([dir]);
+
+  Future<Map<String, Object?>> _readDirs(
+    PhoneRpc rpc,
+    String worktree,
+    List<String> dirs,
+    bool Function() canRead,
+  ) async {
+    final result = <String, Object?>{};
+    if (_treeSupported) {
+      try {
+        var pending = dirs;
+        while (pending.isNotEmpty && canRead()) {
+          final response = await rpc.call('files.tree', {
+            'worktree': worktree,
+            'directories': pending,
+          });
+          if (!canRead()) return result;
+          final snapshots = (response['directories'] as Map)
+              .cast<String, Object?>();
+          for (final entry in snapshots.entries) {
+            result[entry.key] = {
+              ...entry.value as Map,
+              if (response['gitError'] case final String error)
+                'gitError': error,
+            };
+          }
+          final remaining = response['remaining'];
+          if (remaining is! List) break;
+          // 只续读本批还没返回的目录，防止异常响应让轮询永不结束。
+          final next = remaining
+              .whereType<String>()
+              .toSet()
+              .where(
+                (dir) => pending.contains(dir) && !snapshots.containsKey(dir),
+              )
+              .toList();
+          if (next.length >= pending.length) break;
+          pending = next;
+        }
+        return result;
+      } on RpcException catch (error) {
+        if (!error.missingMethod) rethrow;
+        // 旧电脑仍能浏览文件，重连后重新探测新版接口。
+        if (canRead()) _treeSupported = false;
+      }
+    }
+    for (final dir in dirs) {
+      if (!canRead()) break;
+      try {
+        final response = await rpc.call('files.readDir', {
+          'worktree': worktree,
+          'relativePath': dir,
+        });
+        result[dir] = {'entries': response['value']};
+      } catch (error) {
+        if (!mounted) rethrow;
+        result[dir] = {'error': friendlyError(error, context.l10n)};
+      }
+    }
+    return result;
+  }
+
+  Future<void> _loadDirs(List<String> dirs, {bool quiet = false}) async {
+    if (_reading) {
+      if (!quiet) _queued.addAll(dirs);
+      return;
+    }
+    final rpc = widget.model.rpc;
+    if (rpc == null) {
+      if (_children.isEmpty) {
+        setState(() => _error = context.l10n.errorNotConnected);
+      }
+      return;
+    }
+    final generation = _generation;
+    final worktree = widget.worktree;
+    bool current() =>
+        mounted &&
+        generation == _generation &&
+        identical(rpc, widget.model.rpc) &&
+        widget.worktree == worktree;
+    bool canRead() =>
+        current() &&
+        widget.active &&
+        !appAway &&
+        (ModalRoute.of(context)?.isCurrent ?? true);
+    _reading = true;
+    if (!quiet) setState(() => _loading.addAll(dirs));
     try {
-      final res = await rpc.call('files.readDir', {
-        'worktree': widget.worktree,
-        'relativePath': dir,
-      });
+      // 请求只包含当前展开可见的目录，分批遵守电脑端的上限。
+      final snapshots = <String, Object?>{};
+      for (var i = 0; i < dirs.length; i += 256) {
+        if (!canRead()) return;
+        snapshots.addAll(
+          await _readDirs(
+            rpc,
+            worktree,
+            dirs.sublist(i, math.min(i + 256, dirs.length)),
+            canRead,
+          ),
+        );
+        if (!current()) return;
+      }
       if (!mounted) return;
-      await routeSettled(context);
-      if (!mounted) return;
-      setState(() {
-        _children[dir] = parseDir(dir, res['value']);
-        _failed.remove(dir);
-        if (dir.isEmpty) _error = null;
-      });
+      if (!quiet) await routeSettled(context);
+      if (!canRead()) return;
+      String? gitError;
+      for (final snapshot in snapshots.values) {
+        if (snapshot is Map && snapshot['gitError'] is String) {
+          gitError = snapshot['gitError'] as String;
+          if (gitError.isNotEmpty) break;
+        }
+      }
+      var changed = _gitError != gitError;
+      _gitError = gitError;
+      for (final dir in dirs) {
+        final snapshot = snapshots[dir];
+        if (snapshot is! Map) continue;
+        final error = snapshot['error'];
+        if (error is String && error.isNotEmpty) {
+          if (dir.isEmpty) {
+            changed = changed || _error != error;
+            _error = error;
+          } else {
+            changed = changed || _failed[dir] != error;
+            _failed[dir] = error;
+          }
+          continue;
+        }
+        var entries = parseDir(dir, snapshot['entries']);
+        if (snapshot['gitError'] is String) {
+          final previous = {
+            for (final entry in _children[dir] ?? const <FileEntry>[])
+              entry.path: entry,
+          };
+          entries = [
+            for (final entry in entries)
+              FileEntry(
+                path: entry.path,
+                name: entry.name,
+                dir: entry.dir,
+                link: entry.link,
+                gitStatus: previous[entry.path]?.gitStatus ?? '',
+                ignored: previous[entry.path]?.ignored ?? false,
+              ),
+          ];
+        }
+        if (!listEquals(_children[dir], entries)) {
+          _children[dir] = entries;
+          changed = true;
+        }
+        if (_failed.remove(dir) != null) changed = true;
+        if (dir.isEmpty && _error != null) {
+          _error = null;
+          changed = true;
+        }
+      }
+      if (changed) setState(() {});
     } catch (error) {
-      if (mounted) {
+      if (!mounted || !current()) return;
+      // 已显示的树和颜色在断线、Git 读取失败时保留，下一次可见轮询重试。
+      if (!quiet) {
         final text = friendlyError(error, context.l10n);
         setState(() {
-          if (dir.isEmpty) {
-            _error = text;
-          } else {
-            _failed[dir] = text;
+          for (final dir in dirs) {
+            if (dir.isEmpty) {
+              _error = text;
+            } else {
+              _failed[dir] = text;
+            }
           }
         });
       }
     } finally {
-      if (mounted) setState(() => _loading.remove(dir));
+      if (current()) {
+        _reading = false;
+        if (!quiet) setState(() => _loading.removeAll(dirs));
+        final queued = _queued.toList();
+        _queued.clear();
+        if (queued.isNotEmpty && widget.active) _loadDirs(queued);
+      }
     }
   }
 
@@ -226,9 +492,7 @@ class _FilesPaneState extends State<FilesPane> {
     setState(() {
       if (!_open.remove(e.path)) _open.add(e.path);
     });
-    if (_open.contains(e.path) && !_children.containsKey(e.path)) {
-      _load(e.path);
-    }
+    if (_open.contains(e.path)) _load(e.path);
   }
 
   void _openFile(String path) {
@@ -275,9 +539,8 @@ class _FilesPaneState extends State<FilesPane> {
         if (!e.dir || !_open.contains(e.path)) continue;
         if (_failed.containsKey(e.path) && !_loading.contains(e.path)) {
           out.add((null, depth + 1, e.path));
-        } else {
-          walk(e.path, depth + 1);
         }
+        walk(e.path, depth + 1);
       }
     }
 
@@ -338,7 +601,19 @@ class _FilesPaneState extends State<FilesPane> {
       padding: const EdgeInsets.only(bottom: 32),
       itemCount: rows.length + 1,
       itemBuilder: (context, i) {
-        if (i == 0) return search;
+        if (i == 0) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              search,
+              if (_gitError case final error?)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text(error, style: TextStyle(color: c.danger)),
+                ),
+            ],
+          );
+        }
         final (e, depth, dir) = rows[i - 1];
         return e == null ? _failedRow(c, dir, depth) : _row(c, e, depth);
       },
@@ -387,62 +662,74 @@ class _FilesPaneState extends State<FilesPane> {
 
   Widget _row(PosseColors c, FileEntry e, int depth) {
     final open = _open.contains(e.path);
-    return InkWell(
-      onTap: () => e.dir ? _toggle(e) : _openFile(e.path),
-      onLongPress: e.dir
-          ? null
-          : () => showSaveSheet(
-              context,
-              to: saveTarget(e.path),
-              onSave: (to) => _download(
+    final color = e.ignored
+        ? c.muted
+        : switch (e.gitStatus) {
+            'A' => c.sage,
+            '?' => c.gitUntracked,
+            'U' => c.gitDanger,
+            'M' => c.sky,
+            _ => c.text,
+          };
+    return Opacity(
+      opacity: e.ignored ? 0.7 : 1,
+      child: InkWell(
+        onTap: () => e.dir ? _toggle(e) : _openFile(e.path),
+        onLongPress: e.dir
+            ? null
+            : () => showSaveSheet(
                 context,
-                widget.model,
-                widget.worktree,
-                e.path,
-                to: to,
-              ),
-            ),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(12 + depth * _treeIndent, 0, 12, 0),
-        child: SizedBox(
-          height: 40,
-          child: Row(
-            children: [
-              SizedBox(
-                width: _arrowBox,
-                child: e.dir
-                    ? (_loading.contains(e.path)
-                          ? const HexSpinner(size: Ic.glyph)
-                          : AnimatedRotation(
-                              turns: open ? 0.25 : 0,
-                              duration: const Duration(milliseconds: 150),
-                              child: Icon(
-                                Icons.chevron_right_rounded,
-                                size: Ic.medium,
-                                color: c.faint,
-                              ),
-                            ))
-                    : null,
-              ),
-              const SizedBox(width: 4),
-              // 照桌面文件树：按类型的图标，Xcode 的包目录也换成各自的图标
-              FileIconView(
-                e.name,
-                size: Ic.medium,
-                dir: e.dir,
-                open: open,
-                link: e.link,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  e.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: Fs.body, color: c.text),
+                to: saveTarget(e.path),
+                onSave: (to) => _download(
+                  context,
+                  widget.model,
+                  widget.worktree,
+                  e.path,
+                  to: to,
                 ),
               ),
-            ],
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(12 + depth * _treeIndent, 0, 12, 0),
+          child: SizedBox(
+            height: 40,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: _arrowBox,
+                  child: e.dir
+                      ? (_loading.contains(e.path)
+                            ? const HexSpinner(size: Ic.glyph)
+                            : AnimatedRotation(
+                                turns: open ? 0.25 : 0,
+                                duration: const Duration(milliseconds: 150),
+                                child: Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: Ic.medium,
+                                  color: c.faint,
+                                ),
+                              ))
+                      : null,
+                ),
+                const SizedBox(width: 4),
+                // 照桌面文件树：按类型的图标，Xcode 的包目录也换成各自的图标
+                FileIconView(
+                  e.name,
+                  size: Ic.medium,
+                  dir: e.dir,
+                  open: open,
+                  link: e.link,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    e.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: Fs.body, color: color),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

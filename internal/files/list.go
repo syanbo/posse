@@ -76,6 +76,15 @@ func ListFiles(ctx context.Context, root string) (*List, error) {
 // 各仓库用 git ls-files 列（软链过去的仓库也在里面），仓库外面的普通目录遍历。
 // 只有一个仓库、而且就是 root 或 root 的上级时和 ListFiles 一样。
 func ListRepos(ctx context.Context, root string, repos []string) (*List, error) {
+	return listRepos(ctx, root, repos, false)
+}
+
+// ListGitRepos 用于已确认存在仓库的场景：Git 读取失败直接报错，不回退成不完整的清单。
+func ListGitRepos(ctx context.Context, root string, repos []string) (*List, error) {
+	return listRepos(ctx, root, repos, true)
+}
+
+func listRepos(ctx context.Context, root string, repos []string, strict bool) (*List, error) {
 	root = filepath.Clean(root)
 	var rels []string
 	inRepo := false // 工作区本身在某个仓库里（是它的根目录或子目录）：整个工作区按这个仓库的忽略规则列
@@ -87,7 +96,7 @@ func ListRepos(ctx context.Context, root string, repos []string) (*List, error) 
 		}
 		rels = append(rels, rel)
 	}
-	if len(rels) == 0 {
+	if len(rels) == 0 && !strict {
 		return ListFiles(ctx, root)
 	}
 	slices.Sort(rels)
@@ -98,13 +107,17 @@ func ListRepos(ctx context.Context, root string, repos []string) (*List, error) 
 	}
 	if inRepo {
 		// 外层仓库从工作区列起：ls-files 在子目录里只列这个子目录，路径相对它
-		l.lsFiles(ctx, root, "", isRepo)
+		if err := l.lsFiles(ctx, root, "", isRepo); err != nil && strict {
+			return nil, err
+		}
 	}
 	for _, rel := range rels {
 		if l.Truncated {
 			break
 		}
-		l.lsFiles(ctx, filepath.Join(root, rel), rel, isRepo)
+		if err := l.lsFiles(ctx, filepath.Join(root, rel), rel, isRepo); err != nil && strict {
+			return nil, err
+		}
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -288,12 +301,12 @@ func (l *List) Ignored(abs string, dir bool) bool {
 
 // lsFiles 把 dir 里 git ls-files 列出的文件加进清单，前面加上 prefix（dir 相对 Root 的路径）。
 // 嵌套仓库（未跟踪的报成 "nested/"、子模块和指向仓库的软链报成 "nested"）跳过：它的文件由它自己列。
-func (l *List) lsFiles(ctx context.Context, dir, prefix string, isRepo map[string]bool) {
+func (l *List) lsFiles(ctx context.Context, dir, prefix string, isRepo map[string]bool) error {
 	cmd := exec.CommandContext(ctx, "git", "-C", dir, "ls-files", "-co", "--exclude-standard", "-z")
 	cmd.Env = append(os.Environ(), "GIT_TRACE2_EVENT=0")
 	out, err := cmd.Output()
 	if err != nil {
-		return
+		return err
 	}
 	for name := range bytes.SplitSeq(out, []byte{0}) {
 		if len(name) == 0 || name[len(name)-1] == '/' {
@@ -305,8 +318,9 @@ func (l *List) lsFiles(ctx context.Context, dir, prefix string, isRepo map[strin
 		}
 		if len(l.Files) == MaxFiles {
 			l.Truncated = true
-			return
+			return nil
 		}
 		l.Files = append(l.Files, rel)
 	}
+	return nil
 }
