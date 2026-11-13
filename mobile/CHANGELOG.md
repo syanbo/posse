@@ -3,6 +3,24 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.25
+
+- 看桌面的工具条始终展开，可用拖柄自由移动，松手不吸边，横竖屏位置分别记住；返回和 FPS 固定在画面上方，不占用画面空间，键盘弹出时自动避让。
+- 看桌面新增页内设置，可直接切换触控板／直接点按、查看手势和清除记住的密码，与全局设置同步，无需重连。
+- 触控板模式只保留三指拖动，抬手后 1 秒内可放回三指续拖；改用一指移动或双指滚动时先松开鼠标左键。直接点按模式仍支持长按拖动。
+- iOS 通知和角标可独立开关，关闭角标立即清零，回前台时重新核对系统权限；独立控制需要 Mac 0.1.39 及以上，只更新角标还需要新版中转。
+- 会话快捷工具条支持长按拖动排序，与设置页双向同步并保存；键盘入口保持固定。
+- Git 文件状态颜色与桌面端一致，正确显示暂存后又修改或删除的文件；调整首页讨论图标大小，保留原点击区域。
+
+### English
+
+- The remote desktop toolbar stays expanded and can be moved freely with its drag handle without snapping to an edge. Portrait and landscape positions are remembered separately. Back and FPS remain fixed over the picture without reducing its size, and the toolbar avoids the keyboard.
+- Remote desktop now has settings for switching between trackpad and direct touch, viewing gestures and clearing saved passwords. These share the global preferences and apply without reconnecting.
+- Trackpad dragging now uses three fingers only. Lift and replace three fingers within one second to continue dragging; switching to one-finger pointing or two-finger scrolling releases the mouse button first. Direct touch still supports long-press dragging.
+- iOS notifications and badges can be controlled independently. Disabling badges clears them immediately, and system permissions are rechecked on returning to the app. Independent control requires Mac 0.1.39 or later; badge-only updates also require the updated relay.
+- Long-press and drag to reorder the session shortcut bar. Changes sync with Settings and are saved; the keyboard button stays fixed.
+- Git status colors now match the desktop, including files modified or deleted after staging. The home screen discussion icon is smaller while retaining its tap area.
+
 ## 0.1.24
 
 - 看桌面可选清晰度：自动、720p、1080p、1440p，在悬浮球的「画面」面板里与帧率分别设置，按电脑记住，观看中可直接切换（需要电脑端 0.1.38 及以上）。
