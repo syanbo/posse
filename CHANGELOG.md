@@ -3,6 +3,16 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.39
+
+- 配合手机端 0.1.25，支持分别控制 iOS 通知和角标，通知类型选择不再影响角标计数。
+- 支持只更新角标而不发送横幅和声音，并检查中转是否支持；电脑或中转需要升级时，手机给出对应提示。
+
+### English
+
+- With Posse mobile 0.1.25, iOS notifications and app icon badges can be controlled independently. Notification type preferences no longer affect badge counts.
+- Supports badge-only updates without banners or sounds and checks relay compatibility. The phone indicates when the Mac or relay needs an update.
+
 ## 0.1.38
 
 - 手机看桌面新增清晰度选择：自动、720p、1080p、1440p，与帧率独立设置，观看中可直接切换（手机端需要 0.1.24 及以上）。
