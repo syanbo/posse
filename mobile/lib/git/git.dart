@@ -537,7 +537,7 @@ class _GitPaneState extends State<GitPane> {
             style: TextStyle(
               fontSize: Fs.small,
               fontWeight: Fw.medium,
-              color: kind == ChangeKind.conflict ? c.danger : c.text,
+              color: kind == ChangeKind.conflict ? c.gitDanger : c.text,
             ),
           ),
           const SizedBox(width: 8),
@@ -656,7 +656,8 @@ class _GitPaneState extends State<GitPane> {
   }) {
     final kind = file.kind;
     final deleted = kind == ChangeKind.deleted;
-    final from = kind == ChangeKind.renamed && file.orig.isNotEmpty
+    // 重命名后继续修改或删除时，状态颜色跟工作区走，原名仍保留。
+    final from = file.orig.isNotEmpty
         ? file.orig.substring(file.orig.lastIndexOf('/') + 1)
         : null;
     // 平铺时目录和改名的原名都要写；从别的目录挪过来的写原来的全路径，同目录改名只写原名
@@ -801,7 +802,7 @@ class _ModeSwitch extends StatelessWidget {
 Color _nameColor(PosseColors c, ChangeKind kind) => switch (kind) {
   ChangeKind.added => c.sage,
   ChangeKind.deleted => c.muted,
-  ChangeKind.untracked || ChangeKind.conflict => c.danger,
+  ChangeKind.untracked || ChangeKind.conflict => c.gitDanger,
   ChangeKind.modified || ChangeKind.renamed => c.sky,
 };
 

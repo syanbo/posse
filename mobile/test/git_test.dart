@@ -1,15 +1,192 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'git_screen.dart';
+import 'shot_fonts.dart';
 
 import 'package:posse_mobile/git/git.dart';
 import 'package:posse_mobile/git/status.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
+import 'package:posse_mobile/ui/theme.dart';
 
 final zh = lookupAppLocalizations(const Locale('zh'));
 
 void main() {
+  test('file status follows desktop worktree before index priority', () {
+    final cases = <String, ChangeKind>{
+      'A.': ChangeKind.added,
+      'AM': ChangeKind.modified,
+      'AD': ChangeKind.deleted,
+      'M.': ChangeKind.modified,
+      '.M': ChangeKind.modified,
+      'MM': ChangeKind.modified,
+      'MD': ChangeKind.deleted,
+      'D.': ChangeKind.deleted,
+      '.D': ChangeKind.deleted,
+      'R.': ChangeKind.renamed,
+      'RM': ChangeKind.modified,
+      'RD': ChangeKind.deleted,
+      '.R': ChangeKind.renamed,
+      'T.': ChangeKind.modified,
+      '.T': ChangeKind.modified,
+      'C.': ChangeKind.modified,
+    };
+    for (final entry in cases.entries) {
+      final file = parseGitStatus({
+        'files': [
+          {
+            'path': 'file.txt',
+            'x': entry.key[0],
+            'y': entry.key[1],
+            if (entry.key.contains('R')) 'orig': 'old.txt',
+          },
+        ],
+      }).files.single;
+      expect(file.kind, entry.value, reason: entry.key);
+    }
+    for (final xy in ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']) {
+      final file = parseGitStatus({
+        'files': [
+          {'path': 'conflict.txt', 'x': xy[0], 'y': xy[1], 'conflict': true},
+        ],
+      }).files.single;
+      expect(file.kind, ChangeKind.conflict, reason: xy);
+    }
+    final legacy = parseGitStatus({
+      'files': [
+        {'path': 'unknown.txt'},
+        {'path': 'renamed.txt', 'orig': 'old.txt'},
+        {'path': 'added.txt', 'x': 'A'},
+        {'path': 'new.txt', 'x': '?', 'y': '?', 'untracked': true},
+      ],
+    }).files;
+    expect(legacy.map((file) => file.kind), [
+      ChangeKind.modified,
+      ChangeKind.renamed,
+      ChangeKind.added,
+      ChangeKind.untracked,
+    ]);
+  });
+
+  for (final brightness in Brightness.values) {
+    testWidgets('desktop status colors in tree and flat lists ($brightness)', (
+      tester,
+    ) async {
+      final dir = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
+      if (dir.isNotEmpty) await loadShotFonts(tester);
+      await tester.binding.setSurfaceSize(const Size(390, 1100));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final dark = brightness == Brightness.dark;
+      final c = dark ? PosseColors.darkColors : PosseColors.light;
+      final theme = posseTheme(brightness);
+      // 桌面红色来自 MyGo Theme.Danger，不是手机的通用危险色。
+      final red = dark ? const Color(0xFFEF4444) : const Color(0xFFDC2626);
+      final expected = {
+        'added.txt': c.sage,
+        'modified.txt': c.sky,
+        'staged.txt': c.sky,
+        'deleted.txt': c.muted,
+        'renamed.txt': c.sky,
+        'renamed-modified.txt': c.sky,
+        'added-modified.txt': c.sky,
+        'renamed-deleted.txt': c.muted,
+        'untracked.txt': red,
+        'conflict.txt': red,
+      };
+      final status = parseGitStatus({
+        'branch': 'main',
+        'files': [
+          {'path': 'src/added.txt', 'x': 'A', 'y': '.'},
+          {'path': 'src/modified.txt', 'x': '.', 'y': 'M'},
+          {'path': 'src/staged.txt', 'x': 'M', 'y': '.'},
+          {'path': 'src/deleted.txt', 'x': '.', 'y': 'D'},
+          {'path': 'src/renamed.txt', 'x': 'R', 'y': '.', 'orig': 'old.txt'},
+          {'path': 'src/added-modified.txt', 'x': 'A', 'y': 'M'},
+          {
+            'path': 'src/renamed-modified.txt',
+            'x': 'R',
+            'y': 'M',
+            'orig': 'src/before-edit.txt',
+          },
+          {
+            'path': 'src/renamed-deleted.txt',
+            'x': 'R',
+            'y': 'D',
+            'orig': 'old.txt',
+          },
+          {'path': 'untracked.txt', 'x': '?', 'y': '?', 'untracked': true},
+          {'path': 'conflict.txt', 'x': 'A', 'y': 'A', 'conflict': true},
+        ],
+      });
+      final key = GlobalKey();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: key,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: theme.copyWith(
+              appBarTheme: theme.appBarTheme.copyWith(
+                titleTextStyle: theme.appBarTheme.titleTextStyle?.copyWith(
+                  fontFamily: 'Roboto',
+                ),
+              ),
+            ),
+            home: GitScreen(
+              title: 'Git',
+              loadStatus: () async => status,
+              loadDiff: (file) async => parseGitDiff({'path': file.path}),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('按目录'));
+      await tester.pumpAndSettle();
+      for (final mode in ['tree', 'flat']) {
+        if (mode == 'flat') {
+          await tester.tap(find.text('平铺'));
+          await tester.pumpAndSettle();
+        }
+        for (final entry in expected.entries) {
+          final text = tester.widget<Text>(find.text(entry.key));
+          expect(text.style?.color, entry.value, reason: '$mode ${entry.key}');
+          expect(
+            text.style?.decoration,
+            entry.key.contains('deleted') ? TextDecoration.lineThrough : null,
+            reason: '$mode ${entry.key}',
+          );
+        }
+        expect(
+          find.text(
+            mode == 'tree' ? '← before-edit.txt' : 'src  ← before-edit.txt',
+          ),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        if (dir.isNotEmpty) {
+          await tester.runAsync(() async {
+            final boundary =
+                key.currentContext!.findRenderObject()!
+                    as RenderRepaintBoundary;
+            final image = await boundary.toImage(pixelRatio: 2);
+            final bytes = await image.toByteData(
+              format: ui.ImageByteFormat.png,
+            );
+            File('$dir/git-status-$mode-${brightness.name}.png')
+                .writeAsBytesSync(bytes!.buffer.asUint8List());
+          });
+        }
+      }
+      // 布局模式在各工作区间共用，恢复默认值避免影响后续测试。
+      await tester.tap(find.text('按目录'));
+      await tester.pumpAndSettle();
+    });
+  }
+
   test('status and diff parse the phone payload', () {
     final status = parseGitStatus({
       'branch': 'main',

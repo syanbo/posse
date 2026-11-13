@@ -31,12 +31,20 @@ class GitFileChange {
   final String y;
 
   ChangeKind get kind {
-    if (conflict) return ChangeKind.conflict;
     if (untracked) return ChangeKind.untracked;
-    if (x == 'R' || y == 'R' || orig.isNotEmpty) return ChangeKind.renamed;
-    if (x == 'D' || y == 'D') return ChangeKind.deleted;
-    if (x == 'A') return ChangeKind.added;
-    return ChangeKind.modified;
+    if (conflict) return ChangeKind.conflict;
+    // 照桌面 statusLetter：工作区状态优先，只有工作区没变才看暂存区。
+    // 旧电脑缺少状态字母时仍可用 orig 认出重命名。
+    final letter = y.isNotEmpty && y != '.' ? y : x;
+    return switch (letter) {
+      '?' => ChangeKind.untracked,
+      'U' => ChangeKind.conflict,
+      'A' => ChangeKind.added,
+      'D' => ChangeKind.deleted,
+      'R' => ChangeKind.renamed,
+      '' when orig.isNotEmpty => ChangeKind.renamed,
+      _ => ChangeKind.modified,
+    };
   }
 
   /// 子模块（旧电脑不给这个字段）。
