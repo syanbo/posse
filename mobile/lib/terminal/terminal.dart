@@ -1075,11 +1075,11 @@ class _TerminalScreenState extends State<TerminalScreen>
                 left: 0,
                 right: 0,
                 bottom: keyboard,
-                child: _KeyBar(
+                child: TerminalKeyBar(
+                  model: widget.model,
                   onKey: _sendKey,
                   onExit: () => unawaited(_exitAgent()),
                   onClear: () => unawaited(_clearInput()),
-                  keys: widget.model.settings.barKeys,
                   onCustom: (key) => _sendKey(key.bytes, enter: key.enter),
                   onImage: widget.model.rpc == null || _busy ? null : _sendFile,
                   onPaste: widget.model.rpc == null || _busy
@@ -1174,10 +1174,12 @@ const _keyBarHeight = 41.0;
 /// grok 左右各自留的空白列数（46 列宽时实测）。
 const _grokMargin = 2;
 
-class _KeyBar extends StatelessWidget {
-  const _KeyBar({
+/// 会话终端的快捷键栏，和设置页共用顺序；不依赖终端内核，可单独预览和操作。
+class TerminalKeyBar extends StatelessWidget {
+  const TerminalKeyBar({
+    super.key,
+    required this.model,
     required this.onKey,
-    required this.keys,
     required this.onCustom,
     required this.onImage,
     required this.onPaste,
@@ -1191,8 +1193,10 @@ class _KeyBar extends StatelessWidget {
   final VoidCallback onExit;
   final VoidCallback onClear;
 
+  final PosseAppModel model;
+
   /// 键盘开关后面的键，按设置里排的顺序。
-  final List<BarKey> keys;
+  List<BarKey> get keys => model.settings.barKeys;
   final void Function(CustomKey key) onCustom;
   final VoidCallback? onImage;
   final VoidCallback? onPaste;
@@ -1254,6 +1258,45 @@ class _KeyBar extends StatelessWidget {
     );
   }
 
+  Widget _barKey(BuildContext context, PosseColors c, BarKey key) {
+    final custom = key.custom;
+    if (custom != null) {
+      return _textKey(c, custom.shown, () => onCustom(custom));
+    }
+    final term = key.termKey;
+    if (term != null && term.id == sendNowLabel) {
+      return _iconKey(
+        c,
+        glyph: SendNowGlyph(color: c.text),
+        label: context.l10n.terminalSendNow,
+        onTap: () => onKey(term.bytes),
+      );
+    }
+    if (term != null && term.id == exitAgentLabel) {
+      return _textKey(c, term.label(context.l10n), onExit);
+    }
+    if (term != null && term.id == clearInputKey) {
+      return _textKey(c, term.label(context.l10n), onClear);
+    }
+    if (term != null) {
+      return _textKey(c, term.label(context.l10n), () => onKey(term.bytes));
+    }
+    return key.builtin == 'image'
+        ? _iconKey(
+            c,
+            icon: Icons.attach_file_rounded,
+            label: context.l10n.terminalSendFile,
+            onTap: onImage,
+          )
+        : _iconKey(
+            c,
+            icon: Icons.content_paste_rounded,
+            size: _pasteIcon,
+            label: context.l10n.commonPaste,
+            onTap: onPaste,
+          );
+  }
+
   /// 键盘的图形扁（24 格里只占 14 高），和图片同为 18 时看着偏小，所以单独放大；
   /// 粘贴的图形本来就比图片高，只放大一点。
   static const _keyboardIcon = 21.0;
@@ -1280,7 +1323,13 @@ class _KeyBar extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    // 设置改顺序时只刷新工具条，不重建终端视图。
+    listenable: model,
+    builder: (context, _) => _buildBar(context),
+  );
+
+  Widget _buildBar(BuildContext context) {
     final c = PosseColors.of(context);
     return Container(
       decoration: BoxDecoration(
@@ -1291,55 +1340,38 @@ class _KeyBar extends StatelessWidget {
         top: false,
         child: SizedBox(
           height: _keyBarHeight - 1,
-          child: ListView.separated(
+          child: ReorderableListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            itemCount: keys.length + 1,
-            separatorBuilder: (_, _) => const SizedBox(width: 6),
-            itemBuilder: (context, i) {
-              if (i == 0) return _hideKeyboard(c);
-              final key = keys[i - 1];
-              final custom = key.custom;
-              if (custom != null) {
-                return _textKey(c, custom.shown, () => onCustom(custom));
-              }
-              final term = key.termKey;
-              if (term != null && term.id == sendNowLabel) {
-                return _iconKey(
-                  c,
-                  glyph: SendNowGlyph(color: c.text),
-                  label: context.l10n.terminalSendNow,
-                  onTap: () => onKey(term.bytes),
-                );
-              }
-              if (term != null && term.id == exitAgentLabel) {
-                return _textKey(c, term.label(context.l10n), onExit);
-              }
-              if (term != null && term.id == clearInputKey) {
-                return _textKey(c, term.label(context.l10n), onClear);
-              }
-              if (term != null) {
-                return _textKey(
-                  c,
-                  term.label(context.l10n),
-                  () => onKey(term.bytes),
-                );
-              }
-              return key.builtin == 'image'
-                  ? _iconKey(
-                      c,
-                      icon: Icons.attach_file_rounded,
-                      label: context.l10n.terminalSendFile,
-                      onTap: onImage,
-                    )
-                  : _iconKey(
-                      c,
-                      icon: Icons.content_paste_rounded,
-                      size: _pasteIcon,
-                      label: context.l10n.commonPaste,
-                      onTap: onPaste,
-                    );
+            buildDefaultDragHandles: false,
+            header: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: _hideKeyboard(c),
+            ),
+            itemCount: keys.length,
+            onReorderItem: (from, to) {
+              if (from == to) return;
+              final next = List.of(keys);
+              next.insert(to, next.removeAt(from));
+              model.updateSettings((s) => s.barKeys = next);
             },
+            proxyDecorator: (child, _, _) => Material(
+              color: c.raised,
+              shadowColor: PosseColors.lift,
+              elevation: 6,
+              borderRadius: BorderRadius.circular(Rd.button),
+              child: child,
+            ),
+            itemBuilder: (context, i) => ReorderableDelayedDragStartListener(
+              key: ObjectKey(keys[i]),
+              index: i,
+              child: Padding(
+                padding: i < keys.length - 1
+                    ? const EdgeInsets.only(right: 6)
+                    : EdgeInsets.zero,
+                child: _barKey(context, c, keys[i]),
+              ),
+            ),
           ),
         ),
       ),
