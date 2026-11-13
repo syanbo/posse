@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/workspace/models.dart';
 import 'package:posse_mobile/workspace/workspace.dart';
@@ -17,6 +18,21 @@ import 'shot_fonts.dart';
 // POSSE_SHOTS_DIR=/tmp/shots fvm flutter test test/workspace_shots_test.dart
 // 字体见 shot_fonts.dart。
 
+class _Rpc implements PhoneRpc {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _Model extends PosseAppModel {
+  _Model()
+    : super(store: MemoryPairingStore(), settingsStore: MemorySettingsStore());
+
+  final _rpc = _Rpc();
+
+  @override
+  PhoneRpc get rpc => _rpc;
+}
+
 void main() {
   final dir = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
 
@@ -24,10 +40,8 @@ void main() {
     await loadShotFonts(tester);
     SharedPreferences.setMockInitialValues({});
     await tester.binding.setSurfaceSize(const Size(390, 844));
-    final model = PosseAppModel(
-      store: MemoryPairingStore(),
-      settingsStore: MemorySettingsStore(),
-    );
+    // 连着电脑时才显示讨论、历史和新建入口，预览需要覆盖同排按钮。
+    final model = _Model();
     model.worktrees = parseWorktrees([
       {
         'worktreeId': 'p1::w1',
@@ -112,6 +126,18 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 400));
+      final buttons = find.byType(IconButton);
+      final discussion = find.ancestor(
+        of: find.byIcon(Icons.forum_rounded),
+        matching: buttons,
+      );
+      final history = find.ancestor(
+        of: find.byIcon(Icons.history_rounded),
+        matching: buttons,
+      );
+      expect(tester.getSize(discussion), tester.getSize(history));
+      expect(tester.getCenter(discussion).dy, tester.getCenter(history).dy);
+      expect(tester.takeException(), isNull);
       if (!running && lang == 'zh') {
         expect(find.text('主工作区'), findsOneWidget);
       }

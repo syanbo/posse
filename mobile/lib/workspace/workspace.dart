@@ -492,7 +492,13 @@ class WorkspaceScreen extends StatelessWidget {
                             builder: (_) => DiscussionsScreen(model: model),
                           ),
                         ),
-                        icon: const Icon(Icons.forum_rounded),
+                        // 实心双气泡比同排描边图标显大，缩小墨迹但保留图标占位和点击区域。
+                        icon: const SizedBox.square(
+                          dimension: Ic.button,
+                          child: Center(
+                            child: Icon(Icons.forum_rounded, size: Ic.medium),
+                          ),
+                        ),
                       ),
                       IconButton(
                         tooltip: l.homeHistoryTip,
