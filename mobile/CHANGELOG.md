@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.24
+
+- 看桌面可选清晰度：自动、720p、1080p、1440p，在悬浮球的「画面」面板里与帧率分别设置，按电脑记住，观看中可直接切换（需要电脑端 0.1.38 及以上）。
+- 自动档随网络调整画面尺寸；固定档保持所选尺寸上限，画面等比缩小、不放大小窗口，码率继续自适应。
+- 连续选择清晰度时，尚未发出的选择只保留最后一档；切后台或观看目标变化时自动收起旧面板，窗口消失回到整屏时显示提示。
+
+### English
+
+- Choose Auto, 720p, 1080p or 1440p under Picture in the floating ball, independently of frame rate. The choice is remembered per computer and can be changed while viewing (requires Posse for Mac 0.1.38 or later).
+- Auto adapts video dimensions to the network. Fixed presets retain their size limit, preserve the aspect ratio without upscaling small windows, and keep adaptive bitrate enabled.
+- Rapid resolution changes keep only the latest choice that has not yet been sent. The picture panel closes when the app enters the background or the capture target changes, and a message appears when a missing window falls back to the full display.
+
 ## 0.1.23
 
 - 看桌面可以手选帧率：悬浮球的「画面」里选自动、60、30、15，按电脑记住，观看中改了立即生效（需要电脑端 0.1.35 及以上）。
