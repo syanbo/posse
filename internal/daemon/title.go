@@ -76,6 +76,10 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeInternal, "write the title: %v", err)
 	}
+	// 显式给会话改名也恢复标签跟随会话，不能让旧的自定义名字遮住成功的结果。
+	if err := d.setTerminalName(s, ""); err != nil {
+		return nil, err
+	}
 	s.SetTitle(title, sid, name == "claude")
 	return sessionTitleResult{Title: title, Agent: name, Applies: applies}, nil
 }

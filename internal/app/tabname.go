@@ -12,12 +12,34 @@ import (
 	"posse/locales"
 )
 
+type termNameBase struct {
+	Agent     string `json:"agent,omitempty"`
+	SessionID string `json:"sessionId,omitempty"`
+	Title     string `json:"title,omitempty"`
+}
+
+func termNameOrigin(t terminalInfo) termNameBase {
+	base := termNameBase{Agent: t.Agent}
+	if t.AgentState != nil {
+		base.SessionID, base.Title = t.AgentState.SessionID, t.AgentState.Title
+	}
+	return base
+}
+
+// defaultTaskTitle 只在终端尚未被显式命名时用任务标题兜底。
+func (a *app) defaultTaskTitle(term terminalInfo) string {
+	if term.Name != "" || term.AgentState != nil && term.AgentState.Title != "" {
+		return ""
+	}
+	return a.workerTitle[term.ID]
+}
+
 // startRename 让终端标签原地变成输入框，填上现在显示的名字。
 func (a *app) startRename(m locales.Messages, term terminalInfo) {
-	name, detail := tabLabel(m, term)
+	name, detail := fullLabel(m, term)
 	// 退出的终端 detail 是"已退出"，不是标题，不拿来当名字
 	exited := !term.Running && !term.Lost
-	if title, ok := a.workerTitle[term.ID]; ok && term.Name == "" {
+	if title := a.defaultTaskTitle(term); title != "" {
 		detail, exited = title, false
 	}
 	switch {
@@ -49,7 +71,7 @@ func (a *app) finishRename(m locales.Messages, term terminalInfo) {
 	a.renaming = ""
 	name := strings.TrimSpace(a.renameText)
 	// 和默认显示的一样就不记，之后会话标题变了还能跟着变
-	if def, detail := tabLabel(m, terminalInfo{ID: term.ID, Title: term.Title, Agent: term.Agent, AgentState: term.AgentState, Running: true}); term.Name == "" && (name == def || name == detail || name == a.workerTitle[term.ID]) {
+	if def, detail := fullLabel(m, terminalInfo{ID: term.ID, Title: term.Title, Agent: term.Agent, AgentState: term.AgentState, Running: true}); term.Name == "" && (name == def || name == detail || name == a.defaultTaskTitle(term)) {
 		return
 	}
 	a.renameTerminal(term.ID, name)
@@ -62,7 +84,12 @@ func (a *app) renameTerminal(id, name string) {
 		a.state.TermNames = map[string]string{}
 	}
 	a.state.TermNames[id] = name
+	if a.state.TermNameBases == nil {
+		a.state.TermNameBases = map[string]termNameBase{}
+	}
+	a.state.TermNameBases[id] = termNameBase{}
 	if _, t := a.findTerminal(id); t != nil {
+		a.state.TermNameBases[id] = termNameOrigin(*t)
 		t.Name = name
 	}
 	a.saveState()
@@ -76,15 +103,37 @@ func (a *app) syncTermName(t *terminalInfo) {
 		return
 	}
 	if t.Name == name {
-		delete(a.state.TermNames, t.ID)
-		delete(a.nameSent, t.ID)
-		a.saveState()
+		a.ackTermName(t.ID, name)
+		return
+	}
+	// 待交的名字可能因为断线留到下一轮；后来明确设置的会话标题优先，不能重发旧名字盖回去。
+	if base, ok := a.state.TermNameBases[t.ID]; ok && t.Name == "" && t.AgentState != nil && t.AgentState.Title != "" && base != termNameOrigin(*t) {
+		a.ackTermName(t.ID, name)
 		return
 	}
 	t.Name = name
 	if sent, ok := a.nameSent[t.ID]; !ok || sent != name {
 		a.sendTermName(t.ID, name)
 	}
+}
+
+// ackTermName 收到成功回复就撤下本地覆盖：下一次轮询前会话可能又被命令改名，
+// 不能一直等常驻进程报回旧名字。较早请求的回复不能清掉后来输入的新名字。
+func (a *app) ackTermName(id, name string) {
+	if pending, ok := a.state.TermNames[id]; ok && pending == name {
+		delete(a.state.TermNames, id)
+		delete(a.state.TermNameBases, id)
+		delete(a.nameSent, id)
+		a.saveState()
+	}
+}
+
+// confirmTermName 等在途轮询先提交界面更新，再撤掉本地覆盖。
+// refreshMu 同时保证后续轮询在成功回复之后取数，不会用旧结果把名字改回去。
+func (a *app) confirmTermName(id, name string) {
+	a.refreshMu.Lock()
+	defer a.refreshMu.Unlock()
+	a.update(func() { a.ackTermName(id, name) })
 }
 
 // sendTermName 把名字交给常驻进程。同一个名字只发一次；发失败（常驻进程在交接、超时）就忘掉，
@@ -116,6 +165,7 @@ func (a *app) renameWorker(q <-chan [2]string) {
 		err := a.c.Call(ctx, "terminal.rename", map[string]any{"terminal": id, "name": name}, nil)
 		cancel()
 		if err == nil {
+			a.confirmTermName(id, name)
 			a.refresh()
 			continue
 		}

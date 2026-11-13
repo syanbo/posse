@@ -610,11 +610,15 @@ func (t *Terminal) ResetAgent(s AgentState) {
 	t.notify()
 }
 
-// SetTitle 记下会话标题；agent 还没报过会话 ID 时用调用方给的。
+// SetTitle 的会话 ID 来自当前命令环境；先于新会话的 hook 到达时也要更新归属。
 func (t *Terminal) SetTitle(title, sessionID string, pending bool) {
 	t.mu.Lock()
-	if t.agent.SessionID == "" {
+	if sessionID != "" && t.agent.SessionID != sessionID {
 		t.agent.SessionID = sessionID
+		// 旧会话的消息、审批和子 agent 不能跟着新标题归到新会话。
+		t.agent.TranscriptPath, t.agent.Message = "", ""
+		t.agent.ToolName, t.agent.ToolInput, t.agent.Prompt = "", "", ""
+		t.agent.Subagents = nil
 	}
 	t.agent.Title, t.agent.TitlePending = title, pending
 	t.mu.Unlock()

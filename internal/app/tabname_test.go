@@ -1,7 +1,10 @@
 package app
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
+	"time"
 
 	"posse/locales"
 )
@@ -55,6 +58,114 @@ func TestSyncTermName(t *testing.T) {
 	}
 }
 
+func TestWorkerSessionTitle(t *testing.T) {
+	a := &app{workerTitle: map[string]string{"t1": "old task title"}}
+	term := terminalInfo{ID: "t1", Agent: "codex", Running: true}
+	if got := a.defaultTaskTitle(term); got != "old task title" {
+		t.Fatalf("unnamed worker: %q", got)
+	}
+	term.AgentState = &agentState{Title: "1112｜fix｜preserve the complete session title"}
+	if got := a.defaultTaskTitle(term); got != "" {
+		t.Fatalf("task masks the session title: %q", got)
+	}
+	a.startRename(locales.In("zh-Hans"), term)
+	if a.renameText != term.AgentState.Title {
+		t.Fatalf("rename input = %q", a.renameText)
+	}
+	// 保留原样离开输入框，不把会话标题变成固定的自定义名字。
+	a.finishRename(locales.In("zh-Hans"), term)
+	if len(a.state.TermNames) != 0 {
+		t.Fatalf("unchanged title became a custom name: %v", a.state.TermNames)
+	}
+	term.Name = "later custom name"
+	if got := a.defaultTaskTitle(term); got != "" {
+		t.Fatalf("task masks the custom name: %q", got)
+	}
+	_, detail := fullLabel(locales.In("zh-Hans"), term)
+	if detail != term.Name {
+		t.Fatalf("custom name = %q", detail)
+	}
+}
+
+func TestPreviewWorkerSessionTitle(t *testing.T) {
+	if os.Getenv("POSSE_PREVIEW_DIR") == "" {
+		t.Skip("set POSSE_PREVIEW_DIR to render previews")
+	}
+	for _, dark := range []bool{false, true} {
+		a := previewApp(t)
+		a.tasks[0].Title = "Mac复现个人厅主播资格异常"
+		a.workspaces[0].Terminals[3].AgentState = &agentState{Status: "idle", Title: "1112｜修复｜视频模式主播准备状态漏同步"}
+		a.indexTasks()
+		suffix := map[bool]string{true: "dark", false: "light"}[dark]
+		savePNG(t, newPreviewTester(a, dark), "worker-session-title-"+suffix+".png")
+	}
+}
+
+func TestRenameAckBeforeSessionTitlePoll(t *testing.T) {
+	a := &app{}
+	a.renameTerminal("t1", "old custom name")
+	a.ackTermName("t1", "old custom name")
+	// 自定义名的 RPC 已成功，但下一次轮询前 session title 又改了名字。
+	term := terminalInfo{ID: "t1", AgentState: &agentState{Title: "new session title"}}
+	a.syncTermName(&term)
+	if got := termTitle(term); got != "new session title" || len(a.state.TermNames) != 0 {
+		t.Fatalf("stale override = %q, pending %v", got, a.state.TermNames)
+	}
+	a.renameTerminal("t1", "first")
+	a.renameTerminal("t1", "second")
+	a.ackTermName("t1", "first")
+	if a.state.TermNames["t1"] != "second" {
+		t.Fatal("old acknowledgement discarded the newer name")
+	}
+}
+
+func TestRenameAckWaitsForOldPoll(t *testing.T) {
+	a := &app{}
+	a.renameTerminal("t1", "new name")
+	// 轮询已经取到旧名字，但尚未向界面提交结果。
+	a.refreshMu.Lock()
+	done := make(chan struct{})
+	go func() {
+		a.confirmTermName("t1", "new name")
+		close(done)
+	}()
+	select {
+	case <-done:
+		a.refreshMu.Unlock()
+		t.Fatal("acknowledgement passed the in-flight poll")
+	case <-time.After(20 * time.Millisecond):
+	}
+	var shown string
+	a.update(func() {
+		term := terminalInfo{ID: "t1", Name: "old name"}
+		a.syncTermName(&term)
+		shown = term.Name
+	})
+	a.refreshMu.Unlock()
+	<-done
+	a.runPending()
+	if shown != "new name" || len(a.state.TermNames) != 0 {
+		t.Fatalf("old poll showed %q, pending %v", shown, a.state.TermNames)
+	}
+	// 确认之后的新轮询可以接受命令设置的会话标题。
+	term := terminalInfo{ID: "t1", AgentState: &agentState{Title: "new session title"}}
+	a.syncTermName(&term)
+	if got := termTitle(term); got != "new session title" {
+		t.Fatalf("new poll showed %q", got)
+	}
+}
+
+func TestTabTooltipSessionTitle(t *testing.T) {
+	term := terminalInfo{Agent: "codex", Title: "old terminal title", AgentState: &agentState{Title: "1112｜fix｜preserve the complete session title"}}
+	if got := tabTooltip(locales.In("en"), term); got != "Codex\n"+term.AgentState.Title {
+		t.Fatalf("session tooltip = %q", got)
+	}
+	term.Name = "custom name"
+	if got := tabTooltip(locales.In("en"), term); got != "Codex\ncustom name" {
+		t.Fatalf("custom tooltip = %q", got)
+	}
+}
+
 func TestTabRef(t *testing.T) {
 	cases := []struct {
 		term terminalInfo
@@ -76,5 +187,43 @@ func TestTabRef(t *testing.T) {
 		if got := tabRef(locales.In("zh-Hans"), tc.term, tc.task); got != tc.want {
 			t.Errorf("tabRef(%+v) = %q, want %q", tc.term, got, tc.want)
 		}
+	}
+}
+
+func TestFailedRenameYieldsToNewSessionTitle(t *testing.T) {
+	old := terminalInfo{ID: "t1", Agent: "claude", AgentState: &agentState{SessionID: "s1", Title: "old session title"}}
+	a := &app{workspaces: []workspace{{ID: "w1", Terminals: []terminalInfo{old}}}}
+	a.indexWorkspaces()
+	a.renameTerminal("t1", "pending custom name")
+	// RPC 失败后，下一次轮询仍可重试；会话标题没变时保留用户的输入。
+	delete(a.nameSent, "t1")
+	fresh := old
+	a.syncTermName(&fresh)
+	if fresh.Name != "pending custom name" || a.nameSent["t1"] != "pending custom name" {
+		t.Fatalf("retry lost the name: %+v", fresh)
+	}
+	delete(a.nameSent, "t1")
+	// 待交名字和它对应的会话信息都能随窗口重开恢复。
+	home := t.TempDir()
+	b, err := json.Marshal(a.state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(uiStatePath(home), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a = &app{state: loadUIState(home)}
+	fresh = terminalInfo{ID: "t1", Agent: "claude", AgentState: &agentState{SessionID: "s1", Title: "later session title"}}
+	a.syncTermName(&fresh)
+	if fresh.Name != "" || termTitle(fresh) != "later session title" || len(a.state.TermNames) != 0 || len(a.state.TermNameBases) != 0 || len(a.nameSent) != 0 {
+		t.Fatalf("old failed rename masked the new title: %+v, pending %+v", fresh, a.state)
+	}
+	// 会话没变时，后来一次手动改名仍然优先。
+	a.workspaces = []workspace{{ID: "w1", Terminals: []terminalInfo{fresh}}}
+	a.indexWorkspaces()
+	a.renameTerminal("t1", "latest manual name")
+	a.syncTermName(&fresh)
+	if fresh.Name != "latest manual name" {
+		t.Fatalf("new manual name ignored: %+v", fresh)
 	}
 }

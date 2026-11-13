@@ -946,7 +946,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 	}
 	// 和标签一样：任务 worker 用任务标题
 	name, detail := fullLabel(L(c), term)
-	if title, ok := a.workerTitle[term.ID]; ok && term.Name == "" {
+	if title := a.defaultTaskTitle(term); title != "" {
 		detail = title
 	}
 	if detail == "" {
@@ -2203,7 +2203,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 		status = a.sessionStatus(term)
 	}
 	name, detail := tabLabel(L(c), term)
-	if title, ok := a.workerTitle[term.ID]; ok && term.Running && term.Name == "" {
+	if title := a.defaultTaskTitle(term); title != "" && term.Running {
 		detail = truncate(title, 22)
 	}
 	renaming := a.renaming == term.ID
@@ -2342,10 +2342,7 @@ func (a *app) tabClose(c *ui.Context, term terminalInfo) {
 // tabTooltip 是终端标签的悬停提示：完整的名字和标题，标签上只有图标或标题被截断时看得到全文。
 func tabTooltip(m locales.Messages, t terminalInfo) string {
 	name := agentTitle(t.Agent)
-	title := bareTitle(t)
-	if t.Name != "" {
-		title = t.Name
-	}
+	title := termTitle(t)
 	switch {
 	case name == "" && title == "":
 		return m.TermName()

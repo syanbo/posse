@@ -51,6 +51,7 @@ type session struct {
 	Command     []string
 	CreatedAt   time.Time
 
+	nameMu  sync.Mutex // 改名写库单独串行，不能让数据库等待占住 PTY 回调用的 mu
 	mu      sync.Mutex
 	agent   string // 终端里的 agent：启动时指定的，或之后在前台认出来的
 	hooked  bool   // agent 是 posse 启动的那个，带着注入的 hooks

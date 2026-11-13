@@ -594,13 +594,23 @@ func (d *Daemon) terminalRename(ctx context.Context, raw json.RawMessage) (any, 
 		return d.lostInfo(t), nil
 	}
 	d.restoreMu.Unlock()
-	if err := d.store.SetTerminalTitle(s.ID, name); err != nil {
+	if err := d.setTerminalName(s, name); err != nil {
 		return nil, err
+	}
+	return d.terminalInfo(s), nil
+}
+
+// setTerminalName 串行写库和内存，避免标签改名与会话改名交错后各留一个名字。
+func (d *Daemon) setTerminalName(s *session, name string) error {
+	s.nameMu.Lock()
+	defer s.nameMu.Unlock()
+	if err := d.store.SetTerminalTitle(s.ID, name); err != nil {
+		return err
 	}
 	s.mu.Lock()
 	s.name = name
 	s.mu.Unlock()
-	return d.terminalInfo(s), nil
+	return nil
 }
 
 // terminalReclaimSize 让电脑收回被手机占着的尺寸，按界面的尺寸重排。

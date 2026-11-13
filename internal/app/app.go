@@ -813,6 +813,7 @@ func (a *app) apply(ps []project, ws []workspace) {
 	for id := range a.state.TermNames {
 		if _, t := a.findTerminal(id); t == nil {
 			delete(a.state.TermNames, id)
+			delete(a.state.TermNameBases, id)
 		}
 	}
 	a.prunePanes(time.Now())
@@ -1203,6 +1204,7 @@ func (a *app) saveState() {
 	s.ProjectOrder = slices.Clone(s.ProjectOrder)
 	s.TermOrder = maps.Clone(s.TermOrder)
 	s.TermNames = maps.Clone(s.TermNames)
+	s.TermNameBases = maps.Clone(s.TermNameBases)
 	s.GitConsoleClearedAt = maps.Clone(s.GitConsoleClearedAt)
 	s.FilesPanels, s.LogPanels = maps.Clone(s.FilesPanels), maps.Clone(s.LogPanels)
 	s.MobileAddresses = slices.Clone(s.MobileAddresses)
