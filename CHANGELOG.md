@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.38
+
+- 手机看桌面新增清晰度选择：自动、720p、1080p、1440p，与帧率独立设置，观看中可直接切换（手机端需要 0.1.24 及以上）。
+- 画面保持原比例，不放大小窗口；自动档随网络调整尺寸，固定档保持所选尺寸上限、码率继续自适应，切档不重置已测得的网络状态。
+- 采集恢复后继续使用最新清晰度和原窗口；锁屏期间临时显示整屏，解锁后恢复窗口，用户主动选屏时以新选择为准。
+
+### English
+
+- Remote desktop now supports Auto, 720p, 1080p and 1440p resolution presets, independently of frame rate, with switching during a session (requires Posse mobile 0.1.24 or later).
+- Video preserves its aspect ratio without upscaling small windows. Auto adapts the dimensions to the network; fixed presets retain their size limit while bitrate continues to adapt. Switching presets preserves the measured network state.
+- Capture recovery restores the latest resolution and the selected window. Locking temporarily shows the full display, then restores the window after unlocking unless you select another display.
+
 ## 0.1.37
 
 - 修复手机顶部 Claude 上下文占比与终端状态栏不一致的问题，优先使用 Claude 官方读数，正确处理第三方模型名称、分块回复和压缩后的用量。
