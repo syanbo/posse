@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
@@ -14,6 +17,8 @@ import 'package:posse_mobile/desk/mods.dart';
 import 'package:posse_mobile/desk/toolbar.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/ui/theme.dart';
+
+import 'shot_fonts.dart';
 
 final zh = lookupAppLocalizations(const Locale('zh'));
 
@@ -49,24 +54,29 @@ void main() {
       DeviceOrientation.landscapeRight,
     ]);
     expect(deskAppOrientations, isEmpty);
-    expect(deskBarOnRight(left: 59, right: 0), isTrue);
-    expect(deskBarOnRight(left: 0, right: 59), isFalse);
-    expect(deskBarOnRight(left: 0, right: 0), isTrue);
   });
 
-  test('the toolbar collapses after it has been left alone', () {
-    final chrome = DeskChrome();
-    chrome.toggleExpanded(Duration.zero);
-    expect(chrome.expanded, isTrue);
-    chrome.noteActivity(const Duration(seconds: 2));
-    expect(chrome.collapseIfIdle(const Duration(seconds: 5)), isFalse);
-    expect(
-      chrome.collapseIfIdle(const Duration(seconds: 2) + deskBarIdle),
-      isTrue,
-    );
-    expect(chrome.expanded, isFalse);
-    expect(chrome.collapseIfIdle(const Duration(seconds: 30)), isFalse);
-  });
+  test(
+    'toolbar positions round-trip separately and invalid values fall back',
+    () {
+      final settings = AppSettings(
+        deskToolbarPortrait: const Offset(0.3, 0.7),
+        deskToolbarLandscape: const Offset(0.8, 0.4),
+      );
+      final back = AppSettings.decode(jsonEncode(settings.toJson()));
+      expect(back.deskToolbarPortrait, const Offset(0.3, 0.7));
+      expect(back.deskToolbarLandscape, const Offset(0.8, 0.4));
+      final invalid = AppSettings.decode(
+        jsonEncode({
+          'deskToolbarPortrait': [-2, 3],
+          'deskToolbarLandscape': ['bad', 0],
+        }),
+      );
+      expect(invalid.deskToolbarPortrait, const Offset(0, 1));
+      expect(invalid.deskToolbarLandscape, const Offset(1, 0));
+      expect(AppSettings.decode('{}').deskToolbarPortrait, const Offset(1, 0));
+    },
+  );
 
   test('the shortcut bar stays up for an explicit open or the keyboard', () {
     final chrome = DeskChrome();
@@ -94,8 +104,6 @@ void main() {
       ),
       const EdgeInsets.only(left: 59, right: 21),
     );
-    expect(deskBarAlignment(0.5), 0);
-    expect(deskBarAlignment(0), -1);
     expect(deskBarTrack(390, 280), 110);
     expect(deskFpsLabel(zh, 59.6, video: true), '60 fps');
     expect(deskFpsLabel(zh, 0, video: false), '— fps');
@@ -184,60 +192,49 @@ void main() {
     expect(find.text('右键'), findsNothing);
   });
 
-  testWidgets('the toolbar shows fps until it is opened', (tester) async {
+  testWidgets('toolbar stays open and header controls are separate', (
+    tester,
+  ) async {
     var backs = 0;
     var helps = 0;
-    Future<void> pump(bool expanded, {bool video = true}) {
-      return tester.pumpWidget(
-        MaterialApp(
-          theme: posseTheme(Brightness.dark),
-          home: Scaffold(
-            body: Center(
-              child: DeskToolbar(
-                expanded: expanded,
-                latency: const Duration(milliseconds: 40),
-                unresponsive: false,
-                fps: 60,
-                video: video,
-                landscape: false,
-                keyboardUp: false,
-                shortcuts: false,
-                debugOpen: false,
-                stopped: false,
-                onToggle: () {},
-                onBack: () => backs++,
-                onOrientation: () {},
-                onKeyboard: () {},
-                onShortcuts: () {},
-                onDebug: () {},
-                onHelp: () => helps++,
-                onDisconnect: () {},
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.dark),
+        home: Scaffold(
+          body: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  DeskBackButton(onBack: () => backs++),
+                  const DeskStatusPill(
+                    latency: Duration(milliseconds: 40),
+                    unresponsive: false,
+                    fps: 60,
+                    video: true,
+                  ),
+                ],
               ),
-            ),
+              _toolbar(onSettings: () => helps++),
+            ],
           ),
         ),
-      );
-    }
-
-    await pump(false);
-    expect(find.byKey(const Key('desk-fps')), findsOneWidget);
+      ),
+    );
+    await tester.pump(const Duration(seconds: 10));
     expect(find.text('60 fps'), findsOneWidget);
-    expect(find.byKey(const Key('desk-toolbar-back')), findsNothing);
-
-    await pump(true);
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(find.byKey(const Key('desk-toolbar-back')), findsOneWidget);
     expect(find.byKey(const Key('desk-toolbar-orientation')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('desk-toolbar')),
+        matching: find.byKey(const Key('desk-toolbar-back')),
+      ),
+      findsNothing,
+    );
     await tester.tap(find.byKey(const Key('desk-toolbar-back')));
     expect(backs, 1);
-    await tester.tap(find.byKey(const Key('desk-toolbar-help')));
+    await tester.tap(find.byKey(const Key('desk-toolbar-settings')));
     expect(helps, 1);
-
-    // 还没画面（连接中、连不上）：不用点开就有返回和横屏
-    await pump(false, video: false);
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(find.byKey(const Key('desk-toolbar-back')), findsOneWidget);
-    expect(find.byKey(const Key('desk-toolbar-orientation')), findsOneWidget);
   });
 
   testWidgets('taps beside the toolbar still reach the picture', (
@@ -259,9 +256,10 @@ void main() {
                 top: 20,
                 left: 0,
                 right: 0,
+                bottom: 0,
                 child: DeskBarSlot(
                   anchor: ValueNotifier<Offset>(const Offset(0.5, 0)),
-                  onDrag: () {},
+                  onDragEnd: () {},
                   child: const SizedBox(
                     key: Key('desk-pill'),
                     width: 80,
@@ -329,23 +327,16 @@ void main() {
           home: Scaffold(
             body: Center(
               child: DeskToolbar(
-                expanded: true,
-                latency: null,
-                unresponsive: false,
-                fps: 60,
-                video: true,
                 landscape: landscape,
                 keyboardUp: false,
                 shortcuts: false,
                 debugOpen: false,
                 stopped: false,
-                onToggle: () {},
-                onBack: () {},
                 onOrientation: () => turns++,
                 onKeyboard: () {},
                 onShortcuts: () {},
                 onDebug: () {},
-                onHelp: () {},
+                onSettings: () {},
                 onDisconnect: () {},
               ),
             ),
@@ -392,7 +383,7 @@ void main() {
                     Expanded(
                       child: DeskBarSlot(
                         anchor: anchor,
-                        onDrag: () {},
+                        onDragEnd: () {},
                         child: AnimatedSize(
                           duration: const Duration(milliseconds: 160),
                           child: ColoredBox(
@@ -432,10 +423,15 @@ void main() {
     await finger.moveBy(const Offset(24, 0));
     await tester.pump();
     expect(anchor.value.dx - start, closeTo(24 / (300 - 200), 0.05));
+    final beforeBatch = anchor.value.dx;
+    await finger.moveBy(const Offset(-5, 0));
+    await finger.moveBy(const Offset(-5, 0));
+    await tester.pump();
+    expect(anchor.value.dx - beforeBatch, closeTo(-10 / (300 - 200), 0.001));
+    final released = anchor.value;
     await finger.up();
     await tester.pump();
-    // 松手吸边
-    expect(anchor.value.dx, 1);
+    expect(anchor.value, released);
   });
 
   testWidgets(
@@ -477,7 +473,253 @@ void main() {
     },
   );
 
-  testWidgets('the ball drags anywhere and snaps to the nearer side', (
+  testWidgets(
+    'free position persists and header stays fixed across keyboard and rotation',
+    (tester) async {
+      addTearDown(tester.view.reset);
+      _mockDeskChannels(tester);
+      final store = MemorySettingsStore();
+      final model = PosseAppModel(
+        store: MemoryPairingStore(),
+        settingsStore: store,
+      );
+      addTearDown(model.dispose);
+      model.updateSettings((s) => s.deskGesturesSeen = true);
+      _surface(
+        tester,
+        const Size(400, 800),
+        const FakeViewPadding(top: 47, bottom: 34),
+      );
+      Future<void> open() => tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.dark),
+          home: DeskPage(model: model),
+        ),
+      );
+      await open();
+      await tester.pumpAndSettle();
+      Rect bar() => tester.getRect(find.byKey(const Key('desk-toolbar')));
+      Rect back() => tester.getRect(find.byKey(const Key('desk-toolbar-back')));
+      Rect status() => tester.getRect(find.byKey(const Key('desk-status')));
+      final first = bar();
+      final backAt = back();
+      final statusAt = status();
+      expect(first.right, 392);
+      expect(first.top, greaterThan(backAt.bottom));
+      expect(first.height, greaterThan(first.width));
+      await tester.drag(
+        find.byKey(const Key('desk-toolbar-handle')),
+        const Offset(-220, 300),
+      );
+      await tester.pumpAndSettle();
+      final moved = bar();
+      expect(moved.left, greaterThan(50));
+      expect(moved.right, lessThan(300));
+      expect(moved.top, greaterThan(first.top + 200));
+      expect(back(), backAt);
+      expect(status(), statusAt);
+      final saved = model.settings.deskToolbarPortrait;
+      expect(AppSettings.decode(store.data).deskToolbarPortrait, saved);
+
+      // 键盘只推开实际被遮住的工具条，不改变偏好；固定控件也不跟着动。
+      tester.view.viewInsets = const FakeViewPadding(bottom: 450);
+      await tester.pumpAndSettle();
+      expect(bar().bottom, lessThanOrEqualTo(342));
+      expect(bar().width, greaterThan(bar().height));
+      expect(model.settings.deskToolbarPortrait, saved);
+      expect(back(), backAt);
+      expect(status(), statusAt);
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pumpAndSettle();
+      expect(bar(), moved);
+
+      _surface(
+        tester,
+        const Size(800, 400),
+        const FakeViewPadding(left: 59, bottom: 21),
+      );
+      await tester.pumpAndSettle();
+      expect(bar().right, 792);
+      expect(bar().width, greaterThan(bar().height));
+      await tester.drag(
+        find.byKey(const Key('desk-toolbar-handle')),
+        const Offset(-180, 100),
+      );
+      await tester.pumpAndSettle();
+      final side = bar();
+      expect(model.settings.deskToolbarLandscape, isNot(const Offset(1, 0)));
+
+      _surface(
+        tester,
+        const Size(400, 800),
+        const FakeViewPadding(top: 47, bottom: 34),
+      );
+      await tester.pumpAndSettle();
+      expect(bar(), moved);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await open();
+      await tester.pumpAndSettle();
+      expect(bar(), moved);
+      _surface(
+        tester,
+        const Size(800, 400),
+        const FakeViewPadding(left: 59, bottom: 21),
+      );
+      await tester.pumpAndSettle();
+      expect(bar(), side);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    },
+  );
+
+  for (final hold in [
+    Duration.zero,
+    const Duration(milliseconds: 180),
+    const Duration(milliseconds: 600),
+  ]) {
+    testWidgets(
+      'dragging a toolbar button after ${hold.inMilliseconds}ms never taps it or the desktop',
+      (tester) async {
+        final anchor = ValueNotifier(const Offset(0.7, 0.2));
+        addTearDown(anchor.dispose);
+        var help = 0;
+        var desktop = 0;
+        var saves = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: posseTheme(Brightness.dark),
+            home: Scaffold(
+              body: Stack(
+                children: [
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: () => desktop++,
+                      onPanUpdate: (_) => desktop++,
+                      child: const ColoredBox(color: Colors.black),
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: DeskBarSlot(
+                      anchor: anchor,
+                      onDragEnd: () => saves++,
+                      child: _toolbar(onSettings: () => help++),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        final before = anchor.value;
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.byKey(const Key('desk-toolbar-settings'))),
+        );
+        await tester.pump(hold);
+        await gesture.moveBy(const Offset(-30, 18));
+        await tester.pump(const Duration(milliseconds: 100));
+        await gesture.moveBy(const Offset(-70, 42));
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(anchor.value, isNot(before));
+        expect(help, 0);
+        expect(desktop, 0);
+        expect(saves, 1);
+        await tester.tap(find.byKey(const Key('desk-toolbar-settings')));
+        expect(help, 1);
+        expect(saves, 1);
+      },
+    );
+  }
+
+  testWidgets('dragging a full-width toolbar preserves its horizontal anchor', (
+    tester,
+  ) async {
+    final anchor = ValueNotifier(const Offset(1, 0));
+    addTearDown(anchor.dispose);
+    Future<void> pump(double width) => tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.dark),
+        home: Scaffold(
+          body: SizedBox(
+            width: width,
+            height: 180,
+            child: DeskBarSlot(
+              anchor: anchor,
+              onDragEnd: () {},
+              child: _toolbar(landscape: true),
+            ),
+          ),
+        ),
+      ),
+    );
+    await pump(240);
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const Key('desk-toolbar-handle')),
+      const Offset(-30, 24),
+    );
+    await tester.pumpAndSettle();
+    expect(anchor.value.dx, 1);
+    expect(anchor.value.dy, greaterThan(0));
+    await pump(500);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.byKey(const Key('desk-toolbar'))).right, 500);
+  });
+
+  for (final (screen, keyboard) in [
+    (const Size(568, 320), 250.0),
+    (const Size(320, 568), 470.0),
+  ]) {
+    testWidgets('controls remain reachable above tall keyboard on $screen', (
+      tester,
+    ) async {
+      addTearDown(tester.view.reset);
+      _mockDeskChannels(tester);
+      final model = PosseAppModel(
+        store: MemoryPairingStore(),
+        settingsStore: MemorySettingsStore(),
+      );
+      addTearDown(model.dispose);
+      model.updateSettings((s) => s.deskGesturesSeen = true);
+      _surface(tester, screen, FakeViewPadding.zero);
+      tester.view.viewInsets = FakeViewPadding(bottom: keyboard);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.dark),
+          home: DeskPage(model: model),
+        ),
+      );
+      await tester.pumpAndSettle();
+      Rect rect(String key) => tester.getRect(find.byKey(Key(key)));
+      final bar = rect('desk-toolbar');
+      expect(bar.height, deskControlExtent);
+      expect(bar.bottom, lessThanOrEqualTo(screen.height - keyboard));
+      expect(bar.overlaps(rect('desk-toolbar-back')), isFalse);
+      expect(bar.overlaps(rect('desk-status')), isFalse);
+      final scroll = find.descendant(
+        of: find.byKey(const Key('desk-toolbar')),
+        matching: find.byType(SingleChildScrollView),
+      );
+      if (scroll.evaluate().isNotEmpty) {
+        await tester.drag(scroll, const Offset(-500, 0));
+        await tester.pumpAndSettle();
+      }
+      final disconnect = rect('desk-toolbar-disconnect');
+      expect(disconnect.left, greaterThanOrEqualTo(bar.left));
+      expect(disconnect.right, lessThanOrEqualTo(bar.right));
+      expect(tester.takeException(), isNull);
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('desk-toolbar-handle')), findsOneWidget);
+      expect(model.settings.deskToolbarPortrait, const Offset(1, 0));
+      expect(model.settings.deskToolbarLandscape, const Offset(1, 0));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    });
+  }
+
+  testWidgets('landscape debug panel clears the default horizontal toolbar', (
     tester,
   ) async {
     addTearDown(tester.view.reset);
@@ -488,11 +730,7 @@ void main() {
     );
     addTearDown(model.dispose);
     model.updateSettings((s) => s.deskGesturesSeen = true);
-    _surface(
-      tester,
-      const Size(400, 800),
-      const FakeViewPadding(top: 47, bottom: 34),
-    );
+    _surface(tester, const Size(700, 320), const FakeViewPadding(left: 44));
     await tester.pumpWidget(
       MaterialApp(
         theme: posseTheme(Brightness.dark),
@@ -500,48 +738,119 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    Rect ball() => tester.getRect(find.byKey(const Key('desk-toolbar')));
-
-    // 竖屏默认在右上角，按钮竖着排
-    final first = ball();
-    expect(first.right, greaterThan(390));
-    expect(first.top, lessThan(80));
-    expect(first.height, greaterThan(first.width));
-
-    // 拖到左下偏中，松手吸到左边，高度留在放手的地方
-    await tester.drag(
-      find.byKey(const Key('desk-toolbar')),
-      const Offset(-250, 300),
-    );
+    await tester.tap(find.byKey(const Key('desk-toolbar-debug')));
     await tester.pumpAndSettle();
-    final moved = ball();
-    expect(moved.left, lessThan(10));
-    expect(moved.top, greaterThan(first.top + 200));
-
-    // 横屏：刘海在左，球在右边
-    _surface(
-      tester,
-      const Size(800, 400),
-      const FakeViewPadding(left: 59, bottom: 21),
-    );
-    await tester.pumpAndSettle();
-    final side = ball();
-    expect(side.right, greaterThan(790));
-    expect(side.height, greaterThan(side.width));
-
-    // 回竖屏，回到竖屏时放的位置
-    _surface(
-      tester,
-      const Size(400, 800),
-      const FakeViewPadding(top: 47, bottom: 34),
-    );
-    await tester.pumpAndSettle();
-    expect(ball().left, closeTo(moved.left, 2));
-    expect(ball().top, closeTo(moved.top, 2));
-
+    final bar = tester.getRect(find.byKey(const Key('desk-toolbar')));
+    final panel = tester.getRect(find.byKey(const Key('desk-debug-panel')));
+    expect(panel.top, greaterThan(bar.bottom));
+    expect(bar.overlaps(panel), isFalse);
+    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+    await tester.pumpAndSettle();
   });
+
+  testWidgets(
+    'desktop settings update the active mode without leaving the page',
+    (tester) async {
+      addTearDown(tester.view.reset);
+      _mockDeskChannels(tester);
+      final model = PosseAppModel(
+        store: MemoryPairingStore(),
+        settingsStore: MemorySettingsStore(),
+      );
+      addTearDown(model.dispose);
+      model.updateSettings((s) => s.deskGesturesSeen = true);
+      _surface(
+        tester,
+        const Size(390, 844),
+        const FakeViewPadding(top: 47, bottom: 34),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.dark),
+          home: DeskPage(model: model),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('desk-toolbar-settings')));
+      await tester.pumpAndSettle();
+      expect(find.text(zh.settingsDeskPasswords), findsOneWidget);
+      await tester.tap(find.text(zh.settingsDeskDirect));
+      await tester.pumpAndSettle();
+      expect(model.settings.deskTrackpad, isFalse);
+      await tester.tapAt(const Offset(20, 70));
+      await tester.pumpAndSettle();
+      expect(find.byType(DeskPage), findsOneWidget);
+      expect(find.byKey(const Key('desk-gesture-hint')), findsOneWidget);
+      expect(find.text('直接点按模式'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('desk-gesture-hint')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('desk-toolbar-settings')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(zh.deskGestureTitle));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('desk-gesture-hint')), findsOneWidget);
+      expect(find.text(zh.settingsDeskPasswords), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    },
+  );
+
+  final shots = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
+  testWidgets('desktop controls screenshots', (tester) async {
+    addTearDown(tester.view.reset);
+    _mockDeskChannels(tester);
+    await loadShotFonts(tester);
+    final model = PosseAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+    );
+    addTearDown(model.dispose);
+    model.updateSettings((s) => s.deskGesturesSeen = true);
+    final key = GlobalKey();
+    Future<void> shot(String name) => tester.runAsync(() async {
+      final boundary =
+          key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 2);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File('$shots/$name.png').writeAsBytesSync(bytes!.buffer.asUint8List());
+      image.dispose();
+    });
+    for (final dark in [true, false]) {
+      for (final landscape in [false, true]) {
+        _surface(
+          tester,
+          landscape ? const Size(844, 390) : const Size(390, 844),
+          landscape
+              ? const FakeViewPadding(left: 47, bottom: 21)
+              : const FakeViewPadding(top: 47, bottom: 34),
+        );
+        await tester.pumpWidget(
+          RepaintBoundary(
+            key: key,
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: shotTheme(
+                posseTheme(dark ? Brightness.dark : Brightness.light),
+              ),
+              home: DeskPage(model: model),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final suffix =
+            '${landscape ? 'landscape' : 'portrait'}-${dark ? 'dark' : 'light'}';
+        await shot('desk-controls-$suffix');
+        await tester.tap(find.byKey(const Key('desk-toolbar-settings')));
+        await tester.pumpAndSettle();
+        await shot('desk-settings-$suffix');
+        tester.state<NavigatorState>(find.byType(Navigator)).pop();
+        await tester.pumpAndSettle();
+      }
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  }, skip: shots.isEmpty);
 
   test('the picture rises just enough to show the last tap', () {
     // 没点过不动
@@ -554,6 +863,22 @@ void main() {
     expect(deskLift(tapY: 790, screenHeight: 800, covered: 300), 300);
   });
 }
+
+DeskToolbar _toolbar({VoidCallback? onSettings, bool landscape = false}) =>
+    DeskToolbar(
+      landscape: landscape,
+      keyboardUp: false,
+      shortcuts: false,
+      debugOpen: false,
+      stopped: false,
+      onOrientation: () {},
+      onKeyboard: () {},
+      onShortcuts: () {},
+      onDebug: () {},
+      onSettings: onSettings ?? () {},
+      onDisconnect: () {},
+      onView: () {},
+    );
 
 void _surface(WidgetTester tester, Size size, FakeViewPadding inset) {
   tester.view.physicalSize = size;

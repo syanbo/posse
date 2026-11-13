@@ -21,52 +21,21 @@ class DeskChromeLease {
 
 final deskChromeLease = DeskChromeLease();
 
-/// 展开后这么久没有点、没有拖，胶囊收回去。再长就一直挡着顶上一行。
-const deskBarIdle = Duration(seconds: 4);
-
 /// 横屏快捷键栏的键高。竖屏仍是 [deskKeyBarBody]。
 const deskKeyBarDense = 32.0;
 
-/// 看桌面那条的开关。位置不在这里：竖屏和横屏各用一个值，页面自己记，不写入设置。
 class DeskChrome {
-  var expanded = false;
   var shortcuts = false;
-  Duration? idleFrom;
 
   /// 自己打开了快捷键，或系统键盘正开着（扩展键行贴在键盘上）。
   bool keysVisible(bool keyboardUp) => shortcuts || keyboardUp;
 
-  void toggleExpanded(Duration now) {
-    expanded = !expanded;
-    idleFrom = expanded ? now : null;
-  }
-
-  void noteActivity(Duration now) {
-    if (expanded) idleFrom = now;
-  }
-
   void toggleShortcuts() => shortcuts = !shortcuts;
-
-  /// 到点了才收。返回有没有收掉，好让界面决定要不要重建。
-  bool collapseIfIdle(Duration now) {
-    final from = idleFrom;
-    if (!expanded || from == null || now - from < deskBarIdle) return false;
-    expanded = false;
-    idleFrom = null;
-    return true;
-  }
 }
-
-/// 对齐用的 -1 到 1。0.5 是正中。
-double deskBarAlignment(double anchor) => (anchor * 2 - 1).clamp(-1.0, 1.0);
 
 /// 拖动时手指移动占「轨道长度减去胶囊在该方向上的长度」的比例。
 double deskBarTrack(double safeExtent, double barExtent) =>
     (safeExtent - barExtent).clamp(1.0, double.infinity);
-
-/// 横屏胶囊放在没有刘海的那一侧。左右安全区一样时靠右。
-bool deskBarOnRight({required double left, required double right}) =>
-    left >= right;
 
 /// 横屏画面让开左右刘海，宽度铺满剩下的。竖屏用整块舞台。
 EdgeInsets deskPicturePadding({

@@ -28,6 +28,7 @@ import 'mods.dart';
 import 'plugin.dart';
 import 'status.dart';
 import 'toolbar.dart';
+import 'settings_sheet.dart';
 import 'unlock.dart';
 import 'viewport.dart';
 import 'typing.dart';
@@ -80,10 +81,12 @@ class _DeskPageState extends State<DeskPage>
   final _chrome = DeskChrome();
   final _edges = DeskEdges();
   final _lease = Object();
-  // 竖屏默认右上角，横屏默认没有刘海那一侧的中间（第一次横屏时按刘海定左右）
-  final _anchorTop = ValueNotifier<Offset>(const Offset(1, 0));
-  final _anchorSide = ValueNotifier<Offset>(const Offset(1, 0.5));
-  var _sidePlaced = false;
+  late final _anchorTop = ValueNotifier(
+    widget.model.settings.deskToolbarPortrait,
+  );
+  late final _anchorSide = ValueNotifier(
+    widget.model.settings.deskToolbarLandscape,
+  );
 
   /// 最后一次单击在舞台里的纵坐标。键盘弹出时画面上移，让它不被盖住。
   double? _typeY;
@@ -92,7 +95,6 @@ class _DeskPageState extends State<DeskPage>
   StreamSubscription<Map<String, Object?>>? _deskFrames;
   RpcStream? _deskSub;
   PhoneRpc? _rpcNow;
-  Timer? _barTimer;
   Timer? _retry;
   Timer? _lockRetry;
   late final DeskInputLink _link;
@@ -164,7 +166,7 @@ class _DeskPageState extends State<DeskPage>
   var _background = false;
   var _debugOpen = false;
 
-  /// 悬浮球里点「手势」重新打开的提示，和第一次进页面的是同一层。
+  /// 悬浮工具条里点「手势」重新打开的提示，和第一次进页面的是同一层。
   var _hintOpen = false;
   var _keyboardUp = false;
   var _stopped = false;
@@ -252,7 +254,6 @@ class _DeskPageState extends State<DeskPage>
     _input.removeListener(_onTyped);
     _keyboard.dispose();
     _input.dispose();
-    _barTimer?.cancel();
     if (_ui != null) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
@@ -453,39 +454,14 @@ class _DeskPageState extends State<DeskPage>
     unawaited(HapticFeedback.lightImpact());
   }
 
-  void _toggleBar() {
-    setState(() => _chrome.toggleExpanded(_now));
-    _armBarTimer();
-  }
-
-  void _pokeBar() {
-    _chrome.noteActivity(_now);
-    _armBarTimer();
-  }
-
-  void _armBarTimer() {
-    _barTimer?.cancel();
-    final from = _chrome.idleFrom;
-    if (!_chrome.expanded || from == null) return;
-    _barTimer = Timer(deskBarIdle, () {
-      if (!mounted || from != _chrome.idleFrom) return;
-      if (_chrome.collapseIfIdle(from + deskBarIdle)) setState(() {});
+  void _saveBarPosition(bool landscape) {
+    widget.model.updateSettings((s) {
+      if (landscape) {
+        s.deskToolbarLandscape = _anchorSide.value;
+      } else {
+        s.deskToolbarPortrait = _anchorTop.value;
+      }
     });
-  }
-
-  /// 横屏第一次出现时按刘海定左右，之后由用户拖。
-  ValueNotifier<Offset> _sideAnchor(EdgeInsets pad) {
-    if (!_sidePlaced) {
-      _sidePlaced = true;
-      final right = deskBarOnRight(left: pad.left, right: pad.right);
-      _anchorSide.value = Offset(right ? 1 : 0, _anchorSide.value.dy);
-    }
-    return _anchorSide;
-  }
-
-  void _dragBar() {
-    _chrome.noteActivity(_now);
-    _armBarTimer();
   }
 
   void _toggleOrientation() {
@@ -494,13 +470,11 @@ class _DeskPageState extends State<DeskPage>
     final next = !landscape;
     widget.model.updateSettings((s) => s.deskLandscape = next);
     unawaited(lockDeskOrientation(next));
-    _pokeBar();
     setState(() {});
   }
 
   void _toggleShortcuts() {
     setState(() => _chrome.toggleShortcuts());
-    _pokeBar();
   }
 
   void _resetZoom() {
@@ -509,17 +483,28 @@ class _DeskPageState extends State<DeskPage>
       _gestures.viewport.panX = 0;
       _gestures.viewport.panY = 0;
     });
-    _pokeBar();
   }
 
   void _toggleDebug() {
     setState(() => _debugOpen = !_debugOpen);
-    _pokeBar();
   }
 
-  void _showHint() {
-    setState(() => _hintOpen = true);
-    _pokeBar();
+  Future<void> _showSettings() async {
+    _keyboard.unfocus();
+    final help = await showDeskSettings(
+      context,
+      widget.model,
+      forgetPasswords: () async {
+        _pendingSave = null;
+        await _passwords.forgetAll();
+        await _checkSaved();
+      },
+    );
+    if (!mounted) return;
+    setState(() {
+      _gestures.trackpad = widget.model.settings.deskTrackpad;
+      if (help == true) _hintOpen = true;
+    });
   }
 
   void _dismissHint() {
@@ -530,7 +515,6 @@ class _DeskPageState extends State<DeskPage>
   }
 
   Future<void> _disconnect() {
-    _pokeBar();
     if (_stopped) return _enqueue(() => _ensureBody(force: true));
     _stopped = true;
     _lockRetry?.cancel();
@@ -812,10 +796,9 @@ class _DeskPageState extends State<DeskPage>
   /// 这台电脑的公钥：按它记上次看的屏，换地址、重新扫码都不变。
   String? get _computerKey => widget.model.offer?.publicKeyB64;
 
-  /// 悬浮球的「画面」：选一块屏或一个窗口。选的屏记下来，窗口不记（关掉就没了）。让 Mac 切过去，
+  /// 悬浮工具条的「画面」：选一块屏或一个窗口。选的屏记下来，窗口不记（关掉就没了）。让 Mac 切过去，
   /// 切好了 Mac 推新的 displays，画面也换过来；新画面的大小、比例和原来的不一样，缩放回到 1 倍。
   Future<void> _pickView() async {
-    _pokeBar();
     final rpc = _rpcNow;
     if (rpc == null) return;
     final key = _computerKey;
@@ -1321,7 +1304,6 @@ class _DeskPageState extends State<DeskPage>
 
   /// 锁屏时输密码：弹层里输入，可以记住或忘掉。
   Future<void> _unlock() async {
-    _pokeBar();
     if (!_canSendPassword()) return;
     final key = _computerKey;
     final answer = await askMacPassword(
@@ -1376,7 +1358,6 @@ class _DeskPageState extends State<DeskPage>
 
   /// 用记住的密码解锁。
   Future<void> _unlockSaved() async {
-    _pokeBar();
     if (!_canSendPassword()) return;
     final key = _computerKey;
     if (key == null) return;
@@ -1417,7 +1398,7 @@ class _DeskPageState extends State<DeskPage>
     return true;
   }
 
-  /// 锁屏胶囊：和悬浮球一样的圆角和底色，按钮压到胶囊里面。
+  /// 锁屏胶囊：和悬浮工具条一样的圆角和底色，按钮压到胶囊里面。
   Widget _lockPill(PosseColors colors) {
     final unlocking = _unlockGate.busy(DateTime.now());
     final button = FilledButton.styleFrom(
@@ -1497,7 +1478,6 @@ class _DeskPageState extends State<DeskPage>
     } else {
       _keyboard.requestFocus();
     }
-    _pokeBar();
   }
 
   void _syncSystemUi() {
@@ -1582,6 +1562,16 @@ class _DeskPageState extends State<DeskPage>
       viewPadding: pad,
     );
     final top = pad.top < 8 ? 8.0 : pad.top;
+    final controlsTop = top + deskControlExtent + 8;
+    final bottom = math.max(8.0, pad.bottom);
+    final toolbarRoom =
+        MediaQuery.sizeOf(context).height -
+        controlsTop -
+        math.max(bottom, covered + 8);
+    final compactToolbar = toolbarRoom < deskControlExtent + 8;
+    final locked = _macLocked && _stats.video && !_background;
+    final panelTop =
+        controlsTop + (compactToolbar ? 0 : deskControlExtent + 16);
     return ClipRect(
       child: Stack(
         fit: StackFit.expand,
@@ -1623,72 +1613,85 @@ class _DeskPageState extends State<DeskPage>
               ),
             ),
           ),
-          // 和悬浮球同一高度，左右让出球的宽度，球吸在哪边都不压着
-          if (_macLocked && _stats.video && !_background)
+          if (!compactToolbar)
             Positioned(
-              top: top,
+              top: controlsTop,
+              left: pad.left + 8,
+              right: pad.right + 8,
+              bottom: bottom,
+              child: DeskBarSlot(
+                key: ValueKey(landscape),
+                anchor: landscape ? _anchorSide : _anchorTop,
+                bottomInset: math.max(0, covered + 8 - bottom),
+                onDragEnd: () => _saveBarPosition(landscape),
+                child: _toolbar(landscape),
+              ),
+            ),
+          // 临时面板避开默认的横排工具条；拖到面板后面的工具条不抢面板的点击。
+          if (locked || _debugOpen)
+            Positioned(
+              top: panelTop,
               left: 64 + pad.left,
               right: 64 + pad.right,
               child: Align(
                 alignment: Alignment.topCenter,
-                child: _lockPill(colors),
-              ),
-            ),
-          if (_debugOpen)
-            Positioned(
-              top: top,
-              // 两边让出悬浮球的宽度，它吸在哪边都不压着面板
-              left: 64 + pad.left,
-              right: 64 + pad.right,
-              child: ValueListenableBuilder<DeskStats>(
-                valueListenable: _statsTick,
-                builder: (context, stats, _) => Align(
-                  alignment: Alignment.topCenter,
-                  child: _debugPanel(colors, stats),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: math.max(
+                      0,
+                      MediaQuery.sizeOf(context).height -
+                          panelTop -
+                          math.max(bottom, covered + 8),
+                    ),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (locked) _lockPill(colors),
+                        if (locked && _debugOpen) const SizedBox(height: 8),
+                        if (_debugOpen)
+                          ValueListenableBuilder<DeskStats>(
+                            valueListenable: _statsTick,
+                            builder: (context, stats, _) =>
+                                _debugPanel(colors, stats),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
           Positioned(
             top: top,
-            left: pad.left + 4,
-            right: pad.right + 4,
-            // 键盘和快捷键栏弹出时球留在它们上面
-            bottom: math.max(pad.bottom < 8 ? 8.0 : pad.bottom, covered + 8),
-            child: ListenableBuilder(
-              listenable: widget.model,
-              builder: (context, _) {
-                return ValueListenableBuilder<DeskStats>(
-                  valueListenable: _statsTick,
-                  builder: (context, stats, _) => DeskBarSlot(
-                    anchor: landscape ? _sideAnchor(pad) : _anchorTop,
-                    onDrag: _dragBar,
-                    child: DeskToolbar(
-                      expanded: _chrome.expanded,
+            left: pad.left + 8,
+            right: pad.right + 8,
+            child: Row(
+              children: [
+                DeskBackButton(onBack: () => Navigator.maybePop(context)),
+                if (compactToolbar)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: _toolbar(landscape, compact: true),
+                    ),
+                  )
+                else
+                  const Spacer(),
+                ListenableBuilder(
+                  listenable: widget.model,
+                  builder: (context, _) => ValueListenableBuilder<DeskStats>(
+                    valueListenable: _statsTick,
+                    builder: (context, stats, _) => DeskStatusPill(
                       latency: widget.model.latency,
                       unresponsive: widget.model.unresponsive,
                       fps: stats.fps,
                       still: stats.still,
                       video: stats.video,
-                      landscape: landscape,
-                      keyboardUp: _keyboardUp,
-                      shortcuts: _chrome.shortcuts,
-                      debugOpen: _debugOpen,
-                      stopped: _stopped,
-                      onToggle: _toggleBar,
-                      onBack: () => Navigator.maybePop(context),
-                      onOrientation: _toggleOrientation,
-                      onKeyboard: _toggleKeyboard,
-                      onShortcuts: _toggleShortcuts,
-                      onDebug: _toggleDebug,
-                      onHelp: _showHint,
-                      onDisconnect: () => unawaited(_disconnect()),
-                      onView: _displays.list.isNotEmpty
-                          ? () => unawaited(_pickView())
-                          : null,
                     ),
                   ),
-                );
-              },
+                ),
+              ],
             ),
           ),
           Positioned(
@@ -1719,6 +1722,22 @@ class _DeskPageState extends State<DeskPage>
       ),
     );
   }
+
+  Widget _toolbar(bool landscape, {bool compact = false}) => DeskToolbar(
+    landscape: landscape,
+    compact: compact,
+    keyboardUp: _keyboardUp,
+    shortcuts: _chrome.shortcuts,
+    debugOpen: _debugOpen,
+    stopped: _stopped,
+    onOrientation: _toggleOrientation,
+    onKeyboard: _toggleKeyboard,
+    onShortcuts: _toggleShortcuts,
+    onDebug: _toggleDebug,
+    onSettings: () => unawaited(_showSettings()),
+    onDisconnect: () => unawaited(_disconnect()),
+    onView: _displays.list.isNotEmpty ? () => unawaited(_pickView()) : null,
+  );
 
   /// 手指移动和惯性只重建这一层。顶栏、快捷键栏、调试浮层不在这里。
   Widget _pictureLayer(PosseColors colors, Size size) {
@@ -1855,7 +1874,6 @@ class _DeskPageState extends State<DeskPage>
                 FilledButton.icon(
                   key: const Key('desk-retry'),
                   onPressed: () {
-                    _pokeBar();
                     unawaited(_ensure(force: true));
                   },
                   icon: const Icon(Icons.refresh_rounded, size: Ic.medium),

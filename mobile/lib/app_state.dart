@@ -157,6 +157,8 @@ class AppSettings {
     this.deskZoom = 1,
     this.deskWatch = true,
     this.deskLandscape = false,
+    this.deskToolbarPortrait = const Offset(1, 0),
+    this.deskToolbarLandscape = const Offset(1, 0),
     this.deskGesturesSeen = false,
     this.deskTrackpad = true,
     this.historyByFolder = false,
@@ -203,6 +205,10 @@ class AppSettings {
 
   /// 看桌面时锁横屏。离开页面恢复原来的方向，下次进来按这个锁。
   bool deskLandscape;
+
+  /// 工具条在横竖屏各自可移动范围内的位置（0 到 1），不含键盘临时避让。
+  Offset deskToolbarPortrait;
+  Offset deskToolbarLandscape;
 
   /// 看桌面的手势提示已经关过。只出现一次。
   bool deskGesturesSeen;
@@ -267,6 +273,8 @@ class AppSettings {
     'deskZoom': deskZoom,
     'deskWatch': deskWatch,
     'deskLandscape': deskLandscape,
+    'deskToolbarPortrait': [deskToolbarPortrait.dx, deskToolbarPortrait.dy],
+    'deskToolbarLandscape': [deskToolbarLandscape.dx, deskToolbarLandscape.dy],
     'deskGesturesSeen': deskGesturesSeen,
     'deskTrackpad': deskTrackpad,
     'deskVersion': deskVersion,
@@ -328,6 +336,15 @@ class AppSettings {
       if (map['deskLandscape'] is bool) {
         out.deskLandscape = map['deskLandscape'] as bool;
       }
+      Offset toolbarPosition(Object? value) {
+        if (value case [num x, num y] when x.isFinite && y.isFinite) {
+          return Offset(x.toDouble().clamp(0, 1), y.toDouble().clamp(0, 1));
+        }
+        return const Offset(1, 0);
+      }
+
+      out.deskToolbarPortrait = toolbarPosition(map['deskToolbarPortrait']);
+      out.deskToolbarLandscape = toolbarPosition(map['deskToolbarLandscape']);
       if (map['deskGesturesSeen'] is bool) {
         out.deskGesturesSeen = map['deskGesturesSeen'] as bool;
       }
