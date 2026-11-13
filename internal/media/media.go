@@ -104,6 +104,11 @@ func NewScanner(agent, sid, transcript string) *Scanner {
 	return &Scanner{agent: agent, sid: sid, transcript: transcript}
 }
 
+// Found 报告找没找到会话文件：没找到时列不出内嵌的图片，不能说成会话里没有图片。
+func (s *Scanner) Found() bool {
+	return s != nil && s.images != nil
+}
+
 // Same 报告 s 是不是这个会话的；会话 ID 和会话文件是 agent 启动后才报上来的，变了要换一个 Scanner。nil 不是任何会话的。
 func (s *Scanner) Same(agent, sid, transcript string) bool {
 	return s != nil && s.agent == agent && s.sid == sid && s.transcript == transcript

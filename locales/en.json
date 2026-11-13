@@ -3661,6 +3661,10 @@
   "@imagesNone": {
     "description": "Images panel note."
   },
+  "imagesWaiting": "Images will appear once the session has started.",
+  "@imagesWaiting": {
+    "description": "Images panel note while the session file is not found yet."
+  },
   "imagesNoneGenerated": "The agent hasn’t generated any images or videos yet.",
   "@imagesNoneGenerated": {
     "description": "Images panel note in the Generated segment."

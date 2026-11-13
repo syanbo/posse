@@ -26,10 +26,13 @@ type imagesView struct {
 	pasted  []imageItem
 	made    []imageItem // agent 生成的，新的在前，最多 maxMadeImages 张
 	madeAll int         // agent 生成的一共几张
-	poll    panelPoll
-	failed  map[string]bool // 解码失败的图片，不再重试
-	tab     int             // 顶部的分段：0 是 agent 生成的，1 是粘贴的
-	tabSet  bool            // 用户点过分段；没点过时按有没有图片自动选
+	found   bool        // 找到了会话文件；没找到时内嵌的图片列不出来，不能说没有图片
+	// round 标记正在进行的这一轮扫描：面板关掉再打开后终端 ID 一样，靠它认出上一轮的结果
+	round  *struct{}
+	poll   panelPoll
+	failed map[string]bool // 解码失败的图片，不再重试
+	tab    int             // 顶部的分段：0 是 agent 生成的，1 是粘贴的
+	tabSet bool            // 用户点过分段；没点过时按有没有图片自动选
 
 	hover   string // 悬停的图片的 key
 	big     *ui.Bitmap
@@ -50,6 +53,8 @@ const (
 	thumbMaxH     = 240  // 缩略图最高显示多少
 	// maxMadeImages 是面板里最多列几张 agent 生成的图片：用手机、浏览器的会话动辄几百张截图，缩略图都留着太占内存
 	maxMadeImages = 40
+	// thumbFlushEvery 是做缩略图时多久交给界面一批：一张约 20～50 ms，每张都重建界面太频繁
+	thumbFlushEvery = 150 * time.Millisecond
 )
 
 func wrapItems(items []media.Item) []imageItem {
@@ -82,39 +87,24 @@ func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 		have[it.Key] = it.thumb
 	}
 	skip := maps.Clone(v.failed)
+	round := &struct{}{}
+	v.round = round
 	go func() {
 		p, m := scanner.Scan()
-		all := len(m)
+		all, found := len(m), scanner.Found()
 		pasted, made := wrapItems(p), wrapItems(m[:min(len(m), maxMadeImages)])
-		thumbs := map[string]*image.RGBA{}
-		var failed []string
-		for _, it := range slices.Concat(made, pasted) {
-			if have[it.Key] == nil && !skip[it.Key] {
-				if img, err := media.Decode(it.Item, thumbWidth); err == nil {
-					thumbs[it.Key] = img
-				} else {
-					failed = append(failed, it.Key)
-				}
+		for _, items := range [][]imageItem{pasted, made} {
+			for i := range items {
+				items[i].thumb = have[items[i].Key]
 			}
 		}
+		// 先交出列表，缩略图在后面分批补上：几十张截图全解完要一两秒，不能一直显示"正在读取"
 		a.update(func() {
 			v := &a.images
-			if v.term != id {
+			if v.term != id || v.round != round {
 				return
 			}
-			for _, items := range [][]imageItem{pasted, made} {
-				for i := range items {
-					if bm := have[items[i].Key]; bm != nil {
-						items[i].thumb = bm
-					} else if img := thumbs[items[i].Key]; img != nil {
-						items[i].thumb = ui.NewBitmap(img)
-					}
-				}
-			}
-			for _, k := range failed {
-				v.markFailed(k)
-			}
-			v.scanner, v.pasted, v.made, v.madeAll = scanner, pasted, made, all
+			v.scanner, v.pasted, v.made, v.madeAll, v.found = scanner, pasted, made, all, found
 			// 没点过分段时，生成的为空、粘贴的有就看粘贴的
 			if !v.tabSet {
 				v.tab = 0
@@ -122,8 +112,56 @@ func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 					v.tab = 1
 				}
 			}
-			v.poll.done()
+			v.poll.at = time.Now()
 		})
+		// 按面板上的顺序做：当前分段的在前，最新的在最上面
+		order := slices.Concat(made, pasted)
+		if len(made) == 0 {
+			order = slices.Concat(pasted, made)
+		}
+		thumbs := map[string]*image.RGBA{}
+		var failed []string
+		flush := func(last bool) {
+			got, bad := thumbs, failed
+			thumbs, failed = map[string]*image.RGBA{}, nil
+			a.update(func() {
+				v := &a.images
+				if v.term != id || v.round != round {
+					return
+				}
+				for _, items := range [][]imageItem{v.pasted, v.made} {
+					for i := range items {
+						if img := got[items[i].Key]; img != nil && items[i].thumb == nil {
+							items[i].thumb = ui.NewBitmap(img)
+						}
+					}
+				}
+				for _, k := range bad {
+					v.markFailed(k)
+				}
+				if last {
+					v.poll.done()
+				}
+			})
+		}
+		started, sentFirst := time.Now(), false
+		for _, it := range order {
+			if it.thumb != nil || skip[it.Key] {
+				continue
+			}
+			if img, err := media.Decode(it.Item, thumbWidth); err == nil {
+				thumbs[it.Key] = img
+			} else {
+				failed = append(failed, it.Key)
+			}
+			// 最上面那张做好就先交，其余的攒一批再交
+			if len(thumbs)+len(failed) == 1 && !sentFirst || time.Since(started) >= thumbFlushEvery {
+				sentFirst = true
+				flush(false)
+				started = time.Now()
+			}
+		}
+		flush(true)
 	}()
 }
 
@@ -305,6 +343,9 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 					return
 				case v.poll.at.IsZero():
 					usageNote(c, L(c).CommonLoading())
+					return
+				case len(v.made) == 0 && len(v.pasted) == 0 && !v.found:
+					usageNote(c, L(c).ImagesWaiting())
 					return
 				case len(v.made) == 0 && len(v.pasted) == 0:
 					usageNote(c, L(c).ImagesNone())

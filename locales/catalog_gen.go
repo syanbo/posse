@@ -9305,6 +9305,20 @@ func (msgs Messages) ImagesNone() string {
 	return Catalog.Format(msgs.locale, "imagesNone", nil)
 }
 
+// ImagesWaiting says "Images will appear once the session has started."
+// in the language the app shows.
+//
+// Images panel note while the session file is not found yet.
+func ImagesWaiting() string { return In(i18n.Locale()).ImagesWaiting() }
+
+// ImagesWaiting says "Images will appear once the session has started."
+// in the language of msgs.
+//
+// Images panel note while the session file is not found yet.
+func (msgs Messages) ImagesWaiting() string {
+	return Catalog.Format(msgs.locale, "imagesWaiting", nil)
+}
+
 // ImagesNoneGenerated says "The agent hasn’t generated any images or videos yet."
 // in the language the app shows.
 //

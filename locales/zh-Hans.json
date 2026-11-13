@@ -600,6 +600,7 @@
   "imagesGeneratedTab": "生成",
   "imagesImageLabel": "图片 {name}",
   "imagesNone": "这个会话还没有图片或视频。",
+  "imagesWaiting": "会话开始后在这里显示图片和视频。",
   "imagesNoneGenerated": "agent 还没有生成图片或视频。",
   "imagesNonePasted": "这个会话还没有粘贴过图片。",
   "imagesOpenInPreview": "用系统预览打开",

@@ -122,10 +122,19 @@ type claudeBlock struct {
 		FilePath string `json:"file_path"`
 	} `json:"input"`
 	Content json.RawMessage `json:"content"`
-	Source  struct {
+	// 扫描时不取 data：截图的 base64 一张几 MB，只在读回那一张时才要（claudeImageData）
+	Source struct {
 		Type      string `json:"type"`
 		MediaType string `json:"media_type"`
-		Data      string `json:"data"`
+	} `json:"source"`
+}
+
+// claudeImageData 是读回图片时用的内容块，带着 base64。
+type claudeImageData struct {
+	Type   string `json:"type"`
+	Source struct {
+		Type string `json:"type"`
+		Data string `json:"data"`
 	} `json:"source"`
 }
 
@@ -475,7 +484,7 @@ func ReadToolImage(path string, img ToolImage) ([]byte, error) {
 		if bl.Type != "tool_result" {
 			continue
 		}
-		var items []claudeBlock
+		var items []claudeImageData
 		if json.Unmarshal(bl.Content, &items) != nil {
 			continue
 		}
