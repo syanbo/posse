@@ -467,7 +467,7 @@ func (c *conn) dispatch(req request) error {
 		return c.reply(req.ID, map[string]any{})
 	case "status.get":
 		return c.reply(req.ID, s.status())
-	case "posse.push.register":
+	case "posse.push.register", "posse.push.configure":
 		return c.registerPush(req.ID, p)
 	case "posse.push.presence":
 		var a struct {

@@ -22,6 +22,10 @@ import (
 const (
 	kindPush      byte = 0x07
 	kindPushReply byte = 0x87
+	// 新类型让旧中转直接忽略，不能把只更新角标的包误发成带声音的通知。
+	kindPushOptions byte = 0x08
+	pushNoAlert     byte = 2
+	pushProbe       byte = 4
 
 	NonceLen    = 16
 	CollapseLen = 16
@@ -55,6 +59,8 @@ const (
 type Push struct {
 	Nonce    [NonceLen]byte
 	Sandbox  bool
+	NoAlert  bool
+	Probe    bool
 	Token    []byte // APNs 设备 token（二进制）
 	Collapse [CollapseLen]byte
 	Badge    uint16
@@ -66,10 +72,20 @@ func EncodePush(p Push, c *Credential, now time.Time) ([]byte, error) {
 	if len(p.Token) == 0 || len(p.Token) > maxAPNsToken || len(p.Cipher) > MaxPushCipher {
 		return nil, errors.New("push too large")
 	}
-	out := append(append([]byte{}, magic...), kindPush)
+	kind := kindPush
+	if p.NoAlert || p.Probe {
+		kind = kindPushOptions
+	}
+	out := append(append([]byte{}, magic...), kind)
 	var flags byte
 	if p.Sandbox {
 		flags |= PushSandbox
+	}
+	if p.NoAlert {
+		flags |= pushNoAlert
+	}
+	if p.Probe {
+		flags |= pushProbe
 	}
 	out = append(out, flags)
 	out = append(out, p.Nonce[:]...)
@@ -94,6 +110,10 @@ func parsePush(b []byte) (Push, signed, bool) {
 		return p, signed{}, false
 	}
 	p.Sandbox = b[off]&PushSandbox != 0
+	if b[4] == kindPushOptions {
+		p.NoAlert = b[off]&pushNoAlert != 0
+		p.Probe = b[off]&pushProbe != 0
+	}
 	off++
 	copy(p.Nonce[:], b[off:])
 	off += NonceLen
@@ -176,6 +196,10 @@ func (s *Server) handlePush(b []byte, from netip.AddrPort) {
 		return
 	}
 	now := s.now()
+	if p.Probe {
+		reply(PushOK)
+		return
+	}
 	ps.mu.Lock()
 	if ps.seen == nil {
 		ps.seen = map[[NonceLen]byte]pushSeen{}

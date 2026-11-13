@@ -165,6 +165,8 @@ class AppSettings {
     this.homeByStatus = false,
     this.skippedUpdateBuild = 0,
     this.phoneId = '',
+    this.pushEnabled = true,
+    this.badgeEnabled = true,
     this.pushWaiting = true,
     this.pushDone = true,
     this.pushAsked = false,
@@ -237,7 +239,9 @@ class AppSettings {
   /// 这台手机的安装 ID，第一次启动时生成。电脑靠它把同一台手机扫过的几个码认成一台。
   String phoneId;
 
-  /// 手机推送：agent 等你处理时通知、完成没看时通知。两项都关就不向电脑注册。
+  /// 横幅、声音与图标角标独立；类型选择只筛通知，不改变角标计数。
+  bool pushEnabled;
+  bool badgeEnabled;
   bool pushWaiting;
   bool pushDone;
 
@@ -275,6 +279,8 @@ class AppSettings {
     'deskFps': deskFps,
     'deskResolution': deskResolution,
     'phoneId': phoneId,
+    'pushEnabled': pushEnabled,
+    'badgeEnabled': badgeEnabled,
     'pushWaiting': pushWaiting,
     'pushDone': pushDone,
     'pushAsked': pushAsked,
@@ -377,6 +383,14 @@ class AppSettings {
         out.pushWaiting = map['pushWaiting'] as bool;
       }
       if (map['pushDone'] is bool) out.pushDone = map['pushDone'] as bool;
+      // 旧版两类都关等于退出推送，升级不能替用户重新打开。
+      final wasEnabled = out.pushWaiting || out.pushDone;
+      out.pushEnabled = map['pushEnabled'] is bool
+          ? map['pushEnabled'] as bool
+          : wasEnabled;
+      out.badgeEnabled = map['badgeEnabled'] is bool
+          ? map['badgeEnabled'] as bool
+          : wasEnabled;
       if (map['pushAsked'] is bool) out.pushAsked = map['pushAsked'] as bool;
       if (map['backgroundKeep'] is bool) {
         out.backgroundKeep = map['backgroundKeep'] as bool;
@@ -773,6 +787,7 @@ class PosseAppModel extends ChangeNotifier {
     restored = true;
     notifyListeners();
     push?.onOpened = () => unawaited(_openFromPush());
+    await registerPush();
     final active = saved.current ?? saved.computers.firstOrNull;
     // 冷启动是点通知起来的：连上默认那台之后再处理，要的是另一台就切过去；默认那台连不上也照样处理
     try {
@@ -1182,7 +1197,7 @@ class PosseAppModel extends ChangeNotifier {
   var _registerAgain = false;
 
   /// 向连着的电脑注册推送（每条新连接一次，改了开关再一次）：第一次时弹系统的通知权限框。
-  /// 两项都关、没给权限时也告诉电脑，免得它接着推。
+  /// 开关和系统权限分别同步；角标不依赖通知类型选择。
   Future<void> registerPush() async {
     final p = push;
     if (p == null) return;
@@ -1205,35 +1220,73 @@ class PosseAppModel extends ChangeNotifier {
 
   Future<void> _registerOnce(PushPlatform p) async {
     final current = rpc;
-    if (current == null) return;
     Future<void> unregister(PushStatus status) async {
       pushStatus = status;
-      try {
-        await current.call('posse.push.register', {'token': ''});
-      } catch (_) {}
+      await current?.call('posse.push.register', {'token': ''});
     }
 
-    if (!settings.pushWaiting && !settings.pushDone) {
-      return unregister(PushStatus.off);
-    }
     try {
-      var auth = await p.authorization();
-      if (auth == 'notDetermined' && !settings.pushAsked) {
-        updateSettings((s) => s.pushAsked = true);
-        auth = await p.request() ? 'authorized' : 'denied';
+      await p.configure(
+        alerts: settings.pushEnabled,
+        badge: settings.badgeEnabled,
+      );
+      _badge = null;
+      _updateBadge();
+      final wantsAlerts =
+          settings.pushEnabled && (settings.pushWaiting || settings.pushDone);
+      if (!wantsAlerts && !settings.badgeEnabled) {
+        return await unregister(PushStatus.off);
       }
-      if (auth != 'authorized') return await unregister(PushStatus.denied);
-      final res = await current.call('posse.push.register', {
+      var auth = await p.authorization();
+      if (auth.status == 'notDetermined' &&
+          !settings.pushAsked &&
+          current != null) {
+        updateSettings((s) => s.pushAsked = true);
+        await p.request();
+        auth = await p.authorization();
+      }
+      _badgeAllowed = auth.badge;
+      _updateBadge();
+      final alerts = wantsAlerts && auth.alerts;
+      final badge = settings.badgeEnabled && auth.badge;
+      final denied =
+          (wantsAlerts && !auth.alerts) ||
+          (settings.badgeEnabled && !auth.badge);
+      if (!alerts && !badge) {
+        return await unregister(PushStatus.denied);
+      }
+      if (current == null) {
+        pushStatus = denied ? PushStatus.denied : PushStatus.unknown;
+        return;
+      }
+      final params = <String, Object?>{
         'token': await p.token(),
         'key': await p.key(),
         'sandbox': await p.sandbox(),
         'waiting': settings.pushWaiting,
         'done': settings.pushDone,
-      });
-      pushStatus = res['relay'] == true ? PushStatus.on : PushStatus.noRelay;
+        'alerts': alerts,
+        'badge': badge,
+      };
+      Map<String, Object?> res;
+      try {
+        res = await current.call('posse.push.configure', params);
+      } on RpcException catch (e) {
+        if (!e.missingMethod) rethrow;
+        // 旧电脑关闭某一类型时也不推角标；只有全部开启的默认组合兼容。
+        if (!alerts || !badge || !settings.pushWaiting || !settings.pushDone) {
+          return await unregister(PushStatus.unsupportedComputer);
+        }
+        res = await current.call('posse.push.register', params);
+      }
+      pushStatus = denied
+          ? PushStatus.denied
+          : res['relay'] != true
+          ? PushStatus.noRelay
+          : res['badgeOnly'] == false
+          ? PushStatus.unsupportedRelay
+          : PushStatus.on;
       unawaited(p.setLanguage(posseLocale()).catchError((Object _) {}));
-      _badge = null;
-      _updateBadge();
     } on RpcException catch (e) {
       pushStatus = e.missingMethod
           ? PushStatus.unsupportedComputer
@@ -1254,18 +1307,18 @@ class PosseAppModel extends ChangeNotifier {
   }
 
   int? _badge;
+  bool _badgeAllowed = false;
 
   /// App 图标上的角标：等你处理和完成没看的会话数，和电脑推送带的口径一样。
   void _updateBadge() {
     final p = push;
-    if (p == null ||
-        (pushStatus != PushStatus.on && pushStatus != PushStatus.noRelay)) {
-      return;
-    }
+    if (p == null) return;
     var n = 0;
-    for (final list in tabs.values) {
-      for (final t in list) {
-        if (t.posse == 'waiting' || t.posse == 'unread') n++;
+    if (settings.badgeEnabled && _badgeAllowed) {
+      for (final list in tabs.values) {
+        for (final t in list) {
+          if (t.posse == 'waiting' || t.posse == 'unread') n++;
+        }
       }
     }
     if (n == _badge) return;

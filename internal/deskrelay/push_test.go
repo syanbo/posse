@@ -254,3 +254,45 @@ func ecdsaVerify(pub *ecdsa.PublicKey, sum, sig []byte) bool {
 	}
 	return ecdsa.Verify(pub, sum, new(big.Int).SetBytes(sig[:32]), new(big.Int).SetBytes(sig[32:]))
 }
+
+func TestPushIndependentPayload(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		noAlert bool
+		badge   uint16
+	}{
+		{"both", false, 3}, {"notification only", false, 0}, {"badge only", true, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := samplePush()
+			p.NoAlert, p.Badge = tc.noAlert, tc.badge
+			packet, err := EncodePush(p, nil, time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (packet[4] == kindPushOptions) != tc.noAlert {
+				t.Fatalf("packet kind %x", packet[4])
+			}
+			got, _, ok := parsePush(packet)
+			if !ok || got.NoAlert != p.NoAlert || got.Badge != p.Badge {
+				t.Fatalf("roundtrip %+v", got)
+			}
+			var payload map[string]any
+			if err := json.Unmarshal(Payload(got), &payload); err != nil {
+				t.Fatal(err)
+			}
+			aps := payload["aps"].(map[string]any)
+			if aps["badge"] != float64(tc.badge) {
+				t.Fatalf("badge %v", aps)
+			}
+			for _, k := range []string{"alert", "sound", "mutable-content"} {
+				if _, present := aps[k]; present == tc.noAlert {
+					t.Fatalf("%s: %v", k, aps)
+				}
+			}
+			if _, present := payload["e"]; present == tc.noAlert {
+				t.Fatalf("cipher: %v", payload)
+			}
+		})
+	}
+}

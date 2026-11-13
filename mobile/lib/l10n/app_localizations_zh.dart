@@ -1733,8 +1733,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsProjectMeta => '项目显示分支和路径';
 
   @override
-  String get settingsPushDenied =>
-      'Posse 的通知没打开。在 iPhone 的「设置 › Posse › 通知」里打开。';
+  String get settingsPushDenied => '已开启的通知或角标被 iOS 限制，请在系统设置中允许。';
 
   @override
   String get settingsPushDone => 'agent 完成时';
@@ -1749,10 +1748,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsPushOff => '不推送通知。';
 
   @override
-  String get settingsPushOldComputer => '这台电脑上的 Posse 太旧，不支持推送，先更新。';
+  String get settingsPushOldComputer => '更新这台电脑上的 Posse，才能独立控制通知和角标。';
 
   @override
   String get settingsPushOn => 'Posse 在后台、Mac 没人用时，电脑会推送到这台手机。';
+
+  @override
+  String get settingsPushBadge => '角标';
+
+  @override
+  String get settingsPushOldRelay => '中转尚未确认支持只更新角标，请更新中转或重连后再试。已开启的通知不受此限制。';
+
+  @override
+  String get settingsPushSystemSettings => '打开系统设置';
 
   @override
   String get settingsPushTitle => '通知';

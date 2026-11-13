@@ -3131,7 +3131,7 @@ abstract class AppLocalizations {
   /// Settings › Notifications: note when the system permission is denied.
   ///
   /// In en, this message translates to:
-  /// **'Notifications are off for Posse. Turn them on in the iPhone’s Settings › Posse › Notifications.'**
+  /// **'Some enabled notification or badge options are blocked by iOS. Allow them in System Settings.'**
   String get settingsPushDenied;
 
   /// Settings › Notifications: switch for notifications when an agent finishes a turn the user hasn't seen.
@@ -3161,7 +3161,7 @@ abstract class AppLocalizations {
   /// Settings › Notifications: note when the Mac doesn't support push.
   ///
   /// In en, this message translates to:
-  /// **'Posse on this Mac is too old to send notifications. Update it first.'**
+  /// **'Update Posse on this Mac to control notifications and badges independently.'**
   String get settingsPushOldComputer;
 
   /// Settings › Notifications: note when push is working.
@@ -3169,6 +3169,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The Mac notifies this phone while Posse is in the background and nobody is using the Mac.'**
   String get settingsPushOn;
+
+  /// Settings › Notifications: independent app icon badge switch.
+  ///
+  /// In en, this message translates to:
+  /// **'App Icon Badge'**
+  String get settingsPushBadge;
+
+  /// Settings › Notifications: relay does not support badge-only pushes.
+  ///
+  /// In en, this message translates to:
+  /// **'The relay hasn’t confirmed badge-only support. Update the relay or reconnect to try again. Enabled notifications are unaffected.'**
+  String get settingsPushOldRelay;
+
+  /// Settings › Notifications: open the iOS notification settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open System Settings'**
+  String get settingsPushSystemSettings;
 
   /// Settings: section title for push notifications.
   ///

@@ -17,6 +17,10 @@ final class NotificationService: UNNotificationServiceExtension {
       (request.content.mutableCopy() as? UNMutableNotificationContent)
       ?? UNMutableNotificationContent()
     self.content = content
+    // 已经在路上的通知也不能在关闭角标后把旧计数带回来。
+    if UserDefaults(suiteName: pushGroup)?.object(forKey: "pushBadge") as? Bool == false {
+      content.badge = 0
+    }
     let strings = PushStrings()
     content.title = "Posse"
     content.body = strings.text("fallbackBody")

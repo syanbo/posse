@@ -121,6 +121,53 @@ func TestPushNotify(t *testing.T) {
 	case <-time.After(300 * time.Millisecond):
 	}
 
+	// 新开关独立于类型选择，探测本身不能送到 APNs。
+	for _, tc := range []struct {
+		name                         string
+		alerts, badge, waiting, done bool
+		kind                         string
+		wantAlert, wantBadge         bool
+	}{
+		{"both", true, true, true, true, PushWaiting, true, true},
+		{"badge only", false, true, true, true, PushWaiting, false, true},
+		{"notification only", true, false, true, true, PushWaiting, true, false},
+		{"disabled kind still updates badge", true, true, true, false, PushDone, false, true},
+		{"no selected kinds still updates badge", true, true, false, false, PushDone, false, true},
+		{"both off", false, false, true, true, PushWaiting, false, false},
+		{"disabled kind without badge", true, false, true, false, PushDone, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg["alerts"], reg["badge"] = tc.alerts, tc.badge
+			reg["waiting"], reg["done"] = tc.waiting, tc.done
+			r := result(t, p.next(p.call("posse.push.configure", reg)))
+			if r["badgeOnly"] != true {
+				t.Fatalf("capability result %v", r)
+			}
+			select {
+			case <-pusher.got:
+				t.Fatal("capability probe reached APNs")
+			default:
+			}
+			want := tc.wantAlert || tc.wantBadge
+			if sent := srv.Notify("t_1", tc.kind); sent != want {
+				t.Fatalf("sent=%v want=%v", sent, want)
+			}
+			if !want {
+				return
+			}
+			select {
+			case got := <-pusher.got:
+				if got.NoAlert == tc.wantAlert || (got.Badge > 0) != tc.wantBadge {
+					t.Fatalf("push %+v", got)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("no push reached relay")
+			}
+		})
+	}
+	reg["alerts"], reg["badge"], reg["waiting"] = true, true, true
+	result(t, p.next(p.call("posse.push.configure", reg)))
+
 	// APNs 说 token 失效：删掉这条注册
 	pusher.result = deskrelay.PushBadToken
 	srv.Notify("t_1", PushWaiting)
@@ -179,5 +226,41 @@ func TestPushPlainFits(t *testing.T) {
 	short := pushBody{V: 1, Message: "hi"}
 	if p, _ := json.Marshal(short); string(pushPlain(short)) != string(p) {
 		t.Fatal("short body changed")
+	}
+}
+
+func TestPushPreferencesPersist(t *testing.T) {
+	home := t.TempDir()
+	p, err := openPairing(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	on, off := true, false
+	p.setPush(PushTarget{Phone: "phone", Token: "aa", Waiting: true, Alerts: &off, Badge: &on})
+	back, err := openPairing(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := back.pushTargets()
+	if len(got) != 1 || got[0].Alerts == nil || *got[0].Alerts || got[0].Badge == nil || !*got[0].Badge {
+		t.Fatalf("stored preferences %+v", got)
+	}
+}
+
+func TestOldRelayBadgeProbe(t *testing.T) {
+	rc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rc.Close()
+	// 旧中转不认识新包类型，不回执也不投递。
+	srv, err := New(t.TempDir(), &fakeHost{}, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	srv.SetQUIC(QUICOptions{Relay: func() deskrelay.Config { return deskrelay.Config{Relay: rc.LocalAddr().String()} }})
+	if srv.probeBadgeOnly(PushTarget{Token: "abcd"}) {
+		t.Fatal("old relay reported support")
 	}
 }

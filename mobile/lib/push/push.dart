@@ -4,9 +4,21 @@ import 'package:flutter/services.dart';
 
 /// 推送的原生一侧（iOS 的 PushPlugin.swift）：通知权限、APNs token、推送密钥、角标、点过的通知。
 /// 方案见 docs/plans/push.md。测试里换成假的。
+class PushAuthorization {
+  const PushAuthorization(
+    this.status, {
+    this.alerts = false,
+    this.badge = false,
+  });
+
+  /// notDetermined、denied 或 authorized；系统的横幅和角标还可分别关闭。
+  final String status;
+  final bool alerts;
+  final bool badge;
+}
+
 abstract class PushPlatform {
-  /// notDetermined、denied 或 authorized。
-  Future<String> authorization();
+  Future<PushAuthorization> authorization();
   Future<bool> request();
 
   /// APNs 设备 token（hex）。
@@ -17,6 +29,8 @@ abstract class PushPlatform {
   Future<bool> sandbox();
   Future<void> setLanguage(String tag);
   Future<void> setBadge(int count);
+  Future<void> configure({required bool alerts, required bool badge});
+  Future<void> openSettings();
 
   /// 点过、还没处理的通知：c 电脑公钥、wt 工作区、tab 终端 ID。
   Future<Map<String, String>?> takeOpened();
@@ -39,8 +53,26 @@ class ChannelPush implements PushPlatform {
   }
 
   @override
-  Future<String> authorization() async =>
-      await _channel.invokeMethod<String>('authorization') ?? 'denied';
+  Future<PushAuthorization> authorization() async {
+    final value = await _channel.invokeMapMethod<String, Object?>(
+      'authorization',
+    );
+    return PushAuthorization(
+      value?['status'] as String? ?? 'denied',
+      alerts: value?['alerts'] == true,
+      badge: value?['badge'] == true,
+    );
+  }
+
+  @override
+  Future<void> configure({required bool alerts, required bool badge}) =>
+      _channel.invokeMethod<void>('configure', {
+        'alerts': alerts,
+        'badge': badge,
+      });
+
+  @override
+  Future<void> openSettings() => _channel.invokeMethod<void>('openSettings');
 
   @override
   Future<bool> request() async =>
@@ -92,8 +124,11 @@ enum PushStatus {
   /// 这台设备不支持（安卓、测试）
   unsupported,
 
-  /// 两类通知都关了
+  /// 通知和角标都不需要远程更新。
   off,
+
+  /// 中转尚不支持只更新角标的推送。
+  unsupportedRelay,
 
   /// 系统设置里没允许通知
   denied,

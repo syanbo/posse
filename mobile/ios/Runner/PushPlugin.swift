@@ -36,7 +36,13 @@ final class PushPlugin: NSObject, UNUserNotificationCenterDelegate {
         case .denied: status = "denied"
         default: status = "authorized"
         }
-        DispatchQueue.main.async { result(status) }
+        DispatchQueue.main.async {
+          result([
+            "status": status,
+            "alerts": settings.alertSetting == .enabled || settings.soundSetting == .enabled,
+            "badge": settings.badgeSetting == .enabled,
+          ])
+        }
       }
     case "request":
       center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
@@ -55,6 +61,20 @@ final class PushPlugin: NSObject, UNUserNotificationCenterDelegate {
       result(PushPlugin.sandbox)
     case "setLanguage":
       defaults?.set(call.arguments as? String ?? "", forKey: "pushLang")
+      result(nil)
+    case "configure":
+      let options = call.arguments as? [String: Bool] ?? [:]
+      defaults?.set(options["alerts"] ?? true, forKey: "pushAlerts")
+      defaults?.set(options["badge"] ?? true, forKey: "pushBadge")
+      result(nil)
+    case "openSettings":
+      let path: String
+      if #available(iOS 16.0, *) {
+        path = UIApplication.openNotificationSettingsURLString
+      } else {
+        path = UIApplication.openSettingsURLString
+      }
+      if let url = URL(string: path) { UIApplication.shared.open(url) }
       result(nil)
     case "setBadge":
       let n = call.arguments as? Int ?? 0
@@ -122,7 +142,12 @@ final class PushPlugin: NSObject, UNUserNotificationCenterDelegate {
     willPresent notification: UNNotification,
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
-    completionHandler([.banner, .list, .sound])
+    var options: UNNotificationPresentationOptions = []
+    if defaults?.object(forKey: "pushAlerts") as? Bool != false {
+      options.formUnion([.banner, .list, .sound])
+    }
+    // 前台角标由当前电脑的会话列表维护，不能让其他电脑或迟到的推送覆盖它。
+    completionHandler(options)
   }
 
   func userNotificationCenter(

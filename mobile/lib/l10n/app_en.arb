@@ -2427,7 +2427,7 @@
   "@settingsProjectMeta": {
     "description": "Settings › Home: switch."
   },
-  "settingsPushDenied": "Notifications are off for Posse. Turn them on in the iPhone’s Settings › Posse › Notifications.",
+  "settingsPushDenied": "Some enabled notification or badge options are blocked by iOS. Allow them in System Settings.",
   "@settingsPushDenied": {
     "description": "Settings › Notifications: note when the system permission is denied."
   },
@@ -2447,7 +2447,7 @@
   "@settingsPushOff": {
     "description": "Settings › Notifications: note when both switches are off."
   },
-  "settingsPushOldComputer": "Posse on this Mac is too old to send notifications. Update it first.",
+  "settingsPushOldComputer": "Update Posse on this Mac to control notifications and badges independently.",
   "@settingsPushOldComputer": {
     "description": "Settings › Notifications: note when the Mac doesn't support push."
   },
@@ -2455,6 +2455,12 @@
   "@settingsPushOn": {
     "description": "Settings › Notifications: note when push is working."
   },
+  "settingsPushBadge": "App Icon Badge",
+  "@settingsPushBadge": {"description": "Settings \u203a Notifications: independent app icon badge switch."},
+  "settingsPushOldRelay": "The relay hasn’t confirmed badge-only support. Update the relay or reconnect to try again. Enabled notifications are unaffected.",
+  "@settingsPushOldRelay": {"description": "Settings \u203a Notifications: relay does not support badge-only pushes."},
+  "settingsPushSystemSettings": "Open System Settings",
+  "@settingsPushSystemSettings": {"description": "Settings \u203a Notifications: open the iOS notification settings."},
   "settingsPushTitle": "Notifications",
   "@settingsPushTitle": {
     "description": "Settings: section title for push notifications."

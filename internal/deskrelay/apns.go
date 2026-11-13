@@ -86,18 +86,18 @@ func (a *APNs) token(now time.Time) (string, error) {
 // Payload 是交给 APNs 的 JSON。明文只有兜底文字（App 里的本地化键，通知扩展没解开时显示）和角标，
 // 真正的标题和正文在 e 里，由手机上的通知扩展解开。
 func Payload(p Push) []byte {
-	b, _ := json.Marshal(map[string]any{
-		"aps": map[string]any{
-			"alert": map[string]any{
-				"title-loc-key": "PUSH_FALLBACK_TITLE",
-				"loc-key":       "PUSH_FALLBACK_BODY",
-			},
-			"mutable-content": 1,
-			"sound":           "default",
-			"badge":           p.Badge,
-		},
-		"e": base64.StdEncoding.EncodeToString(p.Cipher),
-	})
+	aps := map[string]any{"badge": p.Badge}
+	payload := map[string]any{"aps": aps}
+	if !p.NoAlert {
+		aps["alert"] = map[string]any{
+			"title-loc-key": "PUSH_FALLBACK_TITLE",
+			"loc-key":       "PUSH_FALLBACK_BODY",
+		}
+		aps["mutable-content"] = 1
+		aps["sound"] = "default"
+		payload["e"] = base64.StdEncoding.EncodeToString(p.Cipher)
+	}
+	b, _ := json.Marshal(payload)
 	return b
 }
 

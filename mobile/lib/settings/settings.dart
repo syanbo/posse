@@ -230,22 +230,41 @@ class SettingsScreen extends StatelessWidget {
                     title: l.settingsPushTitle,
                     children: [
                       _Toggle(
-                        title: l.settingsPushWaiting,
-                        value: s.pushWaiting,
+                        title: l.settingsPushTitle,
+                        value: s.pushEnabled,
                         onChanged: (v) {
-                          model.updateSettings((s) => s.pushWaiting = v);
+                          model.updateSettings((s) => s.pushEnabled = v);
                           unawaited(model.registerPush());
                         },
                       ),
                       _Toggle(
-                        title: l.settingsPushDone,
-                        value: s.pushDone,
+                        title: l.settingsPushBadge,
+                        value: s.badgeEnabled,
                         onChanged: (v) {
-                          model.updateSettings((s) => s.pushDone = v);
+                          model.updateSettings((s) => s.badgeEnabled = v);
                           unawaited(model.registerPush());
                         },
                       ),
+                      if (s.pushEnabled) ...[
+                        _Toggle(
+                          title: l.settingsPushWaiting,
+                          value: s.pushWaiting,
+                          onChanged: (v) {
+                            model.updateSettings((s) => s.pushWaiting = v);
+                            unawaited(model.registerPush());
+                          },
+                        ),
+                        _Toggle(
+                          title: l.settingsPushDone,
+                          value: s.pushDone,
+                          onChanged: (v) {
+                            model.updateSettings((s) => s.pushDone = v);
+                            unawaited(model.registerPush());
+                          },
+                        ),
+                      ],
                       _Note(switch (model.pushStatus) {
+                        PushStatus.unsupportedRelay => l.settingsPushOldRelay,
                         PushStatus.on => l.settingsPushOn,
                         PushStatus.noRelay => l.settingsPushNoRelay,
                         PushStatus.denied => l.settingsPushDenied,
@@ -256,6 +275,11 @@ class SettingsScreen extends StatelessWidget {
                         PushStatus.unknown ||
                         PushStatus.unsupported => l.settingsPushUnknown,
                       }),
+                      if (model.pushStatus == PushStatus.denied)
+                        RowTile(
+                          title: Text(l.settingsPushSystemSettings),
+                          onTap: () => unawaited(model.push!.openSettings()),
+                        ),
                     ],
                   ),
                 if (backgroundKeepSupported)

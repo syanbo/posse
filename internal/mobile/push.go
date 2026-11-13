@@ -28,8 +28,10 @@ type PushTarget struct {
 	Token   string    `json:"token"` // APNs 设备 token，hex
 	Key     string    `json:"key"`   // 加密通知内容的 AES-256 密钥，base64，手机生成
 	Sandbox bool      `json:"sandbox,omitempty"`
-	Waiting bool      `json:"waiting"` // 推不推等你处理
-	Done    bool      `json:"done"`    // 推不推完成没看
+	Waiting bool      `json:"waiting"`          // 推不推等你处理
+	Done    bool      `json:"done"`             // 推不推完成没看
+	Alerts  *bool     `json:"alerts,omitempty"` // nil 沿用旧版按类型推通知和角标
+	Badge   *bool     `json:"badge,omitempty"`
 	At      time.Time `json:"at"`
 }
 
@@ -83,6 +85,8 @@ func (c *conn) registerPush(id string, raw json.RawMessage) error {
 		Sandbox bool   `json:"sandbox"`
 		Waiting bool   `json:"waiting"`
 		Done    bool   `json:"done"`
+		Alerts  *bool  `json:"alerts"`
+		Badge   *bool  `json:"badge"`
 	}
 	if json.Unmarshal(raw, &a) != nil {
 		return c.fail(id, "bad_params", "push registration")
@@ -94,7 +98,7 @@ func (c *conn) registerPush(id string, raw json.RawMessage) error {
 	if phone == "" {
 		return c.fail(id, "bad_params", "push needs the phone's install ID")
 	}
-	t := PushTarget{Phone: phone, Waiting: a.Waiting, Done: a.Done, Sandbox: a.Sandbox, At: time.Now()}
+	t := PushTarget{Phone: phone, Waiting: a.Waiting, Done: a.Done, Sandbox: a.Sandbox, At: time.Now(), Alerts: a.Alerts, Badge: a.Badge}
 	if a.Token != "" {
 		tok, err1 := hex.DecodeString(a.Token)
 		key, err2 := base64.StdEncoding.DecodeString(a.Key)
@@ -108,7 +112,12 @@ func (c *conn) registerPush(id string, raw json.RawMessage) error {
 	if s.q.opts.Relay != nil {
 		relay = s.q.opts.Relay().Relay != ""
 	}
-	return c.reply(id, map[string]any{"relay": relay})
+	badgeOnly := true
+	if relay && t.Token != "" && t.Badge != nil && *t.Badge &&
+		(t.Alerts != nil && !*t.Alerts || !t.Waiting || !t.Done) {
+		badgeOnly = s.probeBadgeOnly(t)
+	}
+	return c.reply(id, map[string]any{"relay": relay, "badgeOnly": badgeOnly})
 }
 
 // phoneInFront 是这台手机此刻开着 App、连着这台电脑：不用推，首页自己会显示。
@@ -170,10 +179,16 @@ func (s *Server) Notify(term, kind string) bool {
 	sum := sha256.Sum256([]byte("posse-push:" + b64(s.pair.pub) + ":" + term))
 	sent := false
 	for _, t := range targets {
-		if kind == PushWaiting && !t.Waiting || kind == PushDone && !t.Done || s.phoneInFront(t.Phone) {
+		selected := kind == PushWaiting && t.Waiting || kind == PushDone && t.Done
+		alerts := selected && (t.Alerts == nil || *t.Alerts)
+		showBadge := t.Badge != nil && *t.Badge || t.Badge == nil && selected
+		if !alerts && !showBadge || s.phoneInFront(t.Phone) {
 			continue
 		}
-		p := deskrelay.Push{Sandbox: t.Sandbox, Badge: uint16(min(badge, 0xFFFF))}
+		p := deskrelay.Push{Sandbox: t.Sandbox, NoAlert: !alerts}
+		if showBadge {
+			p.Badge = uint16(min(badge, 0xFFFF))
+		}
 		copy(p.Collapse[:], sum[:])
 		p.Token, _ = hex.DecodeString(t.Token)
 		key, _ := base64.StdEncoding.DecodeString(t.Key)
@@ -284,12 +299,19 @@ const (
 	pushWait  = 12 * time.Second
 )
 
-func (s *Server) sendPush(cfg deskrelay.Config, t PushTarget, p deskrelay.Push) {
+// probeBadgeOnly 用不投递的探测确认中转认得新格式，旧中转不会把它误当通知。
+func (s *Server) probeBadgeOnly(t PushTarget) bool {
+	p := deskrelay.Push{Sandbox: t.Sandbox, NoAlert: true, Probe: true}
+	p.Token, _ = hex.DecodeString(t.Token)
+	return s.sendPush(s.q.opts.Relay(), t, p) == deskrelay.PushOK
+}
+
+func (s *Server) sendPush(cfg deskrelay.Config, t PushTarget, p deskrelay.Push) byte {
 	rand.Read(p.Nonce[:])
 	addr, err := net.ResolveUDPAddr("udp4", cfg.Relay)
 	if err != nil {
 		log.Printf("mobile: push: relay %s: %v", cfg.Relay, err)
-		return
+		return deskrelay.PushFailed
 	}
 	var uc *net.UDPConn
 	if s.q.opts.ListenOut != nil {
@@ -298,25 +320,29 @@ func (s *Server) sendPush(cfg deskrelay.Config, t PushTarget, p deskrelay.Push) 
 	if uc == nil {
 		if uc, err = net.ListenUDP("udp4", nil); err != nil {
 			log.Printf("mobile: push: %v", err)
-			return
+			return deskrelay.PushFailed
 		}
 	}
 	defer uc.Close()
 	cred := cfg.Credential()
 	buf := make([]byte, 64)
-	end := time.Now().Add(pushWait)
-	for i := range pushTries {
+	tries, retry, wait := pushTries, pushRetry, pushWait
+	if p.Probe {
+		tries, retry, wait = 2, 700*time.Millisecond, 1400*time.Millisecond
+	}
+	end := time.Now().Add(wait)
+	for i := range tries {
 		pkt, err := deskrelay.EncodePush(p, cred, time.Now())
 		if err != nil {
 			log.Printf("mobile: push: %v", err)
-			return
+			return deskrelay.PushFailed
 		}
 		if _, err := uc.WriteToUDP(pkt, addr); err != nil {
 			log.Printf("mobile: push: %v", err)
-			return
+			return deskrelay.PushFailed
 		}
-		deadline := time.Now().Add(pushRetry)
-		if i == pushTries-1 {
+		deadline := time.Now().Add(retry)
+		if i == tries-1 {
 			deadline = end
 		}
 		for {
@@ -333,12 +359,15 @@ func (s *Server) sendPush(cfg deskrelay.Config, t PushTarget, p deskrelay.Push) 
 			case deskrelay.PushOK:
 			case deskrelay.PushBadToken:
 				log.Printf("mobile: push: token of phone %s no longer valid, dropped", t.Phone)
-				s.pair.dropPush(t.Token)
+				if !p.Probe {
+					s.pair.dropPush(t.Token)
+				}
 			default:
 				log.Printf("mobile: push: relay refused (%d)", r)
 			}
-			return
+			return r
 		}
 	}
 	log.Printf("mobile: push: relay %s did not answer", cfg.Relay)
+	return deskrelay.PushFailed
 }

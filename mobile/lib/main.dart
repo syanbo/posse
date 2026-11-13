@@ -9,7 +9,6 @@ import 'ui/keyboard.dart';
 import 'ui/splash.dart';
 import 'ui/theme.dart';
 import 'update/update.dart';
-import 'push/push.dart';
 import 'workspace/workspace.dart';
 
 /// 点通知打开会话时从这里拿到导航，见 [PosseAppModel.onOpenSession]。
@@ -65,10 +64,8 @@ class _PosseAppState extends State<PosseApp> with WidgetsBindingObserver {
           widget.model.presence(foreground: true);
           unawaited(widget.model.wake());
           startUpdateChecks();
-          // 可能刚去系统设置里打开了通知
-          if (widget.model.pushStatus == PushStatus.denied) {
-            unawaited(widget.model.registerPush());
-          }
+          // 系统可单独更改通知或角标权限；连接仍活着时也要重新检查。
+          unawaited(widget.model.registerPush());
         }
         _away = false;
       case AppLifecycleState.inactive:

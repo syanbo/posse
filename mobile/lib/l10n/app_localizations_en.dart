@@ -1830,7 +1830,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsPushDenied =>
-      'Notifications are off for Posse. Turn them on in the iPhone’s Settings › Posse › Notifications.';
+      'Some enabled notification or badge options are blocked by iOS. Allow them in System Settings.';
 
   @override
   String get settingsPushDone => 'When an agent finishes';
@@ -1848,11 +1848,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsPushOldComputer =>
-      'Posse on this Mac is too old to send notifications. Update it first.';
+      'Update Posse on this Mac to control notifications and badges independently.';
 
   @override
   String get settingsPushOn =>
       'The Mac notifies this phone while Posse is in the background and nobody is using the Mac.';
+
+  @override
+  String get settingsPushBadge => 'App Icon Badge';
+
+  @override
+  String get settingsPushOldRelay =>
+      'The relay hasn’t confirmed badge-only support. Update the relay or reconnect to try again. Enabled notifications are unaffected.';
+
+  @override
+  String get settingsPushSystemSettings => 'Open System Settings';
 
   @override
   String get settingsPushTitle => 'Notifications';

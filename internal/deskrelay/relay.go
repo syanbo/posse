@@ -214,7 +214,7 @@ func (s *Server) control(b []byte, from netip.AddrPort) {
 		}
 		reply(kindCheckReply, result)
 		return
-	case b[4] == kindPush:
+	case b[4] == kindPush || b[4] == kindPushOptions:
 		s.handlePush(b, from)
 		return
 	case len(b) < RegisterLen || (b[4] != RoleMac && b[4] != RolePhone):
