@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -11,12 +12,16 @@ import (
 
 // Context 是会话最后一次请求占用的上下文，单位 token。
 type Context struct {
-	Used   int `json:"used"`
-	Window int `json:"window"`
+	Used            int      `json:"used"`
+	Window          int      `json:"window"`
+	ReportedPercent *float64 `json:"reportedPercent,omitempty"`
 }
 
 // Percent 是已用的百分比，四舍五入到整数，最多 100。
 func (c Context) Percent() int {
+	if c.ReportedPercent != nil {
+		return min(100, max(0, int(math.Round(*c.ReportedPercent))))
+	}
 	if c.Window <= 0 {
 		return 0
 	}
@@ -77,9 +82,12 @@ func ReadContext(agent, path, model string) (Context, bool) {
 			i := bytes.LastIndexByte(bytes.TrimRight(lines, "\n"), '\n')
 			line := lines[i+1:]
 			lines = lines[:i+1]
+			if agent == "claude" && claudeCompactBoundary(line) {
+				return Context{}, false
+			}
 			if bytes.Contains(line, marker) {
 				if c, ok := parse(line); ok {
-					return c, true
+					return c, c.Window > 0
 				}
 			}
 		}
@@ -105,7 +113,7 @@ func claudeContext(line []byte, model string) (Context, bool) {
 		return Context{}, false
 	}
 	u := rec.Message.Usage
-	used := u.Input + u.CacheCreate + u.CacheRead + u.Output
+	used := u.Input + u.CacheCreate + u.CacheRead
 	// 出错、中断时 Claude Code 写的 <synthetic> 回复用量全是 0
 	if used == 0 {
 		return Context{}, false
@@ -117,20 +125,39 @@ func claudeContext(line []byte, model string) (Context, bool) {
 }
 
 // claudeWindow 是 Claude 模型的上下文窗口。会话文件里没有窗口大小，按模型推断：
-// 名字带 [1m] 的、Claude 5 起的 Opus 和 Sonnet 是 100 万，其余 20 万；已经用超 20 万的一定是 100 万。
+// 名字带 [1m] 的、Claude 5 起的 Opus 和 Sonnet 是 100 万；其余已知系列按 20 万估算，
+// 已用超 20 万时按 100 万估算。认不出的模型返回 0，不给出百分比。
 func claudeWindow(model string, used int) int {
 	const small, large = 200_000, 1_000_000
 	m := strings.ToLower(model)
-	if used > small || strings.Contains(m, "[1m]") {
+	if i := strings.LastIndexByte(m, '/'); i >= 0 {
+		m = m[i+1:]
+	}
+	if i := strings.Index(m, "claude-"); i >= 0 {
+		m = m[i:]
+	}
+	m = strings.ReplaceAll(m, ".", "-")
+	if strings.Contains(m, "[1m]") {
 		return large
 	}
 	words := strings.Split(strings.TrimPrefix(m, "claude-"), "-")
-	if len(words) >= 2 && (words[0] == "opus" || words[0] == "sonnet") {
-		if major, err := strconv.Atoi(words[1]); err == nil && major >= 5 {
-			return large
+	// Claude 3 的旧式命名把系列放在版本号后面。
+	if len(words) >= 2 && words[0] == "3" {
+		for _, word := range words[1:] {
+			if word == "opus" || word == "sonnet" || word == "haiku" {
+				return small
+			}
 		}
 	}
-	return small
+	if len(words) >= 2 && (words[0] == "opus" || words[0] == "sonnet" || words[0] == "haiku") {
+		if major, err := strconv.Atoi(words[1]); err == nil && major > 0 {
+			if used > small || (major >= 5 && words[0] != "haiku") {
+				return large
+			}
+			return small
+		}
+	}
+	return 0
 }
 
 func codexContext(line []byte) (Context, bool) {
@@ -154,4 +181,17 @@ func codexContext(line []byte) (Context, bool) {
 		return Context{}, false
 	}
 	return Context{Used: info.Last.Total, Window: info.Window}, true
+}
+
+// 压缩摘要之前的 usage 已不再描述当前上下文，反向扫描必须在这里停下。
+func claudeCompactBoundary(line []byte) bool {
+	if !bytes.Contains(line, []byte("compact_boundary")) && !bytes.Contains(line, []byte("isCompactSummary")) {
+		return false
+	}
+	var rec struct {
+		Type    string `json:"type"`
+		Subtype string `json:"subtype"`
+		Summary bool   `json:"isCompactSummary"`
+	}
+	return json.Unmarshal(line, &rec) == nil && ((rec.Type == "system" && rec.Subtype == "compact_boundary") || (rec.Type == "user" && rec.Summary))
 }

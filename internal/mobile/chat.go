@@ -317,8 +317,11 @@ func (c *conn) sessionContext(id string, p json.RawMessage) error {
 		return errorf("invalid_params", "%v", err)
 	}
 	path := history.TranscriptPath(a.Agent, a.SessionID, a.TranscriptPath)
-	ctx, ok := history.ReadContext(a.Agent, path, "")
+	ctx, ok := history.ReadReportedContext(c.srv.home, a.Agent, a.SessionID, path)
 	if !ok {
+		ctx, ok = history.ReadContext(a.Agent, path, "")
+	}
+	if !ok || (ctx.ReportedPercent == nil && ctx.Window <= 0) {
 		return c.reply(id, map[string]any{"known": false})
 	}
 	return c.reply(id, map[string]any{"known": true, "used": ctx.Used, "window": ctx.Window, "percent": ctx.Percent()})

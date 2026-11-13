@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"posse/internal/agent"
+	"posse/internal/history"
 	"posse/internal/rpc"
 	"posse/internal/usage"
 )
@@ -321,10 +322,19 @@ func (d *Daemon) usageReport(ctx context.Context, raw json.RawMessage) (any, err
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	if p.Agent != "claude" || !d.usageAgentOn("claude") {
+	if p.Agent != "claude" {
+		return map[string]bool{"updated": false}, nil
+	}
+	if err := history.ReportClaudeContext(d.cfg.Home, p.Payload); err != nil {
+		log.Printf("save Claude context: %v", err)
+	}
+	if !d.usageAgentOn("claude") {
 		return map[string]bool{"updated": false}, nil
 	}
 	u, ok := usage.ClaudeStatusLine(p.Payload, time.Now())
+	if !ok {
+		return map[string]bool{"updated": false}, nil
+	}
 	d.usage.mu.Lock()
 	due := time.Since(d.usage.claudeAt) >= claudeCacheEvery
 	if due {

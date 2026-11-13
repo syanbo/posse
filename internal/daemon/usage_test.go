@@ -3,11 +3,14 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
 
 	"posse/internal/agent"
+	"posse/internal/history"
 	"posse/internal/usage"
 )
 
@@ -149,5 +152,38 @@ func TestCodexUsageThrottlePrunes(t *testing.T) {
 	d.usage.mu.Unlock()
 	if !again.Equal(first) {
 		t.Fatal("hook within the interval read again")
+	}
+}
+
+func TestContextReportWithoutPlanUsage(t *testing.T) {
+	d := &Daemon{cfg: Config{Home: t.TempDir()}}
+	d.usage.store = usage.Open(d.cfg.Home)
+	d.usage.store.SetOff(true)
+	raw, _ := json.Marshal(usageReportParams{Agent: "claude", Payload: json.RawMessage(`{"session_id":"s","context_window":{"context_window_size":1000000,"used_percentage":16.8}}`)})
+	if _, err := d.usageReport(context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+	if c, ok := history.ReadReportedContext(d.cfg.Home, "claude", "s", ""); !ok || c.Percent() != 17 {
+		t.Fatalf("context with usage off: %+v %v", c, ok)
+	}
+	if len(d.usage.store.List(time.Now())) != 0 {
+		t.Fatal("plan usage recorded while off")
+	}
+}
+
+func TestContextWriteFailureKeepsPlanUsage(t *testing.T) {
+	d := &Daemon{cfg: Config{Home: t.TempDir()}}
+	d.usage.store = usage.Open(d.cfg.Home)
+	d.usage.claudeAt = time.Now()
+	if err := os.WriteFile(filepath.Join(d.cfg.Home, "session-context"), []byte("blocked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(usageReportParams{Agent: "claude", Payload: json.RawMessage(`{"session_id":"s","context_window":{"used_percentage":17},"rate_limits":{"five_hour":{"used_percentage":20}}}`)})
+	if _, err := d.usageReport(context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+	got := d.usage.store.List(time.Now())
+	if len(got) != 1 || got[0].Windows[0].Percent != 20 {
+		t.Fatalf("plan usage lost: %+v", got)
 	}
 }

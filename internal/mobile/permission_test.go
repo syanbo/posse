@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"posse/internal/history"
 	"posse/internal/term"
 )
 
@@ -314,6 +315,22 @@ func TestSessionContext(t *testing.T) {
 	got := result(t, p.next(p.call("session.context", args)))
 	if got["known"] != true || got["percent"] != float64(25) || got["window"] != float64(200000) {
 		t.Fatalf("session.context %v", got)
+	}
+	payload, _ := json.Marshal(map[string]any{"session_id": "s1", "transcript_path": path, "context_window": map[string]any{"context_window_size": 1000000, "used_percentage": 16.8}})
+	if err := history.ReportClaudeContext(srv.home, payload); err != nil {
+		t.Fatal(err)
+	}
+	got = result(t, p.next(p.call("session.context", args)))
+	if got["percent"] != float64(17) || got["window"] != float64(1000000) {
+		t.Fatalf("official context %v", got)
+	}
+	payload, _ = json.Marshal(map[string]any{"session_id": "s1", "transcript_path": path, "context_window": map[string]any{"context_window_size": 1000000, "current_usage": nil, "used_percentage": nil}})
+	if err := history.ReportClaudeContext(srv.home, payload); err != nil {
+		t.Fatal(err)
+	}
+	got = result(t, p.next(p.call("session.context", args)))
+	if got["known"] != false {
+		t.Fatalf("compact context %v", got)
 	}
 	none := result(t, p.next(p.call("session.context", map[string]any{"agent": "grok", "sessionId": "x"})))
 	if none["known"] != false {

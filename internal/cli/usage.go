@@ -106,7 +106,7 @@ func cmdStatusline(e *env, args []string) error {
 
 // reportUsage 只在有用量时发，从不拉起常驻进程：它由 Claude 同步调用，不能拖慢状态行。
 func reportUsage(e *env, payload []byte) {
-	if !bytes.Contains(payload, []byte(`"rate_limits"`)) || !json.Valid(payload) {
+	if !json.Valid(payload) || (!bytes.Contains(payload, []byte(`"rate_limits"`)) && !bytes.Contains(payload, []byte(`"context_window"`))) {
 		return
 	}
 	socket := os.Getenv("POSSE_SOCKET")

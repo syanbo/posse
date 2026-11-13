@@ -13,4 +13,4 @@
   - 历史列表默认按今天、昨天、最近 7 天、最近 30 天、1 个月前分组；顶栏的分段按钮可以换成按文件夹分组：会话归到目录所在的项目（项目和它的工作区、worktree 目录取最长匹配），不在任何项目里的用目录名，组按其中最近的会话排先后，选择记在 ui.json 的 `historyByFolder`。默认只展开第一组，点组标题展开收起（不记进 ui.json）；↑/↓ 在看得见的会话之间换选中，会话列表卡片可聚焦，点过之后方向键不被侧栏拿走。
   - `history show` 的 `--tail`、`--tools` 对 `--json` 输出同样生效。
   - `history resume` 在会话目录所在的工作区（或 `--workspace` 指定的）里开终端，先 `cd` 回原目录（claude 按目录找会话）；同一会话已在 posse 终端里运行时直接返回那个终端，原目录已经不在时报错，设置里关掉的 agent 不恢复。没有对应工作区时报 not_found，界面会问要不要把目录加成项目。
-- 历史页列表顶上是总计（会话数、消息数、各 agent 会话数，取自 `history.list` 带回的 `status`）。详情里的路径点一下在访达中打开；"上下文 N%"是最后一次请求占的上下文，从会话文件末尾往前读：Codex 取 `token_count` 的 `last_token_usage` 和 `model_context_window`；Claude 取最后一条助手消息的 usage（输入、缓存、输出相加），文件里没有窗口大小，按模型推断（Claude 5 起的 Opus、Sonnet 和带 `[1m]` 的是 100 万，其余 20 万，用量超过 20 万的算 100 万）；Grok 只有每轮累计、Cursor 没有记录，不显示。
+- 历史页列表顶上是总计（会话数、消息数、各 agent 会话数，取自 `history.list` 带回的 `status`）。详情里的路径点一下在访达中打开；"上下文 N%"是最后一次请求占的上下文，从会话文件末尾往前读：Codex 取 `token_count` 的 `last_token_usage` 和 `model_context_window`；Claude 取最后一条助手消息的 usage（输入和缓存相加，不含输出），文件里没有窗口大小，按模型推断（兼容提供商前缀和小数点版本号；Claude 5 起的 Opus、Sonnet 和带 `[1m]` 的是 100 万，其余已知系列 20 万，用量超过 20 万的算 100 万；认不出的模型不显示百分比）；Grok 只有每轮累计、Cursor 没有记录，不显示。
