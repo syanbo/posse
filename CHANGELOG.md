@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.40
+
+- 配合手机端 0.1.26，文件树按 Git 状态上色，父目录汇总改动、忽略项淡化，与桌面共用状态规则；支持嵌套仓库和同一仓库的多个软链入口。
+- 桌面与手机的未跟踪文件使用 WebStorm 配色，与冲突红色区分。
+- 手机读取文件树时，Git 状态暂不可用仍可浏览目录；大批目录分批返回，文件清单缓存复用，减少重复扫描。
+
+### English
+
+- With Posse mobile 0.1.26, the file tree uses shared desktop Git status rules, highlights changed parent folders and dims ignored entries, including nested repositories and multiple symlink paths to the same repository.
+- Untracked files on desktop and mobile now use WebStorm colors, distinct from conflict red.
+- Mobile file browsing remains available when Git status cannot be read. Large directory responses are split into batches, and cached file lists reduce repeated scans.
+
 ## 0.1.39
 
 - 配合手机端 0.1.25，支持分别控制 iOS 通知和角标，通知类型选择不再影响角标计数。
