@@ -1,6 +1,9 @@
 package files
 
 import (
+	"context"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -9,9 +12,9 @@ import (
 
 // Entry 是目录里的一项。
 type Entry struct {
-	Name string
-	Dir  bool
-	Link string // 符号链接指向的路径（照链接里写的），不是链接时为空，读不出时是 LinkUnreadable
+	Name string `json:"name"`
+	Dir  bool   `json:"dir"`
+	Link string `json:"link,omitempty"` // 符号链接指向的路径（照链接里写的），不是链接时为空，读不出时是 LinkUnreadable
 }
 
 // LinkUnreadable 是读不出指向的符号链接的 Link（英文源文本，界面经 errtext 翻译）。
@@ -23,30 +26,102 @@ func hidden(name string) bool { return name == ".git" || name == ".DS_Store" }
 // ReadDir 读一个目录：目录在前，名字不分大小写排序。指向目录的符号链接算目录。
 // 返回目录自己的磁盘戳，增删改名其中的项会改变它，轮询时据此判断要不要重读。
 func ReadDir(dir string) ([]Entry, Stamp, error) {
-	stamp := StatFile(dir)
-	des, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, stamp, err
+	entries, stamp, _, err := ReadDirContext(context.Background(), dir, -1)
+	return entries, stamp, err
+}
+
+var ErrDirectoryLimit = errors.New("directory listing exceeds the response limit; request fewer directories")
+
+// ReadDirContext 的 budget 是条目 JSON 的保守字节预算，负数表示不限。
+// used 只计入成功返回的完整目录，供同一回复里的后续目录共用余额。
+func ReadDirContext(ctx context.Context, dir string, budget int) ([]Entry, Stamp, int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, Stamp{}, 0, err
 	}
-	out := make([]Entry, 0, len(des))
-	for _, de := range des {
-		if hidden(de.Name()) {
-			continue
+	if budget == 0 {
+		return nil, Stamp{}, 0, ErrDirectoryLimit
+	}
+	stamp := StatFile(dir)
+	f, err := os.Open(dir)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		if f != nil {
+			f.Close()
 		}
-		isDir, link := de.IsDir(), ""
-		if de.Type()&os.ModeSymlink != 0 {
-			p := filepath.Join(dir, de.Name())
-			if fi, err := os.Stat(p); err == nil {
-				isDir = fi.IsDir()
-			}
-			if link, _ = os.Readlink(p); link == "" {
-				link = LinkUnreadable
-			}
+		return nil, stamp, 0, ctxErr
+	}
+	if err != nil {
+		return nil, stamp, 0, err
+	}
+	defer f.Close()
+	entries, used, err := readDirEntries(ctx, dir, budget, f.ReadDir)
+	return entries, stamp, used, err
+}
+
+func readDirEntries(ctx context.Context, dir string, budget int, read func(int) ([]os.DirEntry, error)) ([]Entry, int, error) {
+	out := make([]Entry, 0)
+	used := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, 0, err
 		}
-		out = append(out, Entry{Name: de.Name(), Dir: isDir, Link: link})
+		if budget == 0 {
+			return nil, 0, ErrDirectoryLimit
+		}
+		des, err := read(128)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, 0, ctxErr
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, 0, err
+		}
+		for _, de := range des {
+			if err := ctx.Err(); err != nil {
+				return nil, 0, err
+			}
+			name := de.Name()
+			if hidden(name) {
+				continue
+			}
+			// 名字已经超限时不再查询符号链接；按 JSON 最坏转义长度计费。
+			size := 6*len(name) + 64
+			if budget >= 0 && size > budget-used {
+				return nil, 0, ErrDirectoryLimit
+			}
+			isDir, link := de.IsDir(), ""
+			if de.Type()&os.ModeSymlink != 0 {
+				p := filepath.Join(dir, name)
+				if fi, err := os.Stat(p); err == nil {
+					isDir = fi.IsDir()
+				}
+				if err := ctx.Err(); err != nil {
+					return nil, 0, err
+				}
+				if link, _ = os.Readlink(p); link == "" {
+					link = LinkUnreadable
+				}
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, 0, err
+			}
+			size += 6 * len(link)
+			if budget >= 0 && size > budget-used {
+				return nil, 0, ErrDirectoryLimit
+			}
+			used += size
+			out = append(out, Entry{Name: name, Dir: isDir, Link: link})
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
 	}
 	SortEntries(out)
-	return out, stamp, nil
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+	return out, used, nil
 }
 
 // SortEntries 按目录在前、名字不分大小写排序。

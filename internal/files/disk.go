@@ -1,9 +1,10 @@
 // Package files 是界面"文件"标签背后的纯逻辑：读写文件、目录树、文件清单、模糊匹配和全文检索。
-// 不依赖界面，由窗口进程调用；常驻进程不用它。
+// 不依赖界面，由窗口和目标主机的文件服务复用。
 package files
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"io"
 	"io/fs"
@@ -25,11 +26,11 @@ const (
 // Stamp 是文件在磁盘上的状态，用来发现别人（agent、编辑器）改过它。
 // 带上 inode：写临时文件再改名的保存方式，大小和时间可能凑巧不变，inode 一定会变。
 type Stamp struct {
-	Size    int64
-	ModTime time.Time
-	Ino     uint64
-	Mode    fs.FileMode
-	Missing bool
+	Size    int64       `json:"size"`
+	ModTime time.Time   `json:"modTime"`
+	Ino     uint64      `json:"ino"`
+	Mode    fs.FileMode `json:"mode"`
+	Missing bool        `json:"missing,omitempty"`
 }
 
 // StatFile 取路径现在的磁盘戳；不存在时 Missing 为真，其它错误也按不存在处理。
@@ -130,16 +131,42 @@ func WriteFile(path string, write func(io.Writer) error) (Stamp, error) {
 		}
 		mode = fi.Mode().Perm()
 	}
-	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".posse-*")
+	return writeAtomic(path, mode, write, nil)
+}
+
+type atomicDirectory interface {
+	Close() error
+	Stat() (fs.FileInfo, error)
+	Create(name string) (*os.File, error)
+	Remove(name string) error
+	Rename(oldname, newname string) error
+}
+
+func writeAtomic(path string, mode fs.FileMode, write func(io.Writer) error, beforeRename func() error) (Stamp, error) {
+	dir, name := filepath.Split(path)
+	if dir == "" {
+		dir = "."
+	}
+	root, err := openAtomicDirectory(dir)
 	if err != nil {
 		return Stamp{}, err
 	}
-	tmp := f.Name()
+	defer root.Close()
+	parent, err := root.Stat()
+	if err != nil {
+		return Stamp{}, err
+	}
+	// 用目录句柄清理，即使保存期间目录被移走也不留下未提交内容。
+	tmp := ".posse-" + rand.Text()
+	f, err := root.Create(tmp)
+	if err != nil {
+		return Stamp{}, err
+	}
 	ok := false
 	defer func() {
 		if !ok {
 			f.Close()
-			os.Remove(tmp)
+			root.Remove(tmp)
 		}
 	}()
 	if err := write(f); err != nil {
@@ -148,12 +175,29 @@ func WriteFile(path string, write func(io.Writer) error) (Stamp, error) {
 	if err := f.Chmod(mode); err != nil {
 		return Stamp{}, err
 	}
+	fi, err := f.Stat()
+	if err != nil {
+		return Stamp{}, err
+	}
 	if err := f.Close(); err != nil {
 		return Stamp{}, err
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if beforeRename != nil {
+		if err := beforeRename(); err != nil {
+			return Stamp{}, err
+		}
+	}
+	currentParent, err := os.Stat(dir)
+	if err != nil {
+		return Stamp{}, err
+	}
+	if !os.SameFile(parent, currentParent) {
+		return Stamp{}, ErrSaveConflict
+	}
+	if err := root.Rename(tmp, name); err != nil {
 		return Stamp{}, err
 	}
 	ok = true
-	return StatFile(path), nil
+	// 返回本次写下的版本，避免随后发生的外部替换被误认作自己的保存。
+	return stampOf(fi), nil
 }
