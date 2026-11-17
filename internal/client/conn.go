@@ -29,9 +29,14 @@ type Conn struct {
 	r    *bufio.Reader
 	err  error
 
+	// 握手尺寸在 ready 关闭前写入，之后只读；不随界面的 Resize 改变。
+	cols int
+	rows int
+
 	pending  []byte
 	exited   atomic.Bool
 	exitCode atomic.Int64
+	readOnly atomic.Bool
 }
 
 // attachTimeout 是接入等常驻进程回第一行的期限：常驻进程收了连接却一直不回时，Read 报错，窗口照常重新接入。
@@ -58,7 +63,14 @@ func (k *Conn) open(cols, rows int) bool {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), attachTimeout)
 		defer cancel()
-		conn, r, err := rpc.Open(ctx, k.c.Socket, "terminal.attach", map[string]any{"terminal": k.id, "cols": cols, "rows": rows}, nil)
+		var result struct {
+			Cols     int  `json:"cols"`
+			Rows     int  `json:"rows"`
+			ReadOnly bool `json:"readOnly"`
+		}
+		conn, r, err := k.c.Open(ctx, "terminal.attach", map[string]any{"terminal": k.id, "cols": cols, "rows": rows, "desktop": k.c.Desktop}, &result)
+		k.cols, k.rows = result.Cols, result.Rows
+		k.readOnly.Store(result.ReadOnly)
 		k.wmu.Lock()
 		k.conn, k.r, k.err = conn, r, err
 		k.wmu.Unlock()
@@ -84,6 +96,31 @@ func (k *Conn) wait() error {
 		return k.err
 	}
 	return nil
+}
+
+// TerminalState 等待接入握手，返回快照对应的实际尺寸和只读状态。
+// 不主动接入，首个 Resize 仍可决定请求尺寸。
+func (k *Conn) TerminalState() (cols, rows int, readOnly bool, err error) {
+	if err := k.wait(); err != nil {
+		return 0, 0, false, err
+	}
+	return k.cols, k.rows, k.readOnly.Load(), nil
+}
+
+// TerminalSnapshot 由插件的唯一读协程在 Read 前调用，把首帧作为整体回放，
+// 防止窗口在大快照分片之间调整网格。未使用此接口的调用方仍可直接 Read。
+func (k *Conn) TerminalSnapshot() ([]byte, error) {
+	if err := k.wait(); err != nil {
+		return nil, err
+	}
+	typ, payload, err := rpc.ReadFrame(k.r)
+	if err != nil {
+		return nil, err
+	}
+	if typ != rpc.FrameSnapshot {
+		return nil, io.ErrUnexpectedEOF
+	}
+	return payload, nil
 }
 
 func (k *Conn) Read(p []byte) (int, error) {
@@ -114,6 +151,9 @@ func (k *Conn) Write(p []byte) (int, error) {
 	if err := k.wait(); err != nil {
 		return 0, err
 	}
+	if k.readOnly.Load() {
+		return 0, rpc.Errorf(rpc.CodeReadOnly, "take desktop control before sending terminal input")
+	}
 	k.wmu.Lock()
 	defer k.wmu.Unlock()
 	if err := rpc.WriteFrame(k.conn, rpc.FrameInput, p); err != nil {
@@ -128,6 +168,9 @@ func (k *Conn) Resize(cols, rows int) error {
 	}
 	if err := k.wait(); err != nil {
 		return err
+	}
+	if k.readOnly.Load() {
+		return nil
 	}
 	k.wmu.Lock()
 	defer k.wmu.Unlock()
