@@ -111,6 +111,19 @@ func RecentBranches(ctx context.Context, dir string, n int) []string {
 	if err != nil {
 		return nil
 	}
+	return parseRecentBranches(out, n)
+}
+
+// RecentBranchesChecked 由调用方先确认 HEAD 已有提交；真正的读取失败不能当成空列表。
+func RecentBranchesChecked(ctx context.Context, dir string, n int) ([]string, error) {
+	out, err := runRaw(ctx, dir, nil, nil, "reflog", "show", "--format=%gs", "-n", "200", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	return parseRecentBranches(out, n), nil
+}
+
+func parseRecentBranches(out []byte, n int) []string {
 	var list []string
 	seen := map[string]bool{}
 	for _, line := range strings.Split(string(out), "\n") {

@@ -8,14 +8,29 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
 func run(ctx context.Context, dir string, args ...string) (string, error) {
+	if ctx.Value(readLimitKey{}) != nil {
+		out, err := runRead(ctx, dir, nil, nil, args...)
+		return strings.TrimSpace(string(out)), err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
+	// 工作区操作也要连同 Git 子进程一起取消，关闭存储前不能留下仍在执行的脚本。
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
+	cmd.WaitDelay = 2 * time.Second
+	var runErr error
+	defer func() {
+		if (ctx.Err() != nil || runErr != nil) && cmd.Process != nil {
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+	}()
 	// 禁止 git 弹出交互式凭据提示，否则常驻进程会挂住
 	// 窗口从 Posse 终端里拉起时会继承终端的 GIT_TRACE2_EVENT：自己的命令另有记录，不再报给操作记录
 	// 输出和报错要按英文解析（shortstat、not fully merged）
@@ -23,10 +38,11 @@ func run(ctx context.Context, dir string, args ...string) (string, error) {
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	rec := traceStart(ctx, dir, args)
-	if err := cmd.Run(); err != nil {
+	runErr = cmd.Run()
+	if runErr != nil {
 		msg := strings.TrimSpace(errb.String())
 		if msg == "" {
-			msg = err.Error()
+			msg = runErr.Error()
 		}
 		traceEnd(rec, out.Bytes(), errb.Bytes(), msg, false)
 		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), msg)

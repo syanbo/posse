@@ -19,6 +19,9 @@ import (
 
 // runRaw 原样返回 git 的标准输出（不去首尾空白），stdin 非空时作为输入，env 追加到环境变量。
 func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ...string) ([]byte, error) {
+	if ctx.Value(readLimitKey{}) != nil {
+		return runRead(ctx, dir, stdin, env, args...)
+	}
 	limit := 2 * time.Minute
 	if len(args) > 0 && (args[0] == "fetch" || args[0] == "pull" || args[0] == "push") {
 		limit = 10 * time.Minute
@@ -29,32 +32,56 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 	cmd.Dir = dir
 	// 新会话里跑：没有控制终端，ssh 要口令或确认主机指纹时直接失败，不会在 /dev/tty 上一直等。
 	// 取消、超时时给整组发 SIGTERM，连同 git 拉起的 ssh：git 收到 SIGTERM 会删掉自己的 .lock 再退出，SIGKILL 会把锁留下；
-	// 2 秒还没退（或 ssh 拿着输出管道不放）由 WaitDelay 强杀
+	// WaitDelay 只强杀主进程；等候结束后还要清理持有输出管道的后代进程。
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = 2 * time.Second
+	var runErr error
+	// 父进程非零退出时 Wait 优先返回退出码，可能掩盖输出管道超时，失败后统一收拢后代。
+	defer func() {
+		if (ctx.Err() != nil || runErr != nil) && cmd.Process != nil {
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+	}()
 	// 不拿可选的锁：每 1.5 秒的 status 会顺手重写 index，和终端里 agent 的 git 命令抢 index.lock
 	cmd.Env = append(append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0", "GIT_TRACE2_EVENT=0"), env...)
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
+	var out, errb commandOutput = &bytes.Buffer{}, &bytes.Buffer{}
+	policy, bounded := ctx.Value(fetchOutputKey{}).(*fetchOutputPolicy)
+	bounded = bounded && len(args) > 0 && (args[0] == "fetch" || args[0] == "stash")
+	if bounded {
+		out, errb = &fetchOutput{}, &fetchOutput{}
+		cmd.Env = fetchEnviron(cmd.Env)
+	}
+	cmd.Stdout, cmd.Stderr = out, errb
 	rec := traceStart(ctx, dir, args)
-	if err := cmd.Run(); err != nil {
+	runErr = cmd.Run()
+	if bounded {
+		stdout, stderr := out.(*fetchOutput), errb.(*fetchOutput)
+		stdout.finish()
+		stderr.finish()
+		policy.truncated = stdout.truncated || stderr.truncated
+	}
+	if runErr != nil {
 		msg := withoutHints(errb.String())
 		if msg == "" {
 			msg = strings.TrimSpace(out.String())
 		}
 		if msg == "" {
-			msg = err.Error()
+			msg = runErr.Error()
+		}
+		cause := runErr
+		if ctx.Err() != nil {
+			cause = ctx.Err()
 		}
 		canceled := ctx.Err() != nil && !errors.Is(ctx.Err(), context.DeadlineExceeded)
 		if canceled {
 			msg = MsgCanceled
 		}
 		traceEnd(rec, out.Bytes(), errb.Bytes(), msg, canceled)
-		return out.Bytes(), &Error{Args: args, Msg: msg}
+		return out.Bytes(), &Error{Args: args, Msg: msg, cause: cause}
 	}
 	traceEnd(rec, out.Bytes(), errb.Bytes(), "", false)
 	return out.Bytes(), nil
@@ -73,11 +100,13 @@ func withoutHints(msg string) string {
 
 // Error 是 git 命令失败：Msg 是 git 自己的报错，界面直接显示它。
 type Error struct {
-	Args []string
-	Msg  string
+	Args  []string
+	Msg   string
+	cause error
 }
 
 func (e *Error) Error() string { return e.Msg }
+func (e *Error) Unwrap() error { return e.cause }
 
 // Entry 是状态里的一个文件。X、Y 是暂存区和工作区的状态字母（porcelain 的 XY），"." 表示没变。
 type Entry struct {

@@ -32,7 +32,9 @@ func (r Repo) Contains(abs string) (root string, ok bool) {
 
 // Discovery 是 Discover 的结果。
 type Discovery struct {
-	Repos []Repo
+	// 工作区可能指向仓库的子目录，不能用仓库 Real 代替它做路径换算。
+	RealPath string
+	Repos    []Repo
 	// Partial 说明撞上了扫描上限（目录数、时间），可能没找全。
 	Partial bool
 }
@@ -65,22 +67,30 @@ var discoverSkip = map[string]bool{
 //
 // multi 为假（项目关掉了"识别多个 Git 仓库"）时只认 dir 所在的那一个仓库。
 func Discover(ctx context.Context, dir string, multi bool) Discovery {
+	return discover(ctx, dir, multi, false).result()
+}
+
+func discover(ctx context.Context, dir string, multi, checked bool) *discoverer {
 	dir = filepath.Clean(dir)
 	d := &discoverer{
-		ctx:      ctx,
-		top:      dir,
-		seen:     map[string]bool{},
-		byReal:   map[string]int{},
-		deadline: time.Now().Add(discoverMaxTime),
+		ctx:        ctx,
+		checked:    checked,
+		identities: map[string]RepositoryIdentity{},
+		top:        dir,
+		seen:       map[string]bool{},
+		byReal:     map[string]int{},
+		deadline:   time.Now().Add(discoverMaxTime),
 	}
-	d.topReal, _ = filepath.EvalSymlinks(dir)
+	var err error
+	d.topReal, err = filepath.EvalSymlinks(dir)
+	d.failed(err)
 	if d.topReal == "" {
 		d.topReal = dir
 	}
 	// dir 本身在某个仓库里（是仓库根目录，或子目录工作区）：这个仓库也算，嵌套仓库只在 dir 范围里找
 	// 按真实路径往上找：工作区是指向某个仓库子目录的软链时，字面路径的上级里没有 .git
-	if root := enclosingRoot(d.topReal); root != "" {
-		if top := TopLevel(ctx, root); top != "" {
+	if root := d.enclosingRoot(d.topReal); root != "" {
+		if top := d.topLevel(root); top != "" {
 			shown := ShownRoot(dir, top)
 			// pathspec 按真实路径算：shown 可能是 git 给的真实根目录，不在 dir 的字面上级
 			spec := ""
@@ -90,26 +100,29 @@ func Discover(ctx context.Context, dir string, multi bool) Discovery {
 			if d.add(shown) && multi {
 				d.inside(shown, spec)
 			}
-			return d.result()
+			return d
 		}
 	}
 	if !multi {
-		return d.result()
+		return d
 	}
 	d.walk(dir)
-	return d.result()
+	return d
 }
 
 type discoverer struct {
-	ctx      context.Context
-	top      string
-	topReal  string
-	seen     map[string]bool // 走过的目录，按真实路径
-	byReal   map[string]int  // 仓库的真实路径 → repos 下标
-	repos    []Repo
-	dirs     int
-	deadline time.Time
-	partial  bool
+	checked    bool
+	err        error
+	identities map[string]RepositoryIdentity
+	ctx        context.Context
+	top        string
+	topReal    string
+	seen       map[string]bool // 走过的目录，按真实路径
+	byReal     map[string]int  // 仓库的真实路径 → repos 下标
+	repos      []Repo
+	dirs       int
+	deadline   time.Time
+	partial    bool
 }
 
 func (d *discoverer) result() Discovery {
@@ -126,6 +139,9 @@ func (d *discoverer) result() Discovery {
 				for _, a := range outer.Aliases {
 					alias := a + in.Root[len(outer.Root):]
 					if alias != in.Root && !slices.Contains(in.Aliases, alias) {
+						if d.checked && d.failed(consumeReadBudget(d.ctx, len(alias))) {
+							return Discovery{}
+						}
 						in.Aliases = append(in.Aliases, alias)
 						changed = true
 					}
@@ -134,14 +150,31 @@ func (d *discoverer) result() Discovery {
 		}
 	}
 	slices.SortFunc(d.repos, func(a, b Repo) int { return strings.Compare(a.Root, b.Root) })
-	return Discovery{Repos: d.repos, Partial: d.partial}
+	return Discovery{RealPath: d.topReal, Repos: d.repos, Partial: d.partial}
 }
 
 // add 记下一个仓库；同一个仓库已经记过（另一条软链）时只补一个写法，返回假。
 func (d *discoverer) add(root string) bool {
+	if d.err != nil {
+		return false
+	}
 	real, err := filepath.EvalSymlinks(root)
 	if err != nil {
+		if d.failed(err) {
+			return false
+		}
 		real = root
+	}
+	if d.checked {
+		id, err := RepositoryIdentityChecked(d.ctx, root)
+		if d.failed(err) {
+			return false
+		}
+		if old, ok := d.identities[real]; ok && old != id {
+			d.failed(ErrRepositoryChanged)
+			return false
+		}
+		d.identities[real] = id
 	}
 	if i, ok := d.byReal[real]; ok {
 		if r := &d.repos[i]; r.Root != root && !slices.Contains(r.Aliases, root) {
@@ -161,11 +194,12 @@ func (d *discoverer) ancestorOfTop(real string) bool {
 
 // walk 走普通目录（还没进入任何仓库的部分）。
 func (d *discoverer) walk(dir string) {
-	if d.ctx.Err() != nil {
+	if d.err != nil || d.ctx.Err() != nil {
 		return
 	}
 	real, err := filepath.EvalSymlinks(dir)
 	if err != nil {
+		d.failed(err)
 		return
 	}
 	// 另一条软链进来的同一个仓库：补上这个写法
@@ -185,21 +219,22 @@ func (d *discoverer) walk(dir string) {
 		d.partial = true
 		return
 	}
-	if dir != d.top && hasDotGit(dir) {
+	if dir != d.top && d.hasDotGit(dir) {
 		if d.add(dir) {
 			d.inside(dir, "")
 		}
 		return
 	}
-	if bareRepo(dir) {
+	if d.bareRepo(dir) {
 		return
 	}
-	ents, err := os.ReadDir(dir)
+	ents, err := d.readDir(dir)
 	if err != nil {
+		d.failed(err)
 		return
 	}
 	for _, e := range ents {
-		if d.partial {
+		if d.partial || d.err != nil || d.ctx.Err() != nil {
 			return
 		}
 		name := e.Name()
@@ -209,7 +244,10 @@ func (d *discoverer) walk(dir string) {
 		p := filepath.Join(dir, name)
 		isDir := e.IsDir()
 		if !isDir && e.Type()&os.ModeSymlink != 0 {
-			fi, err := os.Stat(p)
+			fi, err := d.stat(p)
+			if err != nil && !os.IsNotExist(err) {
+				d.failed(err)
+			}
 			isDir = err == nil && fi.IsDir()
 		}
 		if isDir {
@@ -220,7 +258,7 @@ func (d *discoverer) walk(dir string) {
 
 // inside 在仓库 root 里找嵌套仓库、子模块和指向仓库的软链；spec 不为空时只看这个子目录（相对 root）。
 func (d *discoverer) inside(root, spec string) {
-	if d.ctx.Err() != nil {
+	if d.err != nil || d.ctx.Err() != nil {
 		return
 	}
 	args := func(base ...string) []string {
@@ -231,13 +269,13 @@ func (d *discoverer) inside(root, spec string) {
 	}
 	var cands []string
 	// 没被忽略的未跟踪目录：嵌套仓库在这里报成 "dir/"；软链在这里报成文件
-	if out, err := runRaw(d.ctx, root, nil, nil, args("ls-files", "--others", "--directory", "--exclude-standard", "-z")...); err == nil {
+	if out, err := d.run(root, args("ls-files", "--others", "--directory", "--exclude-standard", "-z")...); err == nil {
 		for _, p := range splitZ(out) {
 			cands = append(cands, strings.TrimSuffix(p, "/"))
 		}
 	}
 	// 子模块和 gitlink（160000）、已跟踪的软链（120000）
-	if out, err := runRaw(d.ctx, root, nil, nil, args("ls-files", "--stage", "-z")...); err == nil {
+	if out, err := d.run(root, args("ls-files", "--stage", "-z")...); err == nil {
 		for _, line := range splitZ(out) {
 			mode, rest, ok := strings.Cut(line, " ")
 			if !ok || mode != "160000" && mode != "120000" {
@@ -250,27 +288,27 @@ func (d *discoverer) inside(root, spec string) {
 	}
 	for _, rel := range cands {
 		p := filepath.Join(root, filepath.FromSlash(rel))
-		fi, err := os.Lstat(p)
+		fi, err := d.lstat(p)
 		if err != nil {
 			continue
 		}
 		if fi.Mode()&os.ModeSymlink != 0 {
-			real, err := filepath.EvalSymlinks(p)
+			real, err := d.eval(p)
 			if err != nil || d.ancestorOfTop(real) {
 				continue
 			}
-			if st, err := os.Stat(p); err != nil || !st.IsDir() {
+			if st, err := d.stat(p); err != nil || !st.IsDir() {
 				continue
 			}
 		} else if !fi.IsDir() {
 			continue
-		} else if !hasDotGit(p) {
+		} else if !d.hasDotGit(p) {
 			// 未跟踪的普通目录：--directory 把它整个报成一行 dir/。不带 --directory 再列一次这个目录：
 			// 照外层的忽略规则逐个列出文件，碰到嵌套仓库停下、报成 dir/x/
 			d.untrackedRepos(root, rel)
 			continue
 		}
-		if hasDotGit(p) && d.add(p) {
+		if d.hasDotGit(p) && d.add(p) {
 			d.inside(p, "")
 		}
 	}
@@ -278,7 +316,7 @@ func (d *discoverer) inside(root, spec string) {
 
 // untrackedRepos 找仓库 root 里未跟踪的普通目录 rel 下面的嵌套仓库（被外层忽略的不算）。
 func (d *discoverer) untrackedRepos(root, rel string) {
-	out, err := runRaw(d.ctx, root, nil, nil, "ls-files", "--others", "--exclude-standard", "-z", "--", rel+"/")
+	out, err := d.run(root, "ls-files", "--others", "--exclude-standard", "-z", "--", rel+"/")
 	if err != nil {
 		return
 	}
@@ -286,20 +324,20 @@ func (d *discoverer) untrackedRepos(root, rel string) {
 		p := filepath.Join(root, filepath.FromSlash(strings.TrimSuffix(f, "/")))
 		if !strings.HasSuffix(f, "/") {
 			// 软链 git 报成文件：指向目录的照普通目录那样跟过去（和 walk 一样不跟指向工作区自己、上级的）
-			fi, err := os.Lstat(p)
+			fi, err := d.lstat(p)
 			if err != nil || fi.Mode()&os.ModeSymlink == 0 {
 				continue
 			}
-			real, err := filepath.EvalSymlinks(p)
+			real, err := d.eval(p)
 			if err != nil || d.ancestorOfTop(real) {
 				continue
 			}
-			if st, err := os.Stat(p); err == nil && st.IsDir() {
+			if st, err := d.stat(p); err == nil && st.IsDir() {
 				d.walk(p)
 			}
 			continue
 		}
-		if hasDotGit(p) && d.add(p) {
+		if d.hasDotGit(p) && d.add(p) {
 			d.inside(p, "")
 		}
 	}

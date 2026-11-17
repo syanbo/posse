@@ -37,6 +37,26 @@ var Trace func(Run)
 var traceSeq, opSeq atomic.Int64
 
 type opKey struct{}
+type traceKey struct{}
+
+// WithTrace 将命令和操作结果绑定到本次调用，避免并行目标共用窗口的全局收集器；nil 表示不记录。
+// 收集器可能被同一操作的并发命令调用，调用方需自行同步，且不能阻塞命令执行。
+func WithTrace(ctx context.Context, collect func(Run)) context.Context {
+	return context.WithValue(ctx, traceKey{}, collect)
+}
+
+func traceFor(ctx context.Context) func(Run) {
+	if collect, ok := ctx.Value(traceKey{}).(func(Run)); ok {
+		return collect
+	}
+	return Trace
+}
+
+// 命令结束沿用开始时的收集器，不能因窗口或控制端切换而改变归属。
+type traceRecord struct {
+	Run
+	collect func(Run)
+}
 
 type opInfo struct {
 	name string
@@ -60,36 +80,39 @@ func WithOp(ctx context.Context, name string) context.Context {
 // 记在这个操作下面。成功时不报，命令都已经记过了。
 func OpResult(ctx context.Context, dir, msg string) {
 	op, _ := ctx.Value(opKey{}).(opInfo)
-	if Trace == nil || op.id == 0 || msg == "" {
+	collect := traceFor(ctx)
+	if collect == nil || op.id == 0 || msg == "" {
 		return
 	}
 	now := time.Now()
-	Trace(Run{ID: traceSeq.Add(1), Op: op.name, OpID: op.id, Dir: dir, Start: now, Done: true, Err: msg})
+	collect(Run{ID: traceSeq.Add(1), Op: op.name, OpID: op.id, Dir: dir, Start: now, Done: true, Err: msg})
 }
 
 // OpCanceled 报出操作被取消了。
 func OpCanceled(ctx context.Context, dir string) {
 	op, _ := ctx.Value(opKey{}).(opInfo)
-	if Trace == nil || op.id == 0 {
+	collect := traceFor(ctx)
+	if collect == nil || op.id == 0 {
 		return
 	}
-	Trace(Run{ID: traceSeq.Add(1), Op: op.name, OpID: op.id, Dir: dir, Start: time.Now(), Done: true, Err: MsgCanceled, Canceled: true})
+	collect(Run{ID: traceSeq.Add(1), Op: op.name, OpID: op.id, Dir: dir, Start: time.Now(), Done: true, Err: MsgCanceled, Canceled: true})
 }
 
-func traceStart(ctx context.Context, dir string, args []string) *Run {
-	if Trace == nil {
+func traceStart(ctx context.Context, dir string, args []string) *traceRecord {
+	collect := traceFor(ctx)
+	if collect == nil {
 		return nil
 	}
 	op, _ := ctx.Value(opKey{}).(opInfo)
-	r := &Run{ID: traceSeq.Add(1), Op: op.name, OpID: op.id, Dir: dir, Args: slices.Clone(args), Start: time.Now()}
+	r := &traceRecord{Run: Run{ID: traceSeq.Add(1), Op: op.name, OpID: op.id, Dir: dir, Args: slices.Clone(args), Start: time.Now()}, collect: collect}
 	if r.Op != "" || !readOnly(args) {
-		Trace(*r)
+		r.collect(r.Run)
 	}
 	return r
 }
 
-func traceEnd(r *Run, stdout, stderr []byte, errMsg string, canceled bool) {
-	if r == nil || Trace == nil || (errMsg == "" && r.Op == "" && readOnly(r.Args)) {
+func traceEnd(r *traceRecord, stdout, stderr []byte, errMsg string, canceled bool) {
+	if r == nil || (errMsg == "" && r.Op == "" && readOnly(r.Args)) {
 		return
 	}
 	r.Took, r.Done, r.Err, r.Canceled = time.Since(r.Start), true, errMsg, canceled
@@ -101,7 +124,7 @@ func traceEnd(r *Run, stdout, stderr []byte, errMsg string, canceled bool) {
 		}
 	}
 	r.Out = clip(text, 8<<10)
-	Trace(*r)
+	r.collect(r.Run)
 }
 
 // clip 超过 n 字节时留头尾、中间写省略了多少（英文的记号，界面经 Clipped 拆开后按界面语言写）。
