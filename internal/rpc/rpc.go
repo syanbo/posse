@@ -79,6 +79,12 @@ func NewServer() *Server {
 
 func (s *Server) Handle(method string, h Handler) { s.handlers[method] = h }
 
+// Handler 供同进程的协议入口复用已注册处理器；注册须在 Serve 之前完成。
+func (s *Server) Handler(method string) (Handler, bool) {
+	h, ok := s.handlers[method]
+	return h, ok
+}
+
 func (s *Server) HandleStream(method string, h StreamHandler) { s.streams[method] = h }
 
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
