@@ -379,6 +379,11 @@ func PNGBytes(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return PNGData(b)
+}
+
+// PNGData 把目标资源的原始字节转成剪贴板图片，不借用本机同名路径。
+func PNGData(b []byte) ([]byte, error) {
 	if bytes.HasPrefix(b, []byte("\x89PNG\r\n\x1a\n")) {
 		return b, nil
 	}

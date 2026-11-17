@@ -18,16 +18,17 @@ import (
 // 内嵌在会话文件里的只记位置，用到时按 Offset 读回那一行（ReadToolImage）；
 // OnDisk 的是 agent 自己存下的文件，内容就是 Path。
 type ToolImage struct {
-	Offset int64             // 所在行在会话文件里的起点
-	Index  int               // 这一行里的第几张
-	At     time.Time         // 那一行的时间；grok、cursor 的会话文件没有时间
-	Tool   string            // 返回它的工具，如 Read、mcp__iphone-use__phone_screenshot
-	Path   string            // 读的文件、粘贴的图片的文件；截图之类没有
-	Media  string            // 如 image/png
-	Pasted bool              // 用户粘贴的
-	N      int               // 粘贴的图片的序号（[Image #N]），不知道时是 0
-	OnDisk bool              // 内容在 Path，不在会话文件里
-	Digest [sha256.Size]byte // Codex 工具图片的内容摘要，用来排除生成目录中的副本
+	Offset   int64             // 所在行在会话文件里的起点
+	Index    int               // 这一行里的第几张
+	At       time.Time         // 那一行的时间；grok、cursor 的会话文件没有时间
+	Tool     string            // 返回它的工具，如 Read、mcp__iphone-use__phone_screenshot
+	Path     string            // 读的文件、粘贴的图片的文件；截图之类没有
+	Media    string            // 如 image/png
+	Pasted   bool              // 用户粘贴的
+	N        int               // 粘贴的图片的序号（[Image #N]），不知道时是 0
+	OnDisk   bool              // 内容在 Path，不在会话文件里
+	Digest   [sha256.Size]byte // Codex 工具图片的内容摘要，用来排除生成目录中的副本
+	LineHash [sha256.Size]byte `json:",omitzero"` // 目标读取核对整行，避免同一偏移被替换成另一张图。
 }
 
 // ImageScanner 增量读会话文件收集图片，不是并发安全的。各家记下的不同：
@@ -448,6 +449,10 @@ func ReadToolImage(path string, img ToolImage) ([]byte, error) {
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
+	return readToolImageLine(b, img)
+}
+
+func readToolImageLine(b []byte, img ToolImage) ([]byte, error) {
 	if urls, _, ok := codexImages(b); ok {
 		if img.Index >= len(urls) {
 			return nil, errImageGone
