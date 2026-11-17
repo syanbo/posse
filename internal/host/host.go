@@ -3,6 +3,7 @@
 package host
 
 import (
+	"context"
 	"os"
 	"time"
 
@@ -84,6 +85,7 @@ type Terminal interface {
 
 	// Send 是有人键入（会让"桌面有人在打字"的判断生效），Inject 是 posse 自己输入的提醒
 	Send(data []byte) error
+	SendContext(ctx context.Context, data []byte) error
 	Inject(data []byte) error
 	Resize(cols, rows int)
 	// HoldSize 让终端暂时按 key 的尺寸排版（手机看着时），ReleaseSize 放掉
@@ -97,6 +99,7 @@ type Terminal interface {
 	BracketedPaste() bool
 	ReclaimSize()
 	Clear(redraw bool) error
+	ClearContext(context.Context, bool) error
 	// Colors 是程序查到的默认配色（窗口终端在用的那套），SetColors 由窗口报来
 	Colors() Colors
 	SetColors(c Colors)
@@ -109,6 +112,7 @@ type Terminal interface {
 	// Watch 是只看不应答的接入（手机）。
 	Attach(cols, rows int) ([]byte, Subscription)
 	Watch() ([]byte, Subscription)
+	WatchSize() ([]byte, Subscription, int, int)
 
 	Close(grace time.Duration)
 
@@ -192,8 +196,11 @@ func (l *local) DropSubagent(id string) AgentState { return l.t.DropSubagent(id)
 func (l *local) SetTitle(title, sessionID string, pending bool) {
 	l.t.SetTitle(title, sessionID, pending)
 }
-func (l *local) TakeTitle() string             { return l.t.TakeTitle() }
-func (l *local) Send(data []byte) error        { return l.t.Send(data) }
+func (l *local) TakeTitle() string      { return l.t.TakeTitle() }
+func (l *local) Send(data []byte) error { return l.t.Send(data) }
+func (l *local) SendContext(ctx context.Context, data []byte) error {
+	return l.t.SendContext(ctx, data)
+}
 func (l *local) Inject(data []byte) error      { return l.t.Inject(data) }
 func (l *local) Resize(cols, rows int)         { l.t.Resize(cols, rows) }
 func (l *local) HoldSize(key string, c, r int) { l.t.HoldSize(key, c, r) }
@@ -204,15 +211,23 @@ func (l *local) CursorKeysApp() bool           { return l.t.CursorKeysApp() }
 func (l *local) BracketedPaste() bool          { return l.t.BracketedPaste() }
 func (l *local) ReclaimSize()                  { l.t.ReclaimSize() }
 func (l *local) Clear(redraw bool) error       { return l.t.Clear(redraw) }
-func (l *local) Colors() Colors                { return l.t.Colors() }
-func (l *local) SetColors(c Colors)            { l.t.SetColors(c) }
-func (l *local) Lines() []string               { return l.t.Lines() }
-func (l *local) ContainsText(sub string) bool  { return l.t.ContainsText(sub) }
-func (l *local) Screen() []string              { return l.t.Screen() }
-func (l *local) Close(grace time.Duration)     { l.t.Close(grace) }
-func (l *local) Resume()                       { l.t.Resume() }
+func (l *local) ClearContext(ctx context.Context, redraw bool) error {
+	return l.t.ClearContext(ctx, redraw)
+}
+func (l *local) Colors() Colors               { return l.t.Colors() }
+func (l *local) SetColors(c Colors)           { l.t.SetColors(c) }
+func (l *local) Lines() []string              { return l.t.Lines() }
+func (l *local) ContainsText(sub string) bool { return l.t.ContainsText(sub) }
+func (l *local) Screen() []string             { return l.t.Screen() }
+func (l *local) Close(grace time.Duration)    { l.t.Close(grace) }
+func (l *local) Resume()                      { l.t.Resume() }
 
 func (l *local) Pause() (Record, *os.File, error) { return l.t.Pause() }
+
+func (l *local) WatchSize() ([]byte, Subscription, int, int) {
+	snap, sub, cols, rows := l.t.WatchSize()
+	return snap, &localSub{l.t, sub}, cols, rows
+}
 
 func (l *local) Attach(cols, rows int) ([]byte, Subscription) {
 	snap, sub := l.t.Attach(cols, rows)

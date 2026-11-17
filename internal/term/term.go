@@ -4,6 +4,7 @@ package term
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -97,7 +98,9 @@ type Terminal struct {
 	pid int // 接过来的终端没有 cmd，pid 来自交接记录
 	pty *os.File
 	// replies 把内核对终端查询的应答交给写入协程：应答产生于持锁的 Write 期间，不能在那里阻塞
-	replies chan []byte
+	replies   chan []byte
+	inputOnce sync.Once
+	inputGate chan struct{}
 
 	lastOutput atomic.Int64
 	lastInput  atomic.Int64
@@ -161,6 +164,9 @@ type Subscriber struct {
 	queued atomic.Int64
 	// quiet 的接入者（手机）不应答终端查询，仍由常驻进程里的内核应答
 	quiet bool
+	// 固定网格的查看端遇到尺寸变化要重新取快照；手机 Watch 自己管理尺寸。
+	fixedGrid bool
+	grid      [2]int
 	// kicked 是内核重建后被断开：程序还在跑，接入者要马上重新接入拿新快照
 	kicked atomic.Bool
 }
@@ -300,7 +306,7 @@ func (t *Terminal) run() {
 		for {
 			select {
 			case p := <-t.replies:
-				t.pty.Write(p)
+				t.writeInput(context.Background(), p)
 			case <-t.exited:
 				return
 			}
@@ -414,6 +420,14 @@ var clearSeq = []byte("\x1b[H\x1b[2J\x1b[3J")
 // 之后接入拿到的快照也是空的。redraw 时再给程序发 Ctrl+L，让 shell 重画提示符、TUI 重画界面；
 // 在清屏之后发，程序重画的内容不会被清掉。
 func (t *Terminal) Clear(redraw bool) error {
+	return t.ClearContext(context.Background(), redraw)
+}
+
+// ClearContext 让重绘输入也服从操作取消，避免队列满时退出流程等不到清屏完成。
+func (t *Terminal) ClearContext(ctx context.Context, redraw bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	t.smu.Lock()
 	if t.emu != nil {
 		t.emu.Write(clearSeq)
@@ -422,7 +436,7 @@ func (t *Terminal) Clear(redraw bool) error {
 	t.smu.Unlock()
 	t.notify()
 	if redraw {
-		return t.Send([]byte{0x0c})
+		return t.SendContext(ctx, []byte{0x0c})
 	}
 	return nil
 }
@@ -493,9 +507,15 @@ func (t *Terminal) Watch() ([]byte, *Subscriber) {
 	return t.subscribe(&Subscriber{C: make(chan []byte, 1024), quiet: true})
 }
 
+func (t *Terminal) WatchSize() ([]byte, *Subscriber, int, int) {
+	snap, sub := t.subscribe(&Subscriber{C: make(chan []byte, 1024), quiet: true, fixedGrid: true})
+	return snap, sub, sub.grid[0], sub.grid[1]
+}
+
 func (t *Terminal) subscribe(s *Subscriber) ([]byte, *Subscriber) {
 	t.smu.Lock()
 	defer t.smu.Unlock()
+	s.grid[0], s.grid[1] = t.Size()
 	var snap []byte
 	if t.emu != nil {
 		// PTY 一次读约 1KB，常停在转义序列中间，内核已经吃进前半截。快照后面接上这半截，
@@ -795,11 +815,20 @@ func (t *Terminal) ReclaimSize() {
 func (t *Terminal) resize(cols, rows int) {
 	t.smu.Lock()
 	if t.emu != nil {
-		_, oldRows := t.emu.Size()
+		oldCols, oldRows := t.emu.Size()
 		_, cy := t.emu.Cursor()
 		bar := t.emu.Scrollbar()
 		if t.emu.Resize(cols, rows, 8, 16) == nil {
 			t.storeSize(cols, rows)
+			if c, r := t.Size(); c != oldCols || r != oldRows {
+				for sub := range t.subs {
+					if sub.fixedGrid {
+						sub.kicked.Store(true)
+						delete(t.subs, sub)
+						close(sub.C)
+					}
+				}
+			}
 			switch {
 			case rows < oldRows:
 				// 变少时 libghostty 先去掉底部的空行
@@ -913,13 +942,17 @@ func (t *Terminal) setPTYSize(cols, rows int) {
 }
 
 // Send 直接写入 PTY，等同于用户键入。
-func (t *Terminal) Send(data []byte) error {
+func (t *Terminal) Send(data []byte) error { return t.SendContext(context.Background(), data) }
+
+func (t *Terminal) SendContext(ctx context.Context, data []byte) error {
 	t.lastInput.Store(time.Now().UnixNano())
-	return t.Inject(data)
+	return t.inject(ctx, data)
 }
 
 // Inject 是 posse 自己往终端里打字（如提醒 agent 有新消息），不算作用户输入。
-func (t *Terminal) Inject(data []byte) error {
+func (t *Terminal) Inject(data []byte) error { return t.inject(context.Background(), data) }
+
+func (t *Terminal) inject(ctx context.Context, data []byte) error {
 	if !t.Running() {
 		return errors.New("terminal has exited")
 	}
@@ -934,8 +967,63 @@ func (t *Terminal) Inject(data []byte) error {
 		}
 	}
 	t.mouseLast.Store(mouse)
-	_, err := t.pty.Write(data)
-	return err
+	return t.writeInput(ctx, data)
+}
+
+// 不给共享 PTY 设置写期限，避免取消桌面输入时也打断手机或 CLI 的写入。
+// 描述符本来就是非阻塞的；只有队列写满时短暂等待，期间响应本次输入的取消。
+func (t *Terminal) writeInput(ctx context.Context, data []byte) error {
+	t.inputOnce.Do(func() { t.inputGate = make(chan struct{}, 1) })
+	select {
+	case t.inputGate <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-t.inputGate }()
+	raw, err := t.pty.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var tick *time.Ticker
+	defer func() {
+		if tick != nil {
+			tick.Stop()
+		}
+	}()
+	for len(data) > 0 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var n int
+		var werr error
+		if err := raw.Control(func(fd uintptr) { n, werr = unix.Write(int(fd), data) }); err != nil {
+			return err
+		}
+		if n > 0 {
+			data = data[n:]
+		}
+		if werr == unix.EINTR {
+			continue
+		}
+		if werr != nil && werr != unix.EAGAIN {
+			return werr
+		}
+		if len(data) == 0 {
+			return nil
+		}
+		if werr != unix.EAGAIN && n > 0 {
+			continue
+		}
+		if tick == nil {
+			tick = time.NewTicker(5 * time.Millisecond)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
+	return nil
 }
 
 // mouseQueued 是 PTY 输入队列里没读的字节超过多少时不再写滚轮、移动的报告：程序已经跟不上了。
