@@ -45,6 +45,8 @@ type Host interface {
 	// 期间经 notify 推状态，结束时恰好推一次 Type 为 end 的事件（ctx 结束也推）。
 	// 错误用 DeskError 带上错误码。
 	Desk(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error)
+	// BeginGitWrite 在修改前取得目标资源并登记生命周期；返回后须重新读取状态，完成后释放。
+	BeginGitWrite(ctx context.Context, target GitWriteTarget) (context.Context, func(), error)
 	// RecordGit 把手机做的 git 操作记进桌面 Git 日志的操作记录
 	RecordGit(r GitRecord)
 }

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 
@@ -36,6 +37,11 @@ type projectInfo struct {
 }
 
 func (d *Daemon) projectAdd(ctx context.Context, raw json.RawMessage) (any, error) {
+	ctx, finish, opErr := d.beginWorkspaceOperation(ctx)
+	if opErr != nil {
+		return nil, opErr
+	}
+	defer finish()
 	var p projectAddParams
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
@@ -43,10 +49,27 @@ func (d *Daemon) projectAdd(ctx context.Context, raw json.RawMessage) (any, erro
 	if p.Path == "" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "path required")
 	}
-	path, err := filepath.Abs(p.Path)
+	path := p.Path
+	if strings.Contains("/"+path+"/", "/../") {
+		// Abs 会先清掉 link/..；含父目录时先按文件系统解析，普通软链接仍保留显示路径。
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not a directory", path)
+		}
+		path = resolved
+	}
+	path, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
+	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not a directory", path)
+	}
+	release, err := d.lockWritePaths(ctx, []string{path})
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not a directory", path)
 	}
@@ -106,6 +129,11 @@ type projectSetParams struct {
 }
 
 func (d *Daemon) projectSet(ctx context.Context, raw json.RawMessage) (any, error) {
+	ctx, finish, opErr := d.beginWorkspaceOperation(ctx)
+	if opErr != nil {
+		return nil, opErr
+	}
+	defer finish()
 	var p projectSetParams
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
@@ -114,6 +142,11 @@ func (d *Daemon) projectSet(ctx context.Context, raw json.RawMessage) (any, erro
 	if err != nil {
 		return nil, err
 	}
+	proj, release, err := d.lockProjectSettings(ctx, proj.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if p.Name != nil {
 		if err := validName(*p.Name); err != nil {
 			return nil, err
@@ -141,6 +174,11 @@ type projectRmParams struct {
 
 // projectRm 只移除登记，不删除项目目录；有 worktree 工作区或运行中的终端时需要 force。
 func (d *Daemon) projectRm(ctx context.Context, raw json.RawMessage) (any, error) {
+	ctx, finish, opErr := d.beginWorkspaceOperation(ctx)
+	if opErr != nil {
+		return nil, opErr
+	}
+	defer finish()
 	var p projectRmParams
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
@@ -149,10 +187,12 @@ func (d *Daemon) projectRm(ctx context.Context, raw json.RawMessage) (any, error
 	if err != nil {
 		return nil, err
 	}
-	ws, err := d.store.Workspaces(proj.ID)
+	state, release, err := d.lockProjectWrite(ctx, proj.ID, nil, true)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
+	proj, ws := state.project, state.workspaces
 	// 项目目录已经没了：git 删不了它的 worktree，force 时连同 worktree 工作区一起移除，只删记录和残留目录
 	gone := projectGone(proj, ws)
 	for _, w := range ws {
@@ -218,6 +258,11 @@ type setupResult struct {
 }
 
 func (d *Daemon) workspaceCreate(ctx context.Context, raw json.RawMessage) (any, error) {
+	ctx, finish, opErr := d.beginWorkspaceOperation(ctx)
+	if opErr != nil {
+		return nil, opErr
+	}
+	defer finish()
 	var p workspaceCreateParams
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
@@ -252,6 +297,11 @@ func (d *Daemon) workspaceCreate(ctx context.Context, raw json.RawMessage) (any,
 
 // createWorkspace 建工作区记录，worktree 模式下同时建 git worktree 并运行 setup 脚本。
 func (d *Daemon) createWorkspace(ctx context.Context, proj store.Project, p workspaceCreateParams) (store.Workspace, *setupResult, error) {
+	ctx, finish, opErr := d.beginWorkspaceOperation(ctx)
+	if opErr != nil {
+		return store.Workspace{}, nil, opErr
+	}
+	defer finish()
 	if err := validName(p.Name); err != nil {
 		return store.Workspace{}, nil, err
 	}
@@ -265,6 +315,27 @@ func (d *Daemon) createWorkspace(ctx context.Context, proj store.Project, p work
 			mode = "worktree"
 		}
 	}
+	var paths []string
+	if mode == "worktree" {
+		paths = append(paths, filepath.Join(d.cfg.Home, "worktrees", proj.Name, p.Name))
+		for _, rel := range p.Repos {
+			if filepath.IsAbs(rel) || upward(filepath.Clean(rel)) {
+				return store.Workspace{}, nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not a git repository in project %s", rel, proj.Name)
+			}
+			paths = append(paths, filepath.Join(proj.Path, rel))
+		}
+	} else if mode == "attach" && p.Path != "" {
+		paths = append(paths, p.Path)
+	}
+	state, release, lockErr := d.lockProjectWrite(ctx, proj.ID, paths, false)
+	if lockErr != nil {
+		return store.Workspace{}, nil, lockErr
+	}
+	defer release()
+	if state.project.Path != proj.Path || state.project.Name != proj.Name {
+		return store.Workspace{}, nil, workspaceWriteChanged()
+	}
+	proj = state.project
 	w := store.Workspace{ID: store.NewID("w_"), ProjectID: proj.ID, Name: p.Name, Kind: mode, CreatedAt: time.Now()}
 	var undoRepos func() // 多仓库 worktree 建好了、记录没写进去时撤掉
 	var err error
@@ -327,6 +398,9 @@ func (d *Daemon) createWorkspace(ctx context.Context, proj store.Project, p work
 		}
 		return w, nil, err
 	}
+	// setup 可以反向调用 Posse；登记和回滚已经完成，不能拿着资源锁等待脚本。
+	// 生命周期仍保留，交接与退出会等到脚本结束。
+	release()
 	var setup *setupResult
 	if mode == "worktree" && proj.SetupScript != "" && !p.NoSetup {
 		setup = runSetup(ctx, w, proj.SetupScript)
@@ -366,22 +440,36 @@ func (d *Daemon) attachPath(ctx context.Context, proj store.Project, dir string)
 
 // runSetup 在新 worktree 里用登录 shell 执行项目的 setup 脚本。
 func runSetup(ctx context.Context, w store.Workspace, script string) *setupResult {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
+	_, desktop := ctx.Value(desktopCallContext{}).(desktopRequestContext)
+	if lifecycle, _ := ctx.Value(workspaceOperationContext{}).(*Daemon); !desktop && lifecycle == nil {
+		ctx = context.WithoutCancel(ctx)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, agent.UserShell(), "-l", "-c", script)
+	// 停止 daemon 时收走 setup 的子进程，不能让它继续改写即将关闭的工作区。
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
+	cmd.WaitDelay = 2 * time.Second
+	var runErr error
+	defer func() {
+		if (ctx.Err() != nil || errors.Is(runErr, exec.ErrWaitDelay)) && cmd.Process != nil {
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+	}()
 	cmd.Dir = w.Path
 	cmd.Env = term.Environ([]string{"POSSE_WORKSPACE_ID=" + w.ID, "POSSE_WORKSPACE_PATH=" + w.Path})
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
-	err := cmd.Run()
+	runErr = cmd.Run()
 	s := out.String()
 	if len(s) > 4096 {
 		s = "…" + s[len(s)-4096:]
 	}
-	if err != nil {
-		s += "\n" + err.Error()
+	if runErr != nil {
+		s += "\n" + runErr.Error()
 	}
-	return &setupResult{OK: err == nil, Output: s}
+	return &setupResult{OK: runErr == nil, Output: s}
 }
 
 type workspaceListParams struct {
@@ -426,6 +514,10 @@ func (d *Daemon) workspaceInfo(ctx context.Context, w store.Workspace, dirty boo
 func (d *Daemon) buildWorkspaceInfo(ctx context.Context, w store.Workspace, dirty bool, label string, sessions []*session, lost []store.Terminal) workspaceInfo {
 	info := workspaceInfo{Workspace: w, Label: label, Terminals: d.terminalInfos(sessions, lost)}
 	info.Project, _, _ = strings.Cut(info.Label, "/")
+	// 桌面目录快照不执行 Git；Git 状态由独立服务负责，不能在查询中刷新索引。
+	if p, ok := ctx.Value(desktopCallContext{}).(desktopRequestContext); ok && p.readOnly {
+		dirty = false
+	}
 	if dirty && len(w.Repos) > 0 {
 		v := reposDirty(ctx, w)
 		info.Dirty = &v
@@ -509,11 +601,25 @@ type workspaceRmParams struct {
 }
 
 func (d *Daemon) workspaceRm(ctx context.Context, raw json.RawMessage) (any, error) {
+	ctx, finish, opErr := d.beginWorkspaceOperation(ctx)
+	if opErr != nil {
+		return nil, opErr
+	}
+	defer finish()
 	var p workspaceRmParams
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
 	w, err := d.workspace(p.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	state, release, err := d.lockProjectWrite(ctx, w.ProjectID, nil, true)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	w, err = state.workspace(w.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -581,6 +687,11 @@ type workspaceRelocateParams struct {
 // workspaceRelocate 给目录在外面挪了地方的工作区重新指定目录。main 工作区就是项目目录，
 // 连项目和同一目录上的工作区一起改。git 项目要求新目录是仓库根目录，worktree 还要是这个仓库的。
 func (d *Daemon) workspaceRelocate(ctx context.Context, raw json.RawMessage) (any, error) {
+	ctx, finish, opErr := d.beginWorkspaceOperation(ctx)
+	if opErr != nil {
+		return nil, opErr
+	}
+	defer finish()
 	var p workspaceRelocateParams
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
@@ -602,6 +713,19 @@ func (d *Daemon) workspaceRelocate(ctx context.Context, raw json.RawMessage) (an
 	}
 	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not a directory", p.Path)
+	}
+	state, release, err := d.lockProjectWrite(ctx, proj.ID, []string{path}, true)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not a directory", p.Path)
+	}
+	proj = state.project
+	w, err = state.workspace(w.ID)
+	if err != nil {
+		return nil, err
 	}
 	// 旧目录已经不在，比较不了符号链接，按字面比
 	onProject := w.Kind == "main" || filepath.Clean(w.Path) == filepath.Clean(proj.Path)

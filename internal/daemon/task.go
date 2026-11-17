@@ -127,6 +127,11 @@ type taskStartParams struct {
 }
 
 func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error) {
+	ctx, finish, opErr := d.beginWorkspaceOperation(ctx)
+	if opErr != nil {
+		return nil, opErr
+	}
+	defer finish()
 	var p taskStartParams
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
@@ -1009,6 +1014,11 @@ func (d *Daemon) workspaceDiff(ctx context.Context, raw json.RawMessage) (any, e
 // workspaceMerge 把 worktree 的分支合进项目目录；要求两边已跟踪的文件都没有未提交的改动、
 // 分支有新提交、项目目录正好在基准分支上。
 func (d *Daemon) workspaceMerge(ctx context.Context, raw json.RawMessage) (any, error) {
+	ctx, finish, opErr := d.beginWorkspaceOperation(ctx)
+	if opErr != nil {
+		return nil, opErr
+	}
+	defer finish()
 	var p workspaceSel
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
@@ -1017,6 +1027,16 @@ func (d *Daemon) workspaceMerge(ctx context.Context, raw json.RawMessage) (any, 
 	if err != nil {
 		return nil, err
 	}
+	state, release, err := d.lockProjectWrite(ctx, proj.ID, nil, false)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	w, err = state.workspace(w.ID)
+	if err != nil {
+		return nil, err
+	}
+	proj = state.project
 	if len(w.Repos) > 0 {
 		return mergeRepos(ctx, w)
 	}

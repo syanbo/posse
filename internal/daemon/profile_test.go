@@ -80,8 +80,9 @@ func TestProfileSyncBothWays(t *testing.T) {
 
 	// 换头像：两边都只留在用的一份，对方的头像不删
 	res2 := call(t, m.profileSet, map[string]any{"data": testPNG(t, 300, 300, color.RGBA{0, 200, 0, 255})}).(profileInfo)
-	waitFor(t, "host sees new avatar", func() bool {
-		return person(t, h, room, memberFP).Avatar == res2.Avatar
+	// 资料先写数据库，再清理旧缓存；读到新资料并不代表整个同步请求已经完成。
+	waitFor(t, "host sees new avatar and prunes old cache", func() bool {
+		return person(t, h, room, memberFP).Avatar == res2.Avatar && !collaboration.HasAvatar(h.cfg.Home, res.Avatar)
 	})
 	if collaboration.HasAvatar(h.cfg.Home, res.Avatar) || collaboration.HasAvatar(m.cfg.Home, res.Avatar) {
 		t.Fatal("replaced avatar kept")
@@ -92,8 +93,8 @@ func TestProfileSyncBothWays(t *testing.T) {
 
 	// 去掉头像也同步过去，旧缓存不把它带回来
 	call(t, m.profileSet, map[string]any{"remove": true})
-	waitFor(t, "avatar removed on host", func() bool {
-		return person(t, h, room, memberFP).Avatar == ""
+	waitFor(t, "avatar and cache removed on host", func() bool {
+		return person(t, h, room, memberFP).Avatar == "" && !collaboration.HasAvatar(h.cfg.Home, res2.Avatar)
 	})
 	if person(t, m, room, memberFP).Avatar != "" {
 		t.Fatal("member's own row kept the removed avatar")

@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +15,79 @@ import (
 
 // 聊天工作区（聊天目录加成的项目，见 internal/agent/chat.go）：用户开的 agent 各在一个新的子文件夹里，
 // 聊天结束时没留下文件的子文件夹删掉。
+
+// chatLocation 只发现目标配置和已有登记，不因查看聊天而创建目录或项目。
+func (d *Daemon) chatLocation() (rpc.ChatLocation, error) {
+	location := rpc.ChatLocation{Path: agent.ChatDir(d.cfg.Home)}
+	ws, err := d.store.Workspaces("")
+	if err != nil {
+		return location, err
+	}
+	for _, w := range ws {
+		if w.Kind == "main" && samePath(w.Path, location.Path) {
+			location.Path, location.WorkspaceID = w.Path, w.ID
+			break
+		}
+	}
+	return location, nil
+}
+
+// chatEnsure 的目录只从目标配置取；客户端的路径用于核对，不能指定新的聊天目录。
+func (d *Daemon) chatEnsure(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p rpc.ChatEnsureParams
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	d.chatMu.Lock()
+	defer d.chatMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	location, err := d.chatLocation()
+	if err != nil {
+		return nil, err
+	}
+	if p.ExpectedPath == "" || !samePath(p.ExpectedPath, location.Path) {
+		return nil, rpc.Errorf(rpc.CodeConflict, "chat directory changed; refresh before creating a chat workspace")
+	}
+	if location.WorkspaceID != "" {
+		return location, nil
+	}
+	name := p.Name
+	if name == "" {
+		name = filepath.Base(location.Path)
+	}
+	ps, err := d.store.Projects()
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range ps {
+		if p.Name == name {
+			name = filepath.Base(location.Path)
+			break
+		}
+	}
+	if err := validName(name); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(location.Path, 0o755); err != nil {
+		return nil, rpc.Errorf(rpc.CodeInternal, "create chat folder: %v", err)
+	}
+	params, _ := json.Marshal(projectAddParams{Path: location.Path, Name: name})
+	_, err = d.projectAdd(ctx, params)
+	// 其他入口可能刚登记同一路径；只核对已存在的结果，不重发创建。
+	current, readErr := d.chatLocation()
+	if readErr == nil && current.WorkspaceID != "" && samePath(current.Path, location.Path) {
+		return current, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if readErr != nil {
+		return nil, readErr
+	}
+	return nil, rpc.Errorf(rpc.CodeConflict, "chat directory changed; refresh before creating a chat workspace")
+}
 
 // startUserAgent 启动用户开的 agent 会话（窗口、手机、CLI 的 terminal create）：在聊天工作区里先建一个子文件夹。
 // 任务的 worker 不经这里，见 taskStart。

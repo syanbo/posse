@@ -95,7 +95,9 @@ func (d *Daemon) usageAgentOn(name string) bool {
 	return d.usageOn() && !slices.Contains(agent.Disabled(d.cfg.Home), name)
 }
 
-func (d *Daemon) usageStatus() *usageStatus {
+func (d *Daemon) usageStatus() *usageStatus { return d.usageSnapshot(true) }
+
+func (d *Daemon) usageSnapshot(refresh bool) *usageStatus {
 	if d.usage.store == nil {
 		return nil
 	}
@@ -103,16 +105,18 @@ func (d *Daemon) usageStatus() *usageStatus {
 		return &usageStatus{Usages: []usage.Usage{}, Off: true, CursorOff: d.usage.store.CursorOff(), CodexOff: d.usage.store.CodexOff()}
 	}
 	off := agent.Disabled(d.cfg.Home)
-	d.usage.mu.Lock()
-	reopened := slices.ContainsFunc(d.usage.disabled, func(n string) bool { return !slices.Contains(off, n) })
-	d.usage.disabled = off
-	if reopened {
-		// 关着时什么都没读，Claude 缓存的修改时间要重新比
-		d.usage.claudeMod = time.Time{}
-	}
-	d.usage.mu.Unlock()
-	if reopened {
-		go d.usageStart()
+	if refresh {
+		d.usage.mu.Lock()
+		reopened := slices.ContainsFunc(d.usage.disabled, func(n string) bool { return !slices.Contains(off, n) })
+		d.usage.disabled = off
+		if reopened {
+			// 关着时什么都没读，Claude 缓存的修改时间要重新比
+			d.usage.claudeMod = time.Time{}
+		}
+		d.usage.mu.Unlock()
+		if reopened {
+			go d.usageStart()
+		}
 	}
 	d.usage.mu.Lock()
 	codexError, codexReading := d.usage.codexError, d.usage.codexPending != nil
@@ -403,7 +407,7 @@ func (d *Daemon) usageRefresh(ctx context.Context, raw json.RawMessage) (any, er
 }
 
 func (d *Daemon) usageGet(ctx context.Context, raw json.RawMessage) (any, error) {
-	if st := d.usageStatus(); st != nil {
+	if st := d.usageSnapshot(!isDesktopRequest(ctx)); st != nil {
 		return st, nil
 	}
 	return usageStatus{Usages: []usage.Usage{}}, nil

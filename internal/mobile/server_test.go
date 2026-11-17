@@ -38,6 +38,7 @@ type fakeHost struct {
 	// historyGate 不为空时历史查询等它关上才返回，模拟等索引
 	historyGate chan struct{}
 	gitRecs     []GitRecord
+	gitWrite    func(context.Context, GitWriteTarget) (context.Context, func(), error)
 	// working 不为空时工作区里多一个正在工作的这个 agent
 	working string
 	// extra 是 w1 之外的工作区
@@ -106,6 +107,16 @@ func (h *fakeHost) Terminal(id string) host.Terminal {
 
 func (h *fakeHost) CreateTerminal(wid, agent, prompt, command string) (string, error) {
 	return "", errors.New("not supported")
+}
+
+func (h *fakeHost) BeginGitWrite(ctx context.Context, target GitWriteTarget) (context.Context, func(), error) {
+	h.mu.Lock()
+	fn := h.gitWrite
+	h.mu.Unlock()
+	if fn != nil {
+		return fn(ctx, target)
+	}
+	return ctx, func() {}, nil
 }
 
 func (h *fakeHost) CloseTerminal(id string) error { return nil }

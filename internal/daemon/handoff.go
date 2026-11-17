@@ -203,6 +203,14 @@ func (d *Daemon) daemonHandoff(ctx context.Context, raw json.RawMessage, stop co
 	if exe == "" {
 		exe = d.launcher.Exe
 	}
+	if err := d.desktop.blockHandoff(); err != nil {
+		return nil, err
+	}
+	defer func() {
+		if !d.handoff.handedOff() {
+			d.desktop.unblock()
+		}
+	}()
 	h := &d.handoff
 	h.startMu.Lock()
 	h.mu.Lock()

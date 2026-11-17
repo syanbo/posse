@@ -28,6 +28,7 @@ import (
 	"posse/internal/spawn"
 	"posse/internal/store"
 	"posse/internal/term"
+	"posse/internal/writecoord"
 )
 
 const Version = "0.1.40"
@@ -204,13 +205,17 @@ func (s *session) detectAgent() (name string, hooked, changed bool, sid string) 
 }
 
 type Daemon struct {
-	cfg      Config
-	store    *store.Store
-	started  time.Time
-	launcher agent.Launcher
-	runtime  string // 自己所在的副本目录（spawn.RuntimeDir），不在副本里运行时为空
+	cfg        Config
+	store      *store.Store
+	started    time.Time
+	launcher   agent.Launcher
+	runtime    string // 自己所在的副本目录（spawn.RuntimeDir），不在副本里运行时为空
+	instanceID string
+	desktop    desktopControl
+	writes     writecoord.Coordinator
 
 	avatarMu sync.Mutex // 头像落盘、改引用和回收不交错（profile.go）
+	chatMu   sync.Mutex // 同时到达的聊天创建只登记一次项目。
 
 	mu    sync.Mutex
 	terms map[string]*session
@@ -229,6 +234,7 @@ type Daemon struct {
 	noLost    atomic.Bool // 已经没有等着恢复的终端了（lostIn）
 
 	history  historyState
+	media    mediaState
 	mobile   *mobile.Server
 	host     host.Host // 托管终端，测试里为空时用进程内的
 	awake    *awake    // 防休眠，测试里为空
@@ -341,6 +347,7 @@ func Run(ctx context.Context, cfg Config) error {
 	var keep []string
 	var ln *net.UnixListener
 	if in != nil {
+		d.desktop.blocked = true
 		err := d.adopt(in)
 		if aerr := in.answer(err); err == nil && aerr != nil {
 			err = aerr
@@ -433,6 +440,7 @@ func Run(ctx context.Context, cfg Config) error {
 				lockMu.Lock()
 				unlock = u
 				lockMu.Unlock()
+				d.desktop.unblock()
 				d.startMobile()
 				d.disc.mu.Lock()
 				d.reconcileDiscussions(false)
@@ -514,8 +522,13 @@ func lock(path string, wait time.Duration) (func(), error) {
 }
 
 func (d *Daemon) closeAll() {
+	d.desktop.shutdown()
+	d.media.close()
 	// Serve 出错返回时 ctx 还没取消，这里也要置上，关掉的终端留着恢复
 	d.exiting.Store(true)
+	// 等已经进入启动段的恢复登记完；后来到达的启动会看到 exiting 并退出。
+	d.handoff.startMu.Lock()
+	defer d.handoff.startMu.Unlock()
 	// 交接出去的终端由新进程接着跑
 	if d.handoff.handedOff() {
 		return
@@ -526,6 +539,8 @@ func (d *Daemon) closeAll() {
 }
 
 func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
+	d.registerRemote(srv)
+	d.registerDesktop(srv)
 	srv.Handle("daemon.status", d.status)
 	srv.Handle("desk.stop", d.deskStop)
 	srv.Handle("daemon.handoff", func(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -543,6 +558,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 		time.AfterFunc(100*time.Millisecond, stop)
 		return map[string]bool{"stopping": true}, nil
 	})
+	srv.Handle("chat.ensure", d.chatEnsure)
 	srv.Handle("project.add", d.projectAdd)
 	srv.Handle("project.list", d.projectList)
 	srv.Handle("project.set", d.projectSet)
@@ -578,10 +594,40 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("task.send", d.taskSend)
 	srv.Handle("task.close", d.taskClose)
 	srv.Handle("task.clear", d.taskClear)
+	srv.Handle("files.entry", d.filesEntry)
+	srv.Handle("files.trash", d.filesTrash)
+	srv.Handle("files.version", d.filesVersion)
+	srv.Handle("files.save", d.filesSave)
+	srv.Handle("files.pasteImage", d.filesPasteImage)
+	srv.Handle("media.list", d.mediaList)
+	srv.Handle("media.path", d.mediaPath)
+	srv.Handle("git.discover", d.gitDiscover)
+	srv.Handle("git.status", d.gitStatus)
+	srv.Handle("git.branches", d.gitBranches)
+	srv.Handle("git.file", d.gitFile)
+	srv.Handle("git.blobRange", d.gitBlobRange)
+	srv.Handle("git.log", d.gitLog)
+	srv.Handle("git.commitFiles", d.gitCommitFiles)
+	srv.Handle("git.blame", d.gitBlame)
+	srv.Handle("git.compare", d.gitCompare)
+	srv.Handle("git.worktreeCompare", d.gitWorktreeCompare)
+	srv.Handle("git.pushPreview", d.gitPushPreview)
+	srv.Handle("git.fetch", d.gitFetch)
+	srv.Handle("git.divergence", d.gitDivergence)
+	srv.Handle("files.stat", d.filesStat)
+	srv.Handle("files.readDirs", d.filesReadDirs)
+	srv.Handle("files.readRange", d.filesReadRange)
+	srv.Handle("files.resourceRange", d.filesResourceRange)
+	srv.Handle("files.resourceVersion", d.filesResourceVersion)
+	srv.Handle("files.list", d.filesList)
+	srv.Handle("files.search", d.filesSearch)
+	srv.Handle("files.symbols", d.filesSymbols)
+	srv.Handle("files.definition", d.filesDefinition)
 	srv.Handle("history.search", d.historySearch)
 	srv.Handle("history.list", d.historyList)
 	srv.Handle("history.show", d.historyShow)
 	srv.Handle("history.resume", d.historyResume)
+	srv.Handle("history.trash", d.historyTrash)
 	srv.Handle("history.index", d.historyIndexNow)
 	srv.Handle("hook.event", d.hookEvent)
 	srv.Handle("trace.list", d.traceList)
@@ -656,7 +702,8 @@ type statusResult struct {
 	// DeskMissing 是看桌面缺的系统授权：screen、accessibility。看过一次才知道
 	DeskMissing []string `json:"deskMissing,omitempty"`
 	// Agents 是本机装了的 agent，界面和手机只列这些；还没检测完时为 null
-	Agents []string `json:"agents"`
+	Agents []string         `json:"agents"`
+	Chat   rpc.ChatLocation `json:"chat"`
 }
 
 func (d *Daemon) status(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -665,7 +712,7 @@ func (d *Daemon) status(ctx context.Context, raw json.RawMessage) (any, error) {
 		Colors *host.Colors `json:"colors"`
 	}
 	if rpc.Decode(raw, &p) == nil && p.Colors != nil {
-		d.windowReported(*p.Colors)
+		d.desktopWindowReported(ctx, *p.Colors)
 	}
 	d.mu.Lock()
 	total, running := len(d.terms), 0
@@ -684,7 +731,7 @@ func (d *Daemon) status(ctx context.Context, raw json.RawMessage) (any, error) {
 		st := d.awake.status()
 		r.Awake = &st
 	}
-	r.Usage = d.usageStatus()
+	r.Usage = d.usageSnapshot(!isDesktopRequest(ctx))
 	r.GitTraceSeq = d.gitTrace.latest()
 	if d.mobile != nil {
 		for _, dv := range d.mobile.Devices() {
@@ -695,7 +742,9 @@ func (d *Daemon) status(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	r.DeskViewer, r.DeskMissing = d.deskStatus()
 	r.Agents = d.installedAgents()
-	return r, nil
+	var err error
+	r.Chat, err = d.chatLocation()
+	return r, err
 }
 
 // --- 查找

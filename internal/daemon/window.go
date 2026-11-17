@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -42,6 +43,18 @@ func (w *windowColors) current() *host.Colors {
 	}
 	c := *w.colors
 	return &c
+}
+
+func (d *Daemon) desktopWindowReported(ctx context.Context, colors host.Colors) {
+	c := &d.desktop
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.expireLocked()
+	p, desktop := ctx.Value(desktopCallContext{}).(desktopRequestContext)
+	if c.blocked || desktop && !d.desktopValidLocked(&p.identity) || !desktop && c.owner != "" {
+		return
+	}
+	d.windowReported(colors)
 }
 
 // windowReported 处理窗口随 daemon.status 报来的配色。

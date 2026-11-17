@@ -135,6 +135,25 @@ func (c *conn) gitCheckout(id string, p json.RawMessage) error {
 	if err != nil {
 		return err
 	}
+	ctx, release, err := c.srv.host.BeginGitWrite(ctx, GitWriteTarget{WorkspaceID: w.ID, WorkspacePath: w.Path, Root: root})
+	if err != nil {
+		return err
+	}
+	defer release()
+	// 排队期间工作区、分支与 agent 状态可能已变，不能沿用取得锁之前的快照。
+	state = c.srv.host.State()
+	current, ok := workspaceOf(state, a.Worktree)
+	if !ok || current.ID != w.ID || current.Path != w.Path {
+		return errorf("conflict", "workspace resources changed; refresh before trying again")
+	}
+	w = current
+	currentRoot, err := c.repoRoot(ctx, state, w, a.Repo)
+	if err != nil {
+		return err
+	}
+	if currentRoot != root {
+		return errorf("conflict", "workspace resources changed; refresh before trying again")
+	}
 	list, err := gitx.Branches(ctx, root)
 	if err != nil {
 		return errorf("git", "%v", err)
@@ -181,6 +200,12 @@ func (c *conn) gitCheckout(id string, p json.RawMessage) error {
 	}
 	head, _ := gitx.HeadRef(root)
 	return c.reply(id, map[string]any{"switched": true, "head": head})
+}
+
+type GitWriteTarget struct {
+	WorkspaceID   string
+	WorkspacePath string
+	Root          string
 }
 
 // GitRecord 是手机做的一次 git 操作，交给常驻进程记进桌面 Git 日志的操作记录。

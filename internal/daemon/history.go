@@ -30,12 +30,14 @@ const historyWait = 3 * time.Second
 // historyState 管理会话历史索引。索引在子进程（posse history index）里更新：
 // 首次要读几 GB 的会话文件，放在子进程里，常驻进程的内存不受影响，读完就还给系统。
 type historyState struct {
-	mu       sync.Mutex
-	idx      *history.Index // 常驻进程只读查询用的连接
-	running  chan struct{}  // 更新进行中时非空，结束时关闭
-	progress history.Progress
-	lastRun  time.Time
-	lastErr  string
+	mu          sync.Mutex
+	idx         *history.Index // 常驻进程只读查询用的连接
+	running     chan struct{}  // 更新进行中时非空，结束时关闭
+	progress    history.Progress
+	lastRun     time.Time
+	lastErr     string
+	revision    uint64                       // 删除使进行中的旧索引失效，不能把旧轮完成当作已刷新。
+	moveToTrash func(string) (string, error) // 测试替换为隔离回收目录。
 	// cancel 在常驻进程退出时停掉进行中的更新
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -89,7 +91,7 @@ func (d *Daemon) refreshHistory(ctx context.Context, force bool, wait time.Durat
 		done = make(chan struct{})
 		h.running = done
 		h.progress = history.Progress{}
-		go d.runHistoryUpdate(h.ctx, done)
+		go d.runHistoryUpdate(h.ctx, done, h.revision)
 	}
 	h.mu.Unlock()
 	if done == nil {
@@ -107,7 +109,7 @@ func (d *Daemon) refreshHistory(ctx context.Context, force bool, wait time.Durat
 	}
 }
 
-func (d *Daemon) runHistoryUpdate(ctx context.Context, done chan struct{}) {
+func (d *Daemon) runHistoryUpdate(ctx context.Context, done chan struct{}, revision uint64) {
 	h := &d.history
 	err := d.updateHistory(ctx, func(p history.Progress) {
 		h.mu.Lock()
@@ -117,6 +119,9 @@ func (d *Daemon) runHistoryUpdate(ctx context.Context, done chan struct{}) {
 	h.mu.Lock()
 	h.running = nil
 	h.lastRun = time.Now()
+	if h.revision != revision {
+		h.lastRun = time.Time{}
+	}
 	h.lastErr = ""
 	if err != nil {
 		h.lastErr = err.Error()
@@ -278,13 +283,16 @@ type historyShowParams struct {
 	Tail int    `json:"tail"` // 只要最后几条，0 为全部
 	// Tools 为 false 时不要工具消息；界面只传 session，不传时包含
 	Tools *bool `json:"tools"`
+	// Context 只在详情需要时读目标会话文件，列表、删除前检查和手机查询不额外读文件。
+	Context bool `json:"context"`
 }
 
 type historyShowResult struct {
 	Session  history.Session   `json:"session"`
 	Messages []history.Message `json:"messages"`
 	// Terminal 是正在 posse 里运行这个会话的终端
-	Terminal string `json:"terminal,omitempty"`
+	Terminal string           `json:"terminal,omitempty"`
+	Context  *history.Context `json:"context,omitempty"`
 }
 
 func (d *Daemon) findHistorySession(ctx context.Context, id string) (history.Session, error) {
@@ -346,6 +354,11 @@ func (d *Daemon) historyShow(ctx context.Context, raw json.RawMessage) (any, err
 		msgs = []history.Message{}
 	}
 	res := historyShowResult{Session: s, Messages: msgs}
+	if p.Context {
+		value, _ := history.ReadContext(s.Agent, s.Path, s.Model)
+		// 空对象表示目标端已查过但没有用量；nil 留给不支持此字段的旧服务端。
+		res.Context = &value
+	}
 	if t := d.sessionRunning(s); t != nil {
 		res.Terminal = t.ID
 	}
@@ -366,6 +379,7 @@ func (d *Daemon) sessionRunning(s history.Session) *session {
 
 type historyResumeParams struct {
 	Session   string `json:"session"`
+	Path      string `json:"path"`
 	Workspace string `json:"workspace"`
 	Cols      int    `json:"cols"`
 	Rows      int    `json:"rows"`
@@ -378,12 +392,30 @@ type historyResumeResult struct {
 }
 
 func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, error) {
+	// 和待恢复终端、历史删除共用边界，检查运行状态后不能插入另一条恢复。
+	d.restoreMu.Lock()
+	defer d.restoreMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var p historyResumeParams
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.findHistorySession(ctx, p.Session)
+	var s history.Session
+	var err error
+	if p.Path != "" {
+		s, err = d.findHistoryPath(ctx, p.Path)
+	} else {
+		s, err = d.findHistorySession(ctx, p.Session)
+	}
 	if err != nil {
+		return nil, err
+	}
+	if p.Path != "" && p.Session != "" && s.ID != p.Session {
+		return nil, rpc.Errorf(rpc.CodeConflict, "session file no longer matches the selected session")
+	}
+	if _, err := os.Stat(s.Path); err != nil {
 		return nil, err
 	}
 	if t := d.sessionRunning(s); t != nil {

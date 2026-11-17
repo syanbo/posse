@@ -112,6 +112,9 @@ func (d *Daemon) launchTerminal(w store.Workspace, argv []string, agentName stri
 // launchTerminalLocked 是 launchTerminal 去掉加锁：调用方持有 handoff.startMu 的读锁，
 // 把拉起之后的登记（讨论 worker 的任务绑定）也放进同一段，交接取终端快照时不会只拿到终端没有任务。
 func (d *Daemon) launchTerminalLocked(w store.Workspace, argv []string, agentName string, cols, rows int, revive store.Terminal, extraEnv ...string) (*session, error) {
+	if d.exiting.Load() {
+		return nil, rpc.Errorf(rpc.CodeRestarting, "daemon is shutting down; retry")
+	}
 	if d.handoff.active() {
 		return nil, rpc.Errorf(rpc.CodeConflict, "daemon is handing off to a new version, try again")
 	}
@@ -307,7 +310,7 @@ func (d *Daemon) terminalShow(ctx context.Context, raw json.RawMessage) (any, er
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.session(p.Terminal)
+	s, err := d.sessionForRequest(ctx, p.Terminal)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +339,7 @@ func (d *Daemon) terminalRead(ctx context.Context, raw json.RawMessage) (any, er
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.session(p.Terminal)
+	s, err := d.sessionForRequest(ctx, p.Terminal)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +386,7 @@ func (d *Daemon) terminalSend(ctx context.Context, raw json.RawMessage) (any, er
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.session(p.Terminal)
+	s, err := d.sessionForRequest(ctx, p.Terminal)
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +445,7 @@ func (d *Daemon) terminalWait(ctx context.Context, raw json.RawMessage) (any, er
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.session(p.Terminal)
+	s, err := d.sessionForRequest(ctx, p.Terminal)
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +538,7 @@ func (d *Daemon) terminalResize(ctx context.Context, raw json.RawMessage) (any, 
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.session(p.Terminal)
+	s, err := d.sessionForRequest(ctx, p.Terminal)
 	if err != nil {
 		return nil, err
 	}
@@ -557,11 +560,11 @@ func (d *Daemon) terminalClear(ctx context.Context, raw json.RawMessage) (any, e
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.session(p.Terminal)
+	s, err := d.sessionForRequest(ctx, p.Terminal)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.Clear(p.Redraw); err != nil {
+	if err := s.ClearContext(ctx, p.Redraw); err != nil {
 		return nil, err
 	}
 	return d.terminalInfo(s), nil
@@ -621,7 +624,7 @@ func (d *Daemon) terminalReclaimSize(ctx context.Context, raw json.RawMessage) (
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.session(p.Terminal)
+	s, err := d.sessionForRequest(ctx, p.Terminal)
 	if err != nil {
 		return nil, err
 	}
