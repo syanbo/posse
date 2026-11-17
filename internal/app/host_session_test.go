@@ -20,6 +20,8 @@ type hostControlFixture struct {
 	mu              sync.Mutex
 	state           rpc.DesktopState
 	takes           int
+	heartbeats      int
+	statusError     error
 	heartbeatFail   bool
 	afterTake       func()
 	beforeRelease   func()
@@ -47,7 +49,7 @@ func newHostControlFixture(t *testing.T) (*hostControlFixture, *client.Client) {
 	srv.Handle("desktop.status", func(context.Context, json.RawMessage) (any, error) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
-		return f.state, nil
+		return f.state, f.statusError
 	})
 	srv.Handle("desktop.take", func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p rpc.DesktopRequest
@@ -85,6 +87,9 @@ func newHostControlFixture(t *testing.T) (*hostControlFixture, *client.Client) {
 			}
 			f.mu.Lock()
 			defer f.mu.Unlock()
+			if method == "desktop.heartbeat" {
+				f.heartbeats++
+			}
 			if id != f.state.Identity(f.state.Owner) || f.state.Owner == "" || method == "desktop.heartbeat" && f.heartbeatFail {
 				return nil, rpc.Errorf(rpc.CodeReadOnly, "desktop control is no longer held")
 			}
@@ -403,5 +408,134 @@ func TestHostSessionLateTakeReleasesOnlyItsLease(t *testing.T) {
 	f.mu.Unlock()
 	if owner != "" {
 		t.Fatalf("late take left owner %q", owner)
+	}
+}
+
+func TestHostSessionStatusFailureDoesNotConsumeAutomatic(t *testing.T) {
+	f, c := newHostControlFixture(t)
+	h := newHostSession(localHostID, "window")
+	f.mu.Lock()
+	f.statusError = rpc.Errorf(rpc.CodeBusy, "not ready")
+	f.mu.Unlock()
+	if err := h.connect(context.Background(), c); err == nil {
+		t.Fatal("status failure reported success")
+	}
+	f.mu.Lock()
+	f.statusError = nil
+	f.mu.Unlock()
+	if err := h.connect(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	if !h.snapshot().Controlled {
+		t.Fatal("first successful status did not take control")
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.takes != 1 {
+		t.Fatalf("takes = %d", f.takes)
+	}
+}
+
+func TestHostSessionAutomaticPerInstance(t *testing.T) {
+	for _, mode := range []string{"empty", "occupied", "remote", "reconnect"} {
+		t.Run(mode, func(t *testing.T) {
+			f, c := newHostControlFixture(t)
+			c.Remote = mode == "remote"
+			h := newHostSession(localHostID, "window")
+			ctx := context.Background()
+			if err := h.connect(ctx, c); err != nil {
+				t.Fatal(err)
+			}
+			before := h.snapshot()
+			if mode == "reconnect" {
+				if err := h.detach().release(ctx); err != nil {
+					t.Fatal(err)
+				}
+			}
+			f.mu.Lock()
+			initialTakes := f.takes
+			f.state = rpc.DesktopState{InstanceID: "replacement", Epoch: 1}
+			if mode == "occupied" {
+				f.state.Owner = "other-window"
+			}
+			f.mu.Unlock()
+			var err error
+			if mode == "reconnect" {
+				err = h.connect(ctx, c)
+			} else {
+				err = h.refresh(ctx)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			controlled := mode == "empty" || mode == "reconnect"
+			if h.snapshot().Controlled != controlled || h.matches(before) {
+				t.Fatal("instance change reused old control or did not start the empty local session")
+			}
+			f.mu.Lock()
+			got := f.takes - initialTakes
+			f.state.Owner = ""
+			f.state.Epoch++
+			f.mu.Unlock()
+			want := 0
+			if controlled {
+				want = 1
+			}
+			if got != want {
+				t.Fatalf("new instance takes = %d, want %d", got, want)
+			}
+			if err := h.refresh(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if h.snapshot().Controlled {
+				t.Fatal("empty owner restored control in the same instance")
+			}
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			if f.takes != initialTakes+want {
+				t.Fatal("same instance retried automatic take")
+			}
+		})
+	}
+}
+
+func TestHostSessionLostAutomaticReply(t *testing.T) {
+	f, c := newHostControlFixture(t)
+	h := newHostSession(localHostID, "window")
+	entered, finish := make(chan struct{}), make(chan struct{})
+	defer close(finish)
+	f.mu.Lock()
+	f.afterTake = func() { close(entered); <-finish }
+	f.mu.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- h.connect(ctx, c) }()
+	waitConnectionEvent(t, entered)
+	cancel()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("lost automatic reply reported success")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("automatic take cleanup did not finish")
+	}
+	f.mu.Lock()
+	owner, takes := f.state.Owner, f.takes
+	f.mu.Unlock()
+	if owner != "" || takes != 1 || h.snapshot().Controlled {
+		t.Fatal("unknown automatic take was replayed or retained control")
+	}
+	if err := h.connect(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	if h.snapshot().Controlled {
+		t.Fatal("reconnect retried uncertain automatic take")
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.takes != 1 {
+		t.Fatalf("automatic take attempts = %d", f.takes)
 	}
 }

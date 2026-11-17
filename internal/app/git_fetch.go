@@ -41,7 +41,7 @@ func (s *targetFetch) key() string {
 
 func (a *app) typedFetch() bool {
 	r := a.request()
-	return a.remoteHost() || r.client != nil && r.client.Desktop != nil
+	return r.host != nil || a.remoteHost() || r.client != nil && r.client.Desktop != nil
 }
 
 func (a *app) fetchFor(g *gitState) *targetFetch {
@@ -56,6 +56,9 @@ func (a *app) fetchFor(g *gitState) *targetFetch {
 
 func (a *app) fetchWritable(v *filesView) bool {
 	r := a.request()
+	if r.host != nil && !a.remoteHost() && (v.repos.request.app == nil || !v.repos.request.current()) {
+		return false
+	}
 	return r.current() && r.client != nil && r.client.Desktop != nil && (r.host == nil || r.snapshot.Controlled) && a.files[v.wsID] == v && v.repos.scanned && v.git.identity.Root != "" && v.repoAt(v.git.repo) == v.git && v.git.repo != ""
 }
 
@@ -104,7 +107,9 @@ func (a *app) startFetch(m locales.Messages, w *workspace, v *filesView) {
 		return
 	}
 	target := a.gitTarget(w, v, v.git)
-	if !target.writable() { return }
+	if !target.writable() {
+		return
+	}
 	if s := a.fetchFor(v.git); s != nil && s.pending() {
 		if !s.unknown {
 			return

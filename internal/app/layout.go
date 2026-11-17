@@ -829,13 +829,17 @@ func (a *app) splitNew(m locales.Messages, w *workspace, side dropSide) {
 	}
 	a.splitPending[w.ID] = true
 	wsID := w.ID
+	r := a.request()
 	go func() {
 		var t terminalInfo
-		err := a.call("terminal.create", map[string]any{"workspace": wsID}, &t, 10*time.Second)
+		err := r.call("terminal.create", map[string]any{"workspace": wsID}, &t, 10*time.Second)
 		// 先刷新让新终端进列表：列表里还没有它时 moveTab 找不到它所在的格
-		a.refresh()
-		a.win.Update(func() {
+		r.refresh()
+		a.update(func() {
 			delete(a.splitPending, wsID)
+			if !r.current() {
+				return
+			}
 			w := a.workspace(wsID)
 			if err != nil || w == nil || a.selected != wsID {
 				return

@@ -159,8 +159,8 @@ func (r appRequest) confirmSave(m locales.Messages, d *fileDoc, s *fileSave, don
 	}
 }
 
-// 仍未启用桌面身份的本机窗口保留直接写路径，但同样使用完整版本的条件替换。
-// 一旦 Client 带身份，本机也只经目标执行器保存，不回退到直接写盘。
+// 未建立主机会话的测试保留直接写路径，同样使用完整版本的条件替换。
+// 生产窗口只经目标执行器保存，不回退到直接写盘。
 func (r appRequest) writeSave(m locales.Messages, d *fileDoc, s *fileSave, done func(bool)) {
 	go func() {
 		ctx, cancel := context.WithTimeout(r.app.windowContext(), 30*time.Second)

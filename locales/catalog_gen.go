@@ -35,6 +35,160 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// HostLocal says "This Mac"
+// in the language the app shows.
+//
+// Local host name in the host selector.
+func HostLocal() string { return In(i18n.Locale()).HostLocal() }
+
+// HostLocal says "This Mac"
+// in the language of msgs.
+//
+// Local host name in the host selector.
+func (msgs Messages) HostLocal() string {
+	return Catalog.Format(msgs.locale, "hostLocal", nil)
+}
+
+// HostConnect says "Connect"
+// in the language the app shows.
+//
+// Connect to the selected saved SSH host as a viewer.
+func HostConnect() string { return In(i18n.Locale()).HostConnect() }
+
+// HostConnect says "Connect"
+// in the language of msgs.
+//
+// Connect to the selected saved SSH host as a viewer.
+func (msgs Messages) HostConnect() string {
+	return Catalog.Format(msgs.locale, "hostConnect", nil)
+}
+
+// HostTake says "Take control"
+// in the language the app shows.
+//
+// Explicitly request desktop control of the displayed host.
+func HostTake() string { return In(i18n.Locale()).HostTake() }
+
+// HostTake says "Take control"
+// in the language of msgs.
+//
+// Explicitly request desktop control of the displayed host.
+func (msgs Messages) HostTake() string {
+	return Catalog.Format(msgs.locale, "hostTake", nil)
+}
+
+// HostRelease says "Release control"
+// in the language the app shows.
+//
+// Release desktop control and keep the connection for viewing.
+func HostRelease() string { return In(i18n.Locale()).HostRelease() }
+
+// HostRelease says "Release control"
+// in the language of msgs.
+//
+// Release desktop control and keep the connection for viewing.
+func (msgs Messages) HostRelease() string {
+	return Catalog.Format(msgs.locale, "hostRelease", nil)
+}
+
+// HostDisconnect says "Disconnect"
+// in the language the app shows.
+//
+// Release control and disconnect the displayed remote host.
+func HostDisconnect() string { return In(i18n.Locale()).HostDisconnect() }
+
+// HostDisconnect says "Disconnect"
+// in the language of msgs.
+//
+// Release control and disconnect the displayed remote host.
+func (msgs Messages) HostDisconnect() string {
+	return Catalog.Format(msgs.locale, "hostDisconnect", nil)
+}
+
+// HostConnecting says "Connecting"
+// in the language the app shows.
+//
+// Displayed host connection is in progress.
+func HostConnecting() string { return In(i18n.Locale()).HostConnecting() }
+
+// HostConnecting says "Connecting"
+// in the language of msgs.
+//
+// Displayed host connection is in progress.
+func (msgs Messages) HostConnecting() string {
+	return Catalog.Format(msgs.locale, "hostConnecting", nil)
+}
+
+// HostDisconnected says "Disconnected"
+// in the language the app shows.
+//
+// Displayed host is disconnected; remote reconnect requires user action.
+func HostDisconnected() string { return In(i18n.Locale()).HostDisconnected() }
+
+// HostDisconnected says "Disconnected"
+// in the language of msgs.
+//
+// Displayed host is disconnected; remote reconnect requires user action.
+func (msgs Messages) HostDisconnected() string {
+	return Catalog.Format(msgs.locale, "hostDisconnected", nil)
+}
+
+// HostViewing says "Viewing"
+// in the language the app shows.
+//
+// Connected without desktop control.
+func HostViewing() string { return In(i18n.Locale()).HostViewing() }
+
+// HostViewing says "Viewing"
+// in the language of msgs.
+//
+// Connected without desktop control.
+func (msgs Messages) HostViewing() string {
+	return Catalog.Format(msgs.locale, "hostViewing", nil)
+}
+
+// HostViewingOwner says "Viewing; controlled by {label}"
+// in the language the app shows.
+//
+// Show the other controller label while viewing.
+func HostViewingOwner(label string) string { return In(i18n.Locale()).HostViewingOwner(label) }
+
+// HostViewingOwner says "Viewing; controlled by {label}"
+// in the language of msgs.
+//
+// Show the other controller label while viewing.
+func (msgs Messages) HostViewingOwner(label string) string {
+	return Catalog.Format(msgs.locale, "hostViewingOwner", map[string]any{"label": label})
+}
+
+// HostTakeTitle says "Take control of this host?"
+// in the language the app shows.
+//
+// Confirmation title when another controller holds the host.
+func HostTakeTitle() string { return In(i18n.Locale()).HostTakeTitle() }
+
+// HostTakeTitle says "Take control of this host?"
+// in the language of msgs.
+//
+// Confirmation title when another controller holds the host.
+func (msgs Messages) HostTakeTitle() string {
+	return Catalog.Format(msgs.locale, "hostTakeTitle", nil)
+}
+
+// HostTakeBody says "{label} is controlling this host. Taking control will switch that connection to viewing."
+// in the language the app shows.
+//
+// Explain replacing another desktop controller before taking control.
+func HostTakeBody(label string) string { return In(i18n.Locale()).HostTakeBody(label) }
+
+// HostTakeBody says "{label} is controlling this host. Taking control will switch that connection to viewing."
+// in the language of msgs.
+//
+// Explain replacing another desktop controller before taking control.
+func (msgs Messages) HostTakeBody(label string) string {
+	return Catalog.Format(msgs.locale, "hostTakeBody", map[string]any{"label": label})
+}
+
 // FetchManual says "Fetch from all remotes"
 // in the language the app shows.
 //

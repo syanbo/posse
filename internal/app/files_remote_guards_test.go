@@ -35,7 +35,7 @@ func TestRemoteRepoAutomaticGuards(t *testing.T) {
 	a.refreshGit(v)
 	a.refreshRepo(g)
 	a.pollRepo(g, true)
-	a.applyRepos(v, gitx.Discovery{}, false, time.Now())
+	a.applyRepos(v, gitx.Discovery{}, false, time.Now(), nil)
 	a.useRepo(v, g)
 	a.gitChanged(g, nil)
 	if a.rescanDue(nil, v) {

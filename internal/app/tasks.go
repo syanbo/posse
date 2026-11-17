@@ -252,7 +252,8 @@ func (a *app) projectOf(w *workspace) *project {
 }
 
 // dispatch 把同一个任务派给选中的每个 agent；各自建 worktree 时分支名加上 agent 后缀。
-func (a *app) dispatch(workspaceID, title, spec, branch string, agents []string) {
+func (r appRequest) dispatch(workspaceID, title, spec, branch string, agents []string) {
+	a := r.app
 	group := ""
 	if len(agents) > 1 {
 		group = "g_" + randomSuffix()
@@ -268,46 +269,50 @@ func (a *app) dispatch(workspaceID, title, spec, branch string, agents []string)
 			params["worktree"] = name
 		}
 		var t taskInfo
-		if a.call("task.start", params, &t, 2*time.Minute) != nil {
+		if r.call("task.start", params, &t, 2*time.Minute) != nil {
 			break
 		}
 		if first == "" {
 			first = t.ID
 		}
 	}
-	a.refresh()
+	r.refresh()
 	if first != "" {
-		a.win.Update(func() { a.openTask(first) })
+		r.update(func() { a.openTask(first) })
 	}
 }
 
-func (a *app) reply(questionID, text string) {
-	if a.call("task.reply", map[string]any{"message": questionID, "body": text}, nil, 10*time.Second) == nil {
-		a.win.Update(func() { a.replyText = "" })
+func (r appRequest) reply(questionID, text string) {
+	a := r.app
+	if r.call("task.reply", map[string]any{"message": questionID, "body": text}, nil, 10*time.Second) == nil {
+		r.update(func() { a.replyText = "" })
 	}
-	a.refresh()
+	r.refresh()
 }
 
-func (a *app) sendNote(taskID, text string) {
-	if a.call("task.send", map[string]any{"task": taskID, "body": text}, nil, 10*time.Second) == nil {
-		a.win.Update(func() { a.noteText = "" })
+func (r appRequest) sendNote(taskID, text string) {
+	a := r.app
+	if r.call("task.send", map[string]any{"task": taskID, "body": text}, nil, 10*time.Second) == nil {
+		r.update(func() { a.noteText = "" })
 	}
-	a.refresh()
+	r.refresh()
 }
 
 func (a *app) askCloseTask(m locales.Messages, t taskInfo) {
+	r := a.request()
 	body := m.TasksCloseBody()
 	if t.Status == "running" {
 		body = m.TasksCloseRunningBody()
 	}
 	a.confirm(m.TasksCloseConfirm(agentTitle(t.Agent)), body, m.CommonClose(), func() {
-		a.call("task.close", map[string]any{"task": t.ID}, nil, 15*time.Second)
-		a.refresh()
+		r.call("task.close", map[string]any{"task": t.ID}, nil, 15*time.Second)
+		r.refresh()
 	})
 }
 
 // viewDiff 在 worktree 里开一个终端显示相对分叉点的改动，看完留在 shell 里。
 func (a *app) viewDiff(t taskInfo) {
+	r := a.request()
 	diff := func(base string) string {
 		mb := "$(git merge-base " + agent.Quote(base) + " HEAD)"
 		return "git --no-pager diff --stat " + mb + " && git status --short && git diff " + mb
@@ -324,11 +329,11 @@ func (a *app) viewDiff(t taskInfo) {
 	go func() {
 		var term terminalInfo
 		// 跑完换回用户的 shell；fish、csh 这类读不懂 POSIX 写法的由 ShellArgv 交给 /bin/sh
-		if a.call("terminal.create", map[string]any{"workspace": t.WorkspaceID, "command": agent.ShellArgv(script)}, &term, 10*time.Second) != nil {
+		if r.call("terminal.create", map[string]any{"workspace": t.WorkspaceID, "command": agent.ShellArgv(script)}, &term, 10*time.Second) != nil {
 			return
 		}
-		a.refresh()
-		a.win.Update(func() { a.openTerminal(t.WorkspaceID, term.ID) })
+		r.refresh()
+		r.update(func() { a.openTerminal(t.WorkspaceID, term.ID) })
 	}()
 }
 
@@ -376,9 +381,10 @@ func (a *app) taskBoard(c *ui.Context) {
 		ui.Spacer(c)
 		if ended > 0 {
 			if pressable(textButton(c, m.TasksClearEnded())).Clicked() {
+				r := a.request()
 				go func() {
-					a.call("task.clear", nil, nil, 10*time.Second)
-					a.refresh()
+					r.call("task.clear", nil, nil, 10*time.Second)
+					r.refresh()
 				}()
 			}
 		}
@@ -645,15 +651,15 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 				placeholder = m.TasksReplyForDispatcher()
 			}
 			if a.composer(c, &a.replyText, placeholder, m.TasksReplyButton(), true) {
-				go a.reply(q.ID, strings.TrimSpace(a.replyText))
+				go a.request().reply(q.ID, strings.TrimSpace(a.replyText))
 			}
 		} else if task.Status == "running" && task.Terminal != nil && task.DiscussionID == "" {
 			if a.composer(c, &a.noteText, m.TasksNotePlaceholder(), m.TasksSend(), false) {
-				go a.sendNote(task.ID, strings.TrimSpace(a.noteText))
+				go a.request().sendNote(task.ID, strings.TrimSpace(a.noteText))
 			}
 		} else if followable(task) {
 			if a.composer(c, &a.noteText, m.TasksFollowUpPlaceholder(), m.TasksSend(), false) {
-				go a.sendNote(task.ID, strings.TrimSpace(a.noteText))
+				go a.request().sendNote(task.ID, strings.TrimSpace(a.noteText))
 			}
 		}
 		if task.Spec != "" {
@@ -925,7 +931,7 @@ func (a *app) dispatchDialog(c *ui.Context) {
 					if isGit && a.dMode == 1 {
 						branch = strings.TrimSpace(a.dBranch)
 					}
-					go a.dispatch(w.ID, strings.TrimSpace(a.dTitle), strings.TrimSpace(a.dSpec), branch, agents)
+					go a.request().dispatch(w.ID, strings.TrimSpace(a.dTitle), strings.TrimSpace(a.dSpec), branch, agents)
 				}
 			})
 		})

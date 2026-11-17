@@ -211,6 +211,12 @@ func (k *hostConnections) heartbeat(a *app) bool {
 	}
 	if err := a.host.refresh(k.ctx); err != nil {
 		a.update(func() {
+			if a == k.views.local {
+				if !k.closed && a.host.snapshot().Generation == before.Generation {
+					a.err = errtext.Text(err)
+				}
+				return
+			}
 			if k.closed || k.active == nil || k.active.app != a || a.host.snapshot().Generation != before.Generation {
 				return
 			}

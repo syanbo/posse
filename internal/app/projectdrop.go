@@ -24,6 +24,7 @@ func (a *app) projectDrop(c *ui.Context, nav ui.Element) {
 		return
 	}
 	l := L(c)
+	r := a.request()
 	var dirs []string
 	var known *project
 	for _, p := range paths {
@@ -42,26 +43,27 @@ func (a *app) projectDrop(c *ui.Context, nav ui.Element) {
 	case len(dirs) == 0:
 		a.err = l.SidebarDropNotFolder()
 	case len(dirs) == 1:
-		a.confirm(l.SidebarDropProjectConfirm(shortPath(dirs[0])), l.SidebarDropProjectBody(), l.SidebarDropProjectAdd(), func() { a.addProjects(l, dirs) })
+		a.confirm(l.SidebarDropProjectConfirm(shortPath(dirs[0])), l.SidebarDropProjectBody(), l.SidebarDropProjectAdd(), func() { r.addProjects(l, dirs) })
 	default:
-		a.confirm(l.SidebarDropProjectsConfirm(len(dirs)), l.SidebarDropProjectBody(), l.SidebarDropProjectAdd(), func() { a.addProjects(l, dirs) })
+		a.confirm(l.SidebarDropProjectsConfirm(len(dirs)), l.SidebarDropProjectBody(), l.SidebarDropProjectAdd(), func() { r.addProjects(l, dirs) })
 	}
 }
 
 // addProjects 把几个文件夹依次加成项目，加好后切到第一个的主工作区；某个失败了报错，其余照加。
-func (a *app) addProjects(l locales.Messages, dirs []string) {
+func (r appRequest) addProjects(l locales.Messages, dirs []string) {
+	a := r.app
 	var first string
 	for _, dir := range dirs {
 		var p struct {
 			ID string `json:"id"`
 		}
-		if a.call("project.add", map[string]any{"path": dir}, &p, 10*time.Second) == nil && first == "" {
+		if r.call("project.add", map[string]any{"path": dir}, &p, 10*time.Second) == nil && first == "" {
 			first = p.ID
 		}
 	}
-	a.refresh()
+	r.refresh()
 	if first != "" {
-		a.update(func() { a.showProject(first) })
+		r.update(func() { a.showProject(first) })
 	}
 }
 

@@ -158,6 +158,7 @@ type app struct {
 	views          *hostViews
 	sshAuth        *sshAuthentication // 窗口共用，只由 windowOwner 持有。
 	hosts          *hostConnections
+	hostMenu       hostMenuState
 	connecting     bool
 	viewID         string
 	viewGeneration atomic.Uint64
@@ -488,6 +489,13 @@ const minWindowWidth, minWindowHeight = 900, 560
 // 会取到比例宽度的"，""。"，在两格里居中后前后各空出一大块。
 const termFontFamily = "JetBrainsMono Nerd Font Mono, JetBrains Mono, PingFang SC, monospace"
 
+func newWindowApp(c *client.Client) *app {
+	a := newHostApp(c, c.Home)
+	a.host = newHostSession(localHostID, appName())
+	a.hosts = newHostConnections(newHostViews(a))
+	return a
+}
+
 // Run 打开窗口；必须在 main goroutine 调用。
 func Run(c *client.Client) error {
 	// 同一 home 只开一个窗口：一开始就占住 app.sock，已有窗口在应答就把它叫到前面，自己退出
@@ -507,10 +515,9 @@ func Run(c *client.Client) error {
 	// 开发包放在别的窗口后面也照常画：验收工具从后面截图、操作它，不用把窗口叫到最前抢用户的屏幕。
 	// 日常的包照旧被挡住时不画，省电
 	ui.DrawWhenOccluded = daemon.RunningDevBundle()
-	a := newHostApp(c, c.Home)
+	a := newWindowApp(c)
 	a.exe = newExeWatch()
-	views := newHostViews(a)
-	a.hosts = newHostConnections(views)
+	views := a.views
 	var pollDone chan struct{}
 	var stopCtl func()
 	a.projIcons = projicon.Load(a.home)
@@ -603,12 +610,17 @@ func (a *app) poll(ctx context.Context) {
 	defer tick.Stop()
 	for ctx.Err() == nil {
 		current := a.displayed()
+		if current == a && a.host != nil && !a.host.snapshot().Connected {
+			a.connectLocal(ctx)
+		}
 		if current != a.windowOwner() {
 			a.discussionRequest().refreshDiscussions()
 		}
 		if a.hosts == nil || a.hosts.heartbeat(current) {
 			current.refresh()
 			current.historyTick()
+		} else if current == a.windowOwner() {
+			a.discussionRequest().refreshDiscussions()
 		}
 		a.checkReplaced()
 		select {
@@ -616,6 +628,27 @@ func (a *app) poll(ctx context.Context) {
 			return
 		case <-tick.C:
 		}
+	}
+}
+
+// 本机 socket 不可达时沿用启动流程，随后仍须重新协商身份，不能借 base client 写入。
+func (a *app) connectLocal(ctx context.Context) {
+	h := a.host
+	generation := h.snapshot().Generation
+	err := h.connectAt(ctx, a.c, generation)
+	generation++
+	if isDialError(err) && ctx.Err() == nil && a.displayed() == a && h.snapshot().Generation == generation {
+		if err = a.c.EnsureDaemonContext(ctx); err == nil {
+			err = h.connectAt(ctx, a.c, generation)
+			generation++
+		}
+	}
+	if err != nil && !errors.Is(err, context.Canceled) {
+		a.update(func() {
+			if a.displayed() == a && h.snapshot().Generation == generation {
+				a.err = errtext.Text(err)
+			}
+		})
 	}
 }
 
@@ -648,12 +681,18 @@ func (a *app) refresh() {
 func (a *app) refreshRequest(q appRequest) {
 	a.refreshMu.Lock()
 	defer a.refreshMu.Unlock()
+	if q.host == nil && a.host != nil {
+		// 讨论动作可能请求刷新窗口，但桌面轮询仍须使用本机当前身份。
+		generation := q.viewGeneration
+		q = a.request()
+		q.viewGeneration = generation
+	}
 	if !q.current() || q.client == nil {
 		return
 	}
 	a.refreshQueued.Store(false)
-	if a == a.windowOwner() && q.host == nil && !q.client.Remote {
-		defer (discussionRequest{appRequest: q, gen: a.discGen()}).refreshDiscussions()
+	if a == a.windowOwner() && !q.client.Remote {
+		defer a.discussionRequest().refreshDiscussions()
 	}
 	changed := a.lastPollClient != q.client
 	if changed {
@@ -711,9 +750,9 @@ func (a *app) refreshRequest(q appRequest) {
 		var d taskDetail
 		if q.invoke(ctx, "task.show", map[string]any{"task": id}, &d) == nil {
 			r.detail = &d
-			if q.host == nil && d.WorkspaceKind == "worktree" && time.Since(a.diffAt[d.WorkspaceID]) > 5*time.Second {
+			if !q.client.Remote && d.WorkspaceKind == "worktree" && time.Since(a.diffAt[d.WorkspaceID]) > 5*time.Second {
 				var w worktreeDiff
-				if q.invoke(ctx, "workspace.diff", map[string]any{"workspace": d.WorkspaceID}, &w) == nil {
+				if a.c.Call(ctx, "workspace.diff", map[string]any{"workspace": d.WorkspaceID}, &w) == nil {
 					if a.diffAt == nil {
 						a.diffAt = map[string]time.Time{}
 					}
@@ -730,7 +769,7 @@ func (a *app) refreshRequest(q appRequest) {
 		r = pollResult{err: errtext.Text(err)}
 		if statusOK {
 			r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt}
-			if q.host == nil {
+			if !q.client.Remote {
 				a.autoUpgrade(r.daemonInfo)
 			}
 			r.err = a.staleDaemonError(appL(), r.daemonInfo, err)
@@ -754,7 +793,7 @@ func (a *app) refreshRequest(q appRequest) {
 		r.usage = st.Usage
 		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt, MobileOnline: st.MobileOnline, DeskViewer: st.DeskViewer, DeskMissing: st.DeskMissing, Agents: st.Agents, Chat: st.Chat}
 		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self+a.lastTerm)
-		if q.host == nil {
+		if !q.client.Remote {
 			a.autoUpgrade(r.daemonInfo)
 		}
 	}
@@ -1315,6 +1354,10 @@ const minFontSize, maxFontSize = 9, 28
 
 // call 调用常驻进程，出错时显示在侧栏的提示里。
 func (a *app) call(method string, params any, out any, timeout time.Duration) error {
+	switch method {
+	case "usage.set", "awake.set", "daemon.stop", "relay.clear", "mobile.rm", "mobile.devices", "desk.stop":
+		return (appRequest{app: a, client: a.c, viewGeneration: a.viewGeneration.Load()}).call(method, params, out, timeout)
+	}
 	return a.request().call(method, params, out, timeout)
 }
 

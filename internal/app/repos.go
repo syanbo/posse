@@ -12,6 +12,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/gitx"
+	"posse/internal/rpc"
 )
 
 // 工作区里的仓库：文件栏开着时找出工作区里的所有仓库（gitx.Discover：子目录、软链过去的、嵌套的），
@@ -146,30 +147,71 @@ func (a *app) scanRepos(v *filesView) {
 	}
 	v.repos.scanning = true
 	root, single := v.root, a.projectSingleRepo(v)
+	r := a.request()
+	target := r.current() && r.client != nil && r.client.Desktop != nil
 	go func() {
 		var mod time.Time
 		if fi, err := os.Stat(root); err == nil {
 			mod = fi.ModTime()
 		}
-		d := gitx.Discover(context.Background(), root, !single)
-		a.update(func() { a.applyRepos(v, d, single, mod) })
+		var d gitx.Discovery
+		var identities map[string]gitx.RepositoryIdentity
+		var err error
+		if target {
+			ctx, cancel := context.WithTimeout(a.windowContext(), 30*time.Second)
+			defer cancel()
+			var out rpc.GitDiscoverResult
+			out, err = r.client.GitDiscover(ctx, rpc.GitDiscoverParams{Path: root, SingleRepo: single})
+			d.RealPath, d.Partial = out.RealPath, out.Partial
+			identities = make(map[string]gitx.RepositoryIdentity, len(out.Repos))
+			for _, repo := range out.Repos {
+				d.Repos = append(d.Repos, gitx.Repo{Root: repo.Root, Real: repo.Real, Aliases: repo.Aliases})
+				identities[repo.Root] = repo.Identity
+			}
+		} else {
+			d = gitx.Discover(context.Background(), root, !single)
+		}
+		a.update(func() {
+			v.repos.scanning = false
+			if target && (!r.current() || a.files[v.wsID] != v || v.root != root) {
+				return
+			}
+			if err != nil {
+				v.repos.scanAt = time.Now()
+				v.repos.err = errtext.Text(err)
+				a.err = v.repos.err
+				return
+			}
+			v.repos.err = ""
+			if target {
+				v.repos.request = r
+			}
+			a.applyRepos(v, d, single, mod, identities)
+		})
 	}()
 }
 
 // applyRepos 换上新找到的仓库：还在的沿用原来的状态（勾选、提交信息、排队的操作），没了的丢掉。
-func (a *app) applyRepos(v *filesView, d gitx.Discovery, single bool, mod time.Time) {
+func (a *app) applyRepos(v *filesView, d gitx.Discovery, single bool, mod time.Time, identities map[string]gitx.RepositoryIdentity) {
 	if a.remoteHost() {
 		return
 	}
 	rs := &v.repos
 	rs.scanning, rs.scanned, rs.partial, rs.single = false, true, d.Partial, single
 	rs.scanAt, rs.rootMod = time.Now(), mod
-	v.realRoot, _ = filepath.EvalSymlinks(v.root)
+	v.realRoot = d.RealPath
+	if v.realRoot == "" {
+		v.realRoot, _ = filepath.EvalSymlinks(v.root)
+	}
 	list := make([]*gitState, 0, len(d.Repos))
 	for _, r := range d.Repos {
 		g := v.repoAt(r.Root)
-		if g == nil {
+		id := identities[r.Root]
+		if g == nil || id.Root != "" && g.identity.Root != "" && g.identity != id {
 			g = &gitState{v: v, repo: r.Root}
+		}
+		if id.Root != "" {
+			g.identity = id
 		}
 		g.aliases, g.real = r.Aliases, r.Real
 		list = append(list, g)
@@ -264,8 +306,22 @@ func (a *app) pollRepos(c *ui.Context, v *filesView) {
 		return
 	}
 	rs := &v.repos
+	localTarget := !a.remoteHost() && a.targetGitReady()
+	scanReady := true
+	if localTarget && rs.err != "" {
+		if wait := gitPollEvery - time.Since(rs.scanAt); wait > 0 {
+			scanReady = false
+			if c != nil {
+				c.After(wait)
+			}
+		}
+	}
+	// 先显示本地发现的列表；桌面身份就绪或换代后，再向执行 Fetch 的端确认仓库身份。
+	if localTarget && scanReady && (rs.request.app == nil || !rs.request.current() || rs.err != "") {
+		a.scanRepos(v)
+	}
 	if !rs.scanned {
-		if !a.remoteHost() || time.Since(rs.scanAt) >= gitPollEvery {
+		if scanReady && (!a.remoteHost() || time.Since(rs.scanAt) >= gitPollEvery) {
 			a.scanRepos(v)
 		}
 		if c != nil {
@@ -274,7 +330,7 @@ func (a *app) pollRepos(c *ui.Context, v *filesView) {
 		return
 	}
 	a.followRepo(v)
-	if !rs.scanning && a.rescanDue(c, v) {
+	if !rs.scanning && scanReady && a.rescanDue(c, v) {
 		a.scanRepos(v)
 	}
 	for _, g := range rs.list {
@@ -563,10 +619,14 @@ func (v *filesView) repoOrGone(root string) *gitState {
 
 // setSingleRepo 是项目右键菜单的"识别多个 Git 仓库"：存进常驻进程的项目记录，开着的文件标签下一帧按新的开关重新找仓库。
 func (a *app) setSingleRepo(projectID string, single bool) {
+	r := a.request()
+	if !r.mayWrite() {
+		return
+	}
 	if p := a.projectByID(projectID); p != nil {
 		p.SingleRepo = single
 	}
-	go a.call("project.set", map[string]any{"project": projectID, "singleRepo": single}, nil, 10*time.Second)
+	go r.call("project.set", map[string]any{"project": projectID, "singleRepo": single}, nil, 10*time.Second)
 }
 
 // changesPage 是改动页自己的状态，多个仓库共用一份：提交信息对所有仓库，提交时各仓库分别提交。

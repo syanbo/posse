@@ -19,11 +19,15 @@ type hostSession struct {
 	controllerID string
 	label        string
 
-	mu             sync.Mutex
-	generation     uint64
-	base           *client.Client
-	current        hostSnapshot
-	automaticTried bool
+	mu                sync.Mutex
+	generation        uint64
+	base              *client.Client
+	current           hostSnapshot
+	automaticInstance string
+	blockedInstance   string
+	returnLease       hostLease
+	returnRequested   bool
+	pendingRelease    hostLease
 
 	// 网络操作串行，状态锁不跨网络；离开主机仍能立即使正在等待的结果失效。
 	opMu sync.Mutex
@@ -82,6 +86,14 @@ func (h *hostSession) detach() hostLease {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	lease := h.leaseLocked()
+	if lease.client == nil {
+		lease = h.pendingRelease
+	}
+	h.pendingRelease = hostLease{}
+	if lease.client != nil {
+		h.returnLease = lease
+	}
+	h.returnRequested = false
 	h.generation++
 	h.base = nil
 	h.current.Client = nil
@@ -90,8 +102,8 @@ func (h *hostSession) detach() hostLease {
 	return lease
 }
 
-// connect 接收已经建立的本机连接或 SSH 隧道。仅窗口第一次连接本机时自动申请一次；
-// 重新连接、切回主机和远端连接都从查看开始。
+// connect 接收已经建立的本机连接或 SSH 隧道。本机每个 daemon 实例只自动申请一次；
+// 同实例重连和远端连接都从查看开始；显式切回本机由 prepareLocalReturn 单独授权。
 func (h *hostSession) connect(ctx context.Context, base *client.Client) error {
 	return h.connectAt(ctx, base, h.snapshot().Generation)
 }
@@ -111,14 +123,18 @@ func (h *hostSession) connectAt(ctx context.Context, base *client.Client, expect
 		return context.Canceled
 	}
 	old := h.leaseLocked()
+	returning := h.returnRequested && !copy.Remote
+	h.returnRequested = false
+	if returning {
+		old = h.returnLease
+	}
+	h.returnLease = hostLease{}
 	h.generation++
 	h.base = &copy
 	generation := h.generation
 	h.current.Client = nil
 	h.current.Connected, h.current.Controlled = false, false
 	h.current.Generation = generation
-	automatic := !copy.Remote && !h.automaticTried
-	h.automaticTried = true
 	h.mu.Unlock()
 	_ = old.release(ctx)
 
@@ -126,13 +142,64 @@ func (h *hostSession) connectAt(ctx context.Context, base *client.Client, expect
 	if err := hostControlCall(ctx, &copy, "desktop.status", nil, &state); err != nil {
 		return err
 	}
-	if !h.publish(generation, &copy, state, false) {
+	return h.observe(ctx, generation, &copy, state, returning)
+}
+
+// 只有成功读到状态才消耗该实例的自动接管机会；已有 owner 也消耗，防止稍后抢回。
+func (h *hostSession) observe(ctx context.Context, generation uint64, base *client.Client, state rpc.DesktopState, returning bool) error {
+	if !h.publish(generation, base, state, false) {
 		return context.Canceled
 	}
+	h.mu.Lock()
+	if generation != h.generation || base != h.base {
+		h.mu.Unlock()
+		return context.Canceled
+	}
+	automatic := !base.Remote && state.InstanceID != "" && (state.InstanceID != h.automaticInstance || returning && state.InstanceID != h.blockedInstance)
 	if automatic {
-		return h.takeLocked(ctx, generation, &copy, state, true)
+		h.automaticInstance = state.InstanceID
+	}
+	h.mu.Unlock()
+	if automatic && state.Owner == "" {
+		return h.takeLocked(ctx, generation, base, state, true)
 	}
 	return nil
+}
+
+// 切回本机单独授权一次自动申请；主动释放、心跳失效和接管结果未知的实例仍保持查看。
+func (h *hostSession) prepareLocalReturn() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.id == localHostID && !h.current.Connected && h.current.Desktop.InstanceID != "" && h.current.Desktop.InstanceID != h.blockedInstance {
+		h.returnRequested = true
+	}
+}
+
+// yield 立即换成查看身份，释放请求使用捕获的旧租约，不影响后来接管的代次。
+func (h *hostSession) yield(expected hostSnapshot) hostLease {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.current.Controlled || expected.HostID != h.id || expected.Generation != h.generation || expected.Client != h.current.Client {
+		return hostLease{}
+	}
+	lease := h.leaseLocked()
+	h.pendingRelease = lease
+	h.returnLease, h.returnRequested = hostLease{}, false
+	h.automaticInstance = h.current.Desktop.InstanceID
+	h.blockedInstance = h.current.Desktop.InstanceID
+	h.generation++
+	h.current.Generation = h.generation
+	h.current.Controlled = false
+	h.current.Client = h.base.WithDesktop(h.current.Desktop.Identity(h.viewerID))
+	return lease
+}
+
+func (h *hostSession) released(lease hostLease) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.pendingRelease == lease {
+		h.pendingRelease = hostLease{}
+	}
 }
 
 func hostControlCall(ctx context.Context, c *client.Client, method string, params, out any) error {
@@ -179,6 +246,12 @@ func (h *hostSession) takeLocked(ctx context.Context, generation uint64, base *c
 	if err := hostControlCall(ctx, base, "desktop.take", request, &state); err != nil {
 		var response *rpc.Error
 		if !errors.As(err, &response) {
+			// 操作锁保证后续接管尚未开始；已经切走也要记住结果未知，不能借切回重发。
+			h.mu.Lock()
+			if h.current.Desktop.InstanceID == expected.InstanceID {
+				h.blockedInstance = expected.InstanceID
+			}
+			h.mu.Unlock()
 			h.publish(generation, base, expected, false)
 			h.reconcileTake(base, expected)
 		}
@@ -192,7 +265,22 @@ func (h *hostSession) takeLocked(ctx context.Context, generation uint64, base *c
 		}
 		return context.Canceled
 	}
+	if controlled {
+		h.mu.Lock()
+		if h.generation == generation && h.base == base {
+			h.blockedInstance = ""
+		}
+		h.mu.Unlock()
+	}
 	return nil
+}
+
+func (h *hostSession) blockAutomaticReturn(generation uint64, base *client.Client, instance string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.generation == generation && h.base == base {
+		h.blockedInstance = instance
+	}
 }
 
 // 接管回复丢失只核对状态，不重发接管。操作锁仍在，后续本端接管不会被这次清理释放；
@@ -230,6 +318,7 @@ func (h *hostSession) refresh(ctx context.Context) error {
 			return nil
 		}
 		// 心跳失败立即撤掉本地写资格；后续查询成功也不会恢复它。
+		h.blockAutomaticReturn(before.Generation, base, before.Desktop.InstanceID)
 		h.publish(before.Generation, base, before.Desktop, false)
 	}
 	if err := hostControlCall(ctx, base, "desktop.status", nil, &state); err != nil {
@@ -241,8 +330,5 @@ func (h *hostSession) refresh(ctx context.Context) error {
 		h.mu.Unlock()
 		return err
 	}
-	if !h.publish(before.Generation, base, state, false) {
-		return context.Canceled
-	}
-	return nil
+	return h.observe(ctx, before.Generation, base, state, false)
 }
