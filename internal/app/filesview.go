@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -128,7 +129,9 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 				v.treeSel, v.treeSelDir, v.treeSelCur = r.Path, r.Dir, v.cur
 			}
 			a.pathMenu(c, row, w, v, r.Path, r.Dir)
-			a.dragPath(row, r.Path)
+			if !a.remoteHost() {
+				a.dragPath(row, r.Path)
+			}
 		}).Grow(1).Padding(0, 0, 8, 0)
 	})
 }
@@ -143,12 +146,26 @@ func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, 
 			c.WriteClipboard(rel)
 		}
 		m.Separator()
-		if m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
+		if !a.remoteHost() && m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
 			mygo.Shell.ShowItemInFolder(path)
 		}
-		if m.Item(L(c).FilesOpenWithDefaultApp()).Chosen() {
+		if !a.remoteHost() && m.Item(L(c).FilesOpenWithDefaultApp()).Chosen() {
 			if err := mygo.Shell.OpenPath(path); err != nil {
 				a.err = errtext.Text(err)
+			}
+		}
+		if a.remoteHost() {
+			if dir {
+				if m.Item(L(c).FilesUpload()).Icon(iconArrowUp).Disabled(v.transfer != nil || !a.request().saveAllowed()).Chosen() {
+					a.chooseUpload(L(c), v, path)
+				}
+			} else {
+				if m.Item(L(c).FilesDownload()).Icon(iconArrowDown).Disabled(v.transfer != nil).Chosen() {
+					a.chooseDownload(L(c), v, path, false)
+				}
+				if m.Item(L(c).FilesOpenCopy()).Disabled(v.transfer != nil).Chosen() {
+					a.chooseDownload(L(c), v, path, true)
+				}
 			}
 		}
 		if dir && m.Item(L(c).FilesFindInDir()).Icon(iconSearch).Keys(a.keyText("searchFiles")).Chosen() {
@@ -167,21 +184,34 @@ func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, 
 // askTrashPath 确认后把文件或目录移到废纸篓（能找回，所以不分有没有被 git 跟踪）。
 // 打开着的、没有未保存改动的文件跟着关掉；有改动的留着，显示已删除，免得丢掉改动。
 func (a *app) askTrashPath(m locales.Messages, v *filesView, path string, dir bool) {
+	r := a.request()
+	if !r.mayWrite() {
+		return
+	}
+	a.confirmSeq++
+	seq := a.confirmSeq
 	name := filepath.Base(path)
 	body := m.FilesTrashBody()
 	if dir {
 		body = m.FilesTrashDirBody()
 	}
-	a.confirm(m.FilesTrashConfirm(name), body, m.CommonMoveToTrash(), func() {
-		err := mygo.Shell.TrashItem(path)
-		a.update(func() {
+	go func() {
+		ctx, cancel := context.WithTimeout(a.windowContext(), 20*time.Second)
+		entry, err := r.fileEntry(ctx, path)
+		cancel()
+		r.update(func() {
+			if a.confirmSeq != seq {
+				return
+			}
 			if err != nil {
 				a.err = m.TrashMoveError(errtext.Text(err))
 				return
 			}
-			a.forgetTrashed(v, path, dir)
+			a.confirm(m.FilesTrashConfirm(name), body, m.CommonMoveToTrash(), func() {
+				r.trashEntry(m, v, path, dir, entry)
+			})
 		})
-	})
+	}()
 }
 
 // forgetTrashed 收拾移走的路径：关掉其中没有未保存改动的文件，快速打开的清单下次重列，
@@ -189,7 +219,7 @@ func (a *app) askTrashPath(m locales.Messages, v *filesView, path string, dir bo
 func (a *app) forgetTrashed(v *filesView, path string, dir bool) {
 	var gone []*fileDoc
 	for _, d := range v.docs {
-		if !d.virtual() && !d.isModified() && (d.path == path || dir && inDir(d.path, path)) {
+		if !d.virtual() && !d.needsSave() && (d.path == path || dir && inDir(d.path, path)) {
 			gone = append(gone, d)
 		}
 	}
@@ -403,12 +433,17 @@ func toggleChipPad(c *ui.Context, label, tip string, on bool, pad float32) bool 
 // docArea 画一格里打开的文件 d。文件树、检索和改动在右边的文件栏里。
 func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
+	d.ed.ReadOnly = !a.canEditDoc(d)
 	if d.web != nil {
 		if d.web.view == nil {
-			docMessage(c, d, d.errText(L(c)))
+			a.docMessage(c, v, d, d.errText(L(c)))
 		} else {
 			a.webView(c, d)
 		}
+		return
+	}
+	if v.remote && d.comp != nil {
+		a.compareView(c, w, v, d)
 		return
 	}
 	// diff 读的时候 diff 栏照样画，连按 F7 换文件时不闪
@@ -420,12 +455,21 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		if d.kind == docCompare {
 			a.compareView(c, w, v, d)
 		} else {
-			docMessage(c, d, d.errText(L(c)))
+			a.docMessage(c, v, d, d.errText(L(c)))
 		}
 		return
 	}
 	if d.diff != nil {
+		if v.remote && d.diff.worktreeBase != nil {
+			d.diff.drawn = true
+			if !d.diff.loaded && !d.diff.loading && d.diff.compareErr == "" && a.targetGitReady() {
+				a.loadTargetDiff(v, d)
+			}
+		}
 		a.diffBar(c, w, v, d)
+		if d.diff.compareErr != "" && d.diff.loaded {
+			ui.Text(c, d.diff.compareErr).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 16)
+		}
 		switch d.kind {
 		case docLoading:
 			ui.Text(c, diffLoadingText(L(c), d.diff)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
@@ -434,11 +478,11 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		case docImageDiff:
 			imageDiffView(c, d)
 		case docBinary:
-			docMessage(c, d, L(c).FilesBinaryNoDiff())
+			a.docMessage(c, v, d, L(c).FilesBinaryNoDiff())
 		case docTooLarge:
 			a.tooLargeDiffView(c, v, d)
 		default:
-			docMessage(c, d, d.errText(L(c)))
+			a.docMessage(c, v, d, d.errText(L(c)))
 		}
 		diffHint(c, d.diff)
 		return
@@ -497,15 +541,15 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	case docImage:
 		a.imageDocView(c, d)
 	case docBinary:
-		docMessage(c, d, L(c).FilesBinaryNoContent())
+		a.docMessage(c, v, d, L(c).FilesBinaryNoContent())
 	case docTooLarge:
 		if d.imgInfo.w > 0 {
-			docMessage(c, d, L(c).FilesImageTooLarge(d.imgInfo.w, d.imgInfo.h))
+			a.docMessage(c, v, d, L(c).FilesImageTooLarge(d.imgInfo.w, d.imgInfo.h))
 		} else {
-			docMessage(c, d, L(c).FilesTooLarge(files.MaxSize>>20))
+			a.docMessage(c, v, d, L(c).FilesTooLarge(files.MaxSize>>20))
 		}
 	case docError:
-		docMessage(c, d, d.errText(L(c)))
+		a.docMessage(c, v, d, d.errText(L(c)))
 	}
 }
 
@@ -668,7 +712,7 @@ func (a *app) docTabMenu(c *ui.Context, m *popMenu, v *filesView, d *fileDoc) {
 	if rel, ok := relInside(v.root, d.path); ok && m.Item(L(c).FilesCopyRelativePath()).Chosen() {
 		c.WriteClipboard(rel)
 	}
-	if m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
+	if !a.remoteHost() && m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
 		mygo.Shell.ShowItemInFolder(d.path)
 	}
 }
@@ -700,14 +744,14 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				d.preview = !d.preview
 			}
 		}
-		if d.kind == docText && !d.readOnly && d.blame == nil && isJSON(d.path) {
+		if d.kind == docText && a.canEditDoc(d) && d.blame == nil && isJSON(d.path) {
 			if pressable(iconButtonSized(c, iconBraces, a.withKey(L(c).FilesFormatJSON(), "formatJSON"), compactBox(), smallIcon())).Clicked() {
 				a.formatJSON(L(c), d)
 			}
 		}
-		if d.kind == docText && !d.readOnly && d.isModified() {
-			if pressable(iconButtonSized(c, iconSave, a.withKey(L(c).CommonSave(), "save"), compactBox(), smallIcon())).Clicked() {
-				a.saveDoc(L(c), d, false)
+		if d.kind == docText && a.canEditDoc(d) && d.needsSave() {
+			if pressable(iconButtonSized(c, iconSave, a.withKey(L(c).CommonSave(), "save"), compactBox(), smallIcon())).Disabled(d.save != nil && d.save.busy).Clicked() {
+				a.saveDoc(L(c), d, nil)
 			}
 		}
 		if g, rel := v.relIn(d.path); d.kind == docText && g != nil {
@@ -715,8 +759,11 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				a.openLogIn(w, g, "", rel)
 			}
 			if d.blame != nil {
+				if v.remote && pressable(iconButtonSized(c, iconRefresh, L(c).CommonRefresh(), compactBox(), smallIcon())).Disabled(d.blame.loading).Clicked() {
+					a.loadTargetBlame(v, d)
+				}
 				if pressable(textButton(c, L(c).FilesCloseAnnotate())).Clicked() {
-					d.blame = nil
+					d.closeBlame()
 				}
 			} else if pressable(iconButtonSized(c, iconBlame, L(c).FilesAnnotateTip(), compactBox(), smallIcon())).Clicked() {
 				a.openBlame(L(c), w, v, d.path)
@@ -732,7 +779,7 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				a.revealCurrent(w)
 			}
 		}
-		if pressable(iconButtonSized(c, iconFolder, L(c).CommonRevealInFinder(), compactBox(), smallIcon())).Clicked() {
+		if !a.remoteHost() && pressable(iconButtonSized(c, iconFolder, L(c).CommonRevealInFinder(), compactBox(), smallIcon())).Clicked() {
 			mygo.Shell.ShowItemInFolder(d.path)
 		}
 		if pressable(iconButtonSized(c, iconCopy, L(c).CommonCopyPath(), compactBox(), smallIcon())).Clicked() {
@@ -758,7 +805,7 @@ func (a *app) docBanner(c *ui.Context, d *fileDoc) {
 		}
 	case d.deleted:
 		msg = L(c).FilesDeletedBanner()
-		if d.kind == docText && !d.readOnly {
+		if d.kind == docText && a.canEditDoc(d) {
 			msg = L(c).FilesDeletedBannerSave()
 		}
 	default:
@@ -773,13 +820,17 @@ func (a *app) docBanner(c *ui.Context, d *fileDoc) {
 	})
 }
 
-func docMessage(c *ui.Context, d *fileDoc, msg string) {
+func (a *app) docMessage(c *ui.Context, v *filesView, d *fileDoc, msg string) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).AlignSelf(ui.Stretch).Center().Gap(12).Children(func() {
 		ui.Text(c, msg).FontSize(fsBody).TextColor(t.TextMuted)
 		// diff、日志这些不是磁盘上的文件（路径是 diff:…、log:…），没有可打开的
 		if filepath.IsAbs(d.path) && (d.kind != docError || !d.deleted) {
-			if pressable(textButton(c, L(c).FilesOpenWithDefaultApp())).Clicked() {
+			if a.remoteHost() {
+				if pressable(textButton(c, L(c).FilesOpenCopy())).Disabled(v == nil || v.transfer != nil).Clicked() {
+					a.chooseDownload(L(c), v, d.path, true)
+				}
+			} else if pressable(textButton(c, L(c).FilesOpenWithDefaultApp())).Clicked() {
 				mygo.Shell.OpenPath(d.path)
 			}
 		}
@@ -826,9 +877,7 @@ func (a *app) markdownPreview(c *ui.Context, w *workspace, d *fileDoc) {
 	if v := d.ed.Buffer.Version(); d.md == nil || v != d.mdVer {
 		d.md, d.mdVer = parseMarkdownDoc(d.ed.Buffer.String()), v
 	}
-	if d.mdImgs == nil {
-		d.mdImgs = newMDImages(filepath.Dir(d.path), w.Path)
-	}
+	a.docImages(d, w.Path)
 	f := &d.find
 	f.shortcuts(c, a)
 	ui.Box(c).Grow(1).Children(func() {
@@ -849,6 +898,10 @@ func (a *app) markdownPreview(c *ui.Context, w *workspace, d *fileDoc) {
 
 // openWiki 打开 Markdown 里 [[名字]] 指向的文件：相对当前文件所在的目录，没写扩展名的补 .md，#后面的标题不管。
 func (a *app) openWiki(m locales.Messages, w *workspace, from, target string) {
+	if a.remoteHost() {
+		a.openTargetWiki(m, w, from, target)
+		return
+	}
 	name, _, _ := strings.Cut(target, "#")
 	p := filepath.Join(filepath.Dir(from), name)
 	if filepath.Ext(name) != ".md" {

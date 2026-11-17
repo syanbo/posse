@@ -67,12 +67,16 @@ type jumpLoc struct {
 
 // defPick 是几处同名定义的选择对话框。
 type defPick struct {
-	open  bool
-	ws    string
-	word  string
-	defs  []files.Definition
-	sel   int
-	moved bool // 这一帧用方向键换了选中项，要滚到它
+	request appRequest
+	doc     *fileDoc
+	version uint64
+	origin  jumpLoc
+	open    bool
+	ws      string
+	word    string
+	defs    []files.Definition
+	sel     int
+	moved   bool // 这一帧用方向键换了选中项，要滚到它
 }
 
 // goToDefinition 找编辑器 off 处标识符的定义。
@@ -85,6 +89,10 @@ func (a *app) goToDefinition(m locales.Messages, w *workspace, v *filesView, d *
 	origin := jumpLoc{path: d.path, line: ln + 1, col: col}
 	if lk.Kind == files.LinkWord && !files.IsCode(d.path) {
 		lk.Kind = files.LinkNone
+	}
+	if a.remoteHost() && (lk.Kind == files.LinkPath || lk.Kind == files.LinkWord) {
+		a.goToTargetDefinition(m, w, v, d, off, lk, origin)
+		return
 	}
 	switch lk.Kind {
 	case files.LinkNone:
@@ -259,6 +267,10 @@ func (a *app) defDialog(c *ui.Context) {
 	if !p.open {
 		return
 	}
+	if !p.current() {
+		p.open = false
+		return
+	}
 	w := a.workspace(p.ws)
 	if w == nil {
 		p.open = false
@@ -294,9 +306,13 @@ func (a *app) defDialog(c *ui.Context) {
 		})
 	})
 	p.moved = false
-	if chosen && n > 0 {
+	if chosen && n > 0 && p.current() {
 		p.open = false
-		a.jumpTo(w, v, v.def.origin, p.defs[p.sel])
+		origin := v.def.origin
+		if p.request.app != nil {
+			origin = p.origin
+		}
+		a.jumpTo(w, v, origin, p.defs[p.sel])
 	}
 }
 

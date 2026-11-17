@@ -51,6 +51,7 @@ type quickOpen struct {
 }
 
 type quickSymSearch struct {
+	request appRequest
 	key     string // syms 对应的查询（查询词、只看类型、限定的目录）
 	gen     int
 	cancel  context.CancelFunc
@@ -63,6 +64,7 @@ type quickSymSearch struct {
 const quickTextMax = 50
 
 type quickTextSearch struct {
+	request appRequest
 	key     string // hits 对应的查询（检索词和限定的目录）
 	gen     int
 	cancel  context.CancelFunc
@@ -190,7 +192,7 @@ func (a *app) syncQuickSymbols(v *filesView, query string, typesOnly bool) {
 	s := &a.quick.sym
 	dir := v.search.query.Dir
 	key := fmt.Sprint(dir, "\x00", typesOnly, "\x00", query)
-	if s.key == key {
+	if s.key == key && (s.request.app == nil || s.request.current()) {
 		return
 	}
 	s.key = key
@@ -202,6 +204,10 @@ func (a *app) syncQuickSymbols(v *filesView, query string, typesOnly bool) {
 	}
 	s.syms, s.err, s.running = nil, "", false
 	if strings.TrimSpace(query) == "" {
+		return
+	}
+	if a.remoteHost() {
+		a.startTargetQuickSymbols(v, files.SymbolQuery{Text: query, TypesOnly: typesOnly, Dir: dir}, gen)
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -249,7 +255,7 @@ func (a *app) syncQuickText(v *filesView, query string) {
 	t := &a.quick.text
 	dir := v.search.query.Dir
 	key := dir + "\x00" + query
-	if t.key == key {
+	if t.key == key && (t.request.app == nil || t.request.current()) {
 		return
 	}
 	t.key = key
@@ -261,6 +267,10 @@ func (a *app) syncQuickText(v *filesView, query string) {
 	}
 	t.hits, t.more, t.err, t.running = nil, false, "", false
 	if strings.TrimSpace(query) == "" {
+		return
+	}
+	if a.remoteHost() {
+		a.startTargetQuickText(v, files.Query{Text: query, Dir: dir}, gen)
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -482,7 +492,7 @@ func (a *app) quickDialog(c *ui.Context) {
 			}
 			submitted := in.Submitted()
 			switch {
-			case q.tab != quickActions && l == nil:
+			case q.tab != quickActions && l == nil && v.listing && !(a.remoteHost() && (q.tab == quickText || q.tab == quickSymbols || q.tab == quickAll)):
 				ui.Text(c, m.FilesListing()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
 			case q.tab == quickText && q.text.err != "":
 				ui.Text(c, q.text.err).FontSize(fsSmall).TextColor(t.Danger).Padding(4, 2)
@@ -604,17 +614,21 @@ func (a *app) toggleQuickAll(v *filesView) {
 	if q.allList != nil || q.allListing {
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	r := a.request()
+	ctx, cancel := context.WithTimeout(a.windowContext(), 30*time.Second)
 	q.allCancel, q.allListing = cancel, true
 	root := v.root
 	go func() {
-		l, err := files.ListAll(ctx, root)
+		l, err := r.listFiles(ctx, root, nil, false, true)
 		a.update(func() {
-			if ctx.Err() != nil || !a.quick.open {
+			defer cancel()
+			if ctx.Err() == context.Canceled || !r.current() || !a.quick.open || a.quick.ws != v.wsID || !a.quick.all {
 				return
 			}
 			a.quick.allListing = false
-			if err == nil {
+			if err != nil {
+				a.err = errtext.Text(err)
+			} else {
 				a.quick.allList = l
 			}
 		})

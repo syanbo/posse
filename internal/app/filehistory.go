@@ -18,8 +18,11 @@ import (
 
 // fileHistory 是文件历史里选中的提交和它的 diff，挂在 logDoc 上。
 type fileHistory struct {
-	sel  string   // 选中的提交
-	diff *fileDoc // 选中提交里这个文件的 diff，和 diff 标签共用 loadDiff、diffView
+	read              gitRead
+	loading, resolved bool
+	err               string
+	sel               string   // 选中的提交
+	diff              *fileDoc // 选中提交里这个文件的 diff，和 diff 标签共用 loadDiff、diffView
 	// 换提交时沿用的排版和忽略空白
 	layout   editor.DiffLayout
 	ignoreWS bool
@@ -56,6 +59,9 @@ func (a *app) selectHistory(v *filesView, d *fileDoc, ci gitx.CommitInfo) {
 	h := d.log.hist
 	if old := h.diff; old != nil && old.diff != nil {
 		h.layout, h.ignoreWS = old.diff.state.Layout, old.diff.state.IgnoreWhitespace
+		if v.remote {
+			old.cancelGitContent()
+		}
 	}
 	h.sel = ci.Hash
 	parent := ""
@@ -65,7 +71,12 @@ func (a *app) selectHistory(v *filesView, d *fileDoc, ci gitx.CommitInfo) {
 	spec := diffSpec{root: d.log.root, rel: d.log.filter.Path, oldRev: parent, newRev: ci.Hash}
 	df := &diffDoc{diffSpec: spec, first: true}
 	df.state = editor.DiffState{Layout: h.layout, IgnoreWhitespace: h.ignoreWS}
-	h.diff = &fileDoc{path: "history:" + ci.Hash + ":" + spec.rel, diff: df, started: true}
+	hd := &fileDoc{path: "history:" + ci.Hash + ":" + spec.rel, diff: df, started: true}
+	if v.remote {
+		a.loadTargetHistory(v, d, ci, hd)
+		return
+	}
+	h.diff = hd
 	a.loadDiff(v, h.diff)
 }
 
@@ -87,6 +98,9 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			a.loadLog(v, d, false)
 		}
 	})
+	if ld.err != "" {
+		ui.Text(c, ld.err).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 16)
+	}
 	if len(ld.commits) == 0 {
 		msg := L(c).LogFileEmpty()
 		if ld.loading {
@@ -158,12 +172,25 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 // historyDiff 是右边选中提交的 diff：上一处 / 下一处、排版、差异数，两个版本和路径，下面是 diff。
 func (a *app) historyDiff(c *ui.Context, v *filesView, d *fileDoc) {
 	t := c.Theme()
-	hd := d.log.hist.diff
+	h := d.log.hist
+	if h.err != "" {
+		ui.Text(c, h.err).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 16)
+		if !h.loading && pressable(textButton(c, L(c).CommonRefresh())).Clicked() {
+			a.retryTargetHistory(v, d)
+		}
+	}
+	if h.loading {
+		ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
+	}
+	hd := h.diff
 	if hd == nil {
 		return
 	}
 	df := hd.diff
 	ui.Row(c).Height(sz(34)).Shrink(0).Padding(0, 12, 0, 6).Gap(4).AlignItems(ui.Center).Children(func() {
+		if v.remote && df.retry && !df.loading && pressable(iconButtonSized(c, iconRefresh, L(c).CommonRefresh(), buttonBox(), iconSize)).Clicked() {
+			a.loadDiff(v, hd)
+		}
 		if pressable(iconButtonSized(c, iconArrowUp, L(c).GitPreviousDifference(), buttonBox(), iconSize)).Clicked() {
 			stepHunk(L(c), df, -1)
 		}
@@ -208,9 +235,9 @@ func (a *app) historyDiff(c *ui.Context, v *filesView, d *fileDoc) {
 		case docImageDiff:
 			imageDiffView(c, hd)
 		case docBinary:
-			docMessage(c, hd, L(c).GitBinaryDiff())
+			a.docMessage(c, v, hd, L(c).GitBinaryDiff())
 		case docError:
-			docMessage(c, hd, hd.err)
+			a.docMessage(c, v, hd, hd.err)
 		case docTooLarge:
 			a.tooLargeDiffView(c, v, hd)
 		default:

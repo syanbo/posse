@@ -25,29 +25,36 @@ const (
 )
 
 type logDoc struct {
-	root      string // 仓库根目录；整个仓库的日志跟着当前仓库换（useRepo），文件历史一直是文件所在的仓库
-	filter    gitx.LogFilter
-	text      string // 输入框里的文字，停顿后才应用到 filter
-	author    string
-	commits   []gitx.CommitInfo
-	graph     *commitGraph // 提交图；按作者、文字筛选时为 nil，只画点
-	jump      string       // 点了提交图的箭头、要跳去的提交还没读出来：往下读到它为止
-	more      bool         // 还有更早的提交
-	loading   bool
-	gen       int
-	filterGen int // 筛选输入的防抖计数（applyLogFilter）
-	commit    *commitView
-	list      ui.ListState
-	refsOpen  map[string]bool // 左边分支树展开了哪些组："local"、"remote"、"tags"、"remote:<远端>"
-	refQuery  string
-	refList   ui.ListState
-	refCursor string       // 分支树里键盘停在的行（refItem.key）
-	focusList bool         // 在分支树里按了 →：提交列表建出来时拿焦点
-	err       string       // 上一次读日志的错误（筛选写错、选中的分支被删了），写在列表里
-	notRepo   bool         // 不是 git 仓库：整页报错（d.kind 是 docError）
-	hist      *fileHistory // 文件历史（filter.Path 非空）选中的提交和它的 diff
-	head      bool         // 下次读日志时先读出当前分支，只看它（打开整个仓库的日志时默认选中当前分支）
-	readGen   int          // 最近一次开始读日志时的 gen
+	read          gitRead
+	repository    *gitState
+	baseline      string
+	nextSkip      int
+	loadedFilter  gitx.LogFilter
+	resume        bool
+	filterPending bool
+	root          string // 仓库根目录；整个仓库的日志跟着当前仓库换（useRepo），文件历史一直是文件所在的仓库
+	filter        gitx.LogFilter
+	text          string // 输入框里的文字，停顿后才应用到 filter
+	author        string
+	commits       []gitx.CommitInfo
+	graph         *commitGraph // 提交图；按作者、文字筛选时为 nil，只画点
+	jump          string       // 点了提交图的箭头、要跳去的提交还没读出来：往下读到它为止
+	more          bool         // 还有更早的提交
+	loading       bool
+	gen           int
+	filterGen     int // 筛选输入的防抖计数（applyLogFilter）
+	commit        *commitView
+	list          ui.ListState
+	refsOpen      map[string]bool // 左边分支树展开了哪些组："local"、"remote"、"tags"、"remote:<远端>"
+	refQuery      string
+	refList       ui.ListState
+	refCursor     string       // 分支树里键盘停在的行（refItem.key）
+	focusList     bool         // 在分支树里按了 →：提交列表建出来时拿焦点
+	err           string       // 上一次读日志的错误（筛选写错、选中的分支被删了），写在列表里
+	notRepo       bool         // 不是 git 仓库：整页报错（d.kind 是 docError）
+	hist          *fileHistory // 文件历史（filter.Path 非空）选中的提交和它的 diff
+	head          bool         // 下次读日志时先读出当前分支，只看它（打开整个仓库的日志时默认选中当前分支）
+	readGen       int          // 最近一次开始读日志时的 gen
 }
 
 func logKey(root string, f gitx.LogFilter) string {
@@ -60,9 +67,19 @@ func logKey(root string, f gitx.LogFilter) string {
 // openLog 在底部浮层里打开日志；path 非空时是这个文件的历史，branch 非空时只看这个分支，
 // 整个仓库的日志不给 branch 时只看当前分支。
 func (a *app) openLog(w *workspace, branch, path string) {
+	if a.remoteHost() && !a.targetGitReady() && a.targetFileUnsupported("git.log") {
+		return
+	}
 	v := a.filesFor(w)
+	if v.remote && !a.targetGitSession(v) {
+		return
+	}
 	v.logOpening = true
+	request := a.request()
 	a.withRepos(v, func() {
+		if v.remote && (!v.logOpening || !a.targetGitCurrent(request, v)) {
+			return
+		}
 		v.logOpening = false
 		a.openLogIn(w, v.git, branch, path)
 	})
@@ -71,6 +88,9 @@ func (a *app) openLog(w *workspace, branch, path string) {
 // openLogIn 打开仓库 g 的日志（path 为空）或其中一个文件的历史（path 相对 g 的根目录）。
 // 整个仓库的日志只有一个，对着当前仓库：g 不是当前仓库时先换过去。
 func (a *app) openLogIn(w *workspace, g *gitState, branch, path string) {
+	if a.remoteHost() && !a.targetGitReady() && a.targetFileUnsupported("git.log") {
+		return
+	}
 	v := a.filesFor(w)
 	if path == "" {
 		a.useRepo(v, g)
@@ -85,6 +105,9 @@ func (a *app) openLogIn(w *workspace, g *gitState, branch, path string) {
 	v.console = false
 	for _, d := range v.logs {
 		if d.path == key {
+			if v.remote && v.logCur != nil && v.logCur != d {
+				v.logCur.log.cancelTargetLog()
+			}
 			v.logCur = d
 			if head || !slices.Equal(d.log.filter.Branches, f.Branches) {
 				d.log.filter.Branches, d.log.head = f.Branches, head
@@ -100,6 +123,9 @@ func (a *app) openLogIn(w *workspace, g *gitState, branch, path string) {
 	} else {
 		v.logs = append(v.logs, d)
 	}
+	if v.remote && v.logCur != nil {
+		v.logCur.log.cancelTargetLog()
+	}
 	v.logCur = d
 	a.loadLog(v, d, false)
 }
@@ -108,11 +134,19 @@ func (a *app) openLogIn(w *workspace, g *gitState, branch, path string) {
 func (a *app) logPanelOpen() bool { return a.state.LogPanels[a.panelProject()] }
 
 func (a *app) setLogPanel(open bool) {
+	if !open && a.remoteHost() {
+		for _, v := range a.files {
+			v.cancelTargetLogs()
+		}
+	}
 	a.setProjectPanel(&a.state.LogPanels, a.panelProject(), open)
 }
 
 // toggleLogPanel 是 ⌘9 和标签栏的日志按钮：开着就隐藏，关着就打开（还没有日志时打开整个仓库的）。
 func (a *app) toggleLogPanel(w *workspace) {
+	if a.remoteHost() && !a.targetGitReady() && a.targetFileUnsupported("git.log") {
+		return
+	}
 	if a.logPanelOpen() {
 		a.setLogPanel(false)
 		return
@@ -129,6 +163,9 @@ func (a *app) closeLog(v *filesView, d *fileDoc) {
 	i := slices.Index(v.logs, d)
 	if i < 0 {
 		return
+	}
+	if v.remote {
+		d.log.cancelTargetLog()
 	}
 	v.logs = slices.Delete(v.logs, i, i+1)
 	if v.logCur == d {
@@ -164,6 +201,9 @@ func (a *app) logPanelHeight(avail float32) float32 {
 // （改了里面的程序要按新行数重排），点别处不收，只有隐藏按钮、⌘9 和标签栏的日志按钮开关。
 // 顶上一排是日志和文件历史的小标签，拖上边缘调高度。body 是终端那一栏，按它的高度限制浮层高度。
 func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
+	if a.remoteHost() && !a.targetGitReady() {
+		return
+	}
 	open := float32(0)
 	if a.logPanelOpen() && a.gitBranch(w) != "" {
 		open = 1
@@ -204,6 +244,9 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 			}
 		})
 		d := v.logCur
+		if v.remote && a.logPanelOpen() && !v.console && d != nil {
+			a.resumeTargetLog(v, d)
+		}
 		switch {
 		case v.console:
 			a.gitConsole(c, w, v)
@@ -211,9 +254,9 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 		case d.kind == docLog:
 			a.logView(c, w, v, d)
 		case d.kind == docError && d.log != nil && d.log.notRepo:
-			docMessage(c, d, L(c).GitNotRepo())
+			a.docMessage(c, v, d, L(c).GitNotRepo())
 		case d.kind == docError:
-			docMessage(c, d, d.err)
+			a.docMessage(c, v, d, d.err)
 		default:
 			ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
 		}
@@ -264,6 +307,9 @@ func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 		}
 	})
 	if row.Clicked() {
+		if v.remote && v.logCur != nil && v.logCur != d {
+			v.logCur.log.cancelTargetLog()
+		}
 		v.logCur, v.console = d, false
 	}
 }
@@ -279,6 +325,13 @@ func (a *app) reloadLog(v *filesView, d *fileDoc) {
 }
 
 func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
+	if a.remoteHost() {
+		a.readTargetLog(v, d, more, limit)
+		return
+	}
+	if a.remoteHost() && !a.targetGitReady() && a.targetFileUnsupported("git.log") {
+		return
+	}
 	ld := d.log
 	ld.gen++
 	gen := ld.gen
@@ -413,6 +466,9 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	ld := d.log
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
+			if ld.err != "" && len(ld.commits) > 0 {
+				ui.Text(c, ld.err).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 16)
+			}
 			if len(ld.commits) == 0 {
 				msg, col := L(c).LogNoMatch(), t.TextMuted
 				switch {
@@ -579,13 +635,20 @@ func (a *app) applyLogFilter(v *filesView, d *fileDoc) {
 	ld := d.log
 	// gen 加一让在途的读作废；防抖用自己的计数：停顿期间有 git 操作结束（reloadLog 也加 gen）时筛选照样生效
 	ld.gen++
+	if v.remote {
+		ld.filterPending = true
+		ld.read.stop()
+		ld.loading = false
+	}
 	ld.filterGen++
 	gen := ld.filterGen
+	request := a.request()
 	time.AfterFunc(300*time.Millisecond, func() {
 		a.update(func() {
-			if ld.filterGen != gen {
+			if ld.filterGen != gen || v.remote && (!a.targetGitCurrent(request, v) || !slices.Contains(v.logs, d)) {
 				return
 			}
+			ld.filterPending = false
 			ld.filter.Text, ld.filter.Author = ld.text, ld.author
 			a.loadLog(v, d, false)
 		})
@@ -729,6 +792,9 @@ func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 	if m.Item(lm.LogCopyHash()).Chosen() {
 		c.WriteClipboard(ci.Hash)
 	}
+	if a.remoteHost() {
+		return
+	}
 	m.Separator()
 	if m.Item(lm.LogCheckoutCommit()).Chosen() {
 		do(lm.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, ci.Hash) })
@@ -786,6 +852,9 @@ func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 
 // guardPushed 在改写从 oldest 开始的历史之前查它推送过没有：推送过的先说明之后要强制推送，确认了再继续。
 func (a *app) guardPushed(m locales.Messages, root, oldest string, then func()) {
+	if a.targetFileUnsupported("git.write") {
+		return
+	}
 	go func() {
 		remotes := gitx.RemotesContaining(context.Background(), root, oldest)
 		a.update(func() {
@@ -806,6 +875,9 @@ func (a *app) guardPushed(m locales.Messages, root, oldest string, then func()) 
 
 // askMessage 读出提交信息（两个提交时拼在一起）填进输入框，让用户改完再执行。
 func (a *app) askMessage(m locales.Messages, root, title, hash, second string, do func(string)) {
+	if a.targetFileUnsupported("git.write") {
+		return
+	}
 	go func() {
 		ctx := context.Background()
 		msg := gitx.FullMessage(ctx, root, hash)
@@ -823,13 +895,18 @@ func (a *app) askMessage(m locales.Messages, root, title, hash, second string, d
 // blameDoc 是文件标签里开着的 Annotate：每行最后改它的提交，同一个提交的连续几行只在第一行写作者和日期。
 // 和 WebStorm 一样在同一个标签里开关，不另开标签。
 type blameDoc struct {
-	root    string // 仓库根目录
-	rel     string
-	lines   []gitx.BlameLine
-	loading bool
-	err     string
-	list    ui.ListState
-	sel     *commitView
+	read                  gitRead
+	request               appRequest
+	repository            *gitState
+	loaded, resume, drawn bool
+	path                  string
+	root                  string // 仓库根目录
+	rel                   string
+	lines                 []gitx.BlameLine
+	loading               bool
+	err                   string
+	list                  ui.ListState
+	sel                   *commitView
 	// 查找栏的命中：每个命中所在的行，按行排；hitQ 是算它们用的搜索词
 	hits []int
 	hitQ string
@@ -865,6 +942,9 @@ func (bd *blameDoc) findHits(f *docFind) {
 
 // openBlame 在这个文件的标签里打开 Annotate（文件没开着就先打开）。
 func (a *app) openBlame(m locales.Messages, w *workspace, v *filesView, abs string) {
+	if a.remoteHost() && !a.targetGitReady() && a.targetFileUnsupported("git.blame") {
+		return
+	}
 	g, rel := v.relIn(abs)
 	if g == nil {
 		a.err = m.LogFileNotRepo()
@@ -877,8 +957,13 @@ func (a *app) openBlame(m locales.Messages, w *workspace, v *filesView, abs stri
 		return
 	}
 	root := g.repo
-	bd := &blameDoc{root: root, rel: rel, loading: true}
+	d.closeBlame()
+	bd := &blameDoc{root: root, rel: rel, path: d.path, loading: true}
 	d.blame = bd
+	if v.remote {
+		a.loadTargetBlame(v, d)
+		return
+	}
 	go func() {
 		lines, err := gitx.Blame(context.Background(), root, rel)
 		a.update(func() {
@@ -895,12 +980,19 @@ func (a *app) openBlame(m locales.Messages, w *workspace, v *filesView, abs stri
 func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	bd := d.blame
+	bd.drawn = true
+	if v.remote {
+		a.resumeTargetBlame(v, d)
+	}
 	lines := bd.lines
+	if v.remote && bd.err != "" {
+		ui.Text(c, bd.err).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 16)
+	}
 	switch {
-	case bd.err != "":
-		docMessage(c, d, bd.err)
+	case !v.remote && bd.err != "":
+		a.docMessage(c, v, d, bd.err)
 		return
-	case bd.loading:
+	case bd.loading && (!v.remote || !bd.loaded):
 		ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
 		return
 	}

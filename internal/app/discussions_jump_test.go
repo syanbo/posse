@@ -29,9 +29,8 @@ func TestDiscussionJumpLatestSurvivesStalePoll(t *testing.T) {
 	key := d.key
 
 	// 一次轮询已经带着旧版本取了增量（点击之前发出）
-	var r pollResult
 	var sent []int64
-	a.pollDiscussions(&r, func(method string, params, out any) error {
+	r := a.pollDiscussions(func(method string, params, out any) error {
 		switch method {
 		case "discussion.list":
 			return nil
@@ -57,14 +56,13 @@ func TestDiscussionJumpLatestSurvivesStalePoll(t *testing.T) {
 		t.Fatalf("a frame wrote the old version back: since %d", since)
 	}
 	// 旧的轮询结果晚到
-	a.applyDiscussions(r.disc)
+	a.applyDiscussions(r)
 	tt.Frame()
 	if _, since := a.wantedDisc(); since != 0 {
 		t.Fatalf("stale poll result wrote the old version back: since %d", since)
 	}
 	// 下一次轮询取全量，换上最新一页
-	var r2 pollResult
-	a.pollDiscussions(&r2, func(method string, params, out any) error {
+	r2 := a.pollDiscussions(func(method string, params, out any) error {
 		if method == "discussion.show" {
 			p := params.(map[string]any)
 			if p["since"].(int64) != 0 {
@@ -74,7 +72,7 @@ func TestDiscussionJumpLatestSurvivesStalePoll(t *testing.T) {
 		}
 		return nil
 	})
-	a.applyDiscussions(r2.disc)
+	a.applyDiscussions(r2)
 	if a.disc.d.moreAfter || a.disc.d.msgs[len(a.disc.d.msgs)-1].Seq != 150 {
 		t.Fatalf("not at the latest page: moreAfter=%v last=%d", a.disc.d.moreAfter, a.disc.d.msgs[len(a.disc.d.msgs)-1].Seq)
 	}
@@ -87,15 +85,14 @@ func TestDiscussionJumpLatestSurvivesStalePoll(t *testing.T) {
 func TestDiscussionStalePollAfterSwitch(t *testing.T) {
 	a, _, _ := discTester(t)
 	old := a.disc.d
-	var r pollResult
-	a.pollDiscussions(&r, func(method string, params, out any) error {
+	r := a.pollDiscussions(func(method string, params, out any) error {
 		if method == "discussion.show" {
 			*(out.(*discView)) = discView{Discussion: old.info}
 		}
 		return nil
 	})
 	a.selectDiscussion("fp/d_2")
-	a.applyDiscussions(r.disc)
+	a.applyDiscussions(r)
 	if a.disc.d != nil && a.disc.d.key == old.key {
 		t.Fatal("stale result of the previous discussion was shown")
 	}

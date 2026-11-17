@@ -21,7 +21,7 @@ import (
 const settingsBoardID = "settings"
 
 func (a *app) openSettings() {
-	a.selected = settingsBoardID
+	a.openBoard(settingsBoardID)
 }
 
 // settingsTabs 是设置页左边的分类，右边只放选中的一类。
@@ -44,7 +44,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 	t := c.Theme()
 	m := L(c)
 	a.band(c, func() {
-		titleText(c, m.SettingsTitle(), fsTitle)
+		titleText(c, a.moduleLabel(c, settingsBoardID, m.SettingsTitle()), fsTitle)
 		ui.Spacer(c)
 		a.closeBoardButton(c)
 	})

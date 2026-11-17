@@ -63,6 +63,7 @@ func TestRestartAfterInstallCancelled(t *testing.T) {
 	}
 	click(t, tt, "重启更新")
 	click(t, tt, "保存")
+	pumpSaves(t, []*app{a}, func() bool { return *relaunches == 1 })
 	if *relaunches != 1 {
 		t.Fatalf("restart after the install relaunched %d times", *relaunches)
 	}

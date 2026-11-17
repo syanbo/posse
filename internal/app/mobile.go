@@ -56,7 +56,7 @@ type mobileDevice struct {
 }
 
 func (a *app) openMobile() {
-	a.selected, a.revealSel = mobileBoardID, true
+	a.openBoard(mobileBoardID)
 }
 
 // setMobileVisible 每次进入这一页都重新取配对码和设备列表，之前的码可能已经被手机用掉。
@@ -267,7 +267,7 @@ func mobileOnlineMark(c *ui.Context, names []string) {
 func (a *app) mobileBoard(c *ui.Context) {
 	a.pollMobile(c)
 	a.band(c, func() {
-		titleText(c, L(c).MobileTitle(), fsTitle)
+		titleText(c, a.moduleLabel(c, mobileBoardID, L(c).MobileTitle()), fsTitle)
 		ui.Spacer(c)
 		a.closeBoardButton(c)
 	})

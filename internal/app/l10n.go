@@ -54,11 +54,12 @@ func appL() locales.Messages {
 // startLocale 在窗口建好后读出用户选的语言（设置页显示），并在语言变了时重装菜单：mygo 只重贴系统角色的菜单项，
 // installMenu 自己加的项和 File、View、Window 的标题是装的时候按当时的语言取的。
 func (a *app) startLocale() {
-	a.locale = mygo.App.ChosenLocale()
+	a.rememberLocale(mygo.App.ChosenLocale())
 	setErrLang(mygo.App.Locale())
 	appHourCycle.Store(int32(mygo.App.Region().HourCycle))
 	mygo.App.OnRegionChanged(func(r mygo.Region) { appHourCycle.Store(int32(r.HourCycle)) })
 	mygo.App.OnLocaleChanged(func(locale string) {
+		a.rememberLocale(mygo.App.ChosenLocale())
 		setErrLang(locale)
 		a.installMenu()
 	})
@@ -66,8 +67,13 @@ func (a *app) startLocale() {
 
 // setLocale 是设置页选了语言："" 跟随系统。mygo 存在 app 的 defaults 里，下次启动照用。
 func (a *app) setLocale(tag string) {
-	a.locale = tag
+	a.rememberLocale(tag)
 	mygo.App.SetLocale(tag)
+}
+
+func (a *app) rememberLocale(tag string) {
+	a.locale, a.windowOwner().locale = tag, tag
+	a.displayed().locale = tag
 }
 
 // setErrLang 让报错的译文表跟着界面语言：中文用 zh 表，其余都显示英文原文。

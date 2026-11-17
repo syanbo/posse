@@ -117,7 +117,7 @@ func (a *app) posseSkillsBar(c *ui.Context) {
 				a.installPosseSkills(m)
 			}
 			if pressable(textButton(c, m.SidebarPosseSkillsView())).Clicked() {
-				a.selected = skillsBoardID
+				a.openBoard(skillsBoardID)
 			}
 		})
 	})

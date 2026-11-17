@@ -89,12 +89,14 @@ func TestDiscImageViewer(t *testing.T) {
 	for range 3 {
 		tt.Frame()
 	}
-	// 白图在消息区里的中心（1200×760 的窗口、滚到底）；先移过去再按，和真实的点击一样有悬停
-	tt.Move(605, 456)
+	r, ok := tt.Find("white.png")
+	if !ok {
+		t.Fatal("white image missing")
+	}
+	x, y := r.X+r.W/2, r.Y+r.H/2
+	tt.Move(x, y)
 	tt.Frame()
-	tt.Press(605, 456)
-	tt.Frame()
-	tt.Release(605, 456)
+	tt.ClickAt(x, y)
 	tt.Frame()
 	if !a.discView.open || filepath.Base(a.discView.path) != "white.png" {
 		t.Fatalf("viewer not opened: %+v", a.discView)

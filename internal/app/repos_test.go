@@ -227,6 +227,8 @@ func TestMultiRepoCommit(t *testing.T) {
 	w := &a.workspaces[0]
 	tt := newTester(a.build, 1200, 760)
 	v := a.openFilesPanel(w, sideChanges)
+	tt.Frame()
+	tt.Advance(300 * time.Millisecond)
 	until(t, tt, "status", func() bool {
 		return a.filesPanelShown == 1 && v.repoAt(repoA) != nil && v.repoAt(repoA).status != nil && v.repoAt(repoExt).status != nil
 	})

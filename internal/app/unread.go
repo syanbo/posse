@@ -34,10 +34,11 @@ func (a *app) markRead(cur *terminalInfo) {
 	}
 	a.seenFor = cur.ID
 	id := cur.ID
+	r := a.request()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := a.c.Call(ctx, "terminal.seen", map[string]any{"terminal": id}, nil); err != nil {
+		if err := r.invoke(ctx, "terminal.seen", map[string]any{"terminal": id}, nil); err != nil {
 			log.Printf("terminal.seen %s: %v", id, err)
 		}
 	}()
@@ -45,12 +46,17 @@ func (a *app) markRead(cur *terminalInfo) {
 
 // watchFocus 记下窗口焦点；切回窗口时重画一帧，看着的会话马上算看过。
 func (a *app) watchFocus() {
-	a.focused.Store(true)
+	a.windowFocused.Store(true)
+	a.displayed().focused.Store(true)
 	a.win.OnFocus(func() {
-		a.focused.Store(true)
+		a.windowFocused.Store(true)
+		a.displayed().focused.Store(true)
 		a.win.Update(func() {})
 	})
-	a.win.OnBlur(func() { a.focused.Store(false) })
+	a.win.OnBlur(func() {
+		a.windowFocused.Store(false)
+		a.displayed().focused.Store(false)
+	})
 }
 
 // shownStatus 把还没看过的完成换成 statusUnread；正看着的不换，常驻进程马上会收到看过。

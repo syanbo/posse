@@ -186,6 +186,9 @@ func (a *app) toggleFilesPanel(w *workspace, side int) {
 }
 
 func (a *app) closeFilesPanel() {
+	if v := a.files[a.selected]; v != nil {
+		v.cancelGitReads()
+	}
 	a.setFilesPanel(a.panelProject(), false)
 }
 
@@ -217,6 +220,9 @@ func (a *app) filesTick(c *ui.Context, w *workspace) {
 	a.pollRepos(c, v)
 	a.refreshList(v, false, nil)
 	a.reportListErr(c, v)
+	if s := &v.search; s.active() && s.request.app != nil && !s.request.current() {
+		a.startSearch(v, 0)
+	}
 	if d := v.cur; a.filesActive(w) && d != nil && d.kind == docLoading && !d.started {
 		d.started = true
 		a.loadDoc(d)
@@ -274,6 +280,13 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 			}
 			ui.Spacer(c)
 			if tab == "" && !w.Missing && v.side == sideFiles && !v.search.active() {
+				if a.remoteHost() {
+					ui.Box(c).Shrink(0).Disabled(v.transfer != nil || !a.request().saveAllowed()).Children(func() {
+						if iconButton(c.Key("file-upload"), iconArrowUp, L(c).FilesUpload()).Clicked() {
+							a.chooseUpload(L(c), v, v.root)
+						}
+					})
+				}
 				// 没有能定位的文件时置灰：外面包一层先禁用，按钮里的悬停才不亮
 				wrap := ui.Box(c).Shrink(0)
 				if !revealable(v, v.cur) {
@@ -334,6 +347,9 @@ func (a *app) filesSide(c *ui.Context, w *workspace, v *filesView) {
 			segmentedBadges(c, &v.side, L(c).FilesPanelTitle(), badges, L(c).FilesPanelFilesTab(), L(c).FilesPanelChangesTab())
 		})
 	})
+	if v.transfer != nil {
+		ui.Text(c, L(c).FilesTransferring(v.transfer.name)).FontSize(fsSmall).TextColor(c.Theme().TextMuted).Padding(4, 12)
+	}
 	if v.side == sideFiles {
 		a.searchView(c, w, v)
 	} else {

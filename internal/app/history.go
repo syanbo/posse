@@ -49,9 +49,11 @@ type historyDetail struct {
 	Messages []history.Message `json:"messages"`
 	Terminal string            `json:"terminal"`
 
-	context   history.Context // 最后一次请求占用的上下文，由窗口进程读会话文件得到
-	contextOK bool
-	md        map[int][]mdBlock // 消息序号 → 解析好的 Markdown
+	Context  *history.Context  `json:"context,omitempty"`
+	md       map[int][]mdBlock // 消息序号 → 解析好的 Markdown
+	imgs     *mdImages
+	request  appRequest
+	imageReq uint64
 	// items 是要列出的行，itemsKey 是算它时的条件（是否全显示工具、命中序号、展开了哪些工具组）
 	items    []transcriptItem
 	itemsKey string
@@ -116,7 +118,8 @@ type historyView struct {
 	hitSeq    int    // 从搜索结果打开时命中的消息序号，-1 表示没有
 	placed    bool   // 打开会话后是否已经定位过
 	detail    *historyDetail
-	tools     bool // 显示工具调用
+	detailReq uint64 // 同一会话再次打开也只接收最后一次详情请求。
+	tools     bool   // 显示工具调用
 	list      ui.ListState
 	// resQuery、resAgent 是列表上这份结果对应的查询条件：新结果回来之前照旧显示它，
 	// 不至于一敲字就闪出"没有找到"；换了条件的结果回来时列表回到顶部
@@ -231,13 +234,15 @@ func (a *app) searchHistory(delay time.Duration) {
 	req := h.req
 	h.mu.Unlock()
 	h.askedAt = time.Now().Add(delay)
-	time.AfterFunc(delay, func() { a.fetchHistory(req) })
+	r := a.request()
+	time.AfterFunc(delay, func() { r.fetchHistory(req) })
 }
 
-func (a *app) fetchHistory(req int) {
+func (r appRequest) fetchHistory(req int) {
+	a := r.app
 	h := &a.history
 	query, agentIdx, cur := h.want()
-	if req != cur || a.c == nil {
+	if req != cur || !r.current() || r.client == nil {
 		return
 	}
 	params := map[string]any{"query": strings.TrimSpace(query), "agent": historyAgents[agentIdx], "limit": historyLimit}
@@ -255,22 +260,29 @@ func (a *app) fetchHistory(req int) {
 	h.mu.Lock()
 	h.inflight++
 	h.mu.Unlock()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	err := a.c.Call(ctx, method, params, &res)
+	ctx, cancel := context.WithTimeout(a.windowContext(), 30*time.Second)
+	err := r.invoke(ctx, method, params, &res)
 	cancel()
 	h.mu.Lock()
 	h.inflight--
-	h.fetched = time.Now()
-	stale := req != h.req
+	stale := req != h.req || !r.current()
+	if !stale {
+		h.fetched = time.Now()
+	}
 	h.mu.Unlock()
 	if stale {
 		return
 	}
-	if err != nil {
-		a.win.Update(func() { h.failed = errtext.Text(err) })
-		return
-	}
-	a.win.Update(func() {
+	r.update(func() {
+		// 网络结束到主线程应用之间仍可能开始新搜索，错误和成功都要再次核对序号。
+		_, _, current := h.want()
+		if req != current {
+			return
+		}
+		if err != nil {
+			h.failed = errtext.Text(err)
+			return
+		}
 		h.loaded, h.failed = true, ""
 		h.status, h.anyWord = res.Status, res.Any
 		// 列表按会话 ID 保持滚动位置，定期刷新时有用；换了搜索词或筛选就该从第一条看起
@@ -305,7 +317,8 @@ func (a *app) historyTick() {
 	}
 	h.mu.Unlock()
 	if due {
-		go a.fetchHistory(req)
+		r := a.request()
+		go r.fetchHistory(req)
 	}
 }
 
@@ -329,6 +342,8 @@ func (a *app) releaseHistory() {
 	h.mu.Lock()
 	h.req++
 	h.mu.Unlock()
+	h.detailReq++
+	h.detail.closeImages()
 	h.sessions, h.groups, h.hits, h.detail = nil, nil, nil, nil
 	h.sel, h.loaded, h.placed = "", false, false
 	h.list, h.messages = ui.ListState{}, ui.ListState{}
@@ -340,7 +355,13 @@ func (a *app) setHistoryVisible(v bool) {
 	opened := v && !h.visible
 	h.visible = v
 	h.mu.Unlock()
+	if !v {
+		h.detail.closeImages()
+	}
 	if opened {
+		if h.detail != nil && h.detail.request.app != nil && !h.detail.request.current() {
+			a.selectSession(h.detail.Session, h.hitSeq)
+		}
 		a.setHistoryGrouping()
 		a.searchHistory(0)
 	}
@@ -350,47 +371,69 @@ func (a *app) setHistoryVisible(v bool) {
 func (a *app) selectSession(sess history.Session, seq int) {
 	h := &a.history
 	key := sessionKey(sess)
+	h.detail.closeImages()
 	h.sel, h.hitSeq, h.placed = key, seq, false
 	if h.detail != nil && sessionKey(h.detail.Session) != key {
 		h.detail = nil
 	}
+	h.detailReq++
+	req, r := h.detailReq, a.request()
 	go func() {
 		var d historyDetail
-		if a.call("history.show", map[string]any{"session": sess.ID, "path": sess.Path}, &d, 30*time.Second) != nil {
-			return
+		ctx, cancel := context.WithTimeout(a.windowContext(), 30*time.Second)
+		err := r.invoke(ctx, "history.show", map[string]any{"session": sess.ID, "path": sess.Path, "context": true}, &d)
+		cancel()
+		if err == nil && d.Context == nil && !r.client.Remote {
+			// 旧本机服务端没有上下文字段；远端即使缺字段也不能按其路径读本机文件。
+			value, _ := history.ReadContext(d.Session.Agent, d.Session.Path, d.Session.Model)
+			d.Context = &value
 		}
-		s := d.Session
-		d.context, d.contextOK = history.ReadContext(s.Agent, s.Path, s.Model)
-		a.win.Update(func() {
-			if h.sel == key {
-				h.detail = &d
+		r.update(func() {
+			if h.sel != key || h.detailReq != req {
+				return
 			}
+			if err != nil {
+				a.err = errtext.Text(err)
+				return
+			}
+			h.detail.closeImages()
+			d.request, d.imageReq = r, req
+			h.detail = &d
 		})
 	}()
 }
 
 // resumeSession 在 posse 里继续会话；会话目录不在任何工作区时，问一句再把目录加成项目。
 func (a *app) resumeSession(m locales.Messages, s history.Session) {
+	r := a.request()
+	if !r.mayWrite() {
+		return
+	}
+	r.resumeSession(m, s)
+}
+
+func (r appRequest) resumeSession(m locales.Messages, s history.Session) {
+	a := r.app
 	go func() {
 		var t struct {
 			ID          string `json:"id"`
 			WorkspaceID string `json:"workspaceId"`
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		err := a.c.Call(ctx, "history.resume", map[string]any{"session": s.ID, "cols": 120, "rows": 36}, &t)
+		ctx, cancel := context.WithTimeout(a.windowContext(), 30*time.Second)
+		err := r.invoke(ctx, "history.resume", map[string]any{"session": s.ID, "path": s.Path, "cols": 120, "rows": 36}, &t)
 		cancel()
 		var re *rpc.Error
 		if errors.As(err, &re) && re.Code == rpc.CodeNotFound && s.Cwd != "" && strings.Contains(re.Message, "no workspace contains") {
-			a.win.Update(func() {
+			r.update(func() {
 				a.confirm(m.HistoryAddProjectConfirm(shortPath(s.Cwd)),
 					m.HistoryAddProjectBody(),
 					m.HistoryAddAndContinue(), func() {
 						go func() {
-							if a.call("project.add", map[string]any{"path": s.Cwd}, nil, 10*time.Second) != nil {
+							if r.call("project.add", map[string]any{"path": s.Cwd}, nil, 10*time.Second) != nil {
 								return
 							}
-							a.refresh()
-							a.resumeSession(m, s)
+							r.refresh()
+							r.resumeSession(m, s)
 						}()
 					})
 			})
@@ -398,11 +441,11 @@ func (a *app) resumeSession(m locales.Messages, s history.Session) {
 		}
 		// 目录不在工作区里时只问要不要加成项目，不同时在错误条上报一遍；其余的报错照常上错误条
 		if err != nil {
-			a.update(func() { a.err = errtext.Text(err) })
+			r.update(func() { a.err = errtext.Text(err) })
 		}
-		a.refresh()
+		r.refresh()
 		if err == nil {
-			a.win.Update(func() { a.openTerminal(t.WorkspaceID, t.ID) })
+			r.update(func() { a.openTerminal(t.WorkspaceID, t.ID) })
 		}
 	}()
 }
@@ -690,16 +733,20 @@ func thousands(n int) string {
 func (a *app) cwdLink(c *ui.Context, dir string) func() {
 	return func() {
 		t := c.Theme()
-		b := ui.Row(c.Key("cwd")).Gap(4).Shrink(1).Role(ui.RoleButton).Label(L(c).CommonOpenInFinder()).Tooltip(L(c).HistoryOpenInFinderTip(dir))
+		b := ui.Row(c.Key("cwd")).Gap(4).Shrink(1)
+		local := !a.remoteHost()
+		if local {
+			b.Role(ui.RoleButton).Label(L(c).CommonOpenInFinder()).Tooltip(L(c).HistoryOpenInFinderTip(dir))
+		}
 		color := t.TextMuted
-		if b.Hovered() {
+		if local && b.Hovered() {
 			color = t.Accent
 		}
 		b.Children(func() {
 			ui.Icon(c, iconFolder).FontSize(fsBody).TextColor(color)
 			ui.Text(c, shortPath(dir)).FontSize(fsSmall).Font(monoFont).TextColor(color).MaxLines(1).Shrink(1)
 		})
-		if b.Clicked() {
+		if local && b.Clicked() {
 			if err := mygo.Shell.OpenPath(dir); err != nil {
 				a.err = errtext.Text(err)
 			}
@@ -709,11 +756,11 @@ func (a *app) cwdLink(c *ui.Context, dir string) func() {
 
 // contextMeta 是会话最后一次请求占用的上下文比例；读不到用量的会话（grok、cursor）不显示。
 func contextMeta(c *ui.Context, d *historyDetail) func() {
-	if !d.contextOK {
+	if d.Context == nil || d.Context.Window <= 0 {
 		return nil
 	}
 	return func() {
-		ctx := d.context
+		ctx := d.Context
 		ui.Text(c, L(c).HistoryContext(ctx.Percent())).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).MaxLines(1).Shrink(0).
 			Tooltip(L(c).HistoryContextTip(ctx.Used, ctx.Window))
 	}
@@ -1065,7 +1112,7 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 		case "assistant":
 			// agent 的回复按 Markdown 显示；用户自己打的字原样显示
 			ui.Column(c).Selectable().Children(func() {
-				mdView{words: ns, size: a.mdSize()}.page(c, a.markdown(m))
+				mdView{words: ns, size: a.mdSize(), imgs: a.historyImages(s)}.page(c, a.markdown(m))
 			})
 		default:
 			highlighted(c, text, ns).FontSize(a.mdSize()).LineHeight(1.55).Selectable()
@@ -1081,7 +1128,7 @@ func (a *app) markdown(m history.Message) []mdBlock {
 	}
 	bs, ok := d.md[m.Seq]
 	if !ok {
-		bs = parseMarkdown(strings.TrimSpace(m.Text))
+		bs = parseHistoryMarkdown(strings.TrimSpace(m.Text))
 		d.md[m.Seq] = bs
 	}
 	return bs

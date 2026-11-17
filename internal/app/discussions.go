@@ -265,15 +265,9 @@ type discBoard struct {
 	flashAt  time.Time
 	older    bool // 正在取更早的一页
 
-	// 输入区
-	text     string
-	target   string // @ 的成员 ID
-	quote    string // 引用的消息 ID
-	atts     []string
-	answerQ  string // 正在回答的问题（任务消息 ID）
-	mention  string // @ 的人（局域网协作，指纹）：只提醒，不调用他的 Agent
-	clientID string // 这条草稿的请求 ID：发送失败重试时沿用，常驻进程据此去重
-	sending  bool
+	// 输入区：当前草稿内嵌，切换后留在 drafts 中。
+	discDraft
+	drafts map[string]discDraft
 
 	panel   bool // 右边一栏开着
 	search  string
@@ -380,11 +374,11 @@ func (a *app) advanceWantedDisc(key string, rev, gen int64) {
 	a.discMu.Unlock()
 }
 
-// pollDiscussions 在 refresh 里调用：列表只在变更序号变了时才取全；打开的讨论按版本取增量。
-func (a *app) pollDiscussions(r *pollResult, call func(method string, params, out any) error) {
+// pollDiscussions 只读取本机讨论：列表只在变更序号变了时才取全；打开的讨论按版本取增量。
+func (a *app) pollDiscussions(call func(method string, params, out any) error) *discPoll {
 	var l discList
 	if call("discussion.list", map[string]any{"since": a.discSeq.Load()}, &l) != nil {
-		return
+		return nil
 	}
 	p := discPoll{}
 	if l.Items != nil {
@@ -399,10 +393,11 @@ func (a *app) pollDiscussions(r *pollResult, call func(method string, params, ou
 			p.view, p.key, p.since, p.gen = &v, key, since, gen
 		}
 	}
-	// 增量是空的也交上去：里面带着 worker 终端的实时状态；和上次一样时 samePoll 会跳过重建
+	// 增量是空的也交上去：里面带着 worker 终端的实时状态；和上次一样时 refreshDiscussions 会跳过重建
 	if p.list != nil || p.view != nil {
-		r.disc = &p
+		return &p
 	}
+	return nil
 }
 
 // applyDiscussions 在主线程里把轮询结果交给界面，并为没在看的讨论里的问题和回复发通知。
@@ -454,7 +449,7 @@ func (a *app) discNotice(prev, cur discSummary) {
 	if prev.Key == "" || a.state.NotifyOff {
 		return
 	}
-	if a.win != nil && a.win.IsFocused() && a.selected == discBoardID && a.disc.sel == cur.Key {
+	if a.displayed() == a && a.win != nil && a.win.IsFocused() && a.selected == discBoardID && a.disc.sel == cur.Key {
 		return
 	}
 	m := appL()
@@ -561,7 +556,11 @@ func (a *app) markDiscRead(key string, seq int64) {
 }
 
 func (a *app) openDiscussion(key string) {
-	a.selected, a.revealSel = discBoardID, true
+	// 资源 ID 只属于它的来源主机，远端任务里的讨论不能按同名 ID 打开本机讨论。
+	if a != a.windowOwner() {
+		return
+	}
+	a.openBoard(discBoardID)
 	a.selectDiscussion(key)
 }
 
@@ -570,13 +569,14 @@ func (a *app) selectDiscussion(key string) {
 	if b.sel == key && b.d != nil {
 		return
 	}
-	removePasted(b.atts)
-	*b = discBoard{area: b.area, list: b.list, panel: b.panel, newOpen: b.newOpen, self: b.self, join: b.join, invite: b.invite}
+	b.saveDraft()
+	*b = discBoard{area: b.area, list: b.list, panel: b.panel, newOpen: b.newOpen, self: b.self, join: b.join, invite: b.invite,
+		discDraft: b.drafts[key], drafts: b.drafts}
 	b.sel = key
 	a.setWantedDisc(key, 0)
 	a.pollForce.Store(true)
 	if !a.refreshQueued.Swap(true) {
-		go a.refresh()
+		go a.discussionRequest().refresh()
 	}
 }
 
@@ -631,14 +631,12 @@ func (a *app) discBoard(c *ui.Context) {
 		a.setWantedDisc(b.sel, rev)
 	}
 	a.band(c, func() {
-		titleText(c, m.DiscTitle(), fsTitle)
+		label := m.DiscTitle()
+		if s := a.discussion(b.sel); s != nil {
+			label = s.Title
+		}
+		titleText(c, label, fsTitle)
 		ui.Spacer(c)
-		if len(b.list) > 0 && pressable(textButton(c.Key("disc-join"), m.CollabJoinEllipsis())).Clicked() {
-			a.openJoin()
-		}
-		if len(a.projects) > 0 && len(b.list) > 0 && pressable(accentButton(c, m.DiscNewEllipsis())).Clicked() {
-			a.openNewDiscussion()
-		}
 		a.closeBoardButton(c)
 	})
 	if len(b.list) == 0 {
@@ -649,16 +647,22 @@ func (a *app) discBoard(c *ui.Context) {
 		a.selectDiscussion(b.list[0].Key)
 	}
 	panel := b.panel && b.d != nil && b.d.key == b.sel
-	// 三栏放不下时（窗口窄、侧栏开着）开着详情就先收起讨论列表，消息区不被挤成一字一行
+	// 窄窗口把详情暂时铺满主区域，搜索和成员操作仍可用，返回后恢复消息。
 	w := b.area.Bounds(c).W
-	list := !panel || w == 0 || w >= 2*discSideWidth+discMinMessages()+4*pageGap
+	compact := panel && w > 0 && w < discSideWidth+discMinMessages()+3*pageGap
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Ref(&b.area).Children(func() {
-		if list {
-			card(c).Width(discSideWidth).Shrink(0).Clip().Label(m.DiscList()).Children(func() {
-				ui.Scroll(c).Grow(1).Children(func() {
-					ui.Column(c).Padding(4, 0, 8, 0).Gap(4).Children(func() { a.discListView(c) })
+		if compact {
+			card(c).Grow(1).MinWidth(0).Clip().Children(func() {
+				ui.Row(c).Padding(8, cardPad).AlignItems(ui.Center).Children(func() {
+					titleText(c, m.DiscDetails(), fsTitle)
+					ui.Spacer(c)
+					if iconButton(c, iconClose, m.CommonClose()).Clicked() {
+						b.panel = false
+					}
 				})
+				a.discPanel(c, b.d)
 			})
+			return
 		}
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Children(func() {
 			if b.d == nil || b.d.key != b.sel {
@@ -851,22 +855,22 @@ func (a *app) discDetailView(c *ui.Context, d *discDetail) {
 							a.askShare(m, d)
 						}
 						if shared && pm.Item(m.CollabInviteEllipsis()).Icon(iconLink).Chosen() {
-							go a.createInvite(d.key, false)
+							go a.discussionRequest().createInvite(d.key, false)
 						}
 						if shared && pm.Item(m.CollabInviteGuestEllipsis()).Icon(iconEye).Chosen() {
-							go a.createInvite(d.key, true)
+							go a.discussionRequest().createInvite(d.key, true)
 						}
 					}
 					if d.writable() {
 						// 摘要由成员写：挑一个自己能用的 Agent 发一条请求，它存好摘要再回复
 						for _, mem := range activeMembers(d) {
 							if d.canUse(mem) && pm.Item(m.DiscSummarizeBy(mem.Name)).Icon(iconFileText).Chosen() {
-								go a.discCall("discussion.post", map[string]any{"discussion": d.key, "target": mem.ID,
+								go a.discussionRequest().discCall("discussion.post", map[string]any{"discussion": d.key, "target": mem.ID,
 									"body": m.DiscSummarizeRequest(), "clientId": fmt.Sprintf("c_%x", time.Now().UnixNano())})
 							}
 						}
 						if host && d.info.Summary != "" && pm.Item(m.DiscSummaryClear()).Icon(iconClose).Chosen() {
-							go a.discCall("discussion.summary.clear", map[string]any{"discussion": d.key})
+							go a.discussionRequest().discCall("discussion.summary.clear", map[string]any{"discussion": d.key})
 						}
 					}
 					pm.Separator()
@@ -881,7 +885,7 @@ func (a *app) discDetailView(c *ui.Context, d *discDetail) {
 							a.discArchive(d.key, false)
 						}
 						if pm.Item(m.DiscCleanAttachmentsEllipsis()).Icon(iconTrash).Chosen() {
-							go a.askCleanAttachments(m, d.key)
+							go a.discussionRequest().askCleanAttachments(m, d.key)
 						}
 					} else if pm.Item(m.DiscArchive()).Icon(iconArchive).Chosen() {
 						a.askArchive(m, d)
@@ -1088,7 +1092,7 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 					for i, choice := range msg.Choices {
 						if pressable(textButton(c.Key(fmt.Sprint("choice-", msg.ID, "-", i)), choice)).Clicked() && !b.sending {
 							b.sending = true
-							go a.sendDiscAnswer(msg.Question, choice, false)
+							a.sendDiscAnswer(msg.Question, choice, false)
 						}
 					}
 					if pressable(textButton(c.Key("answer-"+msg.ID), m.DiscAnswerEllipsis())).Clicked() {
@@ -1113,7 +1117,7 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 			keyLabel = m.DiscUnmarkKey()
 		}
 		if !archived && pm.Item(keyLabel).Icon(iconStar).Chosen() {
-			go a.discCall("discussion.key", map[string]any{"message": msg.ID, "on": msg.KeyAt == nil})
+			go a.discussionRequest().discCall("discussion.key", map[string]any{"message": msg.ID, "on": msg.KeyAt == nil})
 		}
 		if pm.Item(m.CommonCopy()).Icon(iconCopy).Chosen() {
 			mygo.Clipboard.WriteText(msg.Body)
@@ -1200,7 +1204,7 @@ func (a *app) discMessageActions(c *ui.Context, msg discMessage) {
 			tip = m.DiscUnmarkKey()
 		}
 		if iconButtonSized(c.Key("key-"+msg.ID), iconStar, tip, compactBox(), smallIcon()).Clicked() {
-			go a.discCall("discussion.key", map[string]any{"message": msg.ID, "on": msg.KeyAt == nil})
+			go a.discussionRequest().discCall("discussion.key", map[string]any{"message": msg.ID, "on": msg.KeyAt == nil})
 		}
 	})
 }
@@ -1364,6 +1368,7 @@ func humanSize(n int64) string {
 }
 
 func (a *app) openDiscFile(path string) {
+	a = a.windowOwner()
 	if _, err := os.Stat(path); err != nil {
 		a.err = errtext.Text(err)
 		return
@@ -1481,8 +1486,9 @@ func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
 			// 房主那边记着已领取，本机账本里却没有：核实副作用后放弃这一轮、重新发起
 			ui.Row(c).Gap(8).Children(func() {
 				if pressable(textButton(c, m.CollabAbandonRetry())).Clicked() {
+					q := a.discussionRequest()
 					a.confirm(m.CollabAbandonTitle(), m.CollabAbandonBody(), m.CommonRetry(), func() {
-						a.discCall("discussion.retry", map[string]any{"execution": x.ID, "abandon": true})
+						q.discCall("discussion.retry", map[string]any{"execution": x.ID, "abandon": true})
 					})
 				}
 			})
@@ -1498,30 +1504,31 @@ func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
 			switch x.State {
 			case "queued", "blocked":
 				if x.State == "blocked" && pressable(accentButton(c, m.DiscRestartContinue())).Clicked() {
-					go a.discCall("discussion.member.restart", map[string]any{"member": x.Member})
+					go a.discussionRequest().discCall("discussion.member.restart", map[string]any{"member": x.Member})
 				}
 				if pressable(textButton(c, m.CommonCancel())).Clicked() {
-					go a.discCall("discussion.cancel", map[string]any{"execution": x.ID})
+					go a.discussionRequest().discCall("discussion.cancel", map[string]any{"execution": x.ID})
 				}
 			case "held":
 				if pressable(accentButton(c, m.DiscContinueAnyway())).Clicked() {
-					go a.discCall("discussion.confirm", map[string]any{"execution": x.ID})
+					go a.discussionRequest().discCall("discussion.confirm", map[string]any{"execution": x.ID})
 				}
 				if pressable(textButton(c, m.DiscIsolate())).Clicked() {
-					go a.discCall("discussion.isolate", map[string]any{"execution": x.ID})
+					go a.discussionRequest().discCall("discussion.isolate", map[string]any{"execution": x.ID})
 				}
 				if pressable(textButton(c, m.CommonCancel())).Clicked() {
-					go a.discCall("discussion.cancel", map[string]any{"execution": x.ID})
+					go a.discussionRequest().discCall("discussion.cancel", map[string]any{"execution": x.ID})
 				}
 			case "running", "waiting":
 				if pressable(textButton(c, m.DiscStop())).Clicked() {
+					q := a.discussionRequest()
 					a.confirm(m.DiscStopConfirm(name), m.DiscStopBody(), m.DiscStop(), func() {
-						a.discCall("discussion.stop", map[string]any{"execution": x.ID})
+						q.discCall("discussion.stop", map[string]any{"execution": x.ID})
 					})
 				}
 			case "failed", "interrupted", "stopped", "cancelled":
 				if member != nil && member.RemovedAt == nil && !retried(d, x) && pressable(textButton(c, m.CommonRetry())).Clicked() {
-					go a.discCall("discussion.retry", map[string]any{"execution": x.ID})
+					go a.discussionRequest().discCall("discussion.retry", map[string]any{"execution": x.ID})
 				}
 			}
 		})
@@ -1607,7 +1614,7 @@ func (a *app) discPausedBanner(c *ui.Context, d *discDetail) {
 				}
 				ui.Text(c, m.CollabPausedLost(mem.Name, queued)).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
 				if pressable(accentButton(c, m.CollabResume())).Clicked() {
-					go a.discCall("discussion.member.resume", map[string]any{"member": mem.ID})
+					go a.discussionRequest().discCall("discussion.member.resume", map[string]any{"member": mem.ID})
 				}
 			})
 			continue
@@ -1616,7 +1623,7 @@ func (a *app) discPausedBanner(c *ui.Context, d *discDetail) {
 			ui.Icon(c, iconPause).FontSize(fsBody).TextColor(colors(t).honey)
 			ui.Text(c, m.DiscPaused(mem.Name, queued)).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
 			if pressable(accentButton(c, m.DiscRestartContinue())).Clicked() {
-				go a.discCall("discussion.member.restart", map[string]any{"member": mem.ID})
+				go a.discussionRequest().discCall("discussion.member.restart", map[string]any{"member": mem.ID})
 			}
 		})
 	}
@@ -1782,7 +1789,7 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 				if len(png) == 0 {
 					return false
 				}
-				go a.pasteDiscImage(png)
+				a.pasteDiscImage(png)
 				return true
 			})
 		}
@@ -1812,7 +1819,7 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 	}
 	if question != nil {
 		b.sending = true
-		go a.sendDiscAnswer(question.Question, strings.TrimSpace(b.text), true)
+		a.sendDiscAnswer(question.Question, strings.TrimSpace(b.text), true)
 		return
 	}
 	if b.clientID == "" {
@@ -1825,50 +1832,52 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 		atts = append(atts, map[string]string{"path": p})
 	}
 	params["attachments"] = atts
-	go a.sendDiscMessage(d.key, params)
+	a.sendDiscMessage(d.key, params)
 }
 
 func (a *app) sendDiscMessage(key string, params map[string]any) {
-	var r struct{ Message discMessage }
-	err := a.call("discussion.post", params, &r, 30*time.Second)
-	a.update(func() {
-		b := &a.disc
-		b.sending = false
-		if err != nil || b.sel != key {
-			return
-		}
-		// 常驻进程已经把附件复制成快照：粘贴图片时写的临时文件可以删了
-		removePasted(b.atts)
-		b.text, b.quote, b.atts, b.clientID, b.mention = "", "", nil, "", ""
-		b.stickBottom()
-		a.markDiscRead(key, r.Message.Seq)
-	})
-	a.refresh()
+	a = a.windowOwner()
+	q := a.discussionRequest()
+	request := a.disc.beginSend("", params["body"].(string), false)
+	params["clientId"] = request.clientID
+	go func() {
+		var r struct{ Message discMessage }
+		err := q.call("discussion.post", params, &r, 30*time.Second)
+		a.update(func() {
+			b := &a.disc
+			b.finishSend(key, request, err == nil && q.current())
+			if err == nil && q.current() && a.selected == discBoardID && b.sel == key {
+				b.stickBottom()
+				a.markDiscRead(key, r.Message.Seq)
+			}
+		})
+		q.refresh()
+	}()
 }
 
-// sendDiscAnswer 回答一个问题。typed 是从输入框发的：成功后清掉输入框；点选项回答的不动输入框里的草稿。
+// sendDiscAnswer 在界面线程捕获来源草稿；点选项回答不动输入框里的正文。
 func (a *app) sendDiscAnswer(question, text string, typed bool) {
-	err := a.call("discussion.answer", map[string]any{"question": question, "body": text}, nil, 10*time.Second)
-	a.update(func() {
-		b := &a.disc
-		b.sending = false
-		if err == nil {
-			if typed {
-				b.text = ""
+	a = a.windowOwner()
+	q := a.discussionRequest()
+	key := a.disc.sel
+	request := a.disc.beginSend(question, text, typed)
+	go func() {
+		err := q.call("discussion.answer", map[string]any{"question": question, "body": text, "clientId": request.clientID}, nil, 10*time.Second)
+		a.update(func() {
+			b := &a.disc
+			b.finishSend(key, request, err == nil && q.current())
+			if err == nil && q.current() && a.selected == discBoardID && b.sel == key {
+				b.stickBottom()
 			}
-			if typed || b.answerQ == question {
-				b.answerQ = ""
-			}
-			b.stickBottom()
-		}
-	})
-	a.refresh()
+		})
+		q.refresh()
+	}()
 }
 
 // pickAttachments 选本机文件当附件；常驻进程发送时复制一份快照。
 func (a *app) pickAttachments(m locales.Messages) {
-	b := &a.disc
-	key, d := b.sel, b.d
+	a = a.windowOwner()
+	key := a.disc.sel
 	a.inDialog(func() []string {
 		paths, err := openDialog(mygo.OpenDialogOptions{Parent: a.win, Title: m.DiscAttachTitle(), ButtonLabel: m.DiscAttach(), Multiple: true})
 		if err != nil {
@@ -1876,19 +1885,17 @@ func (a *app) pickAttachments(m locales.Messages) {
 		}
 		return paths
 	}, func(paths []string) {
-		// 对话框开着时切走、删掉了这个讨论（换讨论会清掉草稿）：选的文件不放进别的草稿
-		if len(paths) == 0 || b.sel != key || b.d != d {
-			return
-		}
-		for _, p := range paths {
-			if !slices.Contains(b.atts, p) {
-				b.atts = append(b.atts, p)
+		a.disc.editDraft(key, func(d *discDraft) {
+			for _, p := range paths {
+				if !slices.Contains(d.atts, p) {
+					d.atts = append(d.atts, p)
+				}
 			}
-		}
-		if len(b.atts) > 10 {
-			b.atts = b.atts[:10]
-			a.err = m.DiscTooManyAttachments(10)
-		}
+			if len(d.atts) > 10 {
+				d.atts = d.atts[:10]
+				a.err = m.DiscTooManyAttachments(10)
+			}
+		})
 	})
 }
 
@@ -1914,7 +1921,7 @@ func (a *app) inDialog(show func() []string, done func([]string)) {
 	}()
 }
 
-// pastePrefix 是粘贴图片写的临时文件名开头：发出去、从草稿里去掉、离开讨论时删掉。
+// pastePrefix 是粘贴图片写的临时文件名开头：发出去、从草稿里去掉时删掉。
 const pastePrefix = "posse-disc-paste-"
 
 func removePasted(paths []string) {
@@ -1926,23 +1933,25 @@ func removePasted(paths []string) {
 }
 
 func (a *app) pasteDiscImage(png []byte) {
-	path := filepath.Join(os.TempDir(), fmt.Sprintf("%s%d.png", pastePrefix, time.Now().UnixNano()))
-	if err := os.WriteFile(path, png, 0o600); err != nil {
-		a.update(func() { a.err = appL().AppPasteImageError(errtext.Text(err)) })
-		return
-	}
-	a.update(func() { a.disc.atts = append(a.disc.atts, path) })
-}
-
-// discCall 调常驻进程，完了刷新；出错显示在错误条上。
-func (a *app) discCall(method string, params map[string]any) {
-	a.call(method, params, nil, 30*time.Second)
-	a.refresh()
+	a = a.windowOwner()
+	key := a.disc.sel
+	go func() {
+		path := filepath.Join(os.TempDir(), fmt.Sprintf("%s%d.png", pastePrefix, time.Now().UnixNano()))
+		if err := os.WriteFile(path, png, 0o600); err != nil {
+			a.update(func() { a.err = appL().AppPasteImageError(errtext.Text(err)) })
+			return
+		}
+		a.update(func() {
+			a.disc.editDraft(key, func(d *discDraft) { d.atts = append(d.atts, path) })
+		})
+	}()
 }
 
 // loadPage 取一页消息并按 mode 放进窗口：older 插到前面（停在原来最上面那条），newer 接到后面，
 // around 整段换成以目标为中心的一页（定位远处的搜索结果、引用、关键消息）。读进来的总数受 discWindow 限制。
 func (a *app) loadPage(key, mode string, params map[string]any, jump string) {
+	a = a.windowOwner()
+	q := a.discussionRequest()
 	b := &a.disc
 	if b.d == nil || b.d.key != key || b.older {
 		return
@@ -1952,12 +1961,12 @@ func (a *app) loadPage(key, mode string, params map[string]any, jump string) {
 	d0 := b.d
 	go func() {
 		var v discView
-		err := a.call("discussion.show", params, &v, 10*time.Second)
+		err := q.call("discussion.show", params, &v, 10*time.Second)
 		a.update(func() {
 			b.older = false
 			d := b.d
 			// 这期间整页换过了（跳到最新、换了讨论、重新打开）：这一页是按旧窗口取的，丢掉
-			if err != nil || d == nil || d != d0 {
+			if err != nil || !q.current() || q.gen != a.discGen() || d == nil || d != d0 {
 				return
 			}
 			for _, x := range v.Executions {
@@ -2032,7 +2041,7 @@ func (a *app) jumpLatest() {
 	b.stickBottom()
 	a.pollForce.Store(true)
 	if !a.refreshQueued.Swap(true) {
-		go a.refresh()
+		go a.discussionRequest().refresh()
 	}
 }
 
@@ -2053,7 +2062,7 @@ func (a *app) discJump(d *discDetail, id string, seq int64) {
 }
 
 func (a *app) discArchive(key string, archived bool) {
-	go a.discCall("discussion.archive", map[string]any{"discussion": key, "archived": archived})
+	go a.discussionRequest().discCall("discussion.archive", map[string]any{"discussion": key, "archived": archived})
 }
 
 // askArchive 先列出挡着归档的请求；没有就确认后归档。
@@ -2075,13 +2084,15 @@ func (a *app) askArchive(m locales.Messages, d *discDetail) {
 		a.confirm(m.DiscArchiveBlocked(), m.DiscArchiveBlockedBody(strings.Join(busy, "\n")), m.CommonOk(), func() {})
 		return
 	}
+	q := a.discussionRequest()
 	a.confirm(m.DiscArchiveConfirm(d.info.Title), m.DiscArchiveBody(), m.DiscArchive(), func() {
-		a.discCall("discussion.archive", map[string]any{"discussion": d.key, "archived": true})
+		q.discCall("discussion.archive", map[string]any{"discussion": d.key, "archived": true})
 	})
 }
 
 // askCleanAttachments 列出已归档讨论的附件和占的空间，确认后移到废纸篓；消息和附件信息留着。
-func (a *app) askCleanAttachments(m locales.Messages, key string) {
+func (q discussionRequest) askCleanAttachments(m locales.Messages, key string) {
+	a := q.app
 	var r struct {
 		Dir   string
 		Items []struct {
@@ -2090,7 +2101,7 @@ func (a *app) askCleanAttachments(m locales.Messages, key string) {
 			Exists bool
 		}
 	}
-	if a.call("discussion.attachments", map[string]any{"discussion": key}, &r, 10*time.Second) != nil {
+	if q.call("discussion.attachments", map[string]any{"discussion": key}, &r, 10*time.Second) != nil {
 		return
 	}
 	// 每个附件在自己的 <附件 ID>/ 目录里：整个目录移走，不留空目录；目录名对不上时只移文件
@@ -2107,7 +2118,7 @@ func (a *app) askCleanAttachments(m locales.Messages, key string) {
 			targets = append(targets, target)
 		}
 	}
-	a.update(func() {
+	q.update(func() {
 		if len(files) == 0 {
 			a.confirm(m.DiscCleanNothing(), m.DiscCleanNothingBody(), m.CommonOk(), func() {})
 			return
@@ -2120,6 +2131,9 @@ func (a *app) askCleanAttachments(m locales.Messages, key string) {
 			names = append(names, m.DiscAndMore(len(files)-8))
 		}
 		a.confirm(m.DiscCleanConfirm(len(files), humanSize(total)), m.DiscCleanBody(strings.Join(names, "\n")), m.CommonMoveToTrash(), func() {
+			if !q.current() {
+				return
+			}
 			var failed error
 			trash := a.trashItem
 			if trash == nil {
@@ -2140,9 +2154,9 @@ func (a *app) askCleanAttachments(m locales.Messages, key string) {
 				}
 			}
 			if failed != nil {
-				a.update(func() { a.err = m.TrashMoveError(errtext.Text(failed)) })
+				q.update(func() { a.err = m.TrashMoveError(errtext.Text(failed)) })
 			}
-			a.refresh()
+			q.refresh()
 		})
 	})
 }
@@ -2217,7 +2231,7 @@ func (a *app) discPanel(c *ui.Context, d *discDetail) {
 						})
 						canUnmark := d.collab == nil || d.hostRole() || k.KeyBy == "" || k.KeyBy == d.collab.Self
 						if !archived && canUnmark && iconButtonSized(c.Key("unkey-"+k.ID), iconClose, m.DiscUnmarkKey(), miniBox(), fsSmall).Clicked() {
-							go a.discCall("discussion.key", map[string]any{"message": k.ID, "on": false})
+							go a.discussionRequest().discCall("discussion.key", map[string]any{"message": k.ID, "on": false})
 						}
 					})
 					if row.Clicked() {
@@ -2309,12 +2323,13 @@ func (a *app) memberRow(c *ui.Context, d *discDetail, mem discMember) {
 			a.openMemberForm(d, mem.ID)
 		}
 		if mem.Paused != "" && pm.Item(m.DiscRestartContinue()).Icon(iconRefresh).Chosen() {
-			go a.discCall("discussion.member.restart", map[string]any{"member": mem.ID})
+			go a.discussionRequest().discCall("discussion.member.restart", map[string]any{"member": mem.ID})
 		}
 		pm.Separator()
 		if pm.Item(m.DiscRemoveMemberEllipsis()).Icon(iconTrash).Danger().Chosen() {
+			q := a.discussionRequest()
 			a.confirm(m.DiscRemoveMemberConfirm(mem.Name), m.DiscRemoveMemberBody(), m.CommonRemove(), func() {
-				a.discCall("discussion.member.remove", map[string]any{"member": mem.ID})
+				q.discCall("discussion.member.remove", map[string]any{"member": mem.ID})
 			})
 		}
 	})
@@ -2347,10 +2362,15 @@ func (a *app) discSearchPanel(c *ui.Context, d *discDetail) {
 				if q == "" {
 					b.hits = nil
 				} else {
+					r := a.discussionRequest()
 					go func() {
 						var hits []discMessage
-						if a.call("discussion.search", map[string]any{"discussion": d.key, "query": q}, &hits, 10*time.Second) == nil {
-							a.update(func() { b.hits = hits })
+						if r.call("discussion.search", map[string]any{"discussion": d.key, "query": q}, &hits, 10*time.Second) == nil {
+							r.update(func() {
+								if b.sel == d.key && strings.TrimSpace(b.search) == q {
+									b.hits = hits
+								}
+							})
 						}
 					}()
 				}
@@ -2412,6 +2432,7 @@ func utf8RuneStart(b byte) bool { return b&0xC0 != 0x80 }
 // --- 对话框
 
 func (a *app) openNewDiscussion() {
+	a = a.showModule(discBoardID)
 	b := &a.disc
 	b.newOpen, b.newTitle, b.newDesc = true, "", ""
 	if w := a.workspace(a.lastWS); w != nil {
@@ -2483,13 +2504,14 @@ func (a *app) newDiscussionDialog(c *ui.Context) {
 					if w := a.workspaceByLabel(b.newWS); w != nil {
 						params["workspace"] = w.ID
 					}
+					q := a.discussionRequest()
 					go func() {
 						var d discSummary
-						if a.call("discussion.create", params, &d, 10*time.Second) != nil {
+						if q.call("discussion.create", params, &d, 10*time.Second) != nil {
 							return
 						}
-						a.refresh()
-						a.update(func() { a.openDiscussion(d.Key) })
+						q.refresh()
+						q.update(func() { q.app.openDiscussion(d.Key) })
 					}()
 				}
 			})
@@ -2526,7 +2548,7 @@ func (a *app) editDiscussionDialog(c *ui.Context) {
 					if w := a.workspaceByLabel(f.ws); w != nil {
 						params["workspace"] = w.ID
 					}
-					go a.discCall("discussion.update", params)
+					go a.discussionRequest().discCall("discussion.update", params)
 				}
 			})
 		})
@@ -2561,9 +2583,10 @@ func (a *app) openMemberForm(d *discDetail, id string) {
 }
 
 // submitMemberForm 提交成员表单：成功才关掉；失败留着表单和请求 ID，报错在错误条上，用户可以原样重试。
-func (a *app) submitMemberForm(method string, params map[string]any, client string) {
-	err := a.call(method, params, nil, 30*time.Second)
-	a.update(func() {
+func (q discussionRequest) submitMemberForm(method string, params map[string]any, client string) {
+	a := q.app
+	err := q.call(method, params, nil, 30*time.Second)
+	q.update(func() {
 		if f := &a.disc.form; f.client == client {
 			f.busy = false
 			if err == nil && f.content() == f.sent {
@@ -2571,7 +2594,7 @@ func (a *app) submitMemberForm(method string, params map[string]any, client stri
 			}
 		}
 	})
-	a.refresh()
+	q.refresh()
 }
 
 func memberDefaultName(d *discDetail, choices []string, i int) string {
@@ -2716,7 +2739,7 @@ func (a *app) memberDialog(c *ui.Context) {
 					} else {
 						params["clientId"] = f.client
 					}
-					go a.submitMemberForm(method, params, f.client)
+					go a.discussionRequest().submitMemberForm(method, params, f.client)
 				}
 			})
 		})

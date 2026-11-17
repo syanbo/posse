@@ -21,7 +21,7 @@ import (
 	"posse/locales"
 )
 
-// 文件标签里的 Git：文件栏"改动"、diff 标签页、编辑器行号旁的改动标记。全部在窗口进程里调用系统 git。
+// 文件标签里的 Git：文件栏"改动"、diff 标签页、编辑器行号旁的改动标记；远端内容经目标服务读取。
 // 交互照 WebStorm（见 docs/features/git.md）：改动列表自动刷新，diff 默认左右对照、忽略空白，
 // F7 / ⇧F7 跨文件跳到下一处 / 上一处改动。
 
@@ -33,27 +33,31 @@ const (
 
 // gitState 是工作区里一个仓库的 Git 状态（找仓库见 repos.go）。
 type gitState struct {
-	v         *filesView
-	repo      string   // 仓库根目录，工作区里的写法（经过软链时是软链的路径）；工作区里没有仓库时为空
-	aliases   []string // 同一个仓库经别的软链进来的写法
-	status    *gitx.Status
-	head      map[string]gitx.LineStats // 相对 HEAD 的增删行数，改动列表显示
-	headRef   string                    // 检出的分支（游离时是哈希前 8 位），gitBranch 一秒最多读一次
-	headAt    time.Time
-	picks     map[string]bool // 勾选提交的文件里用户改过的；没改过的用默认（见 picked）
-	stashes   []gitx.Stash
-	real      string // 解析过软链的根目录：终端里的 git 命令按它归到工作区（runWorkspace）
-	rows      []changeRow
-	folded    map[changeGroup]*bool // 改动列表里收起的组；没有记录是展开
-	closed    bool                  // 多个仓库时改动页里收起了这个仓库
-	poll      panelPoll
-	pollAgain bool    // 读的期间要求重读（refreshRepo），读完再读一次
-	busy      string  // 正在执行的操作，期间按钮不可点
-	busyKind  gitKind // 正在执行的操作的代号，逻辑按它判断，busy 只用来显示
-	queue     []gitOp
-	cancel    context.CancelFunc // 正在执行的是网络操作时可以取消
-	err       string
-	branches  branchInfo
+	identity   gitx.RepositoryIdentity
+	statusRead gitRead
+	branchRead gitRead
+	baseTrack  *targetBaseState
+	v          *filesView
+	repo       string   // 仓库根目录，工作区里的写法（经过软链时是软链的路径）；工作区里没有仓库时为空
+	aliases    []string // 同一个仓库经别的软链进来的写法
+	status     *gitx.Status
+	head       map[string]gitx.LineStats // 相对 HEAD 的增删行数，改动列表显示
+	headRef    string                    // 检出的分支（游离时是哈希前 8 位），gitBranch 一秒最多读一次
+	headAt     time.Time
+	picks      map[string]bool // 勾选提交的文件里用户改过的；没改过的用默认（见 picked）
+	stashes    []gitx.Stash
+	real       string // 解析过软链的根目录：终端里的 git 命令按它归到工作区（runWorkspace）
+	rows       []changeRow
+	folded     map[changeGroup]*bool // 改动列表里收起的组；没有记录是展开
+	closed     bool                  // 多个仓库时改动页里收起了这个仓库
+	poll       panelPoll
+	pollAgain  bool    // 读的期间要求重读（refreshRepo），读完再读一次
+	busy       string  // 正在执行的操作，期间按钮不可点
+	busyKind   gitKind // 正在执行的操作的代号，逻辑按它判断，busy 只用来显示
+	queue      []gitOp
+	cancel     context.CancelFunc // 正在执行的是网络操作时可以取消
+	err        string
+	branches   branchInfo
 	// dirFolded 是按目录分组时各组里收起的目录
 	dirFolded map[changeGroup]map[string]bool
 	// autostash 是这个工作区里的操作（更新、改写提交）留在储藏里的本地改动（储藏的提交），横幅引去处理；
@@ -227,6 +231,10 @@ func (g *gitState) absPath(rel string) string {
 
 // loadHead 读文件在 HEAD 里的内容作为编辑器行号旁改动标记的基准；不在仓库里或是新文件时不标。
 func (a *app) loadHead(v *filesView, d *fileDoc) {
+	if a.remoteHost() {
+		a.loadTargetHead(v, d)
+		return
+	}
 	g, rel := v.relIn(d.path)
 	if g == nil || g.status == nil || g.status.Commit == "" {
 		return
@@ -259,6 +267,7 @@ func (a *app) loadHead(v *filesView, d *fileDoc) {
 // diffSpec 说明一个 diff 比较哪两个版本的哪个文件。版本的写法：newRev 为空是工作区，
 // 其余是提交或分支；oldRev 为空表示旧的一边没有这个文件（新文件、根提交）。路径相对仓库根目录。
 type diffSpec struct {
+	worktreeBase   *worktreeBaseline
 	root           string // 仓库根目录；为空时 openDiff 填上当前仓库
 	rel, orig      string // 重命名时 orig 是旧路径
 	oldRev, newRev string
@@ -296,6 +305,13 @@ func changeSpec(root string, e gitx.Entry) diffSpec {
 
 // diffDoc 是 diff 标签页。
 type diffDoc struct {
+	compareErr string
+	drawn      bool
+	read       gitRead
+	contentSeq uint64 // 只有内容换代才使后台比较失效，查询磁盘戳不影响它。
+	loading    bool
+	loaded     bool
+	retry      bool
 	diffSpec
 	siblings  []diffSpec // 同一组的文件（比较、提交里的），F7 在它们之间跳；为空时在改动列表里跳
 	state     editor.DiffState
@@ -366,12 +382,19 @@ func shortRev(m locales.Messages, rev string) string {
 }
 
 func diffKey(abs string, s diffSpec) string {
-	return "diff:" + s.oldRev + ".." + s.newRev + ":" + abs
+	key := "diff:" + s.oldRev + ".." + s.newRev + ":" + abs
+	if s.worktreeBase != nil {
+		key += "@" + s.worktreeBase.baseline
+	}
+	return key
 }
 
 // openDiff 在文档区打开一个文件的 diff。每个工作区只有一个 diff 标签：已经开着就在里面换成这个文件，
 // 排版和忽略空白沿用；换文件用 diff 上方的文件菜单或 F7。
 func (a *app) openDiff(w *workspace, s diffSpec, siblings []diffSpec, first bool) {
+	if a.remoteHost() && !a.targetGitReady() {
+		return
+	}
 	v := a.showFiles(w)
 	if s.root == "" {
 		s.root = v.git.repo
@@ -389,10 +412,11 @@ func (a *app) openDiff(w *workspace, s diffSpec, siblings []diffSpec, first bool
 			continue
 		}
 		v.cur = d
-		if d.path == key {
+		if d.path == key && (s.worktreeBase == nil || d.diff.compareErr == "") {
 			return
 		}
 		df.state.Layout, df.state.IgnoreWhitespace = d.diff.state.Layout, d.diff.state.IgnoreWhitespace
+		d.cancelGitContent()
 		d.path, d.diff, d.kind, d.err = key, df, docLoading, ""
 		a.loadDiff(v, d)
 		return
@@ -486,13 +510,15 @@ func (a *app) toggleIgnoreSpace(d *fileDoc) {
 	}
 	df.comparing = true
 	old, nw := df.state.Old.String(), df.state.New.String()
+	r, seq := a.request(), df.contentSeq
+	remote := a.remoteHost()
 	go func() {
 		cmp := editor.CompareTexts(old, nw, on)
 		a.update(func() {
-			df.comparing = false
-			if d.diff != df {
+			if d.diff != df || remote && (!r.current() || df.contentSeq != seq) {
 				return
 			}
+			df.comparing = false
 			df.state.IgnoreWhitespace = on
 			df.state.UseComparison(cmp)
 			releaseMemorySoon()
@@ -514,6 +540,10 @@ func clampHunk(df *diffDoc) {
 
 // loadDiff 在后台读两边的内容。
 func (a *app) loadDiff(v *filesView, d *fileDoc) {
+	if a.remoteHost() {
+		a.loadTargetDiff(v, d)
+		return
+	}
 	df := d.diff
 	if df.root == "" {
 		df.root = v.git.repo
@@ -619,6 +649,10 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 
 // reloadDiff 在状态变了之后重读 diff：只有工作区一边会变，看文件的磁盘戳；两边都是固定版本的不重读。
 func (a *app) reloadDiff(v *filesView, d *fileDoc) {
+	if a.remoteHost() {
+		a.reloadTargetDiff(v, d)
+		return
+	}
 	df := d.diff
 	if !df.worktree() || files.StatFile(df.abs()).Same(df.stamp) {
 		return
@@ -724,6 +758,9 @@ func diffJump(df *diffDoc) {
 
 // revertHunk 回滚工作区 diff 里的一处改动，立刻写回磁盘（和 WebStorm 一样不用再保存）。
 func (a *app) revertHunk(m locales.Messages, v *filesView, d *fileDoc, i int) {
+	if a.targetFileUnsupported("git.write") {
+		return
+	}
 	df := d.diff
 	if !df.worktree() {
 		return
@@ -772,6 +809,9 @@ func (a *app) gitDoKind(m locales.Messages, g *gitState, kind gitKind, what stri
 
 // gitStart 执行或排队一个操作。
 func (a *app) gitStart(g *gitState, op gitOp) {
+	if a.rejectTargetGit(g, op) {
+		return
+	}
 	if g.repo == "" {
 		return
 	}
@@ -895,6 +935,9 @@ func networkOp(kind gitKind) bool {
 }
 
 func (a *app) gitRun(g *gitState, op gitOp) {
+	if a.rejectTargetGit(g, op) {
+		return
+	}
 	v := g.v
 	g.busy, g.busyKind = op.what, op.kind
 	root := g.repo
@@ -1167,6 +1210,9 @@ func (v *filesView) commitTargets() (ts []commitTarget, n int) {
 // commit 用同一条提交信息在各仓库分别提交勾选的文件。全部成功才清空提交信息；
 // 失败的仓库报错、留着勾选，成功的仓库勾选清掉，改好再点一次只提交剩下的。
 func (a *app) commit(m locales.Messages, v *filesView) {
+	if a.targetFileUnsupported("git.write") {
+		return
+	}
 	ch := &v.ch
 	msg := strings.TrimSpace(ch.message)
 	if msg == "" {
@@ -1252,6 +1298,9 @@ func (v *filesView) amendRepo() *gitState {
 
 // setAmend 切换"修改上一次提交"：打开时输入框还空着，就填上上一次的提交信息。
 func (a *app) setAmend(v *filesView, on bool) {
+	if a.targetFileUnsupported("git.show") {
+		return
+	}
 	ch := &v.ch
 	ch.amend = on
 	// 取消时把自动填进来的旧信息清掉，免得被当成新提交的信息；改过的留着

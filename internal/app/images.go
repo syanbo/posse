@@ -22,17 +22,19 @@ import (
 // 截图解码后一张十几 MB，所以只留缩到面板宽度的缩略图，悬停放大时才解码那一张。
 type imagesView struct {
 	term    string
+	target  *targetImages
 	scanner *media.Scanner
 	pasted  []imageItem
 	made    []imageItem // agent 生成的，新的在前，最多 maxMadeImages 张
 	madeAll int         // agent 生成的一共几张
 	found   bool        // 找到了会话文件；没找到时内嵌的图片列不出来，不能说没有图片
 	// round 标记正在进行的这一轮扫描：面板关掉再打开后终端 ID 一样，靠它认出上一轮的结果
-	round  *byte
-	poll   panelPoll
-	failed map[string]bool // 解码失败的图片，不再重试
-	tab    int             // 顶部的分段：0 是 agent 生成的，1 是粘贴的
-	tabSet bool            // 用户点过分段；没点过时按有没有图片自动选
+	round      *byte
+	poll       panelPoll
+	failed     map[string]bool // 解码失败的图片，不再重试
+	tab        int             // 顶部的分段：0 是 agent 生成的，1 是粘贴的
+	tabSet     bool            // 用户点过分段；没点过时按有没有图片自动选
+	menuActive bool            // 菜单在独立浮层中，按下菜单不能被当作面板外点击
 
 	hover   string // 悬停的图片的 key
 	big     *ui.Bitmap
@@ -67,6 +69,10 @@ func wrapItems(items []media.Item) []imageItem {
 
 // pollImages 在主线程调用：换了终端就重来，到点了在后台找图片、给新图片做缩略图。
 func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
+	if a.remoteHost() {
+		a.pollTargetImages(c, cur)
+		return
+	}
 	v := &a.images
 	if v.term != cur.ID {
 		*v = imagesView{term: cur.ID}
@@ -175,6 +181,10 @@ func (v *imagesView) markFailed(key string) {
 
 // loadBig 在后台解码悬停的那张图的放大版，只留这一张。
 func (a *app) loadBig(it imageItem) {
+	if a.remoteHost() {
+		a.loadTargetBig(it)
+		return
+	}
 	v := &a.images
 	if v.bigKey == it.Key || v.bigBusy || v.failed[it.Key] {
 		return
@@ -217,6 +227,10 @@ func decodeBig(it media.Item) (*animPlayer, *image.RGBA, error) {
 // withImagePath 拿到原图或视频的路径后在主线程调用 f。工具返回的图片只在会话文件里，先写到临时目录：
 // 读的那个文件之后可能被改掉，打开的是 agent 当时看到的样子。
 func (a *app) withImagePath(it imageItem, f func(path string) error) {
+	// 此回调的调用者都使用本机路径；目标媒体必须走目标读取或显式下载。
+	if a.remoteHost() {
+		return
+	}
 	if it.Tool == nil {
 		if err := f(it.Path); err != nil {
 			a.err = errtext.Text(err)
@@ -254,6 +268,10 @@ func (a *app) openInPreview(it imageItem) {
 // copyImage 把图片放进剪贴板：同一项里既有 PNG 数据（贴进聊天、文档这类认图片的地方）又有文件
 // （访达里粘贴得到文件，Posse 的终端里 ⌘V 贴的是路径，agent 当附件）。转 PNG 在后台做，大图要一会儿。
 func (a *app) copyImage(m locales.Messages, it imageItem) {
+	if a.remoteHost() {
+		a.copyTargetImage(m, it)
+		return
+	}
 	a.withImagePath(it, func(path string) error {
 		go func() {
 			b, err := media.PNGBytes(path)
@@ -283,6 +301,10 @@ func (a *app) copyImage(m locales.Messages, it imageItem) {
 
 // openImage 是点卡片：图片在文件标签里预览（可缩放），视频和找不到工作区的用默认应用打开。
 func (a *app) openImage(it imageItem) {
+	if a.remoteHost() {
+		a.openTargetImage(it, false)
+		return
+	}
 	a.withImagePath(it, func(path string) error {
 		// 和终端里的链接一样，开在正看着的工作区里：放进图片所属的工作区（比如 worktree）就看不见了
 		w := a.workspace(a.selected)
@@ -299,9 +321,17 @@ func (a *app) openImage(it imageItem) {
 
 // imageMenu 是卡片的右键菜单。图片指定用系统的"预览"打开：默认应用可能被改成别的编辑器。
 func (a *app) imageMenu(c *ui.Context, card ui.Element, it imageItem) {
+	st := menuStateOf(card)
+	wasOpen := st.open
 	contextMenu(c, card, func(m *popMenu) {
 		if !it.Video && m.Item(L(c).ImagesCopyImage()).Icon(iconCopy).Chosen() {
 			a.copyImage(L(c), it)
+		}
+		if a.remoteHost() {
+			if m.Item(L(c).FilesOpenCopy()).Chosen() {
+				a.openTargetImage(it, true)
+			}
+			return
 		}
 		if m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
 			a.withImagePath(it, func(path string) error {
@@ -317,6 +347,7 @@ func (a *app) imageMenu(c *ui.Context, card ui.Element, it imageItem) {
 			a.openInPreview(it)
 		}
 	})
+	a.images.menuActive = a.images.menuActive || wasOpen || st.open
 }
 
 // imagesPanel 是右侧的图片面板：顶部分段切换 agent 生成的和粘贴的（标上 #N）；悬停在左边放大，点击在文件标签里预览，右键在访达中显示或用系统预览打开。
@@ -324,6 +355,7 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	a.pollImages(c, cur)
 	v := &a.images
 	v.hover = ""
+	v.menuActive = false
 	a.imagesDrawn = true
 	return a.rightPanel(c, L(c).ImagesTitle(), func() {
 		if media.Supported(cur.Agent) && !v.poll.at.IsZero() && (len(v.made) > 0 || len(v.pasted) > 0) {
@@ -341,6 +373,9 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 				switch {
 				case !media.Supported(cur.Agent):
 					usageNote(c, L(c).ImagesUnsupported())
+					return
+				case v.target != nil && v.target.err != nil && len(v.made)+len(v.pasted) == 0:
+					usageNote(c, errtext.Text(v.target.err))
 					return
 				case v.poll.at.IsZero():
 					usageNote(c, L(c).CommonLoading())
@@ -436,7 +471,7 @@ func (a *app) imageGroup(c *ui.Context, items []imageItem) {
 			a.openImage(it)
 		}
 		// 滑入途中不能拖：卡片在不动的指针下面移动，mygo 会把这一下点击当成拖动（同 dragPath）
-		if a.panelShown >= 1 {
+		if a.panelShown >= 1 && !a.remoteHost() {
 			card.Drag(pathDrag{image: &it})
 		}
 		a.imageMenu(c, card, it)

@@ -180,7 +180,7 @@ func TestSidebarToggleAndResize(t *testing.T) {
 	a := previewApp(t)
 	a.home = home
 	tt := newPreviewTester(a, true)
-	x := sidebarDefault()
+	x := navigationWidth() + sidebarDefault()
 	tt.Move(x, 400)
 	tt.Press(x, 400)
 	tt.Move(x+60, 400)
@@ -193,7 +193,7 @@ func TestSidebarToggleAndResize(t *testing.T) {
 	}
 	waitState(t, home, func(s uiState) bool { return s.SidebarWidth == sidebarDefault()+80 })
 	// 拖得太窄停在下限
-	x = a.sidebarWidth()
+	x = navigationWidth() + a.sidebarWidth()
 	tt.Move(x, 400)
 	tt.Press(x, 400)
 	tt.Move(x-400, 400)
@@ -211,8 +211,11 @@ func TestSidebarToggleAndResize(t *testing.T) {
 	if !a.state.SidebarHidden {
 		t.Fatal("sidebar not hidden")
 	}
-	if _, ok := tt.Find("任务"); ok {
-		t.Fatal("sidebar rows shown while hidden")
+	if _, ok := tt.Find("任务"); !ok {
+		t.Fatal("global navigation hidden with sidebar")
+	}
+	if _, ok := tt.Find("项目"); ok {
+		t.Fatal("workspace tree shown while hidden")
 	}
 	waitState(t, home, func(s uiState) bool { return s.SidebarHidden })
 	tt.Key(ui.Cmd, ui.KeyB)
@@ -321,6 +324,20 @@ func TestCloseBoard(t *testing.T) {
 	tt.Frame()
 	if a.selected != start {
 		t.Fatalf("⌘W left selected = %q", a.selected)
+	}
+}
+
+func TestSaveUIStateOrderPerHost(t *testing.T) {
+	a, b := t.TempDir(), t.TempDir()
+	older, newer := uiSaveSeq.Add(1), uiSaveSeq.Add(1)
+	if err := saveUIStateSeq(b, uiState{Selected: "host-b"}, newer); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveUIStateSeq(a, uiState{Selected: "host-a"}, older); err != nil {
+		t.Fatal(err)
+	}
+	if loadUIState(a).Selected != "host-a" || loadUIState(b).Selected != "host-b" {
+		t.Fatal("one host suppressed the other host state save")
 	}
 }
 

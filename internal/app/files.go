@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"image"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -21,11 +20,12 @@ import (
 	"posse/internal/errtext"
 	"posse/internal/files"
 	"posse/internal/media"
+	"posse/internal/rpc"
 	"posse/locales"
 )
 
 // 文件标签：每个工作区一个，和终端标签并列，浏览、查看、轻量编辑和检索工作区目录里的文件。
-// 全部在窗口进程里，不经过常驻进程。看得见时每秒 stat 一次展开的目录和打开的文件，
+// 窗口持有编辑器与视图，目标磁盘操作通过文件服务。看得见时每秒 stat 一次展开的目录和打开的文件，
 // 发现 agent 的修改；不用 fsnotify：macOS 上它基于 kqueue，监听一个目录要为其中每个文件各开一个描述符。
 
 // filesTabID 是 activeTerm 里表示"选中了打开的文件"的值，选中哪个看 filesView.cur；终端 ID 都以 t_ 开头，不会冲突。
@@ -58,8 +58,12 @@ const (
 
 // fileDoc 是文件标签里打开的一个文件。
 type fileDoc struct {
-	path string
-	kind docKind
+	path        string
+	kind        docKind
+	loadSeq     uint64 // 旧读取不能覆盖重载或路径迁移后的文档。
+	loadCancel  context.CancelFunc
+	baseVersion files.Version
+	save        *fileSave
 	// transient 是预览标签（照 Orca）：文件树里单击打开，再单击别的文件就被换掉；双击、改了内容就常驻
 	transient bool
 	ed        editor.State
@@ -102,8 +106,10 @@ type fileDoc struct {
 	change *changePop
 	blame  *blameDoc
 	// headBuf 是文件在 HEAD 里的内容，编辑器行号旁的改动标记以它为基准；headFor 是读它时的 HEAD
-	headBuf *editor.Buffer
-	headFor string
+	headBuf     *editor.Buffer
+	headFor     string
+	headRead    gitRead
+	headLoading bool
 	// hint 是编辑器顶上一闪而过的提示（没找到定义），hintAt 是开始显示的时间
 	hint   string
 	hintAt time.Time
@@ -153,6 +159,8 @@ func (d *fileDoc) isPreview() bool {
 }
 
 // isModified 报告有没有未保存的改动，只在缓冲区变了之后重新比较。
+func (d *fileDoc) needsSave() bool { return d.save != nil || d.isModified() }
+
 func (d *fileDoc) isModified() bool {
 	if d.kind != docText || d.ed.Buffer == nil {
 		return false
@@ -166,6 +174,7 @@ func (d *fileDoc) isModified() bool {
 
 // fileSearch 是文件标签左栏的全文检索。
 type fileSearch struct {
+	request    appRequest
 	query      files.Query
 	gen        int // 每次检索加一，旧检索交回的结果丢掉
 	cancel     context.CancelFunc
@@ -217,8 +226,13 @@ type searchRow struct {
 
 // filesView 是一个工作区的文件标签。
 type filesView struct {
-	wsID string
-	root string
+	push     *pushState
+	remote   bool
+	transfer *fileTransfer
+	pollSeq  uint64
+	dirSeq   map[string]uint64
+	wsID     string
+	root     string
 	// realRoot 是 root 解析过软链的路径。工作区是指向仓库子目录的软链时，仓库根目录只能照 git 给的真实路径写，
 	// 文件路径要在两种写法之间换算（realPath、shownPath）
 	realRoot string
@@ -237,6 +251,7 @@ type filesView struct {
 	revealScroll bool        // 它的行出现后滚到中间（上级目录可能还在后台读）
 	list         *files.List // 文件清单：快速打开、检索、判断忽略；文件标签不可见时放掉
 	listAt       time.Time
+	listRequest  appRequest
 	listFailAt   time.Time // 上次列文件失败的时间：每帧都会来要清单，失败后等一个周期再试
 	listErr      error     // 列文件失败还没报：后台没有界面语言，由下一帧的视图（reportListErr）写进错误条
 	listing      bool
@@ -254,7 +269,7 @@ type filesView struct {
 	// 日志浮层里选的是"操作记录"标签（gitconsole.go）；consoleLast、consoleDone 记上次看到的最后一条，变了才滚到底
 	console     bool
 	consoleList ui.ListState
-	consoleLast int64
+	consoleLast any
 	consoleDone bool
 	git         *gitState // 当前仓库，见 repos.go
 	repos       repoSet
@@ -272,7 +287,7 @@ func (a *app) filesFor(w *workspace) *filesView {
 	if old != nil && old.root == filepath.Clean(w.Path) {
 		return old
 	}
-	v := &filesView{wsID: w.ID, root: filepath.Clean(w.Path), tree: files.NewTree(w.Path)}
+	v := &filesView{wsID: w.ID, root: filepath.Clean(w.Path), tree: files.NewTree(w.Path), remote: a.remoteHost()}
 	newGitStates(v)
 	if a.files == nil {
 		a.files = map[string]*filesView{}
@@ -280,6 +295,7 @@ func (a *app) filesFor(w *workspace) *filesView {
 	a.files[w.ID] = v
 	// 目录换了（在外面挪了地方，重新指定过）：打开的文档连同没保存的改动带过来
 	if old != nil {
+		old.cancelGitReads()
 		a.carryDocs(w, old, v)
 		a.loadDirs(v, v.tree.SetExpanded(v.root, true))
 		a.saveFilesState(v)
@@ -317,7 +333,9 @@ func (a *app) carryDocs(w *workspace, old, v *filesView) {
 		default:
 			if rel, err := filepath.Rel(old.root, d.path); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 				from := docKey(d)
+				d.cancelLoad()
 				d.path = filepath.Join(v.root, rel)
+				d.baseVersion.Path = ""
 				rename[from] = docKey(d)
 				// 旧路径消失时轮询记下的"没了"不算数：新路径按打开时的磁盘戳比，只是挪了目录的文件戳不变
 				d.seen, d.deleted = d.base, false
@@ -416,21 +434,31 @@ func (a *app) loadDirs(v *filesView, dirs []string) {
 	if len(dirs) == 0 {
 		return
 	}
+	r := a.request()
+	if v.dirSeq == nil {
+		v.dirSeq = map[string]uint64{}
+	}
+	seqs := make(map[string]uint64, len(dirs))
+	for _, dir := range dirs {
+		v.dirSeq[dir]++
+		seqs[dir] = v.dirSeq[dir]
+	}
 	go func() {
-		type result struct {
-			dir     string
-			entries []files.Entry
-			stamp   files.Stamp
-			err     error
-		}
-		out := make([]result, len(dirs))
-		for i, d := range dirs {
-			es, st, err := files.ReadDir(d)
-			out[i] = result{d, es, st, err}
-		}
-		a.update(func() {
-			for _, r := range out {
-				v.tree.Set(r.dir, r.entries, r.stamp, r.err)
+		ctx, cancel := context.WithTimeout(a.windowContext(), 20*time.Second)
+		out, err := r.readDirectories(ctx, dirs)
+		cancel()
+		r.update(func() {
+			if current := a.files[v.wsID]; current != nil && current != v {
+				return
+			}
+			if err != nil {
+				a.err = errtext.Text(err)
+				return
+			}
+			for _, item := range out {
+				if v.dirSeq[item.Path] == seqs[item.Path] {
+					a.applyDirectory(v, item)
+				}
 			}
 		})
 	}()
@@ -454,13 +482,17 @@ func (a *app) reportListErr(c *ui.Context, v *filesView) {
 // 正在列时不另起一遍，done 排到这一遍后面：清单本来就允许旧到 listMaxAge，这一遍是之后才开始的；
 // 清单在列的过程中失效了（invalidateList）会马上重起一遍。force 且带 done 时照旧另起一遍。
 func (a *app) refreshList(v *filesView, force bool, done func()) {
+	stale := v.listRequest.app != nil && !v.listRequest.current()
+	if stale {
+		force = true
+	}
 	if !force && v.list != nil && time.Since(v.listAt) < listMaxAge {
 		if done != nil {
 			done()
 		}
 		return
 	}
-	if v.listing && !(force && done != nil) {
+	if v.listing && !stale && !(force && (done != nil || a.remoteHost())) {
 		if done != nil {
 			v.listWait = append(v.listWait, done)
 		}
@@ -478,6 +510,9 @@ func (a *app) refreshList(v *filesView, force bool, done func()) {
 
 // startList 起一遍列文件。之前还没列完的那遍作废，排着的回调由这一遍交回。
 func (a *app) startList(v *filesView) {
+	r := a.request()
+	v.listRequest = r
+	single := a.projectSingleRepo(v)
 	v.listGen++
 	gen := v.listGen
 	v.listing = true
@@ -488,14 +523,24 @@ func (a *app) startList(v *filesView) {
 		repos = append(repos, g.aliases...)
 	}
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		l, err := listRepos(ctx, root, repos)
+		ctx, cancel := context.WithTimeout(a.windowContext(), 20*time.Second)
+		l, err := r.listFiles(ctx, root, repos, single, false)
 		cancel()
 		a.update(func() {
 			if v.listGen != gen {
 				return
 			}
 			v.listing = false
+			if !r.current() || a.files[v.wsID] != nil && a.files[v.wsID] != v {
+				v.listWait = nil
+				if s := &v.search; s.request.app != nil && !s.request.current() {
+					s.running = false
+					if s.cancel != nil {
+						s.cancel()
+					}
+				}
+				return
+			}
 			if err != nil {
 				v.listFailAt = time.Now()
 				v.listErr = err
@@ -586,18 +631,59 @@ func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview 
 	a.saveFilesState(v)
 }
 
+func (d *fileDoc) cancelLoad() {
+	d.cancelGitContent()
+	d.loadSeq++
+	if d.loadCancel != nil {
+		d.loadCancel()
+		d.loadCancel = nil
+	}
+	d.started = false
+}
+
 // loadDoc 在后台读文件，读完按类型放进文档。
 func (a *app) loadDoc(d *fileDoc) {
-	path := d.path
+	if d.save != nil {
+		return
+	}
+	path, r := d.path, a.request()
+	d.cancelLoad()
+	ctx, cancel := context.WithTimeout(a.windowContext(), 30*time.Second)
+	d.loadCancel, d.started = cancel, true
+	seq, base, baseVersion := d.loadSeq, d.base, d.baseVersion
+	var version uint64
+	if d.ed.Buffer != nil {
+		version = d.ed.Buffer.Version()
+	}
+	finish := func(fn func()) {
+		a.update(func() {
+			if d.loadSeq != seq || d.path != path {
+				return
+			}
+			d.started, d.loadCancel = false, nil
+			if !r.current() || !d.base.Same(base) || !d.baseVersion.Same(baseVersion) || d.ed.Buffer != nil && d.ed.Buffer.Version() != version {
+				return
+			}
+			fn()
+		})
+	}
 	go func() {
+		defer cancel()
+		if !r.current() {
+			finish(func() {})
+			return
+		}
 		if isImagePath(path) {
-			st := files.StatFile(path)
-			pi, anim, err := decodeDocImage(path)
+			st, pi, anim, err := r.readDocImage(ctx, path)
 			if err == nil && pi.Size.X*pi.Size.Y > imageBigPixels {
 				// 原尺寸的图和缩放缓冲这时已经没人引用了，最终的位图留着
 				debug.FreeOSMemory()
 			}
-			a.update(func() {
+			finish(func() {
+				if err != nil && r.targetFiles() && d.kind == docImage {
+					a.err = errtext.Text(err)
+					return
+				}
 				d.base, d.seen = st, st
 				if big, ok := err.(imageTooLarge); ok {
 					d.kind, d.imgInfo = docTooLarge, imageInfo{w: big.w, h: big.h, bytes: st.Size}
@@ -619,8 +705,17 @@ func (a *app) loadDoc(d *fileDoc) {
 			})
 			return
 		}
-		c, err := files.ReadFile(path)
-		a.update(func() { a.applyContent(d, c, err) })
+		c, diskVersion, err := r.readFile(ctx, path)
+		finish(func() {
+			if err != nil && d.kind == docText {
+				a.err = errtext.Text(err)
+				return
+			}
+			a.applyContent(d, c, err)
+			if err == nil {
+				d.baseVersion = diskVersion
+			}
+		})
 	}()
 }
 
@@ -649,6 +744,10 @@ func decodeDocImage(path string) (media.PreviewImage, *animPlayer, error) {
 	if err != nil {
 		return media.PreviewImage{}, nil, err
 	}
+	return decodeDocImageBytes(b)
+}
+
+func decodeDocImageBytes(b []byte) (media.PreviewImage, *animPlayer, error) {
 	if cfg, _, err := image.DecodeConfig(bytes.NewReader(b)); err == nil &&
 		(cfg.Width*cfg.Height > docImageMaxPixels || cfg.Width > docImageMaxSide || cfg.Height > docImageMaxSide) {
 		return media.PreviewImage{}, nil, imageTooLarge{cfg.Width, cfg.Height}
@@ -662,6 +761,7 @@ func decodeDocImage(path string) (media.PreviewImage, *animPlayer, error) {
 
 // applyContent 把读到的内容放进文档：第一次打开，或磁盘上变了、自己没有未保存的改动时重载。
 func (a *app) applyContent(d *fileDoc, c files.Content, err error) {
+	d.baseVersion = files.Version{}
 	d.base, d.seen, d.conflict, d.deleted = c.Stamp, c.Stamp, false, false
 	switch {
 	case err != nil:
@@ -712,79 +812,22 @@ func readError(err error) (string, func(locales.Messages) string) {
 
 // pollFiles 在后台 stat 看得见的目录和打开的文件，变了的重读，结果交回界面线程。
 func (a *app) pollFiles(v *filesView) {
-	type dirRes struct {
-		dir     string
-		entries []files.Entry
-		stamp   files.Stamp
-		err     error
-	}
-	type docRes struct {
-		d       *fileDoc
-		stamp   files.Stamp
-		content files.Content
-		err     error
-	}
-	dirs := map[string]files.Stamp{}
-	for _, d := range v.tree.Visible() {
-		st, ok := v.tree.Stamp(d)
-		if !ok {
-			// 没读成的（工作区目录当时不在）当作不存在：出现了戳就变了，下面会重读
-			st = files.Stamp{Missing: true}
-		}
-		dirs[d] = st
-	}
-	type docReq struct {
-		d     *fileDoc
-		seen  files.Stamp
-		image bool
-	}
-	var docs []docReq
-	for _, d := range v.docs {
-		if d.kind != docLoading && !d.virtual() {
-			docs = append(docs, docReq{d, d.seen, d.kind == docImage})
-		}
-	}
-	go func() {
-		var dr []dirRes
-		for dir, old := range dirs {
-			if st := files.StatFile(dir); !st.Same(old) {
-				es, st, err := files.ReadDir(dir)
-				dr = append(dr, dirRes{dir, es, st, err})
-			}
-		}
-		var cr []docRes
-		for _, q := range docs {
-			st := files.StatFile(q.d.path)
-			if st.Same(q.seen) {
-				continue
-			}
-			r := docRes{d: q.d, stamp: st}
-			if !st.Missing && !q.image {
-				r.content, r.err = files.ReadFile(q.d.path)
-			}
-			cr = append(cr, r)
-		}
-		a.update(func() {
-			v.poll.done()
-			for _, r := range dr {
-				v.tree.Set(r.dir, r.entries, r.stamp, r.err)
-			}
-			for _, r := range cr {
-				a.diskChanged(r.d, r.stamp, r.content, r.err)
-			}
-		})
-	}()
+	a.pollFileChanges(v)
 }
 
 // diskChanged 处理轮询发现的磁盘变化：没有未保存的改动就重载，有就标出冲突，文件没了标出已删除。
 func (a *app) diskChanged(d *fileDoc, st files.Stamp, c files.Content, err error) {
+	if d.kind == docImage && !st.Missing {
+		// 图片下载成功才确认 seen；否则一次网络失败会让后续轮询永远跳过新版本。
+		d.deleted = false
+		a.loadDoc(d)
+		return
+	}
 	d.seen = st
+	invalidateHTMLDocument(d)
 	switch {
 	case st.Missing:
 		d.deleted = true
-	case d.kind == docImage:
-		d.deleted = false
-		a.loadDoc(d)
 	case d.isModified():
 		// 磁盘回到了打开时的样子（目录挪走又挪回来），不算冲突
 		d.deleted, d.conflict = false, !st.Same(d.base)
@@ -795,41 +838,12 @@ func (a *app) diskChanged(d *fileDoc, st files.Stamp, c files.Content, err error
 
 // reloadDoc 放弃未保存的改动，按磁盘上的内容重载。
 func (a *app) reloadDoc(d *fileDoc) {
-	go func() {
-		c, err := files.ReadFile(d.path)
-		a.update(func() { a.applyContent(d, c, err) })
-	}()
-}
-
-// saveDoc 保存文档；磁盘上的文件在打开后被改过时先问，force 为真时直接覆盖。成功返回真。
-func (a *app) saveDoc(m locales.Messages, d *fileDoc, force bool) bool {
-	if d.kind != docText || d.readOnly {
-		return false
-	}
-	if !force && !d.base.Missing && !files.StatFile(d.path).Same(d.base) {
-		a.confirm(m.FilesOverwriteConfirm(), m.FilesOverwriteBody(d.name(m)), m.FilesSaveAnyway(), func() {
-			a.update(func() { a.saveDoc(m, d, true) })
-		})
-		return false
-	}
-	snap := d.ed.Buffer.Snapshot()
-	st, err := files.WriteFile(d.path, func(w io.Writer) error {
-		_, err := snap.WriteTo(w)
-		return err
-	})
-	if err != nil {
-		a.err = m.FilesSaveFailed(d.name(m), errtext.Text(err))
-		return false
-	}
-	// 写入在界面线程同步完成，期间不会有新的输入，缓冲区就是写下去的内容
-	d.ed.Buffer.MarkSaved()
-	d.base, d.seen, d.conflict, d.deleted, d.modStale = st, st, false, false, true
-	return true
+	a.loadDoc(d)
 }
 
 // closeDoc 关闭文档，有未保存的改动时先问。
 func (a *app) closeDoc(v *filesView, d *fileDoc) {
-	if d.isModified() {
+	if d.needsSave() {
 		a.askUnsaved([]*fileDoc{d}, func() { a.dropDoc(v, d) })
 		return
 	}
@@ -840,7 +854,7 @@ func (a *app) closeDoc(v *filesView, d *fileDoc) {
 func (a *app) closeDocs(v *filesView, docs []*fileDoc) {
 	var dirty []*fileDoc
 	for _, d := range docs {
-		if d.isModified() {
+		if d.needsSave() {
 			dirty = append(dirty, d)
 		}
 	}
@@ -851,6 +865,7 @@ func (a *app) closeDocs(v *filesView, docs []*fileDoc) {
 	}
 	if len(dirty) > 0 {
 		a.askUnsaved(dirty, drop)
+		a.unsaved.checkDocs = slices.Clone(docs)
 		return
 	}
 	drop()
@@ -913,7 +928,7 @@ func (a *app) dirtyDocs() []*fileDoc {
 	var out []*fileDoc
 	for _, v := range a.files {
 		for _, d := range v.docs {
-			if d.isModified() {
+			if d.needsSave() {
 				out = append(out, d)
 			}
 		}
@@ -923,12 +938,66 @@ func (a *app) dirtyDocs() []*fileDoc {
 
 // askUnsaved 问要不要保存 docs 里的改动：保存（全部成功才继续）、不保存、取消。then 在继续时调用。
 func (a *app) askUnsaved(docs []*fileDoc, then func()) {
-	a.unsaved = &unsavedAsk{docs: docs, then: then}
+	a.unsavedSeq++
+	u := &unsavedAsk{docs: slices.Clone(docs), then: then, requests: make(map[*fileDoc]appRequest), seq: a.unsavedSeq}
+	for _, d := range docs {
+		if owner := a.documentOwner(d); owner != nil {
+			u.requests[d] = owner.request()
+		}
+	}
+	a.unsaved = u
 }
 
 type unsavedAsk struct {
-	docs []*fileDoc
-	then func()
+	docs        []*fileDoc
+	then        func()
+	requests    map[*fileDoc]appRequest
+	windowClose bool
+	seq         uint64
+	checkDocs   []*fileDoc
+}
+
+func (a *app) saveUnsaved(m locales.Messages, u *unsavedAsk, done func(bool)) {
+	ok := true
+	var next func(int)
+	next = func(i int) {
+		if a.unsavedSeq != u.seq {
+			saveDone(done, false)
+			return
+		}
+		if i == len(u.docs) {
+			// 后面的文件保存时，前面的文件仍可继续编辑。
+			for _, d := range u.docs {
+				r, found := u.requests[d]
+				ok = ok && found && r.bound() && !d.needsSave()
+			}
+			for _, d := range u.checkDocs {
+				ok = ok && !d.needsSave()
+			}
+			if u.windowClose && len(a.allDirtyDocs()) != 0 {
+				ok = false
+			}
+			saveDone(done, ok)
+			return
+		}
+		d := u.docs[i]
+		r, found := u.requests[d]
+		if !found {
+			a.err = errtext.Text(rpc.Errorf(rpc.CodeReadOnly, "desktop control is no longer held"))
+			ok = false
+			next(i + 1)
+			return
+		}
+		r.saveDoc(m, d, func(saved bool) {
+			if !saved {
+				a.err = r.app.err
+				saveDone(done, false)
+				return
+			}
+			next(i + 1)
+		})
+	}
+	next(0)
 }
 
 // unsavedDialog 画 askUnsaved 的对话框。
@@ -964,19 +1033,20 @@ func (a *app) unsavedDialog(c *ui.Context) {
 				ui.Spacer(c)
 				if pressable(textButton(c, m.CommonCancel())).Clicked() {
 					a.unsaved = nil
-					a.quitting.Store(false)
+					a.windowOwner().quitting.Store(false)
 				}
 				if pressable(accentButton(c, m.CommonSave())).Clicked() {
 					a.unsaved = nil
-					ok := true
-					for _, d := range u.docs {
-						ok = a.saveDoc(m, d, false) && ok
-					}
-					if ok {
-						u.then()
-					} else {
-						a.quitting.Store(false)
-					}
+					a.saveUnsaved(m, u, func(saved bool) {
+						if a.unsavedSeq != u.seq {
+							return
+						}
+						if saved {
+							u.then()
+						} else {
+							a.windowOwner().quitting.Store(false)
+						}
+					})
 				}
 			})
 		})
@@ -984,7 +1054,7 @@ func (a *app) unsavedDialog(c *ui.Context) {
 	if !open && a.unsaved != nil {
 		// 点外面或按 Esc
 		a.unsaved = nil
-		a.quitting.Store(false)
+		a.windowOwner().quitting.Store(false)
 	}
 }
 
@@ -1018,12 +1088,14 @@ func (a *app) watchClose() {
 		}
 		e.PreventDefault()
 		a.win.Update(func() {
-			docs := a.dirtyDocs()
+			docs := a.allDirtyDocs()
 			if len(docs) == 0 {
 				a.finishClose()
 				return
 			}
-			a.askUnsaved(docs, a.finishClose)
+			shown := a.displayed()
+			shown.askUnsaved(docs, a.finishClose)
+			shown.unsaved.windowClose = true
 		})
 	})
 }
@@ -1055,6 +1127,8 @@ func inDir(path, dir string) bool {
 // startSearch 按 v.search.query 检索，delay 后开始（输入时防抖）。
 func (a *app) startSearch(v *filesView, delay time.Duration) {
 	s := &v.search
+	r := a.request()
+	s.request = r
 	s.gen++
 	gen := s.gen
 	if s.cancel != nil {
@@ -1063,6 +1137,10 @@ func (a *app) startSearch(v *filesView, delay time.Duration) {
 	}
 	if strings.TrimSpace(s.query.Text) == "" {
 		s.hits, s.rows, s.truncated, s.err, s.running = nil, nil, false, "", false
+		return
+	}
+	if a.remoteHost() {
+		a.startTargetSearch(v, delay)
 		return
 	}
 	if _, err := s.query.Compile(); err != nil {
@@ -1078,8 +1156,18 @@ func (a *app) startSearch(v *filesView, delay time.Duration) {
 			if s.gen != gen {
 				return
 			}
+			if !r.current() {
+				s.running = false
+				cancel()
+				return
+			}
 			a.refreshList(v, false, func() {
 				if s.gen != gen {
+					return
+				}
+				if !r.current() {
+					s.running = false
+					cancel()
 					return
 				}
 				// 有未保存改动的文件搜编辑器里的内容
@@ -1094,7 +1182,7 @@ func (a *app) startSearch(v *filesView, delay time.Duration) {
 					if err == nil {
 						trunc, err = files.Search(ctx, l, q, overlay, func(hs []files.Hit) {
 							a.update(func() {
-								if s.gen == gen {
+								if s.gen == gen && r.current() {
 									s.hits = append(s.hits, hs...)
 									s.rows = searchRows(s.hits)
 								}
@@ -1105,7 +1193,11 @@ func (a *app) startSearch(v *filesView, delay time.Duration) {
 						if s.gen != gen {
 							return
 						}
-						s.running, s.truncated = false, trunc
+						s.running = false
+						if !r.current() {
+							return
+						}
+						s.truncated = trunc
 						if err != nil && ctx.Err() == nil {
 							s.err = errtext.Text(err)
 						}
@@ -1137,10 +1229,11 @@ func (a *app) pruneFiles() {
 		if a.workspace(id) != nil {
 			continue
 		}
-		if !slices.ContainsFunc(v.docs, (*fileDoc).isModified) {
+		if !slices.ContainsFunc(v.docs, (*fileDoc).needsSave) {
 			for _, d := range v.docs {
 				closeWeb(d)
 			}
+			v.cancelGitReads()
 			delete(a.files, id)
 		}
 	}

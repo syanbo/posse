@@ -90,22 +90,26 @@ const termClearSeq = "\x1b[H\x1b[2J\x1b[3J"
 
 // clearTerminal 是 ⌘K：由常驻进程清屏并清空回滚区（之后重新接入也是空的），再给程序发 Ctrl+L 重画提示符。
 func (a *app) clearTerminal(m locales.Messages, v *termView, id string) {
+	if v == nil || v.term == nil || v.term.ReadOnly() {
+		return
+	}
+	r := a.request()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		err := a.c.Call(ctx, "terminal.clear", map[string]any{"terminal": id, "redraw": true}, nil)
+		err := r.invoke(ctx, "terminal.clear", map[string]any{"terminal": id, "redraw": true}, nil)
 		var re *rpc.Error
 		switch {
 		case errors.As(err, &re) && re.Code == rpc.CodeUnknown:
 			// 常驻进程还是没有这个接口的旧版本：只清界面这边，切走再接入时回滚区会回来
-			a.update(func() {
+			r.update(func() {
 				if a.live(v) && v.term != nil {
 					v.term.Feed([]byte(termClearSeq))
 					v.term.Send([]byte{0x0c})
 				}
 			})
 		case err != nil:
-			a.update(func() { a.err = m.TermClearError(errtext.Text(err)) })
+			r.update(func() { a.err = m.TermClearError(errtext.Text(err)) })
 		}
 	}()
 }

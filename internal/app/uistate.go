@@ -29,7 +29,10 @@ type uiState struct {
 	SidebarWidth         float32   `json:"sidebarWidth,omitempty"`         // 侧栏的宽度，0 表示默认
 	ProjectMetaHidden    bool      `json:"projectMetaHidden,omitempty"`    // 侧栏的项目行不显示分支和路径，只留名字
 	SidebarGroup         string    `json:"sidebarGroup,omitempty"`         // 侧栏的看法：空是按项目，sidebarByStatus 是运行中的会话平铺
-	TopTiles             []string  `json:"topTiles,omitempty"`             // 侧栏顶上磁贴的顺序：任务、历史、技能、手机、聊天的页面 ID 和固定的工作区 ID，空是默认顺序
+	TopTiles             []string  `json:"topTiles,omitempty"`             // 旧版全局页面和固定工作区的混合顺序
+	NavigationOrder      []string  `json:"navigationOrder,omitempty"`      // 全局导航顺序
+	PinnedWorkspaces     []string  `json:"pinnedWorkspaces,omitempty"`     // 工作区侧栏的固定项
+	LastWorkspace        string    `json:"lastWorkspace,omitempty"`        // 工作区模块上次选择，聊天单独恢复
 	WorkspaceMetaHidden  bool      `json:"workspaceMetaHidden,omitempty"`  // 侧栏项目下面的工作区行不显示分支，只留名字
 	LogPanel             bool      `json:"logPanel,omitempty"`             // 旧版不分项目的日志浮层开关，读到后记到当前项目上
 	LogPanelHeight       float32   `json:"logPanelHeight,omitempty"`       // Git 日志浮层的高度，0 表示默认
@@ -139,6 +142,7 @@ func loadUIState(home string) uiState {
 		s.RightPanel, s.FilesPanelTab = "", tabHistory
 	}
 	migrateSplits(&s)
+	migrateNavigation(&s)
 	if s.FilesPanelHistory {
 		s.FilesPanelHistory = false
 		if s.FilesPanelTab == "" {
@@ -154,7 +158,7 @@ var (
 	uiSaveSeq atomic.Uint64
 	uiSave    struct {
 		sync.Mutex
-		written uint64
+		written map[string]uint64
 	}
 )
 
@@ -165,17 +169,25 @@ func saveUIStateSeq(home string, s uiState, seq uint64) error {
 	}
 	uiSave.Lock()
 	defer uiSave.Unlock()
-	if seq < uiSave.written {
+	// 各主机的状态文件分别排序，另一台主机的较新保存不能吞掉本文件的更新。
+	path := uiStatePath(home)
+	if seq < uiSave.written[path] {
 		return nil
 	}
-	tmp := uiStatePath(home) + ".tmp"
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, uiStatePath(home)); err != nil {
+	if err := os.Rename(tmp, path); err != nil {
 		return err
 	}
-	uiSave.written = seq
+	if uiSave.written == nil {
+		uiSave.written = make(map[string]uint64)
+	}
+	uiSave.written[path] = seq
 	return nil
 }
 

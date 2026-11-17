@@ -74,7 +74,10 @@ func TestDecodeDocImageLimit(t *testing.T) {
 // 文件标签打开超大的图：显示「太大，不在这里预览」和它的尺寸，不解码。
 func TestOpenHugeImageShowsTooLarge(t *testing.T) {
 	a := previewApp(t)
-	root := filesWorkspace(t, a)
+	// 图片尺寸提示不依赖仓库，避免后台 Git 操作与临时目录清理交错。
+	root := t.TempDir()
+	a.workspaces[0].Path = root
+	a.indexWorkspaces()
 	path := filepath.Join(root, "huge.png")
 	os.WriteFile(path, pngClaiming(8000, 7000), 0o644)
 	w := &a.workspaces[0]

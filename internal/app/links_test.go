@@ -536,7 +536,7 @@ func TestWebAddress(t *testing.T) {
 }
 
 // termX 是主区域里离侧栏右边 dx 的横坐标（默认宽的侧栏），终端、标签栏的坐标都按它算，侧栏宽度变了不用改测试。
-func termX(dx float32) float32 { return sidebarDefault() + dx }
+func termX(dx float32) float32 { return navigationWidth() + sidebarDefault() + dx }
 
 // 链接指向别的工作区里的文件时，在链接所在终端的工作区里打开，不切走。
 func TestOpenLinkFileStaysInWorkspace(t *testing.T) {

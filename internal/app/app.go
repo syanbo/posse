@@ -123,23 +123,25 @@ type worktreeDiff struct {
 type daemonStatus struct {
 	FootprintKB  int64
 	Running      int
-	Awake        *awakeStatus // 旧常驻进程没有防休眠时为空
-	Usage        *planStatus  // 旧常驻进程没有套餐用量时为空
-	Version      string       `json:"version"`
-	Build        string       `json:"build"` // 旧常驻进程没有这个字段时为空
-	Pid          int          `json:"pid"`
-	StartedAt    time.Time    `json:"startedAt"`
-	GitTraceSeq  int64        `json:"gitTraceSeq"`  // 终端 git 命令记录的最新序号，旧常驻进程没有时为 0
-	MobileOnline []string     `json:"mobileOnline"` // 现在连着的手机，旧常驻进程没有这个字段
-	DeskViewer   string       `json:"deskViewer"`   // 正在看桌面的手机
-	DeskMissing  []string     `json:"deskMissing"`  // 看桌面缺的授权：screen、accessibility
-	Agents       []string     `json:"agents"`       // 本机装了的 agent，旧常驻进程没有、或还没检测完时为 nil
+	Awake        *awakeStatus      // 旧常驻进程没有防休眠时为空
+	Usage        *planStatus       // 旧常驻进程没有套餐用量时为空
+	Version      string            `json:"version"`
+	Build        string            `json:"build"` // 旧常驻进程没有这个字段时为空
+	Pid          int               `json:"pid"`
+	StartedAt    time.Time         `json:"startedAt"`
+	GitTraceSeq  int64             `json:"gitTraceSeq"`  // 终端 git 命令记录的最新序号，旧常驻进程没有时为 0
+	MobileOnline []string          `json:"mobileOnline"` // 现在连着的手机，旧常驻进程没有这个字段
+	DeskViewer   string            `json:"deskViewer"`   // 正在看桌面的手机
+	DeskMissing  []string          `json:"deskMissing"`  // 看桌面缺的授权：screen、accessibility
+	Agents       []string          `json:"agents"`       // 目标主机装了的 agent，旧常驻进程没有、或还没检测完时为 nil
+	Chat         *rpc.ChatLocation `json:"chat,omitempty"`
 }
 
 // termView 是当前接入的终端：界面侧的终端内核，它持有到常驻进程的连接。
 type termView struct {
-	id   string
-	term *terminal.Terminal
+	id      string
+	term    *terminal.Terminal
+	request appRequest
 	// dir 是 shell 报告的当前目录（OSC 7），每帧取一次：终端的回调持着终端的锁，不能再调 term.Dir
 	dir string
 	// attached 是接入的时间，painted 是屏幕上出现过内容；两者给 startingHint 用
@@ -151,6 +153,15 @@ type termView struct {
 type app struct {
 	c   *client.Client
 	win *mygo.Window
+	// 视图上下文的主机归属创建后不变；连接、控制身份的变化只由 host 管理。
+	host           *hostSession
+	views          *hostViews
+	sshAuth        *sshAuthentication // 窗口共用，只由 windowOwner 持有。
+	hosts          *hostConnections
+	connecting     bool
+	viewID         string
+	viewGeneration atomic.Uint64
+	windowFocused  atomic.Bool // 实际窗口焦点，由本机上下文持有
 
 	// 讨论页（discussions.go）：轮询在后台协程里读 discWant、discSeq
 	disc        discBoard
@@ -162,6 +173,10 @@ type app struct {
 	discWantGen int64  // 意图的代号，换讨论、跳到最新时加一（discGen）
 	discSeq     atomic.Int64
 	discLoaded  bool // 拿到过一次列表：之后的变化才发通知
+
+	discRefreshMu   sync.Mutex
+	lastDiscPoll    *discPoll
+	lastDiscRequest discussionRequest
 	// trashItem 把文件移到废纸篓，nil 时用 mygo.Shell.TrashItem（要主线程跑着）；测试里换掉
 	trashItem func(path string) error
 	// mainUpdate 把函数交给主线程跑，为 nil 时用 win.Update；测试里直接跑
@@ -201,17 +216,19 @@ type app struct {
 	navOrder     []navTarget       // 侧栏看得见、可选中的行，按显示顺序，供方向键移动
 	navCur       int               // navOrder 里当前选中的行，没有时为 -1
 	lastStatus   map[string]string // 终端 ID → 上次看到的 agent 状态，用于通知
-	badge        int               // Dock 角标现在显示的数
+	badge        int               // Dock 角标现在显示的数，只由窗口 owner 持有
+	setBadge     func(int)         // 测试替换系统角标输出，nil 时调用 MyGo
 	lastTask     map[string]string // 任务 ID → 上次看到的状态和待回复数，用于通知
 	// 轮询上次交给界面的数据，没变就不更新界面；refreshMu 保护
-	lastPoll      *pollResult
-	diffAt        map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
-	paneGone      map[string]time.Time // 分栏里记着、列表里不见了的终端 → 第一次不见的时间（prunePanes）
-	paneDue       atomic.Bool          // paneGone 里有等着到期的：轮询结果没变、不走 apply 时轮询也在界面线程上跑一次 prunePanes
-	termAt        time.Time            // 上次统计终端内存的时间（轮询协程里用）
-	lastTerm      int64
-	pollForce     atomic.Bool // 下一次轮询无论有没有变化都交给界面
-	refreshQueued atomic.Bool // selectTask 排的那次轮询还没开始
+	lastPoll       *pollResult
+	lastPollClient *client.Client       // 换身份后的首轮必须重新提交，旧回调可能在主线程排队时失效
+	diffAt         map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
+	paneGone       map[string]time.Time // 分栏里记着、列表里不见了的终端 → 第一次不见的时间（prunePanes）
+	paneDue        atomic.Bool          // paneGone 里有等着到期的：轮询结果没变、不走 apply 时轮询也在界面线程上跑一次 prunePanes
+	termAt         time.Time            // 上次统计终端内存的时间（轮询协程里用）
+	lastTerm       int64
+	pollForce      atomic.Bool // 下一次轮询无论有没有变化都交给界面
+	refreshQueued  atomic.Bool // selectTask 排的那次轮询还没开始
 	// shade 是窗口上一帧的深浅：0 还没画过，1 浅色，2 深色；轮询报给常驻进程（statusParams）
 	shade atomic.Int32
 	// panes 是主区域每格接入的终端（下标同 cols，选中的不是终端的格为 nil）；pane 是焦点所在的格
@@ -240,7 +257,7 @@ type app struct {
 	disabled     []string      // 设置里关掉的 agent，也在 agents.json
 	restoreAll   bool          // 常驻进程启动时恢复全部终端，也在 agents.json
 	chatDir      string        // 聊天磁贴的目录，也在 agents.json（chat.go）
-	chatAdding   bool          // 正在把聊天目录加成项目
+	chatAdding   *appRequest   // 正在登记聊天项目的固定请求，旧结果不清掉后来的请求。
 	home         string        // $POSSE_HOME，ui.json 所在目录；为空时不保存
 	state        uiState       // 写进 ui.json 的界面状态
 
@@ -261,29 +278,32 @@ type app struct {
 	wantMu   sync.Mutex
 	wantTask string
 
-	history      historyView
-	usage        usageView             // 右侧"技能与工具"面板
-	cheat        cheatView             // 右侧"命令速查"面板
-	panelShown   float32               // 右侧面板滑入的进度，1 是停稳了
-	recent       recentView            // 右侧历史面板
-	skills       skillsView            // 侧栏的「技能」页
-	skillsTab    skillsPanelView       // 文件栏的「技能」页签
-	skillChange  skillChangeView       // 开关技能的确认框
-	skillInstall skillInstallView      // 安装技能的对话框
-	skillRun     skillRunView          // 技能的安装、更新、删除：对话框里嵌终端跑命令
-	hiddenTerms  map[string]bool       // 不进标签栏和侧栏的终端（技能命令的对话框里那个）
-	skillNew     skillNewView          // 新建项目技能的对话框
-	posseSkills  posseSkillsView       // Posse 自带技能装了没有（posseskills.go）
-	images       imagesView            // 右侧图片面板
-	mobile       mobileView            // 侧栏「手机」页：配对码和已配对的手机
-	mem          memView               // 底栏的内存浮窗
-	planOpen     bool                  // 状态栏的套餐用量详情
-	emptyHeight  float32               // 空工作区页滚动区上一帧的高度
-	emptyWidth   float32               // 空工作区页滚动区上一帧的宽度
-	files        map[string]*filesView // 工作区 ID → 文件标签
-	quick        quickOpen             // ⌘P 快速打开
-	defPick      defPick               // 几处同名定义的选择对话框（definition.go）
-	unsaved      *unsavedAsk           // 问要不要保存修改的对话框
+	history       historyView
+	usage         usageView             // 右侧"技能与工具"面板
+	cheat         cheatView             // 右侧"命令速查"面板
+	panelShown    float32               // 右侧面板滑入的进度，1 是停稳了
+	recent        recentView            // 右侧历史面板
+	skills        skillsView            // 侧栏的「技能」页
+	skillsTab     skillsPanelView       // 文件栏的「技能」页签
+	skillChange   skillChangeView       // 开关技能的确认框
+	skillInstall  skillInstallView      // 安装技能的对话框
+	skillRun      skillRunView          // 技能的安装、更新、删除：对话框里嵌终端跑命令
+	hiddenTerms   map[string]bool       // 不进标签栏和侧栏的终端（技能命令的对话框里那个）
+	skillNew      skillNewView          // 新建项目技能的对话框
+	posseSkills   posseSkillsView       // Posse 自带技能装了没有（posseskills.go）
+	images        imagesView            // 右侧图片面板
+	mobile        mobileView            // 侧栏「手机」页：配对码和已配对的手机
+	mem           memView               // 底栏的内存浮窗
+	planOpen      bool                  // 状态栏的套餐用量详情
+	emptyHeight   float32               // 空工作区页滚动区上一帧的高度
+	emptyWidth    float32               // 空工作区页滚动区上一帧的宽度
+	files         map[string]*filesView // 工作区 ID → 文件标签
+	quick         quickOpen             // ⌘P 快速打开
+	defPick       defPick               // 几处同名定义的选择对话框（definition.go）
+	unsaved       *unsavedAsk           // 问要不要保存修改的对话框
+	unsavedSeq    uint64
+	confirmCancel func()
+	confirmSeq    uint64
 	// 菜单的 ⌘W 记在这里，下一帧再关标签
 	menuCloseTab bool
 	// 快捷键（keymap.go）：keyRec 是设置页里正在录的一项，keysVer 在改了快捷键后加一，edBind 是按它缓存的编辑器按键
@@ -297,6 +317,7 @@ type app struct {
 	branchFolds   map[string]bool       // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
 	track         map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用
 	fetchAt       map[string]time.Time  // 项目 ID → 上次自动 fetch 的时间
+	targetFetches []*targetFetch        // 本主机的有界操作记录，包含仍需查询的原 ref
 	gitRuns       []gitx.Run            // Git 操作记录里的命令（gitconsole.go），所有项目共用
 	runWS         map[string]string     // 命令目录 → 所在工作区 ID（runWorkspace），工作区列表变了就清掉
 	realPaths     map[string]string     // 工作区路径 → 解析过符号链接的路径
@@ -347,9 +368,10 @@ type app struct {
 	termCtxID string             // 它是哪个终端的：切走了就不画
 	// 正在改名的终端标签（终端 ID）和输入框里的文字，见 tabname.go
 	renaming, renameText string
-	lastPanels           panelSnap         // 上一帧的项目和它的文件栏、日志浮层开关（snapPanels）
-	nameSent             map[string]string // 已经交给常驻进程的标签名（terminal.rename），每个只发一次
-	renameQ              chan [2]string    // 交给按顺序发改名的协程（renameWorker）
+	renameRequest        appRequest
+	lastPanels           panelSnap            // 上一帧的项目和它的文件栏、日志浮层开关（snapPanels）
+	nameSent             map[string]string    // 已经交给常驻进程的标签名（terminal.rename），每个只发一次
+	renameQ              chan termNameRequest // 交给按顺序发改名的协程（renameWorker）
 	renameOnce           sync.Once
 	tabStripW            [maxColumns]float32 // 各栏标签栏能放标签的宽度，变了就把当前标签再滚进来
 	// overPanelButton 是这一帧指针是否在标签栏的面板按钮上：在按钮上按下交给按钮切换，不算点了面板外面
@@ -386,6 +408,7 @@ type app struct {
 
 	// 新建工作区对话框
 	creating   bool
+	newRequest appRequest
 	newProject string
 	newName    string
 	newAgent   int // newAgentChoices 的序号，0 是不启动 agent
@@ -414,6 +437,7 @@ type app struct {
 	exe         exeWatch
 	exeReplaced atomic.Bool // 轮询线程里只报一次
 	staleApp    bool
+	targetDir   *targetDirectory
 	dialogOpen  bool       // 系统文件对话框开着（inDialog），不再开第二个
 	staleHidden bool       // 这次窗口里收起了重开提示，底栏齿轮旁留一个圆点
 	upd         selfUpdate // 自动更新的检查和下载（appupdate.go）
@@ -483,23 +507,11 @@ func Run(c *client.Client) error {
 	// 开发包放在别的窗口后面也照常画：验收工具从后面截图、操作它，不用把窗口叫到最前抢用户的屏幕。
 	// 日常的包照旧被挡住时不画，省电
 	ui.DrawWhenOccluded = daemon.RunningDevBundle()
-	a := &app{
-		c:            c,
-		activeTerm:   map[string]string{},
-		sectionsOpen: map[string]*bool{},
-		lastStatus:   map[string]string{},
-		lastTask:     map[string]string{},
-		diffs:        map[string]*worktreeDiff{},
-		fontSize:     defaultFontSize,
-		home:         c.Home,
-		state:        loadUIState(c.Home),
-		permission:   agent.PermissionMode(c.Home),
-		disabled:     agent.Disabled(c.Home),
-		restoreAll:   agent.RestoreAll(c.Home),
-		chatDir:      agent.ChatDir(c.Home),
-		exe:          newExeWatch(),
-	}
-	a.selected, a.revealSel = a.state.Selected, true
+	a := newHostApp(c, c.Home)
+	a.exe = newExeWatch()
+	views := newHostViews(a)
+	a.hosts = newHostConnections(views)
+	var pollDone chan struct{}
 	var stopCtl func()
 	a.projIcons = projicon.Load(a.home)
 	a.traceGit()
@@ -515,6 +527,7 @@ func Run(c *client.Client) error {
 	}
 	// Run 之前设好，窗口一出来就是选定的深浅，不先按系统画一帧
 	mygo.Theme.SetSource(themeSource(a.state.Theme))
+	registerHTMLResources()
 	mygo.App.WhenReady(func() {
 		a.win = mygo.NewWindow(mygo.WindowOptions{
 			Title:         appName(),
@@ -526,7 +539,7 @@ func Run(c *client.Client) error {
 			TitleBarStyle: mygo.TitleBarHidden,
 			// 红绿灯在 40 高的顶栏里上下居中，和右边的应用名、侧栏开关、标签对齐（照 Orca）
 			TrafficLightPosition: &mygo.Point{X: trafficLightX, Y: 13},
-			Content:              ui.View(a.build),
+			Content:              ui.View(views.build),
 		})
 		a.watchClose()
 		a.startLocale()
@@ -550,12 +563,17 @@ func Run(c *client.Client) error {
 			a.win.Show()
 			a.win.Focus()
 		})
-		go a.poll()
+		pollDone = make(chan struct{})
+		go func() { defer close(pollDone); a.poll(a.hosts.ctx) }()
 		if ctl != nil {
 			stopCtl = a.serveCtl(ctl)
 		}
 	})
 	err = mygo.App.Run()
+	a.hosts.close()
+	if pollDone != nil {
+		<-pollDone
+	}
 	if stopCtl != nil {
 		stopCtl()
 	}
@@ -580,12 +598,24 @@ func (a *app) statusParams() any {
 }
 
 // poll 定期从常驻进程拉取项目、工作区和终端状态；常驻进程不在时拉起它。
-func (a *app) poll() {
-	for {
-		a.refresh()
+func (a *app) poll(ctx context.Context) {
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for ctx.Err() == nil {
+		current := a.displayed()
+		if current != a.windowOwner() {
+			a.discussionRequest().refreshDiscussions()
+		}
+		if a.hosts == nil || a.hosts.heartbeat(current) {
+			current.refresh()
+			current.historyTick()
+		}
 		a.checkReplaced()
-		a.historyTick()
-		time.Sleep(time.Second)
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
 	}
 }
 
@@ -609,67 +639,81 @@ type pollResult struct {
 	awake      *awakeStatus
 	usage      *planStatus
 	daemonInfo daemonStatus // 版本、构建、pid、启动时间（设置页的"关于"用），连着的手机
-	disc       *discPoll
 }
 
 func (a *app) refresh() {
+	a.refreshRequest(a.request())
+}
+
+func (a *app) refreshRequest(q appRequest) {
 	a.refreshMu.Lock()
 	defer a.refreshMu.Unlock()
+	if !q.current() || q.client == nil {
+		return
+	}
 	a.refreshQueued.Store(false)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if a == a.windowOwner() && q.host == nil && !q.client.Remote {
+		defer (discussionRequest{appRequest: q, gen: a.discGen()}).refreshDiscussions()
+	}
+	changed := a.lastPollClient != q.client
+	if changed {
+		a.traceSeq, a.traceLoaded = 0, false
+	}
+	ctx, cancel := context.WithTimeout(a.windowContext(), 5*time.Second)
 	defer cancel()
 	var r pollResult
 	var st daemonStatus
-	err := a.c.Call(ctx, "project.list", nil, &r.projects)
-	if isDialError(err) {
-		// 连不上才去拉起常驻进程：每秒都先探一次 socket 是白白多一次连接
-		if err = a.c.EnsureDaemon(); err == nil {
-			err = a.c.Call(ctx, "project.list", nil, &r.projects)
+	err := q.invoke(ctx, "project.list", nil, &r.projects)
+	if isDialError(err) && q.host == nil && !q.client.Remote {
+		// 有主机会话时由连接流程恢复，轮询不能绕过重新协商身份。
+		if err = q.client.EnsureDaemonContext(a.windowContext()); err == nil {
+			err = q.invoke(ctx, "project.list", nil, &r.projects)
 		}
 	}
 	// 状态先取：后面的列表在版本对不上的旧常驻进程上可能失败，有了状态照样能发现版本差、自动交接
 	statusOK := false
 	if err == nil {
 		// 带上终端在用的配色：常驻进程换到所有终端上，新终端也按它起（见 daemon 的 windowColors）
-		err = a.c.Call(ctx, "daemon.status", a.statusParams(), &st)
+		err = q.invoke(ctx, "daemon.status", a.statusParams(), &st)
 		statusOK = err == nil
 	}
 	if err == nil {
-		err = a.c.Call(ctx, "workspace.list", nil, &r.workspaces)
-		// 常驻进程只在建工作区时记分支，main 工作区切分支后就过时了；以 HEAD 为准
-		for i := range r.workspaces {
-			// 多仓库的 worktree 工作区根目录不是仓库，往上找到的是不相干的仓库；分支用记下的那个
-			if len(r.workspaces[i].Repos) > 0 {
-				continue
+		err = q.invoke(ctx, "workspace.list", nil, &r.workspaces)
+		if !q.client.Remote {
+			// 常驻进程只在建工作区时记分支，main 工作区切分支后就过时了；以 HEAD 为准
+			for i := range r.workspaces {
+				// 多仓库的 worktree 工作区根目录不是仓库，往上找到的是不相干的仓库；分支用记下的那个
+				if len(r.workspaces[i].Repos) > 0 {
+					continue
+				}
+				if b := gitx.Head(r.workspaces[i].Path); b != "" {
+					r.workspaces[i].Branch = b
+				}
 			}
-			if b := gitx.Head(r.workspaces[i].Path); b != "" {
-				r.workspaces[i].Branch = b
+			r.workspaces = a.dropGoneWorktreesRequest(ctx, r.workspaces, q)
+			for i := range r.workspaces {
+				if _, err := os.Stat(r.workspaces[i].Path); errors.Is(err, fs.ErrNotExist) {
+					// 记着的分支是旧的，不再显示；分支按钮和日志浮层也跟着收起
+					r.workspaces[i].Missing, r.workspaces[i].Branch = true, ""
+				}
 			}
+			showBranches(r.workspaces)
 		}
-		r.workspaces = a.dropGoneWorktrees(ctx, r.workspaces)
-		for i := range r.workspaces {
-			if _, err := os.Stat(r.workspaces[i].Path); errors.Is(err, fs.ErrNotExist) {
-				// 记着的分支是旧的，不再显示；分支按钮和日志浮层也跟着收起
-				r.workspaces[i].Missing, r.workspaces[i].Branch = true, ""
-			}
-		}
-		showBranches(r.workspaces)
 	}
 	if err == nil {
-		err = a.c.Call(ctx, "task.list", nil, &r.tasks)
+		err = q.invoke(ctx, "task.list", nil, &r.tasks)
 	}
 	if err == nil {
-		a.pollGitTrace(ctx, st.GitTraceSeq)
-		a.pollDiscussions(&r, func(method string, params, out any) error { return a.c.Call(ctx, method, params, out) })
+		a.pollGitTraceRequest(ctx, st.GitTraceSeq, q)
 	}
 	// 总览里选中的任务：拉完整内容，worktree 的改动统计每 5 秒更新一次
 	if id := a.wantedTask(); err == nil && id != "" {
 		var d taskDetail
-		if a.c.Call(ctx, "task.show", map[string]any{"task": id}, &d) == nil {
+		if q.invoke(ctx, "task.show", map[string]any{"task": id}, &d) == nil {
 			r.detail = &d
-			if d.WorkspaceKind == "worktree" && time.Since(a.diffAt[d.WorkspaceID]) > 5*time.Second {
+			if q.host == nil && d.WorkspaceKind == "worktree" && time.Since(a.diffAt[d.WorkspaceID]) > 5*time.Second {
 				var w worktreeDiff
-				if a.c.Call(ctx, "workspace.diff", map[string]any{"workspace": d.WorkspaceID}, &w) == nil {
+				if q.invoke(ctx, "workspace.diff", map[string]any{"workspace": d.WorkspaceID}, &w) == nil {
 					if a.diffAt == nil {
 						a.diffAt = map[string]time.Time{}
 					}
@@ -679,11 +723,16 @@ func (a *app) refresh() {
 			}
 		}
 	}
+	if !q.current() {
+		return
+	}
 	if err != nil {
 		r = pollResult{err: errtext.Text(err)}
 		if statusOK {
 			r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt}
-			a.autoUpgrade(r.daemonInfo)
+			if q.host == nil {
+				a.autoUpgrade(r.daemonInfo)
+			}
 			r.err = a.staleDaemonError(appL(), r.daemonInfo, err)
 		}
 	} else {
@@ -697,30 +746,35 @@ func (a *app) refresh() {
 		// 问窗口状态要切到主线程等它，所以也是 5 秒才问一次
 		if time.Since(a.termAt) > 5*time.Second {
 			a.termAt = time.Now()
-			if a.windowShown() {
+			if !q.client.Remote && a.windowShown() {
 				a.lastTerm = terminalsFootprint(r.workspaces)
 			}
 		}
 		r.running, r.daemonKB, r.selfKB, r.termKB, r.awake = st.Running, st.FootprintKB, self, a.lastTerm, st.Awake
 		r.usage = st.Usage
-		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt, MobileOnline: st.MobileOnline, DeskViewer: st.DeskViewer, DeskMissing: st.DeskMissing, Agents: st.Agents}
+		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt, MobileOnline: st.MobileOnline, DeskViewer: st.DeskViewer, DeskMissing: st.DeskMissing, Agents: st.Agents, Chat: st.Chat}
 		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self+a.lastTerm)
-		a.autoUpgrade(r.daemonInfo)
+		if q.host == nil {
+			a.autoUpgrade(r.daemonInfo)
+		}
 	}
 	// 改动统计只在拉到时才有，没拉到时沿用上次的，不算变化
 	if r.diff == nil && a.lastPoll != nil && a.lastPoll.diffFor != "" {
 		r.diff, r.diffFor = a.lastPoll.diff, a.lastPoll.diffFor
 	}
+	if !q.current() {
+		return
+	}
 	force := a.pollForce.Swap(false)
-	if !force && a.lastPoll != nil && samePoll(a.lastPoll, &r) {
+	if !force && !changed && a.lastPoll != nil && samePoll(a.lastPoll, &r) {
 		if r.err == "" && a.paneDue.Load() {
-			a.update(func() { a.prunePanes(time.Now()) })
+			q.update(func() { a.prunePanes(time.Now()) })
 		}
 		return
 	}
 	prevErr := a.lastPoll != nil && a.lastPoll.err != ""
-	a.lastPoll = &r
-	a.update(func() {
+	a.lastPoll, a.lastPollClient = &r, q.client
+	q.update(func() {
 		a.pollDown = r.err != ""
 		if r.err != "" {
 			a.err = r.err
@@ -737,10 +791,12 @@ func (a *app) refresh() {
 		info := r.daemonInfo
 		info.FootprintKB, info.Running, info.Awake, info.Usage = r.daemonKB, r.running, r.awake, r.usage
 		a.daemon, a.selfKB, a.termKB = info, r.selfKB, r.termKB
+		if q.client.Remote && info.Chat != nil {
+			a.chatDir = info.Chat.Path
+		}
 		// apply 会就地排序，r 还要留给下次比较
 		a.apply(slices.Clone(r.projects), slices.Clone(r.workspaces))
 		a.applyTasks(r.tasks)
-		a.applyDiscussions(r.disc)
 		if r.detail != nil && r.detail.ID == a.taskSel {
 			a.detail = r.detail
 		}
@@ -946,6 +1002,9 @@ func (a *app) badgeCount() int {
 
 // updateBadge 按当前的终端状态更新 Dock 角标，数没变时不调系统。轮询的数据变了、每帧看过的会话换了时都调。
 func (a *app) updateBadge() {
+	if a.displayed() != a {
+		return
+	}
 	// 窗口失去焦点时不重画，viewing 要到下一帧才清掉：这里先清，切走后完成的会话马上算进角标
 	if !a.focused.Load() {
 		a.viewing = ""
@@ -955,11 +1014,16 @@ func (a *app) updateBadge() {
 		n = a.badgeCount()
 	}
 	// 没有窗口（测试、离屏预览）时 mygo 的应用没在运行，不能调
-	if n == a.badge || a.win == nil {
+	owner := a.windowOwner()
+	if n == owner.badge || a.win == nil && owner.setBadge == nil {
 		return
 	}
-	a.badge = n
-	mygo.App.SetBadgeCount(n)
+	owner.badge = n
+	if owner.setBadge != nil {
+		owner.setBadge(n)
+	} else {
+		mygo.App.SetBadgeCount(n)
+	}
 }
 
 func (a *app) workspace(id string) *workspace {
@@ -998,7 +1062,7 @@ func (a *app) installMenu() {
 			{Role: mygo.RoleAbout},
 			{Label: locales.MenuCheckForUpdates(), Hidden: !mygo.Updater.Configured(), Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.win.Update(a.openAbout)
-				go a.checkUpdate(true)
+				go a.windowOwner().checkUpdate(true)
 			}},
 			mygo.Separator(),
 			{Label: locales.MenuSettings(), Accelerator: a.accel("settings"), Click: func(*mygo.MenuItem, *mygo.Window) {
@@ -1015,7 +1079,7 @@ func (a *app) installMenu() {
 		}},
 		{Label: locales.MenuFile(), Submenu: []*mygo.MenuItem{
 			{Label: locales.MenuCloseTab(), Accelerator: a.accel("closeTab"), Click: func(*mygo.MenuItem, *mygo.Window) {
-				a.win.Update(func() { a.menuCloseTab = true })
+				a.win.Update(func() { a.displayed().menuCloseTab = true })
 			}},
 			{Role: mygo.RoleClose, Accelerator: a.accel("closeWindow")},
 		}},
@@ -1023,14 +1087,14 @@ func (a *app) installMenu() {
 		// 网页有焦点时键盘在 WebKit 手里，窗口的快捷键收不到；macOS 先把按键交给菜单，放这里网页里也认
 		{Label: locales.MenuView(), Submenu: []*mygo.MenuItem{
 			{Label: locales.MenuReloadPage(), Accelerator: a.accel("webReload"), Click: func(*mygo.MenuItem, *mygo.Window) {
-				a.win.Update(func() { a.menuWeb("reload") })
+				a.win.Update(func() { a.displayed().menuWeb("reload") })
 			}},
 			{Label: locales.MenuForceReloadPage(), Accelerator: a.accel("webHardReload"), Click: func(*mygo.MenuItem, *mygo.Window) {
-				a.win.Update(func() { a.menuWeb("hardReload") })
+				a.win.Update(func() { a.displayed().menuWeb("hardReload") })
 			}},
 			mygo.Separator(),
 			{Label: locales.MenuMobilePreview(), Accelerator: a.accel("webMobile"), Click: func(*mygo.MenuItem, *mygo.Window) {
-				a.win.Update(func() { a.menuWeb("mobile") })
+				a.win.Update(func() { a.displayed().menuWeb("mobile") })
 			}},
 		}},
 		{Label: locales.MenuWindow(), Submenu: []*mygo.MenuItem{
@@ -1107,8 +1171,12 @@ func (a *app) currentTerminal(w *workspace) *terminalInfo {
 
 // attachView 接入一个终端，失败时报错并返回 nil。
 func (a *app) attachView(id string) *termView {
-	conn := a.c.Attach(id)
-	v := &termView{id: id, attached: time.Now()}
+	r := a.request()
+	if !r.current() || r.client == nil {
+		return nil
+	}
+	conn := r.client.Attach(id)
+	v := &termView{id: id, attached: time.Now(), request: r}
 	if f, ok := a.carryFind[id]; ok {
 		v.find = f
 	}
@@ -1162,32 +1230,28 @@ func (a *app) attachView(id string) *termView {
 				v.term.Send([]byte{0x16})
 				return true
 			}
-			go a.pasteImage(v, png)
+			a.pasteImage(v, png)
 			return true
 		},
 		// 连接结束：程序退出时刷新列表；程序仍在运行（被判定跟不上而断开）时重新接入
 		OnExit: func(int) {
-			a.win.Update(func() {
+			r.update(func() {
 				i := slices.Index(a.panes[:], v)
 				if i < 0 {
 					return
 				}
 				if exited, _ := conn.Exited(); !exited {
 					// 重新接入的是同一个终端：查找栏照旧（开着的由 termFindBar 按原来的词再搜，关着的留着上次的词）
-					if v.find.open || v.find.query != "" {
-						if a.carryFind == nil {
-							a.carryFind = map[string]termFind{}
-						}
-						a.carryFind[v.id] = v.find
-					}
+					a.rememberFind(v)
 					v.term.Close()
 					a.panes[i] = nil
 				}
 			})
-			go a.refresh()
+			go r.refresh()
 		},
 	})
 	if err != nil {
+		conn.Close()
 		a.err = errtext.Text(err)
 		return nil
 	}
@@ -1197,11 +1261,26 @@ func (a *app) attachView(id string) *termView {
 
 // saveState 在后台写 ui.json；界面状态丢了不影响使用，失败不提示。
 func (a *app) saveState() {
+	if v := a.views; v != nil && a != v.local {
+		if v.active.Load() == a {
+			copyWindowPreferences(&v.local.state, a.state)
+			v.local.saveStateFile()
+		} else {
+			copyWindowPreferences(&a.state, v.local.state)
+		}
+	}
+	a.saveStateFile()
+}
+
+func (a *app) saveStateFile() {
 	if a.home == "" {
 		return
 	}
 	s := a.state
 	s.ProjectOrder = slices.Clone(s.ProjectOrder)
+	s.TopTiles = slices.Clone(s.TopTiles)
+	s.NavigationOrder = slices.Clone(s.NavigationOrder)
+	s.PinnedWorkspaces = slices.Clone(s.PinnedWorkspaces)
 	s.TermOrder = maps.Clone(s.TermOrder)
 	s.TermNames = maps.Clone(s.TermNames)
 	s.TermNameBases = maps.Clone(s.TermNameBases)
@@ -1209,26 +1288,12 @@ func (a *app) saveState() {
 	s.FilesPanels, s.LogPanels = maps.Clone(s.FilesPanels), maps.Clone(s.LogPanels)
 	s.MobileAddresses = slices.Clone(s.MobileAddresses)
 	s.Files = cloneFilesState(s.Files)
-	s.Keys = maps.Clone(s.Keys)
+	s.Keys = cloneKeyBindings(s.Keys)
 	s.DiscRead = maps.Clone(s.DiscRead)
 	s.Panes = clonePanes(s.Panes)
 	// 编号在这里取：协程开始的先后不等于发起的先后
 	seq := uiSaveSeq.Add(1)
 	go saveUIStateSeq(a.home, s, seq)
-}
-
-// pasteImage 把剪贴板里的图片存成临时文件，再把路径粘贴进终端。
-func (a *app) pasteImage(v *termView, png []byte) {
-	path := filepath.Join(os.TempDir(), fmt.Sprintf("posse-paste-%d.png", time.Now().UnixNano()))
-	if err := os.WriteFile(path, png, 0o600); err != nil {
-		a.win.Update(func() { a.err = appL().AppPasteImageError(errtext.Text(err)) })
-		return
-	}
-	a.win.Update(func() {
-		if a.live(v) {
-			v.term.Paste(path)
-		}
-	})
 }
 
 func (a *app) setFontSize(size float32) {
@@ -1250,41 +1315,39 @@ const minFontSize, maxFontSize = 9, 28
 
 // call 调用常驻进程，出错时显示在侧栏的提示里。
 func (a *app) call(method string, params any, out any, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	err := a.c.Call(ctx, method, params, out)
-	if err != nil {
-		a.update(func() { a.err = errtext.Text(err) })
-	}
-	return err
+	return a.request().call(method, params, out, timeout)
 }
 
 func (a *app) startTerminal(workspaceID, agent string) {
+	r := a.request()
 	go func() {
 		var t terminalInfo
-		err := a.call("terminal.create", map[string]any{"workspace": workspaceID, "agent": agent}, &t, 10*time.Second)
+		err := r.call("terminal.create", map[string]any{"workspace": workspaceID, "agent": agent}, &t, 10*time.Second)
 		// 先刷新让新终端进列表再选中：列表里还没有它时 currentTerminal 会把选中换回第一个
-		a.refresh()
+		r.refresh()
 		if err == nil {
-			a.win.Update(func() { a.openTerminal(workspaceID, t.ID) })
+			r.update(func() { a.openTerminal(workspaceID, t.ID) })
 		}
 	}()
 }
 
 func (a *app) askClose(m locales.Messages, t terminalInfo) {
+	r := a.request()
 	if !t.Running || a.state.CloseNoConfirm {
-		go a.closeTerminal(t.ID)
+		go r.closeTerminal(t.ID)
 		return
 	}
 	name := agentTitle(t.Agent)
 	if name == "" {
 		name = m.TermName()
 	}
-	a.confirm(m.AppCloseConfirm(name), m.AppCloseBody(), m.CommonClose(), func() { a.closeTerminal(t.ID) })
+	a.confirm(m.AppCloseConfirm(name), m.AppCloseBody(), m.CommonClose(), func() { r.closeTerminal(t.ID) })
 }
 
 // askCloseAll 一次关掉几个终端：有程序在运行时只问一次。
 func (a *app) askCloseAll(m locales.Messages, terms []terminalInfo) {
+	r := a.request()
+	terms = slices.Clone(terms)
 	running := 0
 	for _, t := range terms {
 		if t.Running {
@@ -1293,9 +1356,12 @@ func (a *app) askCloseAll(m locales.Messages, terms []terminalInfo) {
 	}
 	closeAll := func() {
 		for _, t := range terms {
-			a.call("terminal.close", map[string]any{"terminal": t.ID}, nil, 10*time.Second)
+			r.call("terminal.close", map[string]any{"terminal": t.ID}, nil, 10*time.Second)
+			if !r.current() {
+				break
+			}
 		}
-		a.refresh()
+		r.refresh()
 	}
 	if running == 0 || a.state.CloseNoConfirm {
 		go closeAll()
@@ -1304,20 +1370,24 @@ func (a *app) askCloseAll(m locales.Messages, terms []terminalInfo) {
 	a.confirm(m.AppCloseAllConfirm(len(terms)), m.AppCloseAllBody(), m.CommonClose(), closeAll)
 }
 
-func (a *app) closeTerminal(id string) {
+func (r appRequest) closeTerminal(id string) {
+	a := r.app
 	// 先从分栏里拿掉：关掉之后轮询可能先一步把它从列表删了，就找不到它在哪个工作区、挨着谁
-	a.update(func() {
-		if w, _ := a.findTerminal(id); w != nil {
-			a.dropColumnKey(w, id)
-		}
-	})
-	a.call("terminal.close", map[string]any{"terminal": id}, nil, 10*time.Second)
-	a.refresh()
+	if r.host == nil || r.snapshot.Controlled {
+		r.update(func() {
+			if w, _ := a.findTerminal(id); w != nil {
+				a.dropColumnKey(w, id)
+			}
+		})
+	}
+	r.call("terminal.close", map[string]any{"terminal": id}, nil, 10*time.Second)
+	r.refresh()
 }
 
 // askRemoveProject 从 Posse 里移除 main 工作区 w 所在的项目：只删记录，不碰磁盘上的文件。
 // 常驻进程要求先删掉 worktree 工作区，这里先挡住并说明要删哪些。
 func (a *app) askRemoveProject(m locales.Messages, w workspace) {
+	r := a.request()
 	var worktrees []string
 	for _, x := range a.byProject[w.ProjectID] {
 		if x.Kind == "worktree" {
@@ -1326,7 +1396,7 @@ func (a *app) askRemoveProject(m locales.Messages, w workspace) {
 	}
 	gone := w.Missing
 	for _, x := range a.byProject[w.ProjectID] {
-		if x.Kind == "worktree" && a.repoGone(x) {
+		if x.Kind == "worktree" && (x.Missing || r.client != nil && !r.client.Remote && a.repoGone(x)) {
 			gone = true
 		}
 	}
@@ -1340,8 +1410,8 @@ func (a *app) askRemoveProject(m locales.Messages, w workspace) {
 		}
 		remove := func(discard bool) func() {
 			return func() {
-				a.call("project.rm", map[string]any{"project": w.ProjectID, "force": true, "discardFiles": discard}, nil, 30*time.Second)
-				a.refresh()
+				r.call("project.rm", map[string]any{"project": w.ProjectID, "force": true, "discardFiles": discard}, nil, 30*time.Second)
+				r.refresh()
 			}
 		}
 		if len(paths) == 0 {
@@ -1357,8 +1427,8 @@ func (a *app) askRemoveProject(m locales.Messages, w workspace) {
 		return
 	}
 	a.confirm(m.AppRemoveProjectConfirm(w.Project), m.AppRemoveProjectBody(), m.CommonRemove(), func() {
-		a.call("project.rm", map[string]any{"project": w.ProjectID, "force": true}, nil, 30*time.Second)
-		a.refresh()
+		r.call("project.rm", map[string]any{"project": w.ProjectID, "force": true}, nil, 30*time.Second)
+		r.refresh()
 	})
 }
 
@@ -1413,10 +1483,11 @@ func (a *app) repoGone(w workspace) bool {
 // askRemoveOrphan 删仓库已经不在的 worktree 工作区：两个动作，默认只移除记录、留着目录（可能只是磁盘没挂载），
 // 另一个连同 $POSSE_HOME/worktrees 里的目录一起删。
 func (a *app) askRemoveOrphan(m locales.Messages, w workspace) {
+	r := a.request()
 	remove := func(discard bool) func() {
 		return func() {
-			a.call("workspace.rm", map[string]any{"workspace": w.ID, "force": true, "discardFiles": discard}, nil, 30*time.Second)
-			a.refresh()
+			r.call("workspace.rm", map[string]any{"workspace": w.ID, "force": true, "discardFiles": discard}, nil, 30*time.Second)
+			r.refresh()
 		}
 	}
 	a.confirmChoice(m.AppOrphanWorkspaceTitle(displayName(&w)), m.AppOrphanWorkspaceBody(w.Path),
@@ -1425,6 +1496,7 @@ func (a *app) askRemoveOrphan(m locales.Messages, w workspace) {
 
 // askRemoveMissing 移除目录已经不在的工作区：只删记录，不碰分支；项目目录不在时移除的是整个项目。
 func (a *app) askRemoveMissing(m locales.Messages, w workspace) {
+	r := a.request()
 	if w.Kind == "main" {
 		a.askRemoveProject(m, w)
 		return
@@ -1436,32 +1508,42 @@ func (a *app) askRemoveMissing(m locales.Messages, w workspace) {
 		}
 	}
 	a.confirm(m.AppRemoveWorkspaceConfirm(displayName(&w)), m.AppRemoveWorkspaceBody(), m.CommonRemove(), func() {
-		go func() {
-			if a.call("workspace.rm", map[string]any{"workspace": w.ID, "force": true}, nil, 30*time.Second) != nil {
-				return
-			}
-			// 清掉 git 的 worktree 记录，分支才不算还检出在那里
-			if repo != "" {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				gitx.PruneWorktrees(ctx, repo)
-				cancel()
-			}
-			a.refresh()
-		}()
+		if r.call("workspace.rm", map[string]any{"workspace": w.ID, "force": true}, nil, 30*time.Second) != nil {
+			return
+		}
+		// 清掉 git 的 worktree 记录，分支才不算还检出在那里
+		if repo != "" && !r.client.Remote && r.current() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			gitx.PruneWorktrees(ctx, repo)
+			cancel()
+		}
+		r.refresh()
 	})
 }
 
 // relocateWorkspace 给目录已经不在的工作区重新选目录（目录在外面挪了地方）。
 func (a *app) relocateWorkspace(m locales.Messages, w workspace) {
+	r := a.request()
+	if r.client != nil && r.client.Remote {
+		r.chooseTargetDirectory(m.AppRelocateTitle(displayName(&w)), m.AppRelocateButton(), filepath.Dir(w.Path), func(path string) {
+			if r.call("workspace.relocate", map[string]any{"workspace": w.ID, "path": path}, nil, 30*time.Second) == nil {
+				r.refresh()
+			}
+		})
+		return
+	}
+	if !r.canChooseLocalDirectory() {
+		return
+	}
 	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: m.AppRelocateTitle(displayName(&w)), ButtonLabel: m.AppRelocateButton(),
 		DefaultPath: nearestDir(w.Path), Directory: true})
 	if err != nil || len(paths) == 0 {
 		return
 	}
-	if a.call("workspace.relocate", map[string]any{"workspace": w.ID, "path": paths[0]}, nil, 30*time.Second) != nil {
+	if r.call("workspace.relocate", map[string]any{"workspace": w.ID, "path": paths[0]}, nil, 30*time.Second) != nil {
 		return
 	}
-	a.refresh()
+	r.refresh()
 }
 
 // nearestDir 是 path 往上第一个还在的目录，选目录的对话框从这里开始。
@@ -1476,7 +1558,17 @@ func nearestDir(path string) string {
 	}
 }
 
+func (a *app) cancelConfirmation() {
+	cancel := a.confirmCancel
+	a.confirmCancel = nil
+	if cancel != nil {
+		cancel()
+	}
+}
+
 func (a *app) confirm(title, body, verb string, do func()) {
+	a.cancelConfirmation()
+	a.confirmSeq++
 	a.confirmTitle, a.confirmBody, a.confirmVerb, a.confirmDo = title, body, verb, do
 	a.confirmAltVerb, a.confirmAltDo = "", nil
 	a.confirming = true
@@ -1489,17 +1581,34 @@ func (a *app) confirmChoice(title, body, verb string, do func(), altVerb string,
 }
 
 func (a *app) addProject(m locales.Messages) {
+	a.request().addProject(m)
+}
+
+func (r appRequest) addProject(m locales.Messages) {
+	a := r.app
+	if r.client != nil && r.client.Remote {
+		r.chooseTargetDirectory(m.AppAddProjectTitle(), m.AppAddProjectButton(), "/", func(path string) {
+			if r.call("project.add", map[string]any{"path": path}, nil, 10*time.Second) == nil {
+				r.refresh()
+			}
+		})
+		return
+	}
+	if !r.canChooseLocalDirectory() {
+		return
+	}
 	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: m.AppAddProjectTitle(), ButtonLabel: m.AppAddProjectButton(), Directory: true})
 	if err != nil || len(paths) == 0 {
 		return
 	}
-	if a.call("project.add", map[string]any{"path": paths[0]}, nil, 10*time.Second) != nil {
+	if r.call("project.add", map[string]any{"path": paths[0]}, nil, 10*time.Second) != nil {
 		return
 	}
-	a.refresh()
+	r.refresh()
 }
 
 func (a *app) openNewWorkspace() {
+	a.newRequest = a.request()
 	a.creating = true
 	a.newName, a.newPrompt, a.newAgent = "", "", 1
 	a.newRepos, a.newReposFor = map[string]bool{}, ""
@@ -1547,7 +1656,8 @@ func repoRel(v *filesView, g *gitState) (string, bool) {
 	return filepath.ToSlash(rel), true
 }
 
-func (a *app) createWorkspace(m locales.Messages, params map[string]any) {
+func (r appRequest) createWorkspace(m locales.Messages, params map[string]any) {
+	a := r.app
 	var w struct {
 		ID        string
 		Terminals []terminalInfo
@@ -1556,8 +1666,8 @@ func (a *app) createWorkspace(m locales.Messages, params map[string]any) {
 			Output string
 		}
 	}
-	if a.call("workspace.create", params, &w, 2*time.Minute) == nil {
-		a.win.Update(func() {
+	if r.call("workspace.create", params, &w, 2*time.Minute) == nil {
+		r.update(func() {
 			if w.Setup != nil && !w.Setup.OK {
 				a.err = m.AppSetupError(truncate(w.Setup.Output, 200))
 			}
@@ -1567,13 +1677,20 @@ func (a *app) createWorkspace(m locales.Messages, params map[string]any) {
 			}
 		})
 	}
-	a.refresh()
+	r.refresh()
 }
 
 // dropGoneWorktrees 在每秒的轮询里找出目录已被删掉的 worktree 工作区（posse 建的和加进来的），
 // 删掉它的记录、清掉 git 的 worktree 记录，返回剩下的。上一级目录也不在时不动：可能是外接盘没挂上。
 // 里面还有终端在跑的也不动，等终端退出：删了记录，终端就没有归属了。
 func (a *app) dropGoneWorktrees(ctx context.Context, ws []workspace) []workspace {
+	return a.dropGoneWorktreesRequest(ctx, ws, a.request())
+}
+
+func (a *app) dropGoneWorktreesRequest(ctx context.Context, ws []workspace, q appRequest) []workspace {
+	if q.client == nil || q.client.Remote || !q.current() || q.host != nil && !q.snapshot.Controlled {
+		return ws
+	}
 	mainPath := map[string]string{}
 	for _, w := range ws {
 		if w.Kind == "main" {
@@ -1599,18 +1716,18 @@ func (a *app) dropGoneWorktrees(ctx context.Context, ws []workspace) []workspace
 	}
 	var names []string
 	for _, w := range gone {
-		if a.c.Call(ctx, "workspace.rm", map[string]any{"workspace": w.ID, "force": true}, nil) != nil {
+		if q.invoke(ctx, "workspace.rm", map[string]any{"workspace": w.ID, "force": true}, nil) != nil {
 			keep = append(keep, w)
 			continue
 		}
 		names = append(names, displayName(&w))
-		if p := mainPath[w.ProjectID]; p != "" {
+		if p := mainPath[w.ProjectID]; p != "" && q.current() {
 			gitx.PruneWorktrees(ctx, p)
 		}
 	}
 	if len(names) > 0 && a.win != nil {
 		m := appL()
-		a.win.Update(func() { a.notify(m.AppWorkspacesRemoved(strings.Join(names, m.AppListSeparator())), "", nil) })
+		q.update(func() { a.notify(m.AppWorkspacesRemoved(strings.Join(names, m.AppListSeparator())), "", nil) })
 	}
 	return keep
 }

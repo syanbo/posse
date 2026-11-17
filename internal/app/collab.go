@@ -268,7 +268,7 @@ func (a *app) collabSection(c *ui.Context, d *discDetail) {
 			cardTitle(c, m.CollabPeople()).Grow(1)
 			if d.hostRole() && cb != nil && cb.Shared && !archived {
 				if iconButtonSized(c.Key("collab-invite"), iconLink, m.CollabInviteEllipsis(), compactBox(), smallIcon()).Clicked() {
-					go a.createInvite(d.key, false)
+					go a.discussionRequest().createInvite(d.key, false)
 				}
 			}
 		})
@@ -289,10 +289,10 @@ func (a *app) collabSection(c *ui.Context, d *discDetail) {
 				ui.Text(c, m.CollabPersonFP(fpText(r.FP))).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted)
 				ui.Row(c).Gap(8).Children(func() {
 					if pressable(accentButton(c.Key("approve-"+r.ID), m.CollabApprove())).Clicked() {
-						go a.discCall("discussion.decide", map[string]any{"request": r.ID, "approve": true})
+						go a.discussionRequest().discCall("discussion.decide", map[string]any{"request": r.ID, "approve": true})
 					}
 					if pressable(textButton(c.Key("reject-"+r.ID), m.CollabReject())).Clicked() {
-						go a.discCall("discussion.decide", map[string]any{"request": r.ID, "approve": false})
+						go a.discussionRequest().discCall("discussion.decide", map[string]any{"request": r.ID, "approve": false})
 					}
 				})
 			})
@@ -301,8 +301,9 @@ func (a *app) collabSection(c *ui.Context, d *discDetail) {
 			a.personRow(c, d, p)
 		}
 		if d.hostRole() && !archived && pressable(textButton(c.Key("collab-unshare"), m.CollabStopSharing())).Clicked() {
+			q := a.discussionRequest()
 			a.confirm(m.CollabStopSharing(), m.CollabStopSharingBody(), m.CollabStopSharing(), func() {
-				a.discCall("discussion.share", map[string]any{"discussion": d.key, "on": false})
+				q.discCall("discussion.share", map[string]any{"discussion": d.key, "on": false})
 			})
 		}
 	})
@@ -364,8 +365,9 @@ func (a *app) personRow(c *ui.Context, d *discDetail, p discPerson) {
 		if d.hostRole() && !p.Host {
 			pm.Separator()
 			if pm.Item(m.CollabRemovePersonEllipsis()).Icon(iconTrash).Danger().Chosen() {
+				q := a.discussionRequest()
 				a.confirm(m.CollabRemovePersonTitle(p.Name), m.CollabRemovePersonBody(), m.CommonRemove(), func() {
-					a.discCall("discussion.person.remove", map[string]any{"discussion": d.key, "person": p.FP})
+					q.discCall("discussion.person.remove", map[string]any{"discussion": d.key, "person": p.FP})
 				})
 			}
 		}
@@ -377,12 +379,14 @@ func (a *app) askShare(m interface {
 	CollabShareBody() string
 	CollabShareVerb() string
 }, d *discDetail) {
+	a = a.windowOwner()
+	q := a.discussionRequest()
 	key := d.key
 	a.confirm(m.CollabShareTitle(), m.CollabShareBody(), m.CollabShareVerb(), func() {
-		if a.call("discussion.share", map[string]any{"discussion": key, "on": true}, nil, 10*time.Second) == nil {
-			a.createInvite(key, false)
+		if q.call("discussion.share", map[string]any{"discussion": key, "on": true}, nil, 10*time.Second) == nil {
+			q.createInvite(key, false)
 		}
-		a.refresh()
+		q.refresh()
 	})
 }
 
@@ -391,24 +395,27 @@ func (a *app) askLeave(m interface {
 	CollabLeaveBody() string
 	CollabLeave() string
 }, d *discDetail) {
+	a = a.windowOwner()
+	q := a.discussionRequest()
 	key := d.key
 	a.confirm(m.CollabLeaveTitle(), m.CollabLeaveBody(), m.CollabLeave(), func() {
-		a.discCall("discussion.leave", map[string]any{"discussion": key})
+		q.discCall("discussion.leave", map[string]any{"discussion": key})
 	})
 }
 
 // createInvite 生成一份邀请并打开邀请框（复制后由用户自己发出去）。
-func (a *app) createInvite(key string, guest bool) {
+func (q discussionRequest) createInvite(key string, guest bool) {
+	a := q.app
 	var r struct {
 		Invite      string
 		Expires     time.Time
 		Addrs       []string
 		Fingerprint string
 	}
-	if a.call("discussion.invite", map[string]any{"discussion": key, "guest": guest}, &r, 10*time.Second) != nil {
+	if q.call("discussion.invite", map[string]any{"discussion": key, "guest": guest}, &r, 10*time.Second) != nil {
 		return
 	}
-	a.update(func() {
+	q.update(func() {
 		a.disc.invite = inviteView{open: true, text: r.Invite, expires: r.Expires, addrs: r.Addrs, fp: r.Fingerprint, guest: guest}
 	})
 }
@@ -447,6 +454,7 @@ func (a *app) inviteDialog(c *ui.Context) {
 }
 
 func (a *app) openJoin() {
+	a = a.showModule(discBoardID)
 	a.disc.join = joinForm{open: true}
 	if text := mygo.Clipboard.ReadText(); strings.Contains(text, collaboration.InvitePrefix) {
 		a.disc.join.text = text
@@ -504,10 +512,11 @@ func (a *app) joinDialog(c *ui.Context) {
 						}
 					}
 					text := f.text
+					q := a.discussionRequest()
 					go func() {
 						var r struct{ Discussion string }
-						err := a.call("discussion.join", map[string]any{"invite": text, "addrs": addrs}, &r, 30*time.Second)
-						a.update(func() {
+						err := q.call("discussion.join", map[string]any{"invite": text, "addrs": addrs}, &r, 30*time.Second)
+						q.update(func() {
 							f.busy = false
 							if err != nil {
 								f.err = errtext.Text(err)
@@ -516,8 +525,8 @@ func (a *app) joinDialog(c *ui.Context) {
 							f.open = false
 						})
 						if err == nil {
-							a.refresh()
-							a.update(func() { a.openDiscussion(r.Discussion) })
+							q.refresh()
+							q.update(func() { q.app.openDiscussion(r.Discussion) })
 						}
 					}()
 				}

@@ -3,33 +3,20 @@ package app
 import (
 	"cmp"
 	"slices"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 )
 
-// 侧栏顶上的磁贴照 Arc 的置顶网址：任务、历史、技能、手机、聊天和固定的工作区排在一起，一行四块，最多十二块（三行），
-// 都能拖动换位置；项目树里的工作区拖上来就固定，固定的拖回项目列表就取消。
-const (
-	topTilesPerRow = 4
-	topTilesMax    = 12
-	// 照 Arc，磁贴离侧栏左右两边、顶上和磁贴之间横竖的间隔都一样
-	tileGap = 8
-)
+const topTilesMax = 12
 
-// globalTiles 是不能取消的全局页面，ui.json 里没记顺序时按这个排。
-var globalTiles = []string{taskBoardID, historyBoardID, skillsBoardID, mobileBoardID, chatBoardID, discBoardID}
+var globalTiles = []string{discBoardID, chatBoardID, taskBoardID, historyBoardID, skillsBoardID, mobileBoardID}
 
-// tileDrag 是拖动中的顶上磁贴，wsDrag 是从项目树拖出来的工作区（项目下面的工作区行）。
 type (
 	tileDrag struct{ id string }
 	wsDrag   struct{ id string }
 )
 
-// topDrag 是能落到顶上的东西：磁贴自己（换位置），工作区行，和项目（单行的项目、多工作区项目的标题行，固定它的主工作区）。
-// 顶上只认这一个类型：一个元素只能接一种拖动的值，接两种时后一种会顶掉前一种。
 type topDrag interface {
-	// topTarget 是落下后占位的 ID，own 表示是顶上已有的磁贴在换位置
 	topTarget(a *app) (id string, own bool)
 }
 
@@ -37,235 +24,133 @@ func (d tileDrag) topTarget(*app) (string, bool)      { return d.id, true }
 func (d wsDrag) topTarget(*app) (string, bool)        { return d.id, false }
 func (d projectDrag) topTarget(a *app) (string, bool) { return a.projectMain(d.id), false }
 
-// topOrder 是磁贴的顺序：ui.json 记的，补上没记到的全局页面。固定过、现在不在了的工作区在常驻进程连上以后去掉，
-// 没连上时留着（交接时可能有一次轮询的列表不全）。
-func (a *app) topOrder() []string {
-	order := make([]string, 0, topTilesMax)
-	for _, id := range a.state.TopTiles {
-		// 聊天工作区已经有「聊天」磁贴：改聊天目录前固定过它的，不再单独画一块
-		if a.isChat(id) {
-			continue
+// 旧磁贴只拆一次，保留两类各自的相对顺序；离线时不能根据尚未取得的工作区列表删数据。
+func migrateNavigation(s *uiState) {
+	for _, id := range s.TopTiles {
+		dst := &s.PinnedWorkspaces
+		if slices.Contains(globalTiles, id) {
+			dst = &s.NavigationOrder
 		}
-		if slices.Contains(globalTiles, id) || !a.loaded || a.workspace(id) != nil {
-			order = append(order, id)
+		if id != "" && !slices.Contains(*dst, id) {
+			*dst = append(*dst, id)
 		}
 	}
-	for _, id := range globalTiles {
-		if !slices.Contains(order, id) {
+	s.TopTiles = nil
+}
+
+func (a *app) topOrder() []string {
+	migrateNavigation(&a.state)
+	var order []string
+	for _, id := range a.state.PinnedWorkspaces {
+		// 未连接时保留旧记录；成功取得列表后，不让已消失的工作区占用名额。
+		// 查询本身不改存盘数据，下一次显式固定/取消固定时才写回有效顺序。
+		if !a.isChat(id) && !slices.Contains(order, id) && (!a.loaded || a.workspace(id) != nil) {
 			order = append(order, id)
 		}
 	}
 	return order
 }
 
-func (a *app) pinned(id string) bool { return slices.Contains(a.state.TopTiles, id) }
+func (a *app) pinned(id string) bool { return slices.Contains(a.topOrder(), id) }
+func (a *app) canPin() bool          { return len(a.topOrder()) < topTilesMax }
+func (a *app) pinnable(id string) bool {
+	return id != "" && !a.pinned(id) && !a.isChat(id) && !slices.Contains(globalTiles, id)
+}
 
-func (a *app) canPin() bool { return len(a.topOrder()) < topTilesMax }
-
-// pinnable 是工作区能不能固定到顶上：聊天工作区已经有「聊天」磁贴，不再单独固定。
-func (a *app) pinnable(id string) bool { return id != "" && !a.pinned(id) && !a.isChat(id) }
-
-// pin 把工作区固定到顶上，排在最后。
 func (a *app) pin(id string) {
 	if !a.pinnable(id) || !a.canPin() {
 		return
 	}
-	a.state.TopTiles = append(a.topOrder(), id)
+	a.state.PinnedWorkspaces = append(a.topOrder(), id)
 	a.saveState()
 }
 
 func (a *app) unpin(id string) {
-	a.state.TopTiles = slices.DeleteFunc(a.topOrder(), func(x string) bool { return x == id })
+	a.state.PinnedWorkspaces = slices.DeleteFunc(a.topOrder(), func(x string) bool { return x == id })
 	a.saveState()
 }
 
-// topTileMotion 是磁贴挪位置、网格变高的动画：照 Arc，不回弹、一下就到。
-var topTileMotion = ui.Animation{Spring: ui.SpringOptions{Duration: 320 * time.Millisecond}}
-
-// topTiles 画顶上的磁贴。磁贴按格子自己摆（绝对定位），位置跟着格子动画过去：拖动时指针停在哪一格，
-// 那一格就空出来、后面的磁贴往后让，松手就落在那里。拖的是已有的磁贴时，它原来的格子跟着收拢；
-// 从项目树拖工作区进来、还放得下时，空出来的那格描一圈强调色。
+// 固定区用紧凑行，不再由网格决定侧栏宽度；空区也接收从项目树拖来的工作区。
 func (a *app) topTiles(c *ui.Context) {
 	order := a.topOrder()
 	var shown []string
 	for _, id := range order {
-		if (id == taskBoardID && len(a.projects) == 0) || (!slices.Contains(globalTiles, id) && a.workspace(id) == nil) {
-			continue
+		if a.workspace(id) != nil {
+			shown = append(shown, id)
 		}
-		shown = append(shown, id)
 	}
-	ui.Column(c).Padding(tileGap, tileGap, 4, tileGap).Shrink(0).Children(func() {
-		area := ui.Box(c.Key("top-tiles")).Shrink(0)
-		// 先收落下的，再按新顺序排：否则松手这一帧会先按旧顺序摆一遍，磁贴来回跳
+	ui.Scroll(c.Key("pinned-scroll")).Height(min(float32(max(len(shown), 1))*pinnedRowHeight()+8, pinnedMaxHeight())).Shrink(0).Children(func() {
+		area := ui.Column(c.Key("pinned-workspaces")).Padding(4, navEnd, 4, trafficLightX-navPad).Shrink(0).MinHeight(pinnedRowHeight()).Label(L(c).SidebarPinned())
 		if d, ok := ui.Drop[topDrag](area); ok {
 			shown = a.dropTile(d, shown, order)
-			c.AnimationFrame()
 		}
-		w := area.LayoutBounds().W
-		cw, ch := (w-tileGap*(topTilesPerRow-1))/topTilesPerRow, tileHeight()
-		hole, moving, incoming := -1, "", ""
+		a.topSlot = 0
 		if d, over := ui.DragOver[topDrag](area); over {
 			id, own := d.topTarget(a)
-			switch {
-			case own && slices.Contains(shown, id):
-				// 拖着的磁贴的工作区拖动途中被删了：不再当它在顶上
-				moving = id
-			case a.pinnable(id) && len(order) < topTilesMax:
-				incoming = id
+			if own && slices.Contains(shown, id) || !own && a.pinnable(id) && a.canPin() {
+				_, y, _ := area.PointerPosition()
+				a.topSlot = min(max(int(y/pinnedRowHeight()), 0), len(shown)) + 1
 			}
-			if x, y, _ := area.PointerPosition(); (moving != "" || incoming != "") && cw > 0 {
-				col := min(max(int(x/(cw+tileGap)), 0), topTilesPerRow-1)
-				hole = max(int(y/(ch+tileGap)), 0)*topTilesPerRow + col
-			}
-		}
-		list := shown
-		if moving != "" && hole >= 0 {
-			list = slices.DeleteFunc(slices.Clone(shown), func(id string) bool { return id == moving })
-		}
-		hole = min(hole, len(list))
-		a.topSlot = hole + 1
-		cells := len(list)
-		if hole >= 0 {
-			cells++
-		}
-		rows := (cells + topTilesPerRow - 1) / topTilesPerRow
-		area.Height(area.AnimateTo("h", float32(rows)*ch+float32(max(rows-1, 0))*tileGap, topTileMotion))
-		if w <= 0 {
-			// 第一帧还不知道宽度，量好了下一帧再摆
-			c.AnimationFrame()
-			return
-		}
-		place := func(e ui.Element, slot int) ui.Element {
-			x := float32(slot%topTilesPerRow) * (cw + tileGap)
-			y := float32(slot/topTilesPerRow) * (ch + tileGap)
-			return e.Absolute().Left(e.AnimateTo("x", x, topTileMotion)).Top(e.AnimateTo("y", y, topTileMotion)).Width(cw).Height(ch)
 		}
 		area.Children(func() {
-			slot := 0
-			for _, id := range list {
-				if slot == hole {
-					slot++
-				}
-				a.placedTile(c, place, id, slot, false)
-				slot++
+			if len(shown) == 0 {
+				ui.Text(c, L(c).SidebarPinned()).FontSize(fsSmall).TextColor(c.Theme().TextMuted).Padding(4, navPad)
 			}
-			switch {
-			case hole < 0:
-			case moving != "":
-				// 拖着的磁贴本身留在空格上、看不见：它是拖动的来源，不能不画
-				a.placedTile(c, place, moving, hole, true)
-			default:
-				place(ui.Row(c.Key("top-hole")), hole).Children(func() { dropSlot(c) })
+			for _, id := range shown {
+				w := a.workspace(id)
+				label := cmp.Or(w.Shown, w.Name)
+				if w.Kind == "main" {
+					label = w.Project
+				}
+				row := a.navRowAt(c, "pin-"+id, a.selected == id, func() {
+					if w.Kind == "main" {
+						a.projectGlyph(c, a.projIcons[w.ProjectID], a.wsIcon(w))
+					} else {
+						ui.Icon(c, a.wsIcon(w)).FontSize(iconSize).TextColor(c.Theme().Accent).Shrink(0)
+					}
+				}, label, "", "", func() {
+					if _, status := a.terminalSummary(w.Terminals); status != "" {
+						statusGlyph(c, status, smallIcon())
+					}
+				})
+				row.Drag(tileDrag{id})
+				contextMenu(c, row, func(m *popMenu) { a.workspaceMenu(c, m, *w) })
+				if row.Clicked() {
+					a.selected = id
+				}
 			}
 		})
-	})
-}
-
-// placedTile 把一块磁贴摆到格子 slot 上，按住能拖；hidden 时是正拖着、空出来的那格。
-func (a *app) placedTile(c *ui.Context, place func(ui.Element, int) ui.Element, id string, slot int, hidden bool) {
-	cell := place(ui.Row(c.Key("cell-"+id)), slot)
-	if hidden {
-		cell.Opacity(0)
-	}
-	cell.Children(func() {
-		tile := a.topTile(c, id)
-		tile.Drag(tileDrag{id})
-		if tile.Dragging() && !hidden && !slices.Contains(globalTiles, id) {
-			// 固定的工作区拖出了顶上（拖回项目列表就取消固定），原处变淡；全局页面拖不走，不变淡
-			tile.Opacity(0.4)
+		if a.topSlot > 0 {
+			accent, slot := c.Theme().Accent, a.topSlot-1
+			area.DrawOver(func(p *ui.Painter, r ui.Rect) {
+				p.Fill(ui.Rect{X: r.X + navPad, Y: r.Y + float32(slot)*pinnedRowHeight(), W: r.W - 2*navPad, H: focusRing}, accent, 0)
+			})
 		}
 	})
 }
 
-// dropTile 把落在顶上的磁贴或工作区放进上一帧空出来的格子，返回新的显示顺序。
 func (a *app) dropTile(d topDrag, shown, order []string) []string {
 	id, own := d.topTarget(a)
 	hole := a.topSlot - 1
-	if id == "" || hole < 0 || (!own && (!a.pinnable(id) || len(order) >= topTilesMax)) {
+	if id == "" || hole < 0 || own && !slices.Contains(shown, id) || !own && (!a.pinnable(id) || len(order) >= topTilesMax) {
 		return shown
 	}
 	list := slices.DeleteFunc(slices.Clone(shown), func(x string) bool { return x == id })
 	list = slices.Insert(list, min(hole, len(list)), id)
-	// 不显示的（没有项目时的任务、常驻进程还没报上来的工作区）插回原来的位置，顺序不丢
 	next := slices.Clone(list)
 	for i, x := range order {
 		if !slices.Contains(next, x) {
 			next = slices.Insert(next, min(i, len(next)), x)
 		}
 	}
-	a.state.TopTiles = next
+	a.state.PinnedWorkspaces = next
 	a.saveState()
 	return list
 }
 
-// projectMain 是项目的主工作区（项目树里排第一个的），拖项目上来时固定它。
 func (a *app) projectMain(projectID string) string {
 	if ws := a.byProject[projectID]; len(ws) > 0 {
 		return ws[0].ID
 	}
 	return ""
-}
-
-// topTile 画一块磁贴：全局页面或固定的工作区。
-func (a *app) topTile(c *ui.Context, id string) ui.Element {
-	switch id {
-	case chatBoardID:
-		return a.chatSidebarItem(c)
-	case taskBoardID:
-		return a.taskSidebarItem(c)
-	case discBoardID:
-		return a.discSidebarItem(c)
-	case historyBoardID:
-		return a.historySidebarItem(c)
-	case skillsBoardID:
-		return a.skillsSidebarItem(c)
-	case mobileBoardID:
-		return a.mobileSidebarItem(c)
-	}
-	w := a.workspace(id)
-	if w == nil {
-		// 工作区刚被删（拖动途中、常驻进程还没报上来）：画一块空的，不解引用
-		return ui.Row(c)
-	}
-	return a.pinnedTile(c, *w)
-}
-
-// dropSlot 是拖工作区进来时空出来的格子：强调色描边加淡底。
-func dropSlot(c *ui.Context) {
-	t := c.Theme()
-	ui.Box(c).Height(tileHeight()).Grow(1).Basis(0).Radius(rControl).Background(colors(t).tint).
-		BorderWidth(focusRing, focusRing, focusRing, focusRing).BorderColor(t.Accent)
-}
-
-// pinnedTile 是一个固定的工作区：主工作区用项目的图标和名字，别的用工作区自己的。
-func (a *app) pinnedTile(c *ui.Context, w workspace) ui.Element {
-	label, glyph := cmp.Or(w.Shown, w.Name), a.wsIcon(&w)
-	icon := func() { ui.Icon(c, glyph).FontSize(iconSize).TextColor(c.Theme().Accent).Shrink(0) }
-	if w.Kind == "main" {
-		label = w.Project
-		icon = func() { a.projectGlyph(c, a.projIcons[w.ProjectID], glyph) }
-	}
-	tile := a.workspaceTile(c, "pin-"+w.ID, &w, icon, label)
-	if tile.Clicked() {
-		a.selected = w.ID
-	}
-	return tile
-}
-
-// workspaceTile 是顶上代表一个工作区的磁贴（固定的工作区、「聊天」）：选中这个工作区时高亮，
-// 右上角是它的终端里最要紧的状态，右键是工作区菜单；w 为 nil 时（聊天目录还不是项目）只有图标和名字。
-// 点了做什么由调用方决定。
-func (a *app) workspaceTile(c *ui.Context, key string, w *workspace, icon func(), label string) ui.Element {
-	var badge func()
-	if w != nil {
-		if _, status := a.terminalSummary(w.Terminals); status != "" {
-			badge = func() { statusGlyph(c, status, smallIcon()) }
-		}
-	}
-	// 不登记进方向键的顺序：项目树里还有它那一行，登记两次 navCur 会跳到后一处
-	tile := sideTile(c, key, w != nil && a.selected == w.ID, icon, label, badge)
-	if w != nil {
-		contextMenu(c, tile, func(m *popMenu) { a.workspaceMenu(c, m, *w) })
-	}
-	return tile
 }

@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"slices"
 	"time"
@@ -12,25 +11,37 @@ import (
 
 	"posse/internal/agent"
 	"posse/internal/errtext"
+	"posse/internal/rpc"
 	"posse/locales"
 )
 
-// 聊天磁贴：侧栏顶上的「聊天」切到聊天目录（默认 ~/Posse）的工作区，第一次点时建目录、加成项目。
+// 聊天导航切到目标主机的聊天工作区；第一次创建由目标常驻进程建目录、登记项目。
 // 在里面开的 agent 由常驻进程各自放进一个新的子文件夹（internal/agent/chat.go），普通终端在聊天目录本身。
 
 const chatBoardID = "chat"
 
-// chatPath 是聊天目录：启动时从 agents.json 读进 chatDir，设置里改了跟着换。
+// 远端目录只来自目标状态，不能把本机 home 或默认目录当作远端配置。
 func (a *app) chatPath() string {
-	if a.chatDir == "" {
+	if a.chatDir == "" && !a.remoteHost() {
 		a.chatDir = agent.ChatDir(a.home)
 	}
 	return a.chatDir
 }
 
+func (a *app) remoteHost() bool {
+	return a.viewID != "" && a.viewID != localHostID || a.c != nil && a.c.Remote || a.host != nil && a.host.id != localHostID
+}
+
 // chatWorkspace 是聊天目录对应的工作区，还没加成项目时是 nil。
 func (a *app) chatWorkspace() *workspace {
-	dir := filepath.Clean(a.chatPath())
+	path := a.chatPath()
+	if path == "" {
+		return nil
+	}
+	if a.remoteHost() && a.daemon.Chat != nil {
+		return a.workspace(a.daemon.Chat.WorkspaceID)
+	}
+	dir := filepath.Clean(path)
 	for i := range a.workspaces {
 		if w := &a.workspaces[i]; w.Kind == "main" && filepath.Clean(w.Path) == dir {
 			return w
@@ -47,8 +58,23 @@ func (a *app) isChat(id string) bool {
 // chatSidebarItem 是顶上的「聊天」磁贴。
 func (a *app) chatSidebarItem(c *ui.Context) ui.Element {
 	l := L(c)
-	icon := func() { ui.Icon(c, iconChat).FontSize(iconSize).TextColor(c.Theme().Accent) }
-	tile := a.workspaceTile(c, chatBoardID, a.chatWorkspace(), icon, l.ChatTitle())
+	var badge func()
+	w := a.chatWorkspace()
+	if w != nil {
+		if _, status := a.terminalSummary(w.Terminals); status != "" {
+			badge = func() { statusGlyph(c, status, smallIcon()) }
+		}
+	}
+	tile := navigationButton(c, chatBoardID, iconChat, l.ChatTitle(), a.displayed() == a && a.isChat(a.selected), badge).Tooltip(a.withKey(l.ChatTitle(), "newChat"))
+	if w != nil {
+		contextMenu(c, tile, func(m *popMenu) {
+			// 收集菜单项不能切页面；执行选中动作时先显示所属主机，确认框和请求才有正确上下文。
+			if m.chosen >= 0 && a.views != nil {
+				a.views.show(a.viewID)
+			}
+			a.workspaceMenu(c, m, *w)
+		})
+	}
 	if tile.Clicked() {
 		a.openChat(L(c), false)
 	}
@@ -58,6 +84,7 @@ func (a *app) chatSidebarItem(c *ui.Context) ui.Element {
 // openChat 切到聊天工作区（停在上次看的标签），fresh 时再开一个新聊天：沿用最近一次聊天的 agent，
 // 还没聊过时只切过去，空工作区里有选 agent 的卡片。聊天目录还不是项目时先建目录、加成项目。
 func (a *app) openChat(l locales.Messages, fresh bool) {
+	a = a.showModule(chatBoardID)
 	if w := a.chatWorkspace(); w != nil {
 		a.selected = w.ID
 		if fresh {
@@ -67,34 +94,34 @@ func (a *app) openChat(l locales.Messages, fresh bool) {
 		}
 		return
 	}
-	// 还没拿到项目列表时不知道它是不是已经加过；正在加的不重复加
-	if !a.loaded || a.chatAdding {
+	// 还没拿到项目列表时不知道它是不是已经加过；当前身份正在创建时不重复发请求。
+	if !a.loaded || a.chatAdding != nil && a.chatAdding.current() {
 		return
 	}
-	a.chatAdding = true
-	dir := a.chatPath()
+	r := a.request()
+	if !r.mayWrite() {
+		return
+	}
+	params := rpc.ChatEnsureParams{ExpectedPath: a.chatPath(), Name: l.ChatTitle()}
+	a.chatAdding = &r
 	go func() {
-		defer a.update(func() { a.chatAdding = false })
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			a.update(func() { a.err = l.ChatCreateFolderError(errtext.Text(err)) })
-			return
-		}
-		// 已经有叫「聊天」的项目时用目录名；目录已经是项目（常驻进程认的路径写法不同）时两次都失败，刷新后照样找得到
-		var err error
-		for _, params := range []map[string]any{{"path": dir, "name": l.ChatTitle()}, {"path": dir}} {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			err = a.c.Call(ctx, "project.add", params, nil)
-			cancel()
-			if err == nil {
-				break
+		defer a.update(func() {
+			if a.chatAdding == &r {
+				a.chatAdding = nil
 			}
-		}
-		a.refresh()
-		a.update(func() {
-			if w := a.chatWorkspace(); w != nil {
-				a.selected = w.ID
-			} else if err != nil {
+		})
+		ctx, cancel := context.WithTimeout(a.windowContext(), 10*time.Second)
+		var location rpc.ChatLocation
+		err := r.invoke(ctx, "chat.ensure", params, &location)
+		cancel()
+		r.refresh()
+		r.update(func() {
+			if err != nil {
 				a.err = l.ChatAddProjectError(errtext.Text(err))
+				return
+			}
+			if w := a.workspace(location.WorkspaceID); w != nil {
+				a.selected = w.ID
 			}
 		})
 	}()
@@ -112,20 +139,24 @@ func lastChatAgent(w *workspace) string {
 
 // chatFolderMenu 是聊天会话的右键菜单项：打开它的文件夹，或者把聊天里做出来的东西转成一个项目（原地登记，不挪目录）。
 func (a *app) chatFolderMenu(l locales.Messages, m *popMenu, term terminalInfo) {
-	if !agent.IsChatFolder(a.chatPath(), term.Dir) {
+	if a.chatPath() == "" || !agent.IsChatFolder(a.chatPath(), term.Dir) {
 		return
 	}
 	m.Separator()
-	if m.Item(l.ChatOpenFolder()).Icon(iconFolder).Chosen() {
+	if !a.remoteHost() && m.Item(l.ChatOpenFolder()).Icon(iconFolder).Chosen() {
 		if err := mygo.Shell.OpenPath(term.Dir); err != nil {
 			a.err = l.ChatOpenFolderError(errtext.Text(err))
 		}
 	}
 	if m.Item(l.ChatConvertProject()).Icon(iconFolderLink).Chosen() {
+		r := a.request()
+		if !r.mayWrite() {
+			return
+		}
 		dir := term.Dir
 		go func() {
-			if a.call("project.add", map[string]any{"path": dir}, nil, 10*time.Second) == nil {
-				a.refresh()
+			if r.call("project.add", map[string]any{"path": dir}, nil, 10*time.Second) == nil {
+				r.refresh()
 			}
 		}()
 	}

@@ -178,7 +178,7 @@ func previewHistory(a *app, query string) {
 		{Seq: 3, Role: "assistant", Text: "Caches 有 12G，Xcode 的 DerivedData 有 31G。先看看 Library/Caches 有多大，再决定清理磁盘上的哪些缓存：\n\n- DerivedData 可以整个删，下次编译会重建\n- 模拟器运行时用 xcrun simctl delete unavailable 清理", At: now.Add(-38 * time.Minute)},
 		{Seq: 4, Role: "user", Text: "DerivedData 删掉吧，模拟器先别动", At: now.Add(-30 * time.Minute)},
 	}}
-	h.detail.context, h.detail.contextOK = history.Context{Used: 372_480, Window: 1_000_000}, true
+	h.detail.Context = &history.Context{Used: 372_480, Window: 1_000_000}
 }
 
 // previewMarkdown 打开一个回复里有标题、表格、列表和代码的会话。
@@ -1692,8 +1692,8 @@ func TestColumnsReorderInColumn(t *testing.T) {
 // 拖分栏线：拖动途中各栏不变，松手才改；拖过头停在最小宽度；双击平分。
 func TestColumnsDividerDrag(t *testing.T) {
 	a, tt := twoColumnTester(t)
-	// 侧栏收起了，主区域从窗口左边开始，分栏线在左栏的右边
-	left := float32(0)
+	// 模块侧栏收起后，主区域仍需让出常驻图标栏。
+	left := navigationWidth()
 	inner := 1200 - left - 1
 	line := func() float32 { return left + a.tree.weight[0]*inner }
 	gx := line()

@@ -17,18 +17,19 @@ import (
 )
 
 // upgradeState 记着把常驻进程换成本窗口的包（daemon.handoff）的进度，按常驻进程的 pid 记：
-// 每个旧进程只自动试一次，失败了不反复试。
+// 每个旧进程只自动试一次；已接受操作尚未结束的 busy 会延迟重试。
 type upgradeState struct {
 	mu          sync.Mutex
 	tried       map[int]bool
 	unsupported map[int]bool // 旧常驻进程没有交接能力，只能重启
 	running     bool
+	retryAt     map[int]time.Time
 }
 
 func (u *upgradeState) begin(pid int, auto bool) bool {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	if u.running || u.unsupported[pid] || (auto && u.tried[pid]) {
+	if u.running || u.unsupported[pid] || (auto && (u.tried[pid] || time.Now().Before(u.retryAt[pid]))) {
 		return false
 	}
 	if u.tried == nil {
@@ -45,6 +46,17 @@ func (u *upgradeState) end(pid int, unsupported bool) {
 	if unsupported {
 		u.unsupported[pid] = true
 	}
+}
+
+func (u *upgradeState) deferBusy(pid int) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.running = false
+	delete(u.tried, pid)
+	if u.retryAt == nil {
+		u.retryAt = map[int]time.Time{}
+	}
+	u.retryAt[pid] = time.Now().Add(5 * time.Second)
 }
 
 // status 给设置页：正在更新、旧常驻进程不支持交接。
@@ -67,7 +79,7 @@ func buildTime(build string) (time.Time, bool) {
 // autoUpgrade 在轮询线程里调用：常驻进程的包比窗口的旧时自动交接。只在窗口的包更新时做，
 // 打开一个旧的 Posse.app 不会把常驻进程换回旧包。
 func (a *app) autoUpgrade(d daemonStatus) {
-	if d.Pid == 0 || d.Build == "" || d.Build == daemon.Build {
+	if a.c.Remote || d.Pid == 0 || d.Build == "" || d.Build == daemon.Build {
 		return
 	}
 	mine, ok1 := buildTime(daemon.Build)
@@ -80,7 +92,7 @@ func (a *app) autoUpgrade(d daemonStatus) {
 
 // upgradeDaemon 让常驻进程把终端交给用本窗口的包启动的新进程，终端不断。
 func (a *app) upgradeDaemon(m locales.Messages, pid int, auto bool) {
-	if !a.upgrade.begin(pid, auto) {
+	if a.c.Remote || !a.upgrade.begin(pid, auto) {
 		return
 	}
 	a.win.Update(func() {})
@@ -102,8 +114,13 @@ func (a *app) upgradeDaemon(m locales.Messages, pid int, auto bool) {
 		var re *rpc.Error
 		unsupported := errors.As(err, &re) && re.Code == rpc.CodeUnknown
 		// 别处（另一个窗口、posse daemon handoff）已经在交接：结果一样，不算失败
-		busy := errors.As(err, &re) && re.Code == rpc.CodeConflict
-		a.upgrade.end(pid, unsupported)
+		deferred := auto && errors.As(err, &re) && re.Code == rpc.CodeBusy
+		busy := errors.As(err, &re) && re.Code == rpc.CodeConflict || deferred
+		if deferred {
+			a.upgrade.deferBusy(pid)
+		} else {
+			a.upgrade.end(pid, unsupported)
+		}
 		a.win.Update(func() {
 			if err != nil && !unsupported && !busy {
 				a.err = m.UpgradeError(errtext.Text(err))

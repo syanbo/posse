@@ -24,6 +24,15 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	ch := &v.ch
 	switch {
 	case !v.repos.scanned:
+		if v.remote && v.repos.err != "" {
+			ui.Column(c).Padding(12, 16).Gap(6).Children(func() {
+				ui.Text(c, v.repos.err).FontSize(fsSmall).TextColor(t.Danger)
+				if pressable(textButton(c, L(c).CommonRefresh())).Disabled(v.repos.scanning || !a.targetGitReady()).Clicked() {
+					a.scanTargetRepos(v)
+				}
+			})
+			return
+		}
 		ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	case g.repo == "":
@@ -163,7 +172,7 @@ func (a *app) changesKeys(c *ui.Context, w *workspace, v *filesView, rows []chan
 	r := rows[files[cur]]
 	e := r.entry
 	switch {
-	case list.Shortcut(c, 0, ui.KeySpace):
+	case !a.remoteHost() && list.Shortcut(c, 0, ui.KeySpace):
 		r.g.setPicked(e, !r.g.picked(e))
 	case list.Shortcut(c, 0, ui.KeyEnter):
 		if statusLetter(e) != 'D' {
@@ -240,10 +249,10 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		if pressable(iconButtonSized(c, iconRefresh, L(c).CommonRefresh(), buttonBox(), iconSize)).Clicked() {
 			a.rescanRepos(v)
 		}
-		if v.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, a.withKey(L(c).GitRollbackEllipsis(), "rollback"), buttonBox(), iconSize)).Clicked() {
+		if !a.remoteHost() && v.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, a.withKey(L(c).GitRollbackEllipsis(), "rollback"), buttonBox(), iconSize)).Clicked() {
 			a.openRollback(v)
 		}
-		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, L(c).GitStashTip(), buttonBox(), iconSize)).Clicked() {
+		if !a.remoteHost() && g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, L(c).GitStashTip(), buttonBox(), iconSize)).Clicked() {
 			m := L(c)
 			a.prompt(promptReq{title: m.GitStashTitle(), body: m.GitStashBody(),
 				placeholder: m.GitStashMessage(), verb: m.GitStash(), optional: true, do: func(msg string, _ bool) {
@@ -291,7 +300,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			title := groupTitles[r.group](L(c))
 			disclosure(c, open, L(c).GitExpandGroup(title), L(c).GitCollapseGroup(title))
 			// 改动和未跟踪的组标题能一键全选、全不选
-			if r.group == groupChanged || r.group == groupUntracked {
+			if !a.remoteHost() && (r.group == groupChanged || r.group == groupUntracked) {
 				var in []gitx.Entry
 				for _, e := range g.status.Entries {
 					if !e.Conflict && e.Untracked == (r.group == groupUntracked) {
@@ -315,7 +324,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		return
 	}
 	if r.group == groupStash {
-		a.stashRow(c, v, r.stash)
+		a.stashRow(c, v, g, r.stash)
 		return
 	}
 	if r.dir {
@@ -340,7 +349,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			// 文件没有展开箭头，留出同样的宽度，勾选框和同一层的目录对齐
 			ui.Box(c).Width(miniBox()).Shrink(0)
 		}
-		if !e.Conflict {
+		if !a.remoteHost() && !e.Conflict {
 			state := pickNone
 			if g.picked(e) {
 				state = pickAll
@@ -382,6 +391,12 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	contextMenu(c, row, func(m *popMenu) {
 		if letter != 'D' && m.Item(L(c).GitOpenFile()).Chosen() {
 			a.openFile(w, g.absPath(e.Path), 0, [2]int{})
+		}
+		if a.remoteHost() {
+			if m.Item(L(c).CommonCopyPath()).Chosen() {
+				c.WriteClipboard(g.absPath(e.Path))
+			}
+			return
 		}
 		m.Separator()
 		switch {
@@ -434,7 +449,7 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 		if open == folds[r.path] {
 			folds[r.path] = !open
 		}
-		if r.group != groupConflict {
+		if !a.remoteHost() && r.group != groupConflict {
 			state := g.pickState(r.files)
 			if pickBox(c, "dir:"+r.path, r.path, state) {
 				g.setPickedAll(r.files, state != pickAll)
@@ -446,6 +461,12 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 		folds[r.path] = !folds[r.path]
 	}
 	contextMenu(c, row, func(m *popMenu) {
+		if a.remoteHost() {
+			if m.Item(L(c).CommonCopyPath()).Chosen() {
+				c.WriteClipboard(g.absPath(r.path))
+			}
+			return
+		}
 		if r.group != groupConflict {
 			label := L(c).GitRollbackEllipsis()
 			if r.group == groupUntracked {
@@ -472,15 +493,15 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 	})
 }
 
-func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
+func (a *app) stashRow(c *ui.Context, v *filesView, g *gitState, s gitx.Stash) {
 	t := c.Theme()
 	lm := L(c)
 	// 储藏是整个仓库共用的：别的 worktree 里存的也列在这里，标出分支，取回前先确认
 	other := ""
-	if head := v.git.status.Head; s.Branch != "" && head != "" && s.Branch != head {
+	if head := g.status.Head; s.Branch != "" && head != "" && s.Branch != head {
 		other = s.Branch
 	}
-	row := ui.Row(c.Key("stash:"+s.Ref)).Height(sz(28)).Margin(2, 6, 0, 6).Padding(0, 8, 0, 12).Gap(6).Radius(rRow).
+	row := ui.Row(c.Key("stash:"+g.repo+":"+s.Hash+":"+s.Ref)).Height(sz(28)).Margin(2, 6, 0, 6).Padding(0, 8, 0, 12).Gap(6).Radius(rRow).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(s.Message)
 	selectedBg(c, row, false)
 	row.Children(func() {
@@ -491,9 +512,11 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 		}
 		ui.Text(c, ago(L(c), s.When)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 	})
+	if a.remoteHost() {
+		return
+	}
 	owner := a.stashOwner(v, other)
-	// 储藏是当前仓库的；确认框晚些才回来，那时当前仓库可能换了
-	g := v.git
+	// 储藏是条目所属仓库的；确认框晚些才回来，那时当前仓库可能换了
 	take := func(what string, fn func(ctx context.Context, root string) error) {
 		if other == "" {
 			a.gitDo(lm, g, what, fn)
@@ -594,6 +617,9 @@ func (a *app) operationBanner(c *ui.Context, w *workspace, v *filesView, g *gitS
 	ui.Column(c.Key("op:"+g.repo)).Shrink(0).Margin(2, 12, 8, 12).Padding(12, 12).Gap(8).Radius(rControl).Background(t.Surface).Children(func() {
 		bannerRepo(c, v, g)
 		ui.Text(c, msg).FontSize(fsSmall).LineHeight(1.45)
+		if a.remoteHost() {
+			return
+		}
 		ui.Row(c).Gap(6).Children(func() {
 			cont := pressable(accentButton(c, m.CommonContinue()))
 			if conflicts > 0 {
@@ -709,7 +735,7 @@ func (a *app) repoHeaderRow(c *ui.Context, w *workspace, v *filesView, r changeR
 				in = append(in, e)
 			}
 		}
-		if len(in) > 0 {
+		if !a.remoteHost() && len(in) > 0 {
 			state := g.pickState(in)
 			if pickBox(c, "repo:"+g.repo, name, state) {
 				g.setPickedAll(in, state != pickAll)
@@ -732,6 +758,12 @@ func (a *app) repoHeaderRow(c *ui.Context, w *workspace, v *filesView, r changeR
 		trackBadge(c, g.status.Ahead, g.status.Behind, true)
 	})
 	contextMenu(c, head, func(m *popMenu) {
+		if a.remoteHost() {
+			if m.Item(L(c).CommonCopyPath()).Chosen() {
+				c.WriteClipboard(g.repo)
+			}
+			return
+		}
 		if m.Item(L(c).GitRollbackEllipsis()).Chosen() {
 			a.openRollbackFor(g, nil, nil)
 		}
@@ -763,6 +795,9 @@ func stashTitle(msg string) string {
 
 // commitBox 是左栏底部的提交框：提交信息、修改上一次提交、提交按钮。勾了几个仓库的文件时在各仓库分别提交。
 func (a *app) commitBox(c *ui.Context, v *filesView) {
+	if a.remoteHost() {
+		return
+	}
 	ch := &v.ch
 	m := L(c)
 	targets, picked := v.commitTargets()
@@ -836,10 +871,12 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 	df.state.Bindings = a.editorBindings()
 	// 左右对照时照 WebStorm 在中间分隔线旁给每处改动放 >>，上下合并时只有悬停的那处有"回滚"
 	split := df.state.Layout == editor.DiffSplit
-	df.state.HunkActions = df.worktree() && !split
+	writable := df.worktree() && !a.remoteHost() && a.request().mayWrite()
+	df.state.HunkActions = writable && !split
+	df.state.RenderHunkActions = nil
 	df.state.RenderHunkMark = nil
 	df.state.OldNumbersRight = true
-	if df.worktree() && split {
+	if writable && split {
 		df.state.RenderHunkMark = func(c *ui.Context, btn ui.Element, act *editor.DiffHunkActions) {
 			t := c.Theme()
 			btn.Width(24).Radius(rSmall).AlignItems(ui.Center).Justify(ui.Center).Label(L(c).GitRollbackChange()).Tooltip(L(c).GitRollbackChange())
@@ -852,7 +889,7 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 			}
 		}
 	}
-	if df.worktree() {
+	if writable {
 		df.state.RenderHunkActions = func(c *ui.Context, bar ui.Element, act *editor.DiffHunkActions) {
 			t := c.Theme()
 			bar.Row().Gap(4)
@@ -961,6 +998,9 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		if !df.plainChanges() {
 			ui.Text(c, df.tabLabel(L(c))).FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(rSmall).Background(t.Surface).Shrink(0)
 		}
+		if base := df.worktreeBase; base != nil && base.file.Kind == "gitlink" && base.file.Dirty {
+			ui.Text(c, L(c).LogUncommitted()).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+		}
 		if d.kind == docDiff {
 			n := len(df.state.Hunks())
 			added, deleted := df.state.Stats()
@@ -988,10 +1028,14 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				a.toggleIgnoreSpace(d)
 			}
 		}
-		if df.worktree() && pressable(iconButtonSized(c, iconRollback, L(c).GitRollbackFile(), compactBox(), smallIcon())).Clicked() {
+		if df.worktreeBase != nil && pressable(iconButtonSized(c, iconRefresh, L(c).CompareRefresh(), compactBox(), smallIcon())).Clicked() {
+			a.refreshWorktreeDiff(w, v, d)
+		}
+		if df.worktree() && !a.remoteHost() && a.request().mayWrite() && pressable(iconButtonSized(c, iconRollback, L(c).GitRollbackFile(), compactBox(), smallIcon())).Clicked() {
 			a.rollbackDiffFile(w, v, d)
 		}
-		if pressable(iconButtonSized(c, iconOpen, a.withKey(L(c).GitOpenInEditor(), "diffOpenFile"), compactBox(), smallIcon())).Clicked() {
+		canOpen := df.worktreeBase == nil || df.worktreeBase.file.Kind == "file"
+		if pressable(iconButtonSized(c, iconOpen, a.withKey(L(c).GitOpenInEditor(), "diffOpenFile"), compactBox(), smallIcon())).Disabled(!canOpen).Clicked() {
 			a.diffToEditor(w, v, d)
 		}
 	})
@@ -1000,6 +1044,9 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 // diffToEditor 是 F4：在编辑器里打开文件，停在当前改动的那一行。
 func (a *app) diffToEditor(w *workspace, v *filesView, d *fileDoc) {
 	df := d.diff
+	if df.worktreeBase != nil && df.worktreeBase.file.Kind != "file" {
+		return
+	}
 	line := 1
 	if hunks := df.state.Hunks(); df.hunk >= 0 && df.hunk < len(hunks) {
 		line = hunks[df.hunk].NewStart + 1

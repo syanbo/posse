@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -24,6 +25,12 @@ import (
 // http(s) 的图片照 GitHub 下载；data: 地址直接解。
 type mdImages struct {
 	dir, root string
+	// 远端文档用回调接管文件来源，避免同名路径或 ~/ 被解释成本机文件。
+	readLocal func(string) ([]byte, string, error)
+	request   appRequest
+	version   uint64
+	ctx       context.Context
+	cancel    context.CancelFunc
 	mu        sync.Mutex
 	m         map[string]*mdImgEntry
 	closed    chan struct{} // 文档关掉时关闭：排队等下载名额的图不再发请求
@@ -33,7 +40,12 @@ type mdImages struct {
 // errMDClosed 是文档关掉了、没去下载的图。不会显示：文档已经不在了。
 var errMDClosed = errors.New("document closed")
 
-func (l *mdImages) close() { l.closeOnce.Do(func() { close(l.closed) }) }
+func (l *mdImages) close() {
+	l.closeOnce.Do(func() {
+		l.cancel()
+		close(l.closed)
+	})
+}
 
 type mdImgEntry struct {
 	src  ui.ImageSource
@@ -54,6 +66,7 @@ const (
 var errSVGText = errors.New("svg with text")
 
 var mdHTTP = &http.Client{Timeout: mdFetchTime}
+var mdTargetHTTP = targetImageHTTP()
 
 // mdFetchSlots 是同时下载的远程图片数：一篇文档里几十张徽章、截图时不一起发请求、一起占着内存（每张最多 mdMaxDownload）。
 // 排队不算进超时，拿到名额才开始计时
@@ -62,7 +75,8 @@ const mdFetchSlots = 4
 var mdFetching = make(chan struct{}, mdFetchSlots)
 
 func newMDImages(dir, root string) *mdImages {
-	return &mdImages{dir: dir, root: root, m: map[string]*mdImgEntry{}, closed: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &mdImages{dir: dir, root: root, ctx: ctx, cancel: cancel, m: map[string]*mdImgEntry{}, closed: make(chan struct{})}
 }
 
 // get 返回图片现在的样子，第一次问时在后台开始载入，载完重画。
@@ -76,6 +90,10 @@ func (l *mdImages) get(c *ui.Context, src string) mdImgEntry {
 		go func() {
 			img, w, h, err := l.load(src)
 			l.mu.Lock()
+			if l.ctx.Err() != nil {
+				l.mu.Unlock()
+				return
+			}
 			e.src, e.w, e.h, e.err, e.done = img, w, h, err, true
 			l.mu.Unlock()
 			services.Invalidate()
@@ -109,6 +127,9 @@ func (l *mdImages) read(src string) ([]byte, string, error) {
 		s, err := url.PathUnescape(body)
 		return []byte(s), head, err
 	case webURL(src):
+		if l.request.app != nil && localImageURL(src) {
+			return nil, "", targetFileError("files.httpResource")
+		}
 		// 排队时文档关了就不下了，让出位置；已经在下载的照常下完
 		select {
 		case mdFetching <- struct{}{}:
@@ -121,7 +142,11 @@ func (l *mdImages) read(src string) ([]byte, string, error) {
 			return nil, "", errMDClosed
 		default:
 		}
-		resp, err := mdHTTP.Get(src)
+		client := mdHTTP
+		if l.request.app != nil {
+			client = mdTargetHTTP
+		}
+		resp, err := client.Get(src)
 		if err != nil {
 			return nil, "", err
 		}
@@ -136,6 +161,9 @@ func (l *mdImages) read(src string) ([]byte, string, error) {
 		return b, resp.Header.Get("Content-Type") + " " + resp.Request.URL.Path, err
 	case strings.Contains(src, "://") && !strings.HasPrefix(src, "file://"):
 		return nil, "", errors.New("unsupported image url")
+	}
+	if l.readLocal != nil {
+		return l.readLocal(src)
 	}
 	p := strings.TrimPrefix(strings.TrimPrefix(src, "file://"), "file:")
 	// GitHub 上常写 x.png?raw=true，本地文件不带这些

@@ -113,6 +113,8 @@ func TestFilesTabOpenEditSave(t *testing.T) {
 	if !a.filesPanelOpen() || v.side != sideFiles {
 		t.Fatal("⇧⌘E should open the files panel on the tree")
 	}
+	// 动画按测试时钟推进，目录读取的超时不应包含逐帧等待动画。
+	settle(tt)
 	until(t, tt, "tree", func() bool { return v.tree.Loaded(root) && tt.HasText("main.go") && a.filesPanelShown == 1 })
 	// 选中文件标签：不被换回第一个终端，终端断开接入
 	if a.activeTerm[w.ID] != filesTabID || a.panes[0] != nil {
@@ -155,7 +157,7 @@ func TestFilesTabOpenEditSave(t *testing.T) {
 		t.Fatalf("modified=%v dirty=%d", d.isModified(), a.dirtyCount.Load())
 	}
 	tt.Key(ui.Cmd, ui.KeyS)
-	tt.Frame()
+	until(t, tt, "save", func() bool { return d.save == nil && !d.isModified() })
 	if b, _ := os.ReadFile(path); string(b) != "// edited\n"+sampleGo {
 		t.Fatalf("saved %q", b)
 	}
@@ -192,7 +194,7 @@ func TestFilesTabOpenEditSave(t *testing.T) {
 	replace("package main // agent\n")
 	until(t, tt, "conflict", func() bool { return d.conflict && tt.HasText("保留我的") })
 	tt.Key(ui.Cmd, ui.KeyS)
-	tt.Frame()
+	until(t, tt, "save conflict", func() bool { return a.confirming })
 	if !a.confirming {
 		t.Fatal("saving over an outside change should ask first")
 	}
@@ -302,6 +304,8 @@ func TestQuickOpenAndSearch(t *testing.T) {
 	if !tt.HasText("3 个文件里有 4 行") {
 		t.Fatalf("status: %v", tt.Texts())
 	}
+	// 搜索可能先于侧栏展开完成，点击前让测试时钟走完动画。
+	settle(tt)
 	// 点命中跳到那一行并选中命中的文字
 	if err := tt.Click("func Search() {}"); err != nil {
 		t.Fatal(err)
@@ -511,7 +515,7 @@ func TestFilesPanelHistoryTab(t *testing.T) {
 	filesWorkspace(t, a)
 	w := &a.workspaces[0]
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")} // 历史会去查会话，连不上就报错
-	// 侧栏里也有"历史"，收起它，点到的才是文件栏的页签
+	// 全局历史入口常驻；文件栏的历史在文件页签左边。
 	a.state.SidebarHidden = true
 	tt := newTester(a.build, 1200, 760)
 	a.openFilesPanel(w, sideChanges)
@@ -523,9 +527,11 @@ func TestFilesPanelHistoryTab(t *testing.T) {
 	if !tt.HasText("改动") {
 		t.Fatal("files tabs missing")
 	}
-	if err := tt.Click("历史"); err != nil {
-		t.Fatal(err)
+	r, ok := tt.Find("文件")
+	if !ok {
+		t.Fatal("file panel tab missing")
 	}
+	tt.ClickAt(r.X+r.W/2-r.W-4, r.Y+r.H/2)
 	tt.Frame()
 	if a.state.FilesPanelTab != tabHistory || tt.HasText("改动") {
 		t.Fatalf("history tab: %q", a.state.FilesPanelTab)
@@ -1183,11 +1189,14 @@ func TestTrashFromTree(t *testing.T) {
 	w := &a.workspaces[0]
 	tt := newTester(a.build, 1200, 760)
 	a.openFilesPanel(w, sideFiles)
+	tt.Frame()
+	settle(tt)
 	until(t, tt, "tree", func() bool { return tt.HasText("main.go") && a.filesPanelShown == 1 })
 	if err := tt.RightClick("main.go"); err != nil {
 		t.Fatal(err)
 	}
 	chooseMenu(t, tt, "删除…")
+	until(t, tt, "trash confirmation", func() bool { return a.confirming })
 	if !a.confirming || a.confirmTitle != "把 main.go 移到废纸篓？" || a.confirmBody != "文件会移到废纸篓，可以从那里找回。" {
 		t.Fatalf("confirm %v %q %q", a.confirming, a.confirmTitle, a.confirmBody)
 	}
@@ -1495,7 +1504,7 @@ func TestRelocateKeepsUnsavedEdits(t *testing.T) {
 	if d.path != filepath.Join(moved, "README.md") || !d.isModified() {
 		t.Fatalf("doc %s modified %v", d.path, d.isModified())
 	}
-	if !a.saveDoc(L(nil), d, false) {
+	if !waitSave(t, []*app{a}, func(done func(bool)) { a.saveDoc(L(nil), d, done) }) {
 		t.Fatalf("save failed: %s", a.err)
 	}
 	b, _ := os.ReadFile(filepath.Join(moved, "README.md"))

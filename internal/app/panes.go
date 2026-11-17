@@ -6,7 +6,22 @@ import "slices"
 func (a *app) focusView() *termView { return a.panes[a.pane] }
 
 // live 报告 v 还接入着：没被切走，也没因重新接入换成新的视图。回调和后台任务回来时用它判断还能不能动 v。
-func (a *app) live(v *termView) bool { return v != nil && slices.Contains(a.panes[:], v) }
+func (a *app) live(v *termView) bool {
+	return v != nil && slices.Contains(a.panes[:], v) && v.current()
+}
+
+func (v *termView) current() bool {
+	return v.request.app == nil || v.request.current()
+}
+
+func (a *app) rememberFind(v *termView) {
+	if v.find.open || v.find.query != "" {
+		if a.carryFind == nil {
+			a.carryFind = map[string]termFind{}
+		}
+		a.carryFind[v.id] = v.find
+	}
+}
 
 // showing 报告终端正接入在主区域的某一格里。
 func (a *app) showing(id string) bool {
@@ -33,7 +48,7 @@ func (a *app) ensurePanes(ids [maxColumns]string) {
 	var next [maxColumns]*termView
 	for i, id := range ids {
 		for j, v := range old {
-			if id != "" && v != nil && v.id == id {
+			if id != "" && v != nil && v.id == id && v.current() {
 				next[i], old[j] = v, nil
 				break
 			}
@@ -41,6 +56,9 @@ func (a *app) ensurePanes(ids [maxColumns]string) {
 	}
 	for _, v := range old {
 		if v != nil {
+			if !v.current() && slices.Contains(ids[:], v.id) {
+				a.rememberFind(v)
+			}
 			v.term.Close()
 			a.dropPaneState(v.id)
 		}

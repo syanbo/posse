@@ -232,6 +232,14 @@ type gitOpRecord struct {
 	runs   []gitx.Run
 	repeat int
 	since  time.Time
+	target *targetFetch
+}
+
+func (o gitOpRecord) key() any {
+	if o.target != nil {
+		return o.target.key()
+	}
+	return o.runs[0].ID
 }
 
 func (o gitOpRecord) failed() bool {
@@ -393,6 +401,14 @@ func (a *app) projectRuns(projectID string) []gitx.Run {
 // projectConsoleErr 报告项目里有没有没看过的失败命令；clear 时顺带标成看过。
 func (a *app) projectConsoleErr(projectID string, clear bool) bool {
 	found := false
+	for _, s := range a.targetFetches {
+		if s.project == projectID && !s.seen && (s.unknown || s.done && (s.result == nil || s.result.Status != "succeeded")) {
+			found = true
+			if clear {
+				s.seen = true
+			}
+		}
+	}
 	for dir := range a.consoleErr {
 		if w := a.runWorkspace(dir); w != nil && w.ProjectID == projectID {
 			found = true
@@ -437,6 +453,9 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 	a.projectConsoleErr(w.ProjectID, true)
 	runs := a.projectRuns(w.ProjectID)
 	ops := foldGitOps(groupGitRuns(runs))
+	targetOps := a.fetchConsole(w.ProjectID)
+	ops = append(ops, targetOps...)
+	slices.SortStableFunc(ops, func(a, b gitOpRecord) int { return a.since.Compare(b.since) })
 	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, L(c).GitConsoleWorkspaces(w.Project)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		ui.Icon(c, iconInfo).FontSize(smallIcon()).TextColor(t.TextMuted).Shrink(0).
@@ -452,11 +471,14 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 			a.saveState()
 		}
 	})
+	if a.typedFetch() || len(targetOps) > 0 {
+		ui.Text(c, L(c).FetchConsoleScope()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 16)
+	}
 	if len(ops) == 0 {
 		ui.Text(c, L(c).GitConsoleEmpty()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	}
-	v.consoleList.Key = func(i int) any { return ops[i].runs[0].ID }
+	v.consoleList.Key = func(i int) any { return ops[i].key() }
 	ui.List(c, &v.consoleList, len(ops), func(i int) {
 		day := consoleDay(L(c), ops[i].since)
 		if i > 0 && consoleDay(L(c), ops[i-1].since) == day {
@@ -464,8 +486,14 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 		}
 		a.gitOpRow(c, ops[i], day)
 	}).Grow(1).Padding(0, 0, 8, 0)
-	if last := runs[len(runs)-1]; last.ID != v.consoleLast || last.Done != v.consoleDone {
-		v.consoleLast, v.consoleDone = last.ID, last.Done
+	last := ops[len(ops)-1]
+	key, done := last.key(), last.target != nil && last.target.done
+	if last.target == nil {
+		run := last.runs[len(last.runs)-1]
+		key, done = run.ID, run.Done
+	}
+	if key != v.consoleLast || done != v.consoleDone {
+		v.consoleLast, v.consoleDone = key, done
 		v.consoleList.ScrollIntoView(len(ops) - 1)
 	}
 }
@@ -473,10 +501,14 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 // gitOpRow 是一个操作：左边是结果图标，然后是操作名、工作区，右边是时间；下面和操作名对齐列出它的 git 命令。
 // day 非空时先画一行日期，隔开不同的天。
 func (a *app) gitOpRow(c *ui.Context, op gitOpRecord, day string) {
+	if op.target != nil {
+		a.fetchConsoleRow(c, op.target, day)
+		return
+	}
 	t := c.Theme()
 	p := colors(t)
 	first, last := op.runs[0], op.runs[len(op.runs)-1]
-	ui.Column(c.Key(first.ID)).Shrink(0).Children(func() {
+	ui.Column(c.Key(op.key())).Shrink(0).Children(func() {
 		if day != "" {
 			ui.Text(c, day).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Padding(12, 16, 4, 16)
 		}
@@ -619,6 +651,13 @@ func quoteArgs(args []string) string {
 
 // pollGitTrace 在轮询里调用：常驻进程的序号变了就取新的终端 git 命令。序号变小说明记录文件没了，从头取。
 func (a *app) pollGitTrace(ctx context.Context, seq int64) {
+	a.pollGitTraceRequest(ctx, seq, a.request())
+}
+
+func (a *app) pollGitTraceRequest(ctx context.Context, seq int64, q appRequest) {
+	if !q.current() {
+		return
+	}
 	if seq == a.traceSeq {
 		a.traceLoaded = true
 		return
@@ -631,12 +670,12 @@ func (a *app) pollGitTrace(ctx context.Context, seq int64) {
 		Records []termGitRun
 		Seq     int64
 	}
-	if a.c.Call(ctx, "git.trace", map[string]any{"after": after}, &res) != nil {
+	if q.invoke(ctx, "git.trace", map[string]any{"after": after}, &res) != nil || !q.current() {
 		return
 	}
 	// 取到了才算读过：第一次失败后取回的旧记录不当成新命令
 	initial := !a.traceLoaded
 	a.traceLoaded = true
 	a.traceSeq = res.Seq
-	a.update(func() { a.addTermRuns(res.Records, initial) })
+	q.update(func() { a.addTermRuns(res.Records, initial) })
 }

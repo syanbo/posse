@@ -48,8 +48,16 @@ func (a *app) build(c *ui.Context) {
 		a.saveState()
 	}
 	w := a.workspace(a.selected)
+	if w != nil && a.remoteHost() {
+		// 首次读取失败时还没有分支按钮，仍需约下一帧才能重试。
+		c.After(gitPollEvery)
+	}
 	if w != nil {
 		a.lastWS = w.ID
+		if !a.isChat(w.ID) && a.state.LastWorkspace != w.ID {
+			a.state.LastWorkspace = w.ID
+			a.saveState()
+		}
 	}
 	a.cols, a.split, a.pane = a.cols[:0], false, 0
 	if w != nil {
@@ -66,6 +74,27 @@ func (a *app) build(c *ui.Context) {
 	a.shortcuts(c, w, cur)
 	// 看不见的文件内容放掉文件清单，再显示时重列；快速打开要用清单
 	for id, v := range a.files {
+		if v.remote {
+			for _, g := range v.repos.list {
+				if g.baseTrack != nil {
+					g.baseTrack.drawn = false
+				}
+			}
+			for _, d := range v.docs {
+				if d.diff != nil && d.diff.worktreeBase != nil {
+					d.diff.drawn = false
+				}
+				if d.comp != nil {
+					d.comp.drawn = false
+				}
+				if d.blame != nil {
+					d.blame.drawn = false
+				}
+			}
+		}
+		if (w == nil || id != w.ID) && v.repos.request.app != nil {
+			v.cancelGitReads()
+		}
 		if w == nil || id != w.ID || !a.filesShown(w) && !(a.quick.open && a.quick.ws == id) {
 			v.list = nil
 		}
@@ -77,11 +106,12 @@ func (a *app) build(c *ui.Context) {
 	// 收起、展开时侧栏从左边缘滑出滑进。主区域只在展开开始、收起结束时改一次宽度，
 	// 免得终端里的程序跟着动画反复按新列数重排（和右边的文件栏一样）
 	open := float32(1)
-	if a.state.SidebarHidden {
+	if a.state.SidebarHidden || !a.hasContextSidebar() {
 		open = 0
 	}
 	a.sidebarShown = root.AnimateTo("sidebar", open, ui.Animation{Duration: 200 * time.Millisecond, Ease: ui.EaseOut})
 	root.Children(func() {
+		a.navigation(c)
 		if a.sidebarSlot() {
 			width := a.sidebarWidth() + 1
 			ui.Box(c).Width(width).Shrink(0).Clip().Background(p.side).Children(func() {
@@ -114,10 +144,13 @@ func (a *app) build(c *ui.Context) {
 					bw = w
 				}
 			})
+			if !a.sidebarSlot() {
+				a.sidebarNotices(c)
+			}
 			a.statusBar(c, bw)
 		})
 		// 最后画，压在分隔线和主区域上面，才接得到分隔线两侧的拖动
-		if !a.state.SidebarHidden {
+		if a.hasContextSidebar() && !a.state.SidebarHidden {
 			a.sidebarGrip(c)
 		}
 	})
@@ -125,13 +158,33 @@ func (a *app) build(c *ui.Context) {
 	// 侧栏不占位置时跟在应用名后面，好再点开
 	ui.Row(c).Absolute().Top(0).Left(c.TitleBar().Left + titleGap).Height(titleHeight(c)).Gap(appNameGap).AlignItems(ui.Center).Children(func() {
 		titleText(c, appName(), fsBody).Width(appNameWidth(c)).Shrink(0)
-		if !a.sidebarSlot() {
+		if a.hasContextSidebar() && !a.sidebarSlot() {
 			a.sidebarButton(c)
 		}
 	})
+	for _, v := range a.files {
+		if v.remote {
+			for _, g := range v.repos.list {
+				if g.baseTrack != nil && !g.baseTrack.drawn {
+					g.cancelTargetBase()
+				}
+			}
+			for _, d := range v.docs {
+				if d.diff != nil && d.diff.worktreeBase != nil && !d.diff.drawn {
+					d.diff.cancelWorktreeDiff()
+				}
+				if d.comp != nil && !d.comp.drawn {
+					d.comp.cancelTargetCompare()
+				}
+				if d.blame != nil && !d.blame.drawn {
+					d.blame.cancelTargetBlame()
+				}
+			}
+		}
+	}
 	// 图片面板这一帧没画（收起了、换到别的页面或普通终端）就放掉位图
 	if !a.imagesDrawn && a.images.term != "" {
-		a.images = imagesView{}
+		a.closeImages()
 	}
 	a.newWorkspaceDialog(c)
 	a.dispatchDialog(c)
@@ -155,6 +208,8 @@ func (a *app) build(c *ui.Context) {
 	a.skillNewDialog(c)
 	a.projectIconDialog(c)
 	a.sysMenuView(c)
+	a.targetDirectoryDialog(c)
+	a.sshAuthDialog(c)
 }
 
 func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
@@ -239,7 +294,7 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		v := a.filesFor(w)
 		a.gitShortcuts(c, w, v)
 		if a.pressed(c, "save") && v.cur != nil {
-			a.saveDoc(L(c), v.cur, false)
+			a.saveDoc(L(c), v.cur, nil)
 		}
 		if v.cur != nil && isJSON(v.cur.path) && a.pressed(c, "formatJSON") {
 			a.formatJSON(L(c), v.cur)
@@ -331,14 +386,16 @@ func (a *app) closeBoard() {
 	case taskBoardID:
 		a.detail, a.taskSel, a.taskHome, a.taskScroll = nil, "", false, ""
 	case discBoardID:
-		// 放掉读进来的消息，再打开时重读；草稿跟着讨论走，关页面时不留
-		removePasted(a.disc.atts)
-		a.disc = discBoard{list: a.disc.list}
+		// 离开页面停止取详情，草稿和附件仍属于原讨论。
 		a.setWantedDisc("", 0)
 	case mobileBoardID:
 		a.mobile.devices = nil
 	case skillsBoardID:
 		a.releaseSkills()
+	}
+	if a.moduleOwner(workspacesBoardID) != a {
+		a.openWorkspaces()
+		return
 	}
 	next := a.lastWS
 	if a.workspace(next) == nil {
@@ -356,15 +413,6 @@ func (a *app) closeBoardButton(c *ui.Context) {
 		a.closeBoard()
 	}
 }
-
-// 侧栏的宽度，拖右边缘调整，拖过的照拖的宽度；默认宽度和上限跟着界面字号缩放。
-// 下限由顶上的磁贴算：最窄时一行四块正好是正方形（宽等于 tileHeight，跟着字号），再窄名字就截得认不出了；
-// 间隔和其他间距一样不跟字号。拉宽时磁贴跟着变宽。
-func sidebarDefault() float32 { return max(sz(272), sidebarMin()) }
-func sidebarMin() float32 {
-	return topTilesPerRow*tileHeight() + (topTilesPerRow+1)*tileGap
-}
-func sidebarMax() float32 { return sz(420) }
 
 func (a *app) sidebarWidth() float32 {
 	w := a.state.SidebarWidth
@@ -391,7 +439,9 @@ func (a *app) sidebarButton(c *ui.Context) {
 }
 
 // sidebarSlot 报告侧栏占不占位置：展开着，或者收起动画还没走完。
-func (a *app) sidebarSlot() bool { return !a.state.SidebarHidden || a.sidebarShown > 0 }
+func (a *app) sidebarSlot() bool {
+	return a.hasContextSidebar() && (!a.state.SidebarHidden || a.sidebarShown > 0)
+}
 
 // 红绿灯右边的应用名占的宽度（跟着界面字号），和应用名加侧栏开关一共占的宽度。
 const (
@@ -428,12 +478,12 @@ func (a *app) barInset(c *ui.Context) float32 {
 	if a.sidebarSlot() {
 		return 0
 	}
-	return c.TitleBar().Left + titleGap + titleLead(c)
+	return max(0, c.TitleBar().Left+titleGap+titleLead(c)-navigationWidth())
 }
 
 // sidebarGrip 是侧栏右边缘的拖动条，松手才写 ui.json。
 func (a *app) sidebarGrip(c *ui.Context) {
-	grip := ui.Box(c.Key("sidebar-grip")).Absolute().Top(0).Bottom(0).Left(a.sidebarWidth() - 2).Width(6).Cursor(ui.CursorResizeEW)
+	grip := ui.Box(c.Key("sidebar-grip")).Absolute().Top(0).Bottom(0).Left(navigationWidth() + a.sidebarWidth() - 2).Width(6).Cursor(ui.CursorResizeEW)
 	if dx, _, held := grip.Dragged(); held {
 		a.state.SidebarWidth = min(max(a.sidebarWidth()+dx, sidebarMin()), sidebarMax())
 		a.resizingSide = true
@@ -457,21 +507,32 @@ func titleHeight(c *ui.Context) float32 { return max(c.TitleBar().Height, 40) }
 func (a *app) sidebar(c *ui.Context) {
 	t := c.Theme()
 	bar := c.TitleBar()
-	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, iconBarPad(), 0, bar.Left+titleGap).DragWindow().AlignItems(ui.Center).
+	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, iconBarPad(), 0, max(0, bar.Left+titleGap-navigationWidth())).DragWindow().AlignItems(ui.Center).
 		BorderWidth(0, 0, hairline, 0).BorderColor(colors(t).line).Children(func() {
 		// 应用名浮在这里（见 build），留出它的位置
 		ui.Box(c).Width(appNameWidth(c)).Shrink(0)
 		ui.Spacer(c)
 		a.sidebarButton(c)
 	})
-	if !a.loaded {
-		msg, color := L(c).SidebarConnecting(), t.TextMuted
-		if a.err != "" {
-			msg, color = L(c).SidebarConnectError(a.err), t.Danger
-		}
-		ui.Text(c, msg).FontSize(fsSmall).TextColor(color).Padding(6, 16)
-	}
 	a.navOrder, a.navCur = a.navOrder[:0], -1
+	defer a.sidebarNotices(c)
+	if a.selected == discBoardID {
+		a.discussionSidebar(c)
+		return
+	}
+	if a.isChat(a.selected) {
+		nav := ui.Scroll(c).Grow(1).MinHeight(0).Focusable().Label(L(c).ChatTitle())
+		nav.Children(func() {
+			ui.Column(c).Padding(6, navEnd, 12, trafficLightX-navPad).Children(func() {
+				if w := a.chatWorkspace(); w != nil {
+					a.sidebarItem(c, *w, L(c).ChatTitle(), false, false, nil)
+					a.sessionRows(c, *w, sidebarSessions(w.Terminals), nil)
+				}
+			})
+		})
+		a.sidebarKeys(nav)
+		return
+	}
 	a.topTiles(c)
 	if len(a.projects) > 0 {
 		a.sidebarGroupSwitch(c)
@@ -502,7 +563,11 @@ func (a *app) sidebar(c *ui.Context) {
 			}
 		})
 	})
-	// 侧栏有焦点时，上下方向键在看得见的行之间移动
+	a.sidebarKeys(nav)
+}
+
+// 聊天和项目树共用焦点路由，方向键只在当前列表的可见行之间移动。
+func (a *app) sidebarKeys(nav ui.Element) {
 	if n := len(a.navOrder); n > 0 {
 		i, to := a.navCur, -1
 		switch {
@@ -521,11 +586,6 @@ func (a *app) sidebar(c *ui.Context) {
 			}
 		}
 	}
-	a.staleBar(c)
-	a.updateBar(c)
-	a.posseSkillsBar(c)
-	a.errorBar(c)
-	a.footer(c)
 }
 
 // projectItem 是侧栏里的一个项目。只有主工作区时项目行就是它，agent 会话缩进在下面；
@@ -1248,60 +1308,14 @@ func dropMark(c *ui.Context, e ui.Element, after, across bool) {
 	})
 }
 
-// navTile 是侧栏顶上的全局页面磁贴：几个平分一行，图标下面写名字；
-// badge 非空时画在右上角（待处理、手机在线）。点击后选中，方向键顺序经 navMark 登记。
+// navTile 的接收方是模块所属主机，隐藏主机的选中项不能点亮当前导航。
 func (a *app) navTile(c *ui.Context, id string, icon *ui.SVG, label string, badge func()) ui.Element {
-	selected := a.navMark(id)
-	tile := sideTile(c, id, selected, func() { ui.Icon(c, icon).FontSize(iconSize).TextColor(c.Theme().Accent) }, label, badge)
+	tile := navigationButton(c, id, icon, a.moduleLabel(c, id, label), a.displayed() == a && a.selected == id, badge)
 	if tile.Clicked() {
-		if id == taskBoardID {
-			a.showTaskHome()
-		}
-		a.selected = id
+		a.openBoard(id)
 	}
 	return tile
 }
-
-// sideTile 画侧栏顶上的一块磁贴：上面是图标，下面是名字（放不下时截断），badge 在右上角。
-func sideTile(c *ui.Context, key string, selected bool, icon func(), label string, badge func()) ui.Element {
-	t := c.Theme()
-	p := colors(t)
-	tile := ui.Column(c.Key(key)).Height(tileHeight()).Grow(1).Basis(0).Gap(4).Radius(rControl).Center().
-		Label(label).Role(ui.RoleButton)
-	bg := p.fill
-	switch {
-	case selected:
-		bg = p.tint
-	case tile.Hovered():
-		bg = p.wash
-	}
-	tile.Background(tile.AnimateColor("bg", bg, hover))
-	tile.Children(func() {
-		icon()
-		name := ui.Text(c, label).FontSize(fsSmall).SingleLine()
-		// 名字放不下时截断：宽度取上一帧的，刚出现的磁贴还没量过，先不限
-		if w := tile.Bounds().W; w > 0 {
-			name.MaxWidth(max(w-12, 0))
-		}
-		if badge != nil {
-			ui.Row(c).Absolute().Top(4).Right(4).AlignItems(ui.Center).Children(badge)
-		}
-	})
-	return tile
-}
-
-// navMark 把全局页面 id 登记进侧栏方向键的顺序，返回它是否选中。
-func (a *app) navMark(id string) bool {
-	selected := a.selected == id
-	a.navOrder = append(a.navOrder, navTarget{ws: id})
-	if selected {
-		a.navCur = len(a.navOrder) - 1
-	}
-	return selected
-}
-
-// tileHeight 是侧栏顶上磁贴的高度，网格的行高和拖进来时的空格都用它。
-func tileHeight() float32 { return sz(56) }
 
 // navRowAt 画侧栏的一行，选中、点击和方向键顺序由调用方处理；icon 画行首的图标。
 // sub 非空时在名称下面用等宽小字显示（路径或分支），branch 非空时在 sub 上面单独一行；选中和悬停的样式见 selectedBg。
@@ -1398,37 +1412,6 @@ func (a *app) errorBar(c *ui.Context) {
 		return
 	}
 	sideNotice(c, true, "", a.err, func() { a.err = "" }, nil)
-}
-
-func (a *app) footer(c *ui.Context) {
-	t, l := c.Theme(), L(c)
-	if !a.loaded {
-		return
-	}
-	ui.Row(c).Height(footHeight).Padding(0, iconBarPad()).Shrink(0).Background(footShade(t)).BorderWidth(hairline, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
-		menuButton(c, iconButton(c, iconPlus, l.CommonNew()), func(m *popMenu) {
-			if m.Item(l.SidebarAddProject()).Chosen() {
-				go a.addProject(l)
-			}
-			if m.Item(l.SidebarNewWorkspace()).Keys(a.keyText("newWorkspace")).Chosen() {
-				a.openNewWorkspace()
-			}
-			if m.Item(l.TasksDispatchEllipsis()).Chosen() {
-				a.openDispatch()
-			}
-			m.Separator()
-			if m.Item(l.SidebarConnectPhone()).Chosen() {
-				a.openMobile()
-			}
-		})
-		ui.Spacer(c)
-		if a.staleApp && a.staleHidden {
-			a.staleDot(c)
-		}
-		if iconButton(c, iconSettings, a.withKey(l.SettingsTitle(), "settings")).Clicked() {
-			a.openSettings()
-		}
-	})
 }
 
 // staleDot 是收起重开提示后留在齿轮旁的圆点，点了把提示卡放回来。
@@ -1768,6 +1751,8 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace, i int) {
 func (a *app) tabBarButtons(c *ui.Context, w *workspace) {
 	if a.state.GitInTabBar && a.gitBranch(w) != "" {
 		a.branchButton(c, w)
+	}
+	if a.state.GitInTabBar && a.gitBranch(w) != "" {
 		b := iconButton(c.Key("git-log"), iconGitLog, a.withKey(L(c).GitLogTitle(), "gitLog"))
 		if a.logPanelOpen() {
 			b.Background(colors(c.Theme()).tint)
@@ -1929,19 +1914,26 @@ func missingRemoveLabel(m locales.Messages, w *workspace) string {
 
 // reclaimSize 让常驻进程放掉手机对终端尺寸的占用，按窗口的尺寸重排。
 func (a *app) reclaimSize(m locales.Messages, id string) {
-	for i := range a.workspaces {
-		for j := range a.workspaces[i].Terminals {
-			if a.workspaces[i].Terminals[j].ID == id {
-				a.workspaces[i].Terminals[j].PhoneSized = false
-			}
-		}
+	r := a.request()
+	if !r.mayWrite() {
+		return
 	}
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(a.windowContext(), 5*time.Second)
 		defer cancel()
-		if err := a.c.Call(ctx, "terminal.reclaimSize", map[string]any{"terminal": id}, nil); err != nil {
-			a.update(func() { a.err = m.TermReclaimError(errtext.Text(err)) })
+		if err := r.invoke(ctx, "terminal.reclaimSize", map[string]any{"terminal": id}, nil); err != nil {
+			r.update(func() { a.err = m.TermReclaimError(errtext.Text(err)) })
+			return
 		}
+		r.update(func() {
+			for i := range a.workspaces {
+				for j := range a.workspaces[i].Terminals {
+					if a.workspaces[i].Terminals[j].ID == id {
+						a.workspaces[i].Terminals[j].PhoneSized = false
+					}
+				}
+			}
+		})
 	}()
 }
 
@@ -1986,7 +1978,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 		if drawn {
 			panel.Opacity(shown).Transform(ui.Translation((1-shown)*24, 0))
 			// 点面板外面任何地方都收起，这一下照常落到下面的终端或按钮上
-			if a.state.RightPanel != "" && panel.PressedOutside() && !a.overPanelButton {
+			if a.state.RightPanel != "" && panel.PressedOutside() && !a.overPanelButton && !(a.lastPanel == panelImages && a.images.menuActive) {
 				a.state.RightPanel = ""
 				a.saveState()
 			}
@@ -2655,6 +2647,7 @@ func (a *app) confirmDialog(c *ui.Context) {
 				}
 				if ok.Clicked() {
 					a.confirming = false
+					a.confirmCancel = nil
 					if a.confirmDo != nil {
 						go a.confirmDo()
 					}
@@ -2684,6 +2677,9 @@ func (a *app) confirmDialog(c *ui.Context) {
 		})
 	}).ClickedOutside() {
 		a.confirming = true
+	}
+	if !a.confirming {
+		a.cancelConfirmation()
 	}
 }
 
@@ -2776,7 +2772,7 @@ func (a *app) newWorkspaceDialog(c *ui.Context) {
 				if len(picked) > 0 {
 					params["repos"] = picked
 				}
-				go a.createWorkspace(m, params)
+				go a.newRequest.createWorkspace(m, params)
 			}
 		})
 	})

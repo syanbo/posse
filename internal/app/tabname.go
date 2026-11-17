@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/rpc"
 	"posse/locales"
 )
@@ -36,6 +37,11 @@ func (a *app) defaultTaskTitle(term terminalInfo) string {
 
 // startRename 让终端标签原地变成输入框，填上现在显示的名字。
 func (a *app) startRename(m locales.Messages, term terminalInfo) {
+	r := a.request()
+	if !r.mayWrite() {
+		return
+	}
+	a.renameRequest = r
 	name, detail := fullLabel(m, term)
 	// 退出的终端 detail 是"已退出"，不是标题，不拿来当名字
 	exited := !term.Running && !term.Lost
@@ -74,12 +80,28 @@ func (a *app) finishRename(m locales.Messages, term terminalInfo) {
 	if def, detail := fullLabel(m, terminalInfo{ID: term.ID, Title: term.Title, Agent: term.Agent, AgentState: term.AgentState, Running: true}); term.Name == "" && (name == def || name == detail || name == a.defaultTaskTitle(term)) {
 		return
 	}
-	a.renameTerminal(term.ID, name)
+	r := a.renameRequest
+	if r.app == nil {
+		r = a.request()
+	}
+	r.renameTerminal(term.ID, name)
 }
 
 // renameTerminal 记下终端标签的名字，name 为空时恢复默认（会话标题或终端标题）。
-// 名字由常驻进程记着，手机上也显示；交过去之前先记在 ui.json 里，界面马上换名字。
+// 名字由常驻进程记着，手机上也显示；无控制身份的旧本机连接保留 ui.json 的本地覆盖。
 func (a *app) renameTerminal(id, name string) {
+	a.request().renameTerminal(id, name)
+}
+
+func (r appRequest) renameTerminal(id, name string) {
+	if !r.mayWrite() {
+		return
+	}
+	a := r.app
+	if r.host != nil {
+		r.sendTermName(id, name)
+		return
+	}
 	if a.state.TermNames == nil {
 		a.state.TermNames = map[string]string{}
 	}
@@ -93,11 +115,15 @@ func (a *app) renameTerminal(id, name string) {
 		t.Name = name
 	}
 	a.saveState()
-	a.sendTermName(id, name)
+	r.sendTermName(id, name)
 }
 
 // syncTermName 在每次轮询时调用：还没交给常驻进程的名字先显示本地的，常驻进程报上来的一样了就不再记着。
 func (a *app) syncTermName(t *terminalInfo) {
+	// 带控制身份的写入只发一次，旧 ui.json 中的待交名字不能在换身份后自动覆盖目标。
+	if a.host != nil {
+		return
+	}
 	name, ok := a.state.TermNames[t.ID]
 	if !ok {
 		return
@@ -131,49 +157,93 @@ func (a *app) ackTermName(id, name string) {
 // confirmTermName 等在途轮询先提交界面更新，再撤掉本地覆盖。
 // refreshMu 同时保证后续轮询在成功回复之后取数，不会用旧结果把名字改回去。
 func (a *app) confirmTermName(id, name string) {
-	a.refreshMu.Lock()
-	defer a.refreshMu.Unlock()
-	a.update(func() { a.ackTermName(id, name) })
+	a.request().confirmTermName(id, name)
 }
 
-// sendTermName 把名字交给常驻进程。同一个名字只发一次；发失败（常驻进程在交接、超时）就忘掉，
-// 下次轮询再发。旧常驻进程不认 terminal.rename 时不再发，名字一直留在 ui.json 里。
-func (a *app) sendTermName(id, name string) {
-	if a.nameSent == nil {
-		a.nameSent = map[string]string{}
+func (r appRequest) confirmTermName(id, name string) {
+	a := r.app
+	a.refreshMu.Lock()
+	defer a.refreshMu.Unlock()
+	r.update(func() {
+		if r.host == nil {
+			a.ackTermName(id, name)
+		} else {
+			delete(a.state.TermNames, id)
+			delete(a.state.TermNameBases, id)
+			delete(a.nameSent, id)
+			a.saveState()
+		}
+	})
+}
+
+type termNameRequest struct {
+	request  appRequest
+	id, name string
+}
+
+// 无控制身份的旧本机连接保留名称迁移与重试；带身份的连接等待确认，失败不自动重发。
+func (a *app) sendTermName(id, name string) { a.request().sendTermName(id, name) }
+
+func (r appRequest) sendTermName(id, name string) {
+	if !r.mayWrite() {
+		return
 	}
-	a.nameSent[id] = name
-	if a.c == nil {
+	a := r.app
+	if r.host == nil {
+		if a.nameSent == nil {
+			a.nameSent = map[string]string{}
+		}
+		a.nameSent[id] = name
+	}
+	if r.client == nil {
 		return
 	}
 	a.renameOnce.Do(func() {
-		a.renameQ = make(chan [2]string, 64)
+		a.renameQ = make(chan termNameRequest, 64)
 		go a.renameWorker(a.renameQ)
 	})
 	select {
-	case a.renameQ <- [2]string{id, name}:
+	case a.renameQ <- termNameRequest{r, id, name}:
 	default:
-		delete(a.nameSent, id)
+		if r.host == nil {
+			delete(a.nameSent, id)
+		} else {
+			a.err = errtext.Text(errors.New("too many pending terminal name changes; retry after they finish"))
+		}
 	}
 }
 
-// renameWorker 按顺序发改名：连着改两次时，常驻进程最后记的是后一个。
-func (a *app) renameWorker(q <-chan [2]string) {
-	for r := range q {
-		id, name := r[0], r[1]
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		err := a.c.Call(ctx, "terminal.rename", map[string]any{"terminal": id, "name": name}, nil)
+// 排队时固定身份，既保证连着改两次的顺序，也不让旧队列借用重连后的控制权。
+func (a *app) renameWorker(q <-chan termNameRequest) {
+	for {
+		var job termNameRequest
+		select {
+		case <-a.windowContext().Done():
+			return
+		case next, ok := <-q:
+			if !ok {
+				return
+			}
+			job = next
+		}
+		r, id, name := job.request, job.id, job.name
+		ctx, cancel := context.WithTimeout(a.windowContext(), 5*time.Second)
+		err := r.invoke(ctx, "terminal.rename", map[string]any{"terminal": id, "name": name}, nil)
 		cancel()
 		if err == nil {
-			a.confirmTermName(id, name)
-			a.refresh()
+			r.confirmTermName(id, name)
+			r.refresh()
+			continue
+		}
+		if r.host != nil {
+			r.update(func() { a.err = errtext.Text(err) })
 			continue
 		}
 		var re *rpc.Error
 		if errors.As(err, &re) && re.Code == rpc.CodeUnknown {
 			continue
 		}
-		a.update(func() {
+		r.update(func() {
 			if a.nameSent[id] == name {
 				delete(a.nameSent, id)
 			}

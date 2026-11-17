@@ -162,8 +162,9 @@ func yamlScalar(v string) string {
 
 // mdConv 把 goldmark 的语法树转成 mdBlock；html 为真时解释其中的 HTML（见 markdown_html.go）。
 type mdConv struct {
-	src  []byte
-	html bool
+	src    []byte
+	html   bool
+	images bool
 }
 
 func (m mdConv) blocks(n ast.Node) []mdBlock {
@@ -287,7 +288,7 @@ func (m mdConv) inlines(n ast.Node) []mdInline {
 			case *ast.Link:
 				walk(c, st, string(c.Destination))
 			case *ast.Image:
-				if m.html {
+				if m.html || m.images {
 					// 图片后面紧跟的文字不和它合并
 					out = append(out, mdInline{img: &mdImg{src: string(c.Destination), alt: plainText(c, src), title: string(c.Title)}, url: url})
 					out = append(out, mdInline{})

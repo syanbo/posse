@@ -72,7 +72,7 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 				c.WriteClipboard(ch.Old)
 				d.change = nil
 			}
-			if rel != "" {
+			if rel != "" && !a.remoteHost() && a.request().mayWrite() {
 				a.commitChangeInput(c, v, d, cp, rel, ch)
 			}
 			if pressable(iconButtonSized(c, iconClose, L(c).GitCloseEscape(), compactBox(), smallIcon())).Clicked() {

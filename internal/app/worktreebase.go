@@ -48,16 +48,22 @@ func baseTip(m locales.Messages, base string, tr *trackInfo) string {
 	if len(d.Conflicts) > 0 {
 		tip += "\n" + m.BranchBaseConflicts(len(d.Conflicts))
 	}
+	if tr.basePrediction == gitx.DivergenceUnavailable {
+		tip += "\n" + m.BranchPredictionUnavailable(tr.baseReason)
+	}
+	if tr.baseErr != "" {
+		tip += "\n" + tr.baseErr
+	}
 	return tip
 }
 
 // baseRow 画在改动页的分支行下面；rebase、合并进行中时让给操作横幅。
 func (a *app) baseRow(c *ui.Context, w *workspace, v *filesView) {
-	if !hasBase(w) || v.git.repo != v.root || v.git.status == nil || v.git.status.Operation != "" {
+	if !baseRepository(w, v) || v.git.status == nil || v.git.status.Operation != "" {
 		return
 	}
 	tr := a.pollTrack(c, w)
-	if !tr.baseOK {
+	if !tr.baseOK && !v.remote {
 		return
 	}
 	t := c.Theme()
@@ -67,6 +73,10 @@ func (a *app) baseRow(c *ui.Context, w *workspace, v *filesView) {
 	ui.Row(c).MinHeight(sz(30)).Shrink(0).Padding(0, 6, 0, 16).Gap(6).Wrap().Justify(ui.End).AlignItems(ui.Center).AlignContent(ui.Center).Children(func() {
 		ui.Text(c, m.BranchRelativeTo(base)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(0)
 		switch {
+		case !tr.baseOK:
+			if tr.baseErr == "" {
+				ui.Text(c, m.CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted)
+			}
 		case d.Ahead == 0 && d.Behind == 0:
 			ui.Text(c, m.CompareNoDifference()).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 		default:
@@ -77,11 +87,25 @@ func (a *app) baseRow(c *ui.Context, w *workspace, v *filesView) {
 			tip := m.BranchConflictFilesTip(strings.Join(d.Conflicts, "\n"))
 			ui.Text(c, m.BranchConflictCount(len(d.Conflicts))).FontSize(fsSmall).TextColor(t.Danger).Shrink(0).Tooltip(tip)
 		}
+		if tr.basePrediction == gitx.DivergenceUnavailable {
+			ui.Text(c, m.BranchPredictionUnavailable(tr.baseReason)).FontSize(fsSmall).TextColor(t.TextMuted)
+		} else if tr.basePrediction == gitx.DivergenceCompleted && len(d.Conflicts) == 0 {
+			ui.Text(c, m.BranchPredictionClear()).FontSize(fsSmall).TextColor(t.TextMuted)
+		}
+		if tr.baseErr != "" {
+			ui.Text(c, tr.baseErr).FontSize(fsSmall).TextColor(t.Danger)
+		}
+		if v.remote && pressable(iconButtonSized(c, iconRefresh, m.BranchRefreshBase(), compactBox(), smallIcon())).Disabled(tr.poll.busy || !a.targetGitReady()).Clicked() {
+			a.loadTargetBase(w, v, v.git)
+		}
 		ui.Spacer(c)
 		// 两个按钮放在一起，换行时一起换
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
 			if d.Behind > 0 {
-				sync := pressable(smallButton(c, m.BranchSync())).Tooltip(m.BranchSyncTip(base))
+				sync := pressable(smallButton(c, m.BranchSync())).Tooltip(m.BranchSyncTip(base)).Disabled(v.remote)
+				if v.remote {
+					sync.Tooltip(m.BranchBaseReadOnly())
+				}
 				menuButton(c, sync, func(pm *popMenu) {
 					if pm.Item(m.BranchMergeFrom(base)).Chosen() {
 						a.syncBase(m, w, false)
@@ -91,8 +115,14 @@ func (a *app) baseRow(c *ui.Context, w *workspace, v *filesView) {
 					}
 				})
 			}
-			if d.Ahead > 0 && pressable(smallButton(c, m.GitMerge()).Tooltip(m.BranchMergeToTip(base))).Clicked() {
-				a.askMergeWorkspace(m, w.ID)
+			if d.Ahead > 0 {
+				merge := pressable(smallButton(c, m.GitMerge()).Tooltip(m.BranchMergeToTip(base))).Disabled(v.remote)
+				if v.remote {
+					merge.Tooltip(m.BranchBaseReadOnly())
+				}
+				if merge.Clicked() {
+					a.askMergeWorkspace(m, w.ID)
+				}
 			}
 		})
 	})
@@ -117,6 +147,9 @@ func baseBadge(c *ui.Context, icon *ui.SVG, color ui.Color, n int, tip string) {
 // syncBase 在 worktree 里把基准分支合并进来或 rebase 上去。停在冲突上时改动页有操作横幅，
 // 解决后继续，再合回项目目录就不会冲突了。
 func (a *app) syncBase(m locales.Messages, w *workspace, rebase bool) {
+	if a.targetFileUnsupported("git.write") {
+		return
+	}
 	base := w.BaseRef
 	what, done := m.BranchMergeFrom(base), m.BranchMerged(base)
 	run := gitx.MergeInto
@@ -160,6 +193,9 @@ func (a *app) syncBase(m locales.Messages, w *workspace, rebase bool) {
 // 先现算一次会不会冲突（轮询的结果可能是同步之前的），会就不去试，改问要不要先在工作区里同步；
 // 常驻进程合并失败时再算一次，确实是冲突的同样引过去，别的原因（项目目录不在基准分支上等）照常报错。
 func (a *app) askMergeWorkspace(m locales.Messages, wsID string) {
+	if a.targetFileUnsupported("git.write") {
+		return
+	}
 	w := a.workspace(wsID)
 	if w == nil || !hasBase(w) {
 		return
@@ -253,6 +289,9 @@ func fileList(m locales.Messages, files []string, n int) string {
 // askMergeRepos 是多仓库 worktree 工作区的合并：各仓库的分支合回项目里各自的基准分支（workspace.merge），
 // 常驻进程先查完所有仓库，有一个不能合就一个都不合；合完问要不要删工作区。
 func (a *app) askMergeRepos(m locales.Messages, wsID string) {
+	if a.targetFileUnsupported("git.write") {
+		return
+	}
 	w := a.workspace(wsID)
 	if w == nil || len(w.Repos) == 0 {
 		return

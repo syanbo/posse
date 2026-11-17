@@ -423,7 +423,7 @@ func (a *app) updateBar(c *ui.Context) {
 }
 
 func (a *app) openAbout() {
-	a.settingsTab = "about"
+	a.windowOwner().settingsTab = "about"
 	a.openSettings()
 }
 

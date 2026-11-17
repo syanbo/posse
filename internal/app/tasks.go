@@ -700,7 +700,7 @@ func (a *app) taskActions(c *ui.Context, task taskInfo) {
 	// 英文的按钮长，详情窄时换行
 	ui.Row(c).Gap(8).Wrap().Children(func() {
 		// 讨论成员的 worker：请求在讨论里发和排队，任务页不追加
-		if task.DiscussionID != "" && pressable(textButton(c, m.DiscOpen())).Clicked() {
+		if task.DiscussionID != "" && a == a.windowOwner() && pressable(textButton(c, m.DiscOpen())).Clicked() {
 			a.openDiscussion(task.DiscussionID)
 		}
 		if task.Terminal != nil {

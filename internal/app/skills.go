@@ -307,7 +307,7 @@ func (a *app) skillsBoard(c *ui.Context) {
 	m := L(c)
 	a.band(c, func() {
 		// 分页兼作标题：侧栏里叫「技能」，这里分技能和 MCP
-		segmented(c, &s.page, m.SkillsPageLabel(), m.SkillsTitle(), "MCP")
+		segmented(c, &s.page, m.SkillsPageLabel(), a.moduleLabel(c, skillsBoardID, m.SkillsTitle()), a.moduleLabel(c, skillsBoardID, "MCP"))
 		placeholder := m.SkillsSearchSkills()
 		if s.page == 1 {
 			placeholder = m.SkillsSearchMCP()

@@ -1,4 +1,82 @@
 {
+  "fetchManual": "Fetch from all remotes",
+  "@fetchManual": {"description": "Manually fetch all remotes on this host; automatic fetching is not available through this connection."},
+  "fetchUnknown": "The previous Fetch result is unknown. Query the original operation or refresh the current repository state.",
+  "@fetchUnknown": {"description": "Unknown Fetch outcome; current refs cannot prove whether it succeeded."},
+  "fetchQuery": "Query operation",
+  "@fetchQuery": {"description": "Query the saved original Fetch operation reference without sending Fetch again."},
+  "fetchRefresh": "Refresh current state",
+  "@fetchRefresh": {"description": "Refresh repository reads without resolving the original Fetch outcome."},
+  "fetchCancelRequested": "Cancellation requested; waiting for the operation result.",
+  "@fetchCancelRequested": {"description": "Cancel acknowledgement is not a completed operation."},
+  "fetchPartial": "Some refs may have changed. Refresh the current state to check.",
+  "@fetchPartial": {"description": "Fetch failure, timeout, or cancellation after execution started may leave partial updates."},
+  "fetchResult": "{status, select, succeeded {Fetch completed} failed {Fetch failed} canceled {Fetch canceled} timed_out {Fetch timed out} conflict {Repository changed; Fetch did not start} other {Fetch result unavailable}}",
+  "@fetchResult": {"description": "Confirmed typed Fetch terminal outcome.", "placeholders": {"status": {"type": "String", "example": "succeeded"}}},
+  "fetchNewTitle": "Start another Fetch?",
+  "@fetchNewTitle": {"description": "Confirmation before replacing the block from an unknown Fetch outcome."},
+  "fetchNewBody": "The previous result is still unknown and that operation may still be running. After checking the current repository state, you can start a new operation. The previous operation will not be retried or marked as successful.",
+  "@fetchNewBody": {"description": "Explicit disposition of an unknown Fetch; a new operation reference will be allocated."},
+  "fetchNewAction": "Start new Fetch",
+  "@fetchNewAction": {"description": "Explicitly authorize a new Fetch despite an unresolved previous result."},
+  "fetchCapacity": "Too many unresolved Git operations. Query or review previous operations before starting another Fetch.",
+  "@fetchCapacity": {"description": "Fetch operation records reached the in-memory count or byte limit."},
+  "fetchConsoleScope": "Only Fetch records from this window session are shown.",
+  "@fetchConsoleScope": {"description": "Scope of in-memory target Fetch command records in Console."},
+  "fetchLogsTruncated": "Some command output or records were omitted.",
+  "@fetchLogsTruncated": {"description": "Target Fetch returned truncated bounded command records."},
+  "branchRefreshBase": "Refresh base comparison",
+  "@branchRefreshBase": { "description": "Refresh commit counts and conflict prediction against the workspace base branch." },
+  "branchPredictionUnavailable": "Conflict prediction unavailable: {reason, select, attributes {unsupported merge attributes} config {unsupported merge configuration} submodule {submodule changes} shallow {shallow history} multiple_bases {multiple merge bases} unrelated {unrelated histories} limit {prediction limit reached} git {Git cannot perform this prediction} other {unsupported inputs}}.",
+  "@branchPredictionUnavailable": { "description": "Explain an unavailable merge prediction using a structured reason from the target Git service; commit counts remain valid.", "placeholders": { "reason": { "type": "String", "example": "attributes" } } },
+  "branchPredictionClear": "No conflicts predicted",
+  "@branchPredictionClear": { "description": "The target completed merge prediction and found no conflicts." },
+  "branchBaseReadOnly": "Read-only comparison; syncing and merging are not available yet.",
+  "@branchBaseReadOnly": { "description": "Disabled sync and merge button tooltip for remote worktree base comparison." },
+  "pushPreviewTitle": "Push Preview",
+  "@pushPreviewTitle": { "description": "Read-only push preview title and menu action for a remote host." },
+  "pushPreviewNotice": "Read-only preview; pushing is not available yet. Uses this host’s recorded remote-tracking refs without contacting the remote.",
+  "@pushPreviewNotice": { "description": "Explain that the remote-host push preview cannot push or verify live remote refs." },
+  "pushPreviewMissing": "No tracking ref",
+  "@pushPreviewMissing": { "description": "The host has no recorded remote-tracking ref for the push destination." },
+  "pushPreviewEmpty": "No commits to list against the recorded tracking ref.",
+  "@pushPreviewEmpty": { "description": "Empty push preview based on stored remote-tracking refs, not live remote state." },
+  "pushPreviewLimit": "Only the first {count, plural, one {# commit is} other {# commits are}} shown.",
+  "@pushPreviewLimit": { "description": "Explain the loaded commit limit in the push preview.", "placeholders": { "count": { "type": "int", "example": "500" } } },
+  "compareRefresh": "Refresh comparison",
+  "@compareRefresh": { "description": "Return to the working tree comparison and refresh its file list and content baseline." },
+  "compareLoadedLimit": "Only the first {count, plural, one {# commit is} other {# commits are}} shown and searched.",
+  "@compareLoadedLimit": {
+    "description": "Notice below a truncated branch comparison list: its search only covers the loaded commits.",
+    "placeholders": { "count": { "type": "int", "example": "1000" } }
+  },
+  "targetDirectoryHost": "Host: {host}",
+  "@targetDirectoryHost": {
+    "description": "Target host whose directories are displayed in the directory picker.",
+    "placeholders": { "host": { "type": "String", "example": "Office Mac" } }
+  },
+  "targetDirectoryParent": "Parent folder",
+  "@targetDirectoryParent": { "description": "Navigate to the parent folder in the target directory picker." },
+  "targetDirectoryPath": "Absolute directory path",
+  "@targetDirectoryPath": { "description": "Accessible label for the target directory path; press Enter to open it." },
+  "targetDirectoryEmpty": "No subfolders",
+  "@targetDirectoryEmpty": { "description": "The directory picker lists only folders; the current directory can still be selected." },
+  "sshAuthTitle": "Connect to {host}",
+  "@sshAuthTitle": {
+    "description": "Title of the SSH authentication dialog, naming the selected host.",
+    "placeholders": { "host": { "type": "String", "example": "Office Mac" } }
+  },
+  "sshAuthAnswer": "Password or passphrase",
+  "@sshAuthAnswer": { "description": "Accessible label for the masked SSH authentication answer field." },
+  "sshAuthTrust": "Trust and connect",
+  "@sshAuthTrust": { "description": "Explicitly accept the host key displayed by SSH and continue connecting." },
+  "navigationLocal": "{name} (This Mac)",
+  "@navigationLocal": {
+    "description": "Navigation label for a module that always belongs to this Mac while browsing another host.",
+    "placeholders": {
+      "name": { "type": "String", "example": "Discussions" }
+    }
+  },
   "appAddProjectButton": "Add",
   "@appAddProjectButton": {
     "description": "Default button of the system open dialog for adding a project."
@@ -1138,15 +1216,6 @@
   "@chatConvertProject": {
     "description": "Chat sidebar tile, settings card, or folder action: label for ConvertProject."
   },
-  "chatCreateFolderError": "Could not create the chat folder: {error}",
-  "@chatCreateFolderError": {
-    "description": "Chat sidebar tile, settings card, or folder action: error message for CreateFolderError. Values: error.",
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
   "chatGrokNote": "Grok asks for confirmation in each untrusted folder. Press y on the first screen of a new chat.",
   "@chatGrokNote": {
     "description": "Chat sidebar tile, settings card, or folder action: explanation for GrokNote."
@@ -1965,6 +2034,30 @@
   "@filesNotFound": {
     "description": "File tab message: the file is missing."
   },
+  "filesUpload": "Upload File…",
+  "@filesUpload": {"description": "Remote file menu: choose a local file to upload into the selected target folder."},
+  "filesDownload": "Download Copy…",
+  "@filesDownload": {"description": "Remote file menu: save a separate copy on this Mac."},
+  "filesOpenCopy": "Open Copy with Local App…",
+  "@filesOpenCopy": {"description": "Remote file menu and binary preview: save a separate local copy, then open it with the default app; edits do not sync back."},
+  "filesSaveCopyAndOpen": "Save Copy and Open",
+  "@filesSaveCopyAndOpen": {"description": "Local save dialog title before opening a downloaded remote file copy."},
+  "filesOpenCopyFailed": "Saved {name}, but couldn’t open the copy: {error}",
+  "@filesOpenCopyFailed": {"description": "The download succeeded but the local default app could not open the saved copy.", "placeholders": {"name": {"type": "String"}, "error": {"type": "String"}}},
+  "filesTransferReplaceTitle": "Replace {name}?",
+  "@filesTransferReplaceTitle": {"description": "Upload confirmation title for an existing target file.", "placeholders": {"name": {"type": "String"}}},
+  "filesTransferReplaceBody": "Uploading will replace the file at {path} on the selected host.",
+  "@filesTransferReplaceBody": {"description": "Upload confirmation identifies the target file that will be replaced.", "placeholders": {"path": {"type": "String"}}},
+  "filesTransferReplace": "Replace",
+  "@filesTransferReplace": {"description": "Confirm replacing the target file with an uploaded file."},
+  "filesTransferring": "Transferring {name}…",
+  "@filesTransferring": {"description": "File panel status while checking or transferring a file.", "placeholders": {"name": {"type": "String"}}},
+  "filesTransferFailed": "Couldn’t transfer {name}: {error}",
+  "@filesTransferFailed": {"description": "File upload or download error.", "placeholders": {"name": {"type": "String"}, "error": {"type": "String"}}},
+  "filesUploaded": "Uploaded {name}",
+  "@filesUploaded": {"description": "Successful upload notification.", "placeholders": {"name": {"type": "String"}}},
+  "filesDownloaded": "Downloaded {name}",
+  "@filesDownloaded": {"description": "Successful download notification.", "placeholders": {"name": {"type": "String"}}},
   "filesOpenWithDefaultApp": "Open with Default App",
   "@filesOpenWithDefaultApp": {
     "description": "Context menu item and button: opens the file in the app macOS uses for it."
@@ -6312,13 +6405,17 @@
   "@sidebarOpenTerminal": {
     "description": "Sidebar: workspace context menu item that opens a plain shell."
   },
+  "sidebarPinned": "Pinned",
+  "@sidebarPinned": {
+    "description": "Workspace sidebar: pinned workspaces section and drag target."
+  },
   "sidebarPin": "Pin to Top",
   "@sidebarPin": {
-    "description": "Sidebar workspace context menu item: adds the workspace as a tile at the top of the sidebar."
+    "description": "Workspace context menu item: adds the workspace to the pinned section."
   },
-  "sidebarPinFull": "{count, plural, one {Pin to Top (Full: # Tile Max)} other {Pin to Top (Full: # Tiles Max)}}",
+  "sidebarPinFull": "{count, plural, one {Pin to Top (Full: # Workspace Max)} other {Pin to Top (Full: # Workspaces Max)}}",
   "@sidebarPinFull": {
-    "description": "Sidebar workspace context menu item, disabled because the tiles at the top are full.",
+    "description": "Workspace context menu item, disabled because the pinned section is full.",
     "placeholders": {
       "count": {
         "type": "int"

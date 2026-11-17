@@ -29,10 +29,13 @@ const (
 
 // repoSet 是工作区里找到的仓库。
 type repoSet struct {
+	request  appRequest
+	read     gitRead
 	list     []*gitState // 按根目录排好
 	none     *gitState   // 工作区里没有仓库时 v.git 指向它：repo 为空
 	scanned  bool        // 找过一次了
 	scanning bool
+	err      string
 	partial  bool      // 撞上扫描上限、可能没找全：不再自动重找，刷新按钮可以
 	single   bool      // 找的时候项目关着"识别多个 Git 仓库"
 	scanAt   time.Time // 上次找完的时间
@@ -117,6 +120,13 @@ func (a *app) projectSingleRepo(v *filesView) bool {
 
 // withRepos 在找过仓库之后调用 fn：已经找过就马上调用，否则开始找、找完再调用。
 func (a *app) withRepos(v *filesView, fn func()) {
+	if a.remoteHost() && !a.targetGitReady() {
+		a.targetFileUnsupported("git.discover")
+		return
+	}
+	if a.remoteHost() && !a.targetGitSession(v) {
+		return
+	}
 	if v.repos.scanned {
 		fn()
 		return
@@ -127,6 +137,10 @@ func (a *app) withRepos(v *filesView, fn func()) {
 
 // scanRepos 在后台找工作区里的仓库，找完换上。
 func (a *app) scanRepos(v *filesView) {
+	if a.remoteHost() {
+		a.scanTargetRepos(v)
+		return
+	}
 	if v.repos.scanning {
 		return
 	}
@@ -144,6 +158,9 @@ func (a *app) scanRepos(v *filesView) {
 
 // applyRepos 换上新找到的仓库：还在的沿用原来的状态（勾选、提交信息、排队的操作），没了的丢掉。
 func (a *app) applyRepos(v *filesView, d gitx.Discovery, single bool, mod time.Time) {
+	if a.remoteHost() {
+		return
+	}
 	rs := &v.repos
 	rs.scanning, rs.scanned, rs.partial, rs.single = false, true, d.Partial, single
 	rs.scanAt, rs.rootMod = time.Now(), mod
@@ -222,7 +239,7 @@ func (a *app) followRepo(v *filesView) {
 
 // useRepo 换当前仓库：马上全量读一次它的状态，日志浮层里整个仓库的日志换成它的。
 func (a *app) useRepo(v *filesView, g *gitState) {
-	if g == v.git {
+	if g == v.git || a.remoteHost() && !a.targetGitReady() {
 		return
 	}
 	v.git = g
@@ -231,6 +248,9 @@ func (a *app) useRepo(v *filesView, g *gitState) {
 	}
 	for _, d := range v.logs {
 		if ld := d.log; ld != nil && ld.filter.Path == "" && ld.root != g.repo {
+			if v.remote {
+				ld.cancelTargetLog()
+			}
 			ld.root, ld.filter.Branches, ld.head, ld.commit = g.repo, nil, true, nil
 			ld.commits, ld.graph = nil, nil
 			a.loadLog(v, d, false)
@@ -240,9 +260,17 @@ func (a *app) useRepo(v *filesView, g *gitState) {
 
 // pollRepos 是文件内容看得见时每帧的 Git 部分：没找过仓库先找，到点了重找，各仓库到点了读状态。
 func (a *app) pollRepos(c *ui.Context, v *filesView) {
+	if a.remoteHost() && !a.targetGitSession(v) {
+		return
+	}
 	rs := &v.repos
 	if !rs.scanned {
-		a.scanRepos(v)
+		if !a.remoteHost() || time.Since(rs.scanAt) >= gitPollEvery {
+			a.scanRepos(v)
+		}
+		if c != nil {
+			c.After(gitPollEvery)
+		}
 		return
 	}
 	a.followRepo(v)
@@ -262,6 +290,9 @@ func (a *app) pollRepos(c *ui.Context, v *filesView) {
 
 // rescanDue 报告该重新找仓库了：项目的开关变了、工作区目录变了、到点了。没找全的不自动重找，免得每分钟都扫一遍大目录。
 func (a *app) rescanDue(c *ui.Context, v *filesView) bool {
+	if a.remoteHost() && !a.targetGitReady() {
+		return false
+	}
 	rs := &v.repos
 	if a.projectSingleRepo(v) != rs.single {
 		return true
@@ -272,7 +303,12 @@ func (a *app) rescanDue(c *ui.Context, v *filesView) bool {
 	if wait := repoRescanEvery - time.Since(rs.scanAt); wait <= 0 {
 		return true
 	} else {
-		c.After(min(wait, gitPollEvery))
+		if c != nil {
+			c.After(min(wait, gitPollEvery))
+		}
+	}
+	if a.remoteHost() {
+		return false
 	}
 	if time.Since(rs.statAt) >= gitPollEvery {
 		rs.statAt = time.Now()
@@ -285,6 +321,10 @@ func (a *app) rescanDue(c *ui.Context, v *filesView) bool {
 
 // pollRepo 在后台读一个仓库的状态，读完交回界面线程。full 为假时只读 status（不是当前仓库）。
 func (a *app) pollRepo(g *gitState, full bool) {
+	if a.remoteHost() {
+		a.pollTargetRepo(g, full)
+		return
+	}
 	root := g.repo
 	go func() {
 		ctx := context.Background()
@@ -333,6 +373,9 @@ func (a *app) pollRepo(g *gitState, full bool) {
 // refreshGit 在操作之后马上重读当前仓库的状态，不等下一次轮询。
 // 还没找过仓库时先找，找完再读。
 func (a *app) refreshGit(v *filesView) {
+	if a.remoteHost() && !a.targetGitSession(v) {
+		return
+	}
 	if !v.repos.scanned {
 		if !v.repos.scanning {
 			a.withRepos(v, func() { a.refreshRepo(v.git) })
@@ -344,7 +387,7 @@ func (a *app) refreshGit(v *filesView) {
 
 // refreshRepo 马上重读一个仓库的状态。
 func (a *app) refreshRepo(g *gitState) {
-	if g.repo == "" {
+	if g.repo == "" || a.remoteHost() && !a.targetGitSession(g.v) {
 		return
 	}
 	g.headAt = time.Time{}
@@ -359,12 +402,19 @@ func (a *app) refreshRepo(g *gitState) {
 
 // rescanRepos 是改动页的刷新按钮：重新找仓库（没找全的也找），再重读当前仓库。
 func (a *app) rescanRepos(v *filesView) {
+	if a.remoteHost() && !a.targetGitReady() {
+		a.targetFileUnsupported("git.discover")
+		return
+	}
 	a.scanRepos(v)
 	a.refreshGit(v)
 }
 
 // gitChanged 在一个仓库的状态变了之后更新依赖它的东西：打开的 diff 重读，编辑器的比较基准跟着 HEAD 走。
 func (a *app) gitChanged(g *gitState, old *gitx.Status) {
+	if a.remoteHost() {
+		return
+	}
 	v := g.v
 	// 操作停在冲突上：切到改动，横幅在那里（多个仓库时每个仓库各一条）
 	if op := g.status.Operation; op != "" && (old == nil || old.Operation != op) {
@@ -446,10 +496,26 @@ func (v *filesView) nestedEntry(g *gitState, e gitx.Entry) bool {
 // 工作区就在仓库里时先用每秒读 HEAD 的 w.Branch，不用等找完仓库；工作区目录本身不是仓库时
 // （下面有几个仓库），文件栏没开过也在这里先去找仓库。
 func (a *app) gitBranch(w *workspace) string {
-	if w.Missing {
+	if w.Missing || a.remoteHost() && !a.targetGitReady() {
 		return ""
 	}
 	v := a.files[w.ID]
+	if a.remoteHost() {
+		v = a.filesFor(w)
+		if !a.targetGitSession(v) {
+			return ""
+		}
+		if !v.repos.scanned {
+			if time.Since(v.repos.scanAt) >= gitPollEvery {
+				a.scanRepos(v)
+			}
+			return statusBranch(v.git)
+		}
+		if !v.git.poll.busy && time.Since(v.git.poll.at) >= gitPollEvery {
+			a.refreshRepo(v.git)
+		}
+		return statusBranch(v.git)
+	}
 	if v == nil || !v.repos.scanned {
 		a.scanRepos(a.filesFor(w))
 		return w.Branch
@@ -474,6 +540,9 @@ func (a *app) gitBranch(w *workspace) string {
 
 // repoBranch 是 root 这个仓库检出的分支（游离时是哈希前 8 位），读 HEAD 文件最多一秒一次。
 func (v *filesView) repoBranch(root string) string {
+	if v.remote {
+		return statusBranch(v.repoAt(root))
+	}
 	g := v.repoAt(root)
 	if g == nil {
 		return gitx.Head(root)

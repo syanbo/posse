@@ -22,34 +22,45 @@ import (
 // 点文件打开 diff，F7 在同一组文件之间跳。
 
 type compareDoc struct {
-	root       string // 仓库根目录
-	other, cur string
-	files      bool
-	onlyOther  []gitx.CommitInfo
-	onlyCur    []gitx.CommitInfo
-	changes    []gitx.FileChange
-	commit     *commitView // 右边看着的提交
-	picked     []string    // ⌘、⇧ 点选的多个提交，都在同一边；空时选中的就是 commit
-	anchor     string      // ⇧ 点选范围的起点
-	queryOther string      // 两栏各自的搜索词，只筛这一栏显示的提交
-	queryCur   string
-	list       ui.ListState
-	folded     map[string]bool // 文件树里收起的目录
-	cursor     string          // 和工作区比较时键盘停在的文件
-	listOther  ui.ListState    // 只在 other 里的提交
-	listCur    ui.ListState    // 只在 cur 里的提交
+	worktree                       *gitx.WorktreeComparison
+	read                           gitRead
+	request                        appRequest
+	repository                     *gitState
+	loading, loaded, resume, drawn bool
+	err                            string
+	otherOID, curOID               string
+	moreOther, moreCur             bool
+	root                           string // 仓库根目录
+	other, cur                     string
+	files                          bool
+	onlyOther                      []gitx.CommitInfo
+	onlyCur                        []gitx.CommitInfo
+	changes                        []gitx.FileChange
+	commit                         *commitView // 右边看着的提交
+	picked                         []string    // ⌘、⇧ 点选的多个提交，都在同一边；空时选中的就是 commit
+	anchor                         string      // ⇧ 点选范围的起点
+	queryOther                     string      // 两栏各自的搜索词，只筛这一栏显示的提交
+	queryCur                       string
+	list                           ui.ListState
+	folded                         map[string]bool // 文件树里收起的目录
+	cursor                         string          // 和工作区比较时键盘停在的文件
+	listOther                      ui.ListState    // 只在 other 里的提交
+	listCur                        ui.ListState    // 只在 cur 里的提交
 }
 
 // commitView 是选中的一个提交和它改的文件。
 type commitView struct {
-	root   string // 仓库根目录
-	info   gitx.CommitInfo
-	files  []gitx.FileChange
-	err    string
-	list   ui.ListState
-	folded map[string]bool // 文件树里收起的目录
-	focus  bool            // 在提交列表里按了 →：文件列表建出来时拿焦点
-	cursor string          // 键盘停在的文件（diff 会挡住列表时才用）
+	diffBase *string
+	read     gitRead
+	loading  bool
+	root     string // 仓库根目录
+	info     gitx.CommitInfo
+	files    []gitx.FileChange
+	err      string
+	list     ui.ListState
+	folded   map[string]bool // 文件树里收起的目录
+	focus    bool            // 在提交列表里按了 →：文件列表建出来时拿焦点
+	cursor   string          // 键盘停在的文件（diff 会挡住列表时才用）
 }
 
 func compareKey(root, other, cur string, files bool) string {
@@ -60,6 +71,10 @@ func compareKey(root, other, cur string, files bool) string {
 }
 
 func (a *app) openCompare(w *workspace, other, cur string, files bool) {
+	if a.remoteHost() && !a.targetGitReady() {
+		a.targetFileUnsupported("git.compare")
+		return
+	}
 	// 比较要整块地方看上下两栏，底部的日志浮层盖着下半截，先收起
 	a.setLogPanel(false)
 	v := a.showFiles(w)
@@ -109,6 +124,14 @@ func (a *app) refsChanged(projectID string) {
 }
 
 func (a *app) loadCompare(v *filesView, d *fileDoc) {
+	if a.remoteHost() {
+		if d.comp.files {
+			a.loadTargetWorktreeCompare(v, d)
+			return
+		}
+		a.loadTargetCompare(v, d)
+		return
+	}
 	cd := d.comp
 	root := cd.root
 	other, cur := cd.other, cd.cur
@@ -144,6 +167,10 @@ func (a *app) loadCompare(v *filesView, d *fileDoc) {
 
 // selectCommit 选中提交，在后台读它改的文件。
 func (a *app) selectCommit(root string, holder **commitView, c gitx.CommitInfo) {
+	if a.remoteHost() {
+		a.selectTargetCommit(root, holder, c)
+		return
+	}
 	cv := &commitView{info: c, root: root}
 	*holder = cv
 	go func() {
@@ -177,14 +204,34 @@ func commitSpecs(root string, c gitx.CommitInfo, files []gitx.FileChange) []diff
 func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	cd := d.comp
+	if v.remote {
+		cd.drawn = true
+		a.resumeTargetCompare(v, d)
+		if cd.err != "" {
+			ui.Text(c, cd.err).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 16)
+		}
+		if cd.loading {
+			ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
+		}
+	}
 	if cd.files {
 		specs := make([]diffSpec, len(cd.changes))
 		for i, f := range cd.changes {
 			specs[i] = diffSpec{root: cd.root, rel: f.Path, orig: f.Orig, oldRev: cd.other, label: cd.other + " → " + L(c).GitWorkspace()}
 		}
-		ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 16).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, L(c).CompareWorkspaceFiles(cd.other, len(cd.changes))).FontSize(fsBody).FontWeight(fwMedium)
+		if v.remote {
+			specs = cd.worktreeSpecs(L(c))
+		}
+		ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, L(c).CompareWorkspaceFiles(cd.other, len(cd.changes))).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Shrink(1)
+			ui.Spacer(c)
+			if v.remote && pressable(iconButtonSized(c, iconRefresh, L(c).CommonRefresh(), compactBox(), smallIcon())).Disabled(cd.loading).Clicked() {
+				a.loadCompare(v, d)
+			}
 		})
+		if v.remote && !cd.loaded {
+			return
+		}
 		if len(cd.changes) == 0 {
 			ui.Text(c, L(c).CompareNoDifference()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(8, 16)
 			return
@@ -270,11 +317,15 @@ func (a *app) compareActions(c *ui.Context, w *workspace, v *filesView, d *fileD
 				v.cur = v.docs[i]
 				return
 			}
-			cd.other, cd.cur = cd.cur, cd.other
-			cd.onlyOther, cd.onlyCur = cd.onlyCur, cd.onlyOther
-			cd.listOther, cd.listCur = cd.listCur, cd.listOther
-			cd.queryOther, cd.queryCur = cd.queryCur, cd.queryOther
-			d.path = compareKey(cd.root, cd.other, cd.cur, false)
+			if v.remote {
+				a.swapTargetCompare(v, d)
+			} else {
+				cd.other, cd.cur = cd.cur, cd.other
+				cd.onlyOther, cd.onlyCur = cd.onlyCur, cd.onlyOther
+				cd.listOther, cd.listCur = cd.listCur, cd.listOther
+				cd.queryOther, cd.queryCur = cd.queryCur, cd.queryOther
+				d.path = compareKey(cd.root, cd.other, cd.cur, false)
+			}
 		}
 		if pressable(iconButtonSized(c, iconRefresh, L(c).CommonRefresh(), compactBox(), smallIcon())).Clicked() {
 			a.loadCompare(v, d)
@@ -285,6 +336,9 @@ func (a *app) compareActions(c *ui.Context, w *workspace, v *filesView, d *fileD
 // comparePick 是 Cherry-pick 按钮：把选中的提交按提交先后应用到当前分支。
 // cherry-pick 只能落在检出的分支上，所以选中的提交要都来自另一边、另一边又正好是工作区检出的分支才可点。
 func (a *app) comparePick(c *ui.Context, w *workspace, v *filesView, cd *compareDoc) {
+	if a.remoteHost() {
+		return
+	}
 	m := L(c)
 	target, tip := "", m.CompareSelectHint()
 	var hashes []string
@@ -352,6 +406,7 @@ func (a *app) clickCommit(v *filesView, cd *compareDoc, all, shown []gitx.Commit
 		if i := slices.Index(sel, ci.Hash); i >= 0 {
 			cd.picked = slices.Delete(slices.Clone(sel), i, i+1)
 			if cd.commit != nil && cd.commit.info.Hash == ci.Hash {
+				cd.commit.read.stop()
 				cd.commit = nil
 			}
 			if len(cd.picked) == 0 {
@@ -402,32 +457,43 @@ func (a *app) commitPane(c *ui.Context, v *filesView, cd *compareDoc, list *ui.L
 	if q != "" {
 		count = m.CompareFilteredCount(len(commits), len(all))
 	}
-	// 琥珀色只给"待处理"，这里用顶栏的底
-	ui.Row(c).Height(sz(42)).Shrink(0).Padding(0, 16, 0, 8).Gap(8).AlignItems(ui.Center).Background(p.band).BorderWidth(0, 0, hairline, 0).BorderColor(p.line).Children(func() {
-		// 照 WebStorm 每栏一个搜索框，放在最左边，两栏各搜各的
-		fieldInputSized(c.Key("search-"+in), query, m.CompareSearch(), 220, 100).Label(m.CompareSearchLabel(in))
+	more := in == cd.other && cd.moreOther || in == cd.cur && cd.moreCur
+	if more {
+		count = m.LogMoreCommitCount(len(all))
+	}
+	// 比较方向单独占一行，打开提交详情后也能辨认两侧分支。
+	ui.Row(c).Height(sz(28)).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Background(p.band).Children(func() {
 		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(lane).Shrink(0)
-		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(0).Children(func() {
+		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(1).MinWidth(0).Clip().Tooltip(m.CompareOnlyIn(in, notIn)).Children(func() {
 			// 两个分支名换了字体和颜色：整句按语言取出来，在占位处切开，分支名单独画
 			for _, part := range strings.Split(m.CompareOnlyIn("\x00in\x00", "\x00notIn\x00"), "\x00") {
 				switch part {
 				case "":
 				case "in":
-					// 分支名不缩，地方不够时让搜索框缩；太长的才截断
-					ui.Text(c, in).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(lane).SingleLine().Shrink(0).MaxWidth(200)
+					// 名称可截断，完整比较方向仍可悬停查看。
+					ui.Text(c, in).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(lane).SingleLine().Shrink(1).MinWidth(0).MaxWidth(200)
 				case "notIn":
-					ui.Text(c, notIn).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).SingleLine().Shrink(0).MaxWidth(200)
+					ui.Text(c, notIn).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).SingleLine().Shrink(1).MinWidth(0).MaxWidth(200)
 				default:
 					ui.Text(c, strings.TrimSpace(part)).FontSize(fsBody).SingleLine().Shrink(0)
 				}
 			}
 		})
+	})
+	ui.Row(c).Height(sz(42)).Shrink(0).Padding(0, 16, 0, 8).Gap(8).AlignItems(ui.Center).Background(p.band).BorderWidth(0, 0, hairline, 0).BorderColor(p.line).Children(func() {
+		fieldInputSized(c.Key("search-"+in), query, m.CompareSearch(), 220, 100).Label(m.CompareSearchLabel(in))
 		ui.Spacer(c)
 		ui.Text(c, count).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 		if actions != nil {
 			actions()
 		}
 	})
+	if more {
+		ui.Text(c, m.CompareLoadedLimit(len(all))).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
+	}
+	if v.remote && !cd.loaded {
+		return
+	}
 	if len(all) == 0 {
 		ui.Text(c, m.CompareNoneOnly(notIn, in)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
@@ -556,13 +622,33 @@ func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commit
 			ui.Text(c, ci.Refs).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
 		}
 	})
-	switch {
-	case cv.err != "":
+	if cv.err != "" {
 		ui.Text(c, cv.err).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 16)
-	case cv.files == nil:
-		ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
-	default:
-		selected, open := a.tabDiffs(w, v, commitSpecs(cv.root, ci, cv.files))
+		if a.remoteHost() && !cv.loading && pressable(textButton(c, L(c).CommonRefresh())).Clicked() {
+			for _, d := range v.docs {
+				if d.comp != nil && d.comp.commit == cv {
+					a.loadTargetCompareCommit(v, d, cv.info)
+					break
+				}
+				if d.blame != nil && d.blame.sel == cv {
+					a.loadTargetBlameCommit(v, d, cv.info)
+					break
+				}
+			}
+			for _, d := range v.logs {
+				if d.log.commit == cv {
+					a.loadTargetCommit(v, d, cv.info)
+					break
+				}
+			}
+		}
+	}
+	if cv.files == nil {
+		if cv.err == "" {
+			ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
+		}
+	} else {
+		selected, open := a.tabDiffs(w, v, cv.diffSpecs())
 		nav := fileListNav{focus: &cv.focus, back: back}
 		if !live {
 			nav.cursor = &cv.cursor
@@ -698,20 +784,30 @@ func (nav fileListNav) keys(c *ui.Context, list *ui.ListState, rows []treeRow, f
 // --- Push 对话框
 
 type pushState struct {
-	ws      string
-	root    string // 推送的仓库
-	branch  string
-	plan    gitx.PushPlan
-	loaded  bool
-	err     string
-	commit  *commitView
-	detail  *fileDoc // 右边看着的文件 diff，不在文档区里（文档区的 diff 会被对话框挡住）
-	tags    bool
-	pushing bool
+	read                                         gitRead
+	request                                      appRequest
+	repository                                   *gitState
+	view                                         *filesView
+	preview                                      *gitx.PushPreviewRead
+	remote, followHead, loading, waiting, resume bool
+	ws                                           string
+	root                                         string // 推送的仓库
+	branch                                       string
+	plan                                         gitx.PushPlan
+	loaded                                       bool
+	err                                          string
+	commit                                       *commitView
+	detail                                       *fileDoc // 右边看着的文件 diff，不在文档区里（文档区的 diff 会被对话框挡住）
+	tags                                         bool
+	pushing                                      bool
 }
 
 // openPush 推送当前分支。
 func (a *app) openPush(m locales.Messages, w *workspace) {
+	if a.remoteHost() {
+		a.openTargetPush(w, "")
+		return
+	}
 	v := a.filesFor(w)
 	a.withRepos(v, func() {
 		// 直接读 HEAD：文件栏没打开过时没有状态，w.Branch 在游离时是哈希
@@ -725,6 +821,10 @@ func (a *app) openPush(m locales.Messages, w *workspace) {
 }
 
 func (a *app) openPushBranch(w *workspace, branch string) {
+	if a.remoteHost() {
+		a.openTargetPush(w, branch)
+		return
+	}
 	v := a.filesFor(w)
 	root := v.git.repo
 	ps := &pushState{ws: w.ID, root: root, branch: branch}
@@ -745,6 +845,9 @@ func (a *app) openPushBranch(w *workspace, branch string) {
 func (a *app) pushDialog(c *ui.Context) {
 	t := c.Theme()
 	ps := a.push
+	if ps != nil && ps.remote {
+		a.resumeTargetPush(ps)
+	}
 	open := ps != nil
 	box := &a.pushBox
 	box.min = [2]ui.Rect{{W: 560, H: 300}, {W: 860, H: 420}}
@@ -759,7 +862,7 @@ func (a *app) pushDialog(c *ui.Context) {
 		}
 		w := a.workspace(ps.ws)
 		if w == nil {
-			a.push = nil
+			a.closePush(ps)
 			return
 		}
 		v := a.filesFor(w)
@@ -775,7 +878,17 @@ func (a *app) pushDialog(c *ui.Context) {
 			dlg.Width(width)
 		}
 		dlg.Children(func() {
-			box.title(c, L(c).ComparePushTitle())
+			title := L(c).ComparePushTitle()
+			if ps.remote {
+				title = L(c).PushPreviewTitle()
+			}
+			box.title(c, title)
+			if ps.remote {
+				ui.Text(c, L(c).PushPreviewNotice()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.4)
+				if ps.err != "" {
+					ui.Text(c, ps.err).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.4)
+				}
+			}
 			body := ui.Row(c).Gap(0).AlignItems(ui.Stretch)
 			if box.sized() {
 				body.Grow(1).Shrink(1)
@@ -787,23 +900,37 @@ func (a *app) pushDialog(c *ui.Context) {
 					plan := ps.plan
 					switch {
 					case !ps.loaded:
-						ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4)
+						if ps.err == "" {
+							ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4)
+						}
 						return
-					case ps.err != "":
+					case ps.err != "" && !ps.remote:
 						ui.Text(c, ps.err).FontSize(fsSmall).TextColor(t.Danger).Padding(4).LineHeight(1.4)
 						return
 					}
 					ui.Row(c).Gap(6).Padding(2, 4, 8, 4).Children(func() {
 						ui.Text(c, plan.Branch+" → "+plan.Remote+" : "+plan.RemoteBranch).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).SingleLine().Shrink(1)
 						if plan.NewBranch {
-							ui.Text(c, L(c).CompareNewBranch()).FontSize(fsSmall).TextColor(colors(t).sage).Shrink(0)
+							label := L(c).CompareNewBranch()
+							if ps.remote {
+								label = L(c).PushPreviewMissing()
+							}
+							ui.Text(c, label).FontSize(fsSmall).TextColor(colors(t).sage).Shrink(0)
 						}
 					})
-					if plan.Gone {
+					if ps.preview != nil && ps.preview.More {
+						ui.Text(c, L(c).LogMoreCommitCount(len(plan.Commits))).FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, 4, 4, 4)
+						ui.Text(c, L(c).PushPreviewLimit(len(plan.Commits))).FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, 4, 8, 4)
+					}
+					if plan.Gone && !ps.remote {
 						ui.Text(c, L(c).ComparePushGone(plan.Remote, plan.RemoteBranch)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, 4, 8, 4).LineHeight(1.4)
 					}
 					if len(plan.Commits) == 0 {
-						ui.Text(c, L(c).ComparePushEmpty()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4)
+						label := L(c).ComparePushEmpty()
+						if ps.remote {
+							label = L(c).PushPreviewEmpty()
+						}
+						ui.Text(c, label).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4)
 						return
 					}
 					ui.Scroll(c).Grow(1).Children(func() {
@@ -812,7 +939,7 @@ func (a *app) pushDialog(c *ui.Context) {
 							for i, ci := range plan.Commits {
 								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash, i == 0, i == len(plan.Commits)-1, laneColor(t, 0)).Clicked() {
 									a.selectCommit(ps.root, &ps.commit, ci)
-									ps.detail = nil
+									ps.clearDetail()
 								}
 							}
 						})
@@ -835,12 +962,17 @@ func (a *app) pushDialog(c *ui.Context) {
 						ui.Text(c, cv.info.Subject).FontSize(fsBody).FontWeight(fwMedium)
 						ui.Text(c, cv.info.Hash[:10]+"  "+cv.info.Author).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted)
 					})
-					switch {
-					case cv.err != "":
+					if cv.err != "" {
 						ui.Text(c, cv.err).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 16)
-					case cv.files == nil:
-						ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
-					default:
+						if ps.remote && pressable(textButton(c, L(c).CommonRefresh())).Disabled(cv.loading).Clicked() {
+							a.loadTargetPushCommit(ps, cv.info)
+						}
+					}
+					if cv.files == nil {
+						if cv.err == "" {
+							ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
+						}
+					} else {
 						selected := func(i int) bool { return ps.detail != nil && ps.detail.diff.rel == cv.files[i].Path }
 						a.fileChangeList(c, &cv.list, &cv.folded, cv.files, selected, func(i int) { a.pushShow(v, ps, i, true) }, fileListNav{})
 					}
@@ -850,12 +982,15 @@ func (a *app) pushDialog(c *ui.Context) {
 				}
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Checkbox(c, &ps.tags, L(c).ComparePushTags())
+				ui.Checkbox(c, &ps.tags, L(c).ComparePushTags()).Disabled(ps.remote)
+				if ps.remote && pressable(textButton(c, L(c).CommonRefresh())).Disabled(ps.loading || ps.waiting).Clicked() {
+					a.loadTargetPush(ps)
+				}
 				ui.Spacer(c)
 				if pressable(textButton(c, L(c).CommonCancel())).Clicked() {
-					a.push = nil
+					a.closePush(ps)
 				}
-				ready := ps.loaded && ps.err == "" && (len(ps.plan.Commits) > 0 || ps.plan.NewBranch) && !ps.pushing
+				ready := !ps.remote && ps.loaded && ps.err == "" && (len(ps.plan.Commits) > 0 || ps.plan.NewBranch) && !ps.pushing
 				force := pressable(textButton(c, L(c).CompareForcePushEllipsis())).Tooltip(L(c).CompareForcePushTip())
 				push := pressable(accentButton(c, L(c).ComparePush()))
 				if !ready {
@@ -876,18 +1011,19 @@ func (a *app) pushDialog(c *ui.Context) {
 	})
 	box.apply(panel)
 	if !open && ps != nil && !ps.pushing {
-		a.push = nil
+		a.closePush(ps)
 	}
 }
 
 // pushShow 在对话框右边打开选中提交里第 i 个文件的 diff；排版和忽略空白沿用上一个，地方窄，默认上下合并。
 func (a *app) pushShow(v *filesView, ps *pushState, i int, first bool) {
 	cv := ps.commit
-	df := &diffDoc{diffSpec: commitSpecs(ps.root, cv.info, cv.files)[i], first: first}
+	df := &diffDoc{diffSpec: cv.diffSpecs()[i], first: first}
 	df.state = editor.DiffState{Layout: editor.DiffUnified, IgnoreWhitespace: true}
 	if old := ps.detail; old != nil {
 		df.state.Layout, df.state.IgnoreWhitespace = old.diff.state.Layout, old.diff.state.IgnoreWhitespace
 	}
+	ps.clearDetail()
 	ps.detail = &fileDoc{path: diffKey(df.abs(), df.diffSpec), diff: df, kind: docLoading, started: true}
 	a.loadDiff(v, ps.detail)
 }
@@ -895,6 +1031,9 @@ func (a *app) pushShow(v *filesView, ps *pushState, i int, first bool) {
 // pushStep 是 diff 里的上一处 / 下一处：到头了换到文件树里的上一个 / 下一个文件。
 func (a *app) pushStep(m locales.Messages, v *filesView, ps *pushState, dir int) {
 	d, cv := ps.detail, ps.commit
+	if d == nil || cv == nil || cv.loading || d.diff.loading {
+		return
+	}
 	df := d.diff
 	if next := df.hunk + dir; d.kind == docDiff && next >= 0 && next < len(df.state.Hunks()) {
 		df.hunk = next
@@ -963,8 +1102,11 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 					a.toggleIgnoreSpace(d)
 				}
 			}
+			if ps.remote && d.err != "" && pressable(iconButtonSized(c, iconRefresh, L(c).CommonRefresh(), compactBox(), smallIcon())).Disabled(df.loading).Clicked() {
+				a.loadDiff(v, d)
+			}
 			if pressable(iconButtonSized(c, iconClose, L(c).CompareHideDiff(), compactBox(), smallIcon())).Clicked() {
-				ps.detail = nil
+				ps.clearDetail()
 			}
 		})
 		if ps.detail == nil {
@@ -995,6 +1137,10 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 }
 
 func (a *app) doPush(m locales.Messages, v *filesView, ps *pushState, force bool) {
+	if ps.remote || v.remote || a.remoteHost() {
+		a.err = errtext.Text(targetFileError("git.write"))
+		return
+	}
 	ps.pushing = true
 	plan, tags := ps.plan, ps.tags
 	a.gitDoKind(m, v.repoOrGone(ps.root), gitPush, "Push", func(ctx context.Context, root string) error {
@@ -1002,7 +1148,7 @@ func (a *app) doPush(m locales.Messages, v *filesView, ps *pushState, force bool
 		a.update(func() {
 			ps.pushing = false
 			if err == nil && a.push == ps {
-				a.push = nil
+				a.closePush(ps)
 			}
 		})
 		if gitx.Rejected(err) {

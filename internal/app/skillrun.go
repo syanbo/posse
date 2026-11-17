@@ -9,6 +9,7 @@ import (
 
 	"posse/internal/agent"
 	"posse/internal/errtext"
+	"posse/internal/rpc"
 	"posse/locales"
 )
 
@@ -16,11 +17,12 @@ import (
 // 跑完按退出码给结果，成功了重扫。终端是常驻进程里的普通终端，只是窗口不把它放进标签栏和侧栏（hiddenTerms）；
 // 跑着时关掉对话框不杀命令，转成普通终端标签接着跑。
 type skillRunView struct {
-	open  bool
-	title string
-	about string
-	line  string // 要跑的 shell 命令
-	ws    string
+	open    bool
+	title   string
+	about   string
+	line    string // 要跑的 shell 命令
+	ws      string
+	request appRequest
 
 	id       string             // 跑起来后的终端
 	term     *terminal.Terminal // 接入它的视图
@@ -43,7 +45,7 @@ func (a *app) askSkillCommand(m locales.Messages, title, about, line string, w *
 	}
 	a.closeSkillRun()
 	gen := a.skillRun.gen
-	a.skillRun = skillRunView{open: true, title: title, about: about, line: line, ws: w.ID, gen: gen}
+	a.skillRun = skillRunView{open: true, title: title, about: about, line: line, ws: w.ID, gen: gen, request: a.request()}
 	if start {
 		a.startSkillRun(m)
 	}
@@ -55,22 +57,31 @@ func (a *app) startSkillRun(m locales.Messages) {
 	r.gen++
 	r.starting, r.err = true, ""
 	ws, line, gen := r.ws, r.line, r.gen
+	q := r.request
+	if q.app == nil {
+		q = a.request()
+		r.request = q
+	}
 	go func() {
 		var t terminalInfo
 		// 命令是 POSIX sh 的写法：fish、csh 用户的 shell 读不懂，经 agent.ShellCommand 交给 /bin/sh
-		err := a.call("terminal.create", map[string]any{"workspace": ws, "command": agent.ShellCommand(line)}, &t, 10*time.Second)
+		err := q.call("terminal.create", map[string]any{"workspace": ws, "command": agent.ShellCommand(line)}, &t, 10*time.Second)
 		a.update(func() {
 			if r.gen != gen {
 				// 等终端建好时对话框已经关了或换了一次：命令照跑，留在标签栏里
 				return
 			}
 			r.starting = false
+			if !q.current() {
+				r.err = errtext.Text(rpc.Errorf(rpc.CodeReadOnly, "desktop control is no longer held"))
+				return
+			}
 			if err != nil {
 				r.err = m.SkillsRunOpenError(errtext.Text(err))
 				return
 			}
 			light, dark := terminalThemes()
-			conn := a.c.Attach(t.ID)
+			conn := q.client.Attach(t.ID)
 			term, err := terminal.New(terminal.Options{Conn: conn, Font: a.termFont(), Theme: light, DarkTheme: dark, NoWheelZoom: true})
 			if err != nil {
 				// 没藏起来：命令照跑，留在标签栏里
@@ -114,7 +125,7 @@ func (a *app) closeSkillRun() {
 		delete(a.hiddenTerms, r.id)
 		if r.exit != nil {
 			id := r.id
-			go a.closeTerminal(id)
+			go a.request().closeTerminal(id)
 		} else {
 			a.pollForce.Store(true)
 			go a.refresh()
@@ -123,16 +134,28 @@ func (a *app) closeSkillRun() {
 	*r = skillRunView{gen: r.gen + 1}
 }
 
+// detachSkillRun 只放掉显示与隐藏标记，切主机或控制身份失效不能结束已经接受的命令。
+func (a *app) detachSkillRun() {
+	r := &a.skillRun
+	if r.term != nil {
+		r.term.Close()
+	}
+	delete(a.hiddenTerms, r.id)
+	*r = skillRunView{gen: r.gen + 1}
+	a.pollForce.Store(true)
+}
+
 // showSkillRun 把还在跑或失败了的命令转到终端标签里看。
 func (a *app) showSkillRun() {
 	r := &a.skillRun
 	ws, id := r.ws, r.id
+	q := a.request()
 	r.exit = nil // 留着终端，不随对话框关掉
 	a.closeSkillRun()
 	// 先刷新让它回到列表再选中：列表里还没有它时 currentTerminal 会把选中换回第一个
 	go func() {
-		a.refresh()
-		a.update(func() { a.openTerminal(ws, id) })
+		q.refresh()
+		q.update(func() { a.openTerminal(ws, id) })
 	}()
 }
 
@@ -140,6 +163,9 @@ func (a *app) skillRunDialog(c *ui.Context) {
 	t := c.Theme()
 	m := L(c)
 	r := &a.skillRun
+	if r.request.app != nil && !r.request.current() {
+		a.detachSkillRun()
+	}
 	if !r.open && r.title == "" {
 		return
 	}

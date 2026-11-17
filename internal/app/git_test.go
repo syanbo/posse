@@ -55,6 +55,8 @@ func gitWorkspace(t *testing.T, a *app) string {
 func openChanges(t *testing.T, a *app, tt *ui.Tester) *filesView {
 	t.Helper()
 	v := a.openFilesPanel(&a.workspaces[0], sideChanges)
+	tt.Frame()
+	tt.Advance(300 * time.Millisecond)
 	// 文件栏滑进来之前点不准
 	until(t, tt, "git status", func() bool { return v.git.status != nil && len(v.git.rows) > 0 && a.filesPanelShown == 1 })
 	return v
@@ -1967,13 +1969,12 @@ func TestCompareSplit(t *testing.T) {
 	if gap < 250 {
 		t.Fatalf("panes not split evenly: first commit at %v, second at %v (title %v)", heads[0], heads[1], top)
 	}
-	// 分隔条在下一栏标题上方
-	// 下一栏标题行和其中搜索框的文字同一条中线，标题行再往上半个分隔条（5 高）是分隔条的中间
+	// 分隔条在下一栏标题上方；搜索工具栏上面还有一行比较方向。
 	field, ok := tt.Find("在 main 独有的提交里按信息、哈希或作者筛选")
 	if !ok {
 		t.Fatal("no search field in the lower pane")
 	}
-	y := field.Y + field.H/2 - sz(42)/2 - 2.5
+	y := field.Y + field.H/2 - sz(42)/2 - sz(28) - 2.5
 	tt.Move(600, y)
 	tt.Frame()
 	if tt.Cursor() != ui.CursorResizeNS {
@@ -2414,6 +2415,9 @@ func openLogWait(t *testing.T, a *app, tt *ui.Tester, w *workspace, path string)
 		v := a.files[w.ID]
 		return v != nil && v.logCur != nil && v.logCur.log.filter.Path == path
 	})
+	tt.Frame()
+	tt.Advance(300 * time.Millisecond)
+	tt.Frame()
 }
 
 // 设置里把分支放回标签栏：分支按钮和 Git 日志开关在标签栏、不在状态栏，用量回到状态栏左端；

@@ -70,7 +70,7 @@ func TestHistoryTotalsFollowSearch(t *testing.T) {
 // 这个词的结果确实为空才显示"没有找到"。
 func TestHistorySearchPending(t *testing.T) {
 	a := previewApp(t)
-	offlineClient(t, a)
+	// 这里只推进界面的等待状态，离线客户端的真实失败会提前结束等待。
 	previewHistory(a, "")
 	h := &a.history
 	tt := newTester(a.build, 1200, 760)
@@ -140,7 +140,7 @@ func TestFetchHistoryErrors(t *testing.T) {
 	h.mu.Unlock()
 	done := make(chan struct{})
 	go func() {
-		a.fetchHistory(1)
+		a.request().fetchHistory(1)
 		close(done)
 	}()
 	for calls.Load() == 0 {
@@ -158,5 +158,8 @@ func TestFetchHistoryErrors(t *testing.T) {
 	a.runPending()
 	if a.err != "" {
 		t.Fatalf("err bar %q", a.err)
+	}
+	if h.failed == "" {
+		t.Fatal("history failure was not shown in the page")
 	}
 }

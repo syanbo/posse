@@ -35,6 +35,482 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// FetchManual says "Fetch from all remotes"
+// in the language the app shows.
+//
+// Manually fetch all remotes on this host; automatic fetching is not
+// available through this connection.
+func FetchManual() string { return In(i18n.Locale()).FetchManual() }
+
+// FetchManual says "Fetch from all remotes"
+// in the language of msgs.
+//
+// Manually fetch all remotes on this host; automatic fetching is not
+// available through this connection.
+func (msgs Messages) FetchManual() string {
+	return Catalog.Format(msgs.locale, "fetchManual", nil)
+}
+
+// FetchUnknown says "The previous Fetch result is unknown. Query the original operation or refresh the current repository state."
+// in the language the app shows.
+//
+// Unknown Fetch outcome; current refs cannot prove whether it succeeded.
+func FetchUnknown() string { return In(i18n.Locale()).FetchUnknown() }
+
+// FetchUnknown says "The previous Fetch result is unknown. Query the original operation or refresh the current repository state."
+// in the language of msgs.
+//
+// Unknown Fetch outcome; current refs cannot prove whether it succeeded.
+func (msgs Messages) FetchUnknown() string {
+	return Catalog.Format(msgs.locale, "fetchUnknown", nil)
+}
+
+// FetchQuery says "Query operation"
+// in the language the app shows.
+//
+// Query the saved original Fetch operation reference without sending Fetch
+// again.
+func FetchQuery() string { return In(i18n.Locale()).FetchQuery() }
+
+// FetchQuery says "Query operation"
+// in the language of msgs.
+//
+// Query the saved original Fetch operation reference without sending Fetch
+// again.
+func (msgs Messages) FetchQuery() string {
+	return Catalog.Format(msgs.locale, "fetchQuery", nil)
+}
+
+// FetchRefresh says "Refresh current state"
+// in the language the app shows.
+//
+// Refresh repository reads without resolving the original Fetch outcome.
+func FetchRefresh() string { return In(i18n.Locale()).FetchRefresh() }
+
+// FetchRefresh says "Refresh current state"
+// in the language of msgs.
+//
+// Refresh repository reads without resolving the original Fetch outcome.
+func (msgs Messages) FetchRefresh() string {
+	return Catalog.Format(msgs.locale, "fetchRefresh", nil)
+}
+
+// FetchCancelRequested says "Cancellation requested; waiting for the operation result."
+// in the language the app shows.
+//
+// Cancel acknowledgement is not a completed operation.
+func FetchCancelRequested() string { return In(i18n.Locale()).FetchCancelRequested() }
+
+// FetchCancelRequested says "Cancellation requested; waiting for the operation result."
+// in the language of msgs.
+//
+// Cancel acknowledgement is not a completed operation.
+func (msgs Messages) FetchCancelRequested() string {
+	return Catalog.Format(msgs.locale, "fetchCancelRequested", nil)
+}
+
+// FetchPartial says "Some refs may have changed. Refresh the current state to check."
+// in the language the app shows.
+//
+// Fetch failure, timeout, or cancellation after execution started may leave
+// partial updates.
+func FetchPartial() string { return In(i18n.Locale()).FetchPartial() }
+
+// FetchPartial says "Some refs may have changed. Refresh the current state to check."
+// in the language of msgs.
+//
+// Fetch failure, timeout, or cancellation after execution started may leave
+// partial updates.
+func (msgs Messages) FetchPartial() string {
+	return Catalog.Format(msgs.locale, "fetchPartial", nil)
+}
+
+// FetchResult says "{status, select, succeeded {Fetch completed} failed {Fetch failed} canceled {Fetch canceled} timed_out {Fetch timed o…"
+// in the language the app shows.
+//
+// Confirmed typed Fetch terminal outcome.
+func FetchResult(status string) string { return In(i18n.Locale()).FetchResult(status) }
+
+// FetchResult says "{status, select, succeeded {Fetch completed} failed {Fetch failed} canceled {Fetch canceled} timed_out {Fetch timed o…"
+// in the language of msgs.
+//
+// Confirmed typed Fetch terminal outcome.
+func (msgs Messages) FetchResult(status string) string {
+	return Catalog.Format(msgs.locale, "fetchResult", map[string]any{"status": status})
+}
+
+// FetchNewTitle says "Start another Fetch?"
+// in the language the app shows.
+//
+// Confirmation before replacing the block from an unknown Fetch outcome.
+func FetchNewTitle() string { return In(i18n.Locale()).FetchNewTitle() }
+
+// FetchNewTitle says "Start another Fetch?"
+// in the language of msgs.
+//
+// Confirmation before replacing the block from an unknown Fetch outcome.
+func (msgs Messages) FetchNewTitle() string {
+	return Catalog.Format(msgs.locale, "fetchNewTitle", nil)
+}
+
+// FetchNewBody says "The previous result is still unknown and that operation may still be running. After checking the current repository s…"
+// in the language the app shows.
+//
+// Explicit disposition of an unknown Fetch; a new operation reference will
+// be allocated.
+func FetchNewBody() string { return In(i18n.Locale()).FetchNewBody() }
+
+// FetchNewBody says "The previous result is still unknown and that operation may still be running. After checking the current repository s…"
+// in the language of msgs.
+//
+// Explicit disposition of an unknown Fetch; a new operation reference will
+// be allocated.
+func (msgs Messages) FetchNewBody() string {
+	return Catalog.Format(msgs.locale, "fetchNewBody", nil)
+}
+
+// FetchNewAction says "Start new Fetch"
+// in the language the app shows.
+//
+// Explicitly authorize a new Fetch despite an unresolved previous result.
+func FetchNewAction() string { return In(i18n.Locale()).FetchNewAction() }
+
+// FetchNewAction says "Start new Fetch"
+// in the language of msgs.
+//
+// Explicitly authorize a new Fetch despite an unresolved previous result.
+func (msgs Messages) FetchNewAction() string {
+	return Catalog.Format(msgs.locale, "fetchNewAction", nil)
+}
+
+// FetchCapacity says "Too many unresolved Git operations. Query or review previous operations before starting another Fetch."
+// in the language the app shows.
+//
+// Fetch operation records reached the in-memory count or byte limit.
+func FetchCapacity() string { return In(i18n.Locale()).FetchCapacity() }
+
+// FetchCapacity says "Too many unresolved Git operations. Query or review previous operations before starting another Fetch."
+// in the language of msgs.
+//
+// Fetch operation records reached the in-memory count or byte limit.
+func (msgs Messages) FetchCapacity() string {
+	return Catalog.Format(msgs.locale, "fetchCapacity", nil)
+}
+
+// FetchConsoleScope says "Only Fetch records from this window session are shown."
+// in the language the app shows.
+//
+// Scope of in-memory target Fetch command records in Console.
+func FetchConsoleScope() string { return In(i18n.Locale()).FetchConsoleScope() }
+
+// FetchConsoleScope says "Only Fetch records from this window session are shown."
+// in the language of msgs.
+//
+// Scope of in-memory target Fetch command records in Console.
+func (msgs Messages) FetchConsoleScope() string {
+	return Catalog.Format(msgs.locale, "fetchConsoleScope", nil)
+}
+
+// FetchLogsTruncated says "Some command output or records were omitted."
+// in the language the app shows.
+//
+// Target Fetch returned truncated bounded command records.
+func FetchLogsTruncated() string { return In(i18n.Locale()).FetchLogsTruncated() }
+
+// FetchLogsTruncated says "Some command output or records were omitted."
+// in the language of msgs.
+//
+// Target Fetch returned truncated bounded command records.
+func (msgs Messages) FetchLogsTruncated() string {
+	return Catalog.Format(msgs.locale, "fetchLogsTruncated", nil)
+}
+
+// BranchRefreshBase says "Refresh base comparison"
+// in the language the app shows.
+//
+// Refresh commit counts and conflict prediction against the workspace base
+// branch.
+func BranchRefreshBase() string { return In(i18n.Locale()).BranchRefreshBase() }
+
+// BranchRefreshBase says "Refresh base comparison"
+// in the language of msgs.
+//
+// Refresh commit counts and conflict prediction against the workspace base
+// branch.
+func (msgs Messages) BranchRefreshBase() string {
+	return Catalog.Format(msgs.locale, "branchRefreshBase", nil)
+}
+
+// BranchPredictionUnavailable says "Conflict prediction unavailable: {reason, select, attributes {unsupported merge attributes} config {unsupported merge…"
+// in the language the app shows.
+//
+// Explain an unavailable merge prediction using a structured reason from
+// the target Git service; commit counts remain valid.
+func BranchPredictionUnavailable(reason string) string {
+	return In(i18n.Locale()).BranchPredictionUnavailable(reason)
+}
+
+// BranchPredictionUnavailable says "Conflict prediction unavailable: {reason, select, attributes {unsupported merge attributes} config {unsupported merge…"
+// in the language of msgs.
+//
+// Explain an unavailable merge prediction using a structured reason from
+// the target Git service; commit counts remain valid.
+func (msgs Messages) BranchPredictionUnavailable(reason string) string {
+	return Catalog.Format(msgs.locale, "branchPredictionUnavailable", map[string]any{"reason": reason})
+}
+
+// BranchPredictionClear says "No conflicts predicted"
+// in the language the app shows.
+//
+// The target completed merge prediction and found no conflicts.
+func BranchPredictionClear() string { return In(i18n.Locale()).BranchPredictionClear() }
+
+// BranchPredictionClear says "No conflicts predicted"
+// in the language of msgs.
+//
+// The target completed merge prediction and found no conflicts.
+func (msgs Messages) BranchPredictionClear() string {
+	return Catalog.Format(msgs.locale, "branchPredictionClear", nil)
+}
+
+// BranchBaseReadOnly says "Read-only comparison; syncing and merging are not available yet."
+// in the language the app shows.
+//
+// Disabled sync and merge button tooltip for remote worktree base
+// comparison.
+func BranchBaseReadOnly() string { return In(i18n.Locale()).BranchBaseReadOnly() }
+
+// BranchBaseReadOnly says "Read-only comparison; syncing and merging are not available yet."
+// in the language of msgs.
+//
+// Disabled sync and merge button tooltip for remote worktree base
+// comparison.
+func (msgs Messages) BranchBaseReadOnly() string {
+	return Catalog.Format(msgs.locale, "branchBaseReadOnly", nil)
+}
+
+// PushPreviewTitle says "Push Preview"
+// in the language the app shows.
+//
+// Read-only push preview title and menu action for a remote host.
+func PushPreviewTitle() string { return In(i18n.Locale()).PushPreviewTitle() }
+
+// PushPreviewTitle says "Push Preview"
+// in the language of msgs.
+//
+// Read-only push preview title and menu action for a remote host.
+func (msgs Messages) PushPreviewTitle() string {
+	return Catalog.Format(msgs.locale, "pushPreviewTitle", nil)
+}
+
+// PushPreviewNotice says "Read-only preview; pushing is not available yet. Uses this host’s recorded remote-tracking refs without contacting …"
+// in the language the app shows.
+//
+// Explain that the remote-host push preview cannot push or verify live
+// remote refs.
+func PushPreviewNotice() string { return In(i18n.Locale()).PushPreviewNotice() }
+
+// PushPreviewNotice says "Read-only preview; pushing is not available yet. Uses this host’s recorded remote-tracking refs without contacting …"
+// in the language of msgs.
+//
+// Explain that the remote-host push preview cannot push or verify live
+// remote refs.
+func (msgs Messages) PushPreviewNotice() string {
+	return Catalog.Format(msgs.locale, "pushPreviewNotice", nil)
+}
+
+// PushPreviewMissing says "No tracking ref"
+// in the language the app shows.
+//
+// The host has no recorded remote-tracking ref for the push destination.
+func PushPreviewMissing() string { return In(i18n.Locale()).PushPreviewMissing() }
+
+// PushPreviewMissing says "No tracking ref"
+// in the language of msgs.
+//
+// The host has no recorded remote-tracking ref for the push destination.
+func (msgs Messages) PushPreviewMissing() string {
+	return Catalog.Format(msgs.locale, "pushPreviewMissing", nil)
+}
+
+// PushPreviewEmpty says "No commits to list against the recorded tracking ref."
+// in the language the app shows.
+//
+// Empty push preview based on stored remote-tracking refs, not live remote
+// state.
+func PushPreviewEmpty() string { return In(i18n.Locale()).PushPreviewEmpty() }
+
+// PushPreviewEmpty says "No commits to list against the recorded tracking ref."
+// in the language of msgs.
+//
+// Empty push preview based on stored remote-tracking refs, not live remote
+// state.
+func (msgs Messages) PushPreviewEmpty() string {
+	return Catalog.Format(msgs.locale, "pushPreviewEmpty", nil)
+}
+
+// PushPreviewLimit says "Only the first {count, plural, one {# commit is} other {# commits are}} shown."
+// in the language the app shows.
+//
+// Explain the loaded commit limit in the push preview.
+func PushPreviewLimit(count int) string { return In(i18n.Locale()).PushPreviewLimit(count) }
+
+// PushPreviewLimit says "Only the first {count, plural, one {# commit is} other {# commits are}} shown."
+// in the language of msgs.
+//
+// Explain the loaded commit limit in the push preview.
+func (msgs Messages) PushPreviewLimit(count int) string {
+	return Catalog.Format(msgs.locale, "pushPreviewLimit", map[string]any{"count": count})
+}
+
+// CompareRefresh says "Refresh comparison"
+// in the language the app shows.
+//
+// Return to the working tree comparison and refresh its file list and
+// content baseline.
+func CompareRefresh() string { return In(i18n.Locale()).CompareRefresh() }
+
+// CompareRefresh says "Refresh comparison"
+// in the language of msgs.
+//
+// Return to the working tree comparison and refresh its file list and
+// content baseline.
+func (msgs Messages) CompareRefresh() string {
+	return Catalog.Format(msgs.locale, "compareRefresh", nil)
+}
+
+// CompareLoadedLimit says "Only the first {count, plural, one {# commit is} other {# commits are}} shown and searched."
+// in the language the app shows.
+//
+// Notice below a truncated branch comparison list: its search only covers
+// the loaded commits.
+func CompareLoadedLimit(count int) string { return In(i18n.Locale()).CompareLoadedLimit(count) }
+
+// CompareLoadedLimit says "Only the first {count, plural, one {# commit is} other {# commits are}} shown and searched."
+// in the language of msgs.
+//
+// Notice below a truncated branch comparison list: its search only covers
+// the loaded commits.
+func (msgs Messages) CompareLoadedLimit(count int) string {
+	return Catalog.Format(msgs.locale, "compareLoadedLimit", map[string]any{"count": count})
+}
+
+// TargetDirectoryHost says "Host: {host}"
+// in the language the app shows.
+//
+// Target host whose directories are displayed in the directory picker.
+func TargetDirectoryHost(host string) string { return In(i18n.Locale()).TargetDirectoryHost(host) }
+
+// TargetDirectoryHost says "Host: {host}"
+// in the language of msgs.
+//
+// Target host whose directories are displayed in the directory picker.
+func (msgs Messages) TargetDirectoryHost(host string) string {
+	return Catalog.Format(msgs.locale, "targetDirectoryHost", map[string]any{"host": host})
+}
+
+// TargetDirectoryParent says "Parent folder"
+// in the language the app shows.
+//
+// Navigate to the parent folder in the target directory picker.
+func TargetDirectoryParent() string { return In(i18n.Locale()).TargetDirectoryParent() }
+
+// TargetDirectoryParent says "Parent folder"
+// in the language of msgs.
+//
+// Navigate to the parent folder in the target directory picker.
+func (msgs Messages) TargetDirectoryParent() string {
+	return Catalog.Format(msgs.locale, "targetDirectoryParent", nil)
+}
+
+// TargetDirectoryPath says "Absolute directory path"
+// in the language the app shows.
+//
+// Accessible label for the target directory path; press Enter to open it.
+func TargetDirectoryPath() string { return In(i18n.Locale()).TargetDirectoryPath() }
+
+// TargetDirectoryPath says "Absolute directory path"
+// in the language of msgs.
+//
+// Accessible label for the target directory path; press Enter to open it.
+func (msgs Messages) TargetDirectoryPath() string {
+	return Catalog.Format(msgs.locale, "targetDirectoryPath", nil)
+}
+
+// TargetDirectoryEmpty says "No subfolders"
+// in the language the app shows.
+//
+// The directory picker lists only folders; the current directory can still
+// be selected.
+func TargetDirectoryEmpty() string { return In(i18n.Locale()).TargetDirectoryEmpty() }
+
+// TargetDirectoryEmpty says "No subfolders"
+// in the language of msgs.
+//
+// The directory picker lists only folders; the current directory can still
+// be selected.
+func (msgs Messages) TargetDirectoryEmpty() string {
+	return Catalog.Format(msgs.locale, "targetDirectoryEmpty", nil)
+}
+
+// SshAuthTitle says "Connect to {host}"
+// in the language the app shows.
+//
+// Title of the SSH authentication dialog, naming the selected host.
+func SshAuthTitle(host string) string { return In(i18n.Locale()).SshAuthTitle(host) }
+
+// SshAuthTitle says "Connect to {host}"
+// in the language of msgs.
+//
+// Title of the SSH authentication dialog, naming the selected host.
+func (msgs Messages) SshAuthTitle(host string) string {
+	return Catalog.Format(msgs.locale, "sshAuthTitle", map[string]any{"host": host})
+}
+
+// SshAuthAnswer says "Password or passphrase"
+// in the language the app shows.
+//
+// Accessible label for the masked SSH authentication answer field.
+func SshAuthAnswer() string { return In(i18n.Locale()).SshAuthAnswer() }
+
+// SshAuthAnswer says "Password or passphrase"
+// in the language of msgs.
+//
+// Accessible label for the masked SSH authentication answer field.
+func (msgs Messages) SshAuthAnswer() string {
+	return Catalog.Format(msgs.locale, "sshAuthAnswer", nil)
+}
+
+// SshAuthTrust says "Trust and connect"
+// in the language the app shows.
+//
+// Explicitly accept the host key displayed by SSH and continue connecting.
+func SshAuthTrust() string { return In(i18n.Locale()).SshAuthTrust() }
+
+// SshAuthTrust says "Trust and connect"
+// in the language of msgs.
+//
+// Explicitly accept the host key displayed by SSH and continue connecting.
+func (msgs Messages) SshAuthTrust() string {
+	return Catalog.Format(msgs.locale, "sshAuthTrust", nil)
+}
+
+// NavigationLocal says "{name} (This Mac)"
+// in the language the app shows.
+//
+// Navigation label for a module that always belongs to this Mac while
+// browsing another host.
+func NavigationLocal(name string) string { return In(i18n.Locale()).NavigationLocal(name) }
+
+// NavigationLocal says "{name} (This Mac)"
+// in the language of msgs.
+//
+// Navigation label for a module that always belongs to this Mac while
+// browsing another host.
+func (msgs Messages) NavigationLocal(name string) string {
+	return Catalog.Format(msgs.locale, "navigationLocal", map[string]any{"name": name})
+}
+
 // AppAddProjectButton says "Add"
 // in the language the app shows.
 //
@@ -2621,24 +3097,6 @@ func (msgs Messages) ChatConvertProject() string {
 	return Catalog.Format(msgs.locale, "chatConvertProject", nil)
 }
 
-// ChatCreateFolderError says "Could not create the chat folder: {error}"
-// in the language the app shows.
-//
-// Chat sidebar tile, settings card, or folder action: error message for
-// CreateFolderError. Values: error.
-func ChatCreateFolderError(error string) string {
-	return In(i18n.Locale()).ChatCreateFolderError(error)
-}
-
-// ChatCreateFolderError says "Could not create the chat folder: {error}"
-// in the language of msgs.
-//
-// Chat sidebar tile, settings card, or folder action: error message for
-// CreateFolderError. Values: error.
-func (msgs Messages) ChatCreateFolderError(error string) string {
-	return Catalog.Format(msgs.locale, "chatCreateFolderError", map[string]any{"error": error})
-}
-
 // ChatGrokNote says "Grok asks for confirmation in each untrusted folder. Press y on the first screen of a new chat."
 // in the language the app shows.
 //
@@ -4879,6 +5337,188 @@ func FilesNotFound() string { return In(i18n.Locale()).FilesNotFound() }
 // File tab message: the file is missing.
 func (msgs Messages) FilesNotFound() string {
 	return Catalog.Format(msgs.locale, "filesNotFound", nil)
+}
+
+// FilesUpload says "Upload File…"
+// in the language the app shows.
+//
+// Remote file menu: choose a local file to upload into the selected target
+// folder.
+func FilesUpload() string { return In(i18n.Locale()).FilesUpload() }
+
+// FilesUpload says "Upload File…"
+// in the language of msgs.
+//
+// Remote file menu: choose a local file to upload into the selected target
+// folder.
+func (msgs Messages) FilesUpload() string {
+	return Catalog.Format(msgs.locale, "filesUpload", nil)
+}
+
+// FilesDownload says "Download Copy…"
+// in the language the app shows.
+//
+// Remote file menu: save a separate copy on this Mac.
+func FilesDownload() string { return In(i18n.Locale()).FilesDownload() }
+
+// FilesDownload says "Download Copy…"
+// in the language of msgs.
+//
+// Remote file menu: save a separate copy on this Mac.
+func (msgs Messages) FilesDownload() string {
+	return Catalog.Format(msgs.locale, "filesDownload", nil)
+}
+
+// FilesOpenCopy says "Open Copy with Local App…"
+// in the language the app shows.
+//
+// Remote file menu and binary preview: save a separate local copy, then
+// open it with the default app; edits do not sync back.
+func FilesOpenCopy() string { return In(i18n.Locale()).FilesOpenCopy() }
+
+// FilesOpenCopy says "Open Copy with Local App…"
+// in the language of msgs.
+//
+// Remote file menu and binary preview: save a separate local copy, then
+// open it with the default app; edits do not sync back.
+func (msgs Messages) FilesOpenCopy() string {
+	return Catalog.Format(msgs.locale, "filesOpenCopy", nil)
+}
+
+// FilesSaveCopyAndOpen says "Save Copy and Open"
+// in the language the app shows.
+//
+// Local save dialog title before opening a downloaded remote file copy.
+func FilesSaveCopyAndOpen() string { return In(i18n.Locale()).FilesSaveCopyAndOpen() }
+
+// FilesSaveCopyAndOpen says "Save Copy and Open"
+// in the language of msgs.
+//
+// Local save dialog title before opening a downloaded remote file copy.
+func (msgs Messages) FilesSaveCopyAndOpen() string {
+	return Catalog.Format(msgs.locale, "filesSaveCopyAndOpen", nil)
+}
+
+// FilesOpenCopyFailed says "Saved {name}, but couldn’t open the copy: {error}"
+// in the language the app shows.
+//
+// The download succeeded but the local default app could not open the saved
+// copy.
+func FilesOpenCopyFailed(name string, error string) string {
+	return In(i18n.Locale()).FilesOpenCopyFailed(name, error)
+}
+
+// FilesOpenCopyFailed says "Saved {name}, but couldn’t open the copy: {error}"
+// in the language of msgs.
+//
+// The download succeeded but the local default app could not open the saved
+// copy.
+func (msgs Messages) FilesOpenCopyFailed(name string, error string) string {
+	return Catalog.Format(msgs.locale, "filesOpenCopyFailed", map[string]any{"name": name, "error": error})
+}
+
+// FilesTransferReplaceTitle says "Replace {name}?"
+// in the language the app shows.
+//
+// Upload confirmation title for an existing target file.
+func FilesTransferReplaceTitle(name string) string {
+	return In(i18n.Locale()).FilesTransferReplaceTitle(name)
+}
+
+// FilesTransferReplaceTitle says "Replace {name}?"
+// in the language of msgs.
+//
+// Upload confirmation title for an existing target file.
+func (msgs Messages) FilesTransferReplaceTitle(name string) string {
+	return Catalog.Format(msgs.locale, "filesTransferReplaceTitle", map[string]any{"name": name})
+}
+
+// FilesTransferReplaceBody says "Uploading will replace the file at {path} on the selected host."
+// in the language the app shows.
+//
+// Upload confirmation identifies the target file that will be replaced.
+func FilesTransferReplaceBody(path string) string {
+	return In(i18n.Locale()).FilesTransferReplaceBody(path)
+}
+
+// FilesTransferReplaceBody says "Uploading will replace the file at {path} on the selected host."
+// in the language of msgs.
+//
+// Upload confirmation identifies the target file that will be replaced.
+func (msgs Messages) FilesTransferReplaceBody(path string) string {
+	return Catalog.Format(msgs.locale, "filesTransferReplaceBody", map[string]any{"path": path})
+}
+
+// FilesTransferReplace says "Replace"
+// in the language the app shows.
+//
+// Confirm replacing the target file with an uploaded file.
+func FilesTransferReplace() string { return In(i18n.Locale()).FilesTransferReplace() }
+
+// FilesTransferReplace says "Replace"
+// in the language of msgs.
+//
+// Confirm replacing the target file with an uploaded file.
+func (msgs Messages) FilesTransferReplace() string {
+	return Catalog.Format(msgs.locale, "filesTransferReplace", nil)
+}
+
+// FilesTransferring says "Transferring {name}…"
+// in the language the app shows.
+//
+// File panel status while checking or transferring a file.
+func FilesTransferring(name string) string { return In(i18n.Locale()).FilesTransferring(name) }
+
+// FilesTransferring says "Transferring {name}…"
+// in the language of msgs.
+//
+// File panel status while checking or transferring a file.
+func (msgs Messages) FilesTransferring(name string) string {
+	return Catalog.Format(msgs.locale, "filesTransferring", map[string]any{"name": name})
+}
+
+// FilesTransferFailed says "Couldn’t transfer {name}: {error}"
+// in the language the app shows.
+//
+// File upload or download error.
+func FilesTransferFailed(name string, error string) string {
+	return In(i18n.Locale()).FilesTransferFailed(name, error)
+}
+
+// FilesTransferFailed says "Couldn’t transfer {name}: {error}"
+// in the language of msgs.
+//
+// File upload or download error.
+func (msgs Messages) FilesTransferFailed(name string, error string) string {
+	return Catalog.Format(msgs.locale, "filesTransferFailed", map[string]any{"name": name, "error": error})
+}
+
+// FilesUploaded says "Uploaded {name}"
+// in the language the app shows.
+//
+// Successful upload notification.
+func FilesUploaded(name string) string { return In(i18n.Locale()).FilesUploaded(name) }
+
+// FilesUploaded says "Uploaded {name}"
+// in the language of msgs.
+//
+// Successful upload notification.
+func (msgs Messages) FilesUploaded(name string) string {
+	return Catalog.Format(msgs.locale, "filesUploaded", map[string]any{"name": name})
+}
+
+// FilesDownloaded says "Downloaded {name}"
+// in the language the app shows.
+//
+// Successful download notification.
+func FilesDownloaded(name string) string { return In(i18n.Locale()).FilesDownloaded(name) }
+
+// FilesDownloaded says "Downloaded {name}"
+// in the language of msgs.
+//
+// Successful download notification.
+func (msgs Messages) FilesDownloaded(name string) string {
+	return Catalog.Format(msgs.locale, "filesDownloaded", map[string]any{"name": name})
 }
 
 // FilesOpenWithDefaultApp says "Open with Default App"
@@ -17549,34 +18189,44 @@ func (msgs Messages) SidebarOpenTerminal() string {
 	return Catalog.Format(msgs.locale, "sidebarOpenTerminal", nil)
 }
 
+// SidebarPinned says "Pinned"
+// in the language the app shows.
+//
+// Workspace sidebar: pinned workspaces section and drag target.
+func SidebarPinned() string { return In(i18n.Locale()).SidebarPinned() }
+
+// SidebarPinned says "Pinned"
+// in the language of msgs.
+//
+// Workspace sidebar: pinned workspaces section and drag target.
+func (msgs Messages) SidebarPinned() string {
+	return Catalog.Format(msgs.locale, "sidebarPinned", nil)
+}
+
 // SidebarPin says "Pin to Top"
 // in the language the app shows.
 //
-// Sidebar workspace context menu item: adds the workspace as a tile at the
-// top of the sidebar.
+// Workspace context menu item: adds the workspace to the pinned section.
 func SidebarPin() string { return In(i18n.Locale()).SidebarPin() }
 
 // SidebarPin says "Pin to Top"
 // in the language of msgs.
 //
-// Sidebar workspace context menu item: adds the workspace as a tile at the
-// top of the sidebar.
+// Workspace context menu item: adds the workspace to the pinned section.
 func (msgs Messages) SidebarPin() string {
 	return Catalog.Format(msgs.locale, "sidebarPin", nil)
 }
 
-// SidebarPinFull says "{count, plural, one {Pin to Top (Full: # Tile Max)} other {Pin to Top (Full: # Tiles Max)}}"
+// SidebarPinFull says "{count, plural, one {Pin to Top (Full: # Workspace Max)} other {Pin to Top (Full: # Workspaces Max)}}"
 // in the language the app shows.
 //
-// Sidebar workspace context menu item, disabled because the tiles at the
-// top are full.
+// Workspace context menu item, disabled because the pinned section is full.
 func SidebarPinFull(count int) string { return In(i18n.Locale()).SidebarPinFull(count) }
 
-// SidebarPinFull says "{count, plural, one {Pin to Top (Full: # Tile Max)} other {Pin to Top (Full: # Tiles Max)}}"
+// SidebarPinFull says "{count, plural, one {Pin to Top (Full: # Workspace Max)} other {Pin to Top (Full: # Workspaces Max)}}"
 // in the language of msgs.
 //
-// Sidebar workspace context menu item, disabled because the tiles at the
-// top are full.
+// Workspace context menu item, disabled because the pinned section is full.
 func (msgs Messages) SidebarPinFull(count int) string {
 	return Catalog.Format(msgs.locale, "sidebarPinFull", map[string]any{"count": count})
 }

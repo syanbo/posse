@@ -419,7 +419,7 @@ func TestSessionButtonsFold(t *testing.T) {
 	}
 }
 
-// 手机占着终端尺寸时，终端上方有提示和"改回电脑尺寸"，点了提示条就收起。
+// 收回尺寸失败时保留手机尺寸提示，不能把点击误当作目标已经完成调整。
 func TestPhoneSizedBar(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
@@ -433,10 +433,15 @@ func TestPhoneSizedBar(t *testing.T) {
 	if err := tt.Click("改回电脑尺寸"); err != nil {
 		t.Fatal(err)
 	}
+	if a.err == "" {
+		awaitHostUpdate(t, a)
+	}
 	settle(tt)
-	// 测试里没有常驻进程，错误条上会有"改回电脑尺寸失败"，看提示条本身
-	if a.workspaces[0].Terminals[0].PhoneSized || tt.HasText("手机正在看这个终端，按手机屏幕排版") {
-		t.Fatal("bar should go away after reclaiming")
+	if a.err == "" {
+		t.Fatal("failed reclaim did not report an error")
+	}
+	if !a.workspaces[0].Terminals[0].PhoneSized || !tt.HasText("手机正在看这个终端，按手机屏幕排版") {
+		t.Fatal("failed reclaim hid the phone size state")
 	}
 }
 

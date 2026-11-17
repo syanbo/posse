@@ -20,7 +20,7 @@ func isJSON(path string) bool {
 // formatJSON 把 JSON 文件整理成缩进格式（键的顺序不变），作为一次编辑：能撤销，保存照常按 ⌘S。
 // 语法错误时在编辑器顶上提示是第几行，不改内容。
 func (a *app) formatJSON(m locales.Messages, d *fileDoc) {
-	if d.kind != docText || d.readOnly || !isJSON(d.path) {
+	if d.kind != docText || !a.canEditDoc(d) || !isJSON(d.path) {
 		return
 	}
 	src := d.ed.Buffer.String()
