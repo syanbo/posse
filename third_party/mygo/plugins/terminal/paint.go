@@ -82,28 +82,51 @@ func (v *view) layout(r ui.Rect, scale float32) {
 	t.mu.Lock()
 	f := t.font()
 	fk := f.key(scale)
+	viewer := t.ReadOnly() && !t.awaitingState
+	cols, rows := t.size.cols, t.size.rows
 	t.mu.Unlock()
+	v.size = [2]float32{r.W, r.H}
+	px, py := t.opts.padding()
+	v.ox, v.oy = int(math.Round(float64(px*scale))), int(math.Round(float64(py*scale)))
+	w, h := int(math.Round(float64(r.W*scale)))-2*v.ox, int(math.Round(float64(r.H*scale)))-2*v.oy
+	if viewer {
+		// Posse: 小窗口缩小整张远端网格，备用屏幕的底行和右侧也必须看得见。
+		if fk != v.baseFont {
+			v.baseFont = fk
+			v.baseCellW, v.baseCellH, _ = fontCellMetrics(fk)
+		}
+		ratio := min(float32(max(w/cols, 1))/float32(v.baseCellW), float32(max(h/rows, 1))/float32(v.baseCellH), 1)
+		fk.size *= ratio
+	}
 	if fk != v.font {
 		v.font, v.scale = fk, scale
 		for i := range v.fonts {
 			v.fonts[i] = fk.variant(i)
 		}
-		m := v.fonts[0].Metrics()
-		adv := float32(0)
-		for _, g := range ui.Shape(asciiPrintable, v.fonts[0]) {
-			adv = max(adv, g.Advance)
-		}
-		v.cellW = max(int(math.Ceil(float64(adv*scale-0.05))), 1)
-		v.cellH = max(int(math.Ceil(float64((m.Ascent+m.Descent+m.LineGap)*fk.lineHeight*scale-0.05))), 1)
-		v.baseline = int(math.Round(float64((float32(v.cellH)-(m.Ascent+m.Descent)*scale)/2 + m.Ascent*scale)))
+		v.cellW, v.cellH, v.baseline = fontCellMetrics(fk)
 		v.shaped.clear()
 		v.lines = v.lines[:0]
 	}
-	v.size = [2]float32{r.W, r.H}
-	px, py := t.opts.padding()
-	v.ox, v.oy = int(math.Round(float64(px*scale))), int(math.Round(float64(py*scale)))
-	w, h := int(math.Round(float64(r.W*scale)))-2*v.ox, int(math.Round(float64(r.H*scale)))-2*v.oy
 	v.cols, v.rows = max(w/v.cellW, 1), max(h/v.cellH, 1)
+	if viewer {
+		// Posse: 链接、选区和鼠标命中始终用远端列数，不能拿窗口宽度编码行坐标。
+		v.cols, v.rows = cols, rows
+	}
+}
+
+// Posse: 原字号与适配窗口后的字号共用度量，原字号结果缓存在 view 上。
+func fontCellMetrics(fk fontKey) (width, height, baseline int) {
+	font := fk.variant(0)
+	m := font.Metrics()
+	adv := float32(0)
+	for _, g := range ui.Shape(asciiPrintable, font) {
+		adv = max(adv, g.Advance)
+	}
+	scale := fk.scale
+	width = max(int(math.Ceil(float64(adv*scale-0.05))), 1)
+	height = max(int(math.Ceil(float64((m.Ascent+m.Descent+m.LineGap)*fk.lineHeight*scale-0.05))), 1)
+	baseline = int(math.Round(float64((float32(height)-(m.Ascent+m.Descent)*scale)/2 + m.Ascent*scale)))
+	return
 }
 
 const asciiPrintable = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"

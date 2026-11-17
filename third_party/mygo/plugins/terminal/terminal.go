@@ -96,7 +96,12 @@ type Options struct {
 	// A Conn with UseTheme(theme *Theme) error is told the colors the view
 	// shows, for the other end to answer a program's questions about them
 	// (Terminal.UseTheme).
+	// Posse: 实现 TerminalState() (cols, rows int, readOnly bool, err error)
+	// 的连接在首份输出前交出握手状态；等待期间不积攒输入。
+	// Posse: 同时实现 TerminalSnapshot() ([]byte, error) 时，首快照整帧回放后才允许窗口改网格。
 	Conn io.ReadWriteCloser
+	// Posse: 查看端保留选区和滚动，不输入、不应答，也不读写程序请求的剪贴板。
+	ReadOnly bool
 	// ResizeByConn leaves the size of the screen to whoever reads Conn:
 	// the view tells Conn the size it fits, with its Resize, and the
 	// screen takes a size only as Terminal.Resize sets it. A client of a
@@ -521,8 +526,10 @@ func (r *ClipboardRequest) answer(a int8) {
 // Terminal is a terminal emulator and the program it runs. Its methods are
 // safe from any goroutine.
 type Terminal struct {
-	opts Options
-	in   inputQueue
+	opts          Options
+	in            inputQueue
+	readOnly      atomic.Bool // Posse: 握手期间和查看连接都禁止输入。
+	awaitingState bool        // Posse: mu 保护；只在握手前向连接交出初始期望尺寸。
 
 	// quoting is how dropped files' paths are quoted, for the program's
 	// shell.
@@ -615,6 +622,8 @@ func New(opts Options) (*Terminal, error) {
 	}
 	opts.Font.Features = append([]string(nil), opts.Font.Features...)
 	t := &Terminal{opts: opts, done: make(chan struct{})}
+	_, t.awaitingState = opts.Conn.(stateConn)
+	t.setReadOnly(opts.ReadOnly || t.awaitingState)
 	t.binds = keybinds(&opts)
 	t.size = gridSize{80, 24, 8, 16}
 	var err error
@@ -631,7 +640,7 @@ func New(opts Options) (*Terminal, error) {
 		TitleChanged: func() { t.events.title = true },
 		RenderHold:   t.renderHold,
 		Clipboard: func(text string, primary bool) bool {
-			if primary || t.opts.NoClipboardWrite {
+			if primary || t.opts.NoClipboardWrite || t.ReadOnly() { // Posse: 查看不接收程序的剪贴板写入。
 				return false
 			}
 			t.clipOut = queue(t.clipOut, text)
@@ -820,6 +829,11 @@ func environment(extra []string) []string {
 
 // read processes the program's output until it ends.
 func (t *Terminal) read() {
+	// Posse: 网格必须先于快照应用，否则回放时的换行位置已经错了。
+	if !t.readConnState() {
+		t.ended()
+		return
+	}
 	buf := make([]byte, 64<<10)
 	for {
 		n, err := t.src.Read(buf)
@@ -1103,6 +1117,9 @@ func (t *Terminal) Feed(data []byte) { t.write(data) }
 // in Ghostty; it reports whether it cleared. A server calls it for a
 // window that shows its terminal (Options.OnClear).
 func (t *Terminal) ClearScreen() bool {
+	if t.ReadOnly() { // Posse: 查看端不能清掉服务端快照。
+		return false
+	}
 	t.mu.Lock()
 	if t.term == nil || t.term.AltScreen() {
 		t.mu.Unlock()
@@ -1132,7 +1149,11 @@ func (t *Terminal) ClearScreen() bool {
 }
 
 // ClearScrollback clears the scrollback, leaving the screen as it is.
-func (t *Terminal) ClearScrollback() { t.write([]byte("\x1b[3J")) }
+func (t *Terminal) ClearScrollback() {
+	if !t.ReadOnly() { // Posse: 查看保留收到的回滚区。
+		t.write([]byte("\x1b[3J"))
+	}
+}
 
 // Close closes the terminal: the program is hung up (SIGHUP), or Conn
 // closed, and the terminal frees its memory. A view of it then shows
@@ -1281,6 +1302,12 @@ func (t *Terminal) resize(s gridSize) {
 	}
 	t.size = s
 	t.term.Resize(s.cols, s.rows, s.cellW, s.cellH)
+	if t.ReadOnly() { // Posse: 首次尺寸触发握手，之后不改远端 PTY。
+		if t.awaitingState && sizedConn(t.src) {
+			t.resizeConn(t.src, s)
+		}
+		return
+	}
 	switch src := t.src.(type) {
 	case *pty.PTY:
 		src.Resize(s.cols, s.rows, s.cols*s.cellW, s.rows*s.cellH)
@@ -1295,7 +1322,8 @@ func (t *Terminal) resize(s gridSize) {
 // Options.ResizeByConn asks Conn for it, the screen keeping its size and
 // taking the cells' new metrics only; t.mu is held.
 func (t *Terminal) viewResize(s gridSize) {
-	if !t.opts.ResizeByConn || !sizedConn(t.src) {
+	// Posse: 查看端沿用连接决定网格的路径，窗口大小只改变显示字号。
+	if !t.ReadOnly() && (!t.opts.ResizeByConn || !sizedConn(t.src)) {
 		t.resize(s)
 		return
 	}
@@ -1308,7 +1336,7 @@ func (t *Terminal) viewResize(s gridSize) {
 	}
 	// New metrics are asked for too: the other end needs the cells' size
 	// in pixels.
-	if s != t.asked {
+	if s != t.asked && sizedConn(t.src) && (!t.ReadOnly() || t.awaitingState) {
 		t.asked = s
 		t.resizeConn(t.src, s)
 	}
@@ -1379,10 +1407,11 @@ func unhex(c byte) (byte, bool) {
 // goroutine of its own: a program that does not read its input must not
 // block the reader, which answers its queries.
 type inputQueue struct {
-	mu     sync.Mutex
-	cond   *sync.Cond
-	queue  []queued
-	closed bool
+	mu      sync.Mutex
+	cond    *sync.Cond
+	queue   []queued
+	closed  bool
+	blocked bool // Posse: 同时截住按键、焦点报告和终端自动应答。
 }
 
 // queued is input to write, and what to run once it is written.
@@ -1404,7 +1433,7 @@ func (q *inputQueue) push(p []byte) { q.pushDone(p, nil) }
 func (q *inputQueue) pushDone(p []byte, done func()) {
 	q.mu.Lock()
 	q.init()
-	if !q.closed {
+	if !q.closed && !q.blocked {
 		q.queue = append(q.queue, queued{p, done})
 		q.cond.Signal()
 	}

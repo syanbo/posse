@@ -62,6 +62,9 @@ func View(c *ui.Context, t *Terminal) ui.Element {
 // until it asks for another; and the I-beam while Shift is held over a
 // program that takes the mouse, as Shift selects then.
 func (v *view) pointerShape(term *vt.Terminal, mods ui.Modifiers) ui.Cursor {
+	if v.t.ReadOnly() { // Posse: 查看端的鼠标始终用于选择文字。
+		return ui.CursorText
+	}
 	asked := term.MouseShape()
 	if tracking := term.MouseTracking(); tracking != v.tracking {
 		v.tracking, v.modeOSC, v.modeShape = tracking, asked, shapeText
@@ -162,6 +165,8 @@ type view struct {
 	// pixels per DIP, and size the element's in DIPs.
 	size                   [2]float32
 	font                   fontKey
+	baseFont               fontKey // Posse: 查看网格适配窗口时复用原字号度量。
+	baseCellW, baseCellH   int
 	fonts                  [4]ui.Font
 	scale                  float32
 	cellW, cellH, baseline int
@@ -192,6 +197,7 @@ type view struct {
 	// pending is a key that types text, until the text comes; preedit
 	// is an input method's composition and its caret.
 	pending      *pendingKey
+	blockedKeys  map[vt.Key]bool // Posse: 握手前同时按住的键都要等松开后再放行。
 	preedit      string
 	preeditCaret int
 
@@ -562,7 +568,7 @@ func (v *view) menu(m *ui.Menu) {
 		v.services.WriteClipboard(text)
 		v.copied(text, CopyUser)
 	}
-	if v.menuItem(m, tx.Paste(), ActionPaste).Chosen() {
+	if v.menuItem(m, tx.Paste(), ActionPaste).Disabled(t.ReadOnly()).Chosen() {
 		v.paste()
 	}
 	if v.menuItem(m, tx.SelectAll(), ActionSelectAll).Chosen() {
@@ -571,7 +577,7 @@ func (v *view) menu(m *ui.Menu) {
 	m.Separator()
 	// Clear clears as ⌘K does, as Ghostty's: clearing the scrollback
 	// alone would change nothing on the screen.
-	if v.menuItem(m, tx.ClearTerminal(), ActionClearScreen).Disabled(alt).Chosen() {
+	if v.menuItem(m, tx.ClearTerminal(), ActionClearScreen).Disabled(alt || t.ReadOnly()).Chosen() {
 		v.clearScreen()
 	}
 }
@@ -596,6 +602,9 @@ func (v *view) input(ev ui.InputEvent) bool {
 		v.typed(ev.Text)
 		return true
 	case ui.InputCompose:
+		if v.t.ReadOnly() { // Posse: 查看时不显示无法提交的输入法预编辑。
+			return true
+		}
 		v.preedit, v.preeditCaret, v.pending = ev.Text, ev.Caret, nil
 		return true
 	case ui.InputCommand:
@@ -671,6 +680,15 @@ func (v *view) keyDown(ev ui.InputEvent) bool {
 	}
 	if mods&ui.Super != 0 {
 		return false // the app's shortcuts
+	}
+	if t.ReadOnly() { // Posse: 握手前按下的键，其迟到文字和松开也不能发出去。
+		k, _ := vtKey(key)
+		if v.blockedKeys == nil {
+			v.blockedKeys = make(map[vt.Key]bool)
+		}
+		v.blockedKeys[k] = true
+		v.pending = &pendingKey{key: k, taken: true}
+		return true
 	}
 	k, unshifted := vtKey(key)
 	if k == vt.KeyUnidentified {
@@ -772,6 +790,9 @@ func (v *view) scrollBack(a Action) bool {
 // OnClear is not asked.
 func (v *view) clearScreen() bool {
 	t := v.t
+	if t.ReadOnly() { // Posse: 必须在应用的 OnClear 写操作之前截住。
+		return false
+	}
 	t.mu.Lock()
 	if t.term == nil || t.term.AltScreen() {
 		t.mu.Unlock()
@@ -789,6 +810,13 @@ func (v *view) clearScreen() bool {
 
 func (v *view) keyUp(ev ui.InputEvent) bool {
 	k, unshifted := vtKey(ev.Key)
+	if v.blockedKeys[k] {
+		delete(v.blockedKeys, k)
+		if v.pending != nil && v.pending.key == k {
+			v.pending = nil
+		}
+		return true
+	}
 	if p := v.pending; p != nil && p.taken && p.key == k {
 		// The release of a key OnKey or a keybind took, Command held or
 		// not.
@@ -824,7 +852,8 @@ func (v *view) typed(text string) {
 	p := v.pending
 	v.pending = nil
 	if p != nil && p.taken {
-		return // the text of a key OnKey took
+		v.pending = p // Posse: 文字事件不结束按键，继续吞掉对应的松开。
+		return
 	}
 	// Posse: OnText may take the text; the key's release goes with it.
 	if on := v.t.opts.OnText; on != nil && on(text) {
@@ -876,6 +905,9 @@ func (v *view) sendKey(k vt.KeyEvent) {
 
 func (v *view) encodeKey(k vt.KeyEvent, press bool) bool {
 	t := v.t
+	if t.ReadOnly() { // Posse: 不因无效输入清掉选区或跳回底部。
+		return false
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.term == nil {
@@ -903,6 +935,9 @@ func (v *view) encodeKey(k vt.KeyEvent, press bool) bool {
 // sendText sends text that is no key, as of an input method.
 func (v *view) sendText(text string) {
 	t := v.t
+	if t.ReadOnly() { // Posse: 保留查看位置与选区。
+		return
+	}
 	t.mu.Lock()
 	if t.term != nil {
 		t.term.ScrollToBottom()
@@ -953,6 +988,9 @@ func (v *view) copied(text string, by CopySource) {
 // read: it reads what was read here.
 func (v *view) paste() bool {
 	t := v.t
+	if t.ReadOnly() { // Posse: 不读取剪贴板，也不触发应用的图片上传回调。
+		return false
+	}
 	held := v.services.ClipboardFormats()
 	if len(held) == 0 {
 		return false
@@ -1058,7 +1096,7 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 		v.opening, v.openingPath, v.openingMods, v.linkPress = link, path, ev.Mods, true
 		return true
 	}
-	tracking := t.term.MouseTracking() && ev.Mods&ui.Shift == 0
+	tracking := !t.ReadOnly() && t.term.MouseTracking() && ev.Mods&ui.Shift == 0 // Posse: 查看无需按 Shift 也能选字。
 	// Posse: a plain click on a link opens it too, at the release; a press
 	// that drags further than a few DIPs selects as ever.
 	if p := v.linkDown; p != nil {
@@ -1698,13 +1736,13 @@ func (v *view) scroll(ev ui.InputEvent) bool {
 // wheelTracked reports whether the program takes the wheel as the mouse:
 // Shift keeps it for the terminal. t.mu held.
 func (v *view) wheelTracked(mods ui.Modifiers) bool {
-	return v.t.term.MouseTracking() && mods&ui.Shift == 0
+	return !v.t.ReadOnly() && v.t.term.MouseTracking() && mods&ui.Shift == 0 // Posse: 查看只滚本地回滚区。
 }
 
 // wheelArrows reports whether a full-screen program takes the wheel as
 // arrow keys (alternate scroll, mode 1007). t.mu held.
 func (v *view) wheelArrows() bool {
-	return v.t.term.AltScreen() && v.t.term.Mode(vt.ModeAltScroll)
+	return !v.t.ReadOnly() && v.t.term.AltScreen() && v.t.term.Mode(vt.ModeAltScroll) // Posse: 不把滚轮转成输入。
 }
 
 // wheelScrollsBack reports whether the wheel scrolls the scrollback, no

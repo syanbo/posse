@@ -104,6 +104,9 @@ func readFormat(d transfer.Data, mime string) []byte {
 // view read only some of them, which tell whether a paste of no text had
 // something else.
 func (t *Terminal) pasteData(d transfer.Data, held []transfer.Format) {
+	if t.ReadOnly() { // Posse: 不读取延迟提供的剪贴板内容。
+		return
+	}
 	o := newOffer(d.Snapshot())
 	if held == nil {
 		held = o.data.Formats()
@@ -192,6 +195,9 @@ type clipboardRequest struct {
 // the main thread (ClipboardDeferred), which may first ask the app.
 // t.mu is held.
 func (t *Terminal) clipboardRead(req vt.ClipboardRead) (vt.ClipboardReply, vt.ClipboardAnswer) {
+	if t.ReadOnly() { // Posse: 查看端不请求授权，也不替控制端回应。
+		return vt.ClipboardReply{}, vt.ClipboardRefused
+	}
 	o := t.offer
 	if req.Granted && o != nil {
 		t.offer = nil
@@ -300,7 +306,7 @@ func (t *Terminal) readsClipboard() bool {
 // program that reads the clipboard itself (mode 5522) is offered them as a
 // file list too, when the paths make one.
 func (t *Terminal) dropFiles(paths []string) {
-	if len(paths) == 0 {
+	if t.ReadOnly() || len(paths) == 0 { // Posse: 查看端不处理拖入的本机文件。
 		return
 	}
 	escaped := make([]string, len(paths))

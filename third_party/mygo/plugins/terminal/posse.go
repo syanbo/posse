@@ -2,6 +2,62 @@ package terminal
 
 import "regexp"
 
+// Posse: 连接在读输出的协程交出状态，不能让界面线程等 SSH 握手。
+type stateConn interface {
+	TerminalState() (cols, rows int, readOnly bool, err error)
+}
+
+// ReadOnly 在握手期间也返回 true，避免尚未取得控制时的操作迟到执行。Posse。
+func (t *Terminal) ReadOnly() bool { return t.readOnly.Load() }
+
+// Posse: 只在启动和首次握手时调用；控制转移由服务端断开连接后重新接入。
+func (t *Terminal) setReadOnly(readOnly bool) {
+	t.in.mu.Lock()
+	t.in.blocked = readOnly
+	t.readOnly.Store(readOnly)
+	t.in.mu.Unlock()
+}
+
+func (t *Terminal) readConnState() bool {
+	conn, ok := t.src.(stateConn)
+	if !ok {
+		return true
+	}
+	cols, rows, readOnly, err := conn.TerminalState()
+	if err != nil {
+		return false
+	}
+	// Posse: 整帧到齐后再在同一把锁里设网格、回放；不能让 paint 插到快照分片之间。
+	var snapshot []byte
+	if source, ok := t.src.(interface{ TerminalSnapshot() ([]byte, error) }); ok {
+		if snapshot, err = source.TerminalSnapshot(); err != nil {
+			return false
+		}
+	}
+	t.mu.Lock()
+	if t.closed || t.term == nil {
+		t.mu.Unlock()
+		return false
+	}
+	if cols > 0 && rows > 0 {
+		t.size.cols, t.size.rows = cols, rows
+		t.term.Resize(cols, rows, t.size.cellW, t.size.cellH)
+	}
+	t.setReadOnly(t.opts.ReadOnly || readOnly)
+	t.term.Write(snapshot)
+	ev := t.events
+	t.events = events{}
+	title := ""
+	if ev.title {
+		title = t.term.Title()
+	}
+	t.awaitingState = false
+	t.mu.Unlock()
+	t.fire(ev, title)
+	t.redraw()
+	return true
+}
+
 // What Posse adds to the terminal's API, kept in a file of its own so that
 // upgrading MyGo merges less. (Posse)
 
