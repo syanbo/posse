@@ -3503,7 +3503,7 @@
   "@historyCopyResumeCommand": {
     "description": "History: button that copies the shell command resuming the session."
   },
-  "historyEmptyBody": "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor and ~/.grok, and never changes them.",
+  "historyEmptyBody": "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor, ~/.grok and ~/.gemini/antigravity-cli, and never changes them.",
   "@historyEmptyBody": {
     "description": "History: empty list body."
   },
@@ -3843,7 +3843,7 @@
   "@imagesTitle": {
     "description": "Title of the Images panel on the right."
   },
-  "imagesUnsupported": "Only Claude, Codex, Grok and Cursor sessions are supported for now.",
+  "imagesUnsupported": "Only Claude, Codex, Grok, Cursor and Antigravity sessions are supported for now.",
   "@imagesUnsupported": {
     "description": "Images panel note for other agents."
   },
@@ -6127,7 +6127,7 @@
   "@settingsPermissionAskTip": {
     "description": "Explains the Ask Each Time mode."
   },
-  "settingsPermissionNote": "The permissions of agents started in Posse, including claude, codex, cursor-agent and grok typed by hand in a terminal. Changes apply to agents started afterwards; running ones keep theirs.",
+  "settingsPermissionNote": "The permissions of agents started in Posse, including claude, codex, cursor-agent, grok and agy typed by hand in a terminal. Changes apply to agents started afterwards; running ones keep theirs.",
   "@settingsPermissionNote": {
     "description": "Note of the Agent Permissions card."
   },
@@ -6135,7 +6135,7 @@
   "@settingsPermissionSkip": {
     "description": "Segment of the Agent Permissions card."
   },
-  "settingsPermissionSkipTip": "Starts each agent with its flag for skipping confirmations: Claude --dangerously-skip-permissions, Codex --dangerously-bypass-approvals-and-sandbox (which also turns off the sandbox), Grok --permission-mode bypassPermissions, Cursor --yolo.",
+  "settingsPermissionSkipTip": "Starts each agent with its flag for skipping confirmations: Claude --dangerously-skip-permissions, Codex --dangerously-bypass-approvals-and-sandbox (which also turns off the sandbox), Grok --permission-mode bypassPermissions, Cursor --yolo, Antigravity --dangerously-skip-permissions.",
   "@settingsPermissionSkipTip": {
     "description": "Explains the Skip Approvals mode."
   },
@@ -6521,7 +6521,7 @@
   "@sidebarPosseSkillsUpdateTitle": {
     "description": "Sidebar notice title: the installed Posse skills are older than this version of Posse."
   },
-  "sidebarPosseSkillsBody": "Lets Claude, Codex, Grok and Cursor hand work to other agents and name sessions. Installed into your skills folders; they only take effect inside Posse.",
+  "sidebarPosseSkillsBody": "Lets Claude, Codex, Grok, Cursor and Antigravity hand work to other agents and name sessions. Installed into your skills folders; they only take effect inside Posse.",
   "@sidebarPosseSkillsBody": {
     "description": "Sidebar notice body explaining what Posse's built-in skills do and where they go."
   },
@@ -6590,7 +6590,7 @@
   "@skillsChecking": {
     "description": "Skills page toolbar: the Check for Updates button while checking."
   },
-  "skillsClaudeNote": "Codex, Grok and Cursor all read .agents/skills, so installing there works for them; Claude only reads its own folder and needs a separate link.",
+  "skillsClaudeNote": "Codex, Grok and Cursor all read .agents/skills, so installing there works for them; Claude only reads its own folder and needs a separate link. Antigravity reads ~/.gemini/config/skills globally and .agents/skills in projects.",
   "@skillsClaudeNote": {
     "description": "Install dialog: note under the Also for Claude switch."
   },
@@ -7015,7 +7015,7 @@
   "@skillsNewNameRule": {
     "description": "New Project Skill dialog: error under an invalid name."
   },
-  "skillsNewNote": "Created in .agents/skills of “{project}”, with a link in .claude/skills for Claude, so all four agents can use it.",
+  "skillsNewNote": "Created in .agents/skills of “{project}”, with a link in .claude/skills for Claude, so all five agents can use it.",
   "@skillsNewNote": {
     "description": "New Project Skill dialog: note under the title.",
     "placeholders": {
@@ -10272,6 +10272,15 @@
     "placeholders": {
       "host": {
         "type": "String"
+      }
+    }
+  },
+  "historyContextTokens": "Context {used} tokens",
+  "@historyContextTokens": {
+    "description": "Context token usage when the model window is unknown.",
+    "placeholders": {
+      "used": {
+        "type": "int"
       }
     }
   }

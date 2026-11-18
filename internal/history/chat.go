@@ -83,7 +83,11 @@ func ReadChatTail(agent, sessionID, path string, limit int, beforeOffset int64) 
 		end = fi.Size()
 	}
 	paged := agent == "codex" && codexPaginated(path)
+	full := &antigravityFull{path: path}
 	msgs, more, err := readBackward(f, end, limit, func(line []byte, off int64) *ChatMessage {
+		if agent == "antigravity" {
+			line = full.line(line)
+		}
 		return decodeChatLine(agent, line, off, paged)
 	})
 	if err != nil {
@@ -122,6 +126,7 @@ func ReadChatNew(agent, path string, from int64) (msgs []ChatMessage, next int64
 		return nil, from, err
 	}
 	paged := agent == "codex" && codexPaginated(path)
+	full := &antigravityFull{path: path}
 	complete := b
 	next = from + int64(len(b))
 	if len(b) > 0 && b[len(b)-1] != '\n' {
@@ -141,6 +146,9 @@ func ReadChatNew(agent, path string, from int64) (msgs []ChatMessage, next int64
 			complete = complete[i+1:]
 		} else {
 			complete = nil
+		}
+		if agent == "antigravity" {
+			line = full.line(line)
 		}
 		if m := decodeChatLine(agent, bytes.TrimRight(line, "\r"), off, paged); m != nil {
 			msgs = append(msgs, *m)
@@ -482,6 +490,8 @@ func decodeChatLine(agent string, raw []byte, off int64, paged bool) *ChatMessag
 		m = decodeCodexLine(raw, off, paged)
 	case "cursor":
 		m = decodeCursorLine(raw, off)
+	case "antigravity":
+		m = decodeAntigravityLine(raw, off)
 	default:
 		return nil
 	}

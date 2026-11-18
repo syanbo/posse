@@ -4579,6 +4579,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You joined as a viewer and can’t post here.'**
   String get discGuestNote;
+
+  /// Context token usage when the model window is unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} tokens'**
+  String chatContextTokens(int used);
 }
 
 class _AppLocalizationsDelegate

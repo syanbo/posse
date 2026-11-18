@@ -32,7 +32,7 @@ type traceScope struct {
 
 // homeSkip 是主目录下不记的位置：agent 自己的目录、共享缓存（几个项目共用，删了只会拖慢下次构建）、废纸篓。
 var homeSkip = []string{
-	".claude", ".codex", ".cursor", ".grok", ".cache", ".npm", ".gradle", ".pub-cache", ".m2", ".cargo", ".rustup",
+	".claude", ".codex", ".cursor", ".grok", ".gemini", ".cache", ".npm", ".gradle", ".pub-cache", ".m2", ".cargo", ".rustup",
 	".bun", ".dart-tool", ".dartServer", ".fvm", ".cocoapods", ".Trash", "go",
 	"Library/Caches", "Library/Developer", "Library/Logs", "Library/Containers", "Library/Group Containers",
 	"Library/Application Support/Code", "Library/Application Support/Cursor",

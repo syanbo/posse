@@ -3,6 +3,7 @@ package skills
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -120,6 +121,72 @@ func TestWritePosseSource(t *testing.T) {
 	}
 }
 
+func TestPosseInstallLine(t *testing.T) {
+	for _, mode := range []string{"install", "existing directory", "broken link", "installer failed", "link failed"} {
+		t.Run(mode, func(t *testing.T) {
+			home := filepath.Join(t.TempDir(), "home ' $(false)")
+			source := filepath.Join(t.TempDir(), "source ' $(false)")
+			bin := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			for _, s := range PosseSkills() {
+				write(t, filepath.Join(source, s.Name, "SKILL.md"), s.Content)
+			}
+			script := "#!/bin/sh\nmkdir -p \"$HOME/.agents/skills\" && cp -R \"$4/.\" \"$HOME/.agents/skills/\"\n"
+			if mode == "installer failed" {
+				script = "#!/bin/sh\nexit 7\n"
+			}
+			if err := os.WriteFile(filepath.Join(bin, "npx"), []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			dir := filepath.Join(home, ".gemini", "config", "skills")
+			at := filepath.Join(dir, TasksSkill)
+			switch mode {
+			case "existing directory":
+				write(t, filepath.Join(at, "SKILL.md"), "user skill")
+			case "broken link":
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink("missing", at); err != nil {
+					t.Fatal(err)
+				}
+			case "link failed":
+				write(t, dir, "user file")
+			}
+			out, err := exec.Command("/bin/sh", "-c", PosseInstallLine(source, home, PosseNames(), false)).CombinedOutput()
+			if wantErr := strings.HasSuffix(mode, "failed"); (err != nil) != wantErr {
+				t.Fatalf("install: %v\n%s", err, out)
+			}
+			if mode == "link failed" {
+				return
+			}
+			for _, name := range PosseNames() {
+				path := filepath.Join(dir, name)
+				if mode == "installer failed" {
+					if _, err := os.Lstat(path); !os.IsNotExist(err) {
+						t.Fatalf("link after failed install: %v", err)
+					}
+					continue
+				}
+				if name == TasksSkill && mode == "existing directory" {
+					if b, err := os.ReadFile(filepath.Join(path, "SKILL.md")); err != nil || string(b) != "user skill" {
+						t.Fatalf("user skill changed: %q, %v", b, err)
+					}
+					continue
+				}
+				want := filepath.Join("..", "..", "..", ".agents", "skills", name)
+				if name == TasksSkill && mode == "broken link" {
+					want = "missing"
+				}
+				if got, err := os.Readlink(path); err != nil || got != want {
+					t.Fatalf("link %s = %q, %v; want %q", name, got, err, want)
+				}
+			}
+		})
+	}
+}
+
 // posse task guide --skill 给用户自己放的技能不带标记，Posse 不去更新、删除它
 func TestTasksFrontmatterUnmarked(t *testing.T) {
 	if parseMeta(TasksFrontmatter() + "body").Posse {
@@ -154,7 +221,7 @@ func TestLinkClaude(t *testing.T) {
 // 改了技能内容要给 posseSkillsVersion 加一，再把这里换成新的摘要：
 // 不加版本，装着旧内容的旧 Posse 和新 Posse 会轮流把对方装的换掉。
 func TestPosseSkillsVersion(t *testing.T) {
-	const version, digest = 1, "c994fcb52db0"
+	const version, digest = 2, "5f1047db689c"
 	if posseSkillsVersion != version || posseDigest() != digest {
 		t.Fatalf("skills content is %s at version %d: bump posseSkillsVersion and update this test", posseDigest(), posseSkillsVersion)
 	}
@@ -173,12 +240,12 @@ func TestPosseNewerInstalled(t *testing.T) {
 		t.Fatal(err)
 	}
 	file := filepath.Join(home, ".agents", "skills", TasksSkill, "SKILL.md")
-	newer := strings.Replace(PosseSkills()[0].Content, versionKey+`: "1"`, versionKey+`: "2"`, 1) + "newer body\n"
+	newer := strings.Replace(PosseSkills()[0].Content, versionKey+`: "2"`, versionKey+`: "3"`, 1) + "newer body\n"
 	os.WriteFile(file, []byte(newer), 0o644)
 	if st := ReadPosse(home); !st.Current() {
 		t.Fatalf("newer install treated as outdated: %+v", st)
 	}
-	older := strings.Replace(PosseSkills()[0].Content, "  "+versionKey+`: "1"`+"\n", "", 1) + "older body\n"
+	older := strings.Replace(PosseSkills()[0].Content, "  "+versionKey+`: "2"`+"\n", "", 1) + "older body\n"
 	os.WriteFile(file, []byte(older), 0o644)
 	if st := ReadPosse(home); !slices.Equal(st.Outdated, []string{TasksSkill}) {
 		t.Fatalf("older install: %+v", st)

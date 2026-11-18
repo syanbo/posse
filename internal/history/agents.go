@@ -21,7 +21,7 @@ import (
 	"unicode/utf8"
 )
 
-// discover 列出四家 agent 的会话文件。
+// discover 列出五家 agent 的会话文件。
 func discover(r Roots) []source {
 	var out []source
 	claude := filepath.Join(r.Home, ".claude", "projects")
@@ -79,6 +79,15 @@ func discover(r Roots) []source {
 	}
 	for _, p := range globFiles(filepath.Join(r.Home, ".grok", "sessions", "*", "*", "chat_history.jsonl")) {
 		out = append(out, source{agent: "grok", transcript: p, meta: filepath.Join(filepath.Dir(p), "summary.json"), parser: grokParser{}})
+	}
+	base := filepath.Join(r.Home, ".gemini", "antigravity-cli")
+	children := antigravityChildren(base)
+	for _, p := range globFiles(filepath.Join(base, "brain", "*", ".system_generated", "logs", "transcript.jsonl")) {
+		id := filepath.Base(AntigravityBrainDir(p))
+		if children[id] {
+			continue
+		}
+		out = append(out, source{agent: "antigravity", transcript: p, meta: filepath.Join(base, "cache", "conversation_metadata.json"), parser: antigravityParser{id: id, full: &antigravityFull{path: p}}})
 	}
 	return out
 }

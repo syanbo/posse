@@ -2718,4 +2718,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get discGuestNote => 'You joined as a viewer and can’t post here.';
+
+  @override
+  String chatContextTokens(int used) {
+    final intl.NumberFormat usedNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String usedString = usedNumberFormat.format(used);
+
+    return '$usedString tokens';
+  }
 }

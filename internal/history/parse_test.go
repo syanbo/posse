@@ -81,6 +81,7 @@ func parseAll(t *testing.T, src source, p parser) ([]Message, fileState) {
 func TestLineFilterSameResult(t *testing.T) {
 	home := t.TempDir()
 	fixtures(t, home)
+	antigravityFixture(t, home)
 	legacyCodex(t, home)
 	spaced := t.TempDir()
 	spacedCopy(t, home, spaced)
@@ -114,7 +115,7 @@ func TestLineFilterSameResult(t *testing.T) {
 		n++
 	}
 	// claude、两份 codex（含被跳过的 guardian）、旧格式 codex、grok
-	if n != 5 || len(compact) != 5 {
+	if n != 6 || len(compact) != 6 {
 		t.Fatalf("checked %d spaced and %d compact files", n, len(compact))
 	}
 }

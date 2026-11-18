@@ -15,7 +15,7 @@ import (
 var sessionGuide string
 
 // sessionEnv 是各 agent 给工具命令注入的当前会话 ID。
-var sessionEnv = map[string]string{"claude": "CLAUDE_CODE_SESSION_ID", "codex": "CODEX_THREAD_ID", "grok": "GROK_SESSION_ID"}
+var sessionEnv = map[string]string{"claude": "CLAUDE_CODE_SESSION_ID", "codex": "CODEX_THREAD_ID", "grok": "GROK_SESSION_ID", "antigravity": "ANTIGRAVITY_CONVERSATION_ID"}
 
 func cmdSessionGuide(e *env, args []string) error {
 	fs := flag.NewFlagSet("session guide", flag.ContinueOnError)

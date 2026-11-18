@@ -80,9 +80,9 @@ func (c *conn) toolsMethod(req request, p json.RawMessage) bool {
 		return true
 	}
 	switch a.Agent {
-	case "claude", "codex", "grok", "cursor":
+	case "claude", "codex", "grok", "cursor", "antigravity":
 	default:
-		c.fail(req.ID, "unsupported", "only Claude, Codex, Grok and Cursor sessions are supported for now")
+		c.fail(req.ID, "unsupported", "only Claude, Codex, Grok, Cursor and Antigravity sessions are supported for now")
 		return true
 	}
 	go func() {

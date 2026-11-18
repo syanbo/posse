@@ -117,6 +117,8 @@ type UsageScanner struct {
 func NewUsageScanner(agent, path string) *UsageScanner {
 	s := &UsageScanner{agent: agent, path: path}
 	switch agent {
+	case "antigravity":
+		s.parser = antigravityParser{}
 	case "claude":
 		s.parser = claudeParser{}
 	case "codex":
@@ -170,6 +172,7 @@ func (s *UsageScanner) Scan() (Usage, error) {
 
 // usageMarkers 先粗筛，只有可能相关的行才解析 JSON。
 var usageMarkers = [][]byte{
+	[]byte(`"tool_calls"`),
 	[]byte("Base directory for this skill"), []byte("mcp__"), []byte("<skill>"),
 	[]byte("forked-skill-launch"), []byte(`"status":"forked"`), // claude 在后台跑的技能
 	[]byte("McpToolCall"), []byte("use_tool"), []byte("SKILL.md"), []byte("CallDynamicTool"),
@@ -204,6 +207,8 @@ func (s *UsageScanner) line(b []byte) {
 		s.grokLine(b)
 	case "cursor":
 		s.cursorLine(b)
+	case "antigravity":
+		s.antigravityLine(b)
 	}
 }
 
@@ -891,6 +896,8 @@ func TranscriptPath(agent, sessionID, reported string) string {
 	}
 	var pattern string
 	switch agent {
+	case "antigravity":
+		pattern = filepath.Join(home, ".gemini", "antigravity-cli", "brain", sessionID, ".system_generated", "logs", "transcript.jsonl")
 	case "claude":
 		pattern = filepath.Join(home, ".claude", "projects", "*", sessionID+".jsonl")
 	case "grok":

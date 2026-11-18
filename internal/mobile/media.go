@@ -126,7 +126,7 @@ func (c *conn) mediaMethod(req request, p json.RawMessage) bool {
 		return true
 	}
 	if !media.Supported(a.Agent) {
-		c.fail(req.ID, "unsupported", "only Claude, Codex, Grok and Cursor sessions are supported for now")
+		c.fail(req.ID, "unsupported", "only Claude, Codex, Grok, Cursor and Antigravity sessions are supported for now")
 		return true
 	}
 	go func() {

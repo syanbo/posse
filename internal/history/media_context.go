@@ -99,7 +99,7 @@ func (s *ImageScanner) ScanContext(ctx context.Context) ([]ToolImage, error) {
 		return nil, err
 	}
 	base := s.offset
-	parse := map[string]func([]byte, int64){"claude": s.line, "codex": s.codexLine, "grok": s.grokLine, "cursor": s.cursorLine}[s.agent]
+	parse := map[string]func([]byte, int64){"claude": s.line, "codex": s.codexLine, "grok": s.grokLine, "cursor": s.cursorLine, "antigravity": s.antigravityLine}[s.agent]
 	if parse == nil {
 		return nil, errors.New("unsupported media agent")
 	}

@@ -69,6 +69,7 @@ type MCPCatalog struct {
 // MCPOptions 是扫描的输入。Codex、Grok 是它们的可执行文件，空时读文件推算。
 type MCPOptions struct {
 	Home        string
+	Dir         string
 	Codex, Grok string
 }
 
@@ -86,6 +87,24 @@ func ScanMCP(ctx context.Context, o MCPOptions) MCPCatalog {
 			byName[name] = s
 		}
 		return s
+	}
+	agyFiles := []string{filepath.Join(o.Home, ".gemini", "config", "mcp_config.json")}
+	if o.Dir != "" {
+		dirs := upToRepo(o.Dir)
+		for i := len(dirs) - 1; i >= 0; i-- {
+			agyFiles = append(agyFiles, filepath.Join(dirs[i], ".agents", "mcp_config.json"))
+		}
+	}
+	for _, file := range agyFiles {
+		for name, def := range readMCPJSON(file, Antigravity) {
+			s := server(name)
+			s.Defs = append(s.Defs, def)
+			state := On
+			if def.Disabled {
+				state = Off
+			}
+			s.Agents[Antigravity] = Status{State: state, Via: file, Inferred: true}
+		}
 	}
 	claudeFile := filepath.Join(o.Home, ".claude.json")
 	cursorFile := filepath.Join(o.Home, ".cursor", "mcp.json")
@@ -170,12 +189,14 @@ func readMCPJSON(file string, ag Agent) map[string]MCPDef {
 	}
 	var f struct {
 		MCPServers map[string]struct {
-			Type    string            `json:"type"`
-			Command string            `json:"command"`
-			Args    []string          `json:"args"`
-			URL     string            `json:"url"`
-			Env     map[string]string `json:"env"`
-			Headers map[string]string `json:"headers"`
+			Type      string            `json:"type"`
+			ServerURL string            `json:"serverUrl"`
+			Disabled  bool              `json:"disabled"`
+			Command   string            `json:"command"`
+			Args      []string          `json:"args"`
+			URL       string            `json:"url"`
+			Env       map[string]string `json:"env"`
+			Headers   map[string]string `json:"headers"`
 		} `json:"mcpServers"`
 	}
 	if json.Unmarshal(b, &f) != nil {
@@ -184,6 +205,12 @@ func readMCPJSON(file string, ag Agent) map[string]MCPDef {
 	out := map[string]MCPDef{}
 	for name, s := range f.MCPServers {
 		d := MCPDef{Agent: ag, File: file, Transport: s.Type, Command: s.Command, Args: s.Args, URL: s.URL, EnvKeys: keys(s.Env), HeaderKeys: keys(s.Headers)}
+		if ag == Antigravity {
+			d.Disabled = s.Disabled
+			if d.URL == "" {
+				d.URL = s.ServerURL
+			}
+		}
 		if d.Transport == "" {
 			d.Transport = "stdio"
 			if d.URL != "" {

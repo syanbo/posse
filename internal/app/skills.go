@@ -199,7 +199,7 @@ func (a *app) skillsSidebarItem(c *ui.Context) ui.Element {
 
 // skillAgentLabels 是技能页按 agent 筛选的分段。
 func skillAgentLabels(m locales.Messages) []string {
-	return []string{m.CommonAll(), "Claude", "Codex", "Grok", "Cursor"}
+	return []string{m.CommonAll(), "Claude", "Codex", "Grok", "Cursor", "Antigravity"}
 }
 
 // scopePosse 是列表里 Posse 自带技能的一组：它们装在用户目录里，扫描算作用户级，界面上单列出来。

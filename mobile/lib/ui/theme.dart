@@ -64,6 +64,8 @@ const monoFamily = 'Menlo';
 const monoFallback = ['monospace', 'Symbols Nerd Font Mono', 'PingFang SC'];
 
 /// 会话页、终端页标题下面那一行（状态、上下文、延迟）的文字。写明字重：不写会继承顶栏标题的粗体。
+const statusLineGap = 12.0;
+
 TextStyle statusLineStyle(Color color) => TextStyle(
   fontSize: Fs.small,
   fontWeight: Fw.body,
@@ -233,6 +235,7 @@ class PosseColors extends ThemeExtension<PosseColors> {
 /// agent 品牌色块（底、图形），和桌面端 agentIcon 一致。
 abstract final class Brand {
   static const claude = Color(0xFFD97757);
+  static const antigravity = Color(0xFF4285F4);
   static const cursor = Color(0xFF6E56CF);
   static const codexEdge = Color(0x1F000000); // Codex 的白底在浅色卡片上会融掉，描一圈细边
 }

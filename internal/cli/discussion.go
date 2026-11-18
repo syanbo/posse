@@ -103,7 +103,7 @@ func cmdDiscussionCreate(e *env, args []string) error {
 	var d discussionInfo
 	return e.do("discussion.create", map[string]any{"caller": caller(), "title": *title, "description": *desc, "project": *project, "workspace": *ws}, &d, func() {
 		fmt.Fprintf(e.out, "created discussion %s: %s\n", d.Key, d.Title)
-		fmt.Fprintf(e.out, "add members with: posse discussion add-member %s --name N --agent claude|codex|grok|cursor\n", d.Key)
+		fmt.Fprintf(e.out, "add members with: posse discussion add-member %s --name N --agent claude|codex|grok|cursor|antigravity\n", d.Key)
 	})
 }
 

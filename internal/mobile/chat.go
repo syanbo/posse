@@ -321,8 +321,13 @@ func (c *conn) sessionContext(id string, p json.RawMessage) error {
 	if !ok {
 		ctx, ok = history.ReadContext(a.Agent, path, "")
 	}
-	if !ok || (ctx.ReportedPercent == nil && ctx.Window <= 0) {
+	if !ok || ctx.ReportedPercent == nil && ctx.Window <= 0 && ctx.Used <= 0 {
 		return c.reply(id, map[string]any{"known": false})
 	}
-	return c.reply(id, map[string]any{"known": true, "used": ctx.Used, "window": ctx.Window, "percent": ctx.Percent()})
+	var percent *int
+	if ctx.ReportedPercent != nil || ctx.Window > 0 {
+		v := ctx.Percent()
+		percent = &v
+	}
+	return c.reply(id, map[string]any{"known": true, "used": ctx.Used, "window": ctx.Window, "percent": percent})
 }

@@ -15,7 +15,7 @@ import (
 )
 
 // Known 是支持一键启动的 agent。
-var Known = []string{"claude", "codex", "grok", "cursor"}
+var Known = []string{"claude", "codex", "grok", "cursor", "antigravity"}
 
 // Launcher 生成 agent 的启动命令；Exe 是 hooks 回调的 posse 可执行文件。
 type Launcher struct {
@@ -55,7 +55,7 @@ func (m Model) args(agentName string) ([]string, error) {
 		return parts, nil
 	}
 	switch agentName {
-	case "claude":
+	case "claude", "antigravity":
 		parts = append(parts, "--effort", Quote(m.Effort))
 	case "codex":
 		v, _ := json.Marshal(m.Effort)
@@ -93,6 +93,9 @@ func (l Launcher) Launch(name string, m Model, prompt string) (Launch, error) {
 		if prompt != "" {
 			parts = append(parts, "--verbatim")
 		}
+	case "antigravity":
+		// agy 的会话设置不接受 hooks，状态由 OSC 7501 上报。
+		parts = []string{"agy"}
 	case "cursor":
 		plugin, err := l.cursorPlugin()
 		if err != nil {
@@ -109,6 +112,9 @@ func (l Launcher) Launch(name string, m Model, prompt string) (Launch, error) {
 	parts = append(parts, margs...)
 	parts = append(parts, l.permissionArgs(name)...)
 	if prompt != "" {
+		if name == "antigravity" {
+			parts = append(parts, "-i")
+		}
 		parts = append(parts, Quote(prompt))
 	}
 	return Launch{Argv: ShellArgv(strings.Join(parts, " ")), SessionID: sessionID}, nil
@@ -138,6 +144,8 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 		parts = append(parts, "resume", Quote(sessionID))
 	case "grok":
 		parts = []string{"grok", "--resume", Quote(sessionID)}
+	case "antigravity":
+		parts = []string{"agy", "--conversation", Quote(sessionID)}
 	case "cursor":
 		plugin, err := l.cursorPlugin()
 		if err != nil {

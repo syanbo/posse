@@ -35,6 +35,8 @@ func (s *Scanner) ScanContext(ctx context.Context) (pasted, made []Item, err err
 			s.dir = ClaudeImageDir(s.sid, s.transcript)
 		}
 		pasted, err = mediaDirectory(ctx, s.dir, true)
+	case "antigravity":
+		pasted, made, err = antigravityMedia(ctx, history.TranscriptPath(s.agent, s.sid, s.transcript))
 	case "codex":
 		if s.sid != "" {
 			var home string
@@ -79,6 +81,10 @@ func (s *Scanner) ScanContext(ctx context.Context) (pasted, made []Item, err err
 			}
 			made = append(made, VideoItems([]history.ToolVideo{video})...)
 		}
+	}
+	if s.agent == "antigravity" {
+		pasted, made = uniqueAntigravityMedia(pasted, made)
+		slices.SortStableFunc(pasted, func(a, b Item) int { return b.At.Compare(a.At) })
 	}
 	slices.SortStableFunc(made, func(a, b Item) int { return b.At.Compare(a.At) })
 	return pasted, made, ctx.Err()

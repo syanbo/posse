@@ -18,6 +18,8 @@ func OfProcess(pid int) (string, []string) {
 // 用户在 shell 里自己敲命令启动的 agent 只能这样认出来。
 func fromProcess(exe string, args []string) string {
 	switch procmem.Name(args) {
+	case "agy":
+		return "antigravity"
 	case "claude":
 		return "claude"
 	case "codex":
@@ -60,9 +62,10 @@ var uuidRE = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[
 
 // sessionFlags 是各家在参数里指定会话的选项：新会话的 ID，或继续的会话。
 var sessionFlags = map[string][]string{
-	"claude": {"--session-id", "-r", "--resume"},
-	"grok":   {"-s", "--session-id", "-r", "--resume"},
-	"cursor": {"--resume"},
+	"antigravity": {"--conversation"},
+	"claude":      {"--session-id", "-r", "--resume"},
+	"grok":        {"-s", "--session-id", "-r", "--resume"},
+	"cursor":      {"--resume"},
 }
 
 // SessionFromArgs 从 agent 进程的参数里取会话 ID：posse 的同名脚本补的 --session-id，或用户自己带的

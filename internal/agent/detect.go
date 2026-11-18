@@ -13,7 +13,7 @@ import (
 )
 
 // Command 是各 agent 启动时运行的命令，检测装没装也按它找。
-var Command = map[string]string{"claude": "claude", "codex": "codex", "grok": "grok", "cursor": "cursor-agent"}
+var Command = map[string]string{"claude": "claude", "codex": "codex", "grok": "grok", "cursor": "cursor-agent", "antigravity": "agy"}
 
 const (
 	foundMark = "__posse_found__"

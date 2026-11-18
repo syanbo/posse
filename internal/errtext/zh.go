@@ -518,7 +518,7 @@ var zh = [][2]string{
 	{"no workspace on the computer contains the session’s folder; add the folder as a project on the computer first", "电脑上没有包含这个会话目录的工作区，先在电脑上把目录加成项目"},
 	{"the computer can no longer find this session", "电脑上找不到这个会话了"},
 	{"the session’s original folder no longer exists on the computer", "会话原来的目录在电脑上已经不在了"},
-	{"only Claude, Codex, Grok and Cursor sessions are supported for now", "目前只支持 Claude、Codex、Grok 和 Cursor 会话"},
+	{"only Claude, Codex, Grok, Cursor and Antigravity sessions are supported for now", "目前只支持 Claude、Codex、Grok、Cursor 和 Antigravity 会话"},
 	{"Unknown method: %s", "电脑上的 Posse 是旧版，不支持这个功能（{1}）：在电脑上更新 Posse"},
 
 	// 看桌面（常驻进程按用户选的语言写的默认人名、恢复终端时打的一行也在这里）

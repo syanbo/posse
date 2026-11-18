@@ -9489,13 +9489,13 @@ func (msgs Messages) HistoryCopyResumeCommand() string {
 	return Catalog.Format(msgs.locale, "historyCopyResumeCommand", nil)
 }
 
-// HistoryEmptyBody says "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor and ~/.grok, and never changes them."
+// HistoryEmptyBody says "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor, ~/.grok and ~/.gemini/antigravity-cli, and never changes …"
 // in the language the app shows.
 //
 // History: empty list body.
 func HistoryEmptyBody() string { return In(i18n.Locale()).HistoryEmptyBody() }
 
-// HistoryEmptyBody says "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor and ~/.grok, and never changes them."
+// HistoryEmptyBody says "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor, ~/.grok and ~/.gemini/antigravity-cli, and never changes …"
 // in the language of msgs.
 //
 // History: empty list body.
@@ -10371,13 +10371,13 @@ func (msgs Messages) ImagesTitle() string {
 	return Catalog.Format(msgs.locale, "imagesTitle", nil)
 }
 
-// ImagesUnsupported says "Only Claude, Codex, Grok and Cursor sessions are supported for now."
+// ImagesUnsupported says "Only Claude, Codex, Grok, Cursor and Antigravity sessions are supported for now."
 // in the language the app shows.
 //
 // Images panel note for other agents.
 func ImagesUnsupported() string { return In(i18n.Locale()).ImagesUnsupported() }
 
-// ImagesUnsupported says "Only Claude, Codex, Grok and Cursor sessions are supported for now."
+// ImagesUnsupported says "Only Claude, Codex, Grok, Cursor and Antigravity sessions are supported for now."
 // in the language of msgs.
 //
 // Images panel note for other agents.
@@ -17499,13 +17499,13 @@ func (msgs Messages) SettingsPermissionAskTip() string {
 	return Catalog.Format(msgs.locale, "settingsPermissionAskTip", nil)
 }
 
-// SettingsPermissionNote says "The permissions of agents started in Posse, including claude, codex, cursor-agent and grok typed by hand in a termina…"
+// SettingsPermissionNote says "The permissions of agents started in Posse, including claude, codex, cursor-agent, grok and agy typed by hand in a te…"
 // in the language the app shows.
 //
 // Note of the Agent Permissions card.
 func SettingsPermissionNote() string { return In(i18n.Locale()).SettingsPermissionNote() }
 
-// SettingsPermissionNote says "The permissions of agents started in Posse, including claude, codex, cursor-agent and grok typed by hand in a termina…"
+// SettingsPermissionNote says "The permissions of agents started in Posse, including claude, codex, cursor-agent, grok and agy typed by hand in a te…"
 // in the language of msgs.
 //
 // Note of the Agent Permissions card.
@@ -18667,14 +18667,14 @@ func (msgs Messages) SidebarPosseSkillsUpdateTitle() string {
 	return Catalog.Format(msgs.locale, "sidebarPosseSkillsUpdateTitle", nil)
 }
 
-// SidebarPosseSkillsBody says "Lets Claude, Codex, Grok and Cursor hand work to other agents and name sessions. Installed into your skills folders; …"
+// SidebarPosseSkillsBody says "Lets Claude, Codex, Grok, Cursor and Antigravity hand work to other agents and name sessions. Installed into your ski…"
 // in the language the app shows.
 //
 // Sidebar notice body explaining what Posse's built-in skills do and where
 // they go.
 func SidebarPosseSkillsBody() string { return In(i18n.Locale()).SidebarPosseSkillsBody() }
 
-// SidebarPosseSkillsBody says "Lets Claude, Codex, Grok and Cursor hand work to other agents and name sessions. Installed into your skills folders; …"
+// SidebarPosseSkillsBody says "Lets Claude, Codex, Grok, Cursor and Antigravity hand work to other agents and name sessions. Installed into your ski…"
 // in the language of msgs.
 //
 // Sidebar notice body explaining what Posse's built-in skills do and where
@@ -19851,13 +19851,13 @@ func (msgs Messages) SkillsNewNameRule() string {
 	return Catalog.Format(msgs.locale, "skillsNewNameRule", nil)
 }
 
-// SkillsNewNote says "Created in .agents/skills of “{project}”, with a link in .claude/skills for Claude, so all four agents can use it."
+// SkillsNewNote says "Created in .agents/skills of “{project}”, with a link in .claude/skills for Claude, so all five agents can use it."
 // in the language the app shows.
 //
 // New Project Skill dialog: note under the title.
 func SkillsNewNote(project string) string { return In(i18n.Locale()).SkillsNewNote(project) }
 
-// SkillsNewNote says "Created in .agents/skills of “{project}”, with a link in .claude/skills for Claude, so all four agents can use it."
+// SkillsNewNote says "Created in .agents/skills of “{project}”, with a link in .claude/skills for Claude, so all five agents can use it."
 // in the language of msgs.
 //
 // New Project Skill dialog: note under the title.
@@ -28679,4 +28679,18 @@ func MemoryRemoteNote(host string) string { return In(i18n.Locale()).MemoryRemot
 // Memory popover note when viewing a remote host.
 func (msgs Messages) MemoryRemoteNote(host string) string {
 	return Catalog.Format(msgs.locale, "memoryRemoteNote", map[string]any{"host": host})
+}
+
+// HistoryContextTokens says "Context {used} tokens"
+// in the language the app shows.
+//
+// Context token usage when the model window is unknown.
+func HistoryContextTokens(used int) string { return In(i18n.Locale()).HistoryContextTokens(used) }
+
+// HistoryContextTokens says "Context {used} tokens"
+// in the language of msgs.
+//
+// Context token usage when the model window is unknown.
+func (msgs Messages) HistoryContextTokens(used int) string {
+	return Catalog.Format(msgs.locale, "historyContextTokens", map[string]any{"used": used})
 }

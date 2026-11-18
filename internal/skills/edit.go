@@ -33,7 +33,7 @@ var ErrStale = errors.New("the config file was just changed; rescan and try agai
 // CanToggle 报告 a 对 s 能不能开关：读得到、生效的那一份，状态是启用或关了（Claude 的 skillOverrides 设成别的值时也能改回）。
 func CanToggle(a Agent, s Skill) bool {
 	// Cursor 没有开关；Claude 账号同步的技能在 Claude 里带前缀（如 anthropic-skills:docx），skillOverrides 的键对不上
-	if a == Cursor || a == Claude && s.Scope == ScopeSynced {
+	if a == Cursor || a == Antigravity || a == Claude && s.Scope == ScopeSynced {
 		return false
 	}
 	switch s.Agents[a].State {
@@ -653,7 +653,7 @@ func LinkFor(o Options, s Skill, a Agent) (link string, ok bool) {
 	var dir string
 	switch s.Scope {
 	case ScopeUser:
-		dir = filepath.Join(o.Home, [NumAgents]string{".claude", ".agents", ".grok", ".cursor"}[a], "skills")
+		dir = filepath.Join(o.Home, [NumAgents]string{".claude", ".agents", ".grok", ".cursor", ".gemini/config"}[a], "skills")
 	case ScopeProject:
 		if o.Dir == "" {
 			return "", false

@@ -1,6 +1,6 @@
 # Posse tasks: coordinate other agents
 
-`posse task` dispatches work to other agents (claude, codex, grok or cursor), each in its own Posse terminal the user can watch, and brings their results back to you. Workers report through Posse; never scrape their terminals for results.
+`posse task` dispatches work to other agents (claude, codex, grok, cursor or antigravity), each in its own Posse terminal the user can watch, and brings their results back to you. Workers report through Posse; never scrape their terminals for results.
 
 **Done means:** every task you started has one explicit outcome, and your report to the user names, per task, the outcome, the evidence and anything unresolved.
 

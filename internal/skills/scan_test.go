@@ -212,7 +212,7 @@ func TestScanProject(t *testing.T) {
 	}
 	// 仓库根的 .agents/skills：Codex、Grok 往上找得到，Claude 不读 .agents
 	lint := find(t, c, "lint", ScopeProject)
-	if got := states(lint); got != [NumAgents]State{Unseen, On, On, Unseen} {
+	if got := states(lint); got != [NumAgents]State{Unseen, On, On, Unseen, On} {
 		t.Errorf("仓库根的 lint %v", got)
 	}
 

@@ -37,7 +37,7 @@ internal/vt            精简版 libghostty-vt 绑定（删键鼠编码/选区/�
 internal/client        CLI 与窗口共用的客户端：拉起常驻进程、流式接入终端与目标 RPC
 internal/remote        Mac SSH 远程工作区：主机配置、私有 askpass、远端发现、socket 转发与能力握手（docs/features/remote.md）
 internal/store         SQLite（modernc，纯 Go）：项目、工作区、终端、任务（task.go）、讨论与协作（discussion.go、collab.go）
-internal/history       claude/codex/cursor/grok 会话增量索引（$POSSE_HOME/history.db，FTS5）、搜索、工具用量与媒体扫描
+internal/history       claude/codex/cursor/grok/antigravity 会话增量索引（$POSSE_HOME/history.db，FTS5）、搜索、工具用量与媒体扫描
 internal/gitx          调用系统 git：管理 worktree，以及状态、diff、分支、推送、日志、追溯、比较与冲突预测
 internal/agent         各家 agent 启动参数、手动启动转发与 hooks/状态映射
 internal/namer         会话标题（posse session title）：规整 MMDD｜类型｜摘要 并写回 Codex/Grok 存储
@@ -55,7 +55,7 @@ internal/usage         各家套餐用量采集与合并（$POSSE_HOME/usage.jso
 internal/files         文件读写（原子保存、磁盘戳、分段读）、目录树、清单、全文检索、定义跳转与行内链接识别
 internal/writecoord    同 daemon 多资源写协调：路径父子互斥、仓库独占键与项目共享/独占键，一次申请、等待可取消
 internal/trash         无界面 macOS 废纸篓适配（Foundation/purego），失败不回退永久删除
-internal/skills        扫描四家 agent 技能目录、开关配置、npx skills 锁文件与断链/冲突体检
+internal/skills        扫描五家 agent 技能目录、开关配置、npx skills 锁文件与断链/冲突体检
 internal/media         会话内粘贴与生成的图片/视频扫描及缩略图
 internal/mermaid       Mermaid 排版（Pele + modernc QuickJS，与 sqlite 共用 modernc libc，升级须保持 libc 版本一致；diagram/ 用 mygo 画）
 internal/mobile        手机服务端：配对、E2EE v2、RPC/二进制流与同端口 UDP QUIC（quic.go）
@@ -78,6 +78,8 @@ third_party/mygo       带改动的 mygo v0.7.4（改动与升级方法见其中
 - `docs/plans/terminal-host.md`：常驻进程无损交接（`daemon.handoff`）与 APFS 运行副本回收
 
 ## 关键约定
+
+- **Antigravity**：内部标识 `antigravity`、命令 `agy`；初始提示走 `-i`，恢复走 `--conversation UUID`。1.5.11 不支持会话级 hooks 配置，状态靠 OSC 7501（`app=antigravity`），任务提醒在空闲时输入，不改全局 hooks。会话 ID 来自恢复参数或 `ANTIGRAVITY_CONVERSATION_ID` 的会话命名调用；新会话尚未绑定 ID 时不猜日志归属。历史、技能与已核实边界见 `docs/plans/antigravity.md`。
 
 - **锁与升级交接**（细则见 `docs/plans/terminal-host.md`）：常驻进程持有 `$POSSE_HOME/possed.lock` 直到完全退出，普通启动只在持锁时增删 socket/pid（拿到锁后 socket 仍有人应答则退出）。交接新进程先写 pid、立即接过旧 socket 服务，后台等锁拿到后再开手机服务；新建终端与交接经 `handoffState.startMu` 互斥；双向不兼容变更才递增 `handoffVersion`，兼容可选字段不加；交接终端及关联任务不记 `lost`，交接空档退出的终端记 `-1`，交接中 `terminal wait --for idle` 不算空闲，手机占尺寸时随 `DeskCols`/`DeskRows` 带回桌面尺寸。退出时 `rpc.Server` 最多等 3 秒写完在途回复，因请求 ctx 取消的回 `restarting`；长等待 RPC 必须响应 ctx，CLI 走 `doWait` 续等（`task ask` 改 `--resume`，`hook.permission.hold` 重挂）。
 - **拉起与运行副本**：拉起常驻进程和采集子进程一律经 `internal/spawn`（新会话 + `responsibility_spawnattrs_setdisclaim` 让其自身承担 TCC 授权，`daemon.OpenLog` 启动前超 5 MB 轮转为 `daemon.log.1`，`EnsureDaemon` 后台 `Wait` 防僵尸）。打包版常驻进程从 `~/Library/Application Support/Posse/runtime/` 下的 APFS 克隆副本运行（`spawn.Runtime`，终端记 `session.runtime`，启动时和终端退出后按引用回收，防换包后 TCC 拒访；详见 `docs/plans/terminal-host.md`）。重新打包覆盖后窗口进程会丢 TCC 授权，需重开窗口（`internal/app/relaunch.go`）。

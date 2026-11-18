@@ -11,7 +11,7 @@ import '../workspace/models.dart';
 import 'send.dart';
 import 'transcript.dart' show chatWho;
 
-/// 读 [ContextMeter] 的数：会话最后一次请求占了多少上下文（`session.context`），没有用量记录时为空。
+/// 读最后一次请求的上下文：Claude/Codex 是百分比，Antigravity 是 token 数，没有读数时为空。
 typedef ContextReader = Future<int?> Function(SessionTab tab);
 
 Future<int?> readSessionContext(PhoneRpc rpc, SessionTab tab) async {
@@ -31,7 +31,7 @@ typedef ContextSender = Future<SendOutcome> Function(
 );
 
 /// 标题下面状态行末尾的上下文用量：小圆环加「42%」，圆环已经说明是用量，不再写字。手机终端太窄，Claude 自己状态栏里的百分比常被截掉。
-/// 只有 Claude、Codex 记了用量；每 15 秒和每次状态变化时重读，电脑上的 posse 太旧（没有这个接口）就不再问。
+/// Claude、Codex 显示百分比，Antigravity 只有 token 数；每 15 秒和每次状态变化时重读，电脑上的 posse 太旧（没有这个接口）就不再问。
 /// 点它问要不要压缩，确认后清空输入框、发 /compact（两家都认）。
 class ContextMeter extends StatefulWidget {
   const ContextMeter({
@@ -57,11 +57,12 @@ class ContextMeter extends StatefulWidget {
 
 class _ContextMeterState extends State<ContextMeter> {
   int? _percent;
+  int? _tokens;
   Timer? _timer;
   var _unsupported = false;
 
   bool get _applies =>
-      const {'claude', 'codex'}.contains(widget.tab.agent) &&
+      const {'claude', 'codex', 'antigravity'}.contains(widget.tab.agent) &&
       (widget.tab.sessionId?.isNotEmpty ?? false);
 
   @override
@@ -78,8 +79,13 @@ class _ContextMeterState extends State<ContextMeter> {
     super.didUpdateWidget(old);
     // 一轮做完、换了会话时用量才会变
     if (old.tab.state != widget.tab.state ||
-        old.tab.sessionId != widget.tab.sessionId) {
-      if (old.tab.sessionId != widget.tab.sessionId) _percent = null;
+        old.tab.sessionId != widget.tab.sessionId ||
+        old.tab.agent != widget.tab.agent) {
+      if (old.tab.sessionId != widget.tab.sessionId ||
+          old.tab.agent != widget.tab.agent) {
+        _percent = null;
+        _tokens = null;
+      }
       _refresh();
     }
   }
@@ -97,8 +103,33 @@ class _ContextMeterState extends State<ContextMeter> {
     if (read == null && rpc == null) return;
     final tab = widget.tab;
     try {
+      if (tab.agent == 'antigravity') {
+        int? tokens;
+        if (read != null) {
+          tokens = await read(tab);
+        } else {
+          final res = await rpc!.call('session.context', {
+            'agent': tab.agent,
+            'sessionId': tab.sessionId,
+            if (tab.transcriptPath != null)
+              'transcriptPath': tab.transcriptPath,
+          });
+          tokens = res['known'] == true ? (res['used'] as num?)?.toInt() : null;
+        }
+        if (mounted &&
+            tab.sessionId == widget.tab.sessionId &&
+            tab.agent == widget.tab.agent) {
+          setState(() {
+            _tokens = tokens;
+            _percent = null;
+          });
+        }
+        return;
+      }
       final percent = await (read ?? (t) => readSessionContext(rpc!, t))(tab);
-      if (mounted && tab.sessionId == widget.tab.sessionId) {
+      if (mounted &&
+          tab.sessionId == widget.tab.sessionId &&
+          tab.agent == widget.tab.agent) {
         setState(() => _percent = percent);
       }
     } on RpcException catch (e) {
@@ -143,7 +174,19 @@ class _ContextMeterState extends State<ContextMeter> {
   @override
   Widget build(BuildContext context) {
     final percent = _percent;
-    if (percent == null || !_applies) return const SizedBox.shrink();
+    if (!_applies) return const SizedBox.shrink();
+    final tokens = _tokens;
+    if (widget.tab.agent == 'antigravity') {
+      if (tokens == null) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(left: statusLineGap),
+        child: Text(
+          context.l10n.chatContextTokens(tokens),
+          style: statusLineStyle(PosseColors.of(context).muted),
+        ),
+      );
+    }
+    if (percent == null) return const SizedBox.shrink();
     final c = PosseColors.of(context);
     // 快满时提醒：Claude 到 80% 左右会自动压缩
     final color = percent >= 90

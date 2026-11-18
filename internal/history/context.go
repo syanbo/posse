@@ -41,6 +41,8 @@ func ReadContext(agent, path, model string) (Context, bool) {
 	switch agent {
 	case "claude":
 		marker, parse = []byte(`"usage"`), func(l []byte) (Context, bool) { return claudeContext(l, model) }
+	case "antigravity":
+		marker, parse = []byte(`"PLANNER_RESPONSE"`), antigravityContext
 	case "codex":
 		marker, parse = []byte(`"token_count"`), codexContext
 	default:
@@ -87,7 +89,7 @@ func ReadContext(agent, path, model string) (Context, bool) {
 			}
 			if bytes.Contains(line, marker) {
 				if c, ok := parse(line); ok {
-					return c, c.Window > 0
+					return c, c.Window > 0 || agent == "antigravity"
 				}
 			}
 		}

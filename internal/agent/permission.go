@@ -17,19 +17,21 @@ const (
 
 // skipArgs 是各家跳过审批的参数，和 Orca 的 YOLO_TUI_AGENT_ARGS 一致。
 var skipArgs = map[string][]string{
-	"claude": {"--dangerously-skip-permissions"},
-	"codex":  {"--dangerously-bypass-approvals-and-sandbox"},
-	"grok":   {"--permission-mode", "bypassPermissions"},
-	"cursor": {"--yolo"},
+	"antigravity": {"--dangerously-skip-permissions"},
+	"claude":      {"--dangerously-skip-permissions"},
+	"codex":       {"--dangerously-bypass-approvals-and-sandbox"},
+	"grok":        {"--permission-mode", "bypassPermissions"},
+	"cursor":      {"--yolo"},
 }
 
 // permissionFlags 是用户手动启动时自己指定权限的参数，带了就不再补：
 // Codex 的跳过参数和 -a、-s 同时给会直接报错退出。
 var permissionFlags = map[string][]string{
-	"claude": {"--dangerously-skip-permissions", "--permission-mode"},
-	"codex":  {"--dangerously-bypass-approvals-and-sandbox", "--approve-for-me", "--yolo", "--full-auto", "-a", "--ask-for-approval", "-s", "--sandbox"},
-	"cursor": {"--yolo", "-f", "--force"},
-	"grok":   {"--permission-mode"},
+	"antigravity": {"--dangerously-skip-permissions", "--mode", "--sandbox"},
+	"claude":      {"--dangerously-skip-permissions", "--permission-mode"},
+	"codex":       {"--dangerously-bypass-approvals-and-sandbox", "--approve-for-me", "--yolo", "--full-auto", "-a", "--ask-for-approval", "-s", "--sandbox"},
+	"cursor":      {"--yolo", "-f", "--force"},
+	"grok":        {"--permission-mode"},
 }
 
 func settingsPath(home string) string { return filepath.Join(home, "agents.json") }

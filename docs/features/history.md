@@ -16,3 +16,9 @@
 - 历史页列表顶上是总计（会话数、消息数、各 agent 会话数，取自 `history.list` 带回的 `status`）。本机详情里的路径点一下在访达中打开，远端路径只展示，不交给本机访达；移到废纸篓通过 `history.trash` 在目标执行，服务端接受时检查桌面控制身份；确认后先刷新索引取得当前分段，移动前直接读取源文件核对会话身份；若会话已恢复运行则拒绝。运行状态检查和移动与 Posse 的历史/终端恢复串行，索引等待在锁外。删除后等旧索引轮次结束，再刷新索引；多文件会话部分移动失败也刷新并报告错误，不永久删除、不自动重做。"上下文 N%"是最后一次请求占的上下文，详情请求带 `context: true` 时由目标 daemon 从会话文件末尾往前读并返回（不需要用量的调用不读）；旧本机 daemon 缺字段时由窗口兼容读取，远端缺字段不读取本机文件：Codex 取 `token_count` 的 `last_token_usage` 和 `model_context_window`；Claude 取最后一条助手消息的 usage（输入和缓存相加，不含输出），文件里没有窗口大小，按模型推断（兼容提供商前缀和小数点版本号；Claude 5 起的 Opus、Sonnet 和带 `[1m]` 的是 100 万，其余已知系列 20 万，用量超过 20 万的算 100 万；认不出的模型不显示百分比）；Grok 只有每轮累计、Cursor 没有记录，不显示。
 
 历史详情里的助手 Markdown 图片会按会话根目录加载：Cwd 是绝对路径时用 Cwd，否则用会话文件父目录，相对路径和 `/images/x.png` 都按该根解释；工具消息仍是纯文本。远端图片经详情请求捕获的目标资源读取，不读本机同路径，换会话、详情请求换代或换主机时关闭旧加载器并丢弃迟到结果。
+
+Antigravity 会话位于 `~/.gemini/antigravity-cli/brain/<UUID>/.system_generated/logs/transcript.jsonl`。标题、工作目录取 `cache/conversation_metadata.json` 的 summary，缓存缺失时保留正文索引、标题回退首句；缓存未提供 WorkspaceURIs 时目录仍未知，恢复需指定工作区。SQLite `conversation_summaries.db` 只读查询父子关系，缓存里的 Internal 标记也排除内部会话；不改 schemaVersion，解析升级用 parserVersions。
+
+解析 USER_INPUT / PLANNER_RESPONSE / GENERIC：用户只取 `<USER_REQUEST>` 正文、剥离附加元数据与设置；工具参数解开嵌套 JSON，thinking 不入库。带 truncated_fields 时按 step_index、type、created_at 核对后从同目录 transcript_full.jsonl 回读；缺失或身份不符则保留截断记录。手机对话增量读取使用同样规则。
+
+Antigravity 上下文取最近有效 PLANNER_RESPONSE 的 input_tokens + cache_read_tokens，缺少可核实的窗口容量，仅显示已用 token。媒体读取 media[].uri 的本地文件，以及 brain/<UUID> 下 .user_uploaded 和产物（目录扫描不跟随软链接）。移到废纸篓前核对 UUID、固定目录层级与软链接边界，移动整个 brain/<UUID>；这是日志和产物的删除，Antigravity 的 conversations/*.db、摘要缓存与搜索数据库保留，原生恢复可能重建日志。

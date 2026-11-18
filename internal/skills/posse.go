@@ -21,7 +21,7 @@ const (
 	TasksSkill  = "posse-tasks"
 	RenameSkill = "posse-rename"
 
-	TasksDescription = "Dispatch work to other agents (claude, codex, grok, cursor) in Posse terminals and coordinate them with `posse task`: start workers with a chosen model and reasoning effort, wait for results, answer their questions, retry failures, merge worktrees. Use when running inside Posse (POSSE_TERMINAL_ID is set) and the user asks to delegate, parallelize, hand off, supervise or fan out work to other agents."
+	TasksDescription = "Dispatch work to other agents (claude, codex, grok, cursor, antigravity) in Posse terminals and coordinate them with `posse task`: start workers with a chosen model and reasoning effort, wait for results, answer their questions, retry failures, merge worktrees. Use when running inside Posse (POSSE_TERMINAL_ID is set) and the user asks to delegate, parallelize, hand off, supervise or fan out work to other agents."
 	tasksBody        = "Before running any `posse task` command, run `posse task guide` and follow it: it is the guide for this exact posse version.\n"
 
 	// posseMarker 写在 frontmatter 的 metadata 里，认出 Posse 装的这一份（复制装的没有锁文件可查），
@@ -29,7 +29,7 @@ const (
 	posseMarker = "managed-by: posse"
 	// posseSkillsVersion 是自带技能内容的版本，跟着 posseMarker 写进 metadata。改了技能内容就加一
 	// （TestPosseSkillsVersion 守着），比装上的旧的 Posse 不去降级它。
-	posseSkillsVersion = 1
+	posseSkillsVersion = 2
 	versionKey         = "posse-skills-version"
 )
 
@@ -276,6 +276,22 @@ func PosseInstall(source string, names []string, claude bool) Install {
 	return Install{Source: source, Skills: names, Claude: claude, Global: true}
 }
 
+// PosseInstallLine 把补链接也交给安装终端，关闭窗口后安装仍能完整结束。
+func PosseInstallLine(source, home string, names []string, claude bool) string {
+	line := ShellLine(PosseInstall(source, names, claude).Args())
+	for _, name := range PosseNames() {
+		if !contains(names, name) {
+			continue
+		}
+		dir := filepath.Join(home, ".gemini", "config", "skills")
+		at := shellQuote(filepath.Join(dir, name))
+		file := shellQuote(filepath.Join(home, ".agents", "skills", name, "SKILL.md"))
+		rel := shellQuote(filepath.Join("..", "..", "..", ".agents", "skills", name))
+		line += " && if [ -f " + file + " ] && [ ! -e " + at + " ] && [ ! -L " + at + " ]; then mkdir -p " + shellQuote(dir) + " && ln -s " + rel + " " + at + "; fi"
+	}
+	return line
+}
+
 // CopyPosse 不经 npx，把 names 这几个 Posse 技能照 npx 的布局放进 home：~/.agents/skills/<名字>/SKILL.md，
 // claude 为真时 ~/.claude/skills/<名字> 是指向它的相对链接。同名但不是 Posse 装的不动，报错。
 func CopyPosse(home string, names []string, claude bool) error {
@@ -317,5 +333,5 @@ func CopyPosse(home string, names []string, claude bool) error {
 			return err
 		}
 	}
-	return nil
+	return LinkPosseAntigravity(home, names)
 }

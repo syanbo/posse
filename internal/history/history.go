@@ -1,4 +1,4 @@
-// Package history 把 claude、codex、cursor、grok 的会话记录增量索引进 SQLite，提供全文搜索。
+// Package history 把 claude、codex、cursor、grok、antigravity 的会话记录增量索引进 SQLite，提供全文搜索。
 // 索引只读各 agent 的会话文件，不写回；索引库是可以随时删掉重建的派生数据。
 package history
 
@@ -16,7 +16,7 @@ import (
 var ErrNotFound = errors.New("session not found")
 
 // Agents 是支持索引的 agent，顺序即界面里的筛选顺序。
-var Agents = []string{"claude", "codex", "cursor", "grok"}
+var Agents = []string{"claude", "codex", "cursor", "grok", "antigravity"}
 
 type Session struct {
 	Agent     string    `json:"agent"`

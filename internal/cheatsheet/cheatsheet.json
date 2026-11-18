@@ -1760,5 +1760,80 @@
     ]
    }
   ]
+ },
+ {
+  "agent": "antigravity",
+  "version": "1.5.11",
+  "docs": "https://antigravity.google/docs/cli/reference",
+  "skillPrefix": "/",
+  "sections": [
+   {
+    "title": "会话与设置",
+    "titleEn": "Conversation & Settings",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/help",
+      "desc": "查看命令和快捷键",
+      "descEn": "Show commands and shortcuts"
+     },
+     {
+      "name": "/resume",
+      "desc": "选择历史会话继续",
+      "descEn": "Choose a conversation to resume"
+     },
+     {
+      "name": "/rename",
+      "desc": "重命名当前会话",
+      "descEn": "Rename the current conversation",
+      "args": "<名称>",
+      "argsEn": "<name>"
+     },
+     {
+      "name": "/clear",
+      "desc": "开始新会话",
+      "descEn": "Start a new conversation",
+      "warn": true
+     },
+     {
+      "name": "/model",
+      "desc": "选择模型",
+      "descEn": "Choose a model"
+     },
+     {
+      "name": "/effort",
+      "desc": "设置思考深度",
+      "descEn": "Set reasoning effort",
+      "args": "[深度]",
+      "argsEn": "[level]"
+     },
+     {
+      "name": "/context",
+      "desc": "查看上下文用量",
+      "descEn": "Inspect context usage"
+     },
+     {
+      "name": "/usage",
+      "desc": "查看模型配额",
+      "descEn": "Inspect model quotas"
+     },
+     {
+      "name": "/skills",
+      "desc": "查看已加载的技能",
+      "descEn": "Browse loaded skills"
+     },
+     {
+      "name": "/mcp",
+      "desc": "查看 MCP 服务",
+      "descEn": "Browse MCP servers"
+     },
+     {
+      "name": "/exit",
+      "desc": "退出到 shell",
+      "descEn": "Return to the shell"
+     }
+    ]
+   }
+  ]
  }
 ]

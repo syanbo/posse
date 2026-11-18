@@ -30,7 +30,7 @@ const usageRefresh = 3 * time.Second
 
 // usageSupported 报告能不能统计这个 agent 的会话。
 func usageSupported(agent string) bool {
-	return agent == "claude" || agent == "codex" || agent == "grok" || agent == "cursor"
+	return agent == "claude" || agent == "codex" || agent == "grok" || agent == "cursor" || agent == "antigravity"
 }
 
 // pollUsage 在主线程调用：换了终端就重来，到点了就在后台读会话文件的新内容。

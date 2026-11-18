@@ -18,7 +18,7 @@ import (
 //   - claude：只接受 UserPromptSubmit hook 返回的 sessionTitle，先记成待交，下一次提交时交过去
 //   - codex：state 库的 threads 和 session_index.jsonl
 //   - grok：会话目录的 summary.json
-//   - cursor：没有核实过能写的地方，只在 Posse 里显示
+//   - cursor、antigravity：没有核实过能写的地方，只在 Posse 里显示
 
 type sessionTitleParams struct {
 	Terminal string `json:"terminal"`
@@ -57,7 +57,7 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 	if sid == "" {
 		sid = s.Agent().SessionID
 	}
-	if sid == "" && name != "cursor" {
+	if sid == "" && name != "cursor" && name != "antigravity" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "the ID of this %s session is not known yet; send a message and try again", name)
 	}
 	var applies string

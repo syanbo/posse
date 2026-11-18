@@ -1228,7 +1228,7 @@ func (t *Terminal) closePTY() {
 }
 
 // strippedEnv 是不应从启动常驻进程的环境泄漏进新终端的变量。
-var strippedPrefixes = []string{"ORCA_", "CLAUDE_CODE_", "POSSE_", "TERM_PROGRAM", "GROK_"}
+var strippedPrefixes = []string{"ORCA_", "CLAUDE_CODE_", "POSSE_", "TERM_PROGRAM", "GROK_", "ANTIGRAVITY_", "AGY_CLI_"}
 var strippedNames = map[string]bool{"CLAUDECODE": true, "CLAUDE_PID": true, "CLAUDE_EFFORT": true, "TERM": true, "COLORTERM": true, "FORCE_HYPERLINK": true,
 	// agent 给工具调用设的非交互环境（关颜色、关分页、git 不开编辑器不问密码）。agent 在终端里用 open 拉起 Posse.app 时，
 	// 窗口和常驻进程会继承它们，再漏进之后的每个终端：Claude Code 看到 NO_COLOR 就整屏没颜色。

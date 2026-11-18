@@ -21,7 +21,7 @@ const ShimEnv = "POSSE_AGENT_SHIM"
 
 // Shimmed 是会放同名脚本的命令和它对应的 agent。agent 这个命令 grok 和 Cursor 都装了，
 // 指向谁看用户的 PATH，由 ShimTarget 在启动时按实际找到的程序定。
-var Shimmed = map[string]string{"claude": "claude", "codex": "codex", "cursor-agent": "cursor", "grok": "grok", "agent": ""}
+var Shimmed = map[string]string{"claude": "claude", "codex": "codex", "cursor-agent": "cursor", "grok": "grok", "agy": "antigravity", "agent": ""}
 
 // ShimTarget 是同名脚本 cmd 找到的程序 real 该按哪个命令补参数：agent 按它实际指向的是 grok 还是 Cursor，
 // 认不出时返回空，原样运行。
@@ -90,6 +90,8 @@ func ShellEnv(home, shell, userZdotdir string) []string {
 
 // passthrough 是不补 hooks、原样运行的子命令和选项：非交互、管理类的用法。
 var passthrough = map[string][]string{
+	"agy": {"acp", "agent", "agents", "changelog", "help", "install", "mcp", "mic-serve", "models", "plugin", "plugins", "remote-control", "update",
+		"-p", "--print", "--prompt", "-h", "--help", "-v", "--version"},
 	"claude": {"mcp", "config", "update", "doctor", "install", "setup-token", "migrate-installer", "plugin", "plugins",
 		"-p", "--print", "-v", "--version", "-h", "--help"},
 	"codex": {"exec", "e", "login", "logout", "mcp", "mcp-server", "app-server", "completion", "sandbox", "debug",
@@ -107,6 +109,12 @@ var grokResumeFlags = []string{"-c", "--continue", "-r", "--resume", "-s", "--se
 // ManualArgs 给用户手动敲的命令补上 hooks 参数，返回完整参数；不该补时原样返回。
 // 不给 Claude 指定 --session-id：用户可能带了 --resume、--continue，会话 ID 由 hooks 报上来。
 func (l Launcher) ManualArgs(cmd string, args []string) ([]string, error) {
+	if cmd == "agy" {
+		if !antigravityInteractive(args) {
+			return args, nil
+		}
+		return append(l.manualPermissionArgs("antigravity", args), args...), nil
+	}
 	skip := passthrough[cmd]
 	for _, a := range args {
 		if strings.HasPrefix(a, "-") && slices.Contains(skip, a) {

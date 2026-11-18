@@ -36,6 +36,22 @@ func wantStatus(t *testing.T, s *session, status string) host.AgentState {
 	return st
 }
 
+func TestAntigravityOSCStatus(t *testing.T) {
+	d, s, _ := oscTerminal(t, "antigravity")
+	for _, tc := range []struct{ state, want, msg string }{
+		{"working", agent.StatusWorking, ""},
+		{"blocked", agent.StatusWaiting, "Choose a workspace"},
+		{"working", agent.StatusWorking, ""},
+		{"done", agent.StatusIdle, "Done"},
+	} {
+		d.onProgramStatus(s.ID, host.ProgramStatus{State: tc.state, App: "antigravity", Msg: tc.msg})
+		st := wantStatus(t, s, tc.want)
+		if tc.state == "blocked" && st.Message != tc.msg {
+			t.Fatalf("unexpected state: %+v", st)
+		}
+	}
+}
+
 // 报过 7501 之后工作中、空闲以它为准：Esc 中断没有 hook 也回到空闲，之后晚到的 hook 改不了状态；
 // 会话 ID、Stop 带的最后一条回复照旧来自 hook。事件顺序照 Claude Code 2.1.318 实测。
 func TestOSCStatusOverridesHooks(t *testing.T) {

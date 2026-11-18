@@ -7,7 +7,7 @@ import (
 	"posse/internal/host"
 )
 
-// agent 经 OSC 7501 报的状态（Claude、Codex、Grok 都会报；Claude、Grok 要先收到探测的应答，term 里应答）。
+// agent 经 OSC 7501 报的状态（Claude、Codex、Grok、Antigravity 都会报；Claude、Grok、Antigravity 要先收到探测的应答，term 里应答）。
 // 报过之后这个 agent 的状态以它为准：hooks 只在事件发生时才有，Esc 中断、本轮出错这类没有事件的情况靠它补；
 // Claude 收到应答后不再把状态写进标题，标题兜底也就用不上了。hooks 仍然提供会话 ID、答题卡和审批、子 agent、退出。
 
@@ -20,6 +20,8 @@ const (
 // oscAgent 是报告者对应的 agent 名，认不出的不改 agent 状态。
 func oscAgent(app string) string {
 	switch app {
+	case "antigravity":
+		return "antigravity"
 	case "claude-code":
 		return "claude"
 	case "codex":

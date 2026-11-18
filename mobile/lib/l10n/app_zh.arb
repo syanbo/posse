@@ -746,5 +746,6 @@
   "discStateMerged": "已并入上一条请求",
   "discGuest": "只读",
   "discInviteGuest": "邀请只读访客",
-  "discGuestNote": "你是以只读身份加入的，不能在这里发言。"
+  "discGuestNote": "你是以只读身份加入的，不能在这里发言。",
+  "chatContextTokens": "{used} token"
 }

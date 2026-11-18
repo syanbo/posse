@@ -2550,6 +2550,8 @@ func agentTitle(agent string) string {
 		return "Codex"
 	case "grok":
 		return "Grok"
+	case "antigravity":
+		return "Antigravity"
 	case "cursor":
 		return "Cursor"
 	}
@@ -2565,6 +2567,8 @@ func agentVendor(agent string) string {
 		return "OpenAI"
 	case "grok":
 		return "xAI"
+	case "antigravity":
+		return "Google"
 	case "cursor":
 		return "Cursor"
 	}

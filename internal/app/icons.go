@@ -2,7 +2,7 @@ package app
 
 import "github.com/egoist/mygo/ui"
 
-// brandIcon 是各家 agent 的标志：单个填充路径，Claude 取自 simple-icons，Codex、Grok、Cursor 取自 LobeHub Icons。
+// brandIcon 是各家 agent 的标志：单个填充路径，Claude 取自 simple-icons，Codex、Grok、Cursor、Antigravity 取自 LobeHub Icons。
 func brandIcon(d string) *ui.SVG {
 	return ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="` + d + `"/></svg>`))
 }
@@ -29,6 +29,9 @@ const (
 )
 
 const hexPath = `M12 2.75 20 7.375v9.25L12 21.25 4 16.625v-9.25z`
+
+// Antigravity 标志取自 https://github.com/lobehub/lobe-icons（MIT）。
+var iconAntigravity = brandIcon(`M21.751 22.607c1.34 1.005 3.35.335 1.508-1.508C17.73 15.74 18.904 1 12.037 1 5.17 1 6.342 15.74.815 21.1c-2.01 2.009.167 2.511 1.507 1.506 5.192-3.517 4.857-9.714 9.715-9.714 4.857 0 4.522 6.197 9.714 9.715z`)
 
 var (
 	iconPlus       = icon(`<path d="M12 4v16M4 12h16"/>`)

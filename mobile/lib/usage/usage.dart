@@ -366,6 +366,7 @@ String agentTitle(String agent) => switch (agent) {
   'codex' => 'Codex',
   'grok' => 'Grok',
   'cursor' => 'Cursor',
+  'antigravity' => 'Antigravity',
   _ => agent,
 };
 

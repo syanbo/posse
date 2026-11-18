@@ -222,7 +222,7 @@ func (d *Daemon) restoreCommand(t *store.Terminal) (string, []string, *host.Agen
 			argv[len(argv)-1] = restoreBanner() + "; " + argv[len(argv)-1]
 			st := &host.AgentState{Status: agent.StatusStarting, SessionID: sid, At: time.Now()}
 			// 同 historyResume：codex、cursor 改状态的第一个 hook 要到第一轮对话才来
-			if name == "codex" || name == "cursor" {
+			if name == "codex" || name == "cursor" || name == "antigravity" {
 				st.Status = ""
 			}
 			return name, argv, st

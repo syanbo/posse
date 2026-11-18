@@ -118,13 +118,16 @@ func TestEnvironStripsHostAgentVars(t *testing.T) {
 	t.Setenv("FORCE_COLOR", "0")
 	t.Setenv("GIT_EDITOR", "true")
 	t.Setenv("GROK_AGENT", "1")
+	t.Setenv("ANTIGRAVITY_CONVERSATION_ID", "parent-session")
+	t.Setenv("ANTIGRAVITY_LS_ADDRESS", "parent-server")
+	t.Setenv("AGY_CLI_DATA_DIR", "/parent")
 	t.Setenv("GRADLE_OPTS", "-Dorg.gradle.console=plain")
 	t.Setenv("MAVEN_OPTS", "-Xmx2g")
 	env := strings.Join(Environ([]string{"POSSE_TERMINAL_ID=t_1"}), "\n")
 	if !strings.Contains(env, "MAVEN_OPTS=-Xmx2g") {
 		t.Fatal("user's MAVEN_OPTS dropped")
 	}
-	for _, bad := range []string{"ORCA_PANE_KEY=", "CLAUDECODE=", "NO_COLOR=", "FORCE_COLOR=", "GIT_EDITOR=", "GROK_AGENT=", "GRADLE_OPTS="} {
+	for _, bad := range []string{"ORCA_PANE_KEY=", "CLAUDECODE=", "NO_COLOR=", "FORCE_COLOR=", "GIT_EDITOR=", "GROK_AGENT=", "ANTIGRAVITY_", "AGY_CLI_", "GRADLE_OPTS="} {
 		if strings.Contains(env, bad) {
 			t.Fatalf("environment leaks %s", bad)
 		}

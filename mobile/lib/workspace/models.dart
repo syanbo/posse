@@ -1,6 +1,6 @@
 import '../ui/widgets.dart';
 
-const chatAgents = {'claude', 'codex', 'grok'};
+const chatAgents = {'claude', 'codex', 'grok', 'antigravity'};
 
 class WorktreeRow {
   const WorktreeRow({

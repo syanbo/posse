@@ -166,10 +166,11 @@ type knownFile struct {
 // parserVersions 是各家解析规则的版本。只改了某一家的解析时改这里：只重读这一家的文件，表结构版本不变，
 // 跨版本继续运行的旧常驻进程照常能查询。表结构或分词变了才改 schemaVersion（整份重建，旧常驻进程要重启）。
 var parserVersions = map[string]string{
-	"claude": "4", // 用户在 agent 工作时插进来的话
-	"codex":  "2", // 记下模型
-	"grok":   "4", // 增量读取时回复不再对上已用过的分段
-	"cursor": "1", // 会话 ID 跨目录重复时各配各的 meta.json
+	"antigravity": "1",
+	"claude":      "4", // 用户在 agent 工作时插进来的话
+	"codex":       "2", // 记下模型
+	"grok":        "4", // 增量读取时回复不再对上已用过的分段
+	"cursor":      "1", // 会话 ID 跨目录重复时各配各的 meta.json
 }
 
 // staleParsers 返回解析规则比索引里记录的新的 agent。

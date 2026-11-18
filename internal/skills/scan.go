@@ -1,4 +1,4 @@
-// Package skills 扫描四家 agent（Claude、Codex、Grok、Cursor）能读到的技能，按各家的读取规则和开关算出谁用得上，
+// Package skills 扫描五家 agent（Claude、Codex、Grok、Cursor、Antigravity）能读到的技能，按各家的读取规则和开关算出谁用得上，
 // 找出断链、同名冲突、多余的链接这类问题。只读；改各家配置的在 config.go。规则的出处见 docs/plans/skills.md。
 package skills
 
@@ -23,14 +23,15 @@ const (
 	Codex
 	Grok
 	Cursor
+	Antigravity
 	NumAgents
 )
 
 // Agents 按界面上的顺序列出各家。
-var Agents = [NumAgents]Agent{Claude, Codex, Grok, Cursor}
+var Agents = [NumAgents]Agent{Claude, Codex, Grok, Cursor, Antigravity}
 
 func (a Agent) String() string {
-	return [...]string{"claude", "codex", "grok", "cursor"}[a]
+	return [...]string{"claude", "codex", "grok", "cursor", "antigravity"}[a]
 }
 
 // Scope 是技能从哪一层来。
@@ -141,11 +142,17 @@ type root struct {
 	// prefix 加在技能名前面（插件技能）。
 	prefix string
 	// walk 为真时往下各级找技能（Grok 的 [skills] paths：可以是目录，也可以是一个 SKILL.md）。
-	walk bool
+	walk  bool
+	paths []string
+	allow func(string) bool
 }
 
-func prios(claude, codex, grok, cursor int) [NumAgents]int {
-	return [NumAgents]int{claude, codex, grok, cursor}
+func prios(claude, codex, grok, cursor int, agy ...int) [NumAgents]int {
+	p := [NumAgents]int{claude, codex, grok, cursor, -1}
+	if len(agy) > 0 {
+		p[Antigravity] = agy[0]
+	}
+	return p
 }
 
 // roots 列出各家会读的目录。优先级：项目的在用户的前面（Claude 相反：个人的盖过项目的）；
@@ -200,7 +207,7 @@ func roots(o Options, cfg configs) []root {
 			)
 		}
 	}
-	return rs
+	return append(rs, antigravityRoots(o)...)
 }
 
 // upToRepo 是 dir 和它往上直到仓库根（有 .git 的目录，worktree 里是文件）的各级目录；不在仓库里时只有 dir。
@@ -238,11 +245,14 @@ func Scan(o Options) Catalog {
 	var items []found
 	seenRoot := map[string]bool{}
 	for i, r := range rs {
-		if seenRoot[r.dir] {
+		if seenRoot[r.dir] && r.prio[Antigravity] < 0 {
 			continue
 		}
 		seenRoot[r.dir] = true
 		for _, p := range candidates(r) {
+			if r.allow != nil && !r.allow(p) {
+				continue
+			}
 			fi, err := os.Lstat(p)
 			if err != nil {
 				continue
@@ -280,6 +290,9 @@ func Scan(o Options) Catalog {
 // candidates 是 r 里可能是技能的各项：一般是下一层的各个目录（含链接）；walk 的往下各级找有 SKILL.md 的目录，
 // 找到就不再往里找，r.dir 本身是 SKILL.md 时就是它所在的目录。
 func candidates(r root) []string {
+	if r.paths != nil {
+		return r.paths
+	}
 	if r.walk {
 		if filepath.Base(r.dir) == "SKILL.md" {
 			return []string{filepath.Dir(r.dir)}

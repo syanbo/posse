@@ -48,6 +48,10 @@ func CheckTrashSession(ctx context.Context, s Session) error {
 			if err != nil {
 				return err
 			}
+		case "antigravity":
+			if dir := AntigravityBrainDir(path); dir != "" {
+				id = filepath.Base(dir)
+			}
 		case "grok":
 			err := (grokParser{}).meta(filepath.Join(filepath.Dir(path), "summary.json"), &st)
 			if err != nil && !os.IsNotExist(err) {
@@ -112,6 +116,12 @@ func TrashPaths(home string, s Session) []string {
 			}
 		}
 		return parts
+	case "antigravity":
+		dir := AntigravityBrainDir(s.Path)
+		expected := filepath.Join(home, ".gemini", "antigravity-cli", "brain", s.ID)
+		if dir == expected && isDir(dir) && under(s.Path, ".gemini", "antigravity-cli", "brain", s.ID) && under(dir, ".gemini", "antigravity-cli", "brain") {
+			return []string{dir}
+		}
 	case "grok":
 		if dir := filepath.Dir(s.Path); filepath.Base(dir) == s.ID && under(dir, ".grok", "sessions") {
 			return []string{dir}

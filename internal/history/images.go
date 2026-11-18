@@ -56,10 +56,11 @@ func NewImageScanner(agent, path string) *ImageScanner {
 func (s *ImageScanner) Path() string { return s.path }
 
 var imageMarkers = map[string][][]byte{
-	"claude": {[]byte(`"type":"image"`), []byte(`"type": "image"`), []byte(`"tool_use"`)},
-	"codex":  {[]byte(`"input_image"`), []byte(`"custom_tool_call"`), []byte(`"function_call"`), []byte(`"custom_tool_call_output"`), []byte(`"function_call_output"`)},
-	"grok":   {[]byte(`"tool_calls"`), []byte(`"tool_result"`), []byte(`"type":"image"`), []byte(`<image_files>`)},
-	"cursor": {[]byte(`<image_files>`)},
+	"antigravity": {[]byte(`"media"`)},
+	"claude":      {[]byte(`"type":"image"`), []byte(`"type": "image"`), []byte(`"tool_use"`)},
+	"codex":       {[]byte(`"input_image"`), []byte(`"custom_tool_call"`), []byte(`"function_call"`), []byte(`"custom_tool_call_output"`), []byte(`"function_call_output"`)},
+	"grok":        {[]byte(`"tool_calls"`), []byte(`"tool_result"`), []byte(`"type":"image"`), []byte(`<image_files>`)},
+	"cursor":      {[]byte(`<image_files>`)},
 }
 
 // Scan 读文件新增的完整行，返回到目前为止的图片，按会话里的顺序。
@@ -83,7 +84,7 @@ func (s *ImageScanner) Scan() ([]ToolImage, error) {
 	}
 	base := s.offset
 	markers := imageMarkers[s.agent]
-	parse := map[string]func([]byte, int64){"claude": s.line, "codex": s.codexLine, "grok": s.grokLine, "cursor": s.cursorLine}[s.agent]
+	parse := map[string]func([]byte, int64){"claude": s.line, "codex": s.codexLine, "grok": s.grokLine, "cursor": s.cursorLine, "antigravity": s.antigravityLine}[s.agent]
 	if parse == nil {
 		return nil, nil
 	}

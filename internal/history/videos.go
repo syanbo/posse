@@ -117,6 +117,21 @@ func (s *VideoScanner) line(b []byte) {
 			outputs = append(outputs, p.Item.Result)
 		}
 		at = l.Timestamp
+	case "antigravity":
+		var r antigravityRecord
+		if json.Unmarshal(b, &r) != nil {
+			return
+		}
+		at, _ = time.Parse(time.RFC3339Nano, r.Created)
+		if r.Type == "GENERIC" {
+			raw, _ := json.Marshal(r.Content)
+			outputs = append(outputs, raw)
+		}
+		for _, m := range r.Media {
+			if path := antigravityFileURI(m.URI); path != "" && strings.HasPrefix(m.MIME, "video/") {
+				s.add(path, at)
+			}
+		}
 	case "grok":
 		// 会话文件不带时间，At 留空
 		var l grokImageLine

@@ -332,6 +332,15 @@ func TestSessionContext(t *testing.T) {
 	if got["known"] != false {
 		t.Fatalf("compact context %v", got)
 	}
+	if err := os.WriteFile(path, []byte(`{"type":"PLANNER_RESPONSE","input_tokens":100,"cache_read_tokens":250}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	args["agent"] = "antigravity"
+	got = result(t, p.next(p.call("session.context", args)))
+	if got["known"] != true || got["used"] != float64(350) || got["window"] != float64(0) || got["percent"] != nil {
+		t.Fatalf("Antigravity context %v", got)
+	}
+
 	none := result(t, p.next(p.call("session.context", map[string]any{"agent": "grok", "sessionId": "x"})))
 	if none["known"] != false {
 		t.Fatalf("grok context %v", none)

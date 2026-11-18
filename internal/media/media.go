@@ -56,7 +56,7 @@ type Item struct {
 
 // Supported 报告能不能列这个 agent 的图片。
 func Supported(agent string) bool {
-	return agent == "claude" || agent == "codex" || agent == "grok" || agent == "cursor"
+	return agent == "claude" || agent == "codex" || agent == "grok" || agent == "cursor" || agent == "antigravity"
 }
 
 // Source 是图片从哪来：磁盘上的文件，或 agent 读的文件、返回它的工具。
@@ -122,6 +122,8 @@ func (s *Scanner) Scan() (pasted, made []Item) {
 			s.dir = ClaudeImageDir(s.sid, s.transcript)
 		}
 		pasted = ListImages(s.dir)
+	case "antigravity":
+		pasted, made, _ = antigravityMedia(context.Background(), history.TranscriptPath(s.agent, s.sid, s.transcript))
 	case "codex":
 		made = CodexImages(s.sid)
 	}
@@ -150,6 +152,10 @@ func (s *Scanner) Scan() (pasted, made []Item) {
 		if vs, err := s.videos.Scan(); err == nil {
 			made = append(made, VideoItems(vs)...)
 		}
+	}
+	if s.agent == "antigravity" {
+		pasted, made = uniqueAntigravityMedia(pasted, made)
+		slices.SortStableFunc(pasted, func(a, b Item) int { return b.At.Compare(a.At) })
 	}
 	slices.SortStableFunc(made, func(a, b Item) int { return b.At.Compare(a.At) })
 	return pasted, made

@@ -20,7 +20,7 @@ import (
 const NPXVersion = "1.7.4"
 
 // npxAgent 是 npx skills 里各家的名字（-a）。
-var npxAgent = [NumAgents]string{"claude-code", "codex", "grok", "cursor"}
+var npxAgent = [NumAgents]string{"claude-code", "codex", "grok", "cursor", "antigravity"}
 
 // Install 是一次安装。
 type Install struct {

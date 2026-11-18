@@ -3622,5 +3622,15 @@
   "discGuestNote": "You joined as a viewer and can’t post here.",
   "@discGuestNote": {
     "description": "Mobile discussions: shown in place of the input when this computer joined the discussion as a read-only viewer"
+  },
+  "chatContextTokens": "{used} tokens",
+  "@chatContextTokens": {
+    "description": "Context token usage when the model window is unknown.",
+    "placeholders": {
+      "used": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
   }
 }

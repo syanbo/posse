@@ -865,7 +865,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 
   /// 快捷键栏的「Exit」：清空输入框，写上 /exit，不回车，由用户自己发送（agent 正在干活时不会被误退）。
-  /// Claude Code、Codex、Grok、Cursor 都认这条命令；不发 Ctrl+D：agent 退出后多出来的一次会落到 shell 上，
+  /// Claude Code、Codex、Grok、Cursor、Antigravity 都认这条命令；不发 Ctrl+D：agent 退出后多出来的一次会落到 shell 上，
   /// 把整个终端也关掉。
   Future<void> _exitAgent() async {
     if (_liveTab.agent == null) {

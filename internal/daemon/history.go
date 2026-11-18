@@ -462,7 +462,7 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 	}
 	// 只记会话 ID 的情况：codex、cursor 改状态的第一个 hook 要到第一轮对话才来，先显示"启动中"就会一直停在那里
 	st := host.AgentState{Status: agent.StatusStarting, SessionID: s.ID, At: time.Now()}
-	if s.Agent == "codex" || s.Agent == "cursor" {
+	if s.Agent == "codex" || s.Agent == "cursor" || s.Agent == "antigravity" {
 		st.Status = ""
 	}
 	t.SetAgent(st)

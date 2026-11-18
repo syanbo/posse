@@ -92,6 +92,8 @@ String agentLabel(String? agent) {
       return 'Codex';
     case 'grok':
       return 'Grok';
+    case 'antigravity':
+      return 'Antigravity';
     case 'cursor':
       return 'Cursor';
     default:

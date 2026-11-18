@@ -551,6 +551,8 @@ func resumeCommand(s history.Session) string {
 		cmd = "codex resume " + id
 	case "grok":
 		cmd = "grok --resume " + id
+	case "antigravity":
+		cmd = "agy --conversation " + id
 	case "cursor":
 		cmd = "cursor-agent --resume " + id
 	}
@@ -756,11 +758,15 @@ func (a *app) cwdLink(c *ui.Context, dir string) func() {
 
 // contextMeta 是会话最后一次请求占用的上下文比例；读不到用量的会话（grok、cursor）不显示。
 func contextMeta(c *ui.Context, d *historyDetail) func() {
-	if d.Context == nil || d.Context.Window <= 0 {
+	if d.Context == nil || d.Context.Used <= 0 && d.Context.Window <= 0 {
 		return nil
 	}
 	return func() {
 		ctx := d.Context
+		if ctx.Window <= 0 {
+			ui.Text(c, L(c).HistoryContextTokens(ctx.Used)).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).MaxLines(1).Shrink(0)
+			return
+		}
 		ui.Text(c, L(c).HistoryContext(ctx.Percent())).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).MaxLines(1).Shrink(0).
 			Tooltip(L(c).HistoryContextTip(ctx.Used, ctx.Window))
 	}

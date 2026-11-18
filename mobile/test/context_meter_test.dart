@@ -57,6 +57,32 @@ void main() {
     expect(find.text('81%'), findsOneWidget);
   });
 
+  testWidgets('Antigravity shows tokens without a compact action', (
+    tester,
+  ) async {
+    Future<void> show(String agent) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ContextMeter(
+              tab: _tab(agent, 'idle'),
+              model: model,
+              read: (_) async => 12345,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    await show('antigravity');
+    expect(find.textContaining('12,345'), findsOneWidget);
+    expect(find.textContaining('%'), findsNothing);
+    expect(find.byKey(const Key('context-meter')), findsNothing);
+    await show('codex');
+    expect(find.text('12345%'), findsOneWidget);
+  });
+
   testWidgets('agents without usage records show nothing', (tester) async {
     var reads = 0;
     await tester.pumpWidget(

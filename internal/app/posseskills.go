@@ -66,7 +66,7 @@ func (a *app) installPosseSkills(m locales.Messages) {
 	if st.Installed() {
 		title = m.SkillsPosseUpdateRunTitle()
 	}
-	line := skills.ShellLine(skills.PosseInstall(src, names, claude).Args())
+	line := skills.PosseInstallLine(src, homeDir, names, claude)
 	a.askSkillCommand(m, title, m.SkillsPosseRunBody(strings.Join(names, m.SkillsListSeparator())), line, w, true)
 	a.skillRun.posse, a.skillRun.posseNames, a.skillRun.posseClaude = true, names, claude
 }

@@ -2576,4 +2576,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get discGuestNote => '你是以只读身份加入的，不能在这里发言。';
+
+  @override
+  String chatContextTokens(int used) {
+    final intl.NumberFormat usedNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String usedString = usedNumberFormat.format(used);
+
+    return '$usedString token';
+  }
 }

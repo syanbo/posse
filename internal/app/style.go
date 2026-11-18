@@ -643,6 +643,8 @@ func agentIcon(c *ui.Context, agent string, size float32) ui.Element {
 		icon, bg, fg = iconCodex, white, black // ChatGPT 应用图标的白底黑标
 	case "grok":
 		icon, bg, fg = iconGrok, t.Text, t.Background
+	case "antigravity":
+		icon, bg, fg = iconAntigravity, ui.Hex("#4285F4"), white
 	case "cursor":
 		icon, bg, fg = iconCursor, ui.Hex("#6E56CF"), white
 	}
