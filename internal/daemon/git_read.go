@@ -98,6 +98,19 @@ func (d *Daemon) gitStatus(ctx context.Context, raw json.RawMessage) (any, error
 	if err != nil {
 		return nil, gitReadError(ctx, err)
 	}
+	if p.LastMessage && out.Status.Commit != "" {
+		out.LastMessage, err = gitx.LastMessageChecked(ctx, id.Root)
+		if err != nil {
+			return nil, gitReadError(ctx, err)
+		}
+		head, err := gitx.ResolveBranchCommit(ctx, id.Root, "HEAD")
+		if err != nil {
+			return nil, gitReadError(ctx, err)
+		}
+		if head != out.Status.Commit {
+			return nil, gitReadError(ctx, gitx.ErrLogChanged)
+		}
+	}
 	if p.Full {
 		if out.Status.Commit == "" {
 			// porcelain 明确报告 unborn 才能按空树统计，其他 HEAD 错误不能降级。

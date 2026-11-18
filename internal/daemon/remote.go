@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 
 	"posse/internal/rpc"
 )
@@ -42,6 +43,6 @@ func (d *Daemon) remoteInfo(context.Context, json.RawMessage) (any, error) {
 		Home:         home,
 		Version:      Version,
 		Build:        Build,
-		Capabilities: []string{"rpc.v1", "terminal.stream.v1"},
+		Capabilities: slices.Clone(rpc.RemoteCapabilities),
 	}, nil
 }

@@ -86,10 +86,41 @@ func (d *Daemon) desktopCall(srv *rpc.Server, ctx context.Context, raw json.RawM
 	if p.Method == "git.fetch" && len(p.Params) > rpc.GitFetchParamsLimit {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid Git fetch parameters")
 	}
+	if p.Method == "git.push" && len(p.Params) > rpc.GitPushParamsLimit {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid Git push parameters")
+	}
+	if p.Method == "git.update" && len(p.Params) > rpc.GitUpdateParamsLimit {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid Git update parameters")
+	}
+	if p.Method == "git.branch" && len(p.Params) > rpc.GitBranchParamsLimit {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid Git branch parameters")
+	}
+	if p.Method == "git.paths" && len(p.Params) > rpc.GitPathsParamsLimit {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid Git paths parameters")
+	}
+	if p.Method == "git.commit" && len(p.Params) > rpc.GitCommitParamsLimit {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid Git commit parameters")
+	}
+	if p.Method == "git.history" && len(p.Params) > rpc.GitHistoryParamsLimit {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid Git history parameters")
+	}
+	if p.Method == "git.stash" && len(p.Params) > rpc.GitStashParamsLimit {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid Git stash parameters")
+	}
+	if p.Method == "git.integrate" && len(p.Params) > rpc.GitIntegrateParamsLimit {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid Git integration parameters")
+	}
+	inputLimit := rpc.FileSaveRequestLimit
+	if p.Method == "git.history" {
+		inputLimit = rpc.GitHistoryParamsLimit
+	}
+	if p.Method == "git.commit" {
+		inputLimit = rpc.GitCommitParamsLimit
+	}
 	inputBytes := 0
-	if p.Method == "files.save" || p.Method == "files.pasteImage" {
+	if p.Method == "files.save" || p.Method == "files.pasteImage" || p.Method == "files.pasteFile" || p.Method == "git.paths" || p.Method == "git.commit" || p.Method == "git.history" {
 		inputBytes = len(p.Params)
-		if inputBytes > rpc.FileSaveRequestLimit {
+		if inputBytes > inputLimit {
 			return nil, rpc.Errorf(rpc.CodeBadRequest, "file write request exceeds the maximum size")
 		}
 	}
@@ -128,7 +159,7 @@ func (d *Daemon) desktopCall(srv *rpc.Server, ctx context.Context, raw json.RawM
 	}
 	// 文件保存和图片粘贴共用 JSON 预算，最多容纳一份最大文件；不能只按小回复计算排队开销。
 	// 在解码正文及启动执行前预留，控制转移、断线不会提前释放这份占用。
-	if inputBytes > rpc.FileSaveRequestLimit-c.saveInputBytes {
+	if inputBytes > inputLimit-c.saveInputBytes {
 		c.mu.Unlock()
 		return nil, rpc.Errorf(rpc.CodeBusy, "file writes are using the request budget; retry after they finish")
 	}

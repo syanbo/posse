@@ -91,3 +91,35 @@ func (d *Daemon) filesSave(ctx context.Context, raw json.RawMessage) (any, error
 	}
 	return rpc.FileSaveResult{Version: version, Revision: p.Revision}, nil
 }
+
+func (d *Daemon) filesMkdir(ctx context.Context, raw json.RawMessage) (any, error) {
+	request, ok := ctx.Value(desktopCallContext{}).(desktopRequestContext)
+	if !ok || request.readOnly {
+		return nil, rpc.Errorf(rpc.CodeReadOnly, "desktop identity required for file saves")
+	}
+	var p rpc.FileMkdirParams
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := filePath(p.Path); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	release, err := d.lockWritePaths(ctx, []string{p.Path})
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fileRPCError(err)
+	}
+	defer release()
+	if err := files.MakeDir(ctx, p.Path); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fileRPCError(err)
+	}
+	return map[string]any{"path": p.Path}, nil
+}

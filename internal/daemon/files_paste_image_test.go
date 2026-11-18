@@ -178,3 +178,46 @@ func TestDesktopPasteImageSharedBudget(t *testing.T) {
 		t.Fatalf("budget not released for save: %v", err)
 	}
 }
+
+func TestDesktopPasteFileAndMkdir(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	d, _ := newTestDaemon(t)
+	socket := desktopServer(t, d)
+	viewer := rpc.DesktopIdentity{InstanceID: d.instanceID, ClientID: "viewer"}
+	owner := desktopTakeTest(t, d, "owner")
+
+	body := []byte("dropped payload")
+	sum := sha256.Sum256(body)
+	fp := rpc.FilePasteFileParams{Name: "notes.md", Data: body, Hash: hex.EncodeToString(sum[:])}
+	rawFP, _ := json.Marshal(fp)
+	desktopErrorCode(t, rpc.Call(t.Context(), socket, "files.pasteFile", fp, nil), rpc.CodeReadOnly)
+	desktopErrorCode(t, rpc.Call(t.Context(), socket, "desktop.call", rpc.DesktopCall{Desktop: viewer, Sequence: 1, Method: "files.pasteFile", Params: rawFP}, nil), rpc.CodeReadOnly)
+
+	var pasted rpc.FilePasteImageResult
+	if err := rpc.Call(t.Context(), socket, "desktop.call", rpc.DesktopCall{Desktop: owner, Sequence: 1, Method: "files.pasteFile", Params: rawFP}, &pasted); err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(pasted.Path) != "notes.md" {
+		t.Fatalf("pasted path = %q", pasted.Path)
+	}
+	if got, err := os.ReadFile(pasted.Path); err != nil || !bytes.Equal(got, body) {
+		t.Fatalf("pasted content = %q, %v", got, err)
+	}
+
+	badName := fp
+	badName.Name = "../escape.md"
+	rawBad, _ := json.Marshal(badName)
+	desktopErrorCode(t, rpc.Call(t.Context(), socket, "desktop.call", rpc.DesktopCall{Desktop: owner, Sequence: 2, Method: "files.pasteFile", Params: rawBad}, nil), rpc.CodeBadRequest)
+
+	targetDir := filepath.Join(t.TempDir(), "sub", "nested")
+	rawMkdir, _ := json.Marshal(rpc.FileMkdirParams{Path: targetDir})
+	desktopErrorCode(t, rpc.Call(t.Context(), socket, "files.mkdir", rpc.FileMkdirParams{Path: targetDir}, nil), rpc.CodeReadOnly)
+	desktopErrorCode(t, rpc.Call(t.Context(), socket, "desktop.call", rpc.DesktopCall{Desktop: viewer, Sequence: 1, Method: "files.mkdir", Params: rawMkdir}, nil), rpc.CodeReadOnly)
+	if err := rpc.Call(t.Context(), socket, "desktop.call", rpc.DesktopCall{Desktop: owner, Sequence: 3, Method: "files.mkdir", Params: rawMkdir}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(targetDir); err != nil || !info.IsDir() {
+		t.Fatalf("mkdir target = %v, %v", info, err)
+	}
+}

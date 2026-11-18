@@ -58,6 +58,11 @@ func gitWriteTrace(ctx context.Context, out *rpc.GitFetchResult, operation strin
 		}
 		mu.Lock()
 		defer mu.Unlock()
+		// 储藏说明可能含凭据，不把 -m 的原文留进操作记录。
+		if operation == "stash" && len(r.Args) == 5 && r.Args[0] == "stash" && r.Args[1] == "push" && r.Args[3] == "-m" {
+			r.Args = slices.Clone(r.Args)
+			r.Args[4] = "[message omitted]"
+		}
 		cleanOut, cleanErr := gitx.SanitizeFetchText(r.Out), gitx.SanitizeFetchText(r.Err)
 		out.LogsTruncated = out.LogsTruncated || cleanOut != r.Out || cleanErr != r.Err
 		r.Out, r.Err = cleanOut, cleanErr
@@ -66,7 +71,7 @@ func gitWriteTrace(ctx context.Context, out *rpc.GitFetchResult, operation strin
 			out.LogsTruncated = true
 		}
 		out.Logs = append(out.Logs, r)
-	}), "fetch")
+	}), operation)
 }
 
 func finishFetch(out rpc.GitFetchResult, err error) rpc.GitFetchResult {
@@ -113,7 +118,7 @@ type fetchTargetSnapshot struct {
 	scope         writecoord.Scope
 }
 
-func (d *Daemon) fetchTargetSnapshot(ctx context.Context, p rpc.GitFetchParams) (fetchTargetSnapshot, error) {
+func (d *Daemon) fetchTargetSnapshot(ctx context.Context, p rpc.GitFetchParams, relative ...string) (fetchTargetSnapshot, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	ctx = gitx.WithReadLimit(gitx.WithTrace(ctx, nil), rpc.GitReadLimit)
@@ -153,7 +158,12 @@ func (d *Daemon) fetchTargetSnapshot(ctx context.Context, p rpc.GitFetchParams) 
 	if err := gitx.CheckRepositoryIdentity(ctx, p.Expected.Root, p.Expected); err != nil {
 		return s, err
 	}
-	s.scope, err = writeScope(ctx, []string{repository, p.Expected.Root}, nil, false)
+	paths := []string{repository, p.Expected.Root}
+	// 这里只收集锁范围；执行时的路径在拿齐锁并复查身份后才拼接。
+	for _, rel := range relative {
+		paths = append(paths, p.Expected.Root+"/"+rel)
+	}
+	s.scope, err = writeScope(ctx, paths, nil, false)
 	if err != nil {
 		return s, err
 	}
@@ -168,8 +178,8 @@ func (d *Daemon) fetchTargetSnapshot(ctx context.Context, p rpc.GitFetchParams) 
 	return s, nil
 }
 
-func (d *Daemon) lockFetchTarget(ctx context.Context, p rpc.GitFetchParams) (func(), error) {
-	before, err := d.fetchTargetSnapshot(ctx, p)
+func (d *Daemon) lockFetchTarget(ctx context.Context, p rpc.GitFetchParams, relative ...string) (func(), error) {
+	before, err := d.fetchTargetSnapshot(ctx, p, relative...)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +187,7 @@ func (d *Daemon) lockFetchTarget(ctx context.Context, p rpc.GitFetchParams) (fun
 	if err != nil {
 		return nil, err
 	}
-	after, err := d.fetchTargetSnapshot(ctx, p)
+	after, err := d.fetchTargetSnapshot(ctx, p, relative...)
 	if err != nil {
 		release()
 		return nil, err

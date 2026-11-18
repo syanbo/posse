@@ -593,9 +593,10 @@ func (d *Daemon) currentWorkspace(terminalID, cwd string) (store.Workspace, erro
 }
 
 type workspaceRmParams struct {
-	Workspace    string `json:"workspace"`
-	Force        bool   `json:"force"`
-	DeleteBranch bool   `json:"deleteBranch"`
+	Workspace      string `json:"workspace"`
+	Force          bool   `json:"force"`
+	CloseTerminals bool   `json:"closeTerminals,omitempty"`
+	DeleteBranch   bool   `json:"deleteBranch"`
 	// DiscardFiles 只在仓库不在了时起作用：连同留下的工作区目录一起删
 	DiscardFiles bool `json:"discardFiles"`
 }
@@ -626,7 +627,7 @@ func (d *Daemon) workspaceRm(ctx context.Context, raw json.RawMessage) (any, err
 	if w.Kind == "main" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "main workspace is the project directory; remove the project instead")
 	}
-	if running := d.runningIn(w.ID); running > 0 && !p.Force {
+	if running := d.runningIn(w.ID); running > 0 && !p.Force && !p.CloseTerminals {
 		return nil, rpc.Errorf(rpc.CodeConflict, "workspace has %d running terminals; pass force to close them", running)
 	}
 	left, repoGone := "", false

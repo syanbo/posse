@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"strings"
+	"unicode/utf8"
 
 	"posse/internal/gitx"
 	"posse/internal/rpc"
@@ -45,6 +47,13 @@ func (d *Daemon) gitCommitFiles(ctx context.Context, raw json.RawMessage) (any, 
 		return nil, err
 	}
 	detail, readErr := gitx.ReadCommitDetailsChecked(ctx, id.Root, p.Hash)
+	message := ""
+	if readErr == nil && p.FullMessage {
+		message, readErr = gitx.FullMessageChecked(ctx, id.Root, p.Hash)
+		if readErr == nil && (len(message) > rpc.GitCommitMessageLimit || !utf8.ValidString(message) || strings.ContainsRune(message, 0)) {
+			readErr = gitx.ErrLogOutput
+		}
+	}
 	// 替换仓库也可能先表现为父对象读不到，先核对身份再报告读取错误。
 	if err := gitx.CheckRepositoryIdentity(ctx, p.Path, id); err != nil {
 		return nil, gitReadError(ctx, err)
@@ -52,5 +61,5 @@ func (d *Daemon) gitCommitFiles(ctx context.Context, raw json.RawMessage) (any, 
 	if readErr != nil {
 		return nil, gitReadError(ctx, readErr)
 	}
-	return gitReadResult(ctx, rpc.GitCommitFilesResult{Identity: id, Commit: detail.Commit, Files: detail.Files, DiffBase: detail.DiffBase, Shallow: detail.Shallow})
+	return gitReadResult(ctx, rpc.GitCommitFilesResult{FullMessage: message, Identity: id, Commit: detail.Commit, Files: detail.Files, DiffBase: detail.DiffBase, Shallow: detail.Shallow})
 }
