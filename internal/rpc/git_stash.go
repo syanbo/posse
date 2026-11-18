@@ -1,68 +1,108 @@
 package rpc
 
 import (
- "encoding/json"
- "strings"
- "unicode/utf8"
+	"encoding/json"
+	"strings"
+	"unicode/utf8"
 
- "posse/internal/gitx"
+	"posse/internal/gitx"
 )
 
-// GitWriteTarget 与 Fetch 保持相同的工作区登记和仓库身份约束。
-type GitWriteTarget = GitFetchParams
-
-type GitStashStateResult struct {
- Target GitWriteTarget `json:"target"`
- Baseline gitx.StashBaseline `json:"baseline"`
-}
-type GitStashPushParams struct {
- Target GitWriteTarget `json:"target"`
- Baseline gitx.StashBaseline `json:"baseline"`
- Message string `json:"message"`
-}
-type GitStashApplyParams struct {
- Target GitWriteTarget `json:"target"`
- Baseline gitx.StashBaseline `json:"baseline"`
- Hash string `json:"hash"`
-}
-type GitStashPopParams = GitStashApplyParams
-type GitStashDropParams struct {
- Target GitWriteTarget `json:"target"`
- Hash string `json:"hash"`
-}
-type GitStashExpectation struct {
- Target GitWriteTarget `json:"target"`
- Action string `json:"action"`
- Hash string `json:"hash"`
-}
-type GitStashResult struct {
- GitFetchResult
- Action string `json:"action"`
- Hash string `json:"hash"`
- // Applied 只确认 apply 命令成功；false 不保证工作树没有部分变化。
- Applied bool `json:"applied"`
- DropState string `json:"dropState"`
-}
 const (
- GitStashParamsLimit = 16 << 10
- GitStashResultLimit = 128 << 10
- GitStashDropNotAttempted = "not_attempted"
- GitStashDropSucceeded = "succeeded"
- GitStashDropFailed = "failed"
- GitStashDropUnknown = "unknown"
+	GitStashMessageLimit = 4096
+	GitStashParamsLimit  = GitFetchParamsLimit + 6*GitStashMessageLimit
+	GitStashResultLimit  = GitFetchResultLimit
+	GitStashPush         = "push"
+	GitStashApply        = "apply"
+	GitStashPop          = "pop"
+	GitStashDrop         = "drop"
 )
-func ValidGitStashExpectation(p GitStashExpectation) bool {
- if !ValidGitFetchParams(p.Target) {return false}
- switch p.Action {
- case "push": return p.Hash==""
- case "apply","pop","drop": return gitx.ValidStashHash(p.Hash)
- }
- return false
+
+type GitStashParams struct {
+	GitFetchParams
+	Action      string       `json:"action"`
+	OID         string       `json:"oid,omitempty"`
+	Head        string       `json:"head,omitempty"`
+	IndexID     string       `json:"indexID,omitempty"`
+	Entries     []gitx.Entry `json:"entries,omitempty"`
+	Message     string       `json:"message,omitempty"`
+	MessageHash string       `json:"messageHash,omitempty"`
 }
-func ValidGitStashParams(action string, target GitWriteTarget, baseline gitx.StashBaseline, hash,message string) bool {
- if !ValidGitStashExpectation(GitStashExpectation{Target:target,Action:action,Hash:hash}) {return false}
- if action=="drop" {if baseline!=(gitx.StashBaseline{}) {return false}} else if !gitx.ValidStashBaseline(baseline) {return false}
- if action!="push" && message!="" || len(message)>4096 || !utf8.ValidString(message) || strings.ContainsRune(message,0) {return false}
- b,err:=json.Marshal(struct{Target GitWriteTarget; Baseline gitx.StashBaseline; Hash,Message string}{target,baseline,hash,message})
- return err==nil && len(b)<=GitStashParamsLimit
+
+type GitStashResult struct {
+	Target        GitStashParams `json:"target"`
+	Status        string         `json:"status"`
+	Started       bool           `json:"started"`
+	OID           string         `json:"oid,omitempty"`
+	Error         *Error         `json:"error,omitempty"`
+	Logs          []gitx.Run     `json:"logs"`
+	LogsTruncated bool           `json:"logsTruncated"`
+}
+
+// 说明只保留摘要，原参数查询仍可核对，但操作记录不保存说明里的凭据。
+func (p GitStashParams) Metadata() GitStashParams {
+	p.Message = ""
+	if len(p.Entries) == 0 {
+		p.Entries = nil
+	}
+	return p
+}
+
+func ValidGitStashTarget(p GitStashParams) bool {
+	if !ValidGitFetchParams(p.GitFetchParams) {
+		return false
+	}
+	if p.Action != GitStashDrop && (p.Head != "" && !ValidGitBranchOID(p.Head) || !validCommitHash(p.IndexID)) {
+		return false
+	}
+	switch p.Action {
+	case GitStashPush:
+		if p.OID != "" || !validCommitHash(p.MessageHash) || len(p.Message) > GitStashMessageLimit || !utf8.ValidString(p.Message) || strings.ContainsRune(p.Message, 0) || p.Message != "" && GitCommitHash([]byte(p.Message)) != p.MessageHash {
+			return false
+		}
+		seen := map[string]bool{}
+		for _, e := range p.Entries {
+			if !ValidGitPath(strings.TrimSuffix(e.Path, "/")) || seen[e.Path] || e.Orig != "" && !ValidGitPath(e.Orig) {
+				return false
+			}
+			seen[e.Path] = true
+		}
+	case GitStashApply, GitStashPop, GitStashDrop:
+		if !ValidGitBranchOID(p.OID) || len(p.Entries) != 0 || p.Message != "" || p.MessageHash != "" {
+			return false
+		}
+		if p.Action == GitStashDrop && (p.Head != "" || p.IndexID != "") {
+			return false
+		}
+	default:
+		return false
+	}
+	raw, err := json.Marshal(p.Metadata())
+	return err == nil && len(raw) <= GitFetchParamsLimit
+}
+
+func ValidGitStashParams(p GitStashParams) bool {
+	if !ValidGitStashTarget(p) || p.Action == GitStashPush && GitCommitHash([]byte(p.Message)) != p.MessageHash {
+		return false
+	}
+	raw, err := json.Marshal(p)
+	return err == nil && len(raw) <= GitStashParamsLimit
+}
+
+// reflog 只允许来自锁内的 stash list；客户端请求不携带这个名字。
+func ValidGitStashRef(ref string) bool {
+	index, ok := strings.CutPrefix(ref, "stash@{")
+	if !ok || !strings.HasSuffix(index, "}") {
+		return false
+	}
+	index = strings.TrimSuffix(index, "}")
+	if index == "" || len(index) > 1 && index[0] == '0' {
+		return false
+	}
+	for _, c := range index {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }

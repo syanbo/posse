@@ -25,15 +25,17 @@ type GitDiscoverResult struct {
 }
 
 type GitStatusParams struct {
-	Path string `json:"path"`
-	Full bool   `json:"full"`
+	Path        string `json:"path"`
+	Full        bool   `json:"full"`
+	LastMessage bool   `json:"lastMessage,omitempty"`
 }
 
 type GitStatusResult struct {
-	Identity GitRepositoryIdentity     `json:"identity"`
-	Status   *gitx.Status              `json:"status"`
-	Head     map[string]gitx.LineStats `json:"head,omitempty"`
-	Stashes  []gitx.Stash              `json:"stashes,omitempty"`
+	LastMessage string                    `json:"lastMessage,omitempty"`
+	Identity    GitRepositoryIdentity     `json:"identity"`
+	Status      *gitx.Status              `json:"status"`
+	Head        map[string]gitx.LineStats `json:"head,omitempty"`
+	Stashes     []gitx.Stash              `json:"stashes,omitempty"`
 }
 
 type GitBranchesParams struct {

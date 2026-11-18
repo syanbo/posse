@@ -18,14 +18,16 @@ type GitLogResult struct {
 	NextSkip int                   `json:"nextSkip"`
 }
 type GitCommitFilesParams struct {
-	Path     string                `json:"path"`
-	Expected GitRepositoryIdentity `json:"expected"`
-	Hash     string                `json:"hash"`
+	FullMessage bool                  `json:"fullMessage,omitempty"`
+	Path        string                `json:"path"`
+	Expected    GitRepositoryIdentity `json:"expected"`
+	Hash        string                `json:"hash"`
 }
 type GitCommitFilesResult struct {
-	Identity GitRepositoryIdentity `json:"identity"`
-	Commit   gitx.CommitInfo       `json:"commit"`
-	Files    []gitx.FileChange     `json:"files"`
-	DiffBase string                `json:"diffBase"`
-	Shallow  bool                  `json:"shallow"`
+	FullMessage string                `json:"fullMessage,omitempty"`
+	Identity    GitRepositoryIdentity `json:"identity"`
+	Commit      gitx.CommitInfo       `json:"commit"`
+	Files       []gitx.FileChange     `json:"files"`
+	DiffBase    string                `json:"diffBase"`
+	Shallow     bool                  `json:"shallow"`
 }

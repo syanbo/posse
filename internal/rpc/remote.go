@@ -2,6 +2,14 @@ package rpc
 
 const RemoteProtocol = 1
 
+var RemoteCapabilities = []string{
+	"rpc.v1",
+	"terminal.stream.v1",
+	"desktop.control.v1",
+	"files.v1",
+	"git.v1",
+}
+
 type RemoteInfo struct {
 	Protocol     int      `json:"protocol"`
 	InstanceID   string   `json:"instanceId"`
