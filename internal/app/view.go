@@ -325,6 +325,9 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if a.pressed(c, "toggleSidebar") {
 		a.toggleSidebar()
 	}
+	if a.views != nil && a.pressed(c, "switchHost") {
+		a.openHostMenu()
+	}
 	if w != nil && a.gitBranch(w) != "" && a.pressed(c, "gitLog") {
 		a.toggleLogPanel(w)
 	}
@@ -1150,26 +1153,33 @@ func (a *app) sessionStatus(term terminalInfo) string {
 // workspaceMenu 是工作区行（和项目标题行）的右键菜单。
 func (a *app) workspaceMenu(c *ui.Context, m *popMenu, w workspace) {
 	lm := L(c)
+	writable := true
+	if a.host != nil {
+		s := a.host.snapshot()
+		writable = !s.Connected || s.Controlled
+	}
 	for _, ag := range a.agentChoices() {
-		if m.Item(lm.TermStart(agentTitle(ag))).Lead(func() { agentIcon(c, ag, iconSize) }).Chosen() {
+		if m.Item(lm.TermStart(agentTitle(ag))).Lead(func() { agentIcon(c, ag, iconSize) }).Disabled(!writable).Chosen() {
 			a.startTerminal(w.ID, ag)
 		}
 	}
-	if m.Item(lm.SidebarOpenTerminal()).Lead(func() { agentIcon(c, "", iconSize) }).Chosen() {
+	if m.Item(lm.SidebarOpenTerminal()).Lead(func() { agentIcon(c, "", iconSize) }).Disabled(!writable).Chosen() {
 		a.startTerminal(w.ID, "")
 	}
-	m.Separator()
-	if m.Item(lm.CommonOpenInFinder()).Icon(iconFolder).Chosen() {
-		if err := mygo.Shell.OpenPath(w.Path); err != nil {
-			a.err = lm.SidebarOpenInFinderError(errtext.Text(err))
+	if !a.remoteHost() {
+		m.Separator()
+		if m.Item(lm.CommonOpenInFinder()).Icon(iconFolder).Chosen() {
+			if err := mygo.Shell.OpenPath(w.Path); err != nil {
+				a.err = lm.SidebarOpenInFinderError(errtext.Text(err))
+			}
 		}
 	}
-	if hasBase(&w) {
+	if a.pathsControls() && hasBase(&w) {
 		m.Separator()
 		if m.Item(lm.SidebarMergeInto(w.BaseRef)).Icon(iconMerge).Chosen() {
 			a.askMergeWorkspace(lm, w.ID)
 		}
-	} else if w.Kind == "worktree" && len(w.Repos) > 0 {
+	} else if a.pathsControls() && w.Kind == "worktree" && len(w.Repos) > 0 {
 		m.Separator()
 		if m.Item(lm.SidebarMergeRepos()).Icon(iconMerge).Chosen() {
 			a.askMergeRepos(lm, w.ID)
@@ -1188,27 +1198,27 @@ func (a *app) workspaceMenu(c *ui.Context, m *popMenu, w workspace) {
 			a.pin(w.ID)
 		}
 	}
-	if w.Kind == "main" && m.Item(lm.SidebarChangeIcon()).Icon(iconImage).Chosen() {
+	if !a.remoteHost() && w.Kind == "main" && m.Item(lm.SidebarChangeIcon()).Icon(iconImage).Chosen() {
 		if p := a.projectByID(w.ProjectID); p != nil {
 			a.editProjectIcon(*p)
 		}
 	}
-	if p := a.projectByID(w.ProjectID); w.Kind == "main" && p != nil && m.Item(lm.SidebarMultiRepo()).Checked(!p.SingleRepo).Chosen() {
+	if p := a.projectByID(w.ProjectID); w.Kind == "main" && p != nil && m.Item(lm.SidebarMultiRepo()).Checked(!p.SingleRepo).Disabled(!writable).Chosen() {
 		a.setSingleRepo(p.ID, !p.SingleRepo)
 	}
-	if m.Item(lm.SidebarNewWorkspaceHere()).Icon(iconPlus).Chosen() {
+	if m.Item(lm.SidebarNewWorkspaceHere()).Icon(iconPlus).Disabled(!writable).Chosen() {
 		a.openNewWorkspace()
 		a.newProject = w.Project
 	}
 	// 项目行就是项目目录本身，删不了这个工作区，删的是整个项目
 	if w.Kind == "main" {
-		if m.Item(lm.SidebarCleanTraces()).Icon(iconEraser).Chosen() {
+		if !a.remoteHost() && m.Item(lm.SidebarCleanTraces()).Icon(iconEraser).Disabled(!writable).Chosen() {
 			a.askCleanTraces(lm, w)
 		}
-		if m.Item(lm.SidebarRemoveProject()).Icon(iconTrash).Danger().Chosen() {
+		if m.Item(lm.SidebarRemoveProject()).Icon(iconTrash).Danger().Disabled(!writable).Chosen() {
 			a.askRemoveProject(lm, w)
 		}
-	} else if m.Item(lm.SidebarDeleteWorkspace()).Icon(iconTrash).Danger().Chosen() {
+	} else if m.Item(lm.SidebarDeleteWorkspace()).Icon(iconTrash).Danger().Disabled(!writable).Chosen() {
 		a.askRemoveWorkspace(lm, w)
 	}
 }

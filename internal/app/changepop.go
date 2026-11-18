@@ -72,7 +72,7 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 				c.WriteClipboard(ch.Old)
 				d.change = nil
 			}
-			if rel != "" && !a.remoteHost() && a.request().mayWrite() {
+			if rel != "" && a.pathsControls() && a.request().mayWrite() {
 				a.commitChangeInput(c, v, d, cp, rel, ch)
 			}
 			if pressable(iconButtonSized(c, iconClose, L(c).GitCloseEscape(), compactBox(), smallIcon())).Clicked() {
@@ -108,6 +108,9 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 // commitChangeInput 是卡片里的"提交此更改"：写好提交信息回车，只把这一处提交上去，文件里别的改动不动。
 // 提交的是编辑器里这一处的内容，所以有没保存的改动时先保存；合并、rebase 进行中不做。
 func (a *app) commitChangeInput(c *ui.Context, v *filesView, d *fileDoc, cp *changePop, rel string, ch editor.BaseChange) {
+	if !a.pathsControls() {
+		return
+	}
 	g := v.repoFor(d.path)
 	if g == nil {
 		return
@@ -132,11 +135,15 @@ func (a *app) commitChangeInput(c *ui.Context, v *filesView, d *fileDoc, cp *cha
 			return
 		}
 		msg := strings.TrimSpace(cp.message)
-		if !in.Submitted() || msg == "" || g.pending(gitCommit) {
+		if !in.Submitted() || msg == "" || g.pending(gitCommit) && !(a.typedFetch() && a.commitWritable(v, g)) {
 			return
 		}
 		content := changeContent(d.headBuf.String(), d.ed.Buffer.String(), ch)
 		m := L(c)
+		if a.typedFetch() {
+			a.targetCommitChange(m, v, d, cp, rel, []byte(content), msg)
+			return
+		}
 		a.gitDoKind(m, g, gitCommit, m.GitCommitButton(), func(ctx context.Context, root string) error {
 			return gitx.CommitChange(ctx, root, rel, []byte(content), msg)
 		}, func() {

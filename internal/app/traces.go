@@ -103,6 +103,9 @@ func pathSize(path string) int64 {
 // askRemoveWorkspace 删工作区前查一下它的痕迹：有就换成带勾选的确认框，没有照旧。
 func (a *app) askRemoveWorkspace(m locales.Messages, w workspace) {
 	r := a.request()
+	if !r.canWrite() {
+		return
+	}
 	if w.Kind == "worktree" && !w.Missing && a.repoGone(w) {
 		a.askRemoveOrphan(m, w)
 		return
@@ -113,17 +116,40 @@ func (a *app) askRemoveWorkspace(m locales.Messages, w workspace) {
 	}
 	title := m.TracesRemoveTitle(displayName(&w))
 	remove := func() bool {
-		if !r.current() {
+		if !r.current() || !r.mayWrite() {
 			return false
 		}
-		// 常驻进程的 force 同时管关终端和丢弃改动：worktree 要保住未提交的改动，不能带 force，
-		// 就先查改动、再自己关终端，否则开着终端的 worktree 删不掉
+		if r.client != nil && r.client.Desktop != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			err := r.client.Call(ctx, "workspace.rm", map[string]any{
+				"workspace":      w.ID,
+				"force":          w.Kind != "worktree",
+				"closeTerminals": true,
+			}, nil)
+			cancel()
+			if err != nil {
+				msg := err.Error()
+				r.update(func() {
+					switch {
+					case strings.Contains(msg, "uncommitted changes"):
+						a.err = m.TracesRemoveDirty(displayName(&w))
+					case strings.Contains(msg, "no longer exists; pass force to remove the workspace anyway"):
+						a.askRemoveOrphan(m, w)
+					default:
+						a.err = errtext.Text(err)
+					}
+				})
+				return false
+			}
+			r.refresh()
+			return true
+		}
+		// 无桌面身份的旧测试窗口保留原路径
 		if w.Kind == "worktree" {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			var out string
 			var err error
 			if len(w.Repos) > 0 {
-				// 多仓库的工作区根目录不是仓库：让常驻进程逐个仓库查（workspace.show 带 dirty）
 				var info struct{ Dirty *bool }
 				if err = a.c.Call(ctx, "workspace.show", map[string]any{"workspace": w.ID}, &info); err == nil && info.Dirty != nil && *info.Dirty {
 					out = "dirty"
@@ -136,7 +162,6 @@ func (a *app) askRemoveWorkspace(m locales.Messages, w workspace) {
 				r.update(func() { a.err = m.TracesRemoveDirty(displayName(&w)) })
 				return false
 			}
-			// 多仓库的查不了就不删：先关终端再被常驻进程拒绝，agent 就白关了
 			if err != nil && len(w.Repos) > 0 {
 				r.update(func() { a.err = errtext.Text(err) })
 				return false
@@ -150,6 +175,10 @@ func (a *app) askRemoveWorkspace(m locales.Messages, w workspace) {
 		err := r.call("workspace.rm", map[string]any{"workspace": w.ID, "force": w.Kind != "worktree"}, nil, 30*time.Second)
 		r.refresh()
 		return err == nil
+	}
+	if a.remoteHost() {
+		a.confirm(title, body, m.CommonDelete(), func() { remove() })
+		return
 	}
 	go func() {
 		items := a.fetchTraces(map[string]any{"workspace": w.ID})
@@ -165,6 +194,9 @@ func (a *app) askRemoveWorkspace(m locales.Messages, w workspace) {
 
 // askCleanTraces 是项目右键菜单的「清理 agent 痕迹…」。
 func (a *app) askCleanTraces(m locales.Messages, w workspace) {
+	if a.remoteHost() || !a.request().canWrite() {
+		return
+	}
 	go func() {
 		items := a.fetchTraces(map[string]any{"project": w.ProjectID})
 		a.update(func() {

@@ -314,25 +314,35 @@ type app struct {
 	edBind     []editor.Binding
 	edBindKeys int
 	// Git：分支弹窗、输入框对话框、Push 对话框
-	branchPop     *branchPopup
-	branchFolds   map[string]bool       // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
-	track         map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用
-	fetchAt       map[string]time.Time  // 项目 ID → 上次自动 fetch 的时间
-	targetFetches []*targetFetch        // 本主机的有界操作记录，包含仍需查询的原 ref
-	gitRuns       []gitx.Run            // Git 操作记录里的命令（gitconsole.go），所有项目共用
-	runWS         map[string]string     // 命令目录 → 所在工作区 ID（runWorkspace），工作区列表变了就清掉
-	realPaths     map[string]string     // 工作区路径 → 解析过符号链接的路径
-	consoleErr    map[string]bool       // 有没在操作记录里看过的失败命令的目录，标签按项目带红点
-	consoleQ      chan consoleWrite     // 交给写 git-console.jsonl 的协程
-	consoleLines  int                   // git-console.jsonl 里有几行，攒多了重写
-	consoleSorted bool                  // 读回的记录已经按项目限过条数（要等拿到工作区列表）
-	consoleOnce   sync.Once
-	traceSeq      int64 // 已经取到的终端 git 命令序号（git.trace），只在轮询协程里用
-	traceLoaded   bool
-	filesPanelRef ui.Ref
-	doubleTaps    uint64             // 上一帧看到的 mygo 双击修饰键计数（c.DoubleTap）
-	quickGen      int                // 随处搜索里文本、符号检索的编号（nextQuickGen）
-	termAreaRef   [maxColumns]ui.Ref // 每一栏的终端内容区（终端和它上面的查找栏）
+	branchPop             *branchPopup
+	branchFolds           map[string]bool       // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
+	track                 map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用
+	fetchAt               map[string]time.Time  // 项目和仓库相对位置 → 上次自动 fetch 的时间
+	fetchRetry            map[string]time.Time  // 同位置仓库的下次准备或查询时间，不算作已发起
+	targetPushes          []*targetPushOperation
+	targetUpdates         []*targetUpdateOperation
+	targetBranches        []*targetBranchOperation
+	targetPaths           []*targetPathsOperation
+	targetCommits         []*targetCommitOperation
+	targetStashes         []*targetStashOperation
+	targetWorkspaceMerges []*targetWorkspaceMerge
+	targetHistories       []*targetHistoryOperation
+	targetIntegrations    []*targetIntegrateOperation
+	targetFetches         []*targetFetch    // 本主机的有界操作记录，包含仍需查询的原 ref
+	gitRuns               []gitx.Run        // Git 操作记录里的命令（gitconsole.go），所有项目共用
+	runWS                 map[string]string // 命令目录 → 所在工作区 ID（runWorkspace），工作区列表变了就清掉
+	realPaths             map[string]string // 工作区路径 → 解析过符号链接的路径
+	consoleErr            map[string]bool   // 有没在操作记录里看过的失败命令的目录，标签按项目带红点
+	consoleQ              chan consoleWrite // 交给写 git-console.jsonl 的协程
+	consoleLines          int               // git-console.jsonl 里有几行，攒多了重写
+	consoleSorted         bool              // 读回的记录已经按项目限过条数（要等拿到工作区列表）
+	consoleOnce           sync.Once
+	traceSeq              int64 // 已经取到的终端 git 命令序号（git.trace），只在轮询协程里用
+	traceLoaded           bool
+	filesPanelRef         ui.Ref
+	doubleTaps            uint64             // 上一帧看到的 mygo 双击修饰键计数（c.DoubleTap）
+	quickGen              int                // 随处搜索里文本、符号检索的编号（nextQuickGen）
+	termAreaRef           [maxColumns]ui.Ref // 每一栏的终端内容区（终端和它上面的查找栏）
 	// 文件栏展开的进度：0 收起，1 打开，中间是动画
 	filesPanelShown float32
 	promptDlg       *promptState
@@ -750,9 +760,9 @@ func (a *app) refreshRequest(q appRequest) {
 		var d taskDetail
 		if q.invoke(ctx, "task.show", map[string]any{"task": id}, &d) == nil {
 			r.detail = &d
-			if !q.client.Remote && d.WorkspaceKind == "worktree" && time.Since(a.diffAt[d.WorkspaceID]) > 5*time.Second {
+			if d.WorkspaceKind == "worktree" && time.Since(a.diffAt[d.WorkspaceID]) > 5*time.Second {
 				var w worktreeDiff
-				if a.c.Call(ctx, "workspace.diff", map[string]any{"workspace": d.WorkspaceID}, &w) == nil {
+				if q.invoke(ctx, "workspace.diff", map[string]any{"workspace": d.WorkspaceID}, &w) == nil {
 					if a.diffAt == nil {
 						a.diffAt = map[string]time.Time{}
 					}
@@ -1254,7 +1264,7 @@ func (a *app) attachView(id string) *termView {
 				if _, t := a.findTerminal(id); t != nil {
 					agent = t.Agent
 				}
-				sendPieces(v.term, dropPieces(paths, agent))
+				a.pasteFiles(v, paths, agent)
 				return true
 			}
 			if text, _ := d.Read(transfer.Text); len(text) > 0 {
@@ -1496,6 +1506,9 @@ func showBranches(ws []workspace) {
 // repoGone 报告 worktree 工作区 w 用的仓库已经不在了（项目目录被删、挪走，或所在的磁盘没挂载）。
 // 这时 git 删不了它，也查不了它目录里有没有没提交的改动。
 func (a *app) repoGone(w workspace) bool {
+	if a.remoteHost() {
+		return false
+	}
 	main := ""
 	for _, x := range a.byProject[w.ProjectID] {
 		if x.Kind == "main" {
@@ -1692,11 +1705,16 @@ func (a *app) projectRepos(name string) []string {
 
 // repoRel 是仓库在工作区里的相对路径（斜杠分隔）；工作区所在的上级仓库不算。
 func repoRel(v *filesView, g *gitState) (string, bool) {
-	rel, err := filepath.Rel(v.root, g.repo)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", false
+	for _, base := range []string{v.root, v.realRoot} {
+		if base == "" {
+			continue
+		}
+		rel, err := filepath.Rel(base, g.repo)
+		if err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return filepath.ToSlash(rel), true
+		}
 	}
-	return filepath.ToSlash(rel), true
+	return "", false
 }
 
 func (r appRequest) createWorkspace(m locales.Messages, params map[string]any) {

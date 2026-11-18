@@ -101,11 +101,8 @@ func (a *app) baseRow(c *ui.Context, w *workspace, v *filesView) {
 		ui.Spacer(c)
 		// 两个按钮放在一起，换行时一起换
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
-			if d.Behind > 0 {
-				sync := pressable(smallButton(c, m.BranchSync())).Tooltip(m.BranchSyncTip(base)).Disabled(v.remote)
-				if v.remote {
-					sync.Tooltip(m.BranchBaseReadOnly())
-				}
+			if a.pathsControls() && d.Behind > 0 {
+				sync := pressable(smallButton(c, m.BranchSync())).Tooltip(m.BranchSyncTip(base))
 				menuButton(c, sync, func(pm *popMenu) {
 					if pm.Item(m.BranchMergeFrom(base)).Chosen() {
 						a.syncBase(m, w, false)
@@ -115,11 +112,8 @@ func (a *app) baseRow(c *ui.Context, w *workspace, v *filesView) {
 					}
 				})
 			}
-			if d.Ahead > 0 {
-				merge := pressable(smallButton(c, m.GitMerge()).Tooltip(m.BranchMergeToTip(base))).Disabled(v.remote)
-				if v.remote {
-					merge.Tooltip(m.BranchBaseReadOnly())
-				}
+			if a.pathsControls() && d.Ahead > 0 {
+				merge := pressable(smallButton(c, m.GitMerge()).Tooltip(m.BranchMergeToTip(base)))
 				if merge.Clicked() {
 					a.askMergeWorkspace(m, w.ID)
 				}
@@ -147,7 +141,11 @@ func baseBadge(c *ui.Context, icon *ui.SVG, color ui.Color, n int, tip string) {
 // syncBase 在 worktree 里把基准分支合并进来或 rebase 上去。停在冲突上时改动页有操作横幅，
 // 解决后继续，再合回项目目录就不会冲突了。
 func (a *app) syncBase(m locales.Messages, w *workspace, rebase bool) {
-	if a.targetFileUnsupported("git.write") {
+	if !a.pathsControls() {
+		return
+	}
+	if a.typedFetch() {
+		a.syncTargetBase(m, w, rebase)
 		return
 	}
 	base := w.BaseRef
@@ -194,7 +192,11 @@ func (a *app) syncBase(m locales.Messages, w *workspace, rebase bool) {
 // 常驻进程合并失败时再算一次，确实是冲突的同样引过去，别的原因（项目目录不在基准分支上等）照常报错。
 func (a *app) askMergeWorkspace(m locales.Messages, wsID string) {
 	q := a.request()
-	if a.targetFileUnsupported("git.write") {
+	if !a.pathsControls() {
+		return
+	}
+	if a.typedFetch() {
+		a.askTargetMerge(m, wsID, false)
 		return
 	}
 	w := a.workspace(wsID)
@@ -291,7 +293,11 @@ func fileList(m locales.Messages, files []string, n int) string {
 // 常驻进程先查完所有仓库，有一个不能合就一个都不合；合完问要不要删工作区。
 func (a *app) askMergeRepos(m locales.Messages, wsID string) {
 	q := a.request()
-	if a.targetFileUnsupported("git.write") {
+	if !a.pathsControls() {
+		return
+	}
+	if a.typedFetch() {
+		a.askTargetMerge(m, wsID, true)
 		return
 	}
 	w := a.workspace(wsID)

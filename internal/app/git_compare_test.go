@@ -77,9 +77,15 @@ func TestTargetGitCompareProduction(t *testing.T) {
 			}
 			tt.Frame()
 			m := locales.In("zh-Hans")
-			for _, label := range []string{m.BranchCheckout(), m.BranchRevealWorktree(), m.BranchMergeInto("feature-target", "target-main"), m.BranchRebaseOnto("target-main", "feature-target")} {
-				if tt.HasText(label) {
-					t.Fatalf("remote menu exposes %s", label)
+			if tt.HasText(m.BranchCheckout()) != controlled {
+				t.Fatal("checkout visibility does not match control")
+			}
+			if tt.HasText(m.BranchRevealWorktree()) {
+				t.Fatal("remote menu exposes Finder")
+			}
+			for _, label := range []string{m.BranchMergeInto("feature-target", "target-main"), m.BranchRebaseOnto("target-main", "feature-target")} {
+				if tt.HasText(label) != controlled {
+					t.Fatalf("integration visibility does not match control: %s", label)
 				}
 			}
 			if err := tt.Click(m.BranchCompareWith("target-main")); err != nil {
@@ -94,8 +100,8 @@ func TestTargetGitCompareProduction(t *testing.T) {
 				t.Fatal(err)
 			}
 			until(t, tt, "comparison detail", func() bool { return cd.commit != nil && len(cd.commit.files) == 2 })
-			if _, ok := tt.Find(m.GitCherryPick()); ok {
-				t.Fatal("remote comparison exposes cherry-pick")
+			if _, ok := tt.Find(m.GitCherryPick()); ok != controlled {
+				t.Fatal("cherry-pick visibility does not match control")
 			}
 			tt.Key(ui.Cmd|ui.Shift, ui.KeyK)
 			tt.Frame()

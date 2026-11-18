@@ -177,3 +177,82 @@ func TestTargetTransferDialogIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestTargetFolderUploadAndDownload(t *testing.T) {
+	a, f, v := transferFixture(t)
+	takeRequestTestControl(t, a)
+	localSrc := filepath.Join(t.TempDir(), "bundle")
+	if err := os.MkdirAll(filepath.Join(localSrc, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(localSrc, "nested", "hello.txt"), []byte("folder body"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	remoteDir := filepath.Join(t.TempDir(), "remote-root", "bundle")
+	f.mu.Lock()
+	f.desktopCall = func(_ context.Context, p rpc.DesktopCall) (any, error) {
+		switch p.Method {
+		case "files.stat":
+			var q rpc.FilePathsParams
+			json.Unmarshal(p.Params, &q)
+			st, _ := files.Stat(q.Paths[0])
+			return []rpc.FileStatResult{{Path: q.Paths[0], Stamp: st}}, nil
+		case "files.mkdir":
+			var q rpc.FileMkdirParams
+			json.Unmarshal(p.Params, &q)
+			return map[string]any{"path": q.Path}, files.MakeDir(t.Context(), q.Path)
+		case "files.version":
+			var q rpc.FileVersionParams
+			json.Unmarshal(p.Params, &q)
+			return files.ReadVersion(t.Context(), q.Path)
+		case "files.save":
+			var q rpc.FileSaveParams
+			json.Unmarshal(p.Params, &q)
+			if err := os.WriteFile(q.Path, q.Data, 0o600); err != nil {
+				return nil, err
+			}
+			ver, _ := files.ReadVersion(t.Context(), q.Path)
+			return rpc.FileSaveResult{Version: ver}, nil
+		case "files.readDirs":
+			var q rpc.FilePathsParams
+			json.Unmarshal(p.Params, &q)
+			entries, st, _ := files.ReadDir(q.Paths[0])
+			return []rpc.FileDirectoryResult{{Path: q.Paths[0], Entries: entries, Stamp: st}}, nil
+		case "files.resourceRange":
+			var q rpc.FileResourceRangeParams
+			json.Unmarshal(p.Params, &q)
+			r, err := files.ReadResourceRange(t.Context(), q.Root, q.Path, q.Offset, q.Limit, q.Expected)
+			return rpc.FileRangeResult{Data: r.Data, Stamp: r.Stamp, EOF: r.EOF}, err
+		case "files.resourceVersion":
+			var q rpc.FileResourceVersionParams
+			json.Unmarshal(p.Params, &q)
+			return files.ReadResourceVersion(t.Context(), q.Root, q.Path)
+		}
+		return nil, rpc.Errorf(rpc.CodeUnknown, "unexpected %s", p.Method)
+	}
+	f.mu.Unlock()
+
+	if err := os.MkdirAll(filepath.Dir(remoteDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a.request().prepareUploadFolder(appL(), v, localSrc, remoteDir)
+	pumpSaves(t, []*app{a}, func() bool { return v.transfer == nil })
+	if a.err != "" {
+		t.Fatalf("folder upload error: %s", a.err)
+	}
+	if got, err := os.ReadFile(filepath.Join(remoteDir, "nested", "hello.txt")); err != nil || string(got) != "folder body" {
+		t.Fatalf("remote folder content: %q %v", got, err)
+	}
+
+	// 查看端也可下载文件夹
+	a.host.yield(a.host.snapshot())
+	localCopy := filepath.Join(t.TempDir(), "downloaded-bundle")
+	a.request().prepareDownloadFolder(appL(), v, remoteDir, localCopy)
+	pumpSaves(t, []*app{a}, func() bool { return v.transfer == nil })
+	if a.err != "" {
+		t.Fatalf("folder download error: %s", a.err)
+	}
+	if got, err := os.ReadFile(filepath.Join(localCopy, "nested", "hello.txt")); err != nil || string(got) != "folder body" {
+		t.Fatalf("downloaded folder content: %q %v", got, err)
+	}
+}

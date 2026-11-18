@@ -16,6 +16,7 @@ import (
 
 	"posse/internal/agent"
 	"posse/internal/gitx"
+	"posse/internal/rpc"
 	"posse/locales"
 )
 
@@ -149,49 +150,81 @@ func fetchKey(project, rel string) string {
 	return project + "\x00" + rel
 }
 
+func fetchRel(w *workspace, dir string) string {
+	rel, err := filepath.Rel(filepath.Clean(w.Path), dir)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return dir
+	}
+	return rel
+}
+
 // autoFetch 到点了在后台 fetch 仓库 dir，失败不报错，下次再试。进行中占着这个仓库的 busy（分支弹窗的按钮转圈），
 // 免得和用户手动的 git 操作同时改引用。
 func (a *app) autoFetch(c *ui.Context, w *workspace, dir string, tr *trackInfo) {
-	if a.remoteHost() || !a.request().current() || a.host != nil && !a.request().snapshot.Controlled {
+	r := a.request()
+	if c == nil || w == nil || a.selected != w.ID || dir == "" || !r.current() || r.host != nil && !r.snapshot.Controlled {
 		return
 	}
-	if a.fetchAt == nil {
-		a.fetchAt = map[string]time.Time{}
+	v := a.files[w.ID]
+	current := a.workspace(w.ID)
+	if v == nil || v.git.repo != dir || current == nil || current.Path != w.Path {
+		return
 	}
-	rel, err := filepath.Rel(filepath.Clean(w.Path), dir)
-	if err != nil || strings.HasPrefix(rel, "..") {
-		rel = dir
-	}
+	rel := fetchRel(w, dir)
 	key := fetchKey(w.ProjectID, rel)
+	if wait := time.Until(a.fetchRetry[key]); wait > 0 {
+		c.After(wait)
+		return
+	}
+	if a.fetchRetry == nil {
+		a.fetchRetry = map[string]time.Time{}
+	}
+	// 未知结果继续占住原操作；查询到 running 后仍按原 ref 查询，不另开 Fetch。
+	if s := a.fetchFor(v.git); s != nil && s.pending() {
+		if s.automatic {
+			a.holdAutoFetch(s, a.fetchRepos(w.ProjectID, rel))
+			if s.unknown || !s.queryAt.IsZero() || s.cancelRequested {
+				a.queryFetch(L(c), s)
+			}
+		}
+		a.fetchRetry[key] = time.Now().Add(trackRefresh)
+		c.After(trackRefresh)
+		return
+	}
 	last, ok := a.fetchAt[key]
 	if wait := autoFetchEvery - time.Since(last); ok && wait > 0 {
 		c.After(wait)
 		return
 	}
-	// 同一项目的 worktree 共用远端引用：fetch 期间把它们开着的同一个仓库都占住，那边手动的 git 操作排队，不同时改引用
-	var repos []*gitState
-	for i := range a.workspaces {
-		ow := &a.workspaces[i]
-		if ow.ProjectID != w.ProjectID {
-			continue
-		}
-		v := a.files[ow.ID]
-		if v == nil {
-			continue
-		}
-		g := v.repoAt(filepath.Join(v.root, rel))
-		if filepath.IsAbs(rel) {
-			g = v.repoAt(rel)
-		}
-		if g == nil {
-			continue
-		}
+	// After 只约重绘，不会阻止其他原因触发的帧；单独记重试时间，避免每帧准备操作。
+	a.fetchRetry[key] = time.Now().Add(time.Second)
+	c.After(time.Second)
+	repos := a.fetchRepos(w.ProjectID, rel)
+	for _, g := range repos {
 		if g.busy != "" {
-			c.After(time.Second)
 			return
 		}
-		repos = append(repos, g)
 	}
+	if a.typedFetch() {
+		if !a.fetchWritable(v) {
+			return
+		}
+		s := a.startTargetFetch(L(c), a.gitTarget(w, v, v.git), true)
+		if s == nil {
+			return
+		}
+		s.autoKey = key
+		a.holdAutoFetch(s, repos)
+		if a.fetchAt == nil {
+			a.fetchAt = map[string]time.Time{}
+		}
+		a.fetchAt[key] = s.at
+		return
+	}
+	if a.fetchAt == nil {
+		a.fetchAt = map[string]time.Time{}
+	}
+	delete(a.fetchRetry, key)
 	a.fetchAt[key] = time.Now()
 	ctx, cancel := context.WithCancel(gitx.WithOp(context.Background(), L(c).BranchAutoFetch()))
 	for _, g := range repos {
@@ -212,6 +245,48 @@ func (a *app) autoFetch(c *ui.Context, w *workspace, dir string, tr *trackInfo) 
 			}
 		})
 	}()
+}
+
+func (a *app) fetchRepos(project, rel string) []*gitState {
+	// 同一项目的 worktree 共用远端引用：fetch 期间把它们开着的同一个仓库都占住，那边手动的 git 操作排队，不同时改引用
+	var repos []*gitState
+	for i := range a.workspaces {
+		ow := &a.workspaces[i]
+		if ow.ProjectID != project {
+			continue
+		}
+		v := a.files[ow.ID]
+		if v == nil {
+			continue
+		}
+		g := v.repoAt(filepath.Join(v.root, rel))
+		if filepath.IsAbs(rel) {
+			g = v.repoAt(rel)
+		}
+		if g == nil {
+			continue
+		}
+		repos = append(repos, g)
+	}
+	return repos
+}
+
+func (a *app) holdAutoFetch(s *targetFetch, repos []*gitState) {
+	for _, g := range repos {
+		if g.busy == "" && !slices.Contains(s.repos, g) {
+			g.busy, g.busyKind = "Fetch", gitFetch
+			g.cancel = func() { a.cancelFetch(appL(), s) }
+			s.repos = append(s.repos, g)
+		}
+	}
+}
+
+func (a *app) releaseAutoFetch(s *targetFetch) {
+	for _, g := range s.repos {
+		g.busy, g.busyKind, g.cancel = "", "", nil
+		a.gitNext(g)
+	}
+	s.repos = nil
 }
 
 // trackTip 是分支按钮的悬停提示：分支名和传入、传出的提交数。
@@ -338,7 +413,7 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 						bp.hl, bp.scroll = min(bp.hl+1, len(bp.rows)-1), true
 					case in.Shortcut(0, ui.KeyUp):
 						bp.hl, bp.scroll = max(bp.hl-1, 0), true
-					case !a.remoteHost() && in.Submitted() && bp.hl >= 0 && bp.hl < len(bp.rows):
+					case in.Submitted() && bp.hl >= 0 && bp.hl < len(bp.rows):
 						a.checkoutBranch(L(c), w, v, bp.rows[bp.hl])
 					}
 				})
@@ -431,13 +506,6 @@ func popupItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
 }
 
 func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
-	if a.remoteHost() {
-		if popupItem(c, iconPush, L(c).PushPreviewTitle(), a.keyText("push")) {
-			a.branchPop = nil
-			a.openPush(L(c), w)
-		}
-		return
-	}
 	g := v.git
 	m := L(c)
 	cur, _ := currentBranch(g.branches.list)
@@ -446,18 +514,25 @@ func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
 		if cur.Upstream == "" {
 			a.err = m.BranchNoUpstream()
 		} else {
-			a.guardAgent(m, w, m.BranchUpdateProject(), func() {
-				a.updateBranch(m, v, m.BranchUpdateProject(), cur)
-			})
+			a.updateBranch(m, v, m.BranchUpdateProject(), cur)
 		}
 	}
-	if popupItem(c, iconCommit, m.BranchCommit(), a.keyText("commit")) {
-		a.branchPop = nil
-		a.openFilesPanel(w, sideChanges).ch.focusMsg = true
+	if !a.remoteHost() {
+		if popupItem(c, iconCommit, m.BranchCommit(), a.keyText("commit")) {
+			a.branchPop = nil
+			a.openFilesPanel(w, sideChanges).ch.focusMsg = true
+		}
 	}
-	if popupItem(c, iconPush, "Push…", a.keyText("push")) {
+	pushLabel := "Push…"
+	if a.remoteHost() {
+		pushLabel = m.PushPreviewTitle()
+	}
+	if popupItem(c, iconPush, pushLabel, a.keyText("push")) {
 		a.branchPop = nil
 		a.openPush(m, w)
+	}
+	if !a.branchControls() {
+		return
 	}
 	hline(c).Margin(4, 6)
 	if popupItem(c, iconPlus, m.BranchNewEllipsis(), a.keyText("newBranch")) {
@@ -466,11 +541,7 @@ func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
 	}
 	if popupItem(c, nil, m.BranchCheckoutRevisionEllipsis(), "") {
 		a.branchPop = nil
-		a.prompt(promptReq{title: m.BranchCheckoutRevision(), placeholder: m.BranchRevisionPlaceholder(), verb: m.BranchCheckout(), do: func(rev string, _ bool) {
-			a.guardAgent(m, w, m.BranchCheckout(), func() {
-				a.gitDo(m, g, m.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, rev) })
-			})
-		}})
+		a.askCheckoutRevision(m, w, v)
 	}
 }
 
@@ -639,21 +710,40 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 
 // checkoutBranch 是分支弹窗里回车或菜单"检出"：在别的工作区检出着的切到那个工作区，当前分支什么也不做。
 func (a *app) checkoutBranch(m locales.Messages, w *workspace, v *filesView, b gitx.Branch) {
-	if a.targetFileUnsupported("git.write") {
+	if !a.branchControls() {
 		return
 	}
-	// 回调（确认框、提示、恢复）晚些才执行，那时当前仓库可能已经换了：固定成现在这个
 	g := v.git
 	a.branchPop = nil
 	if b.Current {
 		return
 	}
-	if other, inOther := gitx.WorktreeOf(b, g.repo); inOther {
+	other, inOther := "", false
+	check := b
+	if a.typedFetch() && b.Remote {
+		for _, local := range g.branches.list {
+			if !local.Remote && local.Name == gitx.LocalOf(b.Name) {
+				check = local
+			}
+		}
+	}
+	if a.remoteHost() {
+		other = check.Worktree
+		inOther = other != "" && other != g.identity.Root && other != g.repo
+	} else {
+		other, inOther = gitx.WorktreeOf(check, g.repo)
+	}
+	if inOther {
 		if ws := a.workspaceAt(other); ws != nil {
 			a.selected, a.revealSel = ws.ID, true
 		} else {
 			a.attachWorktree(m, w, other)
 		}
+		return
+	}
+	if a.typedFetch() {
+		target := a.gitTarget(w, v, g)
+		a.startTargetBranch(m, target, m.BranchCheckout(), branchParams(target, b, rpc.GitBranchCheckout), nil)
 		return
 	}
 	a.guardAgent(m, w, m.BranchCheckout(), func() {
@@ -664,9 +754,59 @@ func (a *app) checkoutBranch(m locales.Messages, w *workspace, v *filesView, b g
 // branchMenu 是一个分支的操作，顺序照 WebStorm。更新、删除的结果在弹窗里看得到，不关弹窗。
 func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, b, cur gitx.Branch, other string, otherWs *workspace, inOther bool) {
 	if a.remoteHost() {
+		if a.branchControls() {
+			if !b.Current {
+				switch {
+				case inOther && otherWs != nil:
+					if m.Item(L(c).BranchSwitchToWorkspace(displayName(otherWs))).Chosen() {
+						a.checkoutBranch(L(c), w, v, b)
+					}
+				case inOther:
+					if m.Item(L(c).BranchOpenPosse()).Chosen() {
+						a.branchPop = nil
+						a.attachWorktree(L(c), w, other)
+					}
+				default:
+					if m.Item(L(c).BranchCheckout()).Chosen() {
+						a.checkoutBranch(L(c), w, v, b)
+					}
+				}
+			}
+			if m.Item(L(c).BranchNewFrom(b.Name)).Icon(iconPlus).Chosen() {
+				a.branchPop = nil
+				a.askNewBranch(L(c), w, v, b.Name, b)
+			}
+			if !b.Remote && !inOther && m.Item(L(c).BranchRenameEllipsis()).Chosen() {
+				a.branchPop = nil
+				a.askRenameBranch(L(c), w, v, b)
+			}
+			del := L(c).CommonDelete()
+			if b.Remote {
+				del = L(c).CommonDeleteEllipsis()
+			}
+			if !b.Current && !inOther && m.Item(del).Chosen() {
+				a.askDeleteBranch(L(c), v, b)
+			}
+		}
+
 		curName := cur.Name
 		if curName == "" {
 			curName = "HEAD"
+		}
+		if a.pathsControls() && !b.Current {
+			if !b.Remote && !inOther && m.Item(L(c).BranchCheckoutRebaseOnto(curName)).Chosen() {
+				a.integrateBranch(L(c), w, v, b, cur, rpc.GitIntegrateCheckoutRebase)
+			}
+			if m.Item(L(c).BranchRebaseOnto(curName, b.Name)).Chosen() {
+				a.integrateBranch(L(c), w, v, b, cur, rpc.GitIntegrateRebase)
+			}
+			if m.Item(L(c).BranchMergeInto(b.Name, curName)).Chosen() {
+				a.integrateBranch(L(c), w, v, b, cur, rpc.GitIntegrateMerge)
+			}
+		}
+		if a.branchControls() && m.Item(L(c).BranchNewWorkspaceFrom(b.Name)).Chosen() {
+			a.branchPop = nil
+			a.askWorktreeFrom(L(c), w, b.Name)
 		}
 		if !b.Current && m.Item(L(c).BranchCompareWith(curName)).Icon(iconDiff).Chosen() {
 			a.branchPop = nil
@@ -676,21 +816,26 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 			a.branchPop = nil
 			a.openCompare(w, b.Name, curName, true)
 		}
+		if m.Item(L(c).BranchShowInLog()).Icon(iconGitLog).Chosen() {
+			a.branchPop = nil
+			a.openLog(w, branchRef(b), "")
+		}
+		if a.branchControls() && !b.Remote && b.Upstream != "" && !inOther && m.Item(L(c).BranchUpdate()).Icon(iconFetch).Chosen() {
+			a.updateBranch(L(c), v, L(c).BranchUpdateNamed(b.Name), b)
+		}
 		if !b.Remote && m.Item(L(c).PushPreviewTitle()).Icon(iconPush).Chosen() {
 			a.branchPop = nil
 			a.openPushBranch(w, b.Name)
 		}
 		return
 	}
-	// 回调（确认框、提示、恢复）晚些才执行，那时当前仓库可能已经换了：固定成现在这个
-	g := v.git
 	lm := L(c)
 	done := func() { a.branchPop = nil }
 	curName := cur.Name
 	if curName == "" {
 		curName = "HEAD"
 	}
-	if !b.Current {
+	if a.branchControls() && !b.Current {
 		switch {
 		case inOther && otherWs != nil:
 			if m.Item(lm.BranchSwitchToWorkspace(displayName(otherWs))).Chosen() {
@@ -716,18 +861,14 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 			}
 		}
 	}
-	if m.Item(lm.BranchNewFrom(b.Name)).Icon(iconPlus).Chosen() {
+	if a.branchControls() && m.Item(lm.BranchNewFrom(b.Name)).Icon(iconPlus).Chosen() {
 		done()
-		a.askNewBranch(lm, w, v, b.Name)
+		a.askNewBranch(lm, w, v, b.Name, b)
 	}
-	if !b.Current && !b.Remote && !inOther && m.Item(lm.BranchCheckoutRebaseOnto(curName)).Chosen() {
-		done()
-		a.guardAgent(lm, w, lm.BranchCheckoutRebase(), func() {
-			a.gitDo(lm, g, lm.BranchCheckoutRebase(), func(ctx context.Context, root string) error {
-				return gitx.CheckoutAndRebase(ctx, root, b.Name, curName)
-			})
-		})
+	if a.pathsControls() && !b.Current && !b.Remote && !inOther && m.Item(lm.BranchCheckoutRebaseOnto(curName)).Chosen() {
+		a.integrateBranch(lm, w, v, b, cur, rpc.GitIntegrateCheckoutRebase)
 	}
+
 	if !b.Current {
 		m.Separator()
 		if m.Item(lm.BranchCompareWith(curName)).Icon(iconDiff).Chosen() {
@@ -739,21 +880,15 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 			a.openCompare(w, b.Name, curName, true)
 		}
 		m.Separator()
-		if m.Item(lm.BranchRebaseOnto(curName, b.Name)).Chosen() {
-			done()
-			a.guardAgent(lm, w, lm.GitOpRebase(), func() {
-				a.gitDo(lm, g, lm.GitOpRebase(), func(ctx context.Context, root string) error { return gitx.Rebase(ctx, root, b.Name) })
-			})
+		if a.pathsControls() && m.Item(lm.BranchRebaseOnto(curName, b.Name)).Chosen() {
+			a.integrateBranch(lm, w, v, b, cur, rpc.GitIntegrateRebase)
 		}
-		if m.Item(lm.BranchMergeInto(b.Name, curName)).Chosen() {
-			done()
-			a.guardAgent(lm, w, lm.GitMerge(), func() {
-				a.gitDo(lm, g, lm.GitMerge(), func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, b.Name) })
-			})
+		if a.pathsControls() && m.Item(lm.BranchMergeInto(b.Name, curName)).Chosen() {
+			a.integrateBranch(lm, w, v, b, cur, rpc.GitIntegrateMerge)
 		}
 	}
 	m.Separator()
-	if m.Item(lm.BranchNewWorkspaceFrom(b.Name)).Chosen() {
+	if a.branchControls() && m.Item(lm.BranchNewWorkspaceFrom(b.Name)).Chosen() {
 		done()
 		a.askWorktreeFrom(lm, w, b.Name)
 	}
@@ -762,11 +897,9 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		done()
 		a.openLog(w, branchRef(b), "")
 	}
-	if !b.Remote && b.Upstream != "" && m.Item(lm.BranchUpdate()).Icon(iconFetch).Chosen() {
+	if a.branchControls() && !b.Remote && b.Upstream != "" && !inOther && m.Item(lm.BranchUpdate()).Icon(iconFetch).Chosen() {
 		if b.Current {
-			a.guardAgent(lm, w, lm.BranchUpdate(), func() {
-				a.updateBranch(lm, v, lm.BranchUpdate(), b)
-			})
+			a.updateBranch(lm, v, lm.BranchUpdate(), b)
 		} else {
 			a.updateBranch(lm, v, lm.BranchUpdateNamed(b.Name), b)
 		}
@@ -776,51 +909,60 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		a.openPushBranch(w, b.Name)
 	}
 	m.Separator()
-	if !b.Remote && m.Item(lm.BranchRenameEllipsis()).Chosen() {
+	if a.branchControls() && !b.Remote && !inOther && m.Item(lm.BranchRenameEllipsis()).Chosen() {
 		done()
-		a.prompt(promptReq{title: lm.BranchRenameTitle(b.Name), initial: b.Name, verb: lm.BranchRename(), do: func(name string, _ bool) {
-			a.gitDo(lm, g, lm.BranchRename(), func(ctx context.Context, root string) error { return gitx.RenameBranch(ctx, root, b.Name, name) })
-		}})
+		a.askRenameBranch(lm, w, v, b)
 	}
 	// 本地分支直接删、可以恢复，不再弹确认；远端分支要确认
 	del := lm.CommonDelete()
 	if b.Remote {
 		del = lm.CommonDeleteEllipsis()
 	}
-	if !b.Current && !inOther && m.Item(del).Chosen() {
+	if a.branchControls() && !b.Current && !inOther && m.Item(del).Chosen() {
 		a.askDeleteBranch(lm, v, b)
 	}
 }
 
 // updateBranch 用远端更新分支，做完提示拉到了几个提交。
 func (a *app) updateBranch(m locales.Messages, v *filesView, what string, b gitx.Branch) {
-	if a.targetFileUnsupported("git.write") {
+	if a.typedFetch() {
+		if w := a.workspace(v.wsID); w != nil {
+			a.startTargetUpdate(m, w, v, what, b)
+		}
 		return
 	}
 	// 回调（确认框、提示、恢复）晚些才执行，那时当前仓库可能已经换了：固定成现在这个
 	g := v.git
-	var n int
-	a.gitDoKind(m, g, gitUpdate, what, func(ctx context.Context, root string) error {
-		before := gitx.Tip(ctx, root, "refs/heads/"+b.Name)
-		err := gitx.Update(ctx, root, b)
-		var left *gitx.AutostashLeft
-		if err == nil || errors.As(err, &left) {
-			n = gitx.Incoming(ctx, root, before, "refs/remotes/"+b.Upstream)
-		}
-		return err
-	}, func() {
-		if n == 0 {
-			a.notify(m.BranchUpToDate(b.Name), "", nil)
-		} else {
-			a.notify(m.BranchPulled(b.Name, n), "", nil)
-		}
-	})
+	run := func() {
+		var n int
+		a.gitDoKind(m, g, gitUpdate, what, func(ctx context.Context, root string) error {
+			before := gitx.Tip(ctx, root, "refs/heads/"+b.Name)
+			err := gitx.Update(ctx, root, b)
+			var left *gitx.AutostashLeft
+			if err == nil || errors.As(err, &left) {
+				n = gitx.Incoming(ctx, root, before, "refs/remotes/"+b.Upstream)
+			}
+			return err
+		}, func() {
+			if n == 0 {
+				a.notify(m.BranchUpToDate(b.Name), "", nil)
+			} else {
+				a.notify(m.BranchPulled(b.Name, n), "", nil)
+			}
+		})
+	}
+	if w := a.workspace(v.wsID); b.Current && w != nil {
+		a.guardAgent(m, w, what, run)
+	} else {
+		run()
+	}
 }
 
 // askDeleteBranch 删除分支，照 WebStorm：已经合并的本地分支直接删，提示里可以恢复；没合并的先问一次是否强制删除。
 // 远端分支删的是远端上的，别人也拉不到了，先确认。
 func (a *app) askDeleteBranch(m locales.Messages, v *filesView, b gitx.Branch) {
-	if a.targetFileUnsupported("git.write") {
+	if a.typedFetch() {
+		a.deleteTargetBranch(m, v, b)
 		return
 	}
 	// 回调（确认框、提示、恢复）晚些才执行，那时当前仓库可能已经换了：固定成现在这个
@@ -861,8 +1003,9 @@ func (a *app) askDeleteBranch(m locales.Messages, v *filesView, b gitx.Branch) {
 	})
 }
 
-func (a *app) askNewBranch(m locales.Messages, w *workspace, v *filesView, from string) {
-	if a.targetFileUnsupported("git.write") {
+func (a *app) askNewBranch(m locales.Messages, w *workspace, v *filesView, from string, source ...gitx.Branch) {
+	if a.typedFetch() {
+		a.askTargetNewBranch(m, w, v, from, source...)
 		return
 	}
 	// 回调（确认框、提示、恢复）晚些才执行，那时当前仓库可能已经换了：固定成现在这个
@@ -887,18 +1030,24 @@ func (a *app) askNewBranch(m locales.Messages, w *workspace, v *filesView, from 
 
 // askWorktreeFrom 是 WebStorm 的 New Worktree：在 posse 里新建一个 worktree 工作区，分支从 base 分出去。
 func (a *app) askWorktreeFrom(m locales.Messages, w *workspace, base string) {
-	if a.targetFileUnsupported("git.write") {
+	if !a.branchControls() {
 		return
 	}
 	r := a.request()
+	if !r.canWrite() {
+		return
+	}
 	params := map[string]any{"project": w.Project, "mode": "worktree", "base": base}
 	// 分支是当前仓库的：不是项目目录那个仓库时（多仓库目录、嵌套仓库），只给这一个仓库建 worktree
-	if v := a.files[w.ID]; v != nil && v.git.repo != v.root {
+	if v := a.files[w.ID]; v != nil && v.git.repo != v.root && (v.realRoot == "" || v.git.repo != v.realRoot) {
 		if rel, ok := repoRel(v, v.git); ok {
 			params["repos"] = []string{rel}
 		}
 	}
 	a.prompt(promptReq{title: m.BranchNewWorkspaceTitle(base), placeholder: m.BranchWorkspaceName(), verb: m.CommonNew(), do: func(name string, _ bool) {
+		if !r.canWrite() {
+			return
+		}
 		params["name"] = name
 		go r.createWorkspace(m, params)
 	}})
@@ -907,7 +1056,11 @@ func (a *app) askWorktreeFrom(m locales.Messages, w *workspace, base string) {
 // attachWorktree 把不是 posse 建的 worktree 加成项目的工作区并切过去，名字取目录名。
 // 常驻进程把它记成 folder：删工作区只删记录，不碰别人建的目录和分支。
 func (a *app) attachWorktree(m locales.Messages, w *workspace, dir string) {
-	if a.targetFileUnsupported("git.write") {
+	if !a.branchControls() {
+		return
+	}
+	r := a.request()
+	if !r.canWrite() {
 		return
 	}
 	name := strings.Map(func(r rune) rune {
@@ -927,7 +1080,7 @@ func (a *app) attachWorktree(m locales.Messages, w *workspace, dir string) {
 	for i, base := 2, name; taken[name]; i++ {
 		name = fmt.Sprintf("%s-%d", base, i)
 	}
-	go a.request().createWorkspace(m, map[string]any{"project": w.Project, "name": name, "mode": "attach", "path": dir})
+	go r.createWorkspace(m, map[string]any{"project": w.Project, "name": name, "mode": "attach", "path": dir})
 }
 
 // workspaceAt 找目录正好是 dir 的工作区（比较时解析符号链接）。

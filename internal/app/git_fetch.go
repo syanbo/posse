@@ -31,6 +31,10 @@ type targetFetch struct {
 	checking, canceling, cancelRequested bool
 	checkSeq                             uint64
 	seen                                 bool
+	automatic                            bool
+	autoKey                              string
+	queryAt                              time.Time
+	repos                                []*gitState
 }
 
 func (s *targetFetch) pending() bool { return !s.done && !s.acknowledged }
@@ -45,9 +49,15 @@ func (a *app) typedFetch() bool {
 }
 
 func (a *app) fetchFor(g *gitState) *targetFetch {
+	autoKey := ""
+	if g.v != nil {
+		if w := a.workspace(g.v.wsID); w != nil {
+			autoKey = fetchKey(w.ProjectID, fetchRel(w, g.repo))
+		}
+	}
 	for i := len(a.targetFetches) - 1; i >= 0; i-- {
 		s := a.targetFetches[i]
-		if s.params.Expected.Root == g.identity.Root || s.params.Expected.Root == g.repo || g.identity.CommonDir != "" && s.params.Expected.CommonDir == g.identity.CommonDir {
+		if s.automatic && s.autoKey != "" && s.autoKey == autoKey || s.params.Expected.Root == g.identity.Root || s.params.Expected.Root == g.repo || g.identity.CommonDir != "" && s.params.Expected.CommonDir == g.identity.CommonDir {
 			return s
 		}
 	}
@@ -119,28 +129,46 @@ func (a *app) startFetch(m locales.Messages, w *workspace, v *filesView) {
 				return
 			}
 			s.acknowledged = true
+			a.releaseAutoFetch(s)
 			a.startFetch(m, w, v)
 		})
 		return
 	}
+	a.startTargetFetch(m, target, false)
+}
+
+func (a *app) startTargetFetch(m locales.Messages, target gitOperationTarget, automatic bool) *targetFetch {
+	if !target.current() || target.request.host != nil && !target.request.snapshot.Controlled {
+		return nil
+	}
 	if !a.reserveFetch() {
-		a.err = m.FetchCapacity()
-		return
+		if !automatic {
+			a.err = m.FetchCapacity()
+		}
+		return nil
 	}
 	r, p := target.request, target.params
 	op, err := r.client.PrepareGitFetch(p)
 	if err != nil {
-		a.err = errtext.Text(err)
-		return
+		if !automatic {
+			a.err = errtext.Text(err)
+		}
+		return nil
 	}
-	s := &targetFetch{ref: op.Ref(), params: p, project: w.ProjectID, workspace: w.Name, request: r, at: time.Now()}
+	s := &targetFetch{ref: op.Ref(), params: p, project: target.project, workspace: target.workspace, request: r, at: time.Now(), automatic: automatic}
 	a.targetFetches = append(a.targetFetches, s)
 	go func() {
 		// 生命周期不绑定当前视图；网络请求结束也不调用操作取消。
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		if !r.current() {
-			a.update(func() { s.done = true })
+			a.update(func() {
+				s.done = true
+				if s.automatic && a.fetchAt[s.autoKey] == s.at {
+					delete(a.fetchAt, s.autoKey)
+				}
+				a.releaseAutoFetch(s)
+			})
 			return
 		}
 		out, err := op.Execute(ctx)
@@ -152,11 +180,15 @@ func (a *app) startFetch(m locales.Messages, w *workspace, v *filesView) {
 				var re *rpc.Error
 				s.unknown = !errors.As(err, &re) || re.Code == rpc.CodeOutcomeUnknown
 				s.done, s.err = !s.unknown, errtext.Text(err)
+				if s.done {
+					a.releaseAutoFetch(s)
+				}
 				return
 			}
 			a.finishFetch(s, out, r, m)
 		})
 	}()
+	return s
 }
 
 func (a *app) finishFetch(s *targetFetch, out rpc.GitFetchResult, r appRequest, m locales.Messages) {
@@ -165,6 +197,7 @@ func (a *app) finishFetch(s *targetFetch, out rpc.GitFetchResult, r appRequest, 
 		return
 	}
 	s.result, s.done, s.unknown = &out, true, false
+	defer a.releaseAutoFetch(s)
 	s.err = ""
 	if out.Error != nil {
 		s.err = errtext.Text(out.Error)
@@ -177,7 +210,7 @@ func (a *app) finishFetch(s *targetFetch, out rpc.GitFetchResult, r appRequest, 
 		return
 	}
 	a.refreshFetch(s, v)
-	if out.Status == rpc.GitFetchSucceeded && s.request.current() {
+	if out.Status == rpc.GitFetchSucceeded && s.request.current() && !s.automatic {
 		a.notify(m.BranchFetched(), "", nil)
 	}
 }
@@ -198,6 +231,7 @@ func (a *app) queryFetch(m locales.Messages, s *targetFetch) {
 	s.checkSeq++
 	seq := s.checkSeq
 	s.checking = true
+	s.queryAt = time.Now()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -222,6 +256,7 @@ func (a *app) queryFetch(m locales.Messages, s *targetFetch) {
 			s.unknown = out.Operation.State == "unknown"
 			if out.Operation.State == "done" && out.Operation.Error != nil {
 				s.done, s.err = true, errtext.Text(out.Operation.Error)
+				a.releaseAutoFetch(s)
 			}
 		})
 	}()

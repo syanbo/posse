@@ -153,3 +153,75 @@ func TestLocalPasteImage(t *testing.T) {
 		t.Fatalf("local image permissions: %v %v", st, err)
 	}
 }
+
+func TestTargetPasteFiles(t *testing.T) {
+	for _, mode := range []string{"success", "failure", "viewer"} {
+		t.Run(mode, func(t *testing.T) {
+			a, f := requestTestApp(t, "remote")
+			if mode != "viewer" {
+				takeRequestTestControl(t, a)
+			}
+			v, conn := recTerminal(t, a)
+			v.request = a.request()
+			localFile := filepath.Join(t.TempDir(), "spec doc.md")
+			if err := os.WriteFile(localFile, []byte("# spec\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			remoteFile := "/tmp/posse-drop-remote/spec doc.md"
+			var calls atomic.Int32
+			f.mu.Lock()
+			f.desktopCall = func(_ context.Context, p rpc.DesktopCall) (any, error) {
+				calls.Add(1)
+				if p.Method != "files.pasteFile" {
+					t.Errorf("unexpected method %s", p.Method)
+				}
+				var q rpc.FilePasteFileParams
+				if err := json.Unmarshal(p.Params, &q); err != nil {
+					return nil, err
+				}
+				if q.Name != "spec doc.md" || string(q.Data) != "# spec\n" {
+					t.Errorf("unexpected payload %+v", q)
+				}
+				if mode == "failure" {
+					return nil, rpc.Errorf(rpc.CodeInternal, "disk full")
+				}
+				return rpc.FilePasteImageResult{Path: remoteFile}, nil
+			}
+			f.mu.Unlock()
+
+			a.pasteFiles(v, []string{localFile}, "claude")
+			if mode != "viewer" {
+				waitFileUpdate(t, a)
+			}
+			a.runPending()
+			switch mode {
+			case "success":
+				got := sent(t, conn)
+				if got != "'/tmp/posse-drop-remote/spec doc.md' " {
+					t.Fatalf("pasted %q, want remote quoted path", got)
+				}
+				if a.err != "" || calls.Load() != 1 {
+					t.Fatalf("err=%q calls=%d", a.err, calls.Load())
+				}
+			case "failure":
+				select {
+				case b := <-conn.in:
+					t.Fatalf("failure leaked path %q", b)
+				default:
+				}
+				if a.err == "" || calls.Load() != 1 {
+					t.Fatalf("missing error or wrong calls=%d", calls.Load())
+				}
+			case "viewer":
+				select {
+				case b := <-conn.in:
+					t.Fatalf("viewer pasted %q", b)
+				default:
+				}
+				if calls.Load() != 0 {
+					t.Fatalf("viewer called upload %d times", calls.Load())
+				}
+			}
+		})
+	}
+}

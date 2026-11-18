@@ -135,7 +135,7 @@ func (r *rollbackDlg) setPicked(files []int, on bool) {
 
 // openRollback 是改动页顶上的回滚和 ⌥⌘Z：对着当前仓库，它没有改动时对着第一个有改动的仓库。
 func (a *app) openRollback(v *filesView) {
-	if a.targetFileUnsupported("git.write") {
+	if !a.pathsControls() {
 		return
 	}
 	if g := v.rollbackRepo(); g != nil {
@@ -146,7 +146,7 @@ func (a *app) openRollback(v *filesView) {
 // openRollbackFor 打开回滚对话框，pick 非空时只勾这几个文件；勾的有新文件就默认勾上"删除新文件"，
 // 从这个文件发起回滚就是要它回到没有的样子。
 func (a *app) openRollbackFor(g *gitState, pick []string, then func(restored, removed []string)) {
-	if a.targetFileUnsupported("git.write") {
+	if !a.pathsControls() {
 		return
 	}
 	v := g.v
@@ -276,7 +276,7 @@ func (r *rollbackDlg) rollbackPaths() (restore, remove, unstage []string, n int)
 
 func (a *app) rollbackDialog(c *ui.Context) {
 	r := &a.rollback
-	if !r.open {
+	if !r.open || !a.pathsControls() {
 		return
 	}
 	t := c.Theme()
@@ -366,6 +366,10 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 				var done func()
 				if then := r.then; then != nil {
 					done = func() { then(restore, remove) }
+				}
+				if a.typedFetch() {
+					a.targetRollback(L(c), *r, done)
+					return
 				}
 				a.gitDoThen(L(c), r.g, L(c).GitRollback(), func(ctx context.Context, root string) error {
 					if len(restore) > 0 {

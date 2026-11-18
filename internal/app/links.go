@@ -49,11 +49,13 @@ func (a *app) openLink(v *termView, link string, mods ui.Modifiers) bool {
 	card := a.newLinkCard(path, linkLine(link))
 	card.ws, card.term = a.termWorkspace(v), v.id
 	switch {
-	case system:
+	case system && !a.remoteHost():
 		a.openPathExternal(card)
+	case system:
+		a.showLinkCard(card)
 	case !direct:
 		a.showLinkCard(card)
-	case !card.isDir && isHTML(card.path) && a.openLinkWeb(card):
+	case !a.remoteHost() && !card.isDir && isHTML(card.path) && a.openLinkWeb(card):
 	case !card.isDir && a.openLinkFile(card):
 	case card.isDir && a.revealLinkDir(card):
 	default:
@@ -159,6 +161,15 @@ func (a *app) termWorkspace(v *termView) *workspace {
 
 // linkPath 是链接指向的本地文件：file:// 链接取路径，网址返回 ok=false，路径按终端目录解析，不存在返回空。
 func (a *app) linkPath(v *termView, link string) (path string, local bool) {
+	if a.remoteHost() {
+		if len(link) >= len("file://") && strings.EqualFold(link[:len("file://")], "file://") {
+			return remoteFileURLPath(link), true
+		}
+		if strings.Contains(link, "://") || strings.HasPrefix(link, "mailto:") {
+			return "", false
+		}
+		return resolveRemoteLinkPath(link, a.linkBase(v)), true
+	}
 	if m := imageTagRe.FindStringSubmatch(link); m != nil {
 		return a.pastedImage(v, m[1]), true
 	}
@@ -284,6 +295,39 @@ func resolveLinkPath(link, base string) string {
 	return p
 }
 
+func remoteFileURLPath(link string) string {
+	if u, err := url.Parse(link); err == nil && filepath.IsAbs(u.Path) && !strings.ContainsRune(u.Path, 0) {
+		return u.Path
+	}
+	raw := link[len("file://"):]
+	if i := strings.IndexByte(raw, '/'); i >= 0 {
+		raw = raw[i:]
+		if filepath.IsAbs(raw) && !strings.ContainsRune(raw, 0) {
+			return raw
+		}
+	}
+	return ""
+}
+
+// resolveRemoteLinkPath 不在本机访问同名文件，只解析带明确路径特征的目标路径。
+func resolveRemoteLinkPath(link, base string) string {
+	p := linePos.ReplaceAllString(strings.TrimSpace(link), "")
+	if p == "" || p == "~" || strings.HasPrefix(p, "~/") || strings.ContainsRune(p, 0) {
+		return ""
+	}
+	if !filepath.IsAbs(p) {
+		if base == "" || (!strings.Contains(p, "/") && filepath.Ext(p) == "") {
+			return ""
+		}
+		p = filepath.Join(base, p)
+	}
+	p = filepath.Clean(p)
+	if !filepath.IsAbs(p) || p == "/" {
+		return ""
+	}
+	return p
+}
+
 // linkCard 是点击网址、文件链接或路径后弹出的卡片，出现在点击的位置。
 type linkCard struct {
 	url     string     // 网址的卡片只有它，path 为空
@@ -314,6 +358,9 @@ func isImagePath(p string) bool {
 }
 
 func (a *app) newLinkCard(path string, line int) *linkCard {
+	if a.remoteHost() {
+		return &linkCard{path: path, line: line}
+	}
 	fi, _ := os.Stat(path)
 	return &linkCard{path: path, line: line, isDir: fi != nil && fi.IsDir()}
 }
@@ -321,7 +368,7 @@ func (a *app) newLinkCard(path string, line int) *linkCard {
 func (a *app) showLinkCard(card *linkCard) {
 	path := card.path
 	a.linkCard = card
-	if !card.isDir && isImagePath(path) {
+	if !a.remoteHost() && !card.isDir && isImagePath(path) {
 		go func() {
 			img, err := media.FittedImage(path, linkPreviewWidth, linkPreviewMaxPx)
 			if err != nil {
@@ -443,7 +490,7 @@ func (a *app) pathCardItems(c *ui.Context, card *linkCard, width float32) {
 	hline(c).Margin(4, 6)
 	// 最常用的在最上面：在 Posse 里打开。网页直接打开的是渲染出来的页面，源码在文件标签里看
 	fileKeys := a.posseKeys(L(c))
-	if !card.isDir && isHTML(card.path) && a.cardWorkspace(card) != nil {
+	if !a.remoteHost() && !card.isDir && isHTML(card.path) && a.cardWorkspace(card) != nil {
 		if linkCardItem(c, iconGlobe, L(c).LinksOpenInPosse(), fileKeys) {
 			a.openLinkWeb(card)
 			a.linkCard = nil
@@ -462,6 +509,9 @@ func (a *app) pathCardItems(c *ui.Context, card *linkCard, width float32) {
 	if w := a.workspace(a.selected); w != nil && inDir(card.path, w.Path) && linkCardItem(c, iconPanelRight, L(c).CommonRevealInFilesPanel(), revealKeys) {
 		a.revealInFiles(w, card.path)
 		a.linkCard = nil
+	}
+	if a.remoteHost() {
+		return
 	}
 	openIcon, openLabel := iconOpen, L(c).CommonOpen()
 	if card.isDir {

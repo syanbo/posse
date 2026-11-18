@@ -281,9 +281,22 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 			ui.Spacer(c)
 			if tab == "" && !w.Missing && v.side == sideFiles && !v.search.active() {
 				if a.remoteHost() {
-					ui.Box(c).Shrink(0).Disabled(v.transfer != nil || !a.request().saveAllowed()).Children(func() {
-						if iconButton(c.Key("file-upload"), iconArrowUp, L(c).FilesUpload()).Clicked() {
-							a.chooseUpload(L(c), v, v.root)
+					disabled := v.transfer != nil || !a.request().saveAllowed()
+					wrap := ui.Box(c).Shrink(0).Disabled(disabled)
+					if disabled {
+						wrap.Opacity(0.5)
+					}
+					wrap.Children(func() {
+						btn := iconButton(c.Key("file-upload"), iconArrowUp, L(c).FilesUpload())
+						if !disabled {
+							menuButton(c, btn, func(m *popMenu) {
+								if m.Item(L(c).FilesUpload()).Icon(iconFile).Chosen() {
+									a.chooseUpload(L(c), v, v.root)
+								}
+								if m.Item(L(c).FilesUploadFolder()).Icon(iconFolder).Chosen() {
+									a.chooseUploadFolder(L(c), v, v.root)
+								}
+							})
 						}
 					})
 				}

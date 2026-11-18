@@ -177,6 +177,7 @@ func (a *app) loadTargetPush(ps *pushState) {
 				ps.commit = nil
 			}
 			ps.preview, ps.plan, ps.loaded, ps.err = &out.PushPreviewRead, out.Plan, true, ""
+			ps.previewIdentity = out.Identity
 			if ps.commit != nil && !slices.ContainsFunc(ps.plan.Commits, func(ci gitx.CommitInfo) bool { return ci.Hash == ps.commit.info.Hash }) {
 				ps.commit.read.stop()
 				ps.commit = nil

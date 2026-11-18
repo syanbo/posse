@@ -35,6 +35,120 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// PushUnknown says "The previous Push result is unknown. Query the original operation or refresh the repository state to check."
+// in the language the app shows.
+//
+// A lost Push response must be queried using its original operation
+// reference.
+func PushUnknown() string { return In(i18n.Locale()).PushUnknown() }
+
+// PushUnknown says "The previous Push result is unknown. Query the original operation or refresh the repository state to check."
+// in the language of msgs.
+//
+// A lost Push response must be queried using its original operation
+// reference.
+func (msgs Messages) PushUnknown() string {
+	return Catalog.Format(msgs.locale, "pushUnknown", nil)
+}
+
+// PushRunning says "Push in progress"
+// in the language the app shows.
+//
+// Status of an accepted Push operation.
+func PushRunning() string { return In(i18n.Locale()).PushRunning() }
+
+// PushRunning says "Push in progress"
+// in the language of msgs.
+//
+// Status of an accepted Push operation.
+func (msgs Messages) PushRunning() string {
+	return Catalog.Format(msgs.locale, "pushRunning", nil)
+}
+
+// PushResult says "{status, select, succeeded {Push completed} failed {Push failed} canceled {Push canceled} timed_out {Push timed out} …"
+// in the language the app shows.
+//
+// Confirmed typed Push terminal outcome.
+func PushResult(status string) string { return In(i18n.Locale()).PushResult(status) }
+
+// PushResult says "{status, select, succeeded {Push completed} failed {Push failed} canceled {Push canceled} timed_out {Push timed out} …"
+// in the language of msgs.
+//
+// Confirmed typed Push terminal outcome.
+func (msgs Messages) PushResult(status string) string {
+	return Catalog.Format(msgs.locale, "pushResult", map[string]any{"status": status})
+}
+
+// PushPartial says "Remote refs may have been partially updated. Cancellation or failure does not roll back the push."
+// in the language the app shows.
+//
+// Push may have partially changed remote refs after it started.
+func PushPartial() string { return In(i18n.Locale()).PushPartial() }
+
+// PushPartial says "Remote refs may have been partially updated. Cancellation or failure does not roll back the push."
+// in the language of msgs.
+//
+// Push may have partially changed remote refs after it started.
+func (msgs Messages) PushPartial() string {
+	return Catalog.Format(msgs.locale, "pushPartial", nil)
+}
+
+// PushNewTitle says "Start another Push?"
+// in the language the app shows.
+//
+// Confirmation before a new Push while the previous result remains unknown.
+func PushNewTitle() string { return In(i18n.Locale()).PushNewTitle() }
+
+// PushNewTitle says "Start another Push?"
+// in the language of msgs.
+//
+// Confirmation before a new Push while the previous result remains unknown.
+func (msgs Messages) PushNewTitle() string {
+	return Catalog.Format(msgs.locale, "pushNewTitle", nil)
+}
+
+// PushNewAction says "Start new Push"
+// in the language the app shows.
+//
+// Explicitly authorize a new Push operation.
+func PushNewAction() string { return In(i18n.Locale()).PushNewAction() }
+
+// PushNewAction says "Start new Push"
+// in the language of msgs.
+//
+// Explicitly authorize a new Push operation.
+func (msgs Messages) PushNewAction() string {
+	return Catalog.Format(msgs.locale, "pushNewAction", nil)
+}
+
+// PushCancel says "Cancel Push"
+// in the language the app shows.
+//
+// Request cancellation of the accepted Push operation.
+func PushCancel() string { return In(i18n.Locale()).PushCancel() }
+
+// PushCancel says "Cancel Push"
+// in the language of msgs.
+//
+// Request cancellation of the accepted Push operation.
+func (msgs Messages) PushCancel() string {
+	return Catalog.Format(msgs.locale, "pushCancel", nil)
+}
+
+// PushCapacity says "Push records are full. Check pending operations before starting another push."
+// in the language the app shows.
+//
+// Bounded Push history has no space for another operation.
+func PushCapacity() string { return In(i18n.Locale()).PushCapacity() }
+
+// PushCapacity says "Push records are full. Check pending operations before starting another push."
+// in the language of msgs.
+//
+// Bounded Push history has no space for another operation.
+func (msgs Messages) PushCapacity() string {
+	return Catalog.Format(msgs.locale, "pushCapacity", nil)
+}
+
 // HostLocal says "This Mac"
 // in the language the app shows.
 //
@@ -351,16 +465,16 @@ func (msgs Messages) FetchCapacity() string {
 	return Catalog.Format(msgs.locale, "fetchCapacity", nil)
 }
 
-// FetchConsoleScope says "Only Fetch records from this window session are shown."
+// FetchConsoleScope says "Only Fetch and Push records from this window session are shown."
 // in the language the app shows.
 //
-// Scope of in-memory target Fetch command records in Console.
+// Scope of in-memory target Fetch and Push command records in Console.
 func FetchConsoleScope() string { return In(i18n.Locale()).FetchConsoleScope() }
 
-// FetchConsoleScope says "Only Fetch records from this window session are shown."
+// FetchConsoleScope says "Only Fetch and Push records from this window session are shown."
 // in the language of msgs.
 //
-// Scope of in-memory target Fetch command records in Console.
+// Scope of in-memory target Fetch and Push command records in Console.
 func (msgs Messages) FetchConsoleScope() string {
 	return Catalog.Format(msgs.locale, "fetchConsoleScope", nil)
 }
@@ -427,48 +541,32 @@ func (msgs Messages) BranchPredictionClear() string {
 	return Catalog.Format(msgs.locale, "branchPredictionClear", nil)
 }
 
-// BranchBaseReadOnly says "Read-only comparison; syncing and merging are not available yet."
-// in the language the app shows.
-//
-// Disabled sync and merge button tooltip for remote worktree base
-// comparison.
-func BranchBaseReadOnly() string { return In(i18n.Locale()).BranchBaseReadOnly() }
-
-// BranchBaseReadOnly says "Read-only comparison; syncing and merging are not available yet."
-// in the language of msgs.
-//
-// Disabled sync and merge button tooltip for remote worktree base
-// comparison.
-func (msgs Messages) BranchBaseReadOnly() string {
-	return Catalog.Format(msgs.locale, "branchBaseReadOnly", nil)
-}
-
 // PushPreviewTitle says "Push Preview"
 // in the language the app shows.
 //
-// Read-only push preview title and menu action for a remote host.
+// Push preview title and menu action for a target host.
 func PushPreviewTitle() string { return In(i18n.Locale()).PushPreviewTitle() }
 
 // PushPreviewTitle says "Push Preview"
 // in the language of msgs.
 //
-// Read-only push preview title and menu action for a remote host.
+// Push preview title and menu action for a target host.
 func (msgs Messages) PushPreviewTitle() string {
 	return Catalog.Format(msgs.locale, "pushPreviewTitle", nil)
 }
 
-// PushPreviewNotice says "Read-only preview; pushing is not available yet. Uses this host’s recorded remote-tracking refs without contacting …"
+// PushPreviewNotice says "Push uses this preview. The list comes from recorded remote-tracking refs; the push itself contacts the remote and is…"
 // in the language the app shows.
 //
-// Explain that the remote-host push preview cannot push or verify live
-// remote refs.
+// Explain how Push uses the displayed preview and rechecks its recorded
+// refs.
 func PushPreviewNotice() string { return In(i18n.Locale()).PushPreviewNotice() }
 
-// PushPreviewNotice says "Read-only preview; pushing is not available yet. Uses this host’s recorded remote-tracking refs without contacting …"
+// PushPreviewNotice says "Push uses this preview. The list comes from recorded remote-tracking refs; the push itself contacts the remote and is…"
 // in the language of msgs.
 //
-// Explain that the remote-host push preview cannot push or verify live
-// remote refs.
+// Explain how Push uses the displayed preview and rechecks its recorded
+// refs.
 func (msgs Messages) PushPreviewNotice() string {
 	return Catalog.Format(msgs.locale, "pushPreviewNotice", nil)
 }
@@ -28427,4 +28525,158 @@ func UsageQueryDisabled() string { return In(i18n.Locale()).UsageQueryDisabled()
 // Codex online queries are disabled in Settings.
 func (msgs Messages) UsageQueryDisabled() string {
 	return Catalog.Format(msgs.locale, "usageQueryDisabled", nil)
+}
+
+// FilesUploadFolder says "Upload Folder…"
+// in the language the app shows.
+//
+// Remote file menu: choose a local folder to upload into the selected
+// target folder.
+func FilesUploadFolder() string { return In(i18n.Locale()).FilesUploadFolder() }
+
+// FilesUploadFolder says "Upload Folder…"
+// in the language of msgs.
+//
+// Remote file menu: choose a local folder to upload into the selected
+// target folder.
+func (msgs Messages) FilesUploadFolder() string {
+	return Catalog.Format(msgs.locale, "filesUploadFolder", nil)
+}
+
+// FilesDownloadFolder says "Download Folder…"
+// in the language the app shows.
+//
+// Remote file menu: save a separate folder copy on this Mac.
+func FilesDownloadFolder() string { return In(i18n.Locale()).FilesDownloadFolder() }
+
+// FilesDownloadFolder says "Download Folder…"
+// in the language of msgs.
+//
+// Remote file menu: save a separate folder copy on this Mac.
+func (msgs Messages) FilesDownloadFolder() string {
+	return Catalog.Format(msgs.locale, "filesDownloadFolder", nil)
+}
+
+// FilesTransferReplaceDirBody says "Uploading will merge into and replace matching files in {path} on the selected host."
+// in the language the app shows.
+//
+// Upload confirmation identifies the target folder that will be merged and
+// have matching files replaced.
+func FilesTransferReplaceDirBody(path string) string {
+	return In(i18n.Locale()).FilesTransferReplaceDirBody(path)
+}
+
+// FilesTransferReplaceDirBody says "Uploading will merge into and replace matching files in {path} on the selected host."
+// in the language of msgs.
+//
+// Upload confirmation identifies the target folder that will be merged and
+// have matching files replaced.
+func (msgs Messages) FilesTransferReplaceDirBody(path string) string {
+	return Catalog.Format(msgs.locale, "filesTransferReplaceDirBody", map[string]any{"path": path})
+}
+
+// FilesDownloadReplaceBody says "Downloading will merge into and replace matching files in {path} on this Mac."
+// in the language the app shows.
+//
+// Download confirmation identifies the local folder that will be merged and
+// have matching files replaced.
+func FilesDownloadReplaceBody(path string) string {
+	return In(i18n.Locale()).FilesDownloadReplaceBody(path)
+}
+
+// FilesDownloadReplaceBody says "Downloading will merge into and replace matching files in {path} on this Mac."
+// in the language of msgs.
+//
+// Download confirmation identifies the local folder that will be merged and
+// have matching files replaced.
+func (msgs Messages) FilesDownloadReplaceBody(path string) string {
+	return Catalog.Format(msgs.locale, "filesDownloadReplaceBody", map[string]any{"path": path})
+}
+
+// AppPasteFileError says "Couldn’t send file to terminal: {error}"
+// in the language the app shows.
+//
+// Error bar message when uploading a dropped or copied file to a remote
+// terminal fails.
+func AppPasteFileError(error string) string { return In(i18n.Locale()).AppPasteFileError(error) }
+
+// AppPasteFileError says "Couldn’t send file to terminal: {error}"
+// in the language of msgs.
+//
+// Error bar message when uploading a dropped or copied file to a remote
+// terminal fails.
+func (msgs Messages) AppPasteFileError(error string) string {
+	return Catalog.Format(msgs.locale, "appPasteFileError", map[string]any{"error": error})
+}
+
+// KeysSwitchHostLabel says "Switch Host"
+// in the language the app shows.
+//
+// Shortcut action label for opening the top-bar host switcher menu.
+func KeysSwitchHostLabel() string { return In(i18n.Locale()).KeysSwitchHostLabel() }
+
+// KeysSwitchHostLabel says "Switch Host"
+// in the language of msgs.
+//
+// Shortcut action label for opening the top-bar host switcher menu.
+func (msgs Messages) KeysSwitchHostLabel() string {
+	return Catalog.Format(msgs.locale, "keysSwitchHostLabel", nil)
+}
+
+// SidebarDropRemoteUnsupported says "Use Add Project to select a folder on the remote host"
+// in the language the app shows.
+//
+// Error bar message when dropping a local Finder folder onto the sidebar
+// while viewing a remote host.
+func SidebarDropRemoteUnsupported() string { return In(i18n.Locale()).SidebarDropRemoteUnsupported() }
+
+// SidebarDropRemoteUnsupported says "Use Add Project to select a folder on the remote host"
+// in the language of msgs.
+//
+// Error bar message when dropping a local Finder folder onto the sidebar
+// while viewing a remote host.
+func (msgs Messages) SidebarDropRemoteUnsupported() string {
+	return Catalog.Format(msgs.locale, "sidebarDropRemoteUnsupported", nil)
+}
+
+// SkillsRemoteHint says "Project skills on {host}. Create, install, or toggle skills on the target Mac."
+// in the language the app shows.
+//
+// Hint in the Files Panel Skills tab when viewing a remote workspace.
+func SkillsRemoteHint(host string) string { return In(i18n.Locale()).SkillsRemoteHint(host) }
+
+// SkillsRemoteHint says "Project skills on {host}. Create, install, or toggle skills on the target Mac."
+// in the language of msgs.
+//
+// Hint in the Files Panel Skills tab when viewing a remote workspace.
+func (msgs Messages) SkillsRemoteHint(host string) string {
+	return Catalog.Format(msgs.locale, "skillsRemoteHint", map[string]any{"host": host})
+}
+
+// MemoryRemoteDaemon says "Daemon ({host})"
+// in the language the app shows.
+//
+// Memory popover line label for the remote Posse daemon.
+func MemoryRemoteDaemon(host string) string { return In(i18n.Locale()).MemoryRemoteDaemon(host) }
+
+// MemoryRemoteDaemon says "Daemon ({host})"
+// in the language of msgs.
+//
+// Memory popover line label for the remote Posse daemon.
+func (msgs Messages) MemoryRemoteDaemon(host string) string {
+	return Catalog.Format(msgs.locale, "memoryRemoteDaemon", map[string]any{"host": host})
+}
+
+// MemoryRemoteNote says "Terminal process trees run on {host} and are not counted on this Mac."
+// in the language the app shows.
+//
+// Memory popover note when viewing a remote host.
+func MemoryRemoteNote(host string) string { return In(i18n.Locale()).MemoryRemoteNote(host) }
+
+// MemoryRemoteNote says "Terminal process trees run on {host} and are not counted on this Mac."
+// in the language of msgs.
+//
+// Memory popover note when viewing a remote host.
+func (msgs Messages) MemoryRemoteNote(host string) string {
+	return Catalog.Format(msgs.locale, "memoryRemoteNote", map[string]any{"host": host})
 }

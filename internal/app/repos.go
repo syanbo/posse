@@ -213,6 +213,15 @@ func (a *app) applyRepos(v *filesView, d gitx.Discovery, single bool, mod time.T
 		if id.Root != "" {
 			g.identity = id
 		}
+		if operation := a.workspaceMergeFor(g); operation != nil && operation.pending() {
+			a.holdWorkspaceMerge(operation, g)
+		}
+		if operation := a.historyFor(g); operation != nil && operation.pending() {
+			a.holdHistory(operation, g)
+		}
+		if operation := a.integrateFor(g); operation != nil && operation.pending() {
+			a.holdIntegrate(operation, g)
+		}
 		g.aliases, g.real = r.Aliases, r.Real
 		list = append(list, g)
 	}

@@ -162,9 +162,10 @@ func TestTargetGitLogCommitAndHistory(t *testing.T) {
 		t.Fatal("closed history owns diff")
 	}
 	a.guardPushed(appL(), v.root, "HEAD", func() { t.Error("write confirmation opened") })
-	assertRemoteFileUnsupported(t, a.err, "git.write")
 	a.askMessage(appL(), v.root, "poison", "HEAD", "", func(string) { t.Error("write prompt opened") })
-	assertRemoteFileUnsupported(t, a.err, "git.write")
+	if a.err != "" || a.confirmDo != nil || a.promptDlg != nil {
+		t.Fatal("legacy history helpers were not silent for a desktop target", a.err)
+	}
 }
 
 func TestTargetGitLogLateResults(t *testing.T) {

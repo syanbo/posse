@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 
 	"posse/internal/client"
 	"posse/internal/errtext"
 	"posse/internal/remote"
+	"posse/internal/rpc"
 )
 
 type hostTransport struct {
@@ -89,7 +91,7 @@ func (k *hostConnections) connectRemote(h remote.Host, start bool) {
 	r := &hostAttempt{app: a, ctx: ctx, cancel: cancel}
 	k.active = r
 	generation := a.host.snapshot().Generation
-	opts := remote.Options{Start: start, Required: []string{"rpc.v1", "terminal.stream.v1"}, Prompt: func(ctx context.Context, p remote.Prompt) (string, error) {
+	opts := remote.Options{Start: start, Required: slices.Clone(rpc.RemoteCapabilities), Prompt: func(ctx context.Context, p remote.Prompt) (string, error) {
 		return k.views.local.sshAuth.ask(ctx, h.Name, p, cancel)
 	}}
 	k.jobs.Go(func() {

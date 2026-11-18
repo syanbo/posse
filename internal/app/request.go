@@ -37,6 +37,10 @@ func (r appRequest) current() bool {
 	return r.bound() && r.app.displayed() == r.app
 }
 
+func (r appRequest) canWrite() bool {
+	return r.current() && (r.host == nil || r.snapshot.Controlled)
+}
+
 func (r appRequest) mayWrite() bool {
 	if !r.current() {
 		return false

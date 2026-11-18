@@ -91,6 +91,11 @@ func terminalsFootprint(ws []workspace) int64 {
 
 // loadMemory 在后台统计各终端的进程树。
 func (a *app) loadMemory() {
+	if a.remoteHost() {
+		a.mem.poll.done()
+		a.mem.rows, a.mem.terms = []memWorkspace{}, 0
+		return
+	}
 	type job struct {
 		ws    workspace
 		terms []terminalInfo
@@ -149,6 +154,9 @@ func (a *app) memoryButton(c *ui.Context) {
 	t := c.Theme()
 	m := &a.mem
 	total := a.daemon.FootprintKB + a.selfKB + a.termKB
+	if a.remoteHost() {
+		total = a.daemon.FootprintKB
+	}
 	n := a.daemon.Running
 	b := ui.Row(c.Key("memory")).Height(sz(24)).Padding(0, chipPad).Gap(6).Radius(rRow).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label(L(c).MemoryButtonLabel(mb(total), n)).Tooltip(L(c).MemoryTip())
@@ -219,6 +227,24 @@ func (a *app) memoryPanel(c *ui.Context) {
 	t := c.Theme()
 	l := L(c)
 	m := &a.mem
+	if a.remoteHost() {
+		host := a.hostName(l)
+		ui.Column(c).Width(320).Gap(12).Padding(8, 8, 6, 8).Children(func() {
+			ui.Row(c).AlignItems(ui.Center).Children(func() {
+				titleText(c, l.MemoryTitle(), fsTitle).Grow(1)
+				ui.Text(c, mb(a.daemon.FootprintKB)).FontSize(fsTitle).FontWeight(fwMedium).FontFeatures("tnum")
+			})
+			ui.Column(c).Children(func() {
+				memSection(c, "POSSE", "")
+				memLine(c, "daemon", nil, l.MemoryRemoteDaemon(host), mb(a.daemon.FootprintKB), 1)
+				memLine(c, "window", nil, l.MemoryWindow(fmt.Sprint(os.Getpid())), mb(a.windowOwner().selfKB), 1)
+			})
+			hline(c)
+			ui.Text(c, l.MemoryRemoteNote(host)).
+				FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
+		})
+		return
+	}
 	ui.Column(c).Width(320).Gap(12).Padding(8, 8, 6, 8).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			titleText(c, l.MemoryTitle(), fsTitle).Grow(1)

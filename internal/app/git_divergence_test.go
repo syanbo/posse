@@ -78,25 +78,23 @@ func TestTargetGitDivergenceProduction(t *testing.T) {
 			if s.track.ahead != 2 || s.track.behind != 1 || s.track.base.Ahead != 1 || s.track.base.Behind != 2 {
 				t.Fatal("upstream and base counts mixed")
 			}
-			for _, want := range []string{m.BranchRelativeTo("base-main"), m.BranchConflictCount(1), m.BranchSync(), m.GitMerge()} {
+			for _, want := range []string{m.BranchRelativeTo("base-main"), m.BranchConflictCount(1)} {
 				if !tt.HasText(want) {
 					t.Fatal("missing base row", want, tt.Texts())
 				}
 			}
+
 			for _, label := range []string{m.BranchSync(), m.GitMerge()} {
-				if err := tt.Click(label); err != nil {
-					t.Fatal(err)
-				}
-				tt.Frame()
-				if a.confirmDo != nil || a.confirming || v.git.busy != "" {
-					t.Fatal("read-only button prepared write")
+				if tt.HasText(label) != controlled {
+					t.Fatal("base control visibility", label, tt.Texts())
 				}
 			}
-			for _, run := range []func(){func() { a.syncBase(appL(), &a.workspaces[0], false) }, func() { a.syncBase(appL(), &a.workspaces[0], true) }, func() { a.askMergeWorkspace(appL(), v.wsID) }, func() { a.askMergeRepos(appL(), v.wsID) }} {
-				run()
-				assertRemoteFileUnsupported(t, a.err, "git.write")
-				if a.confirmDo != nil || a.confirming || v.git.busy != "" {
-					t.Fatal("remote write entry prepared callback")
+			if !controlled {
+				for _, run := range []func(){func() { a.syncBase(appL(), &a.workspaces[0], false) }, func() { a.syncBase(appL(), &a.workspaces[0], true) }, func() { a.askMergeWorkspace(appL(), v.wsID) }, func() { a.askMergeRepos(appL(), v.wsID) }} {
+					run()
+					if a.err != "" || a.confirmDo != nil || v.git.busy != "" {
+						t.Fatal("viewer prepared write", a.err)
+					}
 				}
 			}
 			if d.ed.Buffer != buffer || buffer.String() != "unsaved base draft" || v.ch.message != "unsent commit message" {

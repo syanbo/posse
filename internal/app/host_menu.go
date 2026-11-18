@@ -12,9 +12,17 @@ import (
 )
 
 type hostMenuState struct {
-	hosts     []remote.Host
-	names     map[string]string
-	releasing uint64
+	hosts         []remote.Host
+	names         map[string]string
+	releasing     uint64
+	openRequested bool
+}
+
+func (a *app) openHostMenu() {
+	if a.views == nil {
+		return
+	}
+	a.windowOwner().hostMenu.openRequested = true
 }
 
 func (a *app) loadHostMenu() {
@@ -54,7 +62,7 @@ func (a *app) hostMenuButton(c *ui.Context) {
 		return
 	}
 	name := a.hostName(L(c))
-	b := ui.ButtonBase(c.Key("host-menu")).Width(a.hostMenuWidth(c)).Height(compactBox()).Padding(0, 8).Radius(rSmall).Label(name).Tooltip(name)
+	b := ui.ButtonBase(c.Key("host-menu")).Width(a.hostMenuWidth(c)).Height(compactBox()).Padding(0, 8).Radius(rSmall).Label(name).Tooltip(a.withKey(name, "switchHost"))
 	if b.Hovered() {
 		b.Background(colors(c.Theme()).wash)
 	}
@@ -64,6 +72,12 @@ func (a *app) hostMenuButton(c *ui.Context) {
 			ui.Icon(c, iconDown).Size(fsSmall, fsSmall).TextColor(c.Theme().TextMuted).Shrink(0)
 		})
 	})
+	if owner := a.windowOwner(); owner.hostMenu.openRequested {
+		owner.hostMenu.openRequested = false
+		st := menuStateOf(b)
+		st.open = true
+		st.reset()
+	}
 	var build func(*popMenu)
 	menuButton(c, b, func(m *popMenu) {
 		if build == nil {

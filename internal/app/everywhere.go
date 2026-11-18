@@ -117,6 +117,8 @@ var paletteActions = []paletteAction{
 	{id: "newChat", run: func(a *app, m locales.Messages, _ *workspace) { a.openChat(m, true) }},
 	{id: "settings", run: func(a *app, _ locales.Messages, _ *workspace) { a.openSettings() }},
 	{id: "toggleSidebar", run: func(a *app, _ locales.Messages, _ *workspace) { a.toggleSidebar() }},
+	{id: "switchHost", ok: func(a *app, _ *workspace) bool { return a.views != nil },
+		run: func(a *app, _ locales.Messages, _ *workspace) { a.openHostMenu() }},
 	{id: "filesPanel", run: func(a *app, _ locales.Messages, w *workspace) {
 		if a.filesPanelOpen() {
 			a.closeFilesPanel()

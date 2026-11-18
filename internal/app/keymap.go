@@ -79,6 +79,7 @@ var posseKeys = []keyAction{
 	{id: "prevTab", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysPrevTabLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyBracketLeft), k(ui.Ctrl|ui.Shift, ui.KeyTab)}},
 	{id: "selectTab", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysSelectTabLabel, def: []keyCombo{k(ui.Cmd, ui.Key1)}, fixed: true, text: "⌘1…9"},
 	{id: "toggleSidebar", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysToggleSidebarLabel, def: []keyCombo{k(ui.Cmd, ui.KeyB)}},
+	{id: "switchHost", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysSwitchHostLabel, def: []keyCombo{k(ui.Ctrl|ui.Alt, ui.KeyH)}},
 	{id: "zoomIn", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysZoomInLabel, def: []keyCombo{k(ui.Cmd, ui.KeyEqual)}, note: locales.Messages.KeysZoomInNote},
 	{id: "zoomOut", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysZoomOutLabel, def: []keyCombo{k(ui.Cmd, ui.KeyMinus)}, note: locales.Messages.KeysZoomOutNote},
 	{id: "zoomReset", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysZoomResetLabel, def: []keyCombo{k(ui.Cmd, ui.Key0)}, note: locales.Messages.KeysZoomResetNote},

@@ -719,10 +719,10 @@ func (a *app) taskActions(c *ui.Context, task taskInfo) {
 				a.viewDiff(task)
 			}
 			if len(task.Repos) > 0 {
-				if task.Status != "running" && pressable(textButton(c, m.TasksMergeRepos())).Clicked() {
+				if a.pathsControls() && task.Status != "running" && pressable(textButton(c, m.TasksMergeRepos())).Clicked() {
 					a.askMergeRepos(m, task.WorkspaceID)
 				}
-			} else if task.Status != "running" && pressable(textButton(c, m.TasksMergeInto(task.BaseRef))).Clicked() {
+			} else if a.pathsControls() && task.Status != "running" && pressable(textButton(c, m.TasksMergeInto(task.BaseRef))).Clicked() {
 				a.askMergeWorkspace(m, task.WorkspaceID)
 			}
 		}

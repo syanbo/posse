@@ -128,6 +128,15 @@ func (a *app) scanTargetRepos(v *filesView) {
 				if g == nil || g.identity != repo.Identity {
 					g = &gitState{v: v, repo: repo.Root, identity: repo.Identity}
 				}
+				if operation := a.workspaceMergeFor(g); operation != nil && operation.pending() {
+					a.holdWorkspaceMerge(operation, g)
+				}
+				if operation := a.historyFor(g); operation != nil && operation.pending() {
+					a.holdHistory(operation, g)
+				}
+				if operation := a.integrateFor(g); operation != nil && operation.pending() {
+					a.holdIntegrate(operation, g)
+				}
 				g.real, g.aliases = repo.Real, repo.Aliases
 				g.marksOf = nil
 				list = append(list, g)

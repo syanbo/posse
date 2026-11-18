@@ -13,6 +13,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/gitx"
+	"posse/internal/rpc"
 	"posse/locales"
 )
 
@@ -167,7 +168,7 @@ func (a *app) loadCompare(v *filesView, d *fileDoc) {
 
 // selectCommit 选中提交，在后台读它改的文件。
 func (a *app) selectCommit(root string, holder **commitView, c gitx.CommitInfo) {
-	if a.remoteHost() {
+	if a.remoteHost() || a.push != nil && a.push.remote && holder == &a.push.commit {
 		a.selectTargetCommit(root, holder, c)
 		return
 	}
@@ -336,7 +337,7 @@ func (a *app) compareActions(c *ui.Context, w *workspace, v *filesView, d *fileD
 // comparePick 是 Cherry-pick 按钮：把选中的提交按提交先后应用到当前分支。
 // cherry-pick 只能落在检出的分支上，所以选中的提交要都来自另一边、另一边又正好是工作区检出的分支才可点。
 func (a *app) comparePick(c *ui.Context, w *workspace, v *filesView, cd *compareDoc) {
-	if a.remoteHost() {
+	if !a.pathsControls() {
 		return
 	}
 	m := L(c)
@@ -378,9 +379,7 @@ func (a *app) comparePick(c *ui.Context, w *workspace, v *filesView, cd *compare
 		return
 	}
 	if b.Clicked() {
-		a.guardAgent(m, w, m.GitCherryPick(), func() {
-			a.gitDo(m, v.repoOrGone(cd.root), m.GitCherryPick(), func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, hashes...) })
-		})
+		a.integrateCommits(m, w, v, v.repoOrGone(cd.root), rpc.GitIntegrateCherryPick, hashes)
 	}
 }
 
@@ -789,6 +788,7 @@ type pushState struct {
 	repository                                   *gitState
 	view                                         *filesView
 	preview                                      *gitx.PushPreviewRead
+	previewIdentity                              gitx.RepositoryIdentity
 	remote, followHead, loading, waiting, resume bool
 	ws                                           string
 	root                                         string // 推送的仓库
@@ -804,7 +804,7 @@ type pushState struct {
 
 // openPush 推送当前分支。
 func (a *app) openPush(m locales.Messages, w *workspace) {
-	if a.remoteHost() {
+	if a.typedFetch() {
 		a.openTargetPush(w, "")
 		return
 	}
@@ -821,7 +821,7 @@ func (a *app) openPush(m locales.Messages, w *workspace) {
 }
 
 func (a *app) openPushBranch(w *workspace, branch string) {
-	if a.remoteHost() {
+	if a.typedFetch() {
 		a.openTargetPush(w, branch)
 		return
 	}
@@ -878,13 +878,12 @@ func (a *app) pushDialog(c *ui.Context) {
 			dlg.Width(width)
 		}
 		dlg.Children(func() {
-			title := L(c).ComparePushTitle()
-			if ps.remote {
-				title = L(c).PushPreviewTitle()
-			}
-			box.title(c, title)
+			box.title(c, L(c).ComparePushTitle())
 			if ps.remote {
 				ui.Text(c, L(c).PushPreviewNotice()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.4)
+				if s := a.pushFor(ps.repository); s != nil {
+					a.pushOperationState(c, s)
+				}
 				if ps.err != "" {
 					ui.Text(c, ps.err).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.4)
 				}
@@ -982,7 +981,7 @@ func (a *app) pushDialog(c *ui.Context) {
 				}
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Checkbox(c, &ps.tags, L(c).ComparePushTags()).Disabled(ps.remote)
+				ui.Checkbox(c, &ps.tags, L(c).ComparePushTags()).Disabled(ps.pushing)
 				if ps.remote && pressable(textButton(c, L(c).CommonRefresh())).Disabled(ps.loading || ps.waiting).Clicked() {
 					a.loadTargetPush(ps)
 				}
@@ -990,7 +989,10 @@ func (a *app) pushDialog(c *ui.Context) {
 				if pressable(textButton(c, L(c).CommonCancel())).Clicked() {
 					a.closePush(ps)
 				}
-				ready := !ps.remote && ps.loaded && ps.err == "" && (len(ps.plan.Commits) > 0 || ps.plan.NewBranch) && !ps.pushing
+				ready := ps.loaded && ps.err == "" && (len(ps.plan.Commits) > 0 || ps.plan.NewBranch) && !ps.pushing
+				if ps.remote {
+					ready = a.pushWritable(ps)
+				}
 				force := pressable(textButton(c, L(c).CompareForcePushEllipsis())).Tooltip(L(c).CompareForcePushTip())
 				push := pressable(accentButton(c, L(c).ComparePush()))
 				if !ready {
@@ -1002,15 +1004,19 @@ func (a *app) pushDialog(c *ui.Context) {
 					a.doPush(m, v, ps, false)
 				}
 				if ready && force.Clicked() {
-					a.confirm(m.CompareForcePushConfirm(ps.plan.Branch), m.CompareForcePushBody(ps.plan.Remote+"/"+ps.plan.RemoteBranch), m.CompareForcePush(), func() {
-						a.update(func() { a.doPush(m, v, ps, true) })
-					})
+					if ps.remote {
+						a.startPush(m, ps, true)
+					} else {
+						a.confirm(m.CompareForcePushConfirm(ps.plan.Branch), m.CompareForcePushBody(ps.plan.Remote+"/"+ps.plan.RemoteBranch), m.CompareForcePush(), func() {
+							a.update(func() { a.doPush(m, v, ps, true) })
+						})
+					}
 				}
 			})
 		})
 	})
 	box.apply(panel)
-	if !open && ps != nil && !ps.pushing {
+	if !open && ps != nil && (ps.remote || !ps.pushing) {
 		a.closePush(ps)
 	}
 }
@@ -1137,8 +1143,8 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 }
 
 func (a *app) doPush(m locales.Messages, v *filesView, ps *pushState, force bool) {
-	if ps.remote || v.remote || a.remoteHost() {
-		a.err = errtext.Text(targetFileError("git.write"))
+	if ps.remote || v.remote || a.typedFetch() {
+		a.startPush(m, ps, force)
 		return
 	}
 	ps.pushing = true

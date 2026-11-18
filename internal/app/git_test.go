@@ -529,6 +529,8 @@ func TestAutostashBanner(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := a.openFilesPanel(w, sideFiles)
+	tt.Frame()
+	tt.Advance(300 * time.Millisecond)
 	until(t, tt, "status", func() bool { return v.git.status != nil && a.filesPanelShown == 1 })
 	v.side = sideFiles
 	// 照 git 的 --autostash：先储藏、更新到 feat，取回时冲突，再把储藏以 "autostash" 存进列表，命令照样成功
@@ -593,6 +595,8 @@ func TestConflictBanner(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := a.openFilesPanel(w, sideFiles)
+	tt.Frame()
+	tt.Advance(300 * time.Millisecond)
 	until(t, tt, "status", func() bool { return v.git.status != nil && a.filesPanelShown == 1 })
 	v.side = sideFiles
 	a.gitDo(locales.In("zh-Hans"), v.git, "合并", func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, "feat") })
@@ -627,6 +631,8 @@ func TestCommitDuringMerge(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := a.openFilesPanel(w, sideChanges)
+	tt.Frame()
+	tt.Advance(300 * time.Millisecond)
 	until(t, tt, "status", func() bool { return v.git.status != nil && a.filesPanelShown == 1 })
 	a.gitDo(locales.In("zh-Hans"), v.git, "合并", func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, "feat") })
 	until(t, tt, "conflict", func() bool { return v.git.status.Operation == "merge" && v.git.busy == "" })
@@ -934,8 +940,21 @@ func TestAutoFetch(t *testing.T) {
 	until(t, tt, "other repo", func() bool { return ov.git.repo != "" })
 	a.selected = "w1"
 	tt.Frame()
+	// 离屏一帧可能重建多次；拦住 upload-pack，避免 race 下 Fetch 已完成才检查到 busy。
+	gate := t.TempDir()
+	release := filepath.Join(gate, "release")
+	t.Setenv("POSSE_TEST_FETCH_RELEASE", release)
+	uploadPack := filepath.Join(gate, "upload-pack")
+	if err := os.WriteFile(uploadPack, []byte("#!/bin/sh\nwhile [ ! -e \"$POSSE_TEST_FETCH_RELEASE\" ]; do sleep 0.01; done\nexec git-upload-pack \"$@\"\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.WriteFile(release, nil, 0600) })
+	gitRun(t, root, "config", "remote.origin.uploadpack", uploadPack)
 	a.fetchAt[w.ProjectID] = time.Time{} // 当作五分钟到了
 	until(t, tt, "other busy", func() bool { return ov.git.busy == "Fetch" })
+	if err := os.WriteFile(release, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
 	until(t, tt, "fetched", func() bool { return trackOf(a, "w1").behind == 1 && len(d.comp.onlyOther) == 1 && ov.git.busy == "" })
 
 	// 手动 Fetch 同样重读

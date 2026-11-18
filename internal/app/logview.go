@@ -13,6 +13,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/gitx"
+	"posse/internal/rpc"
 	"posse/locales"
 )
 
@@ -784,75 +785,61 @@ func refNames(d string) []refName {
 // commitMenu 是日志里一个提交的操作；改写历史的几项只对当前分支上的提交有效（gitx 会检查）。
 func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, d *fileDoc, ci gitx.CommitInfo) {
 	lm := L(c)
-	short := ci.Hash[:7]
-	// 做完由 gitDo 里的 refsChanged 重读日志，翻过的页数一起读回来
-	do := func(what string, fn func(ctx context.Context, root string) error) {
-		a.guardAgent(lm, w, what, func() { a.gitDo(lm, v.repoOrGone(d.log.root), what, fn) })
-	}
 	if m.Item(lm.LogCopyHash()).Chosen() {
 		c.WriteClipboard(ci.Hash)
 	}
-	if a.remoteHost() {
+	if !a.branchControls() && a.remoteHost() {
 		return
 	}
 	m.Separator()
-	if m.Item(lm.LogCheckoutCommit()).Chosen() {
-		do(lm.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, ci.Hash) })
+	if a.branchControls() && m.Item(lm.LogCheckoutCommit()).Chosen() {
+		a.checkoutCommit(lm, w, v, v.repoOrGone(d.log.root), ci.Hash)
 	}
-	if m.Item(lm.LogNewBranch()).Chosen() {
+	if a.branchControls() && m.Item(lm.LogNewBranch()).Chosen() {
 		a.askNewBranch(lm, w, v, ci.Hash)
 	}
 	m.Separator()
-	if m.Item(lm.GitCherryPick()).Icon(iconCherryPick).Chosen() {
-		do(lm.GitCherryPick(), func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, ci.Hash) })
+	if a.pathsControls() && m.Item(lm.GitCherryPick()).Icon(iconCherryPick).Chosen() {
+		a.integrateCommits(lm, w, v, v.repoOrGone(d.log.root), rpc.GitIntegrateCherryPick, []string{ci.Hash})
 	}
+	revertItem := func() {
+		if a.pathsControls() && m.Item(lm.LogRevertCommit()).Chosen() {
+			a.integrateCommits(lm, w, v, v.repoOrGone(d.log.root), rpc.GitIntegrateRevert, []string{ci.Hash})
+		}
+	}
+
+	if !a.pathsControls() {
+		return
+	}
+	g := v.repoOrGone(d.log.root)
 	m.Submenu(lm.LogResetHere(), func(sm *popMenu) {
 		if sm.Item(lm.LogSoftReset()).Chosen() {
-			do(lm.LogReset(), func(ctx context.Context, root string) error { return gitx.Reset(ctx, root, ci.Hash, "soft") })
+			a.historyAction(lm, w, v, g, ci, rpc.GitHistoryReset, "soft")
 		}
 		if sm.Item(lm.LogMixedReset()).Chosen() {
-			do(lm.LogReset(), func(ctx context.Context, root string) error { return gitx.Reset(ctx, root, ci.Hash, "mixed") })
+			a.historyAction(lm, w, v, g, ci, rpc.GitHistoryReset, "mixed")
 		}
 		if sm.Item(lm.LogHardResetEllipsis()).Chosen() {
-			a.confirm(lm.LogHardResetConfirm(short), lm.LogHardResetBody(), lm.LogHardReset(), func() {
-				a.update(func() {
-					do(lm.LogReset(), func(ctx context.Context, root string) error { return gitx.Reset(ctx, root, ci.Hash, "hard") })
-				})
-			})
+			a.historyAction(lm, w, v, g, ci, rpc.GitHistoryReset, "hard")
 		}
 	})
-	if m.Item(lm.LogRevertCommit()).Chosen() {
-		do(lm.GitRevert(), func(ctx context.Context, root string) error { return gitx.RevertCommit(ctx, root, ci.Hash) })
-	}
+	revertItem()
 	m.Separator()
 	if m.Item(lm.LogRewordEllipsis()).Chosen() {
-		a.guardPushed(lm, d.log.root, ci.Hash, func() {
-			a.askMessage(lm, d.log.root, lm.LogRewordTitle(short), ci.Hash, "", func(msg string) {
-				do(lm.LogReword(), func(ctx context.Context, root string) error { return gitx.Reword(ctx, root, ci.Hash, msg) })
-			})
-		})
+		a.historyAction(lm, w, v, g, ci, rpc.GitHistoryReword, "")
 	}
 	if len(ci.Parents) == 1 && m.Item(lm.LogSquashEllipsis()).Chosen() {
-		a.guardPushed(lm, d.log.root, ci.Parents[0], func() {
-			a.askMessage(lm, d.log.root, lm.LogSquashTitle(), ci.Parents[0], ci.Hash, func(msg string) {
-				do(lm.LogSquash(), func(ctx context.Context, root string) error { return gitx.SquashIntoParent(ctx, root, ci.Hash, msg) })
-			})
-		})
+		a.historyAction(lm, w, v, g, ci, rpc.GitHistorySquash, "")
 	}
 	if m.Item(lm.LogDropEllipsis()).Chosen() {
-		a.guardPushed(lm, d.log.root, ci.Hash, func() {
-			a.confirm(lm.LogDropConfirm(short), lm.LogDropBody(ci.Subject), lm.LogDrop(), func() {
-				a.update(func() {
-					do(lm.LogDrop(), func(ctx context.Context, root string) error { return gitx.Drop(ctx, root, ci.Hash) })
-				})
-			})
-		})
+		a.historyAction(lm, w, v, g, ci, rpc.GitHistoryDrop, "")
 	}
+
 }
 
 // guardPushed 在改写从 oldest 开始的历史之前查它推送过没有：推送过的先说明之后要强制推送，确认了再继续。
 func (a *app) guardPushed(m locales.Messages, root, oldest string, then func()) {
-	if a.targetFileUnsupported("git.write") {
+	if a.typedFetch() {
 		return
 	}
 	go func() {
@@ -875,7 +862,7 @@ func (a *app) guardPushed(m locales.Messages, root, oldest string, then func()) 
 
 // askMessage 读出提交信息（两个提交时拼在一起）填进输入框，让用户改完再执行。
 func (a *app) askMessage(m locales.Messages, root, title, hash, second string, do func(string)) {
-	if a.targetFileUnsupported("git.write") {
+	if a.typedFetch() {
 		return
 	}
 	go func() {

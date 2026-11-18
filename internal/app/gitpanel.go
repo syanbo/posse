@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -13,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 
 	"posse/internal/gitx"
+	"posse/internal/rpc"
 	"posse/locales"
 )
 
@@ -172,7 +172,7 @@ func (a *app) changesKeys(c *ui.Context, w *workspace, v *filesView, rows []chan
 	r := rows[files[cur]]
 	e := r.entry
 	switch {
-	case !a.remoteHost() && list.Shortcut(c, 0, ui.KeySpace):
+	case a.pathsControls() && list.Shortcut(c, 0, ui.KeySpace):
 		r.g.setPicked(e, !r.g.picked(e))
 	case list.Shortcut(c, 0, ui.KeyEnter):
 		if statusLetter(e) != 'D' {
@@ -249,15 +249,11 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		if pressable(iconButtonSized(c, iconRefresh, L(c).CommonRefresh(), buttonBox(), iconSize)).Clicked() {
 			a.rescanRepos(v)
 		}
-		if !a.remoteHost() && v.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, a.withKey(L(c).GitRollbackEllipsis(), "rollback"), buttonBox(), iconSize)).Clicked() {
+		if a.pathsControls() && v.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, a.withKey(L(c).GitRollbackEllipsis(), "rollback"), buttonBox(), iconSize)).Clicked() {
 			a.openRollback(v)
 		}
-		if !a.remoteHost() && g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, L(c).GitStashTip(), buttonBox(), iconSize)).Clicked() {
-			m := L(c)
-			a.prompt(promptReq{title: m.GitStashTitle(), body: m.GitStashBody(),
-				placeholder: m.GitStashMessage(), verb: m.GitStash(), optional: true, do: func(msg string, _ bool) {
-					a.gitDo(m, g, m.GitStash(), func(ctx context.Context, root string) error { return gitx.StashPush(ctx, root, msg) })
-				}})
+		if a.pathsControls() && g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, L(c).GitStashTip(), buttonBox(), iconSize)).Clicked() {
+			a.stashPush(L(c), v, g)
 		}
 	})
 }
@@ -300,7 +296,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			title := groupTitles[r.group](L(c))
 			disclosure(c, open, L(c).GitExpandGroup(title), L(c).GitCollapseGroup(title))
 			// 改动和未跟踪的组标题能一键全选、全不选
-			if !a.remoteHost() && (r.group == groupChanged || r.group == groupUntracked) {
+			if a.pathsControls() && (r.group == groupChanged || r.group == groupUntracked) {
 				var in []gitx.Entry
 				for _, e := range g.status.Entries {
 					if !e.Conflict && e.Untracked == (r.group == groupUntracked) {
@@ -349,7 +345,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			// 文件没有展开箭头，留出同样的宽度，勾选框和同一层的目录对齐
 			ui.Box(c).Width(miniBox()).Shrink(0)
 		}
-		if !a.remoteHost() && !e.Conflict {
+		if a.pathsControls() && !e.Conflict {
 			state := pickNone
 			if g.picked(e) {
 				state = pickAll
@@ -377,7 +373,9 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		}
 	})
 	if letter != 'D' {
-		a.dragPath(row, g.absPath(e.Path))
+		if !a.remoteHost() {
+			a.dragPath(row, g.absPath(e.Path))
+		}
 	}
 	if row.Clicked() {
 		if e.Conflict {
@@ -392,42 +390,38 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		if letter != 'D' && m.Item(L(c).GitOpenFile()).Chosen() {
 			a.openFile(w, g.absPath(e.Path), 0, [2]int{})
 		}
-		if a.remoteHost() {
-			if m.Item(L(c).CommonCopyPath()).Chosen() {
-				c.WriteClipboard(g.absPath(e.Path))
-			}
-			return
-		}
 		m.Separator()
-		switch {
-		case e.Untracked:
-			if m.Item(L(c).GitAdd()).Chosen() {
-				a.gitDo(L(c), g, L(c).GitAdd(), func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
+		if a.pathsControls() {
+			switch {
+			case e.Untracked:
+				if m.Item(L(c).GitAdd()).Chosen() {
+					a.pathAction(L(c), g, L(c).GitAdd(), rpc.GitPathsStage, e, false)
+				}
+			case e.Conflict:
+				ours, theirs := sideNames(L(c), g.status.Operation, g.autostash != "" && g.autostashConflicts)
+				if m.Item(L(c).GitAcceptSide(ours)).Chosen() {
+					a.pathAction(L(c), g, L(c).GitResolve(), rpc.GitPathsTake, e, true)
+				}
+				if m.Item(L(c).GitAcceptSide(theirs)).Chosen() {
+					a.pathAction(L(c), g, L(c).GitResolve(), rpc.GitPathsTake, e, false)
+				}
+				if m.Item(L(c).GitMarkResolvedLabel()).Chosen() {
+					a.pathAction(L(c), g, L(c).GitMarkResolved(), rpc.GitPathsResolve, e, false)
+				}
 			}
-		case e.Conflict:
-			ours, theirs := sideNames(L(c), g.status.Operation, g.autostash != "" && g.autostashConflicts)
-			if m.Item(L(c).GitAcceptSide(ours)).Chosen() {
-				a.gitDo(L(c), g, L(c).GitResolve(), func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, e.Path, true) })
-			}
-			if m.Item(L(c).GitAcceptSide(theirs)).Chosen() {
-				a.gitDo(L(c), g, L(c).GitResolve(), func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, e.Path, false) })
-			}
-			if m.Item(L(c).GitMarkResolvedLabel()).Chosen() {
-				a.gitDo(L(c), g, L(c).GitMarkResolved(), func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
-			}
-		}
-		if !e.Conflict {
-			label := L(c).GitRollbackEllipsis()
-			if e.Untracked {
-				label = L(c).CommonDeleteEllipsis()
-			}
-			if m.Item(label).Keys(a.keyText("rollback")).Chosen() {
-				a.openRollbackFor(g, []string{e.Path}, nil)
+			if !e.Conflict {
+				label := L(c).GitRollbackEllipsis()
+				if e.Untracked {
+					label = L(c).CommonDeleteEllipsis()
+				}
+				if m.Item(label).Keys(a.keyText("rollback")).Chosen() {
+					a.openRollbackFor(g, []string{e.Path}, nil)
+				}
 			}
 		}
 		m.Separator()
 		abs := g.absPath(e.Path)
-		if letter != 'D' && m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
+		if !a.remoteHost() && letter != 'D' && m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
 			mygo.Shell.ShowItemInFolder(abs)
 		}
 		if m.Item(L(c).CommonCopyPath()).Chosen() {
@@ -449,7 +443,7 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 		if open == folds[r.path] {
 			folds[r.path] = !open
 		}
-		if !a.remoteHost() && r.group != groupConflict {
+		if a.pathsControls() && r.group != groupConflict {
 			state := g.pickState(r.files)
 			if pickBox(c, "dir:"+r.path, r.path, state) {
 				g.setPickedAll(r.files, state != pickAll)
@@ -461,13 +455,7 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 		folds[r.path] = !folds[r.path]
 	}
 	contextMenu(c, row, func(m *popMenu) {
-		if a.remoteHost() {
-			if m.Item(L(c).CommonCopyPath()).Chosen() {
-				c.WriteClipboard(g.absPath(r.path))
-			}
-			return
-		}
-		if r.group != groupConflict {
+		if a.pathsControls() && r.group != groupConflict {
 			label := L(c).GitRollbackEllipsis()
 			if r.group == groupUntracked {
 				label = L(c).CommonDeleteEllipsis()
@@ -484,7 +472,7 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 		abs := g.absPath(r.path)
 		// 里面的文件全删了时目录可能已经不在
 		exists := slices.ContainsFunc(r.files, func(e gitx.Entry) bool { return statusLetter(e) != 'D' })
-		if exists && m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
+		if !a.remoteHost() && exists && m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
 			mygo.Shell.ShowItemInFolder(abs)
 		}
 		if m.Item(L(c).CommonCopyPath()).Chosen() {
@@ -512,24 +500,10 @@ func (a *app) stashRow(c *ui.Context, v *filesView, g *gitState, s gitx.Stash) {
 		}
 		ui.Text(c, ago(L(c), s.When)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 	})
-	if a.remoteHost() {
+	if !a.pathsControls() {
 		return
 	}
 	owner := a.stashOwner(v, other)
-	// 储藏是条目所属仓库的；确认框晚些才回来，那时当前仓库可能换了
-	take := func(what string, fn func(ctx context.Context, root string) error) {
-		if other == "" {
-			a.gitDo(lm, g, what, fn)
-			return
-		}
-		where := lm.GitStashWhereBranch(other)
-		if owner != nil {
-			where = lm.GitStashWhereWorkspace(displayName(owner), other)
-		}
-		a.confirm(lm.GitStashOtherConfirm(what), lm.GitStashOtherBody(where, what), lm.GitOperationAnyway(what), func() {
-			a.update(func() { a.gitDo(lm, g, what, fn) })
-		})
-	}
 	menuButton(c, row, func(m *popMenu) {
 		if owner != nil && m.Item(lm.GitSwitchToWorkspace(displayName(owner))).Chosen() {
 			a.selected, a.revealSel = owner.ID, true
@@ -537,18 +511,14 @@ func (a *app) stashRow(c *ui.Context, v *filesView, g *gitState, s gitx.Stash) {
 		}
 		// 照 WebStorm 储藏标签的右键：弹出（取回并删掉）、应用（储藏留着）、删除
 		if m.Item(lm.GitStashPop()).Chosen() {
-			take(lm.GitStashPopOperation(), func(ctx context.Context, root string) error { return gitx.StashPop(ctx, root, s.Ref) })
+			a.stashTake(lm, v, g, s, rpc.GitStashPop, lm.GitStashPopOperation(), other, owner)
 		}
 		if m.Item(lm.GitStashApply()).Chosen() {
-			take(lm.GitStashApplyOperation(), func(ctx context.Context, root string) error { return gitx.StashApply(ctx, root, s.Ref) })
+			a.stashTake(lm, v, g, s, rpc.GitStashApply, lm.GitStashApplyOperation(), other, owner)
 		}
 		m.Separator()
 		if m.Item(lm.CommonDeleteEllipsis()).Chosen() {
-			a.confirm(lm.GitStashDeleteConfirm(), lm.GitStashDeleteBody(s.Message), lm.CommonDelete(), func() {
-				a.update(func() {
-					a.gitDo(lm, g, lm.GitStashDelete(), func(ctx context.Context, root string) error { return gitx.StashDrop(ctx, root, s.Ref) })
-				})
-			})
+			a.stashDrop(lm, v, g, s, false)
 		}
 	})
 }
@@ -556,7 +526,7 @@ func (a *app) stashRow(c *ui.Context, v *filesView, g *gitState, s gitx.Stash) {
 // stashOwner 找同一项目里当前检出 branch 的工作区；没有（分支没人检出、不是同一项目）为 nil。
 func (a *app) stashOwner(v *filesView, branch string) *workspace {
 	cur := a.workspace(v.wsID)
-	if branch == "" || cur == nil {
+	if branch == "" || cur == nil || v.remote != a.remoteHost() {
 		return nil
 	}
 	for _, w := range a.byProject[cur.ProjectID] {
@@ -617,7 +587,7 @@ func (a *app) operationBanner(c *ui.Context, w *workspace, v *filesView, g *gitS
 	ui.Column(c.Key("op:"+g.repo)).Shrink(0).Margin(2, 12, 8, 12).Padding(12, 12).Gap(8).Radius(rControl).Background(t.Surface).Children(func() {
 		bannerRepo(c, v, g)
 		ui.Text(c, msg).FontSize(fsSmall).LineHeight(1.45)
-		if a.remoteHost() {
+		if !a.pathsControls() {
 			return
 		}
 		ui.Row(c).Gap(6).Children(func() {
@@ -625,17 +595,13 @@ func (a *app) operationBanner(c *ui.Context, w *workspace, v *filesView, g *gitS
 			if conflicts > 0 {
 				cont.Disabled(true)
 			} else if cont.Clicked() {
-				a.gitDo(m, g, m.GitContinueOperation(name), func(ctx context.Context, root string) error { return gitx.Continue(ctx, root, op) })
+				a.integrateProgress(m, w, v, g, rpc.GitIntegrateContinue, op)
 			}
 			if (op == "rebase" || op == "cherry-pick") && pressable(textButton(c, m.GitSkipCommit())).Clicked() {
-				a.gitDo(m, g, m.GitSkip(), func(ctx context.Context, root string) error { return gitx.Skip(ctx, root, op) })
+				a.integrateProgress(m, w, v, g, rpc.GitIntegrateSkip, op)
 			}
 			if pressable(textButton(c, m.GitAbort())).Clicked() {
-				a.confirm(m.GitAbortConfirm(name), m.GitAbortBody(name), m.GitAbort(), func() {
-					a.update(func() {
-						a.gitDo(m, g, m.GitAbort(), func(ctx context.Context, root string) error { return gitx.Abort(ctx, root, op) })
-					})
-				})
+				a.integrateProgress(m, w, v, g, rpc.GitIntegrateAbort, op)
 			}
 		})
 	})
@@ -653,8 +619,12 @@ func (a *app) autostashBanner(c *ui.Context, v *filesView, g *gitState) {
 	if slices.ContainsFunc(g.stashes, func(s gitx.Stash) bool { return s.Hash == hash }) {
 		g.autostashSeen = true
 	} else if g.autostashSeen {
-		g.autostash = ""
-		return
+		// 已接受的删除由原连接的成功结果清横幅，迟到的列表不能替它确认完成。
+		s := a.stashFor(g)
+		if !a.typedFetch() || s == nil || s.params.OID != hash {
+			g.autostash = ""
+			return
+		}
 	}
 	t := c.Theme()
 	m := L(c)
@@ -682,17 +652,13 @@ func (a *app) autostashBanner(c *ui.Context, v *filesView, g *gitState) {
 			}
 		})
 		ui.Row(c).Gap(6).Children(func() {
-			if g.autostashConflicts && conflicts == 0 {
+			if a.pathsControls() && g.autostashConflicts && conflicts == 0 {
 				drop := pressable(accentButton(c, L(c).GitStashDeleteEllipsis()))
-				if g.busy != "" {
+				if g.busy != "" && !(a.typedFetch() && a.stashWritable(v, g)) {
 					drop.Disabled(true)
 				}
 				if drop.Clicked() {
-					a.confirm(m.GitStashDeleteConfirm(), m.GitAutostashDeleteBody(), m.CommonDelete(), func() {
-						a.update(func() {
-							a.gitDo(m, g, m.GitStashDelete(), func(ctx context.Context, root string) error { return gitx.StashDropHash(ctx, root, hash) })
-						})
-					})
+					a.stashDrop(m, v, g, gitx.Stash{Hash: hash}, true)
 				}
 			}
 			if pressable(textButton(c, L(c).GitViewStash())).Clicked() {
@@ -758,14 +724,14 @@ func (a *app) repoHeaderRow(c *ui.Context, w *workspace, v *filesView, r changeR
 		trackBadge(c, g.status.Ahead, g.status.Behind, true)
 	})
 	contextMenu(c, head, func(m *popMenu) {
+		if a.pathsControls() && m.Item(L(c).GitRollbackEllipsis()).Chosen() {
+			a.openRollbackFor(g, nil, nil)
+		}
 		if a.remoteHost() {
 			if m.Item(L(c).CommonCopyPath()).Chosen() {
 				c.WriteClipboard(g.repo)
 			}
 			return
-		}
-		if m.Item(L(c).GitRollbackEllipsis()).Chosen() {
-			a.openRollbackFor(g, nil, nil)
 		}
 		if m.Item(L(c).GitLogTitle()).Chosen() {
 			a.useRepo(v, g)
@@ -795,7 +761,7 @@ func stashTitle(msg string) string {
 
 // commitBox 是左栏底部的提交框：提交信息、修改上一次提交、提交按钮。勾了几个仓库的文件时在各仓库分别提交。
 func (a *app) commitBox(c *ui.Context, v *filesView) {
-	if a.remoteHost() {
+	if !a.pathsControls() {
 		return
 	}
 	ch := &v.ch
@@ -827,7 +793,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 	busy := false
 	for _, t := range targets {
 		// 自动 Fetch 期间也能点，提交排在它后面
-		if t.g.busy != "" && t.g.busyKind != gitFetch || t.g.pending(gitCommit) {
+		if (t.g.busy != "" && t.g.busyKind != gitFetch || t.g.pending(gitCommit)) && !(a.typedFetch() && a.commitWritable(v, t.g)) {
 			busy = true
 		}
 	}
@@ -871,7 +837,7 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 	df.state.Bindings = a.editorBindings()
 	// 左右对照时照 WebStorm 在中间分隔线旁给每处改动放 >>，上下合并时只有悬停的那处有"回滚"
 	split := df.state.Layout == editor.DiffSplit
-	writable := df.worktree() && !a.remoteHost() && a.request().mayWrite()
+	writable := df.worktree() && a.pathsControls()
 	df.state.HunkActions = writable && !split
 	df.state.RenderHunkActions = nil
 	df.state.RenderHunkMark = nil
@@ -1031,7 +997,7 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		if df.worktreeBase != nil && pressable(iconButtonSized(c, iconRefresh, L(c).CompareRefresh(), compactBox(), smallIcon())).Clicked() {
 			a.refreshWorktreeDiff(w, v, d)
 		}
-		if df.worktree() && !a.remoteHost() && a.request().mayWrite() && pressable(iconButtonSized(c, iconRollback, L(c).GitRollbackFile(), compactBox(), smallIcon())).Clicked() {
+		if df.worktree() && a.pathsControls() && pressable(iconButtonSized(c, iconRollback, L(c).GitRollbackFile(), compactBox(), smallIcon())).Clicked() {
 			a.rollbackDiffFile(w, v, d)
 		}
 		canOpen := df.worktreeBase == nil || df.worktreeBase.file.Kind == "file"

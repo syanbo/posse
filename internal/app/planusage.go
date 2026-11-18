@@ -355,7 +355,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 	now := time.Now()
 	// 打开的浮层也补查，不能靠后台更新恰好触发重建；失败时同样等一分钟再试。
 	c.After(time.Minute)
-	if st := a.daemon.Usage; a.c != nil && st != nil && !st.CodexOff && !slices.Contains(a.disabled, "codex") && !a.planBusy && time.Since(a.planAutoAt) >= time.Minute {
+	if st := a.daemon.Usage; a.c != nil && a.request().canWrite() && st != nil && !st.CodexOff && !slices.Contains(a.disabled, "codex") && !a.planBusy && time.Since(a.planAutoAt) >= time.Minute {
 		a.planAutoAt = now
 		a.refreshPlanQuery(L(c), map[string]any{"agent": "codex", "force": false})
 	}
@@ -367,7 +367,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 			if a.planBusy {
 				ui.Row(c.Key("plan-refreshing")).Size(buttonBox(), buttonBox()).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).AlignItems(ui.Center).
 					Tooltip(L(c).UsageRefreshing()).Children(func() { ui.Spinner(c).Label(L(c).UsageRefreshing()) })
-			} else if pressable(iconButtonSized(c.Key("plan-refresh"), iconRefresh, L(c).UsageRefreshTip(), buttonBox(), iconSize)).Clicked() {
+			} else if a.request().canWrite() && pressable(iconButtonSized(c.Key("plan-refresh"), iconRefresh, L(c).UsageRefreshTip(), buttonBox(), iconSize)).Clicked() {
 				a.refreshPlan(L(c))
 			}
 			sel := 0
@@ -450,7 +450,8 @@ func (a *app) refreshPlan(m locales.Messages) {
 }
 
 func (a *app) refreshPlanQuery(m locales.Messages, params map[string]any) {
-	if a.planBusy {
+	r := a.request()
+	if a.planBusy || !r.canWrite() {
 		return
 	}
 	a.planBusy = true
@@ -458,9 +459,17 @@ func (a *app) refreshPlanQuery(m locales.Messages, params map[string]any) {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
 		var st planStatus
-		err := a.c.Call(ctx, "usage.refresh", params, &st)
+		var err error
+		if r.client != nil && r.client.Desktop != nil {
+			err = r.client.Call(ctx, "usage.refresh", params, &st)
+		} else {
+			err = a.c.Call(ctx, "usage.refresh", params, &st)
+		}
 		a.update(func() {
 			a.planBusy = false
+			if !r.current() {
+				return
+			}
 			var re *rpc.Error
 			switch {
 			case errors.As(err, &re) && re.Code == rpc.CodeUnknown:

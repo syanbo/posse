@@ -33,31 +33,40 @@ const (
 
 // gitState 是工作区里一个仓库的 Git 状态（找仓库见 repos.go）。
 type gitState struct {
-	identity   gitx.RepositoryIdentity
-	statusRead gitRead
-	branchRead gitRead
-	baseTrack  *targetBaseState
-	v          *filesView
-	repo       string   // 仓库根目录，工作区里的写法（经过软链时是软链的路径）；工作区里没有仓库时为空
-	aliases    []string // 同一个仓库经别的软链进来的写法
-	status     *gitx.Status
-	head       map[string]gitx.LineStats // 相对 HEAD 的增删行数，改动列表显示
-	headRef    string                    // 检出的分支（游离时是哈希前 8 位），gitBranch 一秒最多读一次
-	headAt     time.Time
-	picks      map[string]bool // 勾选提交的文件里用户改过的；没改过的用默认（见 picked）
-	stashes    []gitx.Stash
-	real       string // 解析过软链的根目录：终端里的 git 命令按它归到工作区（runWorkspace）
-	rows       []changeRow
-	folded     map[changeGroup]*bool // 改动列表里收起的组；没有记录是展开
-	closed     bool                  // 多个仓库时改动页里收起了这个仓库
-	poll       panelPoll
-	pollAgain  bool    // 读的期间要求重读（refreshRepo），读完再读一次
-	busy       string  // 正在执行的操作，期间按钮不可点
-	busyKind   gitKind // 正在执行的操作的代号，逻辑按它判断，busy 只用来显示
-	queue      []gitOp
-	cancel     context.CancelFunc // 正在执行的是网络操作时可以取消
-	err        string
-	branches   branchInfo
+	identity           gitx.RepositoryIdentity
+	statusRead         gitRead
+	branchRead         gitRead
+	baseTrack          *targetBaseState
+	v                  *filesView
+	repo               string   // 仓库根目录，工作区里的写法（经过软链时是软链的路径）；工作区里没有仓库时为空
+	aliases            []string // 同一个仓库经别的软链进来的写法
+	status             *gitx.Status
+	head               map[string]gitx.LineStats // 相对 HEAD 的增删行数，改动列表显示
+	headRef            string                    // 检出的分支（游离时是哈希前 8 位），gitBranch 一秒最多读一次
+	headAt             time.Time
+	picks              map[string]bool // 勾选提交的文件里用户改过的；没改过的用默认（见 picked）
+	stashes            []gitx.Stash
+	real               string // 解析过软链的根目录：终端里的 git 命令按它归到工作区（runWorkspace）
+	rows               []changeRow
+	folded             map[changeGroup]*bool // 改动列表里收起的组；没有记录是展开
+	closed             bool                  // 多个仓库时改动页里收起了这个仓库
+	poll               panelPoll
+	pollAgain          bool    // 读的期间要求重读（refreshRepo），读完再读一次
+	busy               string  // 正在执行的操作，期间按钮不可点
+	busyKind           gitKind // 正在执行的操作的代号，逻辑按它判断，busy 只用来显示
+	busyPush           *targetPushOperation
+	busyUpdate         *targetUpdateOperation
+	busyBranch         *targetBranchOperation
+	busyPaths          *targetPathsOperation
+	busyCommit         *targetCommitOperation
+	busyStash          *targetStashOperation
+	busyWorkspaceMerge *targetWorkspaceMerge
+	busyHistory        *targetHistoryOperation
+	busyIntegrate      *targetIntegrateOperation
+	queue              []gitOp
+	cancel             context.CancelFunc // 正在执行的是网络操作时可以取消
+	err                string
+	branches           branchInfo
 	// dirFolded 是按目录分组时各组里收起的目录
 	dirFolded map[changeGroup]map[string]bool
 	// autostash 是这个工作区里的操作（更新、改写提交）留在储藏里的本地改动（储藏的提交），横幅引去处理；
@@ -540,7 +549,7 @@ func clampHunk(df *diffDoc) {
 
 // loadDiff 在后台读两边的内容。
 func (a *app) loadDiff(v *filesView, d *fileDoc) {
-	if a.remoteHost() {
+	if a.remoteHost() || v.push != nil && v.push.remote && v.push.detail == d {
 		a.loadTargetDiff(v, d)
 		return
 	}
@@ -758,7 +767,11 @@ func diffJump(df *diffDoc) {
 
 // revertHunk 回滚工作区 diff 里的一处改动，立刻写回磁盘（和 WebStorm 一样不用再保存）。
 func (a *app) revertHunk(m locales.Messages, v *filesView, d *fileDoc, i int) {
-	if a.targetFileUnsupported("git.write") {
+	if !a.pathsControls() {
+		return
+	}
+	if a.typedFetch() {
+		a.targetRevertHunk(m, v, d, i)
 		return
 	}
 	df := d.diff
@@ -820,6 +833,37 @@ func (a *app) gitStart(g *gitState, op gitOp) {
 		op.fail(a, op.m.GitOperationFailed(op.what, errtext.Text(errRepoGone)))
 		return
 	}
+	// Fetch 开始后才打开的工作区也共用原操作的占用，不能绕过它直接改引用。
+	if s := a.fetchFor(g); s != nil && s.automatic && s.pending() {
+		a.holdAutoFetch(s, []*gitState{g})
+	}
+	if s := a.pushFor(g); s != nil && s.pending() {
+		a.holdPush(s, g)
+	}
+	if s := a.updateFor(g); s != nil && s.pending() {
+		a.holdUpdate(s, g)
+	}
+	if s := a.branchFor(g); s != nil && s.pending() {
+		a.holdBranch(s, g)
+	}
+	if s := a.pathsFor(g); s != nil && s.pending() {
+		a.holdPaths(s, g)
+	}
+	if s := a.commitFor(g); s != nil && s.pending() {
+		a.holdCommit(s, g)
+	}
+	if s := a.workspaceMergeFor(g); s != nil && s.pending() {
+		a.holdWorkspaceMerge(s, g)
+	}
+	if s := a.historyFor(g); s != nil && s.pending() {
+		a.holdHistory(s, g)
+	}
+	if s := a.stashFor(g); s != nil && s.pending() {
+		a.holdStash(s, g)
+	}
+	if s := a.integrateFor(g); s != nil && s.pending() {
+		a.holdIntegrate(s, g)
+	}
 	if g.busy != "" {
 		g.queue = append(g.queue, op)
 		return
@@ -872,11 +916,13 @@ func (a *app) notify(title, action string, onAction func()) {
 
 // gitOp 是一个排队等着执行的 git 操作。
 type gitOp struct {
-	m    locales.Messages
-	kind gitKind
-	what string
-	fn   func(ctx context.Context, root string) error
-	done func()
+	// ready 在原队列让出仓库后派发已确认的目标操作，不在后台运行本机 Git。
+	ready func()
+	m     locales.Messages
+	kind  gitKind
+	what  string
+	fn    func(ctx context.Context, root string) error
+	done  func()
 	// failed 在失败或取消时代替直接写错误条：一次点击发起几个操作（跨仓库提交）时把报错攒在一起
 	failed func(msg string)
 }
@@ -893,10 +939,14 @@ func (op gitOp) fail(a *app, msg string) {
 type gitKind string
 
 const (
-	gitFetch  gitKind = "fetch"
-	gitPush   gitKind = "push"
-	gitUpdate gitKind = "update"
-	gitCommit gitKind = "commit"
+	gitFetch     gitKind = "fetch"
+	gitPush      gitKind = "push"
+	gitUpdate    gitKind = "update"
+	gitBranch    gitKind = "branch"
+	gitPaths     gitKind = "paths"
+	gitCommit    gitKind = "commit"
+	gitStash     gitKind = "stash"
+	gitIntegrate gitKind = "integrate"
 )
 
 // pending 报告 kind 这种操作正在执行或排着队。
@@ -911,7 +961,7 @@ func busyLine(c *ui.Context, g *gitState) {
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(1).Children(func() {
 		ui.Text(c, g.busyText(m)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		if g.cancel != nil {
-			if ui.Text(c.Key("cancel-git"), m.CommonCancel()).FontSize(fsSmall).TextColor(t.Accent).Role(ui.RoleButton).Label(m.GitCancelOperation(g.busy)).Clicked() {
+			if ui.Text(c.Key("cancel-git"), m.CommonCancel()).FontSize(fsSmall).TextColor(t.Accent).SingleLine().Shrink(0).Role(ui.RoleButton).Label(m.GitCancelOperation(g.busy)).Clicked() {
 				g.cancel()
 			}
 		}
@@ -989,6 +1039,34 @@ func (a *app) gitRun(g *gitState, op gitOp) {
 
 // gitNext 在一个操作结束后执行排队的下一个。
 func (a *app) gitNext(g *gitState) {
+	// 已接受但结果未知的目标写操作仍占用仓库，包括后来打开的同仓库视图。
+	if s := a.pushFor(g); s != nil && s.pending() {
+		a.holdPush(s, g)
+	}
+	if s := a.updateFor(g); s != nil && s.pending() {
+		a.holdUpdate(s, g)
+	}
+	if s := a.branchFor(g); s != nil && s.pending() {
+		a.holdBranch(s, g)
+	}
+	if s := a.pathsFor(g); s != nil && s.pending() {
+		a.holdPaths(s, g)
+	}
+	if s := a.commitFor(g); s != nil && s.pending() {
+		a.holdCommit(s, g)
+	}
+	if s := a.workspaceMergeFor(g); s != nil && s.pending() {
+		a.holdWorkspaceMerge(s, g)
+	}
+	if s := a.historyFor(g); s != nil && s.pending() {
+		a.holdHistory(s, g)
+	}
+	if s := a.stashFor(g); s != nil && s.pending() {
+		a.holdStash(s, g)
+	}
+	if s := a.integrateFor(g); s != nil && s.pending() {
+		a.holdIntegrate(s, g)
+	}
 	if g.busy != "" || len(g.queue) == 0 {
 		return
 	}
@@ -997,6 +1075,11 @@ func (a *app) gitNext(g *gitState) {
 	// 排队期间重新找过仓库、这个仓库不在了：照 gitStart 报出来，接着看下一个（也都会报）
 	if !slices.Contains(g.v.repos.list, g) {
 		op.fail(a, op.m.GitOperationFailed(op.what, errtext.Text(errRepoGone)))
+		a.gitNext(g)
+		return
+	}
+	if op.ready != nil {
+		op.ready()
 		a.gitNext(g)
 		return
 	}
@@ -1210,7 +1293,11 @@ func (v *filesView) commitTargets() (ts []commitTarget, n int) {
 // commit 用同一条提交信息在各仓库分别提交勾选的文件。全部成功才清空提交信息；
 // 失败的仓库报错、留着勾选，成功的仓库勾选清掉，改好再点一次只提交剩下的。
 func (a *app) commit(m locales.Messages, v *filesView) {
-	if a.targetFileUnsupported("git.write") {
+	if !a.pathsControls() {
+		return
+	}
+	if a.typedFetch() {
+		a.targetCommit(m, v)
 		return
 	}
 	ch := &v.ch
@@ -1298,7 +1385,7 @@ func (v *filesView) amendRepo() *gitState {
 
 // setAmend 切换"修改上一次提交"：打开时输入框还空着，就填上上一次的提交信息。
 func (a *app) setAmend(v *filesView, on bool) {
-	if a.targetFileUnsupported("git.show") {
+	if !a.pathsControls() {
 		return
 	}
 	ch := &v.ch
@@ -1315,6 +1402,10 @@ func (a *app) setAmend(v *filesView, on bool) {
 	if strings.TrimSpace(ch.message) != "" || g == nil {
 		return
 	}
+	if a.typedFetch() {
+		a.targetLastMessage(v, g)
+		return
+	}
 	root := g.repo
 	go func() {
 		msg := gitx.LastMessage(context.Background(), root)
@@ -1326,3 +1417,5 @@ func (a *app) setAmend(v *filesView, on bool) {
 		})
 	}()
 }
+
+const gitHistory gitKind = "history"

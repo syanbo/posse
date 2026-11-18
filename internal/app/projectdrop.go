@@ -13,7 +13,8 @@ import (
 // projectDrop 让侧栏的项目列表接住从访达拖来的文件夹：拖到上面时画一圈强调色的框，
 // 松手后问一句再加成项目。已经是项目的文件夹不再问，直接切到它的主工作区；拖来的文件不算。
 func (a *app) projectDrop(c *ui.Context, nav ui.Element) {
-	if nav.FileDragOver() {
+	r := a.request()
+	if nav.FileDragOver() && !a.remoteHost() && r.canWrite() {
 		accent := c.Theme().Accent
 		nav.DrawOver(func(p *ui.Painter, r ui.Rect) {
 			p.Stroke(ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}, accent, 8, 2)
@@ -24,7 +25,13 @@ func (a *app) projectDrop(c *ui.Context, nav ui.Element) {
 		return
 	}
 	l := L(c)
-	r := a.request()
+	if a.remoteHost() {
+		a.err = l.SidebarDropRemoteUnsupported()
+		return
+	}
+	if !r.mayWrite() {
+		return
+	}
 	var dirs []string
 	var known *project
 	for _, p := range paths {

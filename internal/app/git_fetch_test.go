@@ -42,6 +42,8 @@ func fetchDoneFixture(ref rpc.DesktopOperationRef, out rpc.GitFetchResult) rpc.D
 func fetchFixture(t *testing.T, controlled bool, handler func(rpc.DesktopCall, rpc.GitFetchParams) (any, error)) (*app, *hostControlFixture, *filesView, *fileDoc, *ui.Tester) {
 	t.Helper()
 	a, f, v, d, tt := targetBlameFixture(t)
+	// 这里验收手动入口；自动入口单独用分支按钮和可见性测试。
+	a.fetchAt = map[string]time.Time{a.workspaces[0].ProjectID: time.Now()}
 	if controlled {
 		takeRequestTestControl(t, a)
 	}
@@ -482,6 +484,7 @@ func TestTargetGitFetchSymlinkDiscovery(t *testing.T) {
 				path, real = parent, parent
 			}
 			a.workspaces[0].Path, v.root = path, path
+			a.fetchAt[fetchKey(a.workspaces[0].ProjectID, fetchRel(&a.workspaces[0], alias))] = time.Now()
 			a.indexWorkspaces()
 			f.mu.Lock()
 			normal := f.desktopCall

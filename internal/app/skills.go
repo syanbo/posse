@@ -908,6 +908,26 @@ func (a *app) pollSkillsPanel(c *ui.Context, w *workspace) {
 		return
 	}
 	key := w.Path
+	if a.remoteHost() {
+		r := a.request()
+		if !r.current() || r.client == nil || r.client.Desktop == nil {
+			return
+		}
+		go func() {
+			ctx, cancel := context.WithTimeout(a.windowContext(), 20*time.Second)
+			defer cancel()
+			cat, ok := scanRemoteProjectSkills(ctx, r, key)
+			r.update(func() {
+				if p.key != key || !ok {
+					p.poll.busy = false
+					return
+				}
+				p.poll.done()
+				p.cat, p.real = cat, key
+			})
+		}()
+		return
+	}
 	go func() {
 		cat := skills.Scan(skills.Options{Home: homeDir, Dir: key})
 		real, err := filepath.EvalSymlinks(key)
@@ -924,6 +944,54 @@ func (a *app) pollSkillsPanel(c *ui.Context, w *workspace) {
 	}()
 }
 
+func scanRemoteProjectSkills(ctx context.Context, r appRequest, wsPath string) (skills.Catalog, bool) {
+	roots := []string{
+		filepath.Join(wsPath, ".grok", "skills"),
+		filepath.Join(wsPath, ".agents", "skills"),
+		filepath.Join(wsPath, ".claude", "skills"),
+		filepath.Join(wsPath, ".cursor", "skills"),
+	}
+	dirs, err := r.client.ReadDirectories(ctx, roots)
+	if err != nil {
+		return skills.Catalog{}, false
+	}
+	var found []skills.Skill
+	seen := map[string]bool{}
+	for _, d := range dirs {
+		if d.Error != nil {
+			continue
+		}
+		for _, e := range d.Entries {
+			if !e.Dir || strings.HasPrefix(e.Name, ".") {
+				continue
+			}
+			dir := filepath.Join(d.Path, e.Name)
+			file := filepath.Join(dir, "SKILL.md")
+			content, _, err := r.client.ReadFile(ctx, file)
+			if err != nil || content.Text == "" {
+				continue
+			}
+			meta := skills.ParseMeta(content.Text)
+			name := meta.Name
+			if name == "" {
+				name = e.Name
+			}
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			found = append(found, skills.Skill{
+				Name:        name,
+				Description: meta.Description,
+				Dir:         dir,
+				File:        file,
+				Scope:       skills.ScopeProject,
+			})
+		}
+	}
+	return skills.Catalog{Skills: found}, true
+}
+
 // skillsPanel 是文件栏的「技能」页签：当前工作区的项目级技能（工作区和它往上到仓库根的各级目录里的），点一个打开 SKILL.md。
 func (a *app) skillsPanel(c *ui.Context, w *workspace) {
 	t := c.Theme()
@@ -937,14 +1005,18 @@ func (a *app) skillsPanel(c *ui.Context, w *workspace) {
 		}
 	}
 	slices.SortFunc(list, func(x, y skills.Skill) int { return strings.Compare(strings.ToLower(x.Name), strings.ToLower(y.Name)) })
-	ui.Row(c).Shrink(0).Padding(8, 12, 4, 12).Gap(8).Children(func() {
-		if pressable(textButton(c, m.SkillsNewEllipsis())).Clicked() {
-			a.skillNew = skillNewView{open: true, ws: w.ID}
-		}
-		if pressable(textButton(c, m.SkillsInstallEllipsis())).Clicked() {
-			a.openSkillInstall(m, w, false)
-		}
-	})
+	if a.remoteHost() {
+		ui.Text(c, m.SkillsRemoteHint(a.hostName(m))).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45).Padding(8, 12, 4, 12)
+	} else {
+		ui.Row(c).Shrink(0).Padding(8, 12, 4, 12).Gap(8).Children(func() {
+			if pressable(textButton(c, m.SkillsNewEllipsis())).Clicked() {
+				a.skillNew = skillNewView{open: true, ws: w.ID}
+			}
+			if pressable(textButton(c, m.SkillsInstallEllipsis())).Clicked() {
+				a.openSkillInstall(m, w, false)
+			}
+		})
+	}
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Padding(8, 8, 16, 8).Gap(2).Children(func() {
 			switch {
@@ -959,9 +1031,11 @@ func (a *app) skillsPanel(c *ui.Context, w *workspace) {
 				row.Children(func() {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 						ui.Text(c, sk.Name).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Grow(1).Shrink(1)
-						skillMarks(c, sk, func(ag skills.Agent, enable bool) {
-							a.planSkillToggle(m, skills.Options{Home: homeDir, Dir: w.Path}, sk, ag, enable)
-						})
+						if !a.remoteHost() {
+							skillMarks(c, sk, func(ag skills.Agent, enable bool) {
+								a.planSkillToggle(m, skills.Options{Home: homeDir, Dir: w.Path}, sk, ag, enable)
+							})
+						}
 					})
 					if sk.Description != "" {
 						ui.Text(c, oneLine(sk.Description)).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)

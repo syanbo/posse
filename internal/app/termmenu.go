@@ -76,46 +76,49 @@ func writeClipboard(s string) { mygo.Clipboard.Write(transfer.TextData(s)) }
 // 工具调用里的截图要放下时先写成临时文件，所以带整项）。只用这一种类型：mygo 的一个元素只认一种拖放类型，
 // 后登记的会盖掉先登记的。
 type pathDrag struct {
-	path  string
-	image *imageItem
+	hostID string
+	path   string
+	image  *imageItem
 }
 
 // dragPath 让文件栏里的一行可以拖到终端上贴入路径。文件栏滑进来的途中不能拖：
 // 行在不动的指针下面移动，mygo 会把这一下点击当成拖动。
 func (a *app) dragPath(row ui.Element, path string) {
 	if a.filesPanelShown >= 1 {
-		row.Drag(pathDrag{path: path})
+		row.Drag(pathDrag{hostID: a.viewID, path: path})
 	}
 }
 
 // termDrop 让终端区接住从访达和文件栏拖来的文件，把路径贴进终端；拖到上面时画一圈强调色的框。
 func (a *app) termDrop(c *ui.Context, area ui.Element, v *termView, agent string) {
 	_, inner := ui.DragOver[pathDrag](area)
-	if area.FileDragOver() || inner {
+	if (area.FileDragOver() || inner) && v.term != nil && !v.term.ReadOnly() {
 		accent := c.Theme().Accent
 		area.DrawOver(func(p *ui.Painter, r ui.Rect) {
 			p.Stroke(ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}, accent, 8, 2)
 		})
 	}
-	paths := area.DroppedFiles()
+	dropped := area.DroppedFiles()
 	if d, ok := ui.Drop[pathDrag](area); ok {
+		if !a.live(v) || v.term == nil || v.term.ReadOnly() {
+			return
+		}
 		if d.image != nil {
 			a.withImagePath(*d.image, func(path string) error {
-				if a.live(v) && v.term != nil {
+				if a.live(v) && v.term != nil && !v.term.ReadOnly() {
 					sendPieces(v.term, dropPieces([]string{path}, agent))
 					a.focusTerm = true
 				}
 				return nil
 			})
-		} else {
-			paths = append(paths, d.path)
+		} else if d.path != "" && d.hostID == a.viewID {
+			sendPieces(v.term, dropPieces([]string{d.path}, agent))
+			a.focusTerm = true
 		}
 	}
-	if len(paths) == 0 || !a.live(v) || v.term == nil {
-		return
+	if len(dropped) > 0 {
+		a.pasteFiles(v, dropped, agent)
 	}
-	sendPieces(v.term, dropPieces(paths, agent))
-	a.focusTerm = true
 }
 
 // copiedFiles 是剪贴板里复制的文件：只有文件、或者文本只是这些文件的名字（访达复制文件时的样子）。

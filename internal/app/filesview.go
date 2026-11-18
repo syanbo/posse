@@ -159,6 +159,12 @@ func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, 
 				if m.Item(L(c).FilesUpload()).Icon(iconArrowUp).Disabled(v.transfer != nil || !a.request().saveAllowed()).Chosen() {
 					a.chooseUpload(L(c), v, path)
 				}
+				if m.Item(L(c).FilesUploadFolder()).Icon(iconArrowUp).Disabled(v.transfer != nil || !a.request().saveAllowed()).Chosen() {
+					a.chooseUploadFolder(L(c), v, path)
+				}
+				if m.Item(L(c).FilesDownloadFolder()).Icon(iconArrowDown).Disabled(v.transfer != nil).Chosen() {
+					a.chooseDownloadFolder(L(c), v, path)
+				}
 			} else {
 				if m.Item(L(c).FilesDownload()).Icon(iconArrowDown).Disabled(v.transfer != nil).Chosen() {
 					a.chooseDownload(L(c), v, path, false)
@@ -768,7 +774,7 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			} else if pressable(iconButtonSized(c, iconBlame, L(c).FilesAnnotateTip(), compactBox(), smallIcon())).Clicked() {
 				a.openBlame(L(c), w, v, d.path)
 			}
-			if e := g.entry(d.path); e != nil && !e.Conflict {
+			if e := g.entry(d.path); e != nil && !e.Conflict && a.pathsControls() {
 				if pressable(iconButtonSized(c, iconRollback, L(c).FilesRollbackFile(), compactBox(), smallIcon())).Clicked() {
 					a.rollbackDoc(v, d)
 				}

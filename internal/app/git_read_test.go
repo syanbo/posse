@@ -212,7 +212,10 @@ func TestTargetGitProductionViews(t *testing.T) {
 	if !tt.HasText(locales.In("zh-Hans").FetchManual()) || a.fetchWritable(v) {
 		t.Fatal("viewer fetch entry missing or writable")
 	}
-	for _, unwanted := range []string{"更新项目", "Push…", "新建分支…"} {
+	if !tt.HasText(locales.In("zh-Hans").BranchUpdateProject()) {
+		t.Fatal("target update entry missing")
+	}
+	for _, unwanted := range []string{"Push…", "新建分支…"} {
 		if tt.HasText(unwanted) {
 			t.Fatalf("remote popup exposes %s", unwanted)
 		}
@@ -257,7 +260,7 @@ func TestTargetGitProductionViews(t *testing.T) {
 func TestTargetGitWriteAndReadGuards(t *testing.T) {
 	for _, controlled := range []bool{false, true} {
 		t.Run(map[bool]string{false: "viewer", true: "controlled"}[controlled], func(t *testing.T) {
-			a, _, v, _ := remoteGitFixture(t)
+			a, f, v, _ := remoteGitFixture(t)
 			if controlled {
 				takeRequestTestControl(t, a)
 			}
@@ -282,25 +285,58 @@ func TestTargetGitWriteAndReadGuards(t *testing.T) {
 			if d.headFor != "" || d.headBuf != nil {
 				t.Fatal("read local HEAD contents")
 			}
-			for _, item := range []struct {
-				method string
-				run    func()
-			}{
-				{"git.write", func() { a.doPush(appL(), v, &pushState{remote: true}, false) }},
-				{"git.write", func() { a.doPush(appL(), v, &pushState{remote: true}, true) }},
-				{"git.write", func() { a.askNewBranch(appL(), &a.workspaces[0], v, "") }},
-				{"git.write", func() { a.checkoutBranch(appL(), &a.workspaces[0], v, gitx.Branch{Name: "other"}) }},
-				{"git.write", func() { a.openRollback(v) }},
-				{"git.show", func() { a.setAmend(v, true) }},
-				{"git.write", func() { a.syncBase(appL(), &a.workspaces[0], false) }},
-			} {
-				a.err = ""
-				item.run()
-				assertRemoteFileUnsupported(t, a.err, item.method)
+			a.err = ""
+			a.openRollback(v)
+			if a.err != "" || a.rollback.open != controlled || len(a.targetPaths) != 0 {
+				t.Fatal("rollback must only open a controlled dialog before confirmation")
+			}
+			var amendReads atomic.Int32
+			f.mu.Lock()
+			normal := f.desktopCall
+			f.desktopCall = func(ctx context.Context, p rpc.DesktopCall) (any, error) {
+				if p.Method == "git.status" {
+					var q rpc.GitStatusParams
+					json.Unmarshal(p.Params, &q)
+					if q.LastMessage {
+						amendReads.Add(1)
+						return rpc.GitStatusResult{Identity: g.identity, Status: &gitx.Status{Commit: strings.Repeat("a", 40)}, LastMessage: "full subject\n\nfull body"}, nil
+					}
+				}
+				return normal(ctx, p)
+			}
+			f.mu.Unlock()
+			a.setAmend(v, true)
+			if controlled {
+				settleTargetGit(t, a, func() bool { return v.ch.message != "" })
+			}
+			if v.ch.amend != controlled || a.err != "" || controlled && amendReads.Load() != 1 || !controlled && amendReads.Load() != 0 {
+				t.Fatal("amend read guard", a.err)
+			}
+			a.syncBase(appL(), &a.workspaces[0], false)
+			if a.err != "" || len(a.targetIntegrations) != 0 {
+				t.Fatal("sync without loaded divergence acted", a.err)
 			}
 			if a.confirmDo != nil || a.promptDlg != nil || len(v.docs) != 0 || len(v.logs) != 0 {
 				t.Fatal("unsupported operation prepared a local callback")
 			}
+			for _, force := range []bool{false, true} {
+				a.err = ""
+				a.doPush(appL(), v, &pushState{remote: true}, force)
+				if a.err != "" || a.confirmDo != nil || len(a.targetPushes) != 0 {
+					t.Fatal("empty push preview prepared a write")
+				}
+			}
+
+			a.err = ""
+			a.checkoutBranch(appL(), &a.workspaces[0], v, gitx.Branch{Name: "other"})
+			if a.err != "" || a.promptDlg != nil || len(a.targetBranches) != 0 {
+				t.Fatal("checkout sent without a displayed OID")
+			}
+			a.askNewBranch(appL(), &a.workspaces[0], v, "")
+			if a.err != "" || (a.promptDlg != nil) != controlled || len(a.targetBranches) != 0 {
+				t.Fatal("new branch should only prepare the controlled prompt")
+			}
+
 		})
 	}
 }

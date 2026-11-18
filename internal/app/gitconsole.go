@@ -228,14 +228,50 @@ func (a *app) addGitRun(r gitx.Run) {
 // gitOpRecord 是记录里的一个操作和它的命令；不属于任何操作的命令（后台读取失败等）各自算一个。
 // 连着的几次相同操作折成一条时，runs 是最后一次的，repeat 是次数，since 是第一次开始的时间。
 type gitOpRecord struct {
-	name   string
-	runs   []gitx.Run
-	repeat int
-	since  time.Time
-	target *targetFetch
+	name           string
+	runs           []gitx.Run
+	repeat         int
+	since          time.Time
+	push           *targetPushOperation
+	update         *targetUpdateOperation
+	branch         *targetBranchOperation
+	paths          *targetPathsOperation
+	commit         *targetCommitOperation
+	stash          *targetStashOperation
+	workspaceMerge *targetWorkspaceMerge
+	history        *targetHistoryOperation
+	integrate      *targetIntegrateOperation
+	target         *targetFetch
 }
 
 func (o gitOpRecord) key() any {
+	if o.workspaceMerge != nil {
+		return o.workspaceMerge.key()
+	}
+	if o.history != nil {
+		return o.history.key()
+	}
+	if o.integrate != nil {
+		return o.integrate.key()
+	}
+	if o.stash != nil {
+		return o.stash.key()
+	}
+	if o.commit != nil {
+		return o.commit.key()
+	}
+	if o.paths != nil {
+		return o.paths.key()
+	}
+	if o.branch != nil {
+		return o.branch.key()
+	}
+	if o.update != nil {
+		return o.update.key()
+	}
+	if o.push != nil {
+		return o.push.key()
+	}
 	if o.target != nil {
 		return o.target.key()
 	}
@@ -453,7 +489,16 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 	a.projectConsoleErr(w.ProjectID, true)
 	runs := a.projectRuns(w.ProjectID)
 	ops := foldGitOps(groupGitRuns(runs))
-	targetOps := a.fetchConsole(w.ProjectID)
+	targetOps := append(a.fetchConsole(w.ProjectID), a.pushConsole(w.ProjectID)...)
+	updateOps := a.updateConsole(w.ProjectID)
+	targetOps = append(targetOps, updateOps...)
+	branchOps := append(a.branchConsole(w.ProjectID), a.pathsConsole(w.ProjectID)...)
+	targetOps = append(targetOps, branchOps...)
+	targetOps = append(targetOps, a.commitConsole(w.ProjectID)...)
+	stashOps := append(a.stashConsole(w.ProjectID), a.integrateConsole(w.ProjectID)...)
+	targetOps = append(targetOps, stashOps...)
+	historyOps := append(a.historyConsole(w.ProjectID), a.workspaceMergeConsole(w.ProjectID)...)
+	targetOps = append(targetOps, historyOps...)
 	ops = append(ops, targetOps...)
 	slices.SortStableFunc(ops, func(a, b gitOpRecord) int { return a.since.Compare(b.since) })
 	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
@@ -471,7 +516,7 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 			a.saveState()
 		}
 	})
-	if a.typedFetch() || len(targetOps) > 0 {
+	if len(updateOps) == 0 && len(branchOps) == 0 && len(stashOps) == 0 && len(historyOps) == 0 && (a.typedFetch() || len(targetOps) > 0) {
 		ui.Text(c, L(c).FetchConsoleScope()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 16)
 	}
 	if len(ops) == 0 {
@@ -488,7 +533,25 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 	}).Grow(1).Padding(0, 0, 8, 0)
 	last := ops[len(ops)-1]
 	key, done := last.key(), last.target != nil && last.target.done
-	if last.target == nil {
+	if last.workspaceMerge != nil {
+		done = last.workspaceMerge.done
+	} else if last.history != nil {
+		done = last.history.done
+	} else if last.integrate != nil {
+		done = last.integrate.done
+	} else if last.stash != nil {
+		done = last.stash.done
+	} else if last.commit != nil {
+		done = last.commit.done
+	} else if last.paths != nil {
+		done = last.paths.done
+	} else if last.branch != nil {
+		done = last.branch.done
+	} else if last.update != nil {
+		done = last.update.done
+	} else if last.push != nil {
+		done = last.push.done
+	} else if last.target == nil {
 		run := last.runs[len(last.runs)-1]
 		key, done = run.ID, run.Done
 	}
@@ -501,6 +564,42 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 // gitOpRow 是一个操作：左边是结果图标，然后是操作名、工作区，右边是时间；下面和操作名对齐列出它的 git 命令。
 // day 非空时先画一行日期，隔开不同的天。
 func (a *app) gitOpRow(c *ui.Context, op gitOpRecord, day string) {
+	if op.workspaceMerge != nil {
+		a.workspaceMergeConsoleRow(c, op.workspaceMerge, day)
+		return
+	}
+	if op.history != nil {
+		a.historyConsoleRow(c, op.history, day)
+		return
+	}
+	if op.integrate != nil {
+		a.integrateConsoleRow(c, op.integrate, day)
+		return
+	}
+	if op.stash != nil {
+		a.stashConsoleRow(c, op.stash, day)
+		return
+	}
+	if op.commit != nil {
+		a.commitConsoleRow(c, op.commit, day)
+		return
+	}
+	if op.paths != nil {
+		a.pathsConsoleRow(c, op.paths, day)
+		return
+	}
+	if op.branch != nil {
+		a.branchConsoleRow(c, op.branch, day)
+		return
+	}
+	if op.update != nil {
+		a.updateConsoleRow(c, op.update, day)
+		return
+	}
+	if op.push != nil {
+		a.pushConsoleRow(c, op.push, day)
+		return
+	}
 	if op.target != nil {
 		a.fetchConsoleRow(c, op.target, day)
 		return

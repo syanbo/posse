@@ -94,20 +94,17 @@ func TestTargetGitPushProduction(t *testing.T) {
 			if ps.detail.diff.oldRev != targetLogCommit(0).Parents[0] || ps.detail.diff.newRev != targetLogCommit(0).Hash || ps.detail.diff.state.New.String() != "target revision\n" {
 				t.Fatal("push diff not fixed to target commit")
 			}
-			for _, label := range []string{m.ComparePush(), m.CompareForcePushEllipsis()} {
-				if err := tt.Click(label); err != nil {
-					t.Fatal(err)
+			if !controlled {
+				for _, label := range []string{m.ComparePush(), m.CompareForcePushEllipsis()} {
+					if err := tt.Click(label); err != nil {
+						t.Fatal(err)
+					}
+					tt.Frame()
 				}
-				tt.Frame()
-				if ps.pushing || a.confirmDo != nil {
-					t.Fatal("preview prepared push")
-				}
-			}
-			for _, force := range []bool{false, true} {
-				a.doPush(appL(), v, ps, force)
-				assertRemoteFileUnsupported(t, a.err, "git.write")
-				if ps.pushing {
-					t.Fatal("write guard left pushing")
+				a.doPush(appL(), v, ps, false)
+				a.doPush(appL(), v, ps, true)
+				if ps.pushing || a.confirmDo != nil || len(a.targetPushes) != 0 {
+					t.Fatal("viewer prepared push")
 				}
 			}
 			if buffer != draft.ed.Buffer || buffer.String() != "unsaved push draft" {

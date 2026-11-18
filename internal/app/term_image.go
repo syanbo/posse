@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"slices"
 	"time"
 
 	"posse/internal/errtext"
@@ -51,6 +52,51 @@ func (a *app) pasteImage(v *termView, png []byte) {
 				return
 			}
 			v.term.Paste(path)
+		})
+	}()
+}
+
+// pasteFiles 处理访达拖入或复制粘贴到终端的文件：本机直接贴路径，远端先上传到目标临时目录再贴目标路径。
+func (a *app) pasteFiles(v *termView, paths []string, agent string) {
+	if len(paths) == 0 || !a.live(v) || v.term == nil {
+		return
+	}
+	r := v.request
+	if r.app == nil {
+		r = a.request()
+	}
+	if !r.mayWrite() || v.term.ReadOnly() {
+		return
+	}
+	if r.client == nil || !r.client.Remote {
+		sendPieces(v.term, dropPieces(paths, agent))
+		a.focusTerm = true
+		return
+	}
+	sources := slices.Clone(paths)
+	ctx, cancel := context.WithTimeout(a.windowContext(), 2*time.Minute)
+	go func() {
+		defer cancel()
+		uploaded := make([]string, 0, len(sources))
+		var err error
+		for _, src := range sources {
+			var remotePath string
+			remotePath, err = r.client.PasteFile(ctx, src)
+			if err != nil {
+				break
+			}
+			uploaded = append(uploaded, remotePath)
+		}
+		a.update(func() {
+			if !r.current() || !a.live(v) || v.term == nil || v.term.ReadOnly() {
+				return
+			}
+			if err != nil {
+				a.err = appL().AppPasteFileError(errtext.Text(err))
+				return
+			}
+			sendPieces(v.term, dropPieces(uploaded, agent))
+			a.focusTerm = true
 		})
 	}()
 }

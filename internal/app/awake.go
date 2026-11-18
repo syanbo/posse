@@ -74,7 +74,7 @@ func (a *app) awakeButton(c *ui.Context) {
 		ui.Icon(c, iconCoffee).FontSize(fsBody).TextColor(iconColor).Shrink(0)
 		ui.Text(c, short).FontSize(fsSmall).TextColor(textColor)
 	})
-	if st == nil {
+	if st == nil || !a.request().canWrite() {
 		return
 	}
 	menuButton(c, b, func(m *popMenu) {
@@ -87,9 +87,13 @@ func (a *app) awakeButton(c *ui.Context) {
 }
 
 func (a *app) setAwake(mode string) {
+	r := a.request()
+	if !r.canWrite() {
+		return
+	}
 	go func() {
-		if a.call("awake.set", map[string]any{"mode": mode}, nil, 5*time.Second) == nil {
-			a.refresh()
+		if r.call("awake.set", map[string]any{"mode": mode}, nil, 5*time.Second) == nil {
+			r.refresh()
 		}
 	}()
 }

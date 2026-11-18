@@ -66,6 +66,7 @@ func (a *app) pollTargetTrack(c *ui.Context, w *workspace) *trackInfo {
 	if st := g.status; st != nil {
 		tr.ahead, tr.behind = st.Ahead, st.Behind
 	}
+	a.autoFetch(c, w, g.repo, tr)
 	return tr
 }
 

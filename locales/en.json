@@ -1,4 +1,20 @@
 {
+  "pushUnknown": "The previous Push result is unknown. Query the original operation or refresh the repository state to check.",
+  "@pushUnknown": {"description": "A lost Push response must be queried using its original operation reference."},
+  "pushRunning": "Push in progress",
+  "@pushRunning": {"description": "Status of an accepted Push operation."},
+  "pushResult": "{status, select, succeeded {Push completed} failed {Push failed} canceled {Push canceled} timed_out {Push timed out} conflict {Preview changed; Push did not start} other {Push result unavailable}}",
+  "@pushResult": {"description": "Confirmed typed Push terminal outcome.", "placeholders": {"status": {"type": "String", "example": "succeeded"}}},
+  "pushPartial": "Remote refs may have been partially updated. Cancellation or failure does not roll back the push.",
+  "@pushPartial": {"description": "Push may have partially changed remote refs after it started."},
+  "pushNewTitle": "Start another Push?",
+  "@pushNewTitle": {"description": "Confirmation before a new Push while the previous result remains unknown."},
+  "pushNewAction": "Start new Push",
+  "@pushNewAction": {"description": "Explicitly authorize a new Push operation."},
+  "pushCancel": "Cancel Push",
+  "@pushCancel": {"description": "Request cancellation of the accepted Push operation."},
+  "pushCapacity": "Push records are full. Check pending operations before starting another push.",
+  "@pushCapacity": {"description": "Bounded Push history has no space for another operation."},
   "hostLocal": "This Mac",
   "@hostLocal": {"description": "Local host name in the host selector."},
   "hostConnect": "Connect",
@@ -43,8 +59,8 @@
   "@fetchNewAction": {"description": "Explicitly authorize a new Fetch despite an unresolved previous result."},
   "fetchCapacity": "Too many unresolved Git operations. Query or review previous operations before starting another Fetch.",
   "@fetchCapacity": {"description": "Fetch operation records reached the in-memory count or byte limit."},
-  "fetchConsoleScope": "Only Fetch records from this window session are shown.",
-  "@fetchConsoleScope": {"description": "Scope of in-memory target Fetch command records in Console."},
+  "fetchConsoleScope": "Only Fetch and Push records from this window session are shown.",
+  "@fetchConsoleScope": {"description": "Scope of in-memory target Fetch and Push command records in Console."},
   "fetchLogsTruncated": "Some command output or records were omitted.",
   "@fetchLogsTruncated": {"description": "Target Fetch returned truncated bounded command records."},
   "branchRefreshBase": "Refresh base comparison",
@@ -53,12 +69,10 @@
   "@branchPredictionUnavailable": { "description": "Explain an unavailable merge prediction using a structured reason from the target Git service; commit counts remain valid.", "placeholders": { "reason": { "type": "String", "example": "attributes" } } },
   "branchPredictionClear": "No conflicts predicted",
   "@branchPredictionClear": { "description": "The target completed merge prediction and found no conflicts." },
-  "branchBaseReadOnly": "Read-only comparison; syncing and merging are not available yet.",
-  "@branchBaseReadOnly": { "description": "Disabled sync and merge button tooltip for remote worktree base comparison." },
   "pushPreviewTitle": "Push Preview",
-  "@pushPreviewTitle": { "description": "Read-only push preview title and menu action for a remote host." },
-  "pushPreviewNotice": "Read-only preview; pushing is not available yet. Uses this host’s recorded remote-tracking refs without contacting the remote.",
-  "@pushPreviewNotice": { "description": "Explain that the remote-host push preview cannot push or verify live remote refs." },
+  "@pushPreviewTitle": { "description": "Push preview title and menu action for a target host." },
+  "pushPreviewNotice": "Push uses this preview. The list comes from recorded remote-tracking refs; the push itself contacts the remote and is rejected if those refs have changed.",
+  "@pushPreviewNotice": { "description": "Explain how Push uses the displayed preview and rechecks its recorded refs." },
   "pushPreviewMissing": "No tracking ref",
   "@pushPreviewMissing": { "description": "The host has no recorded remote-tracking ref for the push destination." },
   "pushPreviewEmpty": "No commits to list against the recorded tracking ref.",
@@ -10190,5 +10204,75 @@
   "usageQueryDisabled": "Online queries are off; showing the last reading.",
   "@usageQueryDisabled": {
     "description": "Codex online queries are disabled in Settings."
+  },
+  "filesUploadFolder": "Upload Folder…",
+  "@filesUploadFolder": {
+    "description": "Remote file menu: choose a local folder to upload into the selected target folder."
+  },
+  "filesDownloadFolder": "Download Folder…",
+  "@filesDownloadFolder": {
+    "description": "Remote file menu: save a separate folder copy on this Mac."
+  },
+  "filesTransferReplaceDirBody": "Uploading will merge into and replace matching files in {path} on the selected host.",
+  "@filesTransferReplaceDirBody": {
+    "description": "Upload confirmation identifies the target folder that will be merged and have matching files replaced.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "filesDownloadReplaceBody": "Downloading will merge into and replace matching files in {path} on this Mac.",
+  "@filesDownloadReplaceBody": {
+    "description": "Download confirmation identifies the local folder that will be merged and have matching files replaced.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "appPasteFileError": "Couldn’t send file to terminal: {error}",
+  "@appPasteFileError": {
+    "description": "Error bar message when uploading a dropped or copied file to a remote terminal fails.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "keysSwitchHostLabel": "Switch Host",
+  "@keysSwitchHostLabel": {
+    "description": "Shortcut action label for opening the top-bar host switcher menu."
+  },
+  "sidebarDropRemoteUnsupported": "Use Add Project to select a folder on the remote host",
+  "@sidebarDropRemoteUnsupported": {
+    "description": "Error bar message when dropping a local Finder folder onto the sidebar while viewing a remote host."
+  },
+  "skillsRemoteHint": "Project skills on {host}. Create, install, or toggle skills on the target Mac.",
+  "@skillsRemoteHint": {
+    "description": "Hint in the Files Panel Skills tab when viewing a remote workspace.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "memoryRemoteDaemon": "Daemon ({host})",
+  "@memoryRemoteDaemon": {
+    "description": "Memory popover line label for the remote Posse daemon.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "memoryRemoteNote": "Terminal process trees run on {host} and are not counted on this Mac.",
+  "@memoryRemoteNote": {
+    "description": "Memory popover note when viewing a remote host.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
   }
 }
