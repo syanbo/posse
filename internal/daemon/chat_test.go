@@ -17,6 +17,7 @@ func TestChatFolders(t *testing.T) {
 	bin := t.TempDir()
 	// 假的 grok：OUT 不为空时留下一个文件；agent 退出后终端回到 shell，等标签关掉
 	os.WriteFile(filepath.Join(bin, "grok"), []byte("#!/bin/sh\n[ -n \"$OUT\" ] && echo hi > out.md\nexit 0\n"), 0o755)
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("SHELL", "/bin/sh")
 	t.Setenv("PATH", bin+":/usr/bin:/bin")
 	d, other := newTestDaemon(t)
