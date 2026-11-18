@@ -298,7 +298,7 @@ func TestDesktopOperationRejectsResponse(t *testing.T) {
 
 func TestDesktopOperationPrepareValidation(t *testing.T) {
 	c := (&Client{Socket: "/missing"}).WithDesktop(rpc.DesktopIdentity{ClientID: "window", InstanceID: "daemon", Epoch: 1})
-	for _, method := range []string{"project.list", "daemon.stop", "desktop.operation.cancel", "git.push"} {
+	for _, method := range []string{"project.list", "daemon.stop", "desktop.operation.cancel", "git.pull", "git.checkout"} {
 		if _, err := c.PrepareDesktopOperation(method, nil); err == nil {
 			t.Fatalf("accepted %s", method)
 		}

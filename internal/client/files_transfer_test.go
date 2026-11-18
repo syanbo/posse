@@ -563,3 +563,190 @@ func TestDownloadFileFailuresLeaveNoPartial(t *testing.T) {
 		}
 	}
 }
+
+func TestUploadAndDownloadDirectory(t *testing.T) {
+	srcRoot := filepath.Join(t.TempDir(), "src")
+	if err := os.MkdirAll(filepath.Join(srcRoot, "sub", "empty"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(srcRoot, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcRoot, ".git", "HEAD"), []byte("ignored"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcRoot, ".DS_Store"), []byte("ignored"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcRoot, "root.txt"), []byte("root\r\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcRoot, "sub", "data.bin"), []byte{0, 1, 2, 0xff}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	remoteRoot := filepath.Join(t.TempDir(), "remote-target")
+	id := rpc.DesktopIdentity{InstanceID: "target", ClientID: "controller", Epoch: 3}
+	socket := fakeAttach(t, func(conn net.Conn) {
+		defer conn.Close()
+		var req rpc.Request
+		if err := json.NewDecoder(conn).Decode(&req); err != nil {
+			t.Error(err)
+			return
+		}
+		var p rpc.DesktopCall
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			t.Error(err)
+			return
+		}
+		if req.Method != "desktop.call" || p.Desktop != id {
+			t.Errorf("wrong desktop call: %s %+v", req.Method, p)
+		}
+		write, _ := rpc.DesktopMethod(p.Method)
+		if (p.Sequence != 0) != write {
+			t.Errorf("sequence mismatch for %s: seq=%d", p.Method, p.Sequence)
+		}
+		result, err := func(p rpc.DesktopCall) (any, error) {
+			switch p.Method {
+			case "files.stat":
+				var q rpc.FilePathsParams
+				if err := json.Unmarshal(p.Params, &q); err != nil {
+					return nil, err
+				}
+				out := make([]rpc.FileStatResult, len(q.Paths))
+				for i, path := range q.Paths {
+					st, err := files.Stat(path)
+					var re *rpc.Error
+					if err != nil {
+						re = rpc.Errorf(rpc.CodeInternal, "%v", err)
+					}
+					out[i] = rpc.FileStatResult{Path: path, Stamp: st, Error: re}
+				}
+				return out, nil
+			case "files.mkdir":
+				var q rpc.FileMkdirParams
+				if err := json.Unmarshal(p.Params, &q); err != nil {
+					return nil, err
+				}
+				return map[string]any{"path": q.Path}, files.MakeDir(t.Context(), q.Path)
+			case "files.version":
+				var q rpc.FileVersionParams
+				if err := json.Unmarshal(p.Params, &q); err != nil {
+					return nil, err
+				}
+				return files.ReadVersion(t.Context(), q.Path)
+			case "files.save":
+				var q rpc.FileSaveParams
+				if err := json.Unmarshal(p.Params, &q); err != nil {
+					return nil, err
+				}
+				ver, err := files.WriteFileChecked(t.Context(), q.Path, q.Expected, func(w io.Writer) error {
+					_, err := w.Write(q.Data)
+					return err
+				})
+				if err != nil {
+					return nil, err
+				}
+				return rpc.FileSaveResult{Version: ver}, nil
+			case "files.readDirs":
+				var q rpc.FilePathsParams
+				if err := json.Unmarshal(p.Params, &q); err != nil {
+					return nil, err
+				}
+				out := make([]rpc.FileDirectoryResult, len(q.Paths))
+				for i, path := range q.Paths {
+					entries, st, err := files.ReadDir(path)
+					var re *rpc.Error
+					if err != nil {
+						re = rpc.Errorf(rpc.CodeInternal, "%v", err)
+					}
+					out[i] = rpc.FileDirectoryResult{Path: path, Entries: entries, Stamp: st, Error: re}
+				}
+				return out, nil
+			case "files.resourceRange":
+				var q rpc.FileResourceRangeParams
+				if err := json.Unmarshal(p.Params, &q); err != nil {
+					return nil, err
+				}
+				r, err := files.ReadResourceRange(t.Context(), q.Root, q.Path, q.Offset, q.Limit, q.Expected)
+				return rpc.FileRangeResult{Data: r.Data, Stamp: r.Stamp, EOF: r.EOF}, err
+			case "files.resourceVersion":
+				var q rpc.FileResourceVersionParams
+				if err := json.Unmarshal(p.Params, &q); err != nil {
+					return nil, err
+				}
+				return files.ReadResourceVersion(t.Context(), q.Root, q.Path)
+			case "files.pasteFile":
+				var q rpc.FilePasteFileParams
+				if err := json.Unmarshal(p.Params, &q); err != nil {
+					return nil, err
+				}
+				pasted, err := files.PasteFile(t.Context(), q.Name, q.Data)
+				if err != nil {
+					return nil, err
+				}
+				return rpc.FilePasteImageResult{Path: pasted}, nil
+			}
+			return nil, rpc.Errorf(rpc.CodeUnknown, "unexpected %s", p.Method)
+		}(p)
+		var re *rpc.Error
+		if err != nil {
+			if !errors.As(err, &re) {
+				re = rpc.Errorf(rpc.CodeInternal, "%v", err)
+			}
+		}
+		_ = json.NewEncoder(conn).Encode(map[string]any{"result": result, "error": re})
+	})
+	c := (&Client{Socket: socket, Remote: true}).WithDesktop(id)
+
+	if err := c.UploadDirectory(t.Context(), srcRoot, remoteRoot, false); err != nil {
+		t.Fatalf("UploadDirectory failed: %v", err)
+	}
+	if err := c.UploadDirectory(t.Context(), srcRoot, remoteRoot, false); !errors.Is(err, files.ErrSaveConflict) {
+		t.Fatalf("UploadDirectory without replace = %v, want conflict", err)
+	}
+	if err := c.UploadDirectory(t.Context(), srcRoot, remoteRoot, true); err != nil {
+		t.Fatalf("UploadDirectory replace failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(remoteRoot, ".git")); !os.IsNotExist(err) {
+		t.Fatal("uploaded .git directory")
+	}
+	transferContents(t, filepath.Join(remoteRoot, "root.txt"), []byte("root\r\n"))
+	transferContents(t, filepath.Join(remoteRoot, "sub", "data.bin"), []byte{0, 1, 2, 0xff})
+	if info, err := os.Stat(filepath.Join(remoteRoot, "sub", "empty")); err != nil || !info.IsDir() {
+		t.Fatal("missing empty subdirectory on remote")
+	}
+
+	dstRoot := filepath.Join(t.TempDir(), "downloaded")
+	if err := c.DownloadDirectory(t.Context(), remoteRoot, dstRoot, false); err != nil {
+		t.Fatalf("DownloadDirectory failed: %v", err)
+	}
+	if err := c.DownloadDirectory(t.Context(), remoteRoot, dstRoot, false); !errors.Is(err, files.ErrSaveConflict) {
+		t.Fatalf("DownloadDirectory without replace = %v, want conflict", err)
+	}
+	transferContents(t, filepath.Join(dstRoot, "root.txt"), []byte("root\r\n"))
+	transferContents(t, filepath.Join(dstRoot, "sub", "data.bin"), []byte{0, 1, 2, 0xff})
+	if info, err := os.Stat(filepath.Join(dstRoot, "sub", "empty")); err != nil || !info.IsDir() {
+		t.Fatal("missing empty subdirectory on local download")
+	}
+
+	// 拒绝目录内符号链接
+	withLink := filepath.Join(t.TempDir(), "with-link")
+	if err := os.MkdirAll(withLink, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(srcRoot, "root.txt"), filepath.Join(withLink, "link.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.UploadDirectory(t.Context(), withLink, filepath.Join(t.TempDir(), "never"), false); err == nil {
+		t.Fatal("UploadDirectory accepted symlink")
+	}
+
+	// PasteFile 客户端往返
+	t.Setenv("TMPDIR", t.TempDir())
+	pastedPath, err := c.PasteFile(t.Context(), filepath.Join(srcRoot, "root.txt"))
+	if err != nil {
+		t.Fatalf("PasteFile failed: %v", err)
+	}
+	transferContents(t, pastedPath, []byte("root\r\n"))
+}

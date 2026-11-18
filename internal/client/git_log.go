@@ -2,6 +2,8 @@ package client
 
 import (
 	"context"
+	"strings"
+	"unicode/utf8"
 
 	"posse/internal/gitx"
 	"posse/internal/rpc"
@@ -41,6 +43,9 @@ func (c *Client) GitCommitFiles(ctx context.Context, p rpc.GitCommitFilesParams)
 	}
 	if err := c.gitRead(ctx, "git.commitFiles", p.Path, p, &out); err != nil {
 		return rpc.GitCommitFilesResult{}, err
+	}
+	if !p.FullMessage && out.FullMessage != "" || len(out.FullMessage) > rpc.GitCommitMessageLimit || !utf8.ValidString(out.FullMessage) || strings.ContainsRune(out.FullMessage, 0) {
+		return rpc.GitCommitFilesResult{}, gitx.ErrLogOutput
 	}
 	if out.Identity != p.Expected || out.Commit.Hash != p.Hash || !gitx.ValidReadCommit(out.Commit) || out.Files == nil {
 		return rpc.GitCommitFilesResult{}, gitx.ErrLogOutput
