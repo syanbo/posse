@@ -109,3 +109,51 @@ func TestPasteImageCancellationCleansFile(t *testing.T) {
 		})
 	}
 }
+
+func TestPasteFileAndMakeDir(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	body := []byte("hello remote\n\x00binary")
+	path, err := PasteFile(t.Context(), "report final.pdf", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(path) != "report final.pdf" || filepath.Dir(filepath.Dir(path)) != dir {
+		t.Fatalf("unexpected paste file path: %q", path)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, body) {
+		t.Fatalf("content = %q, %v", got, err)
+	}
+	fi, err := os.Stat(path)
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %v, %v", fi, err)
+	}
+	for _, bad := range []string{"", ".", "..", "a/b", `a\b`, "a\x00b", "a\nb", strings.Repeat("x", 256)} {
+		if p, err := PasteFile(t.Context(), bad, body); err == nil || p != "" {
+			t.Fatalf("invalid name %q accepted: %q", bad, p)
+		}
+	}
+
+	nested := filepath.Join(t.TempDir(), "a", "b", "c")
+	if err := MakeDir(t.Context(), nested); err != nil {
+		t.Fatal(err)
+	}
+	if err := MakeDir(t.Context(), nested); err != nil {
+		t.Fatalf("idempotent MakeDir failed: %v", err)
+	}
+	file := filepath.Join(nested, "plain.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := MakeDir(t.Context(), file); !errors.Is(err, ErrSaveConflict) {
+		t.Fatalf("MakeDir over file = %v, want ErrSaveConflict", err)
+	}
+	broken := filepath.Join(nested, "broken")
+	if err := os.Symlink(filepath.Join(nested, "missing"), broken); err != nil {
+		t.Fatal(err)
+	}
+	if err := MakeDir(t.Context(), broken); !errors.Is(err, ErrSaveConflict) {
+		t.Fatalf("MakeDir over broken symlink = %v, want ErrSaveConflict", err)
+	}
+}
