@@ -549,6 +549,7 @@ func TestLocalDesktopDiscussionRouting(t *testing.T) {
 				}
 			}
 			ctx, cancel = context.WithCancel(context.Background())
+			defer cancel()
 			a.poll(ctx)
 			a.runPending()
 			if a.c.Desktop != nil {

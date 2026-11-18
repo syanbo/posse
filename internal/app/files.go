@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"os"
@@ -452,7 +453,9 @@ func (a *app) loadDirs(v *filesView, dirs []string) {
 				return
 			}
 			if err != nil {
-				a.err = errtext.Text(err)
+				if !errors.Is(err, context.Canceled) {
+					a.err = errtext.Text(err)
+				}
 				return
 			}
 			for _, item := range out {
@@ -543,7 +546,9 @@ func (a *app) startList(v *filesView) {
 			}
 			if err != nil {
 				v.listFailAt = time.Now()
-				v.listErr = err
+				if !errors.Is(err, context.Canceled) {
+					v.listErr = err
+				}
 			} else {
 				v.list, v.listAt, v.listFailAt = l, time.Now(), time.Time{}
 			}

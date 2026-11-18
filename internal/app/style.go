@@ -295,15 +295,18 @@ func terminalThemes() (light, dark *terminal.Theme) {
 }
 
 // windowColors 是窗口终端在用的配色（前景、底色、16 色），报给常驻进程。
+// 在后台轮询协程里调用，直接读取常量色值，不改写主线程正在绘制的 posseThemes。
 func windowColors(dark bool) term.Colors {
-	light, darkTheme := terminalThemes()
-	th := light
-	if dark {
-		th = darkTheme
+	rgb := func(hex string) vt.RGB {
+		c := ui.Hex(hex)
+		return vt.RGB{R: c.R, G: c.G, B: c.B}
 	}
-	rgb := func(c ui.Color) vt.RGB { return vt.RGB{R: c.R, G: c.G, B: c.B} }
-	c := term.Colors{Foreground: rgb(th.Foreground), Background: rgb(th.Background)}
-	for i, p := range th.Palette {
+	fg, bg, pal := term.LightForeground, term.LightBackground, term.LightPalette
+	if dark {
+		fg, bg, pal = term.DarkForeground, term.DarkBackground, term.DarkPalette
+	}
+	c := term.Colors{Foreground: rgb(fg), Background: rgb(bg)}
+	for i, p := range pal {
 		c.Palette[i] = rgb(p)
 	}
 	return c
