@@ -19,6 +19,8 @@ type Meta struct {
 
 // parseMeta 读 SKILL.md 的头部。只认顶层的 键: 值，值可以带引号、写成 | 或 > 块，或者接着缩进折行；
 // 嵌套的键和列表跳过。没有头部时返回零值。
+func ParseMeta(src string) Meta { return parseMeta(src) }
+
 func parseMeta(src string) Meta {
 	src = strings.TrimPrefix(src, "\ufeff")
 	rest, ok := strings.CutPrefix(src, "---\n")
