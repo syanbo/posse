@@ -174,6 +174,14 @@ func rebaseTodo(ctx context.Context, dir, from string, actions map[string]string
 	if err != nil {
 		return err
 	}
+	if err := rebaseTodoAt(ctx, dir, base, actions, message, false, nil); err != nil {
+		return err
+	}
+	return autostashLeft(ctx, dir, before)
+}
+
+// 起点已在调用方核对；这里只运行交互式 rebase，不替调用方回滚现场。
+func rebaseTodoAt(ctx context.Context, dir, base string, actions map[string]string, message string, stdinMessage bool, started func()) error {
 	tmp, err := os.MkdirTemp("", "posse-rebase-")
 	if err != nil {
 		return err
@@ -189,12 +197,21 @@ func rebaseTodo(ctx context.Context, dir, from string, actions map[string]string
 	if err := os.WriteFile(seq, []byte(script), 0o755); err != nil {
 		return err
 	}
-	msgFile := filepath.Join(tmp, "message")
-	if err := os.WriteFile(msgFile, []byte(message+"\n"), 0o644); err != nil {
-		return err
-	}
 	edit := filepath.Join(tmp, "edit.sh")
-	if err := os.WriteFile(edit, []byte("#!/bin/sh\ncat '"+msgFile+"' > \"$1\"\n"), 0o755); err != nil {
+	var stdin []byte
+	script = "#!/bin/sh\ncat > \"$1\"\n"
+	if stdinMessage {
+		if message != "" {
+			stdin = []byte(message + "\n")
+		}
+	} else {
+		msgFile := filepath.Join(tmp, "message")
+		if err := os.WriteFile(msgFile, []byte(message+"\n"), 0600); err != nil {
+			return err
+		}
+		script = "#!/bin/sh\ncat '" + msgFile + "' > \"$1\"\n"
+	}
+	if err := os.WriteFile(edit, []byte(script), 0755); err != nil {
 		return err
 	}
 	// 不受用户配置影响：commit.cleanup 默认会删掉 # 开头的行（#123 这类引用），
@@ -207,10 +224,13 @@ func rebaseTodo(ctx context.Context, dir, from string, actions map[string]string
 		args = append(args, base)
 	}
 	env := []string{"GIT_SEQUENCE_EDITOR=" + seq, "GIT_EDITOR=" + edit}
-	if _, err := runRaw(ctx, dir, nil, env, args...); err != nil {
+	if started != nil {
+		started()
+	}
+	if _, err := runRaw(ctx, dir, stdin, env, args...); err != nil {
 		return err
 	}
-	return autostashLeft(ctx, dir, before)
+	return nil
 }
 
 // Reword 改提交信息；是 HEAD 时直接 amend。

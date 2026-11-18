@@ -18,18 +18,27 @@ type fetchOutputPolicy struct{ truncated bool }
 
 // StashBounded 只允许固定储藏动作，查询仍使用单独的只读预算。
 func StashBounded(ctx context.Context, dir, action, value string) (bool, error) {
-	if ctx.Value(readLimitKey{}) != nil { return false, errors.New("Git stash requires a write context") }
+	if ctx.Value(readLimitKey{}) != nil {
+		return false, errors.New("Git stash requires a write context")
+	}
 	policy := &fetchOutputPolicy{}
 	ctx = context.WithValue(ctx, fetchOutputKey{}, policy)
 	var err error
 	switch action {
-	case "push": err = StashPush(ctx, dir, value)
-	case "apply": err = StashApply(ctx, dir, value)
-	case "drop": err = StashDrop(ctx, dir, value)
-	default: err = errors.New("invalid Git stash action")
+	case "push":
+		err = StashPush(ctx, dir, value)
+	case "apply":
+		err = StashApply(ctx, dir, value)
+	case "pop":
+		err = StashPop(ctx, dir, value)
+	case "drop":
+		err = StashDrop(ctx, dir, value)
+	default:
+		err = errors.New("invalid Git stash action")
 	}
 	return policy.truncated, err
 }
+
 type commandOutput interface {
 	io.Writer
 	Bytes() []byte

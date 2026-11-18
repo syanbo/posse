@@ -14,6 +14,7 @@ import (
 // Branch 是一个本地或远端分支。
 type Branch struct {
 	Name     string // 本地分支名，或 origin/main 这样的远端分支
+	OID      string // 分支列表读取时的提交，写入前仍需复查
 	Remote   bool
 	Current  bool
 	Upstream string // 跟踪的远端分支
@@ -27,7 +28,7 @@ type Branch struct {
 // Branches 列出本地和远端分支；远端的 HEAD 指针不算分支。
 func Branches(ctx context.Context, dir string) ([]Branch, error) {
 	out, err := runRaw(ctx, dir, nil, nil, "for-each-ref",
-		"--format=%(refname)%1f%(HEAD)%1f%(upstream:short)%1f%(upstream:track,nobracket)%1f%(worktreepath)%1f%(committerdate:unix)",
+		"--format=%(refname)%1f%(HEAD)%1f%(upstream:short)%1f%(upstream:track,nobracket)%1f%(worktreepath)%1f%(committerdate:unix)%1f%(objectname)",
 		"refs/heads", "refs/remotes")
 	if err != nil {
 		return nil, err
@@ -35,10 +36,10 @@ func Branches(ctx context.Context, dir string) ([]Branch, error) {
 	var list []Branch
 	for _, line := range strings.Split(string(out), "\n") {
 		p := strings.Split(line, "\x1f")
-		if len(p) != 6 {
+		if len(p) != 7 {
 			continue
 		}
-		b := Branch{Current: p[1] == "*", Upstream: p[2], Worktree: p[4]}
+		b := Branch{Current: p[1] == "*", Upstream: p[2], Worktree: p[4], OID: p[6]}
 		switch {
 		case strings.HasPrefix(p[0], "refs/heads/"):
 			b.Name = strings.TrimPrefix(p[0], "refs/heads/")
@@ -220,12 +221,19 @@ var ErrNoUpstream = errors.New("this branch has no upstream branch")
 // Update 用远端更新分支。当前分支：拉取后把本地提交 rebase 上去，未提交的改动临时储藏再取回；
 // 其他分支：只能快进（git fetch 远端分支到本地分支），分叉时报错。
 func Update(ctx context.Context, dir string, b Branch) error {
+	return update(ctx, dir, b, func(args ...string) error {
+		_, err := runRaw(ctx, dir, nil, nil, args...)
+		return err
+	})
+}
+
+func update(ctx context.Context, dir string, b Branch, execute func(...string) error) error {
 	if b.Upstream == "" {
 		return ErrNoUpstream
 	}
 	if b.Current {
 		before, _ := stashTop(ctx, dir)
-		if _, err := runRaw(ctx, dir, nil, nil, "pull", "--rebase", "--autostash"); err != nil {
+		if err := execute("pull", "--rebase", "--autostash"); err != nil {
 			return err
 		}
 		return autostashLeft(ctx, dir, before)
@@ -234,8 +242,11 @@ func Update(ctx context.Context, dir string, b Branch) error {
 	if !ok {
 		return ErrNoUpstream
 	}
-	_, err := runRaw(ctx, dir, nil, nil, "fetch", remote, branch+":refs/heads/"+b.Name)
-	return err
+	// + 是合法分支名的首字符，但在 refspec 开头会被当成强制更新标记。
+	if strings.HasPrefix(branch, "+") {
+		branch = "refs/heads/" + branch
+	}
+	return execute("fetch", remote, branch+":refs/heads/"+b.Name)
 }
 
 // Tip 返回引用指向的提交，没有时为空。

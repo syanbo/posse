@@ -3,6 +3,8 @@ package gitx
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -24,6 +26,9 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 	}
 	limit := 2 * time.Minute
 	if len(args) > 0 && (args[0] == "fetch" || args[0] == "pull" || args[0] == "push") {
+		limit = 10 * time.Minute
+	}
+	if _, ok := ctx.Value(commitOutputKey{}).(bool); ok {
 		limit = 10 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(ctx, limit)
@@ -50,10 +55,15 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 	}
 	var out, errb commandOutput = &bytes.Buffer{}, &bytes.Buffer{}
 	policy, bounded := ctx.Value(fetchOutputKey{}).(*fetchOutputPolicy)
-	bounded = bounded && len(args) > 0 && (args[0] == "fetch" || args[0] == "stash")
+	_, commitBounded := ctx.Value(commitOutputKey{}).(bool)
+	bounded = bounded && len(args) > 0 && (commitBounded || args[0] == "fetch" || args[0] == "stash" || args[0] == "push" || args[0] == "add" || args[0] == "rm" || args[0] == "restore" || args[0] == "checkout")
 	if bounded {
 		out, errb = &fetchOutput{}, &fetchOutput{}
 		cmd.Env = fetchEnviron(cmd.Env)
+		// 只恢复本次调用明确指定的临时索引，不继承进程里的 Git 定位变量。
+		if commitBounded {
+			cmd.Env = append(cmd.Env, env...)
+		}
 	}
 	cmd.Stdout, cmd.Stderr = out, errb
 	rec := traceStart(ctx, dir, args)
@@ -62,7 +72,7 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 		stdout, stderr := out.(*fetchOutput), errb.(*fetchOutput)
 		stdout.finish()
 		stderr.finish()
-		policy.truncated = stdout.truncated || stderr.truncated
+		policy.truncated = (commitBounded && policy.truncated) || stdout.truncated || stderr.truncated
 	}
 	if runErr != nil {
 		msg := withoutHints(errb.String())
@@ -125,6 +135,7 @@ func (e Entry) IsDir() bool { return e.Submodule || strings.HasSuffix(e.Path, "/
 type Status struct {
 	Head      string // 当前分支；分离 HEAD 时为空
 	Commit    string // HEAD 的提交，还没有提交时为空
+	IndexID   string // ls-files -s -z 原始输出的 SHA-256，不刷新索引
 	Upstream  string
 	Ahead     int
 	Behind    int
@@ -140,7 +151,18 @@ func ReadStatus(ctx context.Context, dir string) (*Status, error) {
 	}
 	st := parseStatus(out)
 	st.Operation = inProgress(ctx, dir)
-	return st, nil
+	st.IndexID, err = IndexID(ctx, dir)
+	return st, err
+}
+
+// IndexID 只读索引条目，不取可选锁，也不受 index 的 stat 缓存刷新影响。
+func IndexID(ctx context.Context, dir string) (string, error) {
+	out, err := runRaw(ctx, dir, nil, nil, "ls-files", "-s", "-z")
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(out)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func parseStatus(out []byte) *Status {
@@ -394,7 +416,16 @@ var ErrStagedChange = errors.New("this file has staged changes; commit the whole
 // 只换上这一处之后的样子。在临时的暂存区里提交（钩子照常执行），工作区不动；
 // 真正的暂存区里这个文件换成刚提交的版本，剩下的改动仍然是未暂存的。
 func CommitChange(ctx context.Context, dir, path string, content []byte, message string) error {
-	tree, err := runRaw(ctx, dir, nil, nil, "ls-tree", "-z", "HEAD", "--", path)
+	return commitChange(ctx, dir, path, content, message, nil)
+}
+
+func commitChange(ctx context.Context, dir, path string, content []byte, message string, started func()) error {
+	checkCtx := ctx
+	if started != nil {
+		// 核验数据不能经过诊断净化：文件名可能恰好包含 token 等字样。
+		checkCtx = WithReadLimit(WithTrace(ctx, nil), 16<<10)
+	}
+	tree, err := runRaw(checkCtx, dir, nil, nil, "ls-tree", "-z", "HEAD", "--", literal(path)[0])
 	if err != nil {
 		return err
 	}
@@ -405,12 +436,18 @@ func CommitChange(ctx context.Context, dir, path string, content []byte, message
 		return errors.New("the last commit does not contain this file")
 	}
 	mode, headBlob := f[0], f[2]
-	staged, err := runRaw(ctx, dir, nil, nil, "ls-files", "-s", "-z", "--", literal(path)[0])
+	staged, err := runRaw(checkCtx, dir, nil, nil, "ls-files", "-s", "-z", "--", literal(path)[0])
 	if err != nil {
 		return err
 	}
-	if s := strings.Fields(string(staged)); len(s) < 2 || s[1] != headBlob {
+	if s := strings.Fields(string(staged)); len(s) < 3 || s[1] != headBlob || s[2] != "0" || bytes.Count(staged, []byte{0}) != 1 {
 		return ErrStagedChange
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if started != nil {
+		started()
 	}
 	out, err := runRaw(ctx, dir, content, nil, "hash-object", "-w", "--stdin", "--path", path)
 	if err != nil {

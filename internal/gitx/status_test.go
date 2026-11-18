@@ -2,6 +2,8 @@ package gitx
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -339,5 +341,42 @@ func TestParseStatusDirs(t *testing.T) {
 	}
 	if !st.Entries[0].Submodule {
 		t.Error("sm 应该是子模块")
+	}
+}
+
+func TestStatusIndexID(t *testing.T) {
+	dir := t.TempDir()
+	runTestGit := func(args ...string) string {
+		t.Helper()
+		out, err := runRaw(context.Background(), dir, nil, nil, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(out)
+	}
+	runTestGit("init", "-q")
+	st, err := ReadStatus(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Commit != "" || st.IndexID != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
+		t.Fatalf("unborn status %+v", st)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "[x]*"), []byte("new"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	runTestGit("add", "--", ":(literal)[x]*")
+	st, err = ReadStatus(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked, err := ReadStatusChecked(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := runTestGit("ls-files", "-s", "-z")
+	sum := sha256.Sum256([]byte(raw))
+	if st.IndexID != hex.EncodeToString(sum[:]) || st.IndexID != checked.IndexID {
+		t.Fatal("index digest is not raw ls-files output")
 	}
 }

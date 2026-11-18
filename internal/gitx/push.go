@@ -98,6 +98,16 @@ func Push(ctx context.Context, dir string, plan PushPlan, force, tags bool) erro
 	return err
 }
 
+// PushBounded 只限制诊断输出；整条分支和附注标签仍交给 Push 推送。
+func PushBounded(ctx context.Context, dir string, plan PushPlan, force, tags bool) (bool, error) {
+	if ctx.Value(readLimitKey{}) != nil {
+		return false, errors.New("Git push requires a write context")
+	}
+	policy := &fetchOutputPolicy{}
+	err := Push(context.WithValue(ctx, fetchOutputKey{}, policy), dir, plan, force, tags)
+	return policy.truncated, err
+}
+
 // Rejected 报告推送是不是因为远端有本地没有的提交被拒绝（要先更新，或者强制推送）。
 func Rejected(err error) bool {
 	var ge *Error

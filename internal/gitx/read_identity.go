@@ -104,6 +104,10 @@ func ReadStatusChecked(ctx context.Context, dir string) (*Status, error) {
 		return nil, err
 	}
 	st := parseStatus(out)
+	st.IndexID, err = IndexID(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
 	for _, marker := range []struct{ name, operation string }{
 		{"rebase-merge", "rebase"}, {"rebase-apply", "rebase"}, {"MERGE_HEAD", "merge"},
 		{"CHERRY_PICK_HEAD", "cherry-pick"}, {"REVERT_HEAD", "revert"},
