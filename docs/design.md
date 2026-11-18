@@ -142,6 +142,14 @@ agent 色块：跟在小字旁用 `smallIcon()`，单行列表行首用 `iconSiz
 - 兄弟元素之间用 `hline(c)`、`vline(c)`；容器自己的边界用 `BorderWidth(hairline, …)`。区域之间的线贴边；列表、菜单里两组之间用 `Margin(4, 6)`；其余跟着容器内边距缩进。
 - 聚焦框不是分隔线，粗细 `focusRing`；不聚焦时画同底色的框占住尺寸，聚焦时不挤动内容。
 
+## 控件、快捷键与菜单
+
+- 侧栏是自绘的行（`navRowAt`），不用 mygo 的 `Sidebar`（它的选中样式改不了）。mygo 会把字重取整到固定档位，别指望细调字重。
+- 快捷键都登记在 `internal/app/keymap.go` 的表里（设置页「快捷键」能看能改，改过的存 `ui.json` 的 `keys`）：新加快捷键往表里加一项，用 `a.pressed(c, id)` / `a.pressedIn`（终端 `OnKey` 用 `a.keyIs`）判断，提示文字用 `a.keyText`、`a.withKey`、菜单的 `.Keys(...)`，不写死 `c.Shortcut(ui.Cmd, …)` 和 `"⌘X"`。编辑器的键在表里是 `editor.<命令名>`，经 `editorBindings` 交给编辑器。
+- 菜单栏由 `installMenu` 自己装：macOS 先把按键交给菜单，mygo 默认菜单的"关闭窗口"占着 ⌘W（界面收不到，关最后一个标签会连 app 一起关掉），View 菜单占着 ⌘R、⌘=、⌘-、⌘0。⌘W 是"关闭标签"（`closeTab`），关窗口是 ⇧⌘W。
+- 弹出与右键菜单都是 Posse 自绘（`menu.go`）：按钮弹出用 `menuButton`，右键用 `contextMenu`（mygo 的 `ContextMenuAsked` 沿用它的右键路由，只报位置），终端内容区由插件的 `Options.ContextMenu` 交来位置；不用 mygo 的 `Menu`、`ContextMenu`（系统 `NSMenu`，悬停高亮改不了）。`build` 每帧先跑一遍收集菜单项，点了某项后同一帧再跑一遍报告 `Chosen`，两遍加的项要一样。"在访达中显示/打开"一律用 `iconFolder`。mygo 自己的菜单（文字输入框、可选文字、编辑器的编辑菜单）经 `Context.PresentMenus` 交给 Posse（`presentMenu`、`sysMenuView`），菜单项的文字由 mygo 按界面语言给（中文叫法和 mygo 不同的在 `locales/zh-Hans.json` 用 `mygo.<键>` 覆盖）。
+- 能点的元素主题已给手形指针，新控件不用单独设 `Cursor(ui.CursorPointer)`；只为挡住点击才调 `Clicked` 的大容器要设 `Cursor(ui.CursorDefault)`。
+
 ## 改这套规范
 
 1. 改 `style.go` 里的定义，不在调用处单独调；设置项在 `uistate.go`（`ui.json`）和 `settings.go`，经 `setUIType` 生效。

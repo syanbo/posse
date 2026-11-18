@@ -4,6 +4,11 @@
 
 更新说明（`CHANGELOG.md`、`mobile/CHANGELOG.md`）每节先写中文条目，再写 `### English` 小节放对应的英文条目：Mac 端按界面语言显示其中一份（`appupdate.go` 的 `localNotes`）；手机的发布脚本把中文条目写进 `latest.json` 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 签名与图标
+
+- `mygo.json` 用 Developer ID Application 证书签名（团队 `QKSM9Z4U85`；`macos.signingIdentity` 写证书的 SHA-1：钥匙串里有一张同名的过期证书，写名字 `codesign` 会报 `unknown exception`）。临时签名（adhoc）时系统按每次构建的 cdhash 认 app，每打一次包访问桌面、文稿都要重新授权；用证书后按包 ID 加证书认，授权一直有效。正式打包带强化运行时和时间戳（要联网），libghostty 在包里、同一证书签，照常加载。换证书改这里的 SHA-1（`security find-identity -v -p codesigning`）。
+- 应用图标的原图是 `design/icon-art.png`（满版、不带圆角），改图标同步改它和各端产物：桌面端用 Icon Composer 文档 `design/Posse.icon`（`mygo.json` 的 `macos.icon`，里面一层是原图缩到 1024 的版本，关了玻璃、高光和阴影），由 `actool` 编成 `Assets.car`、圆角由系统画（自带留白和圆角的图在新版 macOS 上会被缩小放进底板）；`icon` 指向的 `design/icon.png` 和那一层是同一个文件，只在编不了 `.icon` 时兜底；手机端的 AppIcon、安卓 mipmap 和 `mobile/assets/icon.png` 由原图缩放。不要放进 `resources/`（那里的文件会原样打进 app）。
+
 ## Mac
 
 先在 `CHANGELOG.md` 加 `## <版本>` 一节（更新时显示的更新内容，可以不提交），再跑 `scripts/release.sh <版本>`：它把版本号写进 `mygo.json` 和 `internal/daemon/daemon.go`（`TestVersionMatchesPackage` 保证两处一致），连同 CHANGELOG 提交成 `chore(release): 发布 <版本>`、打标签 `v<版本>`（不推送），再打包、公证到 `build/release/<版本>`，传到 R2。Apple 芯片和 Intel 各打一个包（`darwin-arm64`、`darwin-amd64`），各有自己的更新清单；下载链接 `Posse.dmg` 是 Apple 芯片的，`Posse-Intel.dmg` 是 Intel 的，`install.sh` 按本机架构选。打包或上传失败后不带参数重跑，发布 `mygo.json` 里现在的版本：线上清单已是这个版本的平台跳过，只重新打包、上传没发完的平台。更新包的签名私钥在 `~/Library/Application Support/mygo/update-keys/`，丢了已装的 Posse 就收不到更新；只有 `release.sh` 把它交给 mygo，日常打包不做更新包（会提示 Not signing an update）。方案和换包时机见 `docs/plans/mac-update.md`。推送提交和标签后跑 `scripts/github-release.sh`（不带参数是 `mygo.json` 里的版本），在 GitHub 上建这一版的 Release：说明取 CHANGELOG 这一节，附两个平台的 dmg（从 `build/release/<版本>` 取，要在发布的那台机器上跑）；重跑只更新说明、覆盖附件。

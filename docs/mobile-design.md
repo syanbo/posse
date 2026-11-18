@@ -90,3 +90,10 @@ Material 图标一律用 `_rounded`。和首页项目行、文件树、Git 树�
 - 确认框用 `showPosseConfirm`，不手写 `AlertDialog`：标题、说明，下面取消和确认两个等宽按钮。语气三种：`normal` 陶土色按钮；`warning`（有风险但不删东西，如 agent 工作时切分支）标题前加琥珀色警示图标，弹框落定后图标的淡底向外扩一圈，只播一次；`danger`（关会话、忘掉电脑这类删除）确认按钮用 `danger`。
 - 确认框的内容跟着弹框的推入动画分层出现（图标 80ms、文字 160ms、按钮 200ms 起），按钮按下缩到 0.97。只改变换和透明度，不另开常驻的动画，放完不再出帧。
 - 带输入框、进度这类自定义内容的仍用 `AlertDialog`，标题、正文字号和离屏幕边的距离由主题的 `dialogTheme` 统一。
+
+## 多语言与报错
+
+- 界面文字经 Flutter 的 `gen-l10n`：译文表是 `mobile/lib/l10n/app_en.arb`（模板，每个键带 `description`）和 `app_zh.arb`，键名、ICU 写法和桌面一致（见 `docs/plans/i18n.md`）。界面里写 `context.l10n.settingsLanguageTitle`，不写中文字面量（`mobile/test/l10n_test.dart` 检查 `lib/` 里没有中文字面量）。改了 ARB 跑 `fvm flutter gen-l10n`，生成的 `app_localizations*.dart` 一起提交。
+- 钟点经 `lib/l10n/dates.dart` 的 `clockTime`、`monthDayTime`，时制用 `use24Hour(context)` 传进去（测试在 `flutter_test_config.dart` 固定 24 小时制）。
+- 界面语言（设置里选，或跟随系统）连上电脑时随 `runtime.clientCapabilities.update` 报过去，变了再报（`posseLocale`、`PosseAppModel.localeChanged`），电脑按它翻译报错。
+- 原生插件（Kotlin、Swift）不写界面文字：报错给英文 `message` 和 `code`，Dart 按 `code` 写成界面语言（`PhoneError`、`friendlyError`，不直接 `'$error'`）；iOS 的权限说明 `Info.plist` 写英文，中文写在 `ios/Runner/zh-Hans.lproj/InfoPlist.strings`，加权限两边一起加（`l10n_test.dart` 也查原生）。

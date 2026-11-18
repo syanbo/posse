@@ -11,99 +11,83 @@ go vet ./... && go test ./... && go tool mygo vet && go tool mygo i18n check
 go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm64/Posse.app（Intel 机器用 darwin/amd64）
 ```
 
-- go.mod 要求 Go 1.27.3（MyGo 的要求），本机 Go 1.26 会通过 GOTOOLCHAIN=auto 自动下载。
-- 终端内核 libghostty-vt 首次运行时由 MyGo 下载到 `~/Library/Caches/mygo/natives/`。
-- 端到端测试不要碰 `~/.posse`。只测 CLI 和常驻进程、不涉及系统授权时用 `POSSE_HOME=/tmp/posse-e2e/home ./bin/posse ...`，编得最快；单元测试和离屏预览不起 App。
-- 改界面后用离屏预览自查（屏幕锁定时也能用）：`POSSE_PREVIEW_DIR=/tmp/posse-preview go test ./internal/app -run TestPreview`，生成主要界面深浅两套的 PNG（清单在 `preview_test.go` 和其余 `*preview*_test.go` 里）。
-- 写手机端界面前读 `docs/mobile-design.md`：取值只用 `mobile/lib/ui/theme.dart` 里的名字，`mobile/test/design_rules_test.dart` 检查。
-- 手机端的界面文字经 Flutter 的 gen-l10n：译文表是 `mobile/lib/l10n/app_en.arb`（模板，每个键带 description）和 `app_zh.arb`，键名、ICU 写法和桌面一样（见上面桌面一条）；界面里写 `context.l10n.settingsLanguageTitle`，不写中文字面量；钟点经 `lib/l10n/dates.dart` 的 `clockTime`、`monthDayTime`，时制用 `use24Hour(context)` 传进去（测试在 `flutter_test_config.dart` 固定 24 小时制）（`mobile/test/l10n_test.dart` 检查 lib 里没有中文字面量）。改了 ARB 跑 `fvm flutter gen-l10n`，生成的 `app_localizations*.dart` 一起提交。界面语言（设置里选，或跟随系统）连上电脑时随 `clientCapabilities.update` 报过去，变了再报（`posseLocale`、`PosseAppModel.localeChanged`），电脑按它翻译报错。原生插件（Kotlin、Swift）不写界面文字：报错给英文 message 和 code，Dart 按 code 写成界面语言（`PhoneError`、`friendlyError`）；iOS 的权限说明 `Info.plist` 写英文，中文写在 `ios/Runner/zh-Hans.lproj/InfoPlist.strings`，加权限两边一起加（`l10n_test.dart` 也查原生）。
-- gofmt 用 `$(go env GOROOT)/bin/gofmt`：Homebrew 的 gofmt 版本较旧，对齐规则不同。
-- 写界面前读 `docs/design.md`（取向和字号、颜色、间距等规则，只用 `style.go` 里的名字，不写数字），各界面的行为见 `docs/features/ui.md`。侧栏是自绘的行（`navRowAt`），不用 mygo 的 Sidebar：它的选中样式改不了。mygo 会把字重取整到固定档位，别指望细调字重。
-- 桌面窗口的界面文字经 mygo 的多语言框架（方案和进度见 `docs/plans/i18n.md`）：译文表是 `locales/en.json`（源语言，每个键带 description）和 `zh-Hans.json`，键小驼峰、界面在前（`settingsRestoreTitle`），带数字、名字的整句用 ICU 占位符和复数，不拼句子。视图里写 `L(c).SettingsTitle()`，没有 Context 的菜单才用平面函数 `locales.SettingsTitle()`；不写中文字面量，全角标点也不写（`TestNoChineseLiterals`）。改了 JSON 跑 `go tool mygo generate` 重写 `locales/catalog_gen.go` 并提交（`go build` 不经 mygo，`TestCatalogGenerated` 核对）。mygo 自己控件的中文叫法要改，在 `zh-Hans.json` 里写 `mygo.<键>`。测试的 Tester 用 `newTester`，固定中文。钟点跟系统的 12/24 小时设置：译文里写 `::jm`、`::jms`（不写 `::Hm`），代码里用 `appTime` 这类键，不写 `Format("15:04")`；Messages 一律经 `L(c)`/`appL()` 取（它们给语言带上时制，直接 `locales.In("en")` 是 12 小时），测试固定 24 小时。内容数据不进译文表：命令速查表 `internal/cheatsheet/cheatsheet.json` 新加条目同时写英文字段（`titleEn`、`descEn`，参数提示带中文的写 `argsEn`），`cheatsheet.For` 按界面语言取。
-- `mygo.json` 用 Developer ID Application 证书签名（团队 QKSM9Z4U85；`macos.signingIdentity` 写证书的 SHA-1：钥匙串里有一张同名的过期证书，写名字 codesign 会报 unknown exception）。临时签名（adhoc）时系统按每次构建的 cdhash 认 app，每打一次包访问桌面、文稿都要重新授权；用证书后按包 ID 加证书认，授权一直有效。正式打包会带强化运行时和时间戳（要联网），libghostty 在包里、同一证书签，照常加载。换证书改这里的 SHA-1（`security find-identity -v -p codesigning`）。
-- 应用图标的原图是 `design/icon-art.png`（满版、不带圆角），改图标改它和下面几处。桌面端用 Icon Composer 文档 `design/Posse.icon`（`mygo.json` 的 `macos.icon`，里面一层是这张图缩到 1024 的版本，关了玻璃、高光和阴影），由 actool 编成 Assets.car、圆角由系统画：自带留白和圆角的图在新版 macOS 上会被缩小放进一块底板。`icon` 指向的 `design/icon.png` 和那一层是同一个文件，只在编不了 .icon 时用；手机端的 AppIcon、安卓 mipmap 和 `mobile/assets/icon.png` 由原图缩放。不要放进 `resources/`：那里的文件会原样打进 app。
-- 要把 App 跑起来的测试（窗口、Computer Use、看桌面、屏幕录制和辅助功能这类按签名认的授权、访问文稿和桌面目录）一律用 `scripts/dev-app.sh` 装出的 `build/dev/PosseDev.app`：包 ID `com.dengbo.posse.dev`、同一张证书，授权一次一直有效，可反复重装。它没设 `POSSE_HOME` 时用 `~/.posse-dev`、没设 `POSSE_MOBILE_PORT` 时手机端口用 6790，`POSSE_HOME` 指向 `~/.posse` 也换成 `~/.posse-dev`（`daemon.ResolveHome`）：双击、系统重新拉起、Computer Use 按包 ID 激活都不带环境变量，在 Posse 的终端里直接运行又会继承日常的 `POSSE_HOME`，连上日常的常驻进程后窗口会把它自动交接到更新的开发包上。只有一份：在 worktree 里跑脚本也装到主仓库的 `build/dev`，换包前退出正在运行的 Posse Dev，不并行验收。命令行调用主仓库的 `build/dev/PosseDev.app/Contents/MacOS/Posse …`，窗口用 `scripts/dev-app.sh --open`（装完在后台打开，不抢用户的窗口），开发包被别的窗口挡住也照常画（`ui.DrawWhenOccluded`），截图、无头点击和按键不用把它叫到最前，只有悬停、拖动这类真实鼠标操作才要；不要 `open -n`、不要自己运行 `posse app`：同一 home 已有窗口时新开的只把它叫到前面就退出，终端里无参数的 `posse` 不开窗口。手机配对一次长期有效，用完 `daemon stop` 停掉它的常驻进程（先 `daemon status` 看 home 是 `~/.posse-dev`）。
-- `build/darwin-arm64/Posse.app` 是日常在用的包（窗口、常驻进程、hooks 都从它运行），只由正式打包写入，不往里复制、不原地改写：正在运行的程序文件被改写，系统按签名失效直接杀掉所有用它的进程，终端全部丢失。不拿它做测试，用上一条的 PosseDev.app；测试用的包如果和日常的包 ID 相同，按包 ID 激活起来的实例会用 `~/.posse`，还会把日常的常驻进程交接过去（发生了就用 build 里的包 `posse daemon handoff` 换回来）。
-- 在 Posse 的终端里跑测试时，环境里带着日常常驻进程的 `GIT_TRACE2_EVENT`，`internal/daemon` 的 `TestGitTrace` 会失败：用 `env -u GIT_TRACE2_EVENT -u GIT_TRACE2_ENV_VARS go test ./...`。
-- 发布 Mac 版、iOS 和安卓安装包的步骤见 `docs/release.md`。`CHANGELOG.md`、`mobile/CHANGELOG.md` 每节先写中文条目，再在 `### English` 小节写英文条目。
-- 内存验收看 `footprint -p <pid>` 的 phys_footprint，不看 RSS：libghostty-vt 压缩回滚后 RSS 不会立即下降。
-- main 保持一条直线，不留合并提交。分支和 worktree 合入的步骤：先在分支上 `git rebase main`，解决冲突后在分支上重新跑测试；再到项目目录执行 `git merge --ff-only <分支>`。不要用 `posse workspace merge`：它按 `--no-ff` 合入，那是给用户项目准备的。`posse task` 的 worker 在 worktree 里做完后，也按这个步骤合入。
+- go.mod 要求 Go 1.27.3（MyGo 的要求），本机 Go 1.26 会通过 `GOTOOLCHAIN=auto` 自动下载；终端内核 `libghostty-vt` 首次运行时由 MyGo 下载到 `~/Library/Caches/mygo/natives/`。
+- `gofmt` 用 `$(go env GOROOT)/bin/gofmt`：Homebrew 的 gofmt 版本较旧，对齐规则不同。
+- 在 Posse 的终端里跑测试时环境带着日常常驻进程的 `GIT_TRACE2_EVENT`（`internal/daemon` 的 `TestGitTrace` 会失败），用 `env -u GIT_TRACE2_EVENT -u GIT_TRACE2_ENV_VARS go test ./...`。
+- 端到端测试不要碰 `~/.posse`。只测 CLI 和常驻进程、不涉及系统授权时用 `POSSE_HOME=/tmp/posse-e2e/home ./bin/posse ...`；单元测试和离屏预览不起 App。
+- 改界面后用离屏预览自查（锁屏也能跑）：`POSSE_PREVIEW_DIR=/tmp/posse-preview go test ./internal/app -run TestPreview`（清单见 `preview_test.go` 和其余 `*preview*_test.go`）。
+- 写桌面界面前读 `docs/design.md`（字号、颜色、间距只用 `style.go` 里的名字，不写数字；自绘侧栏 `navRowAt`、快捷键表 `keymap.go`、自绘菜单 `menu.go` 与 `installMenu` 规则见该文档），各界面行为见 `docs/features/ui.md`。
+- 桌面多语言经 mygo 框架（方案见 `docs/plans/i18n.md`）：译文表是 `locales/en.json`（源语言，带 `description`）和 `zh-Hans.json`，键小驼峰、界面在前，带数字或名字的整句用 ICU 占位符和复数，不拼句子。视图里写 `L(c).SettingsTitle()`，无 Context 的菜单才用平面函数 `locales.SettingsTitle()`；界面文字一律经 `locales`，禁写中文字面量和全角标点（`TestNoChineseLiterals`）。改 JSON 后跑 `go tool mygo generate` 重写 `locales/catalog_gen.go` 并提交（`TestCatalogGenerated` 核对）；mygo 控件叫法在 `zh-Hans.json` 用 `mygo.<键>` 覆盖；测试用 `newTester`（固定中文和 24 小时制）。钟点写 `::jm`、`::jms`（不写 `::Hm` 或 `Format("15:04")`），用 `appTime` 等键经 `L(c)`/`appL()` 取。`internal/cheatsheet/cheatsheet.json` 新增条目同步补 `titleEn`/`descEn`/`argsEn`。
+- 写手机端界面前读 `docs/mobile-design.md`：样式只用 `mobile/lib/ui/theme.dart` 里的名字（`design_rules_test.dart` 检查）；文字经 Flutter `gen-l10n`（`app_en.arb` / `app_zh.arb`，改后跑 `fvm flutter gen-l10n` 一并提交，钟点用 `dates.dart` + `use24Hour(context)`），原生插件和 iOS `InfoPlist.strings` 禁写中文（`l10n_test.dart` 检查），细则见 `docs/mobile-design.md`。
+- 要把 App 跑起来的测试（窗口、Computer Use、看桌面、TCC/录屏/辅助功能授权）一律用 `scripts/dev-app.sh` 装出的 `build/dev/PosseDev.app`（包 ID `com.dengbo.posse.dev`，同证书签名，默认 `~/.posse-dev` 和手机端口 `6790`；`POSSE_HOME` 指向 `~/.posse` 也会经 `daemon.ResolveHome` 换到 `~/.posse-dev`）。worktree 里跑脚本也装到主仓库的 `build/dev`，只有一份，换包前先退出正在运行的 Posse Dev，不并行验收。CLI 调 `build/dev/PosseDev.app/Contents/MacOS/Posse …`，窗口用 `scripts/dev-app.sh --open`（后台打开，靠 `ui.DrawWhenOccluded` 挡住也照常画，截图和无头键鼠不用前置；只有悬停、拖动等真实鼠标操作才前置）；不要 `open -n`、不要直接跑 `posse app`。用完先 `daemon status` 核对 home 是 `~/.posse-dev` 再 `daemon stop`。
+- `build/darwin-arm64/Posse.app` 是日常在用的包（窗口、常驻进程、hooks 都从它运行），只由正式打包写入，严禁往里复制或原地改写（签名失效会被系统直接杀掉所有相关进程，终端全部丢失），也不拿同包 ID 的测试包运行（误把日常常驻进程交接过去时，用 `build/darwin-arm64` 里的包执行 `posse daemon handoff` 换回）。
+- 签名证书（`mygo.json` 写团队 `QKSM9Z4U85` 证书 SHA-1）、应用图标（`design/icon-art.png` 与 `Posse.icon`，禁放 `resources/`）及三端发布步骤见 `docs/release.md`。`CHANGELOG.md`、`mobile/CHANGELOG.md` 每节先写中文条目，再写 `### English` 小节。
+- 内存验收看 `footprint -p <pid>` 的 `phys_footprint`，不看 RSS（`libghostty-vt` 压缩回滚后 RSS 不会立即下降）。
+- `main` 保持一条直线，不留合并提交：分支或 worktree（含 `posse task` 的 worker）先 `git rebase main`、重跑测试，再到主仓库 `git merge --ff-only <分支>`；不要用按 `--no-ff` 合入的 `posse workspace merge`。
 
 ## 结构
 
 ```
-cmd/posse            单一二进制：窗口（posse app，或从 Posse.app 无参数启动）、常驻进程（posse daemon run）和 CLI 共用
-internal/rpc        unix socket 协议：每连接一次请求，请求/响应各一行 JSON
-internal/daemon     常驻进程：项目、工作区、终端的 RPC 处理；task.go 是多 agent 编排；desk.go 是手机看桌面的会话（同一时间一台，拉起采集子进程、收发 UDP）
-internal/host       常驻进程和手机操作终端的边界（Host、Terminal 接口），包着 internal/term 的进程内实现；升级交接（Pause 导出、Adopt 重建）也在这层，方案见 docs/plans/terminal-host.md
-internal/term       PTY + libghostty-vt 维护屏幕状态；接入时给界面快照和输出流
-internal/vt         libghostty-vt 绑定，复制自 MyGo 后只留常驻进程用得到的部分（键鼠编码、选区、视口滚动和常驻进程不处理的通知回调已删，剪贴板写入一律拒绝，RenderState 只在测试里）；snapshot.go 逐格生成快照内容
-internal/client     CLI 与界面共用的客户端：拉起常驻进程、接入终端（Conn）
-internal/remote     Mac SSH 连接基础：主机配置、私有 askpass、远端发现、OpenSSH Unix socket 转发与 daemon 能力握手（docs/features/remote.md）；尚未接入窗口主机切换
-internal/store      SQLite（modernc，纯 Go）：项目、工作区、终端记录；task.go 是任务和消息
-internal/history    会话历史：读 claude/codex/cursor/grok 的会话文件，增量索引进 $POSSE_HOME/history.db（FTS5），搜索和摘要；也给技能与工具面板统计用量、扫描会话里的图片和视频
-internal/gitx       调用系统 git：管理 worktree（常驻进程），以及界面的状态、diff、分支、推送、日志、冲突
-internal/agent      agent 启动命令与 hooks 事件到状态的映射
-internal/namer      会话标题（posse session title）：规整 `MMDD｜类型｜摘要`，写 Codex、Grok 自己存标题的地方
-internal/cli        子命令解析与输出（--json 给 agent 用）
-internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端，任务、历史、文件、Git 等界面，状态栏用量和内存；只接入当前可见的终端；各界面见 docs/features/
-internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
-internal/cheatsheet 各家 agent 内置命令、按键和输入前缀的速查表（手工整理的 cheatsheet.json），以及认出本机 agent 的版本
-internal/projicon   项目自定义图标：窗口里设，存在 $POSSE_HOME/project-icons，常驻进程给手机列工作区时读
-internal/collaboration 讨论的安装身份（$POSSE_HOME/collab.json，Ed25519，指纹给讨论命名 roomKey），和手机密钥无关；第二阶段的局域网协作也放这里。讨论的表和事务在 internal/store/discussion.go，调度和 RPC 在 internal/daemon/discussion.go，见 docs/features/discussions.md；局域网协作的传输（TLS 1.3 WebSocket、邀请、凭据）在这里的 conn.go、invite.go，房主和成员两侧在 internal/daemon/collab*.go，表在 internal/store/collab.go
-locales            界面文字的译文表（en.json、zh-Hans.json）和 mygo 生成的取文字函数（catalog_gen.go）
-internal/errtext    报错的界面文字：英文原文按界面语言翻译（译文表如 zh.go），桌面窗口和手机服务显示报错时用
-internal/spawn      拉起常驻进程和桌面采集子进程：新开会话，让它自己对系统授权负责；runtime.go 管常驻进程运行用的包副本（创建、登记、回收）
-internal/desk       手机看 Mac 桌面的采集侧：子进程（`posse desk helper`）用 ScreenCaptureKit 采屏（可选屏，也可只看一个窗口，window_darwin.go）、VideoToolbox 硬编码，帧经管道交给父进程，手机的键鼠输入由父进程排序去重（input.go）、子进程发 CGEvent 注入（inject_darwin.go）；父进程拆 RTP、AES-GCM 加密发 UDP、按接收报告调码率（`posse desk cast` 是还没接进常驻进程时的推流入口）
-internal/usage      各 agent 套餐用量：解析 Claude statusLine 输入和缓存、Codex 会话文件和 app-server、Grok 日志、Cursor 接口，合并后存 $POSSE_HOME/usage.json
-internal/files      文件标签与目标文件服务共用的纯逻辑：读写文件（原子保存、磁盘戳、分段读取）、目录树、文件清单、模糊匹配、全文检索、跳到定义、识别行内链接和路径
-internal/writecoord 同一 daemon 内的多资源写入协调：路径父子互斥、仓库独占键与项目共享/独占键，一次申请、等待可取消；资源身份和业务状态复查在 daemon
-internal/trash      无界面的 macOS 废纸篓适配（Foundation/purego），供目标端文件和历史删除复用；失败不永久删除
-internal/skills     技能管理：扫描四家 agent 的技能目录，按各家的读取规则和开关（Claude 的 skillOverrides、Codex 的 [[skills.config]] 和 app-server、Grok 的 [skills]）算谁用得上，体检断链、同名冲突、多余链接和 npx skills 锁文件；界面在 internal/app/skills.go
-internal/media      会话里的图片和视频（粘贴的、agent 生成的），桌面的图片面板和手机共用
-internal/mermaid    Markdown 里的 Mermaid 图（移植自 Mayoi），不依赖 mygo、桌面和手机共用：Pele（`pele.js.gz`，`scripts/pele.sh` 打包）在 QuickJS（modernc，和 sqlite 共用 libc，两边要求的 libc 版本必须一致，升级时一起看）里排版出 SVG，换上主题色、抽出文字，宽度由调用方的量法给；`diagram/` 用 mygo 画（形状交给 mygo 的 SVG、文字由 mygo 排字），手机经 `posse_quic` 的 `hq_mermaid` 调。JS 运行时画第一张图时启动，之后一直留着（约 11 MB，桌面在窗口进程里）
-internal/mobile     给 Posse 手机客户端的服务：配对、E2EE v2、RPC 和终端二进制流，握手、方法名和帧格式沿用 Orca 手机协议（Orca 自己的手机 App 不再兼容）；quic.go 给 Posse 手机客户端在同一端口号的 UDP 上开 QUIC（局域网和中转）
-internal/mquic      手机和 Mac 之间的 QUIC 传输，两端共用：一条流上的消息分帧、关闭帧、向中转登记的 socket、手机拨号
-internal/deskrelay  UDP 中转协议和服务器（看桌面和手机 QUIC 共用：按令牌把手机和 Mac 的包原样互转，只见密文；探测包回来源地址，给打洞用；开了鉴权时只有带签名的 Mac 能开会话，邀请码、管理员码和 desk.json 的读写也在这里），`tools/deskrelay` 是服务器程序，改了协议要重新部署
-tools               desk 的验收工具：`desksession`（和插件的 `DeskSession.swift` 一起编，跑手机上那份收包、补发、解码）、`deskshape`（本机 UDP 限速、延迟、丢包）、`deskrelay`（部署到公网服务器上的中转）
-scripts             `dev-app.sh`：装开发用的 PosseDev.app；`release.sh`：发布 Mac 版；`github-release.sh`：把已发布的 Mac 版镜像成 GitHub Release；`ios-adhoc.sh`：发布 iOS 的 Ad Hoc 安装包；`android-release.sh`：发布安卓安装包；`pele.sh`：打包 Mermaid 渲染器 Pele（升级 Pele 时跑，要 npx）；`memprobe.sh`：按类别采样进程内存（做法和上次的结果见 `docs/plans/memory.md`）；`discmem.sh`：分阶段采样 PosseDev 窗口和开发常驻进程的内存（讨论页验收，只读不操作界面）；`collab-tls-trial.sh`：局域网协作的 TLS 单机试验（见 `docs/plans/collab-tls-trial.md`）
-mobile              Posse 手机客户端（Flutter，用 fvm 固定版本，命令见其中的 README；`third_party/flterm` 是带改动的终端组件，改动见其中的 POSSE.md；`packages/posse_quic` 是编进 App 的 Go 库（QUIC 客户端、E2EE 的 secretbox 加解密和 Mermaid 排版），构建钩子调 `go build`，Dart 经 FFI 调用）
-third_party/mygo    带改动的 mygo v0.7.4（go.mod 用 replace 指向它），改动和升级方法见其中的 POSSE.md
+cmd/posse              单一二进制：窗口（posse app / 无参启动 .app）、常驻进程（daemon run）和 CLI 共用
+internal/rpc           unix socket 协议：每连接一次请求，请求/响应各一行 JSON
+internal/daemon        常驻进程：项目、工作区、终端、远端 Git/文件 RPC；task.go 编排，desk.go 看桌面，discussion.go / collab*.go 讨论与协作
+internal/host          终端宿主边界（Host、Terminal 接口）与升级交接（Pause 导出、Adopt 重建，见 docs/plans/terminal-host.md）
+internal/term          PTY + libghostty-vt 屏幕状态，接入快照与输出流
+internal/vt            精简版 libghostty-vt 绑定（删键鼠编码/选区/视口滚动，禁写剪贴板）；snapshot.go 逐格导出快照
+internal/client        CLI 与窗口共用的客户端：拉起常驻进程、流式接入终端与目标 RPC
+internal/remote        Mac SSH 远程工作区：主机配置、私有 askpass、远端发现、socket 转发与能力握手（docs/features/remote.md）
+internal/store         SQLite（modernc，纯 Go）：项目、工作区、终端、任务（task.go）、讨论与协作（discussion.go、collab.go）
+internal/history       claude/codex/cursor/grok 会话增量索引（$POSSE_HOME/history.db，FTS5）、搜索、工具用量与媒体扫描
+internal/gitx          调用系统 git：管理 worktree，以及状态、diff、分支、推送、日志、追溯、比较与冲突预测
+internal/agent         各家 agent 启动参数、手动启动转发与 hooks/状态映射
+internal/namer         会话标题（posse session title）：规整 MMDD｜类型｜摘要 并写回 Codex/Grok 存储
+internal/cli           子命令解析与输出（--json 供 agent 调用）
+internal/app           MyGo 原生窗口：侧栏、终端标签、任务、讨论、历史、文件、Git、技能、手机与设置页（只接入当前可见终端）
+internal/procmem       读取进程 phys_footprint（proc_pid_rusage）
+internal/cheatsheet    各家 agent 命令/按键速查表（cheatsheet.json）与本机版本识别
+internal/projicon      项目自定义图标（$POSSE_HOME/project-icons）
+internal/collaboration 讨论身份（$POSSE_HOME/collab.json，Ed25519）与局域网协作传输（TLS 1.3 WebSocket、邀请、凭据）
+locales                桌面多语言译文表（en.json、zh-Hans.json）与 mygo 生成代码（catalog_gen.go）
+internal/errtext       英文报错按界面语言查表翻译（如 zh.go），供桌面窗口和手机服务显示
+internal/spawn         拉起常驻进程与采集子进程（新会话 + disclaim 授权归属）；runtime.go 管理 APFS 克隆运行副本
+internal/desk          手机看桌面采集侧（desk helper：ScreenCaptureKit + VideoToolbox + CGEvent 注入；父进程 RTP/AES-GCM UDP）
+internal/usage         各家套餐用量采集与合并（$POSSE_HOME/usage.json）
+internal/files         文件读写（原子保存、磁盘戳、分段读）、目录树、清单、全文检索、定义跳转与行内链接识别
+internal/writecoord    同 daemon 多资源写协调：路径父子互斥、仓库独占键与项目共享/独占键，一次申请、等待可取消
+internal/trash         无界面 macOS 废纸篓适配（Foundation/purego），失败不回退永久删除
+internal/skills        扫描四家 agent 技能目录、开关配置、npx skills 锁文件与断链/冲突体检
+internal/media         会话内粘贴与生成的图片/视频扫描及缩略图
+internal/mermaid       Mermaid 排版（Pele + modernc QuickJS，与 sqlite 共用 modernc libc，升级须保持 libc 版本一致；diagram/ 用 mygo 画）
+internal/mobile        手机服务端：配对、E2EE v2、RPC/二进制流与同端口 UDP QUIC（quic.go）
+internal/mquic         手机与 Mac 共用的 QUIC 消息分帧、关闭帧、中转登记与拨号
+internal/deskrelay     看桌面与手机 QUIC 共用的 UDP 中转协议、鉴权邀请、APNs 转发与 desk.json 读写
+tools                  desk 验收与部署工具：desksession、deskshape、deskrelay（改中转协议须重部署）
+scripts                dev-app.sh、release.sh、github-release.sh、ios-adhoc.sh、android-release.sh、pele.sh、memprobe.sh、discmem.sh 等
+mobile                 Flutter 手机客户端（fvm 固定版本；third_party/flterm 终端组件；packages/posse_quic Go FFI 库）
+third_party/mygo       带改动的 mygo v0.7.4（改动与升级方法见其中的 POSSE.md）
 ```
+
+## 模块文档路由
+
+改对应模块前先读相应文档，改完功能同步更新文档：
+
+- `docs/features/agents.md`：agent 识别、手动启动 hooks、编排（`posse task`）、会话标题、自带技能、权限、恢复终端、`posse web`、文件去处与痕迹
+- `docs/features/git.md`：多仓库发现、改动/提交/储藏/回滚、diff、日志、比较、分支、worktree 同步合并及目标 Git 操作规则
+- `docs/features/remote.md`：SSH 远程工作区、桌面查看/接管租约（`desktop.*`）、跨入口写协调及目标文件/媒体/Git RPC 边界与状态机
+- `docs/features/files.md`、`history.md`、`discussions.md`、`usage.md`、`mobile.md`、`ui.md`：文件栏与编辑器、会话历史、讨论与局域网协作、套餐用量与防休眠、手机遥控与看桌面、桌面各界面行为
+- `docs/plans/terminal-host.md`：常驻进程无损交接（`daemon.handoff`）与 APFS 运行副本回收
 
 ## 关键约定
 
-- 常驻进程持有 `$POSSE_HOME/possed.lock` 的文件锁直到完全退出；socket 和 pid 文件只在持锁时创建和删除。例外是交接接过来的新进程：先写 pid 文件、接着用旧进程交来的 socket 服务，锁在后台等（见下一条）。
-- 升级交接（`daemon.handoff`，`internal/daemon/handoff.go`；流程、描述符怎么交、带不过去的终端状态见 `docs/plans/terminal-host.md` 和代码注释）：窗口的包比常驻进程新时自动触发（`internal/app/upgrade.go` 的 `autoUpgrade`，每个旧进程只自动试一次，已接受操作未完成返回 busy 时延迟重试），设置页的"更新常驻进程"和 `posse daemon handoff` 手动触发。改代码时要守的：协议版本是 `handoffVersion`，改了交接记录或帧格式、新旧两边解析不了时要加一（旧进程只认版本号相等的新进程，加了就要重启一次才能升上来），新旧双向都能解析的可选字段（如 `handoffTerm.Runtime`）不加；新建终端和交接开始经 `handoffState.startMu` 互斥；交接的终端和以它们为 worker 的任务不记为 lost；旧进程只把 PTY 已交出去的终端的退出留给新进程，交接窗口里退出的新进程收不到退出码，记 -1；新进程回话后马上开始服务（hook 只等 2 秒，不能等旧进程退出），在后台一直等锁，拿到才开手机服务（端口在旧进程手里），等不到也不退出；普通启动拿到锁后 socket 还有人应答就退出，免得交接空档里被拉起的进程删掉新进程的 socket；交接期间 `terminal wait --for idle` 不算空闲；手机看着时终端是手机的尺寸，记录里带上界面的尺寸（`DeskCols`、`DeskRows`），新进程换回去。
-- 常驻进程退出（交接或重启）时 `rpc.Server` 先等正在处理的请求写完回复（最多 3 秒），处理函数因请求的 ctx 结束返回 `context.Canceled` 的回成 `restarting`。新增长等待的 RPC 要跟着 ctx 结束，CLI 侧走 `doWait`，到新进程上按剩下的时间接着等；`task ask` 带回问题 ID 改成 `--resume`、Claude 权限挂起到新进程上再挂，见 `doWait` 和 `hook.permission.hold` 调用处的注释。
-- PTY 主端是非阻塞、交给 Go 轮询器的描述符（`term.pollable`），交接时靠读期限停下读协程。不要对它调 `Fd()` 或 `pty.Setsize`（经 `Fd()` 改回阻塞模式，读期限就失效了，而且阻塞标志和交出去的描述符共用），改尺寸用 `setPTYSize`、取描述符用 `SyscallConn`。
-- 拉起常驻进程的一方（`client.EnsureDaemon`、交接时的旧进程）都经 `internal/spawn`：新开会话，并用私有接口 `responsibility_spawnattrs_setdisclaim` 让它自己对系统授权负责（否则授权记在拉起方身上：终端里的 CLI 拉起时是那个终端 App，一路交接下去是最初那份 Posse.app，包被换掉后每次访问桌面都弹授权）。`daemon.log` 也由拉起方经 `daemon.OpenLog` 打开后交给它当 stdout/stderr；拉起前超过 5 MB 就改名成 `daemon.log.1`（只留一份），运行期间不轮转。`EnsureDaemon` 拉起后在后台 `Wait`，窗口开着时常驻进程退出不留僵尸进程。
-- 常驻进程不从 Posse.app 运行，从它的 APFS 克隆副本运行（`spawn.Runtime`，`~/Library/Application Support/Posse/runtime/<包ID>/<版本>-<构建>/`，同一构建复用；`go build` 的 bin/posse 不复制）：tccd 按拉起终端的常驻进程的程序路径核实授权，常驻进程活着时包被换掉，终端访问桌面就一直被拒。拉起常驻进程的各方（`EnsureDaemon`、交接时的旧进程、调 `daemon.handoff` 的窗口和 `posse daemon handoff`）都先准备副本，准备不了就从原包运行，不挡启动和交接。每个终端记着拉起它的副本（`session.runtime`），副本按 home 登记、在常驻进程启动时和终端退出后回收；实测和回收规则见 `docs/plans/terminal-host.md` 的「从副本运行」。
-- 程序关掉鼠标跟踪（9、1000、1002、1003 都关）时，如果最后写进 PTY 的是鼠标报告，常驻进程清掉 PTY 里还没读的输入（`dropStaleMouse`，主端 `TIOCFLUSH`）：Codex 退出时先不读输入、最后才关鼠标跟踪，这期间鼠标移动的报告会被接着运行的 shell 读成一串 `35;12;8M`。程序忙着没读输入、PTY 输入队列（macOS 约 1 KB）里没读的已超过 256 字节或写完会超过 960 字节时，滚轮和移动的报告直接丢掉（`Inject`、`lossyMouse`；按下、松开不丢）：写满的队列会把报告从中间截断，Codex 读到结尾单独的 ESC 当成 Esc 键，后半截 `[<64;53;8M` 进了输入框。
-- 终端内核对程序的终端查询（DA/DSR、OSC 10/11 颜色、深浅等）的应答写回 PTY，由 `Terminal.answer` 控制；界面连接后改由界面应答，避免重复回复。内核的默认颜色先按建终端时的系统外观选 Posse 终端配色（`term/colors.go`，窗口主题和 16 色也用它），窗口开着时换成窗口终端在用的那套：窗口每秒的 `daemon.status` 带着它（`statusParams`），常驻进程变了就换到所有终端上、新终端也按它起，5 秒没收到当窗口关了（`daemon/window.go` 的 `windowColors`），手机照终端的配色画；Codex 只在启动时查一次背景色，查不到就把用户消息画成深灰底。
-- `terminal send` 直接写 PTY，不经过终端内核；带 `--enter` 时回车与文本分开发送，否则 TUI 会把回车当成粘贴内容。
-- 新终端的环境会去掉 `ORCA_*`、`CLAUDE_CODE_*`、`CLAUDECODE` 等变量，以及 agent 给工具调用设的非交互变量（`NO_COLOR`、`FORCE_COLOR`、`PAGER`、`GIT_EDITOR`、`GROK_*` 等，会经 `open` 拉起的 Posse.app 漏进终端，见 `term.Environ`）；注入 `POSSE_HOME`、`POSSE_SOCKET`、`POSSE_TERMINAL_ID`、`POSSE_WORKSPACE_ID`，以及给 Git 操作记录用的 `GIT_TRACE2_EVENT`、`GIT_TRACE2_ENV_VARS`；PATH 最前面是 posse 所在目录（常驻进程所在的副本，终端活着就不会被回收）。
-- 工作区三种：`main`（项目目录本身）、`folder`（同一目录上的额外工作区）、`worktree`（git worktree，放在 `$POSSE_HOME/worktrees/<项目>/<名称>`）。别的工具建的 worktree 用 `attach` 模式加进来时记成 `folder`（路径是那个 worktree），删工作区不碰它的目录和分支。
-- agent 状态靠启动参数注入的 hooks，不改用户的全局配置：Claude 用 `--settings $POSSE_HOME/claude-hooks.json` 和 `--session-id`；Codex 用 `-c hooks.<事件>=…` 加 `-c hooks.state=…` 预置信任 hash（算法见 `codexHookHash`，Codex 升级后用 `codex app-server` 的 `hooks/list` 核对是否仍为 trusted）；Cursor 用 `--plugin-dir $POSSE_HOME/cursor-plugin`，hooks 放在 posse 生成的插件里（`internal/agent/cursor.go`），不写 `~/.cursor/hooks.json`。
-- `posse hook` 被 agent 同步调用：不得向 stdout 输出（Claude 会把它注入模型上下文）。例外有四处：Cursor 要从 stdout 读一个 JSON 回应，posse 输出 `{}` 表示不干预；Claude 的 PermissionRequest 在手机给出 allow 或 deny 时向 stdout 写决策 JSON，没有决定就不输出；Claude 的 UserPromptSubmit 在有待交的会话标题时写 `hookSpecificOutput.sessionTitle`；有未提醒的任务消息时，Claude 的 PostToolUse、PostToolUseFailure 和 Stop，Codex 的 PostToolUse 和 Stop，Cursor 的 postToolUse、postToolUseFailure 和 stop 写交提醒的回应（中断这一轮时不交，`agent.DeliversOn`）（`agent.DeliveryOutput`，Cursor 用它代替 `{}`）。始终 exit 0，不拉起常驻进程。
-- agent 经 OSC 7501 报过状态后，工作中、空闲以它为准，hooks 只管等待、退出和其余字段，标题只看 Codex、Grok 的 `Action Required`（常驻进程应答它的探测，Claude 收到应答后不往标题里写状态；规则见 `docs/features/agents.md`）。没报过 7501 又没有 hook 的情况靠终端标题兜底（`agent.TitleStatus`）：Claude 按 Esc 中断后标题回到 `✳` 前缀；Codex 等待操作时标题含 `Action Required`；grok 不注入 hooks，状态全靠标题（盲文转圈字符是工作中，含 `Action Required` 是等待）。用户自己启动的 agent 也只靠标题，见 `docs/features/agents.md`。
-- 界面接入终端：`terminal.attach` 流式连接，常驻进程先发快照再推实时输出，两者在 `smu` 下衔接，不丢不重（快照怎么生成、为什么接上 `tail`，见 `internal/vt/snapshot.go` 和 `Terminal.subscribe` 的注释）。行数变多时常驻进程会重建内核（`term.pullBack`）并断开所有接入者（`Subscriber.Kicked`），它们按自己当下的尺寸重新接入拿新快照；不在输出流里广播快照。
-- 所有子命令都认 `-h` / `--help`（在 `--` 之前），打印这条命令的用法：agent 常先这样试。
-- `workspace merge` 在项目目录以 `--no-ff` 合入 worktree 分支：要求两边已跟踪文件干净、分支有新提交、项目目录在基准分支上；失败时 `merge --abort`。未跟踪文件不挡合并，但 `workspace rm` 仍会因它拒绝删除。
-- Posse.app 里的可执行文件叫 `Posse`，agent 在终端里调用 `posse` 能找到它，依赖 APFS 默认的大小写不敏感。
-- 快捷键都登记在 `internal/app/keymap.go` 的表里（设置页「快捷键」能看能改，改过的存 ui.json 的 `keys`）：新加快捷键往表里加一项，用 `a.pressed(c, id)` / `a.pressedIn`（终端 OnKey 用 `a.keyIs`）判断，提示文字用 `a.keyText`、`a.withKey`、菜单的 `.Keys(...)`，不写死 `c.Shortcut(ui.Cmd, …)` 和"⌘X"。编辑器的键在表里是 `editor.<命令名>`，经 `editorBindings` 交给编辑器。
-- 菜单由 `installMenu` 自己装：macOS 先把按键交给菜单，mygo 默认菜单的"关闭窗口"占着 ⌘W（界面收不到，关最后一个标签会连 app 一起关掉），View 菜单占着 ⌘R、⌘=、⌘-、⌘0。⌘W 是"关闭标签"（`closeTab`），关窗口是 ⇧⌘W。
-- 菜单都是 Posse 自绘（`menu.go`）：按钮弹出用 `menuButton`，右键用 `contextMenu`（mygo 的 `ContextMenuAsked` 沿用它的右键路由，只报位置），终端内容区由插件的 `Options.ContextMenu` 交来位置；不用 mygo 的 `Menu`、`ContextMenu`（系统 NSMenu，悬停高亮改不了）。build 每帧先跑一遍收集菜单项，点了某项后同一帧再跑一遍报告 `Chosen`，两遍加的项要一样。"在访达中显示/打开"一律用 `iconFolder`。mygo 自己的菜单（文字输入框、可选文字、编辑器的编辑菜单）经 `Context.PresentMenus` 交给 Posse（`presentMenu`、`sysMenuView`），菜单项的文字由 mygo 按界面语言给（中文叫法和 mygo 不同的在 `locales/zh-Hans.json` 用 `mygo.<键>` 覆盖）。能点的元素主题已给手形指针，新控件不用单独设 `Cursor(ui.CursorPointer)`；只为挡住点击才调 `Clicked` 的大容器要设 `Cursor(ui.CursorDefault)`。
-- 报错的源文本是英文：常驻进程、CLI、各内部包照旧写英文（agent 读的是它们）。界面上显示报错一律经 `errtext.Text(err)`（桌面窗口）或手机服务的 `conn.fail`，不直接用 `err.Error()`：它去掉错误码，按界面语言查译文表，认不出的原样给出：窗口用 `errtext.Current`（跟着 mygo 的界面语言设，见 `l10n.go`），手机服务用这条连接的语言（手机在 `runtime.clientCapabilities.update` 里带 `locale`，`conn.language()`，没带的按中文），一律 `errtext.TextIn`/`MessageIn`，不用全局的 `Current`。常驻进程自己显示给人看的文字（看桌面和配对的默认手机名、恢复终端时打的一行）没有界面语言，按 `errtext.SystemLang()`：用户在 Posse 设置里选的语言（mygo 存在包 ID 的 defaults 的 `AppleLanguages`），没选按 macOS 首选语言列表里第一个有译文的语言（和窗口的选法一样，[日语, 简体中文] 是中文），同样是英文源文本加译文表；结果缓存 5 秒，换了语言稍后生效。各内部包不写中文字面量（`errtext` 的 `TestNoChineseOutsideApp`，允许名单在测试里，每项写明原因）：要给人看的说明写英文源文本由界面经 errtext 翻译，或给代号、结构化字段由窗口用 locales、手机用自己的文字写（如 media 的 `Tag`、技能读不到的 `NotRead`/`Reads`）。新加界面碰得到的英文报错，在 `internal/errtext/zh.go` 补一条译文（键和代码里的格式串一字不差，`TestFormatsStillInSource` 核对）；加一种界面语言就加一张译文表、登记进 `catalogs`。手机 App 里显示报错经 `friendlyError`（`mobile/lib/app_state.dart`），不直接 `'$error'`。
-- 只有界面关心的状态（`internal/app/uistate.go`）存在 `$POSSE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要换掉常驻进程。
-- 重新打包、覆盖安装后，窗口进程失去 TCC 授权（读桌面、文稿等目录报 EPERM，不弹授权），要重开窗口（`internal/app/relaunch.go`，提示和重开流程见 `docs/features/ui.md`）。常驻进程和终端不受影响：它们从包的副本运行（见上面拉起常驻进程的副本一条）。
-- 界面每秒轮询常驻进程，数据和上次相同就不重建界面；只有连不上 socket 时才去拉起常驻进程。靠时间推进的内容（右侧面板的定时刷新、"几分钟前"）要在视图里用 `c.After` 约下一帧，不能指望每秒重建。操作失败的报错留在错误条上，等用户关掉。
-- 功能说明按模块放在 `docs/features/`：`agents.md`（agent 识别、手动启动、编排、会话标题、权限）、`history.md`、`files.md`、`git.md`、`mobile.md`、`usage.md`（套餐用量、防休眠）、`discussions.md`（讨论和局域网协作）、`ui.md`（界面各部分）。改了功能同步更新对应的文档。
-- 终端里会长期留着的 posse 路径（hooks 命令、Claude 的 statusLine、`$POSSE_HOME/bin` 的转发脚本、`posse agent exec` 补的 hooks）一律写 `$POSSE_HOME/bin/posse`（`daemon.PosseLink`），不写副本的路径：每个常驻进程启动时把这个符号链接原子地指向自己（bin/posse 时指向它自己）。旧终端里后来手动启动的 agent 用的是当时常驻进程的副本，那份副本可能先被回收；Codex 的信任 hash 按命令算，路径固定后升级也不变。
-- `$POSSE_HOME/bin` 的转发脚本和 shell 集成文件每个常驻进程只写一次，注入 agent 的参数（hooks、Claude 的 `--append-system-prompt`）在常驻进程的代码里：改了这些要交接（`posse daemon handoff`，不断终端）或重启常驻进程，之后新开的终端才生效。启动 agent 只注入 hooks 和 Claude 的文件去处指路，不按会话注入技能、不碰 Codex 的 `developer_instructions`、不给 Grok 加 `--rules`；Posse 自带的技能由用户在窗口里装进用户的技能目录（`internal/skills/posse.go`，见 `docs/features/agents.md`）。
-- 会话历史只读各 agent 的会话目录，不写回（例外：会话标题、用户在历史页移到废纸篓）。只改了某一家的解析规则改 `parserVersions`（index.go），只重读这一家；改表结构或分词才改 `schemaVersion`（旧索引重建，跨版本的旧常驻进程报 ErrStale，要重启）。改粗筛规则（`wants`）要跑 `TestLineFilterSameResult`。索引只有一个连接，结果集没关之前不能再查。
-- 文件栏不用 fsnotify（macOS 上基于 kqueue，监听一个目录要为其中每个文件开一个描述符），看得见时每秒 stat 一次。保存前磁盘戳变了先问，不默默覆盖 agent 的修改。
-- 本机 Git 界面仍在窗口进程里调系统 git；远端仓库发现、状态和分支读取经目标 daemon 的 `git.discover/status/branches`，diff 与编辑器基线经 `git.file/blobRange` 读取固定 OID 的原始内容、分段收齐后校验摘要；工作树侧复用目标资源读取。日志与提交详情经 `git.log/commitFiles`，分页核对引用与浅边界基线，提交差异使用返回的 `DiffBase`（浅克隆仍保留原始 Parents）。逐行追溯经 `git.blame`，隔离临时 Git 配置计算固定工作树版本，客户端校验原始字节摘要；不直接在目标仓库运行 `blame --contents`（仍会执行 process 过滤器）。分支比较经 `git.compare` 固定两侧 OID，双向列表各有条数上限及 More 标记。工作树比较经 `git.worktreeCompare`，隔离配置/索引并只读目标工作树，子模块分别隔离计算；列表与 diff 绑定固定 Commit/Baseline 和每项类型/版本，过期需刷新比较，不按秒重扫全仓。推送预览经 `git.pushPreview` 固定本地分支与跟踪引用 OID，读取目标已有引用并返回最多 500 条及 More，不联网、不据此直接执行推送。worktree 基准关系经 `git.divergence` 固定 HEAD/BaseRef，冲突预测只写私有临时对象库，并区分已预测、不需要预测与预测不可用；`Unchanged` 仅确认输入基线，窗口保留自己的成功结果。窗口异步读取绑定主机身份、仓库身份和请求序号；工作区真实路径取目标 `RealPath`。手动 Fetch 经 `git.fetch` 与已接受的 `desktop.call` 执行，固定工作区登记和仓库身份、在共享写协调内复查；回复丢失查原操作，不自动重发，取消使用当前控制身份和原操作标识。目标 Fetch 日志按主机在窗口内有界保留，尚无终态的记录预留结果容量；确认另开操作不等于原操作完成。其余远端 Git 闭包写操作和 auto-fetch 尚未迁移，保留门禁，不能随基础读取放通；实现及验证状态见 `docs/features/remote.md`。目标读取经 `gitx.WithReadLimit` 共用输出和扫描预算，查询前后核对 Root/GitDir/CommonDir 身份，不改全局 Trace、不回退本机路径。界面路径都相对仓库根目录，仓库根目录换成工作区路径的写法（`gitx.ShownRoot`，git 给的是解析过符号链接的）；界面调用的 gitx 函数用 `runRaw`；gitx 自己调 git 时设 `GIT_TRACE2_EVENT=0`。强制推送一律 `--force-with-lease --force-if-includes`。
-- `internal/desk` 经 purego 调 Objective-C：自动释放池按线程记，在 goroutine 上 push/pop 之间要 `runtime.LockOSThread`（`withPool`），否则 goroutine 换线程后 pop 会崩。用 iOS 模拟器测手机看桌面时推流加 `--exclude-app com.apple.iphonesimulator`（经常驻进程订阅时给常驻进程设 `POSSE_DESK_EXCLUDE=com.apple.iphonesimulator`），否则模拟器窗口被录进画面形成回环。
-- 看桌面和手机 QUIC 的 UDP 中转写在 `$POSSE_HOME/desk.json`（`{"relay": "host:port"}`，被邀请的再带 `name`、`key`，管理员带 `master`），由手机页「外网中转」或 `posse mobile relay set <码>` 写入，每次观看、每次手机调 `posse.quic` 时读，不用重启。中转用的 socket 经 `IP_BOUND_IF` 绑在物理网卡（en*）上，绕开 Surge 这类接管默认路由的代理（走代理时 UDP 出不去）；直连局域网和 Tailscale 的 socket 不绑，照系统路由走。
-- 手机遥控的端到端测试用 `POSSE_MOBILE_PORT` 换端口，免得和日常的常驻进程冲突；主机密钥在 `$POSSE_HOME/mobile.json`，换密钥等于所有手机重新配对。
+- **锁与升级交接**（细则见 `docs/plans/terminal-host.md`）：常驻进程持有 `$POSSE_HOME/possed.lock` 直到完全退出，普通启动只在持锁时增删 socket/pid（拿到锁后 socket 仍有人应答则退出）。交接新进程先写 pid、立即接过旧 socket 服务，后台等锁拿到后再开手机服务；新建终端与交接经 `handoffState.startMu` 互斥；双向不兼容变更才递增 `handoffVersion`，兼容可选字段不加；交接终端及关联任务不记 `lost`，交接空档退出的终端记 `-1`，交接中 `terminal wait --for idle` 不算空闲，手机占尺寸时随 `DeskCols`/`DeskRows` 带回桌面尺寸。退出时 `rpc.Server` 最多等 3 秒写完在途回复，因请求 ctx 取消的回 `restarting`；长等待 RPC 必须响应 ctx，CLI 走 `doWait` 续等（`task ask` 改 `--resume`，`hook.permission.hold` 重挂）。
+- **拉起与运行副本**：拉起常驻进程和采集子进程一律经 `internal/spawn`（新会话 + `responsibility_spawnattrs_setdisclaim` 让其自身承担 TCC 授权，`daemon.OpenLog` 启动前超 5 MB 轮转为 `daemon.log.1`，`EnsureDaemon` 后台 `Wait` 防僵尸）。打包版常驻进程从 `~/Library/Application Support/Posse/runtime/` 下的 APFS 克隆副本运行（`spawn.Runtime`，终端记 `session.runtime`，启动时和终端退出后按引用回收，防换包后 TCC 拒访；详见 `docs/plans/terminal-host.md`）。重新打包覆盖后窗口进程会丢 TCC 授权，需重开窗口（`internal/app/relaunch.go`）。
+- **PTY 与终端输入输出**：PTY 主端是非阻塞、交给 Go 轮询器的描述符（`term.pollable`），严禁调 `Fd()` 或 `pty.Setsize`（会改回阻塞模式使交接读期限失效），改尺寸用 `setPTYSize`、取描述符用 `SyscallConn`。程序关掉全部鼠标跟踪（9/1000/1002/1003）且最后写入是鼠标报告时，`dropStaleMouse` 调 `TIOCFLUSH` 清未读输入；PTY 未读超 256 B 或写完超 960 B 时丢弃滚轮与移动报告（`Inject`/`lossyMouse`，按下松开不丢），防截断产生孤立 ESC。终端查询（DA/DSR、OSC 10/11 等）未接界面时由内核应答（`Terminal.answer`），界面接入后改由界面应答；终端默认配色跟窗口每秒 `daemon.status` 上报的 `statusParams`（5 秒未收视作窗口关闭，`daemon/window.go`）。`terminal send` 直写 PTY，`--enter` 时文本与回车分开发送。
+- **界面接入终端**：`terminal.attach` 流式连接在 `smu` 下先发快照再接实时输出，不丢不重（见 `internal/vt/snapshot.go`）；行数变多时重建内核（`term.pullBack`）并踢开所有接入者（`Subscriber.Kicked`）重连拿新快照，不在输出流广播快照。
+- **终端环境与固定路径**：新终端剥离 `ORCA_*`、`CLAUDE_CODE_*`、`CLAUDECODE` 及非交互工具变量（`NO_COLOR`、`FORCE_COLOR`、`PAGER`、`GIT_EDITOR`、`GROK_*` 等，见 `term.Environ`），注入 `POSSE_HOME`、`POSSE_SOCKET`、`POSSE_TERMINAL_ID`、`POSSE_WORKSPACE_ID`、`GIT_TRACE2_EVENT`、`GIT_TRACE2_ENV_VARS`，PATH 最前放当前常驻进程副本目录。长期留存的 posse 路径（hooks、Claude `statusLine`、`$POSSE_HOME/bin` 转发脚本、`posse agent exec`）一律写 `$POSSE_HOME/bin/posse`（`daemon.PosseLink` 启动时原子更新），不写副本路径。`Posse.app` 内可执行文件名为 `Posse`，终端敲 `posse` 靠 APFS 默认大小写不敏感。所有子命令在 `--` 前都认 `-h` / `--help`。
+- **工作区**：三种模式 `main`（项目目录）、`folder`（同目录额外工作区）、`worktree`（`$POSSE_HOME/worktrees/<项目>/<名称>`）；外部建的 worktree 以 `attach` 加入时记为 `folder`，删除不碰其目录和分支。`workspace merge` 以 `--no-ff` 合入（要求两边已跟踪文件干净、有新提交、在基准分支上，失败 `merge --abort`）；未跟踪文件不挡合并，但挡 `workspace rm`。
+- **Agent hooks 与状态**（细则见 `docs/features/agents.md`）：状态靠启动参数注入 hooks，不改用户全局配置——Claude 用 `--settings $POSSE_HOME/claude-hooks.json` 和 `--session-id`；Codex 用 `-c hooks.<事件>=…` 加 `-c hooks.state=…` 预置信任 hash（`codexHookHash`，升级后用 `codex app-server` 的 `hooks/list` 核对）；Cursor 用 `--plugin-dir $POSSE_HOME/cursor-plugin`（`internal/agent/cursor.go`）。启动只注入 hooks 和 Claude 的 `--append-system-prompt` 文件去处指路，不按会话注入技能、不碰 Codex `developer_instructions` 或 Grok `--rules`；改转发脚本或注入参数后需 `posse daemon handoff` 或重启常驻进程对新终端生效。`posse hook` 同步执行，始终 `exit 0` 且不拉起常驻进程，**严禁向 stdout 输出**，仅四处例外：Cursor 固定回 `{}`；Claude `PermissionRequest` 有手机决策时写决策 JSON；Claude `UserPromptSubmit` 有待交标题时写 `hookSpecificOutput.sessionTitle`；有未提醒任务消息时在 `agent.DeliversOn` 允许的钩子写提醒输出（`agent.DeliveryOutput`）。报过 OSC 7501 后工作中/空闲以它为准，hooks 管等待、退出与附加字段，标题只看 `Action Required`；未报 7501 且无 hook 时靠标题兜底（`agent.TitleStatus`）。
+- **报错翻译与禁写中文**：内部包、常驻进程和 CLI 的报错源文本一律写英文（`errtext` 的 `TestNoChineseOutsideApp` 守卫 `internal/` 除 `app` 外及 `cmd/`）。桌面窗口显示报错一律经 `errtext.Text(err)`（用 `errtext.Current`），手机服务经 `conn.fail` / `errtext.TextIn`（按连接上报的 `locale`，缺省中文，不用全局 `Current`），常驻进程自显文字按 `errtext.SystemLang()`（5 秒缓存），手机端 Dart 经 `friendlyError`；新增界面可见报错须在 `internal/errtext/zh.go` 补精确格式串译文（`TestFormatsStillInSource` 核对）。
+- **窗口状态与轮询**：仅界面关心的状态存 `$POSSE_HOME/ui.json`（`internal/app/uistate.go`），窗口直接读写，不进常驻进程。窗口每秒轮询常驻进程，数据未变不重建界面，连不上 socket 才拉起常驻进程；随时间推进的显示（定时刷新、"几分钟前"）在视图里用 `c.After` 约下一帧；操作报错留在错误条等用户关闭。文件栏不用 `fsnotify`（kqueue 每文件占一个 fd），可见时每秒 `stat`；保存前磁盘戳变化先询问。
+- **会话历史**：只读各 agent 会话目录，不写回（会话标题和历史页移到废纸篓除外）。单家解析变更只改 `parserVersions`，表结构或分词变更才改 `schemaVersion`（旧常驻进程报 `ErrStale`）；改粗筛 `wants` 必跑 `TestLineFilterSameResult`；单连接查询，结果集未关前不得再查。
+- **Git 与远程工作区**（各接口与状态机细则必读 `docs/features/git.md` 和 `docs/features/remote.md`）：有桌面身份的本机和远端控制窗口统一经目标 daemon 的 `git.*` 与已接受的 `desktop.call` 读写（无身份旧测试窗口保留本机 `gitx` 调用）；查看端隐藏写入口并静默拒绝，不发请求、不报门禁错。目标读取经 `gitx.WithReadLimit` 共用输出与扫描预算，前后核对 `Root`/`GitDir`/`CommonDir` 身份，禁执行目标过滤器脚本、不改全局 Trace、绝不回退本机同名路径。目标写操作一次取齐仓库路径、`common-dir`、项目共享键与相关文件锁（与 `files.save` 共用 `writecoord`），锁内复查工作区登记、仓库身份及点击时基线（HEAD OID、`IndexID`、分支/跟踪 OID、文件版本），不符返回 `conflict`（`Started=false`）且不改现场；开始后失败、冲突或取消保留现场，不自动 reset/abort。断线、关弹窗或控制转移不取消已接受操作；回复丢失只按原 `ref` 查 `desktop.operation`，不自动重发，另开须确认并先续跑本机旧队列；取消用当前控制身份与原 `ref`，回执不等于完成或回滚。桌面 Git 写操作、文件夹批量上传下载（`files.mkdir`）与远端终端复制/拖入文件上传（`files.pasteFile`）均已迁到目标服务，`daemon.info` 宣布完整能力集；任何误调的本机 Git 闭包仍由 `git.write` 门禁拦截。界面路径相对仓库根并换算为工作区写法（`gitx.ShownRoot`）；界面调 `gitx` 用 `runRaw`；`gitx` 自调 git 设 `GIT_TRACE2_EVENT=0`；强制推送只用 `--force-with-lease --force-if-includes`。
+- **看桌面与手机遥控**（细则见 `docs/features/mobile.md`）：`internal/desk` 经 purego 调 Objective-C 时 goroutine 内 push/pop 自动释放池必须 `runtime.LockOSThread`（`withPool`）；本机用 iOS 模拟器测看桌面时加 `--exclude-app com.apple.iphonesimulator`（或 `POSSE_DESK_EXCLUDE`）防画面回环。外网中转存 `$POSSE_HOME/desk.json`（每次用时现读），中转 UDP socket 经 `IP_BOUND_IF` 绑物理网卡 `en*` 绕开代理，局域网和 Tailscale 不绑。手机端到端测试用 `POSSE_MOBILE_PORT` 换端口；换 `$POSSE_HOME/mobile.json` 主机密钥等于所有手机重新配对。
