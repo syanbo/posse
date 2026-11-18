@@ -68,6 +68,8 @@
 
 2026-11-14 手动目标 Fetch 批次：新增 git.fetch，沿用 fetch --all，通过已接受的桌面执行器固定目标并复用路径/common-dir/project协调；原始参数16KiB、结果128KiB，专用有界输出保留真实结果并净化URL、认证及远端消息。窗口提供手动Fetch、原ref查询/取消、未知结果明确确认新操作，按主机在本次窗口保留最多500项/4MiB记录，未终结记录预留响应容量。服务审查的URL引号泄露、窗口软链仓库误禁和已处置旧操作迟到结果越容量均已修复，原探针及永久回归通过；服务定向race gitx/daemon/client 7.644/18.010/1.590秒，窗口race15.826秒，容量修复定向/race1.163/6.253秒。四张深浅未知/Console预览已检查。首次完整app失败于旧阶段禁止Fetch/Console的两项断言，更新为手动Fetch查看门禁及目标Console范围；新增断言首次因语言不符失败，固定中文后两项1.048秒通过。最终完整app124.248秒、全项目build/vet、MyGo vet、i18n1899条及diff-check通过。原Grok任务k_2665c676退出且未交本批报告，按用户要求改派Cursor k_7cf73d22。Cursor独立验收通过（app/gitx/client/daemon/errtext定向race11.985/6.533/1.570/19.124/2.085秒，无FAIL/SKIP），两项旧断言补跑race8.908秒通过，四张已有预览已检查，无新增可复现缺陷；完整报告 `.posse/tasks/k_7cf73d22/report-host-git-fetch.md` 已核对。其余Git写操作、auto-fetch、目标持久Console、主机入口及真实双Mac尚未完成。
 
+2026-11-18 桌面 Git 写操作完整迁移与阶段 5 收口：已完成本机桌面控制身份与顶栏主机菜单（`7e655da4`）、自动 Fetch、实际 Push（`git.push`）、分支更新（`git.update`）、分支检出/新建/重命名/删除恢复（`git.branch`）与外部 worktree 打开/从分支建工作区、文件级 Git 写操作（`git.paths`）、部分/整体/单处提交与 amend（`git.commit`）、储藏写入（`git.stash`）、整合与冲突推进（`git.integrate`）、历史改写与远端包含检查（`git.history`/`git.remotesContaining`）、worktree 同步与合并回项目（`workspace.merge`）；补齐文件夹批量上传下载（`files.mkdir` + `UploadDirectory`/`DownloadDirectory`）与远端终端复制/拖入文件上传（`files.pasteFile`）；`daemon.info` 与窗口连接器已开启完整能力集握手（`rpc.v1`/`terminal.stream.v1`/`desktop.control.v1`/`files.v1`/`git.v1`），登记切换主机快捷键 `⌃⌥H`（`switchHost`）；收口远端侧栏拖入、worktree 删除 `closeTerminals`（修复 `repoGone` 误读本机路径）、任务 `workspace.diff`、查看端防休眠/用量门禁、远端文件栏技能页签、远端内存浮窗进程树隔离与远端终端链接卡片；修复 `local_desktop_test.go` 的 `go vet` 泄漏。全套构建、vet、MyGo vet、i18n、单测与定向竞态回归通过；真实双物理 Mac（SSH 跨机、外网凭据、远端 TCC、休眠唤醒、退出登录、真实 QuickLook 视频缩略图与手机共存）仍待双机环境实测。
+
 ## 0. 前置交付：纵向全局导航
 
 在 SSH 实现前，先把现有侧栏顶部全局磁贴迁到窗口最左侧的窄导航栏，参考用户提供的 Codex 截图，保持 Posse 自己的暖灰/陶土主题。
