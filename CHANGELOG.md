@@ -3,6 +3,24 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.41
+
+- 可以连到另一台 Mac 上的 Posse。顶栏主机菜单里连接、查看、接管和断开；查看时不改对方的文件，接管之后 Git、文件夹传输和终端里的文件操作都在那台 Mac 上执行。
+- 接入 Antigravity：可以开终端、恢复会话，历史里也能看到。
+- 左侧改为常驻图标栏。任务和历史各自有模块侧栏，列表只画看得到的行；工作区顶部的固定区去掉了。聊天项目从聊天入口进入，不再出现在项目树里。有侧栏和没有侧栏的页面之间切换时侧栏直接出现或消失，只有点开关才滑动。
+- 找仓库时目录太大或读满大小限制，改动页显示「目录太大，没扫完」，不再反复弹出侧栏错误。关掉同一条后台错误后，到点重试不会再把它弹回来。
+- 冲突预测读满大小限制时显示无法预测，并放宽了读取预算。自动 Fetch 碰到常驻进程交接时不再显示失败，稍后重试。
+- 修复上报终端配色时和窗口绘制抢同一份颜色，以及取消列出文件时误报错误。
+
+### English
+
+- Connect to Posse on another Mac from the host menu: connect, view, take control, and disconnect. Viewing does not change that Mac; after taking control, Git, folder transfers, and file operations from terminals run there.
+- Antigravity terminals, session resume, and history are supported.
+- The left edge is now a persistent icon rail. Tasks and History have their own sidebars and only draw visible rows. The pinned section at the top of the workspace sidebar is gone. The chat project opens from Chat and no longer appears in the project tree. Switching between pages with and without a sidebar shows or hides it immediately; only the sidebar toggle animates.
+- When repository discovery hits a directory or read limit, the changes page says the scan did not finish, instead of repeating a sidebar error. Dismissing that background error keeps it dismissed when the retry runs.
+- Conflict prediction that runs out of read budget now says it cannot predict, and the read budget is larger. Automatic fetch no longer shows a failure while the background process is handing over; it retries later.
+- Fix terminal colors being overwritten while the window is drawing, and cancelling a file listing no longer reports an error.
+
 ## 0.1.40
 
 - 配合手机端 0.1.26，文件树按 Git 状态上色，父目录汇总改动、忽略项淡化，与桌面共用状态规则；支持嵌套仓库和同一仓库的多个软链入口。
