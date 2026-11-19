@@ -179,10 +179,12 @@ func (a *app) scanRepos(v *filesView) {
 			if err != nil {
 				v.repos.scanAt = time.Now()
 				v.repos.err = errtext.Text(err)
-				a.err = v.repos.err
+				a.showErr(v.repos.err)
 				return
 			}
+			prev := v.repos.err
 			v.repos.err = ""
+			a.clearErr(prev)
 			if target {
 				v.repos.request = r
 			}
@@ -581,8 +583,12 @@ func (a *app) gitBranch(w *workspace) string {
 		}
 		return statusBranch(v.git)
 	}
+	// 文件栏关着时只有这里会去找仓库。失败后隔一会儿再试，不在每一帧都重来一遍。
 	if v == nil || !v.repos.scanned {
-		a.scanRepos(a.filesFor(w))
+		v = a.filesFor(w)
+		if !v.repos.scanning && time.Since(v.repos.scanAt) >= gitPollEvery {
+			a.scanRepos(v)
+		}
 		return w.Branch
 	}
 	// 文件栏关着时 pollRepos 不跑：项目的开关变了在这里重找

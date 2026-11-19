@@ -622,6 +622,36 @@ func TestLocalDesktopRepositoryFailureRetry(t *testing.T) {
 	}
 }
 
+func TestDismissedDiscoverErrorStaysClosed(t *testing.T) {
+	a, f := localDesktopFixture(t)
+	connectLocalDesktop(t, a)
+	v, _, _ := localDesktopRepo(t, a, f)
+	var calls atomic.Int32
+	f.mu.Lock()
+	f.desktopCall = func(context.Context, rpc.DesktopCall) (any, error) {
+		calls.Add(1)
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s", gitx.ErrReadLimit.Error())
+	}
+	f.mu.Unlock()
+	w := &a.workspaces[0]
+	a.gitBranch(w)
+	pumpSaves(t, []*app{a}, func() bool { return !v.repos.scanning })
+	if calls.Load() != 1 || a.err == "" || v.repos.scanned {
+		t.Fatal("discovery failure did not surface once")
+	}
+	a.gitBranch(w)
+	if calls.Load() != 1 || v.repos.scanning {
+		t.Fatal("failed discovery retried on the next frame")
+	}
+	a.dismissedErr, a.err = a.err, ""
+	v.repos.scanAt = time.Now().Add(-gitPollEvery)
+	a.gitBranch(w)
+	pumpSaves(t, []*app{a}, func() bool { return !v.repos.scanning })
+	if calls.Load() != 2 || a.err != "" {
+		t.Fatalf("dismissed notice returned: calls=%d err=%q", calls.Load(), a.err)
+	}
+}
+
 func TestLocalDesktopRepositoryRescanKeepsFetch(t *testing.T) {
 	a, f := localDesktopFixture(t)
 	connectLocalDesktop(t, a)

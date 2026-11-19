@@ -117,10 +117,12 @@ func (a *app) scanTargetRepos(v *filesView) {
 			rs.scanAt = time.Now()
 			if err != nil {
 				rs.err = errtext.Text(err)
-				a.err = rs.err
+				a.showErr(rs.err)
 				return
 			}
+			prev := rs.err
 			rs.err = ""
+			a.clearErr(prev)
 			old := rs.list
 			list := make([]*gitState, 0, len(out.Repos))
 			for _, repo := range out.Repos {
@@ -232,13 +234,15 @@ func (a *app) pollTargetRepo(g *gitState, full bool) {
 			}
 			if err != nil {
 				g.err = errtext.Text(err)
-				a.err = g.err
+				a.showErr(g.err)
 				return
 			}
+			prev := g.err
+			g.err = ""
+			a.clearErr(prev)
 			if !a.targetGitIdentity(g, out.Identity) {
 				return
 			}
-			g.err = ""
 			out.Status.Entries = slices.DeleteFunc(out.Status.Entries, func(e gitx.Entry) bool { return v.nestedEntry(g, e) })
 			old := g.status
 			g.status = out.Status

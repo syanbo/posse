@@ -35,7 +35,7 @@ type Discovery struct {
 	// 工作区可能指向仓库的子目录，不能用仓库 Real 代替它做路径换算。
 	RealPath string
 	Repos    []Repo
-	// Partial 说明撞上了扫描上限（目录数、时间），可能没找全。
+	// Partial 说明撞上了扫描上限（目录数、时间、读取预算），可能没找全。
 	Partial bool
 }
 
@@ -127,6 +127,7 @@ type discoverer struct {
 
 func (d *discoverer) result() Discovery {
 	// 外层仓库经两条软链进来时，只顺着第一条找到了里面的仓库：给它们补上另一条的写法
+aliases:
 	for changed := true; changed; {
 		changed = false
 		for i := range d.repos {
@@ -140,7 +141,10 @@ func (d *discoverer) result() Discovery {
 					alias := a + in.Root[len(outer.Root):]
 					if alias != in.Root && !slices.Contains(in.Aliases, alias) {
 						if d.checked && d.failed(consumeReadBudget(d.ctx, len(alias))) {
-							return Discovery{}
+							if d.err != nil {
+								return Discovery{}
+							}
+							break aliases // 预算读满：已有的写法照常交回，标成没找全
 						}
 						in.Aliases = append(in.Aliases, alias)
 						changed = true

@@ -102,10 +102,11 @@ func (d *historyDetail) visible(tools bool, hitSeq int) []transcriptItem {
 
 // historyView 是历史页的状态。界面线程读写；req 和 want 由 mu 保护，供请求协程核对自己是否过期。
 type historyView struct {
-	query    string
-	agent    int
-	sessions []history.Session // 没有搜索词时：最近的会话
-	groups   []string          // 与 sessions 对应的分组：按时间分组时是 dayGroup 的代号，否则是文件夹（空串是不知道目录的会话）
+	query       string
+	focusSearch bool // 下一帧侧栏里的搜索框要拿焦点
+	agent       int
+	sessions    []history.Session // 没有搜索词时：最近的会话
+	groups      []string          // 与 sessions 对应的分组：按时间分组时是 dayGroup 的代号，否则是文件夹（空串是不知道目录的会话）
 	// folderOf 不为空时按文件夹分组，返回会话目录归到的组名
 	folderOf func(cwd string) string
 	// groupOpen 是点过的分组展开与否；没点过的只有第一组展开
@@ -575,11 +576,42 @@ func (a *app) historySidebarItem(c *ui.Context) ui.Element {
 
 func (a *app) historyBoard(c *ui.Context) {
 	h := &a.history
+	// 搜索框在侧栏里：侧栏收着时按搜索键先展开，下一帧侧栏画出来再聚焦
+	if a.pressed(c, "historySearch") {
+		if a.state.SidebarHidden {
+			a.toggleSidebar()
+		}
+		h.focusSearch = true
+	}
 	a.band(c, func() {
-		titleText(c, L(c).HistoryTitle(), fsTitle).Margin(0, 6, 0, 0).Shrink(0)
+		label := L(c).HistoryTitle()
+		if h.sel != "" && h.detail != nil {
+			label = cmp.Or(oneLine(h.detail.Session.Title), label)
+		}
+		titleText(c, label, fsTitle).MaxLines(1).Shrink(1).MinWidth(0)
+		ui.Spacer(c)
+		a.closeBoardButton(c)
+	})
+	ui.Column(c).Grow(1).MinHeight(0).Padding(pageGap).Gap(pageGap).Children(func() { a.sessionDetail(c) })
+	// 上下方向键换选中的会话；焦点在搜索框里、列表上或哪儿都不在时都管用
+	switch {
+	case c.Shortcut(0, ui.KeyDown):
+		a.stepSession(1)
+	case c.Shortcut(0, ui.KeyUp):
+		a.stepSession(-1)
+	}
+}
+
+// historySidebar 是历史页的模块侧栏：标题行带按 agent 筛选，下面是搜索框、分组方式和会话列表。
+func (a *app) historySidebar(c *ui.Context) {
+	h := &a.history
+	m := L(c)
+	moduleHeader(c, a.moduleLabel(c, historyBoardID, m.HistoryTitle()), func() { a.historyAgentMenu(c) })
+	ui.Column(c).Padding(0, iconBarPad(), 8, trafficLightX).Gap(8).Shrink(0).Children(func() {
 		// 系统搜索框的占位文字固定是英文 Search，这里用普通输入框
-		search := fieldInputSized(c, &h.query, L(c).HistorySearchPlaceholder(a.keyText("historySearch")), 340, 160).Label(L(c).HistorySearchLabel())
-		if a.pressed(c, "historySearch") {
+		search := fieldInput(c, &h.query, m.HistorySearchPlaceholder(a.keyText("historySearch"))).Label(m.HistorySearchLabel())
+		if h.focusSearch {
+			h.focusSearch = false
 			search.Focus()
 		}
 		changed := search.Changed()
@@ -590,34 +622,38 @@ func (a *app) historyBoard(c *ui.Context) {
 			a.searchHistory(250 * time.Millisecond)
 		}
 		a.historyGroupSwitch(c)
-		ui.Spacer(c)
-		if segmented(c, &h.agent, L(c).HistoryFilterByAgent(), historyAgentLabels(L(c))...) {
-			a.searchHistory(0)
-		}
-		a.closeBoardButton(c)
 	})
 	searching := h.resQuery != ""
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Children(func() {
-		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走
-		list := card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label(L(c).HistorySessionList())
-		list.Children(func() {
-			a.historyTotals(c)
-			a.historyNotice(c, searching)
-			if searching {
-				a.hitList(c)
-			} else {
-				a.sessionList(c)
-			}
-		})
-		ui.Column(c).Grow(1).Shrink(1).Gap(pageGap).Children(func() { a.sessionDetail(c) })
+	// 可以聚焦：点过列表后方向键归它
+	ui.Column(c).Grow(1).MinHeight(0).Focusable().FocusRing(false).Label(m.HistorySessionList()).Children(func() {
+		a.historyTotals(c)
+		a.historyNotice(c, searching)
+		if searching {
+			a.hitList(c)
+		} else {
+			a.sessionList(c)
+		}
 	})
-	// 上下方向键换选中的会话；焦点在搜索框里、列表上或哪儿都不在时都管用
-	switch {
-	case c.Shortcut(0, ui.KeyDown):
-		a.stepSession(1)
-	case c.Shortcut(0, ui.KeyUp):
-		a.stepSession(-1)
+}
+
+// historyAgentMenu 是按 agent 筛选的漏斗，选了某一家时垫强调色淡底。
+func (a *app) historyAgentMenu(c *ui.Context) {
+	h := &a.history
+	m := L(c)
+	labels := historyAgentLabels(m)
+	tip := m.HistoryFilterByAgent()
+	if h.agent > 0 && h.agent < len(labels) {
+		tip = labels[h.agent]
 	}
+	b := toggleIconBox(c, "history-agent", iconFilter, tip, h.agent > 0, compactBox(), fsBody, rRow)
+	menuButton(c, b, func(menu *popMenu) {
+		for i, label := range labels {
+			if menu.Item(label).Checked(h.agent == i).Chosen() && h.agent != i {
+				h.agent = i
+				a.searchHistory(0)
+			}
+		}
+	})
 }
 
 // stepSession 选中列表里看得见的下一个（step 为 1）或上一个会话，折起来的分组跳过；
@@ -855,7 +891,7 @@ func (a *app) sessionList(c *ui.Context) {
 			}
 			h.groupOpen[r.group] = !open
 		}
-	}).Grow(1).Padding(4, 0, 8, 0).Gap(4), &h.list, colors(t).card)
+	}).Grow(1).Padding(4, 0, 8, 0).Gap(4), &h.list, colors(t).side)
 }
 
 // historyRow 是会话列表的一行：分组标题（session 为 -1）或一个会话。
@@ -902,7 +938,7 @@ func (a *app) hitList(c *ui.Context) {
 	fadeEdges(ui.List(c, &h.list, len(h.hits), func(i int) {
 		hit := h.hits[i]
 		a.sessionRow(c, hit.Session, &hit)
-	}).Grow(1).Padding(8, 0).Gap(4), &h.list, colors(c.Theme()).card)
+	}).Grow(1).Padding(8, 0).Gap(4), &h.list, colors(c.Theme()).side)
 }
 
 func (a *app) historyEmpty(c *ui.Context, title, body string) {

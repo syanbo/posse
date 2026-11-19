@@ -105,11 +105,15 @@ func (a *app) build(c *ui.Context) {
 	root := ui.Row(c).Fill().AlignItems(ui.Stretch)
 	// 收起、展开时侧栏从左边缘滑出滑进。主区域只在展开开始、收起结束时改一次宽度，
 	// 免得终端里的程序跟着动画反复按新列数重排（和右边的文件栏一样）
-	open := float32(1)
-	if a.state.SidebarHidden || !a.hasContextSidebar() {
+	// 有没有模块侧栏各用一路动画：在技能、手机、设置这类没有侧栏的页面和工作区之间切换时换了一路，直接到位不滑动，
+	// 只有点开关收起、展开才滑
+	open, slide := float32(1), "sidebar"
+	if !a.hasContextSidebar() {
+		open, slide = 0, "sidebar-none"
+	} else if a.state.SidebarHidden {
 		open = 0
 	}
-	a.sidebarShown = root.AnimateTo("sidebar", open, ui.Animation{Duration: 200 * time.Millisecond, Ease: ui.EaseOut})
+	a.sidebarShown = root.AnimateTo(slide, open, ui.Animation{Duration: 200 * time.Millisecond, Ease: ui.EaseOut})
 	root.Children(func() {
 		a.navigation(c)
 		if a.sidebarSlot() {
@@ -476,14 +480,16 @@ func appNameWidth(c *ui.Context) float32 {
 // appNameWidths 只在界面线程读写。
 var appNameWidths = map[[2]float32]float32{}
 
-func titleLead(c *ui.Context) float32 { return appNameWidth(c) + appNameGap + buttonBox() }
-
-// barInset 是侧栏不占位置时主区域顶栏左边要让出的宽度：红绿灯和浮在旁边的应用名、侧栏开关。
+// barInset 是侧栏不占位置时主区域顶栏左边要让出的宽度：红绿灯和浮在旁边的应用名，
+// 有模块侧栏可展开时还有侧栏开关；没有模块侧栏的页面不画开关，也不给它留位置。
 func (a *app) barInset(c *ui.Context) float32 {
 	if a.sidebarSlot() {
 		return 0
 	}
-	lead := titleLead(c)
+	lead := appNameWidth(c)
+	if a.hasContextSidebar() {
+		lead += appNameGap + buttonBox()
+	}
 	if a.views != nil {
 		lead += appNameGap + a.hostMenuWidth(c)
 	}
@@ -525,8 +531,15 @@ func (a *app) sidebar(c *ui.Context) {
 	})
 	a.navOrder, a.navCur = a.navOrder[:0], -1
 	defer a.sidebarNotices(c)
-	if a.selected == discBoardID {
+	switch a.selected {
+	case discBoardID:
 		a.discussionSidebar(c)
+		return
+	case taskBoardID:
+		a.taskSidebar(c)
+		return
+	case historyBoardID:
+		a.historySidebar(c)
 		return
 	}
 	if a.isChat(a.selected) {
@@ -542,15 +555,10 @@ func (a *app) sidebar(c *ui.Context) {
 		a.sidebarKeys(nav)
 		return
 	}
-	a.topTiles(c)
 	if len(a.projects) > 0 {
 		a.sidebarGroupSwitch(c)
 	}
 	nav := ui.Scroll(c).Grow(1).Focusable().Label(L(c).SidebarWorkspaces())
-	// 固定的工作区从顶上拖回项目列表就取消固定
-	if d, ok := ui.Drop[tileDrag](nav); ok && !slices.Contains(globalTiles, d.id) {
-		a.unpin(d.id)
-	}
 	a.projectDrop(c, nav)
 	nav.Children(func() {
 		ui.Column(c).Padding(6, navEnd, 12, trafficLightX-navPad).Gap(2).Children(func() {
@@ -566,7 +574,7 @@ func (a *app) sidebar(c *ui.Context) {
 			// 遍历拷贝：拖放排序会在这一帧里改 a.projects
 			a.navProjects = append(a.navProjects[:0], a.projects...)
 			for _, p := range a.navProjects {
-				if ws := a.byProject[p.ID]; len(ws) > 0 {
+				if ws := a.byProject[p.ID]; len(ws) > 0 && !a.chatOnly(ws) {
 					a.projectItem(c, p, ws, reveal == p.ID)
 				}
 			}
@@ -885,13 +893,6 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 		icon = func() { a.projectGlyph(c, a.projIcons[w.ProjectID], a.wsIcon(&w)) }
 	}
 	item := a.navRowAt(c, w.ID, selected, icon, label, sub, branch, trailing)
-	if nested {
-		// 项目下面的工作区行能拖到顶上固定；单行的项目整行拖的是项目（排序），顶上也接
-		item.Drag(wsDrag{w.ID})
-		if item.Dragging() {
-			item.Opacity(0.4)
-		}
-	}
 	if item.Clicked() {
 		a.selected = w.ID
 	}
@@ -1186,18 +1187,6 @@ func (a *app) workspaceMenu(c *ui.Context, m *popMenu, w workspace) {
 		}
 	}
 	m.Separator()
-	// 聊天工作区已经有「聊天」磁贴
-	if !a.isChat(w.ID) {
-		if a.pinned(w.ID) {
-			if m.Item(lm.SidebarUnpin()).Icon(iconPin).Chosen() {
-				a.unpin(w.ID)
-			}
-		} else if !a.canPin() {
-			m.Item(lm.SidebarPinFull(topTilesMax)).Icon(iconPin).Disabled(true)
-		} else if m.Item(lm.SidebarPin()).Icon(iconPin).Chosen() {
-			a.pin(w.ID)
-		}
-	}
 	if !a.remoteHost() && w.Kind == "main" && m.Item(lm.SidebarChangeIcon()).Icon(iconImage).Chosen() {
 		if p := a.projectByID(w.ProjectID); p != nil {
 			a.editProjectIcon(*p)
@@ -1423,11 +1412,36 @@ func sideNotice(c *ui.Context, danger bool, title, body string, onClose func(), 
 	})
 }
 
+// showErr 把错误放进侧栏提示。用户关掉同一条之后，后台重试不再弹回来。
+func (a *app) showErr(msg string) {
+	if msg == "" || msg == a.err || msg == a.dismissedErr {
+		return
+	}
+	a.dismissedErr = ""
+	a.err = msg
+}
+
+// clearErr 在这条错误已经解决时收起提示，并允许以后再次出现。
+func (a *app) clearErr(prev string) {
+	if prev == "" {
+		return
+	}
+	if a.err == prev {
+		a.err = ""
+	}
+	if a.dismissedErr == prev {
+		a.dismissedErr = ""
+	}
+}
+
 func (a *app) errorBar(c *ui.Context) {
 	if a.err == "" || !a.loaded {
 		return
 	}
-	sideNotice(c, true, "", a.err, func() { a.err = "" }, nil)
+	sideNotice(c, true, "", a.err, func() {
+		a.dismissedErr = a.err
+		a.err = ""
+	}, nil)
 }
 
 // staleDot 是收起重开提示后留在齿轮旁的圆点，点了把提示卡放回来。
@@ -2604,6 +2618,11 @@ func toggleIconButton(c *ui.Context, key string, icon *ui.SVG, label string, on 
 
 // toggleIconButtonSized 同 toggleIconButton，方框、图标和圆角自定（顶栏里和 iconButton 一样大）。
 func toggleIconButtonSized(c *ui.Context, key string, icon *ui.SVG, label string, on bool, box, glyph, radius float32) bool {
+	return toggleIconBox(c, key, icon, label, on, box, glyph, radius).Clicked()
+}
+
+// toggleIconBox 画 toggleIconButtonSized 的按钮并返回它，好接 menuButton。
+func toggleIconBox(c *ui.Context, key string, icon *ui.SVG, label string, on bool, box, glyph, radius float32) ui.Element {
 	t := c.Theme()
 	b := ui.Box(c.Key(key)).Size(box, box).Radius(radius).Center().Shrink(0).
 		Role(ui.RoleButton).Label(label).Tooltip(label).Checked(on)
@@ -2616,7 +2635,7 @@ func toggleIconButtonSized(c *ui.Context, key string, icon *ui.SVG, label string
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() { ui.Icon(c, icon).FontSize(glyph).TextColor(fg) })
-	return b.Clicked()
+	return b
 }
 
 // quietIconButton 是不带悬停提示的图标按钮，用在一眼认得出、提示反而挡视线的地方（终端右上角的会话按钮）。

@@ -377,7 +377,11 @@ func (a *app) taskBoard(c *ui.Context) {
 	}
 	m := L(c)
 	a.band(c, func() {
-		titleText(c, m.TasksTitle(), fsTitle)
+		label := m.TasksTitle()
+		if sel := a.task(a.taskSel); sel != nil && !a.taskHome {
+			label = sel.Title
+		}
+		titleText(c, label, fsTitle).MaxLines(1).Shrink(1).MinWidth(0)
 		ui.Spacer(c)
 		if ended > 0 {
 			if pressable(textButton(c, m.TasksClearEnded())).Clicked() {
@@ -387,10 +391,6 @@ func (a *app) taskBoard(c *ui.Context) {
 					r.refresh()
 				}()
 			}
-		}
-		// 空总览中间已有同一个按钮
-		if len(a.tasks) > 0 && pressable(accentButton(c, m.TasksDispatchEllipsis())).Clicked() {
-			a.openDispatch()
 		}
 		a.closeBoardButton(c)
 	})
@@ -402,21 +402,12 @@ func (a *app) taskBoard(c *ui.Context) {
 	if !a.taskHome && a.task(a.taskSel) == nil {
 		a.selectTask(a.sorted[0].ID)
 	}
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Children(func() {
-		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走（和历史页一样）
-		card(c).Width(360).Shrink(0).Clip().Focusable().FocusRing(false).Label(m.TasksList()).Children(func() {
-			ui.Scroll(c).Grow(1).Children(func() {
-				// 项与项之间留 4：悬停和选中的底色不粘在一起（和历史列表一样）
-				ui.Column(c).Padding(4, 0, 8, 0).Gap(4).Children(func() { a.taskList(c) })
-			})
-		})
-		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Children(func() {
-			if sel := a.task(a.taskSel); sel != nil && !a.taskHome {
-				ui.Scroll(c).Grow(1).Children(func() { a.taskDetailView(c, *sel) })
-				return
-			}
-			a.taskEmptyCard(c)
-		})
+	ui.Column(c).Grow(1).MinHeight(0).Padding(pageGap).Children(func() {
+		if sel := a.task(a.taskSel); sel != nil && !a.taskHome {
+			ui.Scroll(c).Grow(1).Children(func() { a.taskDetailView(c, *sel) })
+			return
+		}
+		a.taskEmptyCard(c)
 	})
 	// 上下方向键换选中的任务，和历史页一样；焦点在回复框里时归输入框，开着对话框时不动
 	if a.dispatching || a.confirming {
@@ -428,6 +419,24 @@ func (a *app) taskBoard(c *ui.Context) {
 	case c.Shortcut(0, ui.KeyUp):
 		a.stepTask(-1)
 	}
+}
+
+// taskSidebar 是任务页的模块侧栏：标题行带派发按钮，下面是任务列表。
+func (a *app) taskSidebar(c *ui.Context) {
+	t, m := c.Theme(), L(c)
+	moduleHeader(c, a.moduleLabel(c, taskBoardID, m.TasksTitle()), func() {
+		if iconButton(c, iconPlus, m.TasksDispatchEllipsis()).Clicked() {
+			a.openDispatch()
+		}
+	})
+	// 可以聚焦：点过列表后方向键归它，不被别处拿走（和历史页一样）
+	ui.Column(c).Grow(1).MinHeight(0).Focusable().FocusRing(false).Label(m.TasksList()).Children(func() {
+		if len(a.tasks) == 0 {
+			ui.Text(c, m.TasksEmptyTitle()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 20)
+			return
+		}
+		a.taskList(c)
+	})
 }
 
 // stepTask 选中列表里的下一个（step 为 1）或上一个任务；还没选中时下键选第一个、上键选最后一个。到头了不动。
@@ -504,19 +513,56 @@ func sortTasks(tasks []taskInfo) []taskInfo {
 	return ts
 }
 
+// taskListRow 是虚拟列表里的一行：分组标题（task 为 -1）或一个任务。
+type taskListRow struct {
+	section int
+	task    int
+}
+
+func (a *app) taskRows() []taskListRow {
+	rows := make([]taskListRow, 0, len(a.sorted)+3)
+	section := -1
+	for i, task := range a.sorted {
+		if s := taskSection(task); s != section {
+			section = s
+			rows = append(rows, taskListRow{section: s, task: -1})
+		}
+		rows = append(rows, taskListRow{task: i})
+	}
+	return rows
+}
+
 func (a *app) taskList(c *ui.Context) {
 	t, m := c.Theme(), L(c)
 	// 列表里有"几分钟"这样的相对时间，界面不再每秒重建，自己约下一帧
 	c.After(30 * time.Second)
-	section := -1
-	for _, task := range a.sorted {
-		if s := taskSection(task); s != section {
-			section = s
-			label := []string{m.TasksSectionNeedsReply(), m.CommonInProgress(), m.TasksSectionEnded()}[s]
-			ui.Text(c.Key(fmt.Sprint("section-", s)), label).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Padding(12, 20, 4, 20)
+	rows := a.taskRows()
+	if a.taskScroll != "" {
+		for i, r := range rows {
+			if r.task >= 0 && a.sorted[r.task].ID == a.taskScroll {
+				a.taskListState.ScrollIntoView(i)
+				break
+			}
 		}
-		a.taskRow(c, task)
+		a.taskScroll = ""
 	}
+	a.taskListState.Key = func(i int) any {
+		r := rows[i]
+		if r.task >= 0 {
+			return a.sorted[r.task].ID
+		}
+		return fmt.Sprint("section-", r.section)
+	}
+	// 只画看得见的行：任务有几百条时，切到这一页不用把每一行都排出来
+	fadeEdges(ui.List(c, &a.taskListState, len(rows), func(i int) {
+		r := rows[i]
+		if r.task < 0 {
+			label := []string{m.TasksSectionNeedsReply(), m.CommonInProgress(), m.TasksSectionEnded()}[r.section]
+			ui.Text(c.Key(fmt.Sprint("section-", r.section)), label).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Padding(12, 20, 4, 20)
+			return
+		}
+		a.taskRow(c, a.sorted[r.task])
+	}).Grow(1).Padding(0, 0, 8, 0).Gap(4), &a.taskListState, colors(t).side)
 }
 
 func (a *app) taskRow(c *ui.Context, task taskInfo) {
@@ -555,10 +601,6 @@ func (a *app) taskRow(c *ui.Context, task taskInfo) {
 			ui.Text(c, preview).FontSize(fsSmall).TextColor(color).MaxLines(2).LineHeight(1.35)
 		})
 	})
-	if a.taskScroll == task.ID {
-		a.taskScroll = ""
-		row.ScrollIntoView()
-	}
 	if row.Clicked() {
 		a.selectTask(task.ID)
 	}

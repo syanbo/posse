@@ -47,8 +47,8 @@ func buttonBox() float32  { return iconSize + 12 }
 func compactBox() float32 { return iconSize + 8 }
 
 // 全局导航保持窄栏，图标比普通工具按钮大一档。
-func navigationWidth() float32       { return sz(56) }
-func navigationBox() float32         { return sz(40) }
+func navigationWidth() float32       { return sz(48) }
+func navigationBox() float32         { return sz(36) }
 func navigationIcon() float32        { return iconSize + 6 }
 func sidebarDefault() float32        { return sz(248) }
 func sidebarMin() float32            { return sz(224) }
@@ -57,7 +57,6 @@ func sshAuthWidth() float32          { return sz(420) }
 func targetDirectoryWidth() float32  { return sz(520) }
 func targetDirectoryHeight() float32 { return sz(260) }
 func pinnedRowHeight() float32       { return sz(32) }
-func pinnedMaxHeight() float32       { return sz(160) }
 
 // miniBox 是标签、文件行里的小按钮（关闭、继续），放 fsSmall 的图标。
 func miniBox() float32 { return iconSize + 4 }

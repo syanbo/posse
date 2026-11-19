@@ -183,16 +183,17 @@ type app struct {
 	// mainUpdate 把函数交给主线程跑，为 nil 时用 win.Update；测试里直接跑
 	mainUpdate func(func())
 
-	projects   []project
-	workspaces []workspace
-	tasks      []taskInfo
-	daemon     daemonStatus
-	planBusy   bool      // 套餐用量正在刷新
-	planAutoAt time.Time // 用量浮层上次自动补查的时间
-	selfKB     int64
-	termKB     int64 // 所有终端进程树的内存，底栏的总内存要加上它
-	loaded     bool
-	err        string
+	projects     []project
+	workspaces   []workspace
+	tasks        []taskInfo
+	daemon       daemonStatus
+	planBusy     bool      // 套餐用量正在刷新
+	planAutoAt   time.Time // 用量浮层上次自动补查的时间
+	selfKB       int64
+	termKB       int64 // 所有终端进程树的内存，底栏的总内存要加上它
+	loaded       bool
+	err          string
+	dismissedErr string // 用户关掉的那条侧栏错误：同一条后台重试不再弹
 
 	// 由 apply、applyTasks 算好的派生数据，免得每帧重算
 	byProject     map[string][]workspace   // 项目 ID → 它的工作区，主工作区在前
@@ -212,7 +213,6 @@ type app struct {
 	sectionsOpen map[string]*bool  // 项目 ID → 侧栏分组是否展开
 	workersOpen  map[string]*bool  // 派发方终端 ID → 侧栏里它的 worker 是否展开（默认展开，不记进 ui.json）
 	runOrder     []string          // 侧栏「运行中」里会话的顺序（终端 ID），nil 表示下一帧按状态重排
-	topSlot      int               // 侧栏顶上磁贴拖动时空出来的格子加一，0 是没有；松手时按它落
 	pollDown     bool              // 最近一次轮询连不上常驻进程，侧栏的会话列表是旧的
 	navOrder     []navTarget       // 侧栏看得见、可选中的行，按显示顺序，供方向键移动
 	navCur       int               // navOrder 里当前选中的行，没有时为 -1
@@ -268,13 +268,14 @@ type app struct {
 		src    string
 		blocks []mdBlock
 	} // 任务说明解析好的 Markdown，见 specMarkdown
-	taskScroll string                   // 方向键换到的任务：列表建到它时滚进视野
-	taskSel    string                   // 选中的任务 ID
-	lastWS     string                   // 上次选中的工作区：关掉任务、历史等页面后回到这里
-	detail     *taskDetail              // 选中任务的消息等完整内容
-	diffs      map[string]*worktreeDiff // worktree 工作区 ID → 改动统计
-	replyText  string
-	noteText   string
+	taskListState ui.ListState             // 任务侧栏的虚拟列表
+	taskScroll    string                   // 方向键换到的任务：列表建到它时滚进视野
+	taskSel       string                   // 选中的任务 ID
+	lastWS        string                   // 上次选中的工作区：关掉任务、历史等页面后回到这里
+	detail        *taskDetail              // 选中任务的消息等完整内容
+	diffs         map[string]*worktreeDiff // worktree 工作区 ID → 改动统计
+	replyText     string
+	noteText      string
 	// wantTask 由界面线程写、轮询协程读：总览里正在看哪个任务
 	wantMu   sync.Mutex
 	wantTask string

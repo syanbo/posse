@@ -91,7 +91,7 @@ agent 色块：跟在小字旁用 `smallIcon()`，单行列表行首用 `iconSiz
 
 ## 尺寸
 
-行高、按钮高、输入框高和跟着文字的列宽写成 `sz(v)`，按正文字号等比缩放（`v` 是 13 号正文时的值）。同一类列表用同一个行高。已有的：侧栏行 `sz(32)`、`sz(46)`、`sz(64)`（一到三行），`logRowH()`、`fontRowHeight()`、`appNameWidth()`。全局导航宽 `navigationWidth()`（`sz(56)`），按钮 `navigationBox()`（`sz(40)`）、图标 `navigationIcon()`（`iconSize+6`）；模块侧栏默认 `sidebarDefault()`（`sz(248)`）、最窄 `sidebarMin()`（`sz(224)`）、最宽 `sidebarMax()`（`sz(420)`），固定工作区用紧凑行，不再由磁贴决定最小宽度。
+行高、按钮高、输入框高和跟着文字的列宽写成 `sz(v)`，按正文字号等比缩放（`v` 是 13 号正文时的值）。同一类列表用同一个行高。已有的：侧栏行 `sz(32)`、`sz(46)`、`sz(64)`（一到三行），`logRowH()`、`fontRowHeight()`、`appNameWidth()`。全局导航宽 `navigationWidth()`（`sz(48)`），按钮 `navigationBox()`（`sz(36)`）、图标 `navigationIcon()`（`iconSize+6`）；模块侧栏默认 `sidebarDefault()`（`sz(248)`）、最窄 `sidebarMin()`（`sz(224)`）、最宽 `sidebarMax()`（`sz(420)`）。
 
 ## 圆角
 
@@ -140,6 +140,7 @@ agent 色块：跟在小字旁用 `smallIcon()`，单行列表行首用 `iconSiz
 - 盖在终端上的按钮列用不透明的 `Surface` 底、不描边；填充底的按钮不描边；表格只画行间横线、表头用填充底；代码块标题栏不画线。
 - 分隔线颜色一律 `line`，线宽 `hairline`（2 倍屏一个物理像素）。主题的 `Border` 只给 mygo 自己的控件。
 - 兄弟元素之间用 `hline(c)`、`vline(c)`；容器自己的边界用 `BorderWidth(hairline, …)`。区域之间的线贴边；列表、菜单里两组之间用 `Margin(4, 6)`；其余跟着容器内边距缩进。
+- 全局导航栏顶上那段接着侧栏和主区域顶栏画底线，右边缘从顶栏下面起画一条竖线（避开红绿灯），在工作区和各页面都是独立的一栏。
 - 聚焦框不是分隔线，粗细 `focusRing`；不聚焦时画同底色的框占住尺寸，聚焦时不挤动内容。
 
 ## 控件、快捷键与菜单

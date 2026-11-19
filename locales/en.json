@@ -6441,23 +6441,6 @@
   "@sidebarOpenTerminal": {
     "description": "Sidebar: workspace context menu item that opens a plain shell."
   },
-  "sidebarPinned": "Pinned",
-  "@sidebarPinned": {
-    "description": "Workspace sidebar: pinned workspaces section and drag target."
-  },
-  "sidebarPin": "Pin to Top",
-  "@sidebarPin": {
-    "description": "Workspace context menu item: adds the workspace to the pinned section."
-  },
-  "sidebarPinFull": "{count, plural, one {Pin to Top (Full: # Workspace Max)} other {Pin to Top (Full: # Workspaces Max)}}",
-  "@sidebarPinFull": {
-    "description": "Workspace context menu item, disabled because the pinned section is full.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "sidebarRemoveProject": "Remove Project…",
   "@sidebarRemoveProject": {
     "description": "Sidebar project context menu item and missing-folder button: removes the project from Posse (files stay)."
@@ -6496,10 +6479,6 @@
         "type": "int"
       }
     }
-  },
-  "sidebarUnpin": "Unpin",
-  "@sidebarUnpin": {
-    "description": "Sidebar workspace context menu item: removes the workspace from the tiles at the top."
   },
   "sidebarUpdatedBody": "Reopen the window to apply. Until then, projects in Desktop and Documents may not be able to read files.",
   "@sidebarUpdatedBody": {

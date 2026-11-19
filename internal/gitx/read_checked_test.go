@@ -55,8 +55,38 @@ func TestDiscoverCheckedCompatible(t *testing.T) {
 			t.Fatalf("identities missing: %v", ids)
 		}
 	}
-	_, _, err := DiscoverChecked(WithReadLimit(t.Context(), 8), root, true)
-	if !errors.Is(err, ErrReadLimit) {
-		t.Fatalf("discovery swallowed budget failure: %v", err)
+	// 预算不够时按没找全交回，不报错，也不越过预算
+	ctx := WithReadLimit(t.Context(), 8)
+	got, _, err := DiscoverChecked(ctx, root, true)
+	if err != nil || !got.Partial {
+		t.Fatalf("budget exhaustion: %+v %v", got, err)
 	}
+	if b := ctx.Value(readLimitKey{}).(*readBudget); b.remaining < 0 {
+		t.Fatalf("budget overrun: %d", b.remaining)
+	}
+}
+
+// 读满预算前找到的仓库照常交回，标成没找全。
+func TestDiscoverCheckedPartialKeepsFound(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"a", "b", "c"} {
+		initRepo(t, filepath.Join(root, name))
+	}
+	full, _, err := DiscoverChecked(WithReadLimit(t.Context(), 4<<20), root, true)
+	if err != nil || full.Partial || len(full.Repos) != 3 {
+		t.Fatalf("full discovery: %+v %v", full, err)
+	}
+	for limit := 64; limit < 64<<10; limit *= 2 {
+		got, ids, err := DiscoverChecked(WithReadLimit(t.Context(), limit), root, true)
+		if err != nil {
+			t.Fatalf("limit %d: %v", limit, err)
+		}
+		if len(ids) != len(got.Repos) {
+			t.Fatalf("limit %d: identities missing: %v", limit, ids)
+		}
+		if got.Partial && len(got.Repos) > 0 && len(got.Repos) < 3 {
+			return
+		}
+	}
+	t.Fatal("no budget produced a partial result with some repos")
 }

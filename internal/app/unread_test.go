@@ -47,7 +47,7 @@ func TestUnreadStatus(t *testing.T) {
 	}
 }
 
-// 在等任务的会话（侧栏会话行画波形）汇总进工作区、项目和固定磁贴时也是等任务，不因为它本轮完成没看就摇铃铛。
+// 在等任务的会话（侧栏会话行画波形）汇总进工作区和项目时也是等任务，不因为它本轮完成没看就摇铃铛。
 func TestSummaryWaitingTasks(t *testing.T) {
 	a := &app{runningFor: map[string]int{"b": 1}}
 	ts := []terminalInfo{

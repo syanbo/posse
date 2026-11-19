@@ -55,6 +55,12 @@ func (a *app) isChat(id string) bool {
 	return w != nil && w.ID == id
 }
 
+// chatOnly 报告项目是不是只有聊天工作区：它在全局图标栏有自己的入口，不再列进项目树和「运行中」。
+// 聊天项目里另加了工作区时照常列出，免得那些工作区找不到。
+func (a *app) chatOnly(ws []workspace) bool {
+	return len(ws) == 1 && a.isChat(ws[0].ID)
+}
+
 // chatSidebarItem 是顶上的「聊天」磁贴。
 func (a *app) chatSidebarItem(c *ui.Context) ui.Element {
 	l := L(c)
@@ -65,7 +71,7 @@ func (a *app) chatSidebarItem(c *ui.Context) ui.Element {
 			badge = func() { statusGlyph(c, status, smallIcon()) }
 		}
 	}
-	tile := navigationButton(c, chatBoardID, iconChat, l.ChatTitle(), a.displayed() == a && a.isChat(a.selected), badge).Tooltip(a.withKey(l.ChatTitle(), "newChat"))
+	tile := navigationButton(c, chatBoardID, iconChat, l.ChatTitle(), a.displayed() == a && a.isChat(a.selected), badge)
 	if w != nil {
 		contextMenu(c, tile, func(m *popMenu) {
 			// 收集菜单项不能切页面；执行选中动作时先显示所属主机，确认框和请求才有正确上下文。

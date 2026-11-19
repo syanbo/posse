@@ -18441,48 +18441,6 @@ func (msgs Messages) SidebarOpenTerminal() string {
 	return Catalog.Format(msgs.locale, "sidebarOpenTerminal", nil)
 }
 
-// SidebarPinned says "Pinned"
-// in the language the app shows.
-//
-// Workspace sidebar: pinned workspaces section and drag target.
-func SidebarPinned() string { return In(i18n.Locale()).SidebarPinned() }
-
-// SidebarPinned says "Pinned"
-// in the language of msgs.
-//
-// Workspace sidebar: pinned workspaces section and drag target.
-func (msgs Messages) SidebarPinned() string {
-	return Catalog.Format(msgs.locale, "sidebarPinned", nil)
-}
-
-// SidebarPin says "Pin to Top"
-// in the language the app shows.
-//
-// Workspace context menu item: adds the workspace to the pinned section.
-func SidebarPin() string { return In(i18n.Locale()).SidebarPin() }
-
-// SidebarPin says "Pin to Top"
-// in the language of msgs.
-//
-// Workspace context menu item: adds the workspace to the pinned section.
-func (msgs Messages) SidebarPin() string {
-	return Catalog.Format(msgs.locale, "sidebarPin", nil)
-}
-
-// SidebarPinFull says "{count, plural, one {Pin to Top (Full: # Workspace Max)} other {Pin to Top (Full: # Workspaces Max)}}"
-// in the language the app shows.
-//
-// Workspace context menu item, disabled because the pinned section is full.
-func SidebarPinFull(count int) string { return In(i18n.Locale()).SidebarPinFull(count) }
-
-// SidebarPinFull says "{count, plural, one {Pin to Top (Full: # Workspace Max)} other {Pin to Top (Full: # Workspaces Max)}}"
-// in the language of msgs.
-//
-// Workspace context menu item, disabled because the pinned section is full.
-func (msgs Messages) SidebarPinFull(count int) string {
-	return Catalog.Format(msgs.locale, "sidebarPinFull", map[string]any{"count": count})
-}
-
 // SidebarRemoveProject says "Remove Project…"
 // in the language the app shows.
 //
@@ -18573,22 +18531,6 @@ func SidebarShowWorkspaces(count int) string { return In(i18n.Locale()).SidebarS
 // workspaces.
 func (msgs Messages) SidebarShowWorkspaces(count int) string {
 	return Catalog.Format(msgs.locale, "sidebarShowWorkspaces", map[string]any{"count": count})
-}
-
-// SidebarUnpin says "Unpin"
-// in the language the app shows.
-//
-// Sidebar workspace context menu item: removes the workspace from the tiles
-// at the top.
-func SidebarUnpin() string { return In(i18n.Locale()).SidebarUnpin() }
-
-// SidebarUnpin says "Unpin"
-// in the language of msgs.
-//
-// Sidebar workspace context menu item: removes the workspace from the tiles
-// at the top.
-func (msgs Messages) SidebarUnpin() string {
-	return Catalog.Format(msgs.locale, "sidebarUnpin", nil)
 }
 
 // SidebarUpdatedBody says "Reopen the window to apply. Until then, projects in Desktop and Documents may not be able to read files."

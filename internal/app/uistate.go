@@ -31,7 +31,7 @@ type uiState struct {
 	SidebarGroup         string    `json:"sidebarGroup,omitempty"`         // 侧栏的看法：空是按项目，sidebarByStatus 是运行中的会话平铺
 	TopTiles             []string  `json:"topTiles,omitempty"`             // 旧版全局页面和固定工作区的混合顺序
 	NavigationOrder      []string  `json:"navigationOrder,omitempty"`      // 全局导航顺序
-	PinnedWorkspaces     []string  `json:"pinnedWorkspaces,omitempty"`     // 工作区侧栏的固定项
+	PinnedWorkspaces     []string  `json:"pinnedWorkspaces,omitempty"`     // 旧的固定工作区，不再显示；迁移和分主机状态仍保留
 	LastWorkspace        string    `json:"lastWorkspace,omitempty"`        // 工作区模块上次选择，聊天单独恢复
 	WorkspaceMetaHidden  bool      `json:"workspaceMetaHidden,omitempty"`  // 侧栏项目下面的工作区行不显示分支，只留名字
 	LogPanel             bool      `json:"logPanel,omitempty"`             // 旧版不分项目的日志浮层开关，读到后记到当前项目上

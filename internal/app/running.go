@@ -81,6 +81,9 @@ func (a *app) runningList(c *ui.Context) {
 	var natural []string // 照「项目」看法里的先后
 	for _, p := range a.projects {
 		ws := a.byProject[p.ID]
+		if a.chatOnly(ws) {
+			continue
+		}
 		for _, w := range ws {
 			where := workspaceWhere(L(c), p, ws, w)
 			for _, t := range a.sessionsInTree(agentSessions(w.Terminals)) {
