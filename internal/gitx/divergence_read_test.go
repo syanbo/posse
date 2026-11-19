@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -293,5 +294,39 @@ func TestDivergenceReadCancelCleanup(t *testing.T) {
 	entries, err := os.ReadDir(tmp)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("temp leak %v %v", entries, err)
+	}
+}
+
+func TestDivergenceReadInputBudget(t *testing.T) {
+	root := divergenceRepo(t, "sha1", "file")
+	dir := filepath.Join(root, strings.Repeat("deep-directory-name/", 6))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 2000 {
+		write(t, filepath.Join(dir, fmt.Sprintf("resource-file-%04d.txt", i)), "x\n")
+	}
+	gitIn(t, root, "add", ".")
+	gitIn(t, root, "commit", "-qm", "many paths")
+	id, err := RepositoryIdentityChecked(historyContext(t), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := WithReadLimit(t.Context(), 900<<10)
+	got, err := ReadDivergenceChecked(ctx, id, "base", "")
+	if err != nil || got.Prediction != DivergenceUnavailable || got.Reason != DivergenceLimit || got.Ahead != 2 || got.Behind != 1 {
+		t.Fatalf("limited %+v %v", got, err)
+	}
+	again, err := ReadDivergenceChecked(ctx, id, "base", got.Baseline)
+	if err != nil || !again.Unchanged || again.Baseline != got.Baseline {
+		t.Fatalf("baseline %+v %v", again, err)
+	}
+	// 用剩的份额退回调用方，后续身份复查仍有预算。
+	if _, err := RepositoryIdentityChecked(ctx, root); err != nil {
+		t.Fatalf("refund %v", err)
+	}
+	full, err := ReadDivergenceChecked(WithReadLimit(t.Context(), 48<<20), id, "base", "")
+	if err != nil || full.Prediction != DivergenceCompleted || len(full.Conflicts) != 1 {
+		t.Fatalf("full %+v %v", full, err)
 	}
 }

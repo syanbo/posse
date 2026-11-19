@@ -32,6 +32,7 @@ type divergenceInputs struct {
 	args       []string
 	attributes string
 	reason     string
+	counted    bool
 }
 
 func readDivergenceInputs(ctx context.Context, id RepositoryIdentity, base string) (divergenceInputs, error) {
@@ -60,6 +61,7 @@ func readDivergenceInputs(ctx context.Context, id RepositoryIdentity, base strin
 		}
 		*target = n
 	}
+	s.counted = true
 	if s.baseline.Ahead == 0 || s.baseline.Behind == 0 {
 		return s, nil
 	}

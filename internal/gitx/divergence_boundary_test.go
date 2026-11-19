@@ -111,12 +111,8 @@ func TestDivergenceReadTemporaryLimits(t *testing.T) {
 			}
 			divergenceWrapper(t, "case \" $* \" in *\" merge-tree \"*) "+scripts[kind]+";; esac")
 			got, err := divergenceReadTest(t, root, "base", "")
-			if kind == "output" {
-				if !errors.Is(err, ErrReadLimit) {
-					t.Fatalf("output budget %v", err)
-				}
-			} else if err != nil || got.Prediction != DivergenceUnavailable || got.Reason != DivergenceLimit {
-				t.Fatalf("disk budget %+v %v", got, err)
+			if err != nil || got.Prediction != DivergenceUnavailable || got.Reason != DivergenceLimit {
+				t.Fatalf("%s budget %+v %v", kind, got, err)
 			}
 			entries, e := os.ReadDir(tmp)
 			if e != nil || len(entries) != 0 {

@@ -19,7 +19,7 @@ func (d *Daemon) gitDivergence(ctx context.Context, raw json.RawMessage) (any, e
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	ctx = gitx.WithReadLimit(ctx, rpc.GitReadLimit)
+	ctx = gitx.WithReadLimit(ctx, rpc.GitDivergenceReadLimit)
 	id, err := gitFileIdentity(ctx, p.Path, p.Expected)
 	if err != nil {
 		return nil, err
@@ -31,5 +31,10 @@ func (d *Daemon) gitDivergence(ctx context.Context, raw json.RawMessage) (any, e
 	if readErr != nil {
 		return nil, gitReadError(ctx, readErr)
 	}
-	return gitReadResult(ctx, rpc.GitDivergenceResult{Identity: id, BaseRef: p.BaseRef, DivergenceRead: result})
+	out := rpc.GitDivergenceResult{Identity: id, BaseRef: p.BaseRef, DivergenceRead: result}
+	// 读取份额比回复上限大，冲突列表放不进回复时按超出预测范围处理。
+	if encoded, err := json.Marshal(out); err == nil && len(encoded) > rpc.GitReadLimit {
+		out.Prediction, out.Reason, out.Conflicts = gitx.DivergenceUnavailable, gitx.DivergenceLimit, []string{}
+	}
+	return gitReadResult(ctx, out)
 }
