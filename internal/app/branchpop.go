@@ -140,7 +140,11 @@ func trackKey(w *workspace, repo string) string { return w.ID + "\x00" + repo }
 
 // autoFetchEvery 是多久自动 fetch 一次。只拉看得见的工作区的当前仓库，同一项目的 worktree 共用远端引用，
 // 按项目里仓库的位置计时（工作区自己的仓库就是项目，嵌套的仓库按它相对工作区的路径）。
-const autoFetchEvery = 5 * time.Minute
+const (
+	autoFetchEvery = 5 * time.Minute
+	// 交接通常一两秒结束，不必等满一个周期。
+	autoFetchBusyRetry = 5 * time.Second
+)
 
 // fetchKey 是 a.fetchAt 的键，见 autoFetchEvery；rel 是仓库相对工作区的路径，工作区自己的仓库为空。
 func fetchKey(project, rel string) string {

@@ -178,6 +178,10 @@ func (a *app) startTargetFetch(m locales.Messages, target gitOperationTarget, au
 			}
 			if err != nil {
 				var re *rpc.Error
+				if s.automatic && errors.As(err, &re) && re.Code == rpc.CodeBusy {
+					a.skipAutoFetch(s)
+					return
+				}
 				s.unknown = !errors.As(err, &re) || re.Code == rpc.CodeOutcomeUnknown
 				s.done, s.err = !s.unknown, errtext.Text(err)
 				if s.done {
@@ -189,6 +193,23 @@ func (a *app) startTargetFetch(m locales.Messages, target gitOperationTarget, au
 		})
 	}()
 	return s
+}
+
+// 常驻进程交接或其他写入占着时服务没有接受这次 Fetch：不留失败记录，稍后再试。
+func (a *app) skipAutoFetch(s *targetFetch) {
+	s.done = true
+	a.targetFetches = slices.DeleteFunc(a.targetFetches, func(x *targetFetch) bool { return x == s })
+	a.releaseAutoFetch(s)
+	if s.autoKey == "" {
+		return
+	}
+	if a.fetchAt[s.autoKey] == s.at {
+		delete(a.fetchAt, s.autoKey)
+	}
+	if a.fetchRetry == nil {
+		a.fetchRetry = map[string]time.Time{}
+	}
+	a.fetchRetry[s.autoKey] = time.Now().Add(autoFetchBusyRetry)
 }
 
 func (a *app) finishFetch(s *targetFetch, out rpc.GitFetchResult, r appRequest, m locales.Messages) {

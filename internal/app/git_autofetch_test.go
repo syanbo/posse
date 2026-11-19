@@ -413,3 +413,27 @@ func TestAutoFetchTargetCancelAndWriteGuards(t *testing.T) {
 		}
 	}
 }
+
+func TestAutoFetchTargetBusyRetriesQuietly(t *testing.T) {
+	var calls atomic.Int32
+	a, _, v, tt, _ := autoFetchFixture(t, true, true, func(_ context.Context, _ rpc.DesktopCall, q rpc.GitFetchParams) (any, error) {
+		if calls.Add(1) == 1 {
+			return nil, rpc.Errorf(rpc.CodeBusy, "workspace writes are blocked during handoff")
+		}
+		return fetchResultFixture(q, rpc.GitFetchSucceeded), nil
+	})
+	until(t, tt, "busy attempt", func() bool { return calls.Load() == 1 && len(a.targetFetches) == 0 && len(a.fetchRetry) == 1 })
+	if a.err != "" || len(a.toasts) != 0 || v.git.busy != "" || len(a.fetchAt) != 0 {
+		t.Fatal("busy automatic fetch left a failure or held the repository")
+	}
+	for _, at := range a.fetchRetry {
+		if wait := time.Until(at); wait <= 0 || wait > autoFetchBusyRetry {
+			t.Fatalf("busy retry in %v", wait)
+		}
+	}
+	expireAutoFetch(a)
+	until(t, tt, "retry", func() bool { return len(a.targetFetches) == 1 && a.targetFetches[0].done })
+	if calls.Load() != 2 || a.targetFetches[0].err != "" {
+		t.Fatalf("retry calls=%d err=%q", calls.Load(), a.targetFetches[0].err)
+	}
+}
