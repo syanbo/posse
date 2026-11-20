@@ -156,7 +156,11 @@ func ReadStatus(ctx context.Context, dir string) (*Status, error) {
 }
 
 // IndexID 只读索引条目，不取可选锁，也不受 index 的 stat 缓存刷新影响。
+// 同一次状态检查已经流过这份清单时直接用它的指纹，避免文件多的仓库把清单读第二遍。
 func IndexID(ctx context.Context, dir string) (string, error) {
+	if fp, ok := ctx.Value(indexIDKey{}).(*indexFingerprint); ok && fp.ready {
+		return fp.id, nil
+	}
 	out, err := runRaw(ctx, dir, nil, nil, "ls-files", "-s", "-z")
 	if err != nil {
 		return "", err

@@ -99,6 +99,7 @@ func CheckRepositoryIdentity(ctx context.Context, path string, expected Reposito
 
 // ReadStatusChecked 保留状态解析，只把操作标记的查询失败也交还调用方。
 func ReadStatusChecked(ctx context.Context, dir string) (*Status, error) {
+	ctx = context.WithValue(ctx, indexIDKey{}, &indexFingerprint{})
 	out, err := runRaw(ctx, dir, nil, nil, "status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all")
 	if err != nil {
 		return nil, err
