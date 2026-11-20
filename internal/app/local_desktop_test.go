@@ -622,6 +622,32 @@ func TestLocalDesktopRepositoryFailureRetry(t *testing.T) {
 	}
 }
 
+func TestBranchButtonRefreshesStaleFetchIdentity(t *testing.T) {
+	a, f := localDesktopFixture(t)
+	connectLocalDesktop(t, a)
+	v, discovery, calls := localDesktopRepo(t, a, f)
+	a.scanRepos(v)
+	pumpSaves(t, []*app{a}, func() bool { return !v.repos.scanning && a.fetchWritable(v) })
+	before := calls.Load()
+	if before != 1 {
+		t.Fatalf("discovery calls = %d", before)
+	}
+	takeRequestTestControl(t, a)
+	if a.fetchWritable(v) {
+		t.Fatal("stale discovery stayed writable")
+	}
+	w := &a.workspaces[0]
+	a.gitBranch(w)
+	if !v.repos.scanning {
+		t.Fatal("branch button did not start a new discovery")
+	}
+	a.gitBranch(w)
+	pumpSaves(t, []*app{a}, func() bool { return !v.repos.scanning })
+	if calls.Load() != before+1 || !a.fetchWritable(v) || v.git.identity != discovery.Repos[0].Identity {
+		t.Fatalf("branch button discovery calls=%d writable=%v", calls.Load(), a.fetchWritable(v))
+	}
+}
+
 func TestDismissedDiscoverErrorStaysClosed(t *testing.T) {
 	a, f := localDesktopFixture(t)
 	connectLocalDesktop(t, a)

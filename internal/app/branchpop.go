@@ -424,7 +424,7 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 				a.fetchButton(c, w, v)
 			})
 			a.fetchStatus(c, v)
-			if g.busy != "" && (g.busyKind != gitFetch || len(g.queue) > 0) {
+			if g.busy != "" && !a.hideFetchBusy(g) {
 				ui.Row(c).Padding(0, 12, 4, 12).Children(func() { busyLine(c, g) })
 			}
 			query := strings.ToLower(strings.TrimSpace(bp.query))

@@ -559,6 +559,23 @@ func (v *filesView) nestedEntry(g *gitState, e gitx.Entry) bool {
 	return n != nil && n != g
 }
 
+// refreshStaleFetchIdentity 在本机窗口上次经目标发现的仓库已不属于当前桌面控制时重新发现。
+// 没经目标发现过的视图不在这里找：切工作区沿用已有的仓库身份，自动 Fetch 靠它共用计时。
+// 文件栏关着时只有分支按钮会走到这里；失败后隔 gitPollEvery 再试，不每帧重来。
+func (a *app) refreshStaleFetchIdentity(v *filesView) {
+	if v == nil || a.remoteHost() || !a.targetGitReady() || v.repos.scanning {
+		return
+	}
+	rs := &v.repos
+	if rs.request.app == nil || rs.request.current() {
+		return
+	}
+	if rs.err != "" && time.Since(rs.scanAt) < gitPollEvery {
+		return
+	}
+	a.scanRepos(v)
+}
+
 // gitBranch 是标签栏分支按钮写的分支：工作区当前仓库检出的分支（游离时是哈希前 8 位），没有仓库时为空。
 // 工作区就在仓库里时先用每秒读 HEAD 的 w.Branch，不用等找完仓库；工作区目录本身不是仓库时
 // （下面有几个仓库），文件栏没开过也在这里先去找仓库。
@@ -591,10 +608,12 @@ func (a *app) gitBranch(w *workspace) string {
 		}
 		return w.Branch
 	}
-	// 文件栏关着时 pollRepos 不跑：项目的开关变了在这里重找
+	// 文件栏关着时 pollRepos 不跑：项目的开关变了在这里重找。
+	// 桌面控制换代后，上次发现记下的身份过期，Fetch 按钮会一直禁用；分支按钮看得见就要重新发现。
 	if !v.repos.scanning && a.projectSingleRepo(v) != v.repos.single {
 		a.scanRepos(v)
 	}
+	a.refreshStaleFetchIdentity(v)
 	if v.git.repo == "" {
 		return ""
 	}

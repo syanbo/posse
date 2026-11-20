@@ -137,6 +137,29 @@ func TestTargetGitFetchProduction(t *testing.T) {
 	}
 }
 
+func TestHideFetchBusyOnlyWhilePending(t *testing.T) {
+	a := &app{host: newHostSession(localHostID, "window")}
+	g := &gitState{repo: "repo", identity: gitx.RepositoryIdentity{Root: "repo"}, busy: "Fetch", busyKind: gitFetch}
+	s := &targetFetch{params: rpc.GitFetchParams{Expected: gitx.RepositoryIdentity{Root: "repo"}}}
+	a.targetFetches = []*targetFetch{s}
+	if !a.hideFetchBusy(g) {
+		t.Fatal("in-progress fetch showed a second busy line")
+	}
+	g.queue = []gitOp{{}}
+	if a.hideFetchBusy(g) {
+		t.Fatal("queued operation hid the busy line")
+	}
+	g.queue = nil
+	s.result, s.done = &rpc.GitFetchResult{Status: rpc.GitFetchSucceeded}, true
+	if a.hideFetchBusy(g) {
+		t.Fatal("completed fetch hid why the button stays disabled")
+	}
+	plain := &app{}
+	if !plain.hideFetchBusy(g) {
+		t.Fatal("legacy fetch busy line was not hidden")
+	}
+}
+
 func TestTargetGitFetchUnknownAndNewOperation(t *testing.T) {
 	var calls atomic.Int32
 	a, f, v, _, tt := fetchFixture(t, true, func(_ rpc.DesktopCall, q rpc.GitFetchParams) (any, error) {

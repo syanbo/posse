@@ -311,6 +311,19 @@ func (a *app) cancelFetch(m locales.Messages, s *targetFetch) {
 	}()
 }
 
+// hideFetchBusy 在状态行已经写着「正在获取」时不再画一条 Fetch 忙碌行。
+// 上一次 Fetch 已经有结果、仓库却仍被占着时要留着忙碌行，否则按钮是灰的却看不出原因。
+func (a *app) hideFetchBusy(g *gitState) bool {
+	if g.busyKind != gitFetch || len(g.queue) > 0 {
+		return false
+	}
+	if !a.typedFetch() {
+		return true
+	}
+	s := a.fetchFor(g)
+	return s != nil && s.pending() && s.result == nil
+}
+
 func (a *app) fetchButton(c *ui.Context, w *workspace, v *filesView) {
 	g, m := v.git, L(c)
 	if !a.typedFetch() {
