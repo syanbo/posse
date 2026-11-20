@@ -167,11 +167,11 @@ type Subscriber struct {
 	// 固定网格的查看端遇到尺寸变化要重新取快照；手机 Watch 自己管理尺寸。
 	fixedGrid bool
 	grid      [2]int
-	// kicked 是内核重建后被断开：程序还在跑，接入者要马上重新接入拿新快照
+	// kicked 是被断开后要马上重新接入：内核重建，或手机占用、放开、电脑收回尺寸改了格子。程序仍在运行。
 	kicked atomic.Bool
 }
 
-// Kicked 报告 C 是因为内核重建而关闭的，程序仍在运行。
+// Kicked 报告 C 是因为要重新取快照而关闭的，程序仍在运行。
 func (s *Subscriber) Kicked() bool { return s.kicked.Load() }
 
 type sizeHold struct {
@@ -756,20 +756,23 @@ func (t *Terminal) Resize(cols, rows int) {
 		t.desk = [2]int{cols, rows}
 		return
 	}
-	t.resize(cols, rows)
+	t.resize(cols, rows, false)
 }
 
 // HoldSize 让终端按 key（一个手机订阅）的尺寸排版，直到 ReleaseSize；多个手机时最后来的说了算。
 func (t *Terminal) HoldSize(key any, cols, rows int) {
 	t.zmu.Lock()
 	defer t.zmu.Unlock()
-	if len(t.holds) == 0 {
+	flip := len(t.holds) == 0
+	if flip {
 		t.desk[0], t.desk[1] = t.Size()
 	}
 	t.holds = slices.DeleteFunc(t.holds, func(h sizeHold) bool { return h.key == key })
 	t.holds = append(t.holds, sizeHold{key, cols, rows})
 	if c, r := t.Size(); c != cols || r != rows {
-		t.resize(cols, rows)
+		t.resize(cols, rows, true)
+	} else if flip {
+		t.kickControllers()
 	}
 }
 
@@ -787,7 +790,9 @@ func (t *Terminal) ReleaseSize(key any) {
 		want = [2]int{h.cols, h.rows}
 	}
 	if c, r := t.Size(); want[0] > 0 && want[1] > 0 && (c != want[0] || r != want[1]) {
-		t.resize(want[0], want[1])
+		t.resize(want[0], want[1], true)
+	} else if len(t.holds) == 0 {
+		t.kickControllers()
 	}
 }
 
@@ -807,12 +812,35 @@ func (t *Terminal) ReclaimSize() {
 		return
 	}
 	t.holds = nil
-	if c, r := t.Size(); t.Running() && t.desk[0] > 0 && t.desk[1] > 0 && (c != t.desk[0] || r != t.desk[1]) {
-		t.resize(t.desk[0], t.desk[1])
+	if !t.Running() {
+		return
+	}
+	if c, r := t.Size(); t.desk[0] > 0 && t.desk[1] > 0 && (c != t.desk[0] || r != t.desk[1]) {
+		t.resize(t.desk[0], t.desk[1], true)
+	} else {
+		t.kickControllers()
 	}
 }
 
-func (t *Terminal) resize(cols, rows int) {
+// kickControllers 在有没有手机占着尺寸翻转、格子却没变时断开窗口那路接入：
+// 窗口按握手结果决定本地格子停不停在常驻进程给的尺寸上，翻转后要重新握手。
+func (t *Terminal) kickControllers() {
+	t.smu.Lock()
+	defer t.smu.Unlock()
+	for sub := range t.subs {
+		if !sub.quiet {
+			sub.kicked.Store(true)
+			delete(t.subs, sub)
+			close(sub.C)
+		}
+	}
+	t.updateAnswer()
+}
+
+// external 是手机占用、放开或电脑收回尺寸。格子变了就踢开窗口那路接入，让它重新接入拿新快照：
+// 光标在底部或备用屏幕时 pullBack 不会断开它，本地格子会停在手机宽度。窗口自己拖动改尺寸不踢，
+// 否则拖窗口会每帧重连。手机的只看接入（quiet）不踢，它轮询尺寸后自己重取快照。
+func (t *Terminal) resize(cols, rows int, external bool) {
 	t.smu.Lock()
 	if t.emu != nil {
 		oldCols, oldRows := t.emu.Size()
@@ -822,12 +850,13 @@ func (t *Terminal) resize(cols, rows int) {
 			t.storeSize(cols, rows)
 			if c, r := t.Size(); c != oldCols || r != oldRows {
 				for sub := range t.subs {
-					if sub.fixedGrid {
+					if sub.fixedGrid || (external && !sub.quiet) {
 						sub.kicked.Store(true)
 						delete(t.subs, sub)
 						close(sub.C)
 					}
 				}
+				t.updateAnswer()
 			}
 			switch {
 			case rows < oldRows:

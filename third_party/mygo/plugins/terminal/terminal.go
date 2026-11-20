@@ -1323,7 +1323,12 @@ func (t *Terminal) resize(s gridSize) {
 // taking the cells' new metrics only; t.mu is held.
 func (t *Terminal) viewResize(s gridSize) {
 	// Posse: 查看端沿用连接决定网格的路径，窗口大小只改变显示字号。
+	// 手机占着尺寸时控制端也停在握手网格上，只把窗口想要的格子数告诉连接。
 	if !t.ReadOnly() && (!t.opts.ResizeByConn || !sizedConn(t.src)) {
+		if t.sizePinned() {
+			t.keepPinnedGrid(s)
+			return
+		}
 		t.resize(s)
 		return
 	}

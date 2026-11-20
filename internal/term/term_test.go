@@ -533,13 +533,125 @@ func TestReleaseSizePullsBack(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("subscriber was not kicked")
 	}
-	tm.smu.Lock()
-	_, cy := tm.emu.Cursor()
-	last, _ := tm.emu.RowText(29)
-	tm.smu.Unlock()
-	if cy != 21 || !strings.HasPrefix(string(last), "status") {
-		t.Fatalf("cursor row %d, last row %q", cy, string(last))
+	// 放开尺寸时先踢开窗口，底部空行要等尺寸稳定后才收。
+	deadline := time.Now().Add(2 * time.Second)
+	var cy int
+	var last string
+	for {
+		tm.smu.Lock()
+		_, cy = tm.emu.Cursor()
+		row, _ := tm.emu.RowText(29)
+		tm.smu.Unlock()
+		last = string(row)
+		if cy == 21 && strings.HasPrefix(last, "status") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("cursor row %d, last row %q", cy, last)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+// 手机占着、放开或电脑收回尺寸时，窗口那路接入要马上断开重新取快照。
+// 只改列数、光标在底部时 pullBack 不会踢人；窗口自己拖动改尺寸、手机的只看接入都不踢。
+// 占用翻转而格子没变时也踢：窗口按重新握手的结果决定本地格子停不停在常驻进程给的尺寸上。
+func TestPhoneSizeKicksController(t *testing.T) {
+	tm, err := Start(Options{ID: "t_phonegrid", Dir: t.TempDir(), Command: []string{"/bin/sh", "-c", "sleep 30"}, Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	_, phone := tm.Watch()
+	defer tm.Detach(phone)
+
+	_, window := tm.Attach(80, 24)
+	_, viewer, _, _ := tm.WatchSize()
+	tm.HoldSize("same", 80, 24)
+	if !subscriberKicked(t, window) {
+		t.Fatal("holding the current size left the window unpinned")
+	}
+	if viewer.Kicked() || phone.Kicked() {
+		t.Fatal("hold without a grid change kicked a quiet watch")
+	}
+	tm.Detach(viewer)
+	if !tm.answer.Load() {
+		t.Fatal("kicked window still owns query answers")
+	}
+	_, window = tm.Attach(0, 0)
+	tm.HoldSize("same", 40, 24)
+	if !subscriberKicked(t, window) {
+		t.Fatal("phone hold left the window on the old grid")
+	}
+	if phone.Kicked() {
+		t.Fatal("phone hold disconnected the phone watch")
+	}
+
+	_, window = tm.Attach(0, 0)
+	tm.ReleaseSize("same")
+	if !subscriberKicked(t, window) {
+		t.Fatal("releasing the phone size left the window attached")
+	}
+	if c, r := tm.Size(); c != 80 || r != 24 {
+		t.Fatalf("restored size %dx%d", c, r)
+	}
+
+	_, window = tm.Attach(0, 0)
+	tm.HoldSize("again", 40, 24)
+	if !subscriberKicked(t, window) {
+		t.Fatal("second hold did not kick the window")
+	}
+	_, window = tm.Attach(0, 0)
+	tm.ReclaimSize()
+	if !subscriberKicked(t, window) {
+		t.Fatal("reclaim left the window attached")
+	}
+	if c, r := tm.Size(); c != 80 || r != 24 {
+		t.Fatalf("reclaimed size %dx%d", c, r)
+	}
+
+	// 窗口在手机占着时改到和手机一样的尺寸，手机离开时格子不变，窗口仍要重新握手
+	tm.HoldSize("equal", 40, 24)
+	_, window = tm.Attach(40, 24)
+	tm.ReleaseSize("equal")
+	if !subscriberKicked(t, window) {
+		t.Fatal("release without a grid change left the window pinned")
+	}
+	if c, r := tm.Size(); c != 40 || r != 24 || tm.SizeHeld() {
+		t.Fatalf("released size %dx%d held %v", c, r, tm.SizeHeld())
+	}
+	tm.Resize(80, 24)
+
+	_, window = tm.Attach(80, 24)
+	defer tm.Detach(window)
+	_, viewer, _, _ = tm.WatchSize()
+	defer tm.Detach(viewer)
+	tm.Resize(100, 24)
+	if window.Kicked() {
+		t.Fatal("the window's own resize disconnected it")
+	}
+	if !viewer.Kicked() {
+		t.Fatal("viewer kept the old grid")
+	}
+	if phone.Kicked() {
+		t.Fatal("window resize disconnected the phone watch")
+	}
+}
+
+func subscriberKicked(t *testing.T, sub *Subscriber) bool {
+	t.Helper()
+	if !sub.Kicked() {
+		return false
+	}
+	select {
+	case _, ok := <-sub.C:
+		if ok {
+			t.Fatal("kicked subscriber still delivered output")
+		}
+	default:
+		t.Fatal("kicked subscriber channel still open")
+	}
+	return true
 }
 
 // 程序打开括号粘贴（Claude Code、zsh 都会）后 BracketedPaste 报告为真，关掉后为假

@@ -177,6 +177,72 @@ func TestPosseViewerGridAndInput(t *testing.T) {
 	}
 }
 
+type pinConn struct {
+	viewerTestConn
+	pinned bool
+	mu     sync.Mutex
+	got    [][2]int
+}
+
+func (c *pinConn) SizePinned() bool { return c.pinned }
+
+func (c *pinConn) Resize(cols, rows int) error {
+	c.mu.Lock()
+	c.got = append(c.got, [2]int{cols, rows})
+	c.mu.Unlock()
+	return nil
+}
+
+func TestPossePinnedGridKeepsHandshakeSize(t *testing.T) {
+	for _, pinned := range []bool{false, true} {
+		t.Run(fmt.Sprintf("pinned=%t", pinned), func(t *testing.T) {
+			local, peer := net.Pipe()
+			conn := &pinConn{
+				viewerTestConn: viewerTestConn{Conn: local, gate: make(chan struct{}), reading: make(chan struct{}), cols: 30, rows: 10},
+				pinned:         pinned,
+			}
+			term, err := New(Options{Conn: conn})
+			if err != nil {
+				t.Fatal(err)
+			}
+			out := make(chan []byte, 1)
+			go func() { b, _ := io.ReadAll(peer); out <- b }()
+			t.Cleanup(func() {
+				term.Close()
+				peer.Close()
+				<-out
+			})
+			close(conn.gate)
+			viewerTestWait(t, conn.reading)
+			ui.NewTester(func(c *ui.Context) { View(c, term).Grow(1) }, 900, 400)
+			cols, rows := term.Size()
+			deadline := time.Now().Add(2 * time.Second)
+			var got [][2]int
+			for {
+				conn.mu.Lock()
+				got = append([][2]int(nil), conn.got...)
+				conn.mu.Unlock()
+				if len(got) > 0 || time.Now().After(deadline) {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if pinned {
+				if cols != 30 || rows != 10 {
+					t.Fatalf("pinned grid = %dx%d", cols, rows)
+				}
+				if len(got) == 0 || got[len(got)-1][0] <= 30 {
+					t.Fatalf("window size not reported: %v", got)
+				}
+				return
+			}
+			if cols <= 30 {
+				t.Fatalf("controller grid = %dx%d, want the view", cols, rows)
+			}
+		})
+	}
+}
+
 func TestPosseHandshakeDropsEarlyInput(t *testing.T) {
 	term, conn, _, out := newViewerTest(t, false, Options{})
 	term.Send([]byte("early"))

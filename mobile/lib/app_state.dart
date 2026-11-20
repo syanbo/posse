@@ -668,6 +668,10 @@ class PosseAppModel extends ChangeNotifier {
   /// 电脑上装了、又没在设置里关掉的 agent，按电脑给的顺序；新建会话面板只列这些。
   List<String> agents = const [];
 
+  /// agent 在手机终端页上退出、尺寸已还给电脑的终端。重新打开这一页仍按电脑布局看，
+  /// 不再用手机尺寸占着；这个终端里再跑起 agent 或关掉电脑布局时去掉。只记在内存里。
+  final Set<String> yieldedTerminals = {};
+
   /// 项目图标的图片，键是文件名：桌面每次导入都换一个名字，取过的不会过期。正在取的值是 null。
   final Map<String, Uint8List?> _projectIcons = {};
 

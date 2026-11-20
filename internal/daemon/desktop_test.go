@@ -119,6 +119,40 @@ func desktopServer(t *testing.T, d *Daemon, configure ...func(*rpc.Server)) stri
 	return ln.Addr().String()
 }
 
+func TestAttachReportsPhoneHeldSize(t *testing.T) {
+	d, w := newTestDaemon(t)
+	s, err := d.startTerminal(w, []string{"/bin/sh", "-c", "cat"}, "", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	socket := desktopServer(t, d)
+	attach := func() terminalAttachResult {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var result terminalAttachResult
+		conn, _, err := rpc.Open(ctx, socket, "terminal.attach", terminalAttachParams{Terminal: s.ID, Cols: 80, Rows: 24}, &result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		conn.Close()
+		waitFor(t, "attach detached", func() bool { return s.Terminal.(interface{ Subscribers() int }).Subscribers() == 0 })
+		return result
+	}
+	if r := attach(); r.Held {
+		t.Fatalf("free terminal reported held: %+v", r)
+	}
+	// 手机占的尺寸和窗口要的一样，单看尺寸分不出来，要靠 held
+	s.HoldSize("phone", 80, 24)
+	if r := attach(); !r.Held || r.Cols != 80 || r.Rows != 24 {
+		t.Fatalf("held terminal: %+v", r)
+	}
+	s.ReleaseSize("phone")
+	if r := attach(); r.Held {
+		t.Fatalf("released terminal reported held: %+v", r)
+	}
+}
+
 func TestDesktopViewerAndTakeover(t *testing.T) {
 	d, w := newTestDaemon(t)
 	s, err := d.startTerminal(w, []string{"/bin/sh", "-c", "cat"}, "", 80, 24)

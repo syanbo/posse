@@ -79,6 +79,104 @@ func TestDesktopViewerDoesNotWriteFrames(t *testing.T) {
 	}
 }
 
+func TestSizePinnedWhenHandshakeDiffers(t *testing.T) {
+	serve := func(match bool, held ...bool) func(net.Conn) {
+		return func(c net.Conn) {
+			defer c.Close()
+			r := bufio.NewReader(c)
+			line, err := r.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request rpc.Request
+			if json.Unmarshal(line, &request) != nil {
+				return
+			}
+			var p struct {
+				Cols int `json:"cols"`
+				Rows int `json:"rows"`
+			}
+			if json.Unmarshal(request.Params, &p) != nil {
+				return
+			}
+			cols, rows := p.Cols, p.Rows
+			if !match && cols > 0 {
+				cols -= 10
+			}
+			result := map[string]any{"cols": cols, "rows": rows}
+			if len(held) > 0 {
+				result["held"] = held[0]
+			}
+			rpc.WriteResult(c, result)
+			io.Copy(io.Discard, r)
+		}
+	}
+	for _, tc := range []struct {
+		name        string
+		match, held bool
+		wantPinned  bool
+	}{
+		{"held-same-size", true, true, true},
+		{"not-held-other-size", false, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			k := (&Client{Socket: fakeAttach(t, serve(tc.match, tc.held))}).Attach("term")
+			defer k.Close()
+			if err := k.Resize(100, 30); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, _, err := k.TerminalState(); err != nil {
+				t.Fatal(err)
+			}
+			if k.SizePinned() != tc.wantPinned {
+				t.Fatalf("pinned = %v, daemon held = %v", k.SizePinned(), tc.held)
+			}
+		})
+	}
+	t.Run("differs", func(t *testing.T) {
+		k := (&Client{Socket: fakeAttach(t, serve(false))}).Attach("term")
+		defer k.Close()
+		if k.SizePinned() {
+			t.Fatal("pinned before attach")
+		}
+		if err := k.Resize(100, 30); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, _, err := k.TerminalState(); err != nil {
+			t.Fatal(err)
+		}
+		if !k.SizePinned() {
+			t.Fatal("handshake size differs but the grid is not pinned")
+		}
+	})
+	t.Run("matches", func(t *testing.T) {
+		k := (&Client{Socket: fakeAttach(t, serve(true))}).Attach("term")
+		defer k.Close()
+		if err := k.Resize(100, 30); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, _, err := k.TerminalState(); err != nil {
+			t.Fatal(err)
+		}
+		if k.SizePinned() {
+			t.Fatal("matching handshake size pinned the grid")
+		}
+	})
+	t.Run("fallback", func(t *testing.T) {
+		k := (&Client{Socket: fakeAttach(t, serve(false))}).Attach("term")
+		defer k.Close()
+		if !k.open(0, 0) {
+			t.Fatal("fallback attach did not open")
+		}
+		if _, _, _, err := k.TerminalState(); err != nil {
+			t.Fatal(err)
+		}
+		if k.SizePinned() {
+			t.Fatal("attach without a requested size pinned the grid")
+		}
+	})
+}
+
 func TestTerminalStateWaitsForResize(t *testing.T) {
 	attached := make(chan struct{}, 1)
 	socket := fakeAttach(t, func(c net.Conn) {

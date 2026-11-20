@@ -79,6 +79,24 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   bool get _desk => widget.model.settings.deskLayout;
 
+  /// 这一页按电脑的格子看：用户开了电脑布局，或 agent 退出后把尺寸还给了电脑。
+  bool get _fitDesktop => _desk || _yieldDesktop;
+
+  /// 这个终端页上看见过 agent。它退出后不再用手机尺寸占着 PTY，电脑才能回到窗口的列数。
+  var _sawAgent = false;
+
+  /// agent 已经退出。订阅不再带手机视口，画面按电脑布局缩放，直到再跑起 agent 或用户改布局。
+  /// 按终端记在模型上，重新打开这一页时沿用。
+  bool get _yieldDesktop =>
+      widget.model.yieldedTerminals.contains(widget.tab.terminalId);
+  set _yieldDesktop(bool value) {
+    if (value) {
+      widget.model.yieldedTerminals.add(widget.tab.terminalId);
+    } else {
+      widget.model.yieldedTerminals.remove(widget.tab.terminalId);
+    }
+  }
+
   /// 电脑布局的画面：平移、捏合中的临时倍数。静止时字号已经按吸定的倍数排过，这里的倍数是 1。
   final _deskKey = GlobalKey();
 
@@ -146,6 +164,13 @@ class _TerminalScreenState extends State<TerminalScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final agent = widget.tab.agent;
+    if (agent != null && agent.isNotEmpty) {
+      _sawAgent = true;
+      _yieldDesktop = false;
+    } else {
+      _sawAgent = _yieldDesktop;
+    }
     _controller = TerminalController()
       ..onOutput = _onOutput
       ..onResize = _onResize;
@@ -217,9 +242,29 @@ class _TerminalScreenState extends State<TerminalScreen>
     // 标题或状态变了才重建，轮询没变化时不动终端视图
     final tab = _liveTab;
     // agent 停下来（一轮做完、等人）时按电脑上的画面重来一遍：手机上偶尔会和电脑对不上，
-    // agent 只重画变了的格子，错位的地方不会自己好；停下时重取，不打断它干活时的输出
+    // agent 只重画变了的格子，错位的地方不会自己好；停下时重取，不打断它干活时的输出。
+    // agent 退出后改按电脑布局看，把尺寸还给电脑；再跑起来才重新按手机屏幕排。
     final agentState = agentStateOf(tab.state);
-    if (_agentState == AgentState.working && agentState != AgentState.working) {
+    final name = tab.agent ?? '';
+    var yieldedNow = false;
+    if (name != '') {
+      _sawAgent = true;
+      if (_yieldDesktop) {
+        _yieldDesktop = false;
+        _resizeTimer?.cancel();
+        if (mounted) setState(() {});
+        _schedule(fresh: true);
+      }
+    } else if (_sawAgent && !_yieldDesktop && !_desk) {
+      _yieldDesktop = true;
+      yieldedNow = true;
+      _resizeTimer?.cancel();
+      if (mounted) setState(() {});
+      _schedule(fresh: true);
+    }
+    if (!yieldedNow &&
+        _agentState == AgentState.working &&
+        agentState != AgentState.working) {
       _schedule(fresh: true);
     }
     _agentState = agentState;
@@ -235,7 +280,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   void _onResize(int cols, int rows) {
     // 电脑布局把控件排成桌面的格子，这里报上来的是电脑的列数。记成手机视口的话，
     // 关掉电脑布局会按桌面宽度去 HoldSize。
-    if (_desk) return;
+    if (_fitDesktop) return;
     // 推入页面、转屏、从后台回来重新布局时一次会连着报好几个尺寸。每个都订阅的话，电脑上的终端
     // 跟着连改几次尺寸，agent 每次都重画，手机也连着复位、写快照几次。等尺寸稳定下来只订阅一次；
     // 途中收到的旧尺寸输出会画乱本地画面，由这次的快照盖掉
@@ -243,7 +288,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     if (_painted) _resizes.changed();
     _resizeTimer?.cancel();
     _resizeTimer = Timer(_resizeSettle, () {
-      if (!mounted || _desk || !_resizes.report(cols, rows)) return;
+      if (!mounted || _fitDesktop || !_resizes.report(cols, rows)) return;
       _cols = cols;
       _rows = rows;
       _schedule(fresh: true);
@@ -252,7 +297,7 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// 电脑布局时 flterm 的 onResize 不能用，手机这块区域的列数从布局算，留给关掉时订阅。
   void _notePhoneBox(BoxConstraints box) {
-    if (!_desk && _cols >= 20) return;
+    if (!_fitDesktop && _cols >= 20) return;
     final cell = _cellMetrics(widget.model.settings.terminalFontSize);
     if (cell.cellWidth <= 0 || cell.cellHeight <= 0) return;
     var cols = (box.maxWidth / cell.cellWidth).floor();
@@ -262,7 +307,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     if (cols == _cols && rows == _rows) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (!_desk && _cols >= 20) return;
+      if (!_fitDesktop && _cols >= 20) return;
       if (cols == _cols && rows == _rows) return;
       _cols = cols;
       _rows = rows;
@@ -298,7 +343,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   Future<void> _open({bool fresh = false}) async {
     final rpc = widget.model.rpc;
     if (!mounted || rpc == null || _cols < 20 || _rows < 8) return;
-    final desk = _desk;
+    final desk = _fitDesktop;
     if (!fresh &&
         identical(rpc, _bound) &&
         _stream != null &&
@@ -476,7 +521,7 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// grok 自己在左右各留 [_grokMargin] 列空白、整屏铺底色，窄屏上再加外面的内边距显得空。
   /// 手机布局时把终端排宽 2×[_grokMargin] 列，左右各裁掉这么多，grok 的内容贴着屏幕边。
-  bool get _cropGrok => widget.tab.agent == 'grok' && !_desk;
+  bool get _cropGrok => widget.tab.agent == 'grok' && !_fitDesktop;
 
   Widget _croppedView(PosseColors c, BoxConstraints box) {
     final cell = _cellMetrics(widget.model.settings.terminalFontSize);
@@ -500,7 +545,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   Widget _deskView(PosseColors c, BoxConstraints box) {
     // 程序自己铺了底色（比如 grok）时，外面的内边距接着画它的底色，不露出一圈主题色；
     // 电脑布局能缩放、平移，不往外延
-    if (!_desk || _deskCols <= 0) {
+    if (!_fitDesktop || _deskCols <= 0) {
       if (_cropGrok) return _croppedView(c, box);
       return _terminalView(c, backgroundBleed: _termPadding);
     }
@@ -575,7 +620,7 @@ class _TerminalScreenState extends State<TerminalScreen>
           _cellMetrics(widget.model.settings.terminalFontSize).cellHeight;
     }
     width -= _termPadding.horizontal;
-    if (!_desk || _deskCols <= 0) {
+    if (!_fitDesktop || _deskCols <= 0) {
       return _termPadding.top +
           rows *
               _cellMetrics(widget.model.settings.terminalFontSize).cellHeight;
@@ -948,9 +993,14 @@ class _TerminalScreenState extends State<TerminalScreen>
                 media: hasMedia(_liveTab),
                 tools: hasTools(_liveTab),
                 // 打开时终端保持电脑的尺寸，手机左右滑着看；关着时按手机屏幕重排
-                desk: _desk,
+                // agent 退出后临时按电脑布局看时开关也显示开着；只关掉这次让位时不改全局设置
+                desk: _fitDesktop,
                 onDesk: (value) {
-                  widget.model.updateSettings((s) => s.deskLayout = value);
+                  if (value || _desk) {
+                    widget.model.updateSettings((s) => s.deskLayout = value);
+                  }
+                  // 关掉电脑布局是明确要按手机屏幕排，agent 退出后的临时让位也一起取消
+                  if (!value) _yieldDesktop = false;
                   if (!mounted) return;
                   setState(() {});
                   _schedule();
@@ -1098,7 +1148,7 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   Widget _selectionChrome(double width, double height, double covered) {
     final cell = _cellMetrics(
-      _desk && _deskCols > 0
+      _fitDesktop && _deskCols > 0
           ? _deskFont(width - _termPadding.horizontal)
           : widget.model.settings.terminalFontSize,
     );
@@ -1116,9 +1166,9 @@ class _TerminalScreenState extends State<TerminalScreen>
         visible: height - covered,
         covered: covered,
       ),
-      pinch: _desk ? _pinch : 1,
-      panX: _desk ? _panX : 0,
-      panY: _desk ? _panY : 0,
+      pinch: _fitDesktop ? _pinch : 1,
+      panX: _fitDesktop ? _panX : 0,
+      panY: _fitDesktop ? _panY : 0,
       cropX: _cropGrok ? cell.cellWidth * _grokMargin : 0,
     );
   }

@@ -58,6 +58,29 @@ func (t *Terminal) readConnState() bool {
 	return true
 }
 
+// sizePinned 报告连接要求本地网格停在握手尺寸上。手机占着终端时，常驻进程不按窗口改 PTY，
+// 本地若跟着窗口变宽，之后的输出会对不齐。
+func (t *Terminal) sizePinned() bool {
+	p, ok := t.src.(interface{ SizePinned() bool })
+	return ok && p.SizePinned()
+}
+
+// keepPinnedGrid 只更新格子的像素大小，列数行数留在握手回来的尺寸。
+// 窗口想要的列数仍告诉连接，手机离开或电脑收回尺寸时按它恢复。t.mu 已持有。
+func (t *Terminal) keepPinnedGrid(s gridSize) {
+	if t.term == nil {
+		return
+	}
+	if s.cellW != t.size.cellW || s.cellH != t.size.cellH {
+		t.size.cellW, t.size.cellH = s.cellW, s.cellH
+		t.term.Resize(t.size.cols, t.size.rows, s.cellW, s.cellH)
+	}
+	if s != t.asked && sizedConn(t.src) {
+		t.asked = s
+		t.resizeConn(t.src, s)
+	}
+}
+
 // What Posse adds to the terminal's API, kept in a file of its own so that
 // upgrading MyGo merges less. (Posse)
 

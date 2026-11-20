@@ -32,6 +32,8 @@ type Conn struct {
 	// 握手尺寸在 ready 关闭前写入，之后只读；不随界面的 Resize 改变。
 	cols int
 	rows int
+	// pinned 是握手时手机正占着尺寸。和 cols、rows 一样，只在 ready 关闭前写，TerminalState 返回之后读。
+	pinned bool
 
 	pending  []byte
 	exited   atomic.Bool
@@ -64,12 +66,21 @@ func (k *Conn) open(cols, rows int) bool {
 		ctx, cancel := context.WithTimeout(context.Background(), attachTimeout)
 		defer cancel()
 		var result struct {
-			Cols     int  `json:"cols"`
-			Rows     int  `json:"rows"`
-			ReadOnly bool `json:"readOnly"`
+			Cols     int   `json:"cols"`
+			Rows     int   `json:"rows"`
+			ReadOnly bool  `json:"readOnly"`
+			Held     *bool `json:"held"`
 		}
 		conn, r, err := k.c.Open(ctx, "terminal.attach", map[string]any{"terminal": k.id, "cols": cols, "rows": rows, "desktop": k.c.Desktop}, &result)
 		k.cols, k.rows = result.Cols, result.Rows
+		switch {
+		case err != nil:
+		case result.Held != nil:
+			k.pinned = *result.Held
+		default:
+			// 旧常驻进程不报 held，按握手尺寸和请求的不同推断；没请求尺寸（一秒后的兜底接入）不算。
+			k.pinned = cols > 0 && rows > 0 && (result.Cols != cols || result.Rows != rows)
+		}
 		k.readOnly.Store(result.ReadOnly)
 		k.wmu.Lock()
 		k.conn, k.r, k.err = conn, r, err
@@ -106,6 +117,10 @@ func (k *Conn) TerminalState() (cols, rows int, readOnly bool, err error) {
 	}
 	return k.cols, k.rows, k.readOnly.Load(), nil
 }
+
+// SizePinned 报告本地网格应停在握手尺寸上：常驻进程没按请求改 PTY（手机占着），
+// 窗口再把本地格子拉成窗口宽度，之后的输出会对不齐。窗口想要的尺寸仍经 Resize 送去记下。
+func (k *Conn) SizePinned() bool { return k.pinned }
 
 // TerminalSnapshot 由插件的唯一读协程在 Read 前调用，把首帧作为整体回放，
 // 防止窗口在大快照分片之间调整网格。未使用此接口的调用方仍可直接 Read。

@@ -24,6 +24,9 @@ type terminalAttachResult struct {
 	Rows     int  `json:"rows"`
 	Running  bool `json:"running"`
 	ReadOnly bool `json:"readOnly,omitempty"`
+	// Held 是控制端接入时手机正占着尺寸：窗口本地格子要停在 Cols×Rows 上。
+	// 之后占用翻转会踢开这路接入，重新握手时再取。
+	Held bool `json:"held,omitempty"`
 }
 
 // terminalAttach 把终端接到界面：先发快照，再推送之后的输出；界面发来键入和尺寸变化。
@@ -60,8 +63,11 @@ func (d *Daemon) terminalAttach(ctx context.Context, raw json.RawMessage, conn n
 	var snap []byte
 	var sub host.Subscription
 	var cols, rows int
+	var held bool
 	if controlled {
 		snap, sub = s.Attach(p.Cols, p.Rows)
+		// 先接入再读：读之后的翻转会踢开这路接入，不会停在过期的结果上
+		held = s.SizeHeld()
 		cols, rows = s.Size()
 	} else {
 		snap, sub, cols, rows = s.WatchSize()
@@ -76,7 +82,7 @@ func (d *Daemon) terminalAttach(ctx context.Context, raw json.RawMessage, conn n
 	}
 	c.mu.Unlock()
 	defer func() { c.mu.Lock(); delete(c.writers, writer); sub.Close(); c.mu.Unlock() }()
-	rpc.WriteResult(conn, terminalAttachResult{Cols: cols, Rows: rows, Running: s.Running(), ReadOnly: !controlled})
+	rpc.WriteResult(conn, terminalAttachResult{Cols: cols, Rows: rows, Running: s.Running(), ReadOnly: !controlled, Held: held})
 
 	w := bufio.NewWriterSize(conn, 64<<10)
 	write := func(typ byte, payload []byte) error {
