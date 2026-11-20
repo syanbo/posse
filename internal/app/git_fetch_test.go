@@ -115,8 +115,9 @@ func TestTargetGitFetchProduction(t *testing.T) {
 			if s.result == nil || s.result.Status != status || target.Expected != v.git.identity || target.WorkspaceID != "w" || target.WorkspacePath != a.workspaces[0].Path || calls.Load() != 1 {
 				t.Fatalf("wrong target or result: %+v %s", target, s.err)
 			}
-			if !tt.HasText(locales.In("zh-Hans").FetchResult(status)) {
-				t.Fatal("missing result", tt.Texts())
+			// 成功不留状态行，其余结果要说明
+			if tt.HasText(locales.In("zh-Hans").FetchResult(status)) != (status != rpc.GitFetchSucceeded) {
+				t.Fatal("wrong result line", tt.Texts())
 			}
 			if status != rpc.GitFetchSucceeded && status != rpc.GitFetchConflict && !tt.HasText(locales.In("zh-Hans").FetchPartial()) {
 				t.Fatal("partial update omitted")
@@ -318,6 +319,11 @@ func TestTargetGitFetchDisconnectAndCancel(t *testing.T) {
 			a.startFetch(appL(), &a.workspaces[0], v)
 			if calls.Load() != 1 || a.confirmDo != nil {
 				t.Fatal("running operation allowed another fetch")
+			}
+			// 进行中只有按钮转圈，没有状态行和查询按钮
+			tt.Frame()
+			if tt.HasText(locales.In("zh-Hans").FetchQuery()) || tt.HasText(locales.In("zh-Hans").FetchManual()) {
+				t.Fatal("running fetch showed a status row or the fetch button", tt.Texts())
 			}
 			if err := tt.Click(locales.In("zh-Hans").BranchCancelFetch()); err != nil {
 				t.Fatal(err)
@@ -575,6 +581,14 @@ func TestPreviewTargetGitFetch(t *testing.T) {
 		savePNG(t, newPreviewTester(a, dark), "remote-git-fetch-unknown-"+name+".png")
 	}
 	s := a.targetFetches[0]
+	s.unknown, s.err = false, ""
+	for _, dark := range []bool{false, true} {
+		name := "light"
+		if dark {
+			name = "dark"
+		}
+		savePNG(t, newPreviewTester(a, dark), "remote-git-fetch-running-"+name+".png")
+	}
 	out := fetchResultFixture(s.params, rpc.GitFetchTimedOut)
 	out.Error.Message, out.Logs[0].Err = "timed out", "timed out"
 	out.LogsTruncated = true

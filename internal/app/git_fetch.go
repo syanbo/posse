@@ -311,7 +311,7 @@ func (a *app) cancelFetch(m locales.Messages, s *targetFetch) {
 	}()
 }
 
-// hideFetchBusy 在状态行已经写着「正在获取」时不再画一条 Fetch 忙碌行。
+// hideFetchBusy 在 Fetch 按钮已经转圈（或状态行写着结果未知）时不再画一条 Fetch 忙碌行。
 // 上一次 Fetch 已经有结果、仓库却仍被占着时要留着忙碌行，否则按钮是灰的却看不出原因。
 func (a *app) hideFetchBusy(g *gitState) bool {
 	if g.busyKind != gitFetch || len(g.queue) > 0 {
@@ -324,13 +324,19 @@ func (a *app) hideFetchBusy(g *gitState) bool {
 	return s != nil && s.pending() && s.result == nil
 }
 
+// fetchSpinner 是 Fetch 进行中时代替 Fetch 按钮的转圈，点一下取消。
+func fetchSpinner(c *ui.Context) bool {
+	m := L(c)
+	spin := ui.Row(c.Key("fetching")).Size(buttonBox(), buttonBox()).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.BranchCancelFetch()).Tooltip(m.BranchFetchingTip())
+	spin.Children(func() { ui.Spinner(c).Label(m.BranchFetching()) })
+	return spin.Clicked()
+}
+
 func (a *app) fetchButton(c *ui.Context, w *workspace, v *filesView) {
 	g, m := v.git, L(c)
 	if !a.typedFetch() {
 		if g.busyKind == gitFetch {
-			spin := ui.Row(c.Key("fetching")).Size(buttonBox(), buttonBox()).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.BranchCancelFetch()).Tooltip(m.BranchFetchingTip())
-			spin.Children(func() { ui.Spinner(c).Label(m.BranchFetching()) })
-			if spin.Clicked() && g.cancel != nil {
+			if fetchSpinner(c) && g.cancel != nil {
 				g.cancel()
 			}
 			return
@@ -341,6 +347,14 @@ func (a *app) fetchButton(c *ui.Context, w *workspace, v *filesView) {
 		return
 	}
 	s := a.fetchFor(g)
+	// 结果未知时不转圈：按钮留给「发起新 Fetch」的确认，查询和核对在状态行里
+	if s != nil && s.pending() && !s.unknown {
+		r := a.request()
+		if fetchSpinner(c) && a.targetGitReady() && (r.host == nil || r.snapshot.Controlled) && !s.checking && !s.canceling && !s.cancelRequested {
+			a.cancelFetch(m, s)
+		}
+		return
+	}
 	blocked := !a.fetchWritable(v) || g.busy != "" || s != nil && s.pending() && (!s.unknown || s.checking || s.canceling)
 	if pressable(iconButtonSized(c, iconFetch, m.FetchManual(), buttonBox(), iconSize)).Disabled(blocked).Clicked() {
 		a.startFetch(m, w, v)
@@ -358,37 +372,41 @@ func (a *app) fetchStatus(c *ui.Context, v *filesView) {
 	a.fetchState(c, s, v)
 }
 
+// fetchState 只在需要用户处理时画状态行：结果未知、失败或只更新了一部分、报错。
+// 进行中由 Fetch 按钮转圈表示，成功不留字。
 func (a *app) fetchState(c *ui.Context, s *targetFetch, v *filesView) {
 	m, t := L(c), c.Theme()
+	partial := s.result != nil && s.result.Started && s.result.Status != rpc.GitFetchSucceeded
+	failed := s.result != nil && s.result.Status != rpc.GitFetchSucceeded || s.done && s.result == nil
+	unknown := s.pending() && s.unknown
+	if !failed && !unknown && s.err == "" {
+		return
+	}
 	ui.Column(c.Key("fetch-status")).Padding(4, 12).Gap(4).Children(func() {
-		text := m.BranchFetching()
 		switch {
 		case s.result != nil:
-			text = m.FetchResult(s.result.Status)
+			ui.Text(c, m.FetchResult(s.result.Status)).FontSize(fsSmall).TextColor(t.TextMuted)
 		case s.done:
-			text = m.CommonFailed()
-		case s.unknown:
-			text = m.FetchUnknown()
-		case s.cancelRequested:
-			text = m.FetchCancelRequested()
+			ui.Text(c, m.CommonFailed()).FontSize(fsSmall).TextColor(t.TextMuted)
+		case unknown:
+			ui.Text(c, m.FetchUnknown()).FontSize(fsSmall).TextColor(t.TextMuted)
 		}
-		ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted)
-		if s.result != nil && s.result.Started && s.result.Status != rpc.GitFetchSucceeded {
+		if partial {
 			ui.Text(c, m.FetchPartial()).FontSize(fsSmall).TextColor(t.TextMuted)
 		}
 		if s.err != "" {
 			ui.Text(c, s.err).FontSize(fsSmall).TextColor(t.Danger)
 		}
-		if !s.done || s.result != nil && s.result.Started && s.result.Status != rpc.GitFetchSucceeded {
+		if unknown || partial {
 			ui.Row(c).Gap(4).Children(func() {
-				if !s.done && ui.Button(c, m.FetchQuery()).Disabled(!a.targetGitReady() || s.checking || s.canceling).Clicked() {
+				if unknown && ui.Button(c, m.FetchQuery()).Disabled(!a.targetGitReady() || s.checking || s.canceling).Clicked() {
 					a.queryFetch(m, s)
 				}
 				if ui.Button(c, m.FetchRefresh()).Disabled(!a.targetGitReady() || v == nil).Clicked() {
 					a.refreshFetch(s, v)
 				}
 				r := a.request()
-				if !s.done && ui.Button(c, m.BranchCancelFetch()).Disabled(!a.targetGitReady() || r.host != nil && !r.snapshot.Controlled || s.checking || s.canceling || !s.pending()).Clicked() {
+				if unknown && ui.Button(c, m.BranchCancelFetch()).Disabled(!a.targetGitReady() || r.host != nil && !r.snapshot.Controlled || s.checking || s.canceling).Clicked() {
 					a.cancelFetch(m, s)
 				}
 			})
