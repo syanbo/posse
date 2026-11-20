@@ -891,6 +891,7 @@ func (d *Daemon) agentLoop(ctx context.Context) {
 		d.mu.Unlock()
 		for _, s := range ss {
 			d.checkAgentGone(s)
+			d.syncAntigravity(s)
 			// 标题和进程检查发现的 agent 变化、shell 里换的目录在这里记下
 			d.saveResume(s, false)
 		}

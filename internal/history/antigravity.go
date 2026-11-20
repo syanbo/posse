@@ -13,8 +13,54 @@ import (
 	"time"
 )
 
-// 子会话关系另存 SQLite；只读查询失败时仍可用摘要缓存里的 Internal 标记。
-func antigravityChildren(base string) map[string]bool {
+// AntigravityBase 是 agy 的数据目录。
+func AntigravityBase(home string) string {
+	return filepath.Join(home, ".gemini", "antigravity-cli")
+}
+
+var antigravityUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// AntigravityOpenSession 从 agy 进程打开着的文件认出它正在用的会话：agy 运行期间一直持有
+// presence/<UUID>.lock。认不出或同时持有几个时返回空，不猜。
+func AntigravityOpenSession(home string, files []string) string {
+	dir := filepath.Join(AntigravityBase(home), "presence")
+	// 内核给的是解开符号链接后的路径
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		resolved = dir
+	}
+	id := ""
+	for _, f := range files {
+		if d := filepath.Dir(f); d != dir && d != resolved || filepath.Ext(f) != ".lock" {
+			continue
+		}
+		name := strings.TrimSuffix(filepath.Base(f), ".lock")
+		if !antigravityUUID.MatchString(name) || id != "" && id != name {
+			return ""
+		}
+		id = name
+	}
+	return id
+}
+
+// AntigravityTitle 返回 agy 给会话起的标题（首轮回复后写进 conversation_summaries.db，
+// 摘要缓存要更晚才有），没有时返回空。
+func AntigravityTitle(home, id string) string {
+	db := openAntigravitySummaries(AntigravityBase(home))
+	if db == nil {
+		return ""
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	var title string
+	if db.QueryRowContext(ctx, `SELECT title FROM conversation_summaries WHERE conversation_id = ?`, id).Scan(&title) != nil {
+		return ""
+	}
+	return strings.TrimSpace(title)
+}
+
+func openAntigravitySummaries(base string) *sql.DB {
 	path := filepath.Join(base, "conversation_summaries.db")
 	if _, err := os.Stat(path); err != nil {
 		return nil
@@ -23,6 +69,15 @@ func antigravityChildren(base string) map[string]bool {
 	u.RawQuery = "mode=ro&_pragma=query_only(1)&_pragma=busy_timeout(100)"
 	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
+		return nil
+	}
+	return db
+}
+
+// 子会话关系另存 SQLite；只读查询失败时仍可用摘要缓存里的 Internal 标记。
+func antigravityChildren(base string) map[string]bool {
+	db := openAntigravitySummaries(base)
+	if db == nil {
 		return nil
 	}
 	defer db.Close()

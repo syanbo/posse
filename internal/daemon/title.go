@@ -18,7 +18,7 @@ import (
 //   - claude：只接受 UserPromptSubmit hook 返回的 sessionTitle，先记成待交，下一次提交时交过去
 //   - codex：state 库的 threads 和 session_index.jsonl
 //   - grok：会话目录的 summary.json
-//   - cursor、antigravity：没有核实过能写的地方，只在 Posse 里显示
+//   - cursor、antigravity：没有核实过能写的地方，只在 Posse 里显示（antigravity 没起过时用 agy 自己的标题，见 antigravity.go）
 
 type sessionTitleParams struct {
 	Terminal string `json:"terminal"`

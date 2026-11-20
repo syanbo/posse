@@ -19,3 +19,6 @@ func ExeArgs(pid int) (string, []string) { return "", nil }
 
 // Cwd 在其他平台上不实现。
 func Cwd(pid int) string { return "" }
+
+// OpenFiles 在其他平台上不实现。
+func OpenFiles(pid int) []string { return nil }

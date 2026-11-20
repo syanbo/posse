@@ -2,6 +2,8 @@
 package procmem
 
 import (
+	"bytes"
+	"encoding/binary"
 	"sync"
 	"unsafe"
 
@@ -15,6 +17,7 @@ var (
 	pidinfo func(pid, flavor int32, arg uint64, buf unsafe.Pointer, size int32) int32
 	// listChildren 是 proc_listchildpids，返回写进 buf 的 pid 个数
 	listChildren func(pid int32, buf unsafe.Pointer, size int32) int32
+	fdinfo       func(pid, fd, flavor int32, buf unsafe.Pointer, size int32) int32
 )
 
 // rusage_info_v4（flavor 4）：16 字节 uuid 之后依次是 user_time、system_time、pkg_idle_wkups、
@@ -31,6 +34,7 @@ func load() {
 			purego.RegisterLibFunc(&rusage, h, "proc_pid_rusage")
 			purego.RegisterLibFunc(&pidinfo, h, "proc_pidinfo")
 			purego.RegisterLibFunc(&listChildren, h, "proc_listchildpids")
+			purego.RegisterLibFunc(&fdinfo, h, "proc_pidfdinfo")
 		}
 	})
 }
@@ -71,6 +75,50 @@ func Cwd(pid int) string {
 		}
 	}
 	return ""
+}
+
+// proc_fdinfo（PROC_PIDLISTFDS）每项 8 字节：int32 fd、uint32 类型；vnode_fdinfowithpath
+// （PROC_PIDFDVNODEPATHINFO）是 24 字节的 proc_fileinfo 加 vnode_info 再加路径
+const (
+	pidListFDs        = 1
+	fdVnodePathInfo   = 2
+	fdTypeVnode       = 1
+	fdVnodePathOffset = 24 + vnodeInfoSize
+	fdVnodePathSize   = fdVnodePathOffset + maxPathLen
+)
+
+// OpenFiles 返回进程此刻打开着的文件和目录路径；取不到时（进程不在、没有权限）返回 nil。
+func OpenFiles(pid int) []string {
+	load()
+	if pidinfo == nil || fdinfo == nil || pid <= 0 {
+		return nil
+	}
+	n := pidinfo(int32(pid), pidListFDs, 0, nil, 0)
+	if n <= 0 {
+		return nil
+	}
+	// 两次调用之间可能又开了文件，多留些余量
+	buf := make([]byte, int(n)+32*8)
+	n = pidinfo(int32(pid), pidListFDs, 0, unsafe.Pointer(&buf[0]), int32(len(buf)))
+	if n <= 0 {
+		return nil
+	}
+	var out []string
+	var info [fdVnodePathSize]byte
+	for i := 0; i+8 <= int(n); i += 8 {
+		fd := int32(binary.LittleEndian.Uint32(buf[i:]))
+		if binary.LittleEndian.Uint32(buf[i+4:]) != fdTypeVnode {
+			continue
+		}
+		if fdinfo(int32(pid), fd, fdVnodePathInfo, unsafe.Pointer(&info[0]), int32(len(info))) < fdVnodePathSize {
+			continue
+		}
+		path := info[fdVnodePathOffset:]
+		if end := bytes.IndexByte(path, 0); end > 0 {
+			out = append(out, string(path[:end]))
+		}
+	}
+	return out
 }
 
 // Footprint 返回进程的 phys_footprint（字节），与活动监视器的"内存"一致；取不到时返回 0。

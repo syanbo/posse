@@ -80,7 +80,7 @@ func discover(r Roots) []source {
 	for _, p := range globFiles(filepath.Join(r.Home, ".grok", "sessions", "*", "*", "chat_history.jsonl")) {
 		out = append(out, source{agent: "grok", transcript: p, meta: filepath.Join(filepath.Dir(p), "summary.json"), parser: grokParser{}})
 	}
-	base := filepath.Join(r.Home, ".gemini", "antigravity-cli")
+	base := AntigravityBase(r.Home)
 	children := antigravityChildren(base)
 	for _, p := range globFiles(filepath.Join(base, "brain", "*", ".system_generated", "logs", "transcript.jsonl")) {
 		id := filepath.Base(AntigravityBrainDir(p))

@@ -3,6 +3,8 @@ package procmem
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -51,6 +53,31 @@ func TestTreeFootprint(t *testing.T) {
 	}
 	for _, k := range kids {
 		exec.Command("kill", strconv.Itoa(k)).Run()
+	}
+}
+
+func TestOpenFiles(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "held.lock")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	cmd := exec.Command("/bin/sleep", "30")
+	cmd.Stdin = f
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer cmd.Process.Kill()
+	if files := OpenFiles(cmd.Process.Pid); !slices.Contains(files, path) {
+		t.Fatalf("%s not in %q", path, files)
+	}
+	if files := OpenFiles(-1); files != nil {
+		t.Fatalf("invalid pid: %q", files)
 	}
 }
 
