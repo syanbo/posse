@@ -3,6 +3,22 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.42
+
+- 工作区、聊天、讨论、任务、历史的侧栏顶部统一为同一种标题行，切换时标题和列表不再上下跳动。聊天标题行右边的加号用上一次的 agent 再开一个聊天。
+- 图标栏的工作区图标显示项目里最要紧的会话状态；技能和手机上方的分割线恢复显示。
+- Fetch 进行中改为按钮转圈，不再显示状态行；仓库发现过期时重新发现，避免 Fetch 按钮一直点不了。大仓库读状态时不再把索引清单算进读取上限。
+- Antigravity 终端按会话锁绑定会话并显示它起的标题；历史里按 `call_mcp_tool` 识别 MCP 调用，并按结果标记失败。
+- 手机退出 agent 后，电脑端终端回到窗口尺寸。
+
+### English
+
+- The Workspaces, Chat, Discussions, Tasks, and History sidebars share one header style, so titles and lists no longer shift when switching. The plus button in the Chat header starts another chat with the last agent.
+- The Workspaces icon in the rail shows the most urgent session status across projects; the divider above Skills and Mobile is visible again.
+- Fetch shows a spinner on its button instead of a status line, and stale repository discovery is redone so the Fetch button no longer stays disabled. Reading status in large repositories no longer counts the index listing against the read limit.
+- Antigravity terminals bind to their session through its session lock and show the title it sets; history recognizes MCP calls made through `call_mcp_tool` and marks failures from their results.
+- After the phone exits an agent, the desktop terminal returns to the window size.
+
 ## 0.1.41
 
 - 可以连到另一台 Mac 上的 Posse。顶栏主机菜单里连接、查看、接管和断开；查看时不改对方的文件，接管之后 Git、文件夹传输和终端里的文件操作都在那台 Mac 上执行。
