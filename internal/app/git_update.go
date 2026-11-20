@@ -53,7 +53,7 @@ func (s *targetUpdateOperation) matchesRepository(g *gitState) bool {
 
 func (a *app) holdUpdate(s *targetUpdateOperation, g *gitState) {
 	if s.pending() && g.busy == "" && !slices.Contains(s.repos, g) {
-		g.busy, g.busyKind, g.busyUpdate = s.what, gitUpdate, s
+		g.busy, g.busyKind, g.busyUpdate, g.updateBranch = s.what, gitUpdate, s, s.params.Branch
 		g.cancel = func() { a.cancelUpdate(appL(), s) }
 		s.repos = append(s.repos, g)
 	}
@@ -62,7 +62,7 @@ func (a *app) holdUpdate(s *targetUpdateOperation, g *gitState) {
 func (a *app) releaseUpdate(s *targetUpdateOperation) {
 	for _, g := range s.repos {
 		if g.busyUpdate == s {
-			g.busy, g.busyKind, g.cancel, g.busyUpdate = "", "", nil, nil
+			g.busy, g.busyKind, g.cancel, g.busyUpdate, g.updateBranch = "", "", nil, nil, ""
 			a.gitNext(g)
 		}
 	}

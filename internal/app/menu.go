@@ -26,6 +26,8 @@ type menuItem struct {
 	lead     func() // 自己画最左边（agent 图标），优先于 icon
 	sep      bool
 	disabled bool
+	spin     bool  // 行首图标换成转圈，行高不变
+	keep     bool  // 点了不关菜单，转圈留在这一项上
 	danger   bool  // 文字和图标用警示色（关闭这类要确认的操作）
 	checked  *bool // 不为 nil 时是可勾选的项
 	sub      *popMenu
@@ -55,6 +57,8 @@ func (m *popMenu) Submenu(label string, build func(m *popMenu)) *menuItem {
 }
 
 func (it *menuItem) Icon(icon *ui.SVG) *menuItem { it.icon = icon; return it }
+func (it *menuItem) Spin(on bool) *menuItem      { it.spin = on; return it }
+func (it *menuItem) Keep() *menuItem             { it.keep = true; return it }
 func (it *menuItem) Lead(draw func()) *menuItem  { it.lead = draw; return it }
 func (it *menuItem) Disabled(d bool) *menuItem   { it.disabled = d; return it }
 func (it *menuItem) Checked(on bool) *menuItem   { it.checked = &on; return it }
@@ -192,10 +196,26 @@ func showMenu(c *ui.Context, panel ui.Element, st *menuState, build func(m *popM
 		}
 	}
 	if picked != 0 {
-		st.open = false
 		seq = 0
-		build(newPopMenu(&seq, picked))
+		acted := newPopMenu(&seq, picked)
+		build(acted)
+		if !menuKeepsOpen(acted, picked) {
+			st.open = false
+		}
 	}
+}
+
+// menuKeepsOpen 报告选中的那一项要求菜单留着（更新时转圈留在「更新」上）。
+func menuKeepsOpen(m *popMenu, seq int) bool {
+	for _, it := range m.items {
+		if it.seq == seq {
+			return it.keep
+		}
+		if it.sub != nil && menuKeepsOpen(it.sub, seq) {
+			return true
+		}
+	}
+	return false
 }
 
 // menuKeys 处理方向键和回车：↑↓ 在第一层或展开的子菜单里移动，→ 展开子菜单、← 收起，回车选中。返回选中的项。
@@ -270,7 +290,7 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 	var checks, icons, separateChecks bool
 	for _, it := range m.items {
 		checks = checks || it.checked != nil
-		icons = icons || it.icon != nil || it.lead != nil
+		icons = icons || it.icon != nil || it.lead != nil || it.spin
 		separateChecks = separateChecks || it.checked != nil && (it.icon != nil || it.lead != nil)
 	}
 	hot := st.hot
@@ -335,6 +355,8 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 					switch {
 					case it.lead != nil:
 						it.lead()
+					case it.spin:
+						ui.Spinner(c).Size(iconSize, iconSize)
 					case it.icon != nil:
 						ui.Icon(c, it.icon).FontSize(iconSize).TextColor(iconFg)
 					case !separateChecks:

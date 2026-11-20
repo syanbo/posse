@@ -31,6 +31,7 @@ type compareDoc struct {
 	err                            string
 	otherOID, curOID               string
 	moreOther, moreCur             bool
+	epoch                          uint64 // 本地重读的代次，旧结果不能盖住后来的 Fetch
 	root                           string // 仓库根目录
 	other, cur                     string
 	files                          bool
@@ -93,6 +94,7 @@ func (a *app) openCompare(w *workspace, other, cur string, files bool) {
 
 // refsChanged 在 fetch、拉取、推送等改了引用的操作之后，重读一个项目里所有依赖引用的界面：
 // 分支按钮的传入传出、分支弹窗、分支比较、按分支名比较的 diff、日志和文件历史。
+// 比较里对着某一端顶端提交打开的 diff 不在这里重读（两边都是哈希），等比较结果回来后跟着新顶端走。
 // 同一项目的工作区共用引用，别的工作区里开着的也要重读。
 func (a *app) refsChanged(projectID string) {
 	for _, w := range a.byProject[projectID] {
@@ -117,11 +119,17 @@ func (a *app) refsChanged(projectID string) {
 			}
 		}
 		for _, d := range v.logs {
-			if d.log != nil && !d.log.loading {
-				a.reloadLog(v, d)
+			if d.log == nil {
+				continue
 			}
+			if d.log.loading {
+				d.log.again = true
+				continue
+			}
+			a.reloadLog(v, d)
 		}
 	}
+	a.reloadOpenPush(projectID)
 }
 
 func (a *app) loadCompare(v *filesView, d *fileDoc) {
@@ -134,6 +142,8 @@ func (a *app) loadCompare(v *filesView, d *fileDoc) {
 		return
 	}
 	cd := d.comp
+	cd.epoch++
+	epoch := cd.epoch
 	root := cd.root
 	other, cur := cd.other, cd.cur
 	go func() {
@@ -141,29 +151,241 @@ func (a *app) loadCompare(v *filesView, d *fileDoc) {
 		var onlyOther, onlyCur []gitx.CommitInfo
 		var changes []gitx.FileChange
 		var err error
+		otherOID, curOID := "", ""
 		if cd.files {
 			changes, err = gitx.DiffWithWorkingTree(ctx, root, other)
 		} else if onlyOther, err = gitx.CommitsBetween(ctx, root, cur, other, 1000); err == nil {
 			onlyCur, err = gitx.CommitsBetween(ctx, root, other, cur, 1000)
 		}
+		if err == nil {
+			// 顶端提交用来判断开着的 diff 要不要跟着分支走；解析失败就留着上次的
+			if oid, e := gitx.ResolveBranchCommit(ctx, root, other); e == nil {
+				otherOID = oid
+			}
+			if oid, e := gitx.ResolveBranchCommit(ctx, root, cur); e == nil {
+				curOID = oid
+			}
+		}
 		a.update(func() {
+			if cd.epoch != epoch || d.comp != cd || !slices.Contains(v.docs, d) {
+				return
+			}
 			// 读的时候用户点了交换：结果跟着对调
 			if cd.other != other {
 				onlyOther, onlyCur = onlyCur, onlyOther
+				otherOID, curOID = curOID, otherOID
 			}
 			if err != nil {
 				d.kind, d.err = docError, errtext.Text(err)
 				return
 			}
+			prevOther, prevCur := cd.otherOID, cd.curOID
+			if otherOID == "" {
+				otherOID = prevOther
+			}
+			if curOID == "" {
+				curOID = prevCur
+			}
 			cd.onlyOther, cd.onlyCur, cd.changes = onlyOther, onlyCur, changes
+			cd.otherOID, cd.curOID = otherOID, curOID
 			// 刷新后已经不在两边的提交（比如 cherry-pick 过去了）不再算选中
 			cd.picked = slices.DeleteFunc(cd.picked, func(h string) bool {
 				has := func(x gitx.CommitInfo) bool { return x.Hash == h }
 				return !slices.ContainsFunc(onlyOther, has) && !slices.ContainsFunc(onlyCur, has)
 			})
 			d.kind = docCompare
+			a.followCompareDiffs(v, d, prevOther, prevCur)
 		})
 	}()
+}
+
+// followCompareDiffs 在比较重读之后，把开着的 diff 对齐到新的分支顶端。
+// 提交哈希的内容不会变，所以 Fetch、更新之后 diff 标签会停在旧顶端；当时看的正是移动前的顶端时，改看新顶端里的同一个文件。
+// 更早的提交不动。和工作区比较的 diff 按分支名或新的基线重读。
+func (a *app) followCompareDiffs(v *filesView, d *fileDoc, prevOther, prevCur string) {
+	cd := d.comp
+	if cd == nil {
+		return
+	}
+	if cd.files {
+		a.syncCompareFileDiff(v, cd)
+		return
+	}
+	doc, info, prev, ok := compareTipDiff(v, cd, prevOther, prevCur)
+	a.followCompareSelection(cd, prevOther, prevCur)
+	if !ok {
+		return
+	}
+	if a.remoteHost() {
+		a.followTargetCompareDiff(v, d, doc, info, prev)
+		return
+	}
+	w := a.workspace(v.wsID)
+	if w == nil {
+		return
+	}
+	rel, root := doc.diff.rel, cd.root
+	go func() {
+		files, err := gitx.CommitFiles(context.Background(), root, info.Hash)
+		a.update(func() {
+			if !compareTipCurrent(v, d, cd, doc, prev, rel) {
+				return
+			}
+			if err != nil {
+				return
+			}
+			// 这次读完时顶端又往前了：丢掉这次，按比较里现在的顶端再跟
+			if info.Hash != cd.otherOID && info.Hash != cd.curOID {
+				a.followCompareDiffs(v, d, prevOther, prevCur)
+				return
+			}
+			specs := commitSpecs(root, info, files)
+			for _, s := range specs {
+				if s.rel == rel {
+					a.reopenDiff(w, v, s, specs, true)
+					return
+				}
+			}
+			// 新顶端没改这个文件：改成两边分支上这个文件的差别，之后引用再动还会重读
+			spec := diffSpec{root: root, rel: rel, oldRev: cd.cur, newRev: cd.other, label: cd.other}
+			if info.Hash == cd.curOID {
+				spec.oldRev, spec.newRev, spec.label = cd.other, cd.cur, cd.cur
+			}
+			a.reopenDiff(w, v, spec, []diffSpec{spec}, true)
+		})
+	}()
+}
+
+// compareTipDiff 找到正显示某一端旧顶端的 diff，以及这一端现在的顶端提交。
+func compareTipDiff(v *filesView, cd *compareDoc, prevOther, prevCur string) (*fileDoc, gitx.CommitInfo, string, bool) {
+	for _, doc := range v.docs {
+		df := doc.diff
+		if df == nil || df.root != cd.root || df.newRev == "" {
+			continue
+		}
+		switch {
+		case prevOther != "" && df.newRev == prevOther && cd.otherOID != prevOther:
+			if info, ok := commitByHash(cd.onlyOther, cd.otherOID); ok {
+				return doc, info, prevOther, true
+			}
+		case prevCur != "" && df.newRev == prevCur && cd.curOID != prevCur:
+			if info, ok := commitByHash(cd.onlyCur, cd.curOID); ok {
+				return doc, info, prevCur, true
+			}
+		}
+	}
+	return nil, gitx.CommitInfo{}, "", false
+}
+
+// diffStillOpen 是这个 diff 标签还开着，而且仍显示当时那次提交里的同一个文件。
+func diffStillOpen(v *filesView, doc *fileDoc, prev, rel string) bool {
+	return v != nil && doc != nil && slices.Contains(v.docs, doc) && doc.diff != nil && doc.diff.newRev == prev && doc.diff.rel == rel
+}
+
+// compareTipCurrent 是比较和它要跟着走的 diff 都还在。
+func compareTipCurrent(v *filesView, d *fileDoc, cd *compareDoc, doc *fileDoc, prev, rel string) bool {
+	return diffStillOpen(v, doc, prev, rel) && slices.Contains(v.docs, d) && d.comp == cd
+}
+
+func commitByHash(list []gitx.CommitInfo, hash string) (gitx.CommitInfo, bool) {
+	for _, c := range list {
+		if hash != "" && c.Hash == hash {
+			return c, true
+		}
+	}
+	return gitx.CommitInfo{}, false
+}
+
+// followCompareSelection 让比较右边看着的提交跟着顶端走；新顶端不在列表里就收起。
+func (a *app) followCompareSelection(cd *compareDoc, prevOther, prevCur string) {
+	cv := cd.commit
+	if cv == nil {
+		return
+	}
+	var list []gitx.CommitInfo
+	var tip string
+	switch cv.info.Hash {
+	case prevOther:
+		if cd.otherOID == prevOther {
+			return
+		}
+		list, tip = cd.onlyOther, cd.otherOID
+	case prevCur:
+		if cd.curOID == prevCur {
+			return
+		}
+		list, tip = cd.onlyCur, cd.curOID
+	default:
+		return
+	}
+	if info, ok := commitByHash(list, tip); ok {
+		a.selectCommit(cd.root, &cd.commit, info)
+		return
+	}
+	cd.commit = nil
+}
+
+// syncCompareFileDiff 重读「和工作区比较」打开的 diff。分支名会在 refsChanged 里重读；
+// 远端把旧提交钉死了，基线变了要按新的比较结果重新打开。
+func (a *app) syncCompareFileDiff(v *filesView, cd *compareDoc) {
+	w := a.workspace(v.wsID)
+	if w == nil {
+		return
+	}
+	for _, doc := range v.docs {
+		df := doc.diff
+		if df == nil || df.root != cd.root || !df.worktree() {
+			continue
+		}
+		if df.oldRev != cd.other && (df.worktreeBase == nil || df.worktreeBase.revision != cd.other) {
+			continue
+		}
+		specs := compareFileSpecs(cd, df.label)
+		df.siblings = specs
+		next, ok := specForPath(specs, df.rel)
+		if !ok || specSameBase(df.diffSpec, next) {
+			continue
+		}
+		next.label = df.label
+		a.reopenDiff(w, v, next, specs, df.first)
+	}
+}
+
+func compareFileSpecs(cd *compareDoc, label string) []diffSpec {
+	if cd.worktree != nil {
+		out := make([]diffSpec, len(cd.worktree.Files))
+		for i, f := range cd.worktree.Files {
+			out[i] = diffSpec{root: cd.root, rel: f.Path, orig: f.Orig, oldRev: cd.worktree.Commit, label: label, worktreeBase: &worktreeBaseline{baseline: cd.worktree.Baseline, revision: cd.other, file: f}}
+		}
+		return out
+	}
+	out := make([]diffSpec, len(cd.changes))
+	for i, f := range cd.changes {
+		out[i] = diffSpec{root: cd.root, rel: f.Path, orig: f.Orig, oldRev: cd.other, label: label}
+	}
+	return out
+}
+
+func specForPath(specs []diffSpec, rel string) (diffSpec, bool) {
+	for _, s := range specs {
+		if s.rel == rel {
+			return s, true
+		}
+	}
+	return diffSpec{}, false
+}
+
+func specSameBase(a, b diffSpec) bool {
+	if a.oldRev != b.oldRev || a.newRev != b.newRev || a.rel != b.rel || a.orig != b.orig {
+		return false
+	}
+	if (a.worktreeBase == nil) != (b.worktreeBase == nil) {
+		return false
+	}
+	if a.worktreeBase == nil {
+		return true
+	}
+	return a.worktreeBase.baseline == b.worktreeBase.baseline && a.worktreeBase.revision == b.worktreeBase.revision
 }
 
 // selectCommit 选中提交，在后台读它改的文件。
@@ -322,6 +544,7 @@ func (a *app) compareActions(c *ui.Context, w *workspace, v *filesView, d *fileD
 				a.swapTargetCompare(v, d)
 			} else {
 				cd.other, cd.cur = cd.cur, cd.other
+				cd.otherOID, cd.curOID = cd.curOID, cd.otherOID
 				cd.onlyOther, cd.onlyCur = cd.onlyCur, cd.onlyOther
 				cd.listOther, cd.listCur = cd.listCur, cd.listOther
 				cd.queryOther, cd.queryCur = cd.queryCur, cd.queryOther
@@ -800,6 +1023,9 @@ type pushState struct {
 	detail                                       *fileDoc // 右边看着的文件 diff，不在文档区里（文档区的 diff 会被对话框挡住）
 	tags                                         bool
 	pushing                                      bool
+	reload                                       uint64 // 预览重读进行中又来一次时，只采用最后一次
+	followFrom                                   string // 右边还显示着这个旧顶端、换 diff 还没回来
+	followGen                                    uint64
 }
 
 // openPush 推送当前分支。
@@ -830,17 +1056,161 @@ func (a *app) openPushBranch(w *workspace, branch string) {
 	ps := &pushState{ws: w.ID, root: root, branch: branch}
 	a.push = ps
 	a.pushBox.reset()
+	a.loadLocalPush(ps)
+}
+
+// reloadPushIfOpen 在推送结束、对话框还开着时重读预览。进行中丢掉的那次结果要补回来。
+func (a *app) reloadPushIfOpen(ps *pushState) {
+	if ps == nil || a.push != ps || ps.pushing {
+		return
+	}
+	if ps.remote {
+		a.loadTargetPush(ps)
+		return
+	}
+	a.loadLocalPush(ps)
+}
+
+// reloadOpenPush 在 Fetch、更新或推送之后重算开着的推送预览。正在推送时基线已经锁住，不重算。
+func (a *app) reloadOpenPush(projectID string) {
+	ps := a.push
+	if ps == nil || ps.pushing {
+		return
+	}
+	w := a.workspace(ps.ws)
+	if w == nil || w.ProjectID != projectID {
+		return
+	}
+	if ps.remote {
+		a.loadTargetPush(ps)
+		return
+	}
+	a.loadLocalPush(ps)
+}
+
+func (a *app) loadLocalPush(ps *pushState) {
+	ps.reload++
+	n := ps.reload
+	prev := ""
+	if len(ps.plan.Commits) > 0 {
+		prev = ps.plan.Commits[0].Hash
+	}
+	root, branch := ps.root, ps.branch
 	go func() {
-		ctx := context.Background()
-		plan, err := gitx.PushPreview(ctx, root, branch)
+		plan, err := gitx.PushPreview(context.Background(), root, branch)
 		a.update(func() {
-			ps.plan, ps.loaded = plan, true
+			if a.push != ps || ps.reload != n || ps.pushing {
+				return
+			}
+			ps.loaded = true
 			if err != nil {
 				ps.err = errtext.Text(err)
+				if ps.commit != nil {
+					ps.commit.read.stop()
+					ps.commit = nil
+				}
+				ps.clearDetail()
+				return
 			}
+			ps.plan, ps.err = plan, ""
+			a.followPushTip(ps, prev)
 		})
 	}()
 }
+
+// followPushTip 把正看着的、将要推送的最新提交对齐到新的最新提交。更早的提交保持不动。
+func (a *app) followPushTip(ps *pushState, prev string) {
+	if prev == "" {
+		return
+	}
+	if len(ps.plan.Commits) == 0 {
+		if ps.commit != nil {
+			ps.commit.read.stop()
+			ps.commit = nil
+		}
+		ps.clearDetail()
+		return
+	}
+	next := ps.plan.Commits[0]
+	// 上一次换成新顶端的 diff 还没回来时，计划里的「上一个顶端」已经是中间那次。右边实际显示的才是要接着跟的。
+	// 右边已经不是那个提交（人点开了别的）就把残留清掉，否则之后再点回这次旧提交会被当成顶端跟走。
+	if ps.followFrom != "" && ps.detail != nil && ps.detail.diff != nil && ps.detail.diff.newRev == ps.followFrom {
+		prev = ps.followFrom
+		if next.Hash == prev {
+			ps.followFrom = ""
+		}
+	} else if ps.followFrom != "" {
+		ps.followFrom = ""
+	}
+	if next.Hash != prev && ps.detail != nil && ps.detail.diff != nil && ps.detail.diff.newRev == prev && ps.detail.diff.rel != "" {
+		a.retargetPushDetail(ps, next, ps.detail.diff.rel)
+		return
+	}
+	if next.Hash != prev && ps.commit != nil && ps.commit.info.Hash == prev {
+		if ps.remote {
+			a.loadTargetPushCommit(ps, next)
+		} else {
+			a.selectCommit(ps.root, &ps.commit, next)
+		}
+		return
+	}
+	if ps.commit != nil && !containsCommit(ps.plan.Commits, ps.commit.info.Hash) {
+		ps.commit.read.stop()
+		ps.commit = nil
+		ps.clearDetail()
+	}
+}
+
+// retargetPushDetail 把推送对话框右边的 diff 换成新提交里的同一个文件。
+func (a *app) retargetPushDetail(ps *pushState, info gitx.CommitInfo, rel string) {
+	v := ps.view
+	if v == nil {
+		v = a.files[ps.ws]
+	}
+	if v == nil {
+		return
+	}
+	if ps.remote {
+		a.retargetTargetPushDetail(ps, v, info, rel)
+		return
+	}
+	prev := ""
+	if ps.detail != nil && ps.detail.diff != nil {
+		prev = ps.detail.diff.newRev
+	}
+	ps.followGen++
+	gen := ps.followGen
+	ps.followFrom = prev
+	n := ps.reload
+	go func() {
+		files, err := gitx.CommitFiles(context.Background(), ps.root, info.Hash)
+		a.update(func() {
+			if a.push != ps || ps.followGen != gen {
+				return
+			}
+			if ps.pushing || ps.followFrom != prev || ps.detail == nil || ps.detail.diff == nil || ps.detail.diff.rel != rel || ps.detail.diff.newRev != prev || err != nil {
+				ps.followFrom = ""
+				return
+			}
+			if ps.reload != n {
+				return
+			}
+			ps.followFrom = ""
+			cv := &commitView{info: info, root: ps.root, files: files}
+			ps.commit = cv
+			for i, f := range files {
+				if f.Path == rel {
+					a.pushShow(v, ps, i, true)
+					return
+				}
+			}
+			ps.clearDetail()
+		})
+	}()
+}
+
+// pushListPane 是推送对话框里提交列表的宽度。
+var pushListPane = pane{380, 240, 560}
 
 func (a *app) pushDialog(c *ui.Context) {
 	t := c.Theme()
@@ -867,9 +1237,9 @@ func (a *app) pushDialog(c *ui.Context) {
 		}
 		v := a.filesFor(w)
 		// 看 diff 时对话框加宽加高，最右边是 diff
-		width, height, listW := float32(760), float32(320), float32(380)
+		width, height := float32(760), float32(320)
 		if ps.detail != nil {
-			width, height, listW = 1080, 560, 280
+			width, height = 1080, 560
 		}
 		dlg := ui.Column(c).Gap(12)
 		if box.sized() {
@@ -878,12 +1248,13 @@ func (a *app) pushDialog(c *ui.Context) {
 			dlg.Width(width)
 		}
 		dlg.Children(func() {
-			box.title(c, L(c).ComparePushTitle())
+			box.titleBar(c, L(c).ComparePushTitle(), func() {
+				if pressable(iconButtonSized(c, iconClose, L(c).CommonClose(), compactBox(), smallIcon())).Clicked() {
+					a.closePush(ps)
+				}
+			})
 			if ps.remote {
 				ui.Text(c, L(c).PushPreviewNotice()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.4)
-				if s := a.pushFor(ps.repository); s != nil {
-					a.pushOperationState(c, s)
-				}
 				if ps.err != "" {
 					ui.Text(c, ps.err).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.4)
 				}
@@ -895,7 +1266,7 @@ func (a *app) pushDialog(c *ui.Context) {
 				body.Height(height)
 			}
 			body.Children(func() {
-				ui.Column(c).Width(listW).Shrink(0).Children(func() {
+				ui.Column(c).Width(paneWidth(a.state.PushListWidth, pushListPane)).Shrink(0).Children(func() {
 					plan := ps.plan
 					switch {
 					case !ps.loaded:
@@ -944,7 +1315,7 @@ func (a *app) pushDialog(c *ui.Context) {
 						})
 					})
 				})
-				vline(c)
+				a.paneDivider(c, "push-list-grip", &a.state.PushListWidth, pushListPane, 1)
 				files := ui.Column(c)
 				if ps.detail != nil {
 					files.Width(240).Shrink(0)
@@ -984,6 +1355,11 @@ func (a *app) pushDialog(c *ui.Context) {
 				ui.Checkbox(c, &ps.tags, L(c).ComparePushTags()).Disabled(ps.pushing)
 				if ps.remote && pressable(textButton(c, L(c).CommonRefresh())).Disabled(ps.loading || ps.waiting).Clicked() {
 					a.loadTargetPush(ps)
+				}
+				if ps.remote {
+					if s := a.pushFor(ps.repository); s != nil {
+						a.pushOperationBar(c, s)
+					}
 				}
 				ui.Spacer(c)
 				if pressable(textButton(c, L(c).CommonCancel())).Clicked() {

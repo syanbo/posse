@@ -54,6 +54,7 @@ type gitState struct {
 	pollAgain          bool    // 读的期间要求重读（refreshRepo），读完再读一次
 	busy               string  // 正在执行的操作，期间按钮不可点
 	busyKind           gitKind // 正在执行的操作的代号，逻辑按它判断，busy 只用来显示
+	updateBranch       string  // 正在更新的分支；分支菜单的「更新」在原处转圈，不另插一行
 	busyPush           *targetPushOperation
 	busyUpdate         *targetUpdateOperation
 	busyBranch         *targetBranchOperation
@@ -434,6 +435,21 @@ func (a *app) openDiff(w *workspace, s diffSpec, siblings []diffSpec, first bool
 	v.insertDoc(d)
 	d.started = true
 	a.loadDiff(v, d)
+}
+
+// reopenDiff 换掉已经开着的 diff。人正在看比较或终端时留在原地，diff 在后台重读。
+// openDiff 会切到文件标签；这里把工作区原来的活动标签和返回终端记回来，自动 Fetch 才不会把人从终端拽走。
+func (a *app) reopenDiff(w *workspace, v *filesView, s diffSpec, siblings []diffSpec, first bool) {
+	cur := v.cur
+	active, prev := a.activeTerm[w.ID], v.prevTerm
+	a.openDiff(w, s, siblings, first)
+	if cur != nil && cur.diff == nil {
+		v.cur = cur
+	}
+	if active != filesTabID {
+		a.activeTerm[w.ID] = active
+		v.prevTerm = prev
+	}
 }
 
 // diffGroup 是 diff 标签里可以切换的文件：比较、提交里同一组的文件，没有就是改动列表。
@@ -917,12 +933,13 @@ func (a *app) notify(title, action string, onAction func()) {
 // gitOp 是一个排队等着执行的 git 操作。
 type gitOp struct {
 	// ready 在原队列让出仓库后派发已确认的目标操作，不在后台运行本机 Git。
-	ready func()
-	m     locales.Messages
-	kind  gitKind
-	what  string
-	fn    func(ctx context.Context, root string) error
-	done  func()
+	ready  func()
+	m      locales.Messages
+	kind   gitKind
+	what   string
+	branch string // 更新的分支名，排队时菜单也能对上是哪一条
+	fn     func(ctx context.Context, root string) error
+	done   func()
 	// failed 在失败或取消时代替直接写错误条：一次点击发起几个操作（跨仓库提交）时把报错攒在一起
 	failed func(msg string)
 }
@@ -952,6 +969,20 @@ const (
 // pending 报告 kind 这种操作正在执行或排着队。
 func (g *gitState) pending(kind gitKind) bool {
 	return g.busyKind == kind || slices.ContainsFunc(g.queue, func(op gitOp) bool { return op.kind == kind })
+}
+
+// updating 报告这个分支正在更新，或已经排在这个仓库后面。
+func (g *gitState) updating(name string) bool {
+	if name == "" {
+		return false
+	}
+	if g.busyKind == gitUpdate && g.updateBranch == name {
+		return true
+	}
+	if s := g.busyUpdate; s != nil && s.pending() && s.params.Branch == name {
+		return true
+	}
+	return slices.ContainsFunc(g.queue, func(op gitOp) bool { return op.kind == gitUpdate && op.branch == name })
 }
 
 // busyLine 画忙碌的文字，网络操作后面跟一个"取消"。
@@ -989,7 +1020,7 @@ func (a *app) gitRun(g *gitState, op gitOp) {
 		return
 	}
 	v := g.v
-	g.busy, g.busyKind = op.what, op.kind
+	g.busy, g.busyKind, g.updateBranch = op.what, op.kind, op.branch
 	root := g.repo
 	ctx, cancel := context.WithCancel(gitx.WithOp(context.Background(), op.what))
 	if networkOp(op.kind) {
@@ -1011,7 +1042,7 @@ func (a *app) gitRun(g *gitState, op gitOp) {
 		}
 		cancel()
 		a.update(func() {
-			g.busy, g.busyKind, g.cancel = "", "", nil
+			g.busy, g.busyKind, g.cancel, g.updateBranch = "", "", nil, ""
 			if canceled {
 				op.fail(a, op.m.GitOperationCanceled(op.what))
 			} else if err != nil {

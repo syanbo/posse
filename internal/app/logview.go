@@ -42,6 +42,7 @@ type logDoc struct {
 	jump          string       // 点了提交图的箭头、要跳去的提交还没读出来：往下读到它为止
 	more          bool         // 还有更早的提交
 	loading       bool
+	again         bool // 这次读取期间引用变了：读完丢掉这次结果，再从头读并跟随
 	gen           int
 	filterGen     int // 筛选输入的防抖计数（applyLogFilter）
 	commit        *commitView
@@ -317,17 +318,28 @@ func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 
 // loadLog 读日志：more 为真时接着往后读一页。
 func (a *app) loadLog(v *filesView, d *fileDoc, more bool) {
-	a.readLog(v, d, more, logPage)
+	a.readLog(v, d, more, logPage, false)
 }
 
 // reloadLog 引用变了之后从头重读，已经往后翻过的页数一起读回来，列表不缩回第一页。
 func (a *app) reloadLog(v *filesView, d *fileDoc) {
-	a.readLog(v, d, false, max(logPage, len(d.log.commits)))
+	a.readLog(v, d, false, max(logPage, len(d.log.commits)), true)
 }
 
-func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
+// logCatchUp 这次读取期间引用变过。丢掉这次结果，从头再读并跟随。
+func (a *app) logCatchUp(v *filesView, d *fileDoc) bool {
+	ld := d.log
+	if ld == nil || !ld.again {
+		return false
+	}
+	ld.again = false
+	a.reloadLog(v, d)
+	return true
+}
+
+func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int, follow bool) {
 	if a.remoteHost() {
-		a.readTargetLog(v, d, more, limit)
+		a.readTargetLog(v, d, more, limit, follow)
 		return
 	}
 	if a.remoteHost() && !a.targetGitReady() && a.targetFileUnsupported("git.log") {
@@ -368,6 +380,9 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 				return
 			}
 			ld.loading = false
+			if a.logCatchUp(v, d) {
+				return
+			}
 			if head {
 				ld.filter.Branches = f.Branches
 			}
@@ -381,6 +396,10 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 				ld.err, ld.commits, ld.graph, ld.more = errtext.Text(err), nil, nil, false
 				d.kind = docLog
 				return
+			}
+			prevTip := ""
+			if !more && len(ld.commits) > 0 {
+				prevTip = ld.commits[0].Hash
 			}
 			if more {
 				ld.commits = append(ld.commits, list...)
@@ -400,7 +419,73 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 			} else {
 				ld.jump = ""
 			}
+			if follow {
+				a.followLogTip(v, d, prevTip)
+			}
 			d.kind = docLog
+		})
+	}()
+}
+
+// followLogTip 在引用重读之后，把正看着的最新一次提交对齐到新的最新一次。
+// 更早的提交保持不动；换筛选重读不走这里。
+func (a *app) followLogTip(v *filesView, d *fileDoc, prev string) {
+	ld := d.log
+	if ld == nil || prev == "" || len(ld.commits) == 0 || ld.commits[0].Hash == prev {
+		return
+	}
+	next := ld.commits[0]
+	if ld.hist != nil && ld.hist.sel == prev {
+		a.selectHistory(v, d, next)
+	}
+	if ld.commit != nil && ld.commit.info.Hash == prev {
+		a.selectCommit(ld.root, &ld.commit, next)
+	}
+	if w := a.workspace(v.wsID); w != nil {
+		a.followDiffTip(w, v, d, prev, next)
+	}
+}
+
+// followDiffTip 把开着的、正显示这次旧顶端提交的 diff 标签改到新提交里的同一个文件。
+// 新提交没改这个文件就留着原来的 diff。只复查发起这次跟随的那份日志：
+// 同仓库另一份日志的顶端可以不同，拿它来再跟会两边来回启动 git。
+func (a *app) followDiffTip(w *workspace, v *filesView, d *fileDoc, prev string, info gitx.CommitInfo) {
+	if d == nil || d.log == nil {
+		return
+	}
+	root := d.log.root
+	var doc *fileDoc
+	for _, item := range v.docs {
+		if item.diff != nil && item.diff.root == root && item.diff.newRev == prev && item.diff.rel != "" {
+			doc = item
+			break
+		}
+	}
+	if doc == nil {
+		return
+	}
+	if a.remoteHost() {
+		a.followTargetDiffTip(v, d, doc, info, prev)
+		return
+	}
+	rel := doc.diff.rel
+	go func() {
+		files, err := gitx.CommitFiles(context.Background(), root, info.Hash)
+		a.update(func() {
+			if !diffStillOpen(v, doc, prev, rel) || err != nil || d.log == nil {
+				return
+			}
+			if slices.Contains(v.logs, d) && len(d.log.commits) > 0 && d.log.commits[0].Hash != info.Hash {
+				a.followLogTip(v, d, prev)
+				return
+			}
+			specs := commitSpecs(root, info, files)
+			for _, s := range specs {
+				if s.rel == rel {
+					a.reopenDiff(w, v, s, specs, true)
+					return
+				}
+			}
 		})
 	}()
 }
@@ -893,6 +978,7 @@ type blameDoc struct {
 	loading               bool
 	err                   string
 	list                  ui.ListState
+	epoch                 uint64 // 重读进行中又来一次时，只采用最后一次
 	sel                   *commitView
 	// 查找栏的命中：每个命中所在的行，按行排；hitQ 是算它们用的搜索词
 	hits []int
@@ -951,15 +1037,55 @@ func (a *app) openBlame(m locales.Messages, w *workspace, v *filesView, abs stri
 		a.loadTargetBlame(v, d)
 		return
 	}
+	bd.epoch++
+	epoch := bd.epoch
 	go func() {
 		lines, err := gitx.Blame(context.Background(), root, rel)
 		a.update(func() {
+			if d.blame != bd || bd.epoch != epoch {
+				return
+			}
 			bd.loading = false
 			if err != nil {
 				bd.err = errtext.Text(err)
 				return
 			}
 			bd.lines = lines
+		})
+	}()
+}
+
+// reloadBlame 在 HEAD 前进之后重读开着的 Annotate。本地不亮加载态，避免把已经画出的行闪掉。
+func (a *app) reloadBlame(v *filesView, d *fileDoc) {
+	if d.blame == nil {
+		return
+	}
+	if v.remote {
+		a.loadTargetBlame(v, d)
+		return
+	}
+	bd := d.blame
+	bd.epoch++
+	epoch := bd.epoch
+	root, rel := bd.root, bd.rel
+	go func() {
+		lines, err := gitx.Blame(context.Background(), root, rel)
+		a.update(func() {
+			if d.blame != bd || bd.epoch != epoch {
+				return
+			}
+			bd.loading = false
+			if err != nil {
+				bd.err = errtext.Text(err)
+				return
+			}
+			bd.err = ""
+			bd.lines = lines
+			bd.hits, bd.hitQ = nil, ""
+			if bd.sel != nil && !slices.ContainsFunc(lines, func(l gitx.BlameLine) bool { return l.Hash == bd.sel.info.Hash }) {
+				bd.sel.read.stop()
+				bd.sel = nil
+			}
 		})
 	}()
 }

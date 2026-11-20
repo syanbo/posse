@@ -20,6 +20,7 @@ import (
 
 	"posse/internal/client"
 	"posse/internal/gitx"
+	"posse/internal/rpc"
 	"posse/locales"
 )
 
@@ -231,6 +232,242 @@ func branchWorkspace(t *testing.T, a *app) string {
 	return root
 }
 
+// 更新不在分支列表顶上另插一行；转圈和取消留在「更新」上，菜单不关，列表不跳动。
+func TestBranchUpdateLoadingStaysPut(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := newTester(a.build, 1200, 760)
+	tt.Frame()
+	a.openBranches(w)
+	v := a.files[w.ID]
+	until(t, tt, "branches", func() bool { return v.git.branches.list != nil && tt.HasText("本地") })
+	for i := range v.git.branches.list {
+		if v.git.branches.list[i].Name == "feat" {
+			v.git.branches.list[i].Upstream = "origin/feat"
+		}
+	}
+	var canceled bool
+	v.git.busy, v.git.busyKind, v.git.updateBranch = "更新 feat", gitUpdate, "feat"
+	v.git.cancel = func() { canceled = true }
+	tt.Frame()
+	if tt.HasText("更新 feat…") {
+		t.Fatal("update inserted a loading row")
+	}
+	v.git.busy, v.git.busyKind, v.git.updateBranch, v.git.cancel = "Checkout", "", "", nil
+	tt.Frame()
+	if !tt.HasText("Checkout…") {
+		t.Fatal("other operations lost the busy line")
+	}
+	v.git.busy, v.git.busyKind, v.git.updateBranch = "更新 feat", gitUpdate, "feat"
+	v.git.cancel = func() { canceled = true }
+	tt.Frame()
+	if err := tt.Click("feat"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("更新") || !tt.HasText("取消") {
+		t.Fatalf("update item: %v", tt.Texts())
+	}
+	if err := tt.Click("更新"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !canceled {
+		t.Fatal("clicking the running update did not cancel")
+	}
+	if !tt.HasText("检出") {
+		t.Fatalf("menu closed: %v", tt.Texts())
+	}
+}
+
+// 比较里点开顶端提交的文件后，Fetch 或更新把这一端的顶端往前推，diff 标签要改看新顶端里的同一个文件。
+func TestCompareDiffFollowsBranchTip(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := newTester(a.build, 1200, 760)
+	tt.Frame()
+	a.openBranches(w)
+	v := a.files[w.ID]
+	until(t, tt, "branches", func() bool {
+		return v.git != nil && v.git.branches.list != nil && v.git.busy == "" && gitxBranch(v, "feat").Name == "feat"
+	})
+	a.branchPop = nil
+	a.openCompare(w, "feat", "main", false)
+	until(t, tt, "compare", func() bool {
+		return v.cur != nil && v.cur.comp != nil && v.cur.comp.otherOID != "" && tt.HasText("feat: 新功能")
+	})
+	cd := v.cur.comp
+	tip := cd.otherOID
+	if err := tt.Click("feat: 新功能"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "commit files", func() bool { return cd.commit != nil && cd.commit.files != nil && tt.HasText("feat.txt") })
+	if err := tt.Click("feat.txt"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "diff", func() bool { return v.cur != nil && v.cur.diff != nil && v.cur.kind == docDiff })
+	if v.cur.diff.newRev != tip || v.cur.diff.state.New.String() != "feat\n" {
+		t.Fatalf("opened diff rev %s tip %s body %q", v.cur.diff.newRev, tip, v.cur.diff.state.New.String())
+	}
+	gitRun(t, root, "switch", "-q", "feat")
+	if err := os.WriteFile(filepath.Join(root, "feat.txt"), []byte("feat2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, root, "commit", "-q", "-am", "feat: 再改")
+	gitRun(t, root, "switch", "-q", "main")
+	a.refsChanged(w.ProjectID)
+	until(t, tt, "diff follows new tip", func() bool {
+		d := v.cur
+		return d != nil && d.diff != nil && d.kind == docDiff && d.diff.newRev != tip && d.diff.newRev == cd.otherOID && d.diff.state.New != nil && d.diff.state.New.String() == "feat2\n"
+	})
+	if cd.onlyOther[0].Subject != "feat: 再改" || cd.commit == nil || cd.commit.info.Hash != cd.otherOID {
+		t.Fatalf("compare did not follow the tip: subject %q commit %v oid %s", cd.onlyOther[0].Subject, cd.commit, cd.otherOID)
+	}
+}
+
+// 文件历史、从顶端提交打开的 diff、推送预览在引用前进后跟着新的顶端；看着更早的提交则不动。
+// HEAD 变了之后，开着的 Annotate 重读。
+func TestRefsFollowTipElsewhere(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := newTester(a.build, 1200, 760)
+	tt.Frame()
+	openLogWait(t, a, tt, w, "main.go")
+	v := a.files[w.ID]
+	d := v.logCur
+	until(t, tt, "history", func() bool {
+		h := d.log.hist
+		return h != nil && h.diff != nil && h.sel != "" && len(d.log.commits) >= 2
+	})
+	tip := d.log.commits[0].Hash
+	a.openDiff(w, d.log.hist.diff.diff.diffSpec, nil, true)
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// tip-1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, root, "commit", "-q", "-am", "fix: 再改")
+	until(t, tt, "history idle", func() bool { return d.log != nil && !d.log.loading })
+	a.refsChanged(w.ProjectID)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		tt.Frame()
+		ld := d.log
+		next, sel, histRev, docRev := "", "", "", ""
+		if len(ld.commits) > 0 {
+			next = ld.commits[0].Hash
+		}
+		if ld.hist != nil {
+			sel = ld.hist.sel
+			if ld.hist.diff != nil && ld.hist.diff.diff != nil {
+				histRev = ld.hist.diff.diff.newRev
+			}
+		}
+		followed := false
+		for _, doc := range v.docs {
+			if doc.diff == nil || doc.diff.rel != "main.go" {
+				continue
+			}
+			docRev = doc.diff.newRev
+			if next != "" && next != tip && sel == next && histRev == next && docRev == next && doc.kind == docDiff && strings.Contains(doc.diff.state.New.String(), "// tip-1") {
+				followed = true
+			}
+		}
+		if followed {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("history tip: loading=%v old=%s next=%s sel=%s hist=%s doc=%s", ld.loading, tip, next, sel, histRev, docRev)
+		}
+		pass(tt, 5*time.Millisecond)
+	}
+	older := d.log.commits[1].Hash
+	if err := tt.Click(d.log.commits[1].Subject); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "older", func() bool { return d.log.hist.sel == older })
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// tip-2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, root, "commit", "-q", "-am", "fix: 第三次")
+	until(t, tt, "history idle again", func() bool { return d.log != nil && !d.log.loading })
+	a.refsChanged(w.ProjectID)
+	until(t, tt, "older stays", func() bool {
+		ld := d.log
+		if len(ld.commits) == 0 || ld.commits[0].Subject != "fix: 第三次" || ld.hist.sel != older {
+			return false
+		}
+		for _, doc := range v.docs {
+			if doc.diff != nil && doc.diff.rel == "main.go" && doc.diff.newRev == ld.commits[0].Hash && strings.Contains(doc.diff.state.New.String(), "// tip-2") {
+				return true
+			}
+		}
+		return false
+	})
+
+	a.openPush(locales.In("zh-Hans"), w)
+	until(t, tt, "push", func() bool {
+		ps := a.push
+		return ps != nil && ps.loaded && len(ps.plan.Commits) > 0 && ps.plan.Commits[0].Hash == d.log.commits[0].Hash
+	})
+	ps := a.push
+	a.selectCommit(ps.root, &ps.commit, ps.plan.Commits[0])
+	until(t, tt, "push files", func() bool { return ps.commit != nil && len(ps.commit.files) > 0 })
+	idx := -1
+	for i, f := range ps.commit.files {
+		if f.Path == "main.go" {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		t.Fatalf("main.go not in push commit: %+v", ps.commit.files)
+	}
+	pushed := ps.plan.Commits[0].Hash
+	a.pushShow(v, ps, idx, true)
+	until(t, tt, "push diff", func() bool {
+		return ps.detail != nil && ps.detail.kind == docDiff && ps.detail.diff.newRev == pushed
+	})
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// tip-3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, root, "commit", "-q", "-am", "fix: 第四次")
+	a.refsChanged(w.ProjectID)
+	until(t, tt, "push tip", func() bool {
+		return len(ps.plan.Commits) > 0 && ps.plan.Commits[0].Hash != pushed && ps.detail != nil && ps.detail.kind == docDiff && ps.detail.diff.newRev == ps.plan.Commits[0].Hash && strings.Contains(ps.detail.diff.state.New.String(), "// tip-3")
+	})
+
+	a.openBlame(locales.In("zh-Hans"), w, v, filepath.Join(root, "main.go"))
+	bd := v.cur.blame
+	if bd == nil {
+		t.Fatal("blame did not open")
+	}
+	until(t, tt, "blame", func() bool { return !bd.loading && len(bd.lines) > 0 })
+	var prev gitx.Status
+	if v.git.status != nil {
+		prev = *v.git.status
+	}
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// tip-4\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, root, "commit", "-q", "-am", "fix: 第五次")
+	head := strings.TrimSpace(gitRun(t, root, "rev-parse", "HEAD"))
+	if v.git.status == nil {
+		v.git.status = &gitx.Status{}
+	}
+	v.git.status.Commit = head
+	a.gitChanged(v.git, &prev)
+	until(t, tt, "blame follows head", func() bool {
+		for _, l := range bd.lines {
+			if l.Hash == head {
+				return true
+			}
+		}
+		return false
+	})
+}
+
 func TestBranchPopupAndCompare(t *testing.T) {
 	a := previewApp(t)
 	root := branchWorkspace(t, a)
@@ -382,6 +619,257 @@ func TestPushDialog(t *testing.T) {
 	until(t, tt, "pushed", func() bool { return a.push == nil && a.files[w.ID].git.busy == "" })
 	if n := gitRun(t, root, "rev-list", "--count", "origin/main..main"); n != "0" {
 		t.Fatalf("still %s ahead", n)
+	}
+}
+
+// 后台重读 diff 不能把工作区从终端切到文件标签。
+func TestReopenDiffKeepsTerminal(t *testing.T) {
+	a := previewApp(t)
+	w := &a.workspaces[0]
+	v := a.filesFor(w)
+	a.activeTerm[w.ID] = "t1"
+	v.prevTerm = "t3"
+	cur := &fileDoc{path: filepath.Join(w.Path, "notes.txt"), kind: docText}
+	v.docs = []*fileDoc{cur}
+	v.cur = cur
+	a.reopenDiff(w, v, diffSpec{root: t.TempDir(), rel: "a.txt", oldRev: "HEAD", newRev: "HEAD"}, nil, true)
+	if a.activeTerm[w.ID] != "t1" || v.prevTerm != "t3" {
+		t.Fatalf("tab %q prev %q", a.activeTerm[w.ID], v.prevTerm)
+	}
+	if v.cur != cur {
+		t.Fatal("focus left the file")
+	}
+}
+
+// 重读 Annotate 时先开始的那次作废，后一次回来要把「加载中」收掉。
+func TestReloadBlameClearsLoading(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	v := a.filesFor(w)
+	d := &fileDoc{path: filepath.Join(root, "main.go"), kind: docText}
+	v.docs = []*fileDoc{d}
+	v.cur = d
+	d.blame = &blameDoc{root: root, rel: "main.go", path: d.path, loading: true, epoch: 50}
+	a.reloadBlame(v, d)
+	tt := newTester(a.build, 400, 300)
+	until(t, tt, "blame", func() bool {
+		return d.blame != nil && !d.blame.loading && d.blame.err == "" && len(d.blame.lines) > 0
+	})
+}
+
+// 推送预览里残留的跟随不能把后来点开的更早提交改到顶端。
+func TestPushClickDropsStaleFollow(t *testing.T) {
+	a := previewApp(t)
+	ps := &pushState{root: t.TempDir(), plan: gitx.PushPlan{Commits: []gitx.CommitInfo{{Hash: "new"}, {Hash: "old"}}}}
+	ps.followFrom, ps.followGen = "old", 1
+	ps.detail = &fileDoc{diff: &diffDoc{diffSpec: diffSpec{newRev: "other", rel: "a.go"}}}
+	a.followPushTip(ps, "new")
+	if ps.followGen != 1 || ps.followFrom != "" || ps.detail == nil || ps.detail.diff.newRev != "other" {
+		t.Fatalf("follow %d %q detail %v", ps.followGen, ps.followFrom, ps.detail)
+	}
+	ps.followFrom = "old"
+	ps.detail = &fileDoc{diff: &diffDoc{diffSpec: diffSpec{newRev: "old", rel: "a.go"}}}
+	ps.clearDetail()
+	if ps.followGen != 1 || ps.followFrom != "" || ps.detail != nil {
+		t.Fatal("clearDetail reused the generation")
+	}
+}
+
+// 日志还在读时引用变了，这次读完再从头读，并跟上新的最新一次。
+func TestLogCatchesUpWhileLoading(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := newTester(a.build, 1200, 760)
+	tt.Frame()
+	openLogWait(t, a, tt, w, "main.go")
+	v := a.files[w.ID]
+	d := v.logCur
+	until(t, tt, "history", func() bool {
+		ld := d.log
+		return ld != nil && !ld.loading && len(ld.commits) > 0 && ld.hist != nil && ld.hist.sel == ld.commits[0].Hash
+	})
+	old := d.log.commits[0].Hash
+	d.log.loading = true
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// catch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, root, "commit", "-q", "-am", "fix: 读的时候")
+	a.refsChanged(w.ProjectID)
+	if !d.log.again || d.log.commits[0].Hash != old {
+		t.Fatalf("again %v tip %s", d.log.again, d.log.commits[0].Hash)
+	}
+	if !a.logCatchUp(v, d) || d.log.again {
+		t.Fatal("did not catch up")
+	}
+	until(t, tt, "caught up", func() bool {
+		ld := d.log
+		return ld != nil && !ld.loading && len(ld.commits) > 0 && ld.commits[0].Hash != old && ld.hist != nil && ld.hist.sel == ld.commits[0].Hash
+	})
+}
+
+// 跟随还在路上时，人又点回同一个提交的同一个文件，旧结果不能把右边改掉。
+func TestRetargetDropsClickBack(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	newHash := gitRun(t, root, "rev-parse", "HEAD")
+	oldHash := gitRun(t, root, "rev-parse", "HEAD~1")
+	ps := &pushState{view: a.filesFor(w), ws: w.ID, root: root}
+	a.push = ps
+	kept := &fileDoc{diff: &diffDoc{diffSpec: diffSpec{root: root, rel: "main.go", newRev: oldHash}}}
+	ps.detail = kept
+	ps.followFrom = oldHash
+	a.retargetPushDetail(ps, gitx.CommitInfo{Hash: newHash}, "main.go")
+	ps.followFrom = ""
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		a.runPending()
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if ps.detail != kept || ps.detail.diff == nil || ps.detail.diff.newRev != oldHash {
+		t.Fatalf("click-back followed: %+v", ps.detail)
+	}
+}
+
+// 文件历史和整份日志同时开着、顶端不是同一次提交时，看着文件历史顶端的 diff 仍要跟上，并且不能两边来回读。
+func TestFollowDiffTwoLogs(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := newTester(a.build, 1200, 760)
+	tt.Frame()
+	openLogWait(t, a, tt, w, "main.go")
+	v := a.files[w.ID]
+	hist := v.logCur
+	until(t, tt, "history", func() bool {
+		h := hist.log.hist
+		return h != nil && h.diff != nil && h.sel != "" && len(hist.log.commits) >= 1
+	})
+	old := hist.log.commits[0].Hash
+	a.openDiff(w, hist.log.hist.diff.diff.diffSpec, nil, true)
+	openLogWait(t, a, tt, w, "")
+	var whole *fileDoc
+	for _, d := range v.logs {
+		if d.log != nil && d.log.filter.Path == "" {
+			whole = d
+		}
+	}
+	if whole == nil {
+		t.Fatal("repo log missing")
+	}
+	until(t, tt, "repo log", func() bool {
+		return len(whole.log.commits) >= 1 && !whole.log.loading && !hist.log.loading
+	})
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// tip-1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, root, "commit", "-q", "-am", "fix: 再改")
+	if err := os.WriteFile(filepath.Join(root, "other.txt"), []byte("other\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, root, "add", "other.txt")
+	gitRun(t, root, "commit", "-q", "-m", "chore: 另一个文件")
+	a.refsChanged(w.ProjectID)
+	until(t, tt, "file tip diff", func() bool {
+		if len(hist.log.commits) == 0 || hist.log.commits[0].Hash == old || hist.log.loading || whole.log.loading {
+			return false
+		}
+		if len(whole.log.commits) == 0 || whole.log.commits[0].Hash == hist.log.commits[0].Hash {
+			return false
+		}
+		next := hist.log.commits[0].Hash
+		for _, doc := range v.docs {
+			if doc.diff != nil && doc.diff.rel == "main.go" && doc.diff.newRev == next && strings.Contains(doc.diff.state.New.String(), "// tip-1") {
+				return true
+			}
+		}
+		return false
+	})
+	next := hist.log.commits[0].Hash
+	tt.Advance(500 * time.Millisecond)
+	tt.Frame()
+	for _, doc := range v.docs {
+		if doc.diff != nil && doc.diff.rel == "main.go" && doc.diff.newRev != next {
+			t.Fatalf("diff left the file tip: %s", doc.diff.newRev)
+		}
+	}
+}
+
+// 推送对话框：标题右边关闭，提交列表可以左右拖，进行中的状态留在底部、不把列表顶下去。
+func TestPushDialogChrome(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := newTester(a.build, 1200, 760)
+	tt.Frame()
+	a.openPush(locales.In("zh-Hans"), w)
+	until(t, tt, "push plan", func() bool { return a.push != nil && a.push.loaded && tt.HasText("fix: 本地修复") })
+	v := a.files[w.ID]
+	ps := a.push
+	ps.remote = true
+	ps.repository = v.git
+	tt.Frame()
+	row, ok := tt.Find("fix: 本地修复")
+	if !ok {
+		t.Fatal("commit row missing")
+	}
+	a.targetPushes = append(a.targetPushes, &targetPushOperation{
+		params: rpc.GitPushParams{Expected: v.git.identity},
+	})
+	tt.Frame()
+	if !tt.HasText("正在推送") {
+		t.Fatalf("running status: %v", tt.Texts())
+	}
+	again, ok := tt.Find("fix: 本地修复")
+	if !ok || again.Y != row.Y {
+		t.Fatalf("commit row jumped from %v to %v", row.Y, again.Y)
+	}
+	status, ok := tt.Find("正在推送")
+	if !ok || status.Y <= again.Y {
+		t.Fatalf("status not in the footer: status %v commit %v", status, again)
+	}
+
+	head, ok := tt.Find("main → origin : main")
+	if !ok {
+		t.Fatal("branch line missing")
+	}
+	line := head.X - 4 + paneWidth(a.state.PushListWidth, pushListPane)
+	y := head.Y + 80
+	var x float32
+	var hit bool
+	for dx := float32(-12); dx <= 12; dx += 2 {
+		tt.Move(line+dx, y)
+		tt.Frame()
+		if tt.Cursor() == ui.CursorResizeEW {
+			x, hit = line+dx, true
+			break
+		}
+	}
+	if !hit {
+		t.Fatalf("divider not found around %.0f", line)
+	}
+	before := paneWidth(a.state.PushListWidth, pushListPane)
+	tt.Press(x, y)
+	tt.Frame()
+	tt.Move(x-80, y)
+	tt.Frame()
+	if paneWidth(a.state.PushListWidth, pushListPane) >= before {
+		t.Fatalf("list width %v, was %v", a.state.PushListWidth, before)
+	}
+	tt.Release(x-80, y)
+	tt.Frame()
+
+	if err := tt.Click("关闭"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.push != nil {
+		t.Fatal("close left the dialog open")
 	}
 }
 

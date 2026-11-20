@@ -163,3 +163,44 @@ func TestFetchHistoryErrors(t *testing.T) {
 		t.Fatal("history failure was not shown in the page")
 	}
 }
+
+// 列表不截断，搜索仍只取最相关的一批。分组条数才和顶上的总会话数一致。
+func TestHistoryListUnlimited(t *testing.T) {
+	var got struct {
+		Limit int    `json:"limit"`
+		Query string `json:"query"`
+	}
+	_, c := startFakeDaemon(t, map[string]rpc.Handler{
+		"history.list": func(ctx context.Context, raw json.RawMessage) (any, error) {
+			if err := json.Unmarshal(raw, &got); err != nil {
+				t.Error(err)
+			}
+			return map[string]any{"sessions": []map[string]any{{"id": "a"}}}, nil
+		},
+		"history.search": func(ctx context.Context, raw json.RawMessage) (any, error) {
+			if err := json.Unmarshal(raw, &got); err != nil {
+				t.Error(err)
+			}
+			return map[string]any{"hits": []map[string]any{}}, nil
+		},
+	})
+	a := &app{c: c}
+	h := &a.history
+	h.mu.Lock()
+	h.req = 1
+	h.mu.Unlock()
+	a.request().fetchHistory(1)
+	a.runPending()
+	if got.Query != "" || got.Limit != 0 {
+		t.Fatalf("list query=%q limit=%d, want all sessions", got.Query, got.Limit)
+	}
+	h.mu.Lock()
+	h.wQuery = "磁盘"
+	h.req = 2
+	h.mu.Unlock()
+	a.request().fetchHistory(2)
+	a.runPending()
+	if got.Query != "磁盘" || got.Limit != historySearchLimit {
+		t.Fatalf("search query=%q limit=%d", got.Query, got.Limit)
+	}
+}

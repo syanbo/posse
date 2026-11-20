@@ -10,6 +10,12 @@
 - Fetch 进行中改为按钮转圈，不再显示状态行；仓库发现过期时重新发现，避免 Fetch 按钮一直点不了。大仓库读状态时不再把索引清单算进读取上限。
 - Antigravity 终端按会话锁绑定会话并显示它起的标题；历史里按 `call_mcp_tool` 识别 MCP 调用，并按结果标记失败。
 - 手机退出 agent 后，电脑端终端回到窗口尺寸。
+- 历史列表列出全部会话，分组条数与顶上的总会话数一致。搜索仍只显示最相关的结果。
+- 分支弹窗更新时不再在列表顶上插入加载行；加载和取消留在「更新」上，列表不再跳动。
+- 比较两个分支时，Fetch 或更新之后，正看着某一边顶端提交的 diff 标签会改看新的顶端。
+- 文件历史、提交日志和推送预览在看着最新一次提交时，Fetch 或更新之后会跟着新的最新一次；从这次提交打开的 diff 一起改。看着更早的提交保持不动。当时还在读的日志，这次读完会再读并跟上。HEAD 变了之后，开着的 Annotate 会重读。
+- 终端里悬停图片（包括 `[Image #N]`）时，预览下面显示原图像素尺寸、格式和文件大小。
+- 推送对话框标题右边可以关闭，提交列表和右边的分栏可以左右拖。正在推送时，状态和查询、取消留在底部按钮那一排，列表不再往下跳。
 
 ### English
 
@@ -18,6 +24,12 @@
 - Fetch shows a spinner on its button instead of a status line, and stale repository discovery is redone so the Fetch button no longer stays disabled. Reading status in large repositories no longer counts the index listing against the read limit.
 - Antigravity terminals bind to their session through its session lock and show the title it sets; history recognizes MCP calls made through `call_mcp_tool` and marks failures from their results.
 - After the phone exits an agent, the desktop terminal returns to the window size.
+- The history list includes every session, so group counts match the total. Search still shows only the most relevant results.
+- Updating from the branch popup no longer inserts a loading row above the list. The spinner and cancel stay on Update, so the list does not jump.
+- While comparing two branches, Fetch or update moves an open diff of either tip commit on to the new tip.
+- File history, the commit log, and the push preview follow the newest commit after Fetch or update when that commit was what was open, including a diff opened from it. An older commit stays put. A log that is still loading catches up when that read finishes. Annotate reloads after HEAD moves.
+- Hovering an image in the terminal, including `[Image #N]`, shows the original pixel size, format, and file size under the preview.
+- The push dialog has a close button, and the divider between the commit list and the files can be dragged. While a push is running, its status and the query and cancel actions stay on the bottom button row, so the list does not jump.
 
 ## 0.1.41
 

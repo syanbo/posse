@@ -1,8 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -438,7 +440,7 @@ func TestPlaceHoverPreview(t *testing.T) {
 		{"long screenshot", 300, 100, 1000, 20000, true},
 		{"phone near top", 500, 30, 1179, 2556, true},
 	} {
-		r := placeHoverPreview(bw, bh, tc.x, tc.y, tc.iw, tc.ih)
+		r := placeHoverPreview(bw, bh, tc.x, tc.y, tc.iw, tc.ih, 0)
 		if r.X < 8 || r.Y < 8 || r.X+r.W > bw-8 || r.Y+r.H > bh-8 {
 			t.Errorf("%s: %+v outside area", tc.name, r)
 		}
@@ -454,19 +456,50 @@ func TestPlaceHoverPreview(t *testing.T) {
 		}
 	}
 	// 竖图用满终端的高度
-	if r := placeHoverPreview(bw, bh, 300, 400, 1179, 2556); r.H < bh-20 {
+	if r := placeHoverPreview(bw, bh, 300, 400, 1179, 2556, 0); r.H < bh-20 {
 		t.Errorf("phone preview only %v high", r.H)
 	}
 	// 宽随终端变：大终端里横图比原来的 360 宽，最多 800
-	if r := placeHoverPreview(2000, 1000, 500, 550, 2624, 2024); r.W < 700 || r.W > hoverPreviewMaxWidth {
+	if r := placeHoverPreview(2000, 1000, 500, 550, 2624, 2024, 0); r.W < 700 || r.W > hoverPreviewMaxWidth {
 		t.Errorf("wide preview in a big terminal is %v wide", r.W)
 	}
-	if r := placeHoverPreview(600, 800, 100, 100, 1600, 900); r.W > hoverPreviewMinWidth {
+	if r := placeHoverPreview(600, 800, 100, 100, 1600, 900, 0); r.W > hoverPreviewMinWidth {
 		t.Errorf("preview in a narrow terminal is %v wide", r.W)
 	}
 	// 小图不放大到糊
-	if r := placeHoverPreview(2000, 1000, 500, 300, 200, 200); r.W > hoverPreviewMinWidth {
+	if r := placeHoverPreview(2000, 1000, 500, 300, 200, 200, 0); r.W > hoverPreviewMinWidth {
 		t.Errorf("small image blown up to %v", r.W)
+	}
+	// 尺寸行加在图下面，图的比例不变，也不盖住指针
+	base := placeHoverPreview(bw, bh, 300, 100, 1600, 900, 0)
+	with := placeHoverPreview(bw, bh, 300, 100, 1600, 900, hoverPreviewMeta)
+	if with.H < base.H+hoverPreviewMeta-1 || with.X < 8 || with.Y < 8 || with.X+with.W > bw-8 || with.Y+with.H > bh-8 {
+		t.Fatalf("captioned preview %+v, plain %+v", with, base)
+	}
+	if x, y := float32(300), float32(100); x >= with.X && x <= with.X+with.W && y >= with.Y && y <= with.Y+with.H {
+		t.Fatalf("captioned preview covers pointer: %+v", with)
+	}
+	iw, ih := with.W-2*hoverPreviewPad, with.H-2*hoverPreviewPad-hoverPreviewMeta
+	if d := iw/ih - 1600.0/900; d > 0.02 || d < -0.02 {
+		t.Fatalf("caption changed the picture aspect: %v", iw/ih)
+	}
+}
+
+func TestImageFileInfo(t *testing.T) {
+	var b bytes.Buffer
+	if err := png.Encode(&b, image.NewNRGBA(image.Rect(0, 0, 30, 20))); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "pic.png")
+	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info := imageFileInfo(path)
+	if info.w != 30 || info.h != 20 || info.format != "png" || info.bytes != int64(b.Len()) {
+		t.Fatalf("info %+v, file %d bytes", info, b.Len())
+	}
+	if got := imageMetaText(info); got != fmt.Sprintf("30 × 20  PNG  %s", byteSize(b.Len())) {
+		t.Fatalf("meta %q", got)
 	}
 }
 

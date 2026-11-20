@@ -188,6 +188,7 @@ func (a *app) executePush(m locales.Messages, ps *pushState, target gitOperation
 				s.done = true
 				ps.pushing = false
 				a.releasePush(s)
+				a.reloadPushIfOpen(ps)
 			})
 			return
 		}
@@ -195,6 +196,9 @@ func (a *app) executePush(m locales.Messages, ps *pushState, target gitOperation
 		a.update(func() {
 			ps.pushing = false
 			if s.done || !slices.Contains(a.targetPushes, s) {
+				if s.done && !s.unknown {
+					a.reloadPushIfOpen(ps)
+				}
 				return
 			}
 			if err != nil {
@@ -203,6 +207,8 @@ func (a *app) executePush(m locales.Messages, ps *pushState, target gitOperation
 				s.done, s.err = !s.unknown, errtext.Text(err)
 				if s.done {
 					a.releasePush(s)
+					// 结果未知时不补读：补读会把预览标成加载中，另开推送的确认框出不来。
+					a.reloadPushIfOpen(ps)
 				}
 				return
 			}
@@ -245,12 +251,13 @@ func (a *app) finishPush(s *targetPushOperation, out rpc.GitPushResult, r appReq
 		return
 	}
 	a.refreshGit(v)
+	if ps := a.push; ps != nil && ps.repository == g && out.Status == rpc.GitFetchSucceeded && ps.preview != nil && s.params.Matches(*ps.preview) {
+		ps.pushing = false
+		a.closePush(ps)
+	}
 	a.refsChanged(s.project)
 	if ps := a.push; ps != nil && ps.repository == g {
 		ps.pushing = false
-		if out.Status == rpc.GitFetchSucceeded && ps.preview != nil && s.params.Matches(*ps.preview) {
-			a.closePush(ps)
-		}
 	}
 	if out.Status == rpc.GitFetchSucceeded && s.request.current() {
 		msg := m.ComparePushedTo(s.params.Remote + "/" + s.params.RemoteBranch)
@@ -288,6 +295,9 @@ func (a *app) queryPush(m locales.Messages, s *targetPushOperation) {
 			if out.Operation.State == "done" && out.Operation.Error != nil {
 				s.done, s.err = true, errtext.Text(out.Operation.Error)
 				a.releasePush(s)
+				if ps := a.push; ps != nil && !ps.pushing && ps.repository != nil && s.matchesRepository(ps.repository) {
+					a.reloadPushIfOpen(ps)
+				}
 			}
 		})
 	}()
@@ -318,19 +328,24 @@ func (a *app) cancelPush(m locales.Messages, s *targetPushOperation) {
 		})
 	}()
 }
-func (a *app) pushOperationState(c *ui.Context, s *targetPushOperation) {
-	m, t := L(c), c.Theme()
-	text := m.PushRunning()
+func pushStatusText(m locales.Messages, s *targetPushOperation) string {
 	switch {
 	case s.result != nil:
-		text = m.PushResult(s.result.Status)
+		return m.PushResult(s.result.Status)
 	case s.done:
-		text = m.CommonFailed()
+		return m.CommonFailed()
 	case s.unknown:
-		text = m.PushUnknown()
+		return m.PushUnknown()
 	case s.cancelRequested:
-		text = m.FetchCancelRequested()
+		return m.FetchCancelRequested()
+	default:
+		return m.PushRunning()
 	}
+}
+
+func (a *app) pushOperationState(c *ui.Context, s *targetPushOperation) {
+	m, t := L(c), c.Theme()
+	text := pushStatusText(m, s)
 	ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted)
 	if s.result != nil && s.result.Started && s.result.Status != rpc.GitFetchSucceeded {
 		ui.Text(c, m.PushPartial()).FontSize(fsSmall).TextColor(t.TextMuted)
@@ -350,6 +365,29 @@ func (a *app) pushOperationState(c *ui.Context, s *targetPushOperation) {
 		})
 	}
 }
+
+// pushOperationBar 把进行中的推送状态放进对话框底部那一排，不在列表上面另起一行。
+func (a *app) pushOperationBar(c *ui.Context, s *targetPushOperation) {
+	m, t := L(c), c.Theme()
+	ui.Text(c, pushStatusText(m, s)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+	if s.result != nil && s.result.Started && s.result.Status != rpc.GitFetchSucceeded {
+		ui.Text(c, m.PushPartial()).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+	}
+	if s.err != "" {
+		ui.Text(c, s.err).FontSize(fsSmall).TextColor(t.Danger).SingleLine().Shrink(1)
+	}
+	if s.done {
+		return
+	}
+	r := a.request()
+	if pressable(textButton(c, m.FetchQuery())).Disabled(!a.targetGitReady() || s.checking || s.canceling).Clicked() {
+		a.queryPush(m, s)
+	}
+	if pressable(textButton(c, m.PushCancel())).Disabled(!a.targetGitReady() || r.host != nil && !r.snapshot.Controlled || s.checking || s.canceling || !s.pending()).Clicked() {
+		a.cancelPush(m, s)
+	}
+}
+
 func (a *app) pushConsole(project string) []gitOpRecord {
 	var ops []gitOpRecord
 	for _, s := range a.targetPushes {

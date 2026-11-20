@@ -9,6 +9,7 @@
 - 修复打开或刷新套餐用量时面板上下跳动的问题。
 - 文件树按 Git 状态上色，父目录汇总改动、忽略项淡化，与桌面保持一致；未跟踪文件使用 WebStorm 配色，与冲突红色区分（文件树上色需要 Mac 0.1.40 及以上）。
 - 文件页可见时自动刷新，支持嵌套仓库和软链；Git 状态读取失败仍可浏览，切后台或换连接后停止旧目录请求。
+- 历史列表列出全部会话，分组条数与电脑上的总会话数一致。搜索仍只显示最相关的结果。
 
 ### English
 
@@ -16,6 +17,7 @@
 - Fixed layout jumps when opening or refreshing plan usage.
 - The file tree now matches desktop Git status colors, highlights changed parent folders and dims ignored entries. Untracked files use WebStorm colors, distinct from conflict red (file tree colors require Posse for Mac 0.1.40 or later).
 - Files refresh automatically while visible, including nested repositories and symlinks. Browsing remains available when Git status fails, and pending directory requests stop when the app enters the background or changes connections.
+- The history list includes every session, so group counts match the total on the Mac. Search still shows only the most relevant results.
 
 ## 0.1.25
 

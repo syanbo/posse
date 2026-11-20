@@ -1,8 +1,10 @@
 package app
 
 import (
+	"context"
 	"slices"
 	"strings"
+	"time"
 
 	"posse/internal/errtext"
 	"posse/internal/gitx"
@@ -54,7 +56,7 @@ func (a *app) targetLogCurrent(r appRequest, v *filesView, d *fileDoc, g *gitSta
 	return a.targetGitCurrent(r, v) && slices.Contains(v.logs, d) && d.log.root == g.repo && v.repoAt(g.repo) == g && d.log.repository == g
 }
 
-func (a *app) readTargetLog(v *filesView, d *fileDoc, more bool, limit int) {
+func (a *app) readTargetLog(v *filesView, d *fileDoc, more bool, limit int, follow bool) {
 	if !a.targetGitSession(v) || !slices.Contains(v.logs, d) {
 		return
 	}
@@ -75,6 +77,8 @@ func (a *app) readTargetLog(v *filesView, d *fileDoc, more bool, limit int) {
 	if ld.resume && ld.filterPending {
 		ld.filter.Text, ld.filter.Author = ld.text, ld.author
 		ld.filterPending = false
+		// 这次是把没读完的筛选套上，不是引用变了。refsChanged 也会进这里，不能跟着跳到新列表第一条。
+		follow = false
 	}
 	f := ld.filter
 	f.Branches = slices.Clone(f.Branches)
@@ -122,6 +126,10 @@ func (a *app) readTargetLog(v *filesView, d *fileDoc, more bool, limit int) {
 			}
 			ld.loading = false
 			if !a.targetLogCurrent(r, v, d, g) || g.identity != identity {
+				ld.again = false
+				return
+			}
+			if a.logCatchUp(v, d) {
 				return
 			}
 			d.kind = docLog
@@ -137,6 +145,10 @@ func (a *app) readTargetLog(v *filesView, d *fileDoc, more bool, limit int) {
 			ld.filter.Branches = f.Branches
 			ld.loadedFilter = f
 			ld.baseline, ld.nextSkip, ld.more = out.Baseline, out.NextSkip, out.HasMore
+			prevTip := ""
+			if !more && len(ld.commits) > 0 {
+				prevTip = ld.commits[0].Hash
+			}
 			if more {
 				ld.commits = append(ld.commits, commits...)
 			} else {
@@ -158,10 +170,53 @@ func (a *app) readTargetLog(v *filesView, d *fileDoc, more bool, limit int) {
 				ld.commit.read.stop()
 				ld.commit = nil
 			}
+			if follow {
+				a.followLogTip(v, d, prevTip)
+			}
 			if ld.jump != "" && more {
 				a.jumpToCommit(v, d, ld.jump)
 			} else {
 				ld.jump = ""
+			}
+		})
+	}()
+}
+
+// followTargetDiffTip 把远端开着的、对着旧顶端提交的 diff 换成新提交里的同一个文件。
+func (a *app) followTargetDiffTip(v *filesView, src, doc *fileDoc, info gitx.CommitInfo, prev string) {
+	if !a.targetGitSession(v) || doc.diff == nil {
+		return
+	}
+	g := v.repoAt(doc.diff.root)
+	w := a.workspace(v.wsID)
+	if g == nil || w == nil {
+		return
+	}
+	r, identity := a.request(), g.identity
+	rel, root := doc.diff.rel, doc.diff.root
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	go func() {
+		defer cancel()
+		out, err := r.client.GitCommitFiles(ctx, rpc.GitCommitFilesParams{Path: g.repo, Expected: identity, Hash: info.Hash})
+		a.update(func() {
+			if !diffStillOpen(v, doc, prev, rel) || g.identity != identity {
+				return
+			}
+			if err != nil || !a.targetGitIdentity(g, out.Identity) {
+				return
+			}
+			if src != nil && slices.Contains(v.logs, src) && src.log != nil && len(src.log.commits) > 0 && src.log.commits[0].Hash != info.Hash {
+				a.followLogTip(v, src, prev)
+				return
+			}
+			base := out.DiffBase
+			cv := &commitView{root: root, info: out.Commit, files: out.Files, diffBase: &base}
+			specs := cv.diffSpecs()
+			for _, s := range specs {
+				if s.rel == rel {
+					a.reopenDiff(w, v, s, specs, true)
+					return
+				}
 			}
 		})
 	}()
@@ -252,7 +307,12 @@ func (a *app) resumeTargetLog(v *filesView, d *fileDoc) {
 	}
 	ld := d.log
 	if ld.repository != v.repoAt(ld.root) || ld.resume || d.kind == docLoading && !ld.loading {
-		a.reloadLog(v, d)
+		// 筛选还没读完被打断时，恢复是换筛选，不是引用变了，不能跟着跳到新列表的第一条
+		if ld.filterPending {
+			a.loadLog(v, d, false)
+		} else {
+			a.reloadLog(v, d)
+		}
 	}
 	if cv := ld.commit; cv != nil && cv.files == nil && cv.err == "" && !cv.loading {
 		a.loadTargetCommit(v, d, cv.info)

@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"slices"
+	"time"
 
 	"posse/internal/errtext"
 	"posse/internal/gitx"
@@ -67,6 +69,7 @@ func (a *app) loadTargetCompare(v *filesView, d *fileDoc) {
 			if !a.targetGitIdentity(g, out.Identity) {
 				return
 			}
+			prevOther, prevCur := cd.otherOID, cd.curOID
 			cd.onlyOther, cd.onlyCur = out.OnlyOther, out.OnlyCurrent
 			cd.otherOID, cd.curOID = out.OtherOID, out.CurrentOID
 			cd.moreOther, cd.moreCur = out.MoreOther, out.MoreCurrent
@@ -77,9 +80,13 @@ func (a *app) loadTargetCompare(v *filesView, d *fileDoc) {
 			}
 			cd.picked = slices.DeleteFunc(cd.picked, func(h string) bool { return !contains(h) })
 			if cd.commit != nil && !contains(cd.commit.info.Hash) {
-				cd.commit.read.stop()
-				cd.commit = nil
+				moved := cd.commit.info.Hash == prevOther && cd.otherOID != prevOther || cd.commit.info.Hash == prevCur && cd.curOID != prevCur
+				if !moved {
+					cd.commit.read.stop()
+					cd.commit = nil
+				}
 			}
+			a.followCompareDiffs(v, d, prevOther, prevCur)
 		})
 	}()
 }
@@ -120,6 +127,58 @@ func (a *app) swapTargetCompare(v *filesView, d *fileDoc) {
 	if pending {
 		a.loadTargetCompare(v, d)
 	}
+}
+
+// followTargetCompareDiff 把远端比较里开着的、对着旧顶端的 diff 换成新顶端里的同一个文件。
+func (a *app) followTargetCompareDiff(v *filesView, d *fileDoc, doc *fileDoc, info gitx.CommitInfo, prev string) {
+	if !a.targetGitSession(v) || !slices.Contains(v.docs, d) || d.comp == nil || doc.diff == nil {
+		return
+	}
+	cd := d.comp
+	g := v.repoAt(cd.root)
+	w := a.workspace(v.wsID)
+	if g == nil || cd.repository != g || w == nil {
+		return
+	}
+	r, identity := a.request(), g.identity
+	rel := doc.diff.rel
+	prevOther, prevCur := "", ""
+	if info.Hash == cd.otherOID {
+		prevOther = prev
+	} else {
+		prevCur = prev
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	go func() {
+		defer cancel()
+		out, err := r.client.GitCommitFiles(ctx, rpc.GitCommitFilesParams{Path: g.repo, Expected: identity, Hash: info.Hash})
+		a.update(func() {
+			if !a.targetCompareCurrent(r, v, d, cd, g) || !diffStillOpen(v, doc, prev, rel) || g.identity != identity {
+				return
+			}
+			if err != nil || !a.targetGitIdentity(g, out.Identity) {
+				return
+			}
+			if info.Hash != cd.otherOID && info.Hash != cd.curOID {
+				a.followCompareDiffs(v, d, prevOther, prevCur)
+				return
+			}
+			base := out.DiffBase
+			cv := &commitView{root: cd.root, info: out.Commit, files: out.Files, diffBase: &base}
+			specs := cv.diffSpecs()
+			for _, s := range specs {
+				if s.rel == rel {
+					a.reopenDiff(w, v, s, specs, true)
+					return
+				}
+			}
+			spec := diffSpec{root: cd.root, rel: rel, oldRev: cd.cur, newRev: cd.other, label: cd.other}
+			if info.Hash == cd.curOID {
+				spec.oldRev, spec.newRev, spec.label = cd.other, cd.cur, cd.cur
+			}
+			a.reopenDiff(w, v, spec, []diffSpec{spec}, true)
+		})
+	}()
 }
 
 func (a *app) loadTargetCompareCommit(v *filesView, d *fileDoc, ci gitx.CommitInfo) {

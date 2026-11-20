@@ -1,7 +1,8 @@
 package app
 
 import (
-	"slices"
+	"context"
+	"time"
 
 	"posse/internal/errtext"
 	"posse/internal/gitx"
@@ -9,6 +10,8 @@ import (
 )
 
 func (ps *pushState) clearDetail() {
+	// 代数只增不减。清回 0 之后下一次又从 1 开始，路上的旧回调会对上新代数，把新的跟随清掉。
+	ps.followFrom = ""
 	if ps.detail != nil {
 		ps.detail.cancelGitContent()
 		ps.detail = nil
@@ -145,6 +148,9 @@ func (a *app) loadTargetPush(ps *pushState) {
 			if !a.targetPushCurrent(r, ps, g) || g.identity != identity {
 				return
 			}
+			if ps.pushing {
+				return
+			}
 			if changedIdentity != nil {
 				a.targetGitIdentity(g, *changedIdentity)
 				return
@@ -169,7 +175,11 @@ func (a *app) loadTargetPush(ps *pushState) {
 			if !a.targetGitIdentity(g, out.Identity) {
 				return
 			}
-			if ps.preview != nil && (ps.plan.Remote != out.Plan.Remote || ps.plan.RemoteBranch != out.Plan.RemoteBranch || ps.preview.Baseline != out.Baseline) {
+			prevTip := ""
+			if len(ps.plan.Commits) > 0 {
+				prevTip = ps.plan.Commits[0].Hash
+			}
+			if ps.preview != nil && pushTargetChanged(ps.preview, ps.plan, out.PushPreviewRead) {
 				ps.clearDetail()
 				if ps.commit != nil {
 					ps.commit.read.stop()
@@ -178,13 +188,15 @@ func (a *app) loadTargetPush(ps *pushState) {
 			}
 			ps.preview, ps.plan, ps.loaded, ps.err = &out.PushPreviewRead, out.Plan, true, ""
 			ps.previewIdentity = out.Identity
-			if ps.commit != nil && !slices.ContainsFunc(ps.plan.Commits, func(ci gitx.CommitInfo) bool { return ci.Hash == ps.commit.info.Hash }) {
-				ps.commit.read.stop()
-				ps.commit = nil
-				ps.clearDetail()
-			}
+			a.followPushTip(ps, prevTip)
 		})
 	}()
+}
+
+// pushTargetChanged 是推送目标变了（远端、跟踪分支或它的提交），本地分支自己往前走不算。
+// 预览基线把全部引用都算进去，只看它的话本地顶端一动就会把详情清掉，跟随就走不到。
+func pushTargetChanged(prev *gitx.PushPreviewRead, plan gitx.PushPlan, next gitx.PushPreviewRead) bool {
+	return plan.Remote != next.Plan.Remote || plan.RemoteBranch != next.Plan.RemoteBranch || prev.TrackingRef != next.TrackingRef || prev.TrackingOID != next.TrackingOID || prev.TrackingMissing != next.TrackingMissing
 }
 
 func (a *app) resumeTargetPush(ps *pushState) {
@@ -266,6 +278,57 @@ func (a *app) loadTargetPushCommit(ps *pushState, ci gitx.CommitInfo) {
 				return
 			}
 			cv.info, cv.files, cv.diffBase, cv.err = out.Commit, out.Files, &out.DiffBase, ""
+		})
+	}()
+}
+
+// retargetTargetPushDetail 把远端推送预览右边的 diff 换成新提交里的同一个文件。
+func (a *app) retargetTargetPushDetail(ps *pushState, v *filesView, info gitx.CommitInfo, rel string) {
+	if !a.targetGitSession(v) || a.push != ps || v.push != ps {
+		return
+	}
+	g := v.repoAt(ps.root)
+	if g == nil || ps.repository != g {
+		return
+	}
+	r, identity := a.request(), g.identity
+	prev := ""
+	if ps.detail != nil && ps.detail.diff != nil {
+		prev = ps.detail.diff.newRev
+	}
+	ps.followGen++
+	gen := ps.followGen
+	ps.followFrom = prev
+	seq := ps.read.seq
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	go func() {
+		defer cancel()
+		out, err := r.client.GitCommitFiles(ctx, rpc.GitCommitFilesParams{Path: g.repo, Expected: identity, Hash: info.Hash})
+		a.update(func() {
+			if a.push != ps || ps.followGen != gen {
+				return
+			}
+			if ps.pushing || ps.followFrom != prev || g.identity != identity || ps.detail == nil || ps.detail.diff == nil || ps.detail.diff.rel != rel || ps.detail.diff.newRev != prev {
+				ps.followFrom = ""
+				return
+			}
+			if ps.read.seq != seq {
+				return
+			}
+			ps.followFrom = ""
+			if err != nil || !a.targetGitIdentity(g, out.Identity) {
+				return
+			}
+			base := out.DiffBase
+			cv := &commitView{info: out.Commit, root: ps.root, files: out.Files, diffBase: &base}
+			ps.commit = cv
+			for i, f := range out.Files {
+				if f.Path == rel {
+					a.pushShow(v, ps, i, true)
+					return
+				}
+			}
+			ps.clearDetail()
 		})
 	}()
 }

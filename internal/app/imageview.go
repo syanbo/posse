@@ -18,6 +18,18 @@ type imageInfo struct {
 	alpha  bool // 有透明像素：铺棋盘格才看得出
 }
 
+// imageMetaText 是图片的原图像素、格式和文件大小，文件标签顶栏和终端悬停预览共用。
+func imageMetaText(info imageInfo) string {
+	s := fmt.Sprintf("%d × %d", info.w, info.h)
+	if info.format != "" {
+		s += "  " + strings.ToUpper(info.format)
+	}
+	if info.bytes > 0 {
+		s += "  " + byteSize(int(info.bytes))
+	}
+	return s
+}
+
 // imageView 是图片预览的缩放和位置。zoom 按原图算：1 是原图一个像素对屏幕一个物理像素，0 是适应窗口。
 // cx、cy 是视口中心对着的位图像素，适应窗口时不用。vw、vh、dpr 记着上一次画的视口，输入按它换算。
 type imageView struct {
@@ -281,8 +293,7 @@ func (k *checkerCache) get(cols, rows int, on ui.Color) *ui.Bitmap {
 func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 	t := c.Theme()
 	info := d.imgInfo
-	ui.Text(c, fmt.Sprintf("%d × %d  %s  %s", info.w, info.h, strings.ToUpper(info.format), byteSize(int(info.bytes)))).
-		FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(0)
+	ui.Text(c, imageMetaText(info)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(0)
 	if an := d.anim; an != nil {
 		ui.Text(c, L(c).ImagesFrames(len(an.delays), fmt.Sprintf("%.1f", an.duration().Seconds()))).
 			FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(0)

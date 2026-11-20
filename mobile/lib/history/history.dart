@@ -83,7 +83,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ? await rpc.call('history.list', {
               'agent': agent,
               'cwd': ?cwd,
-              'limit': 300,
+              'limit': 0, // 不截断，分组条数和电脑上的总会话数一致
             })
           : await rpc.call('history.search', {
               'query': q,

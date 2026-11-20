@@ -424,7 +424,8 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 				a.fetchButton(c, w, v)
 			})
 			a.fetchStatus(c, v)
-			if g.busy != "" && !a.hideFetchBusy(g) {
+			// 更新的转圈留在「更新」上，这里再插一行会把下面的列表顶下去
+			if g.busy != "" && g.busyKind != gitUpdate && !a.hideFetchBusy(g) {
 				ui.Row(c).Padding(0, 12, 4, 12).Children(func() { busyLine(c, g) })
 			}
 			query := strings.ToLower(strings.TrimSpace(bp.query))
@@ -488,6 +489,11 @@ func (a *app) branchPopGrip(c *ui.Context) {
 
 // popupItem 是弹窗里的一行操作，返回这一帧是否点了它。
 func popupItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
+	return popupRow(c, icon, label, keys, false)
+}
+
+// popupRow 同 popupItem。spin 时行首图标换成转圈，行高不变，点一下仍然算点中（用来取消）。
+func popupRow(c *ui.Context, icon *ui.SVG, label, keys string, spin bool) bool {
 	t := c.Theme()
 	row := ui.Row(c.Key(label)).Height(sz(28)).Padding(0, 12).Gap(8).Radius(rRow).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
 	bg := ui.Transparent
@@ -496,9 +502,12 @@ func popupItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
 	}
 	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
-		if icon != nil {
+		switch {
+		case spin:
+			ui.Spinner(c).Size(iconSize, iconSize)
+		case icon != nil:
 			ui.Icon(c, icon).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
-		} else {
+		default:
 			ui.Box(c).Width(14).Shrink(0)
 		}
 		ui.Text(c, label).FontSize(fsBody).Grow(1)
@@ -513,11 +522,20 @@ func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
 	g := v.git
 	m := L(c)
 	cur, _ := currentBranch(g.branches.list)
-	// 更新、删除的结果就在弹窗里看得到（忙碌行、传入数、分支消失），不关弹窗
-	if popupItem(c, iconFetch, m.BranchUpdateProject(), "") {
-		if cur.Upstream == "" {
+	// 更新、删除的结果就在弹窗里看得到（传入数、分支消失），不关弹窗。更新的转圈在这一行，不另插一行。
+	updating := g.updating(cur.Name)
+	cancel := ""
+	if updating && g.busyKind == gitUpdate && g.updateBranch == cur.Name && g.cancel != nil {
+		cancel = m.CommonCancel()
+	}
+	if popupRow(c, iconFetch, m.BranchUpdateProject(), cancel, updating) {
+		switch {
+		case cancel != "":
+			g.cancel()
+		case updating:
+		case cur.Upstream == "":
 			a.err = m.BranchNoUpstream()
-		} else {
+		default:
 			a.updateBranch(m, v, m.BranchUpdateProject(), cur)
 		}
 	}
@@ -824,8 +842,14 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 			a.branchPop = nil
 			a.openLog(w, branchRef(b), "")
 		}
-		if a.branchControls() && !b.Remote && b.Upstream != "" && !inOther && m.Item(L(c).BranchUpdate()).Icon(iconFetch).Chosen() {
-			a.updateBranch(L(c), v, L(c).BranchUpdateNamed(b.Name), b)
+		if a.branchControls() && !b.Remote && b.Upstream != "" && !inOther {
+			if act, cancel := branchUpdateItem(m, L(c), v.git, b); act {
+				if cancel {
+					v.git.cancel()
+				} else {
+					a.updateBranch(L(c), v, L(c).BranchUpdateNamed(b.Name), b)
+				}
+			}
 		}
 		if !b.Remote && m.Item(L(c).PushPreviewTitle()).Icon(iconPush).Chosen() {
 			a.branchPop = nil
@@ -901,11 +925,16 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		done()
 		a.openLog(w, branchRef(b), "")
 	}
-	if a.branchControls() && !b.Remote && b.Upstream != "" && !inOther && m.Item(lm.BranchUpdate()).Icon(iconFetch).Chosen() {
-		if b.Current {
-			a.updateBranch(lm, v, lm.BranchUpdate(), b)
-		} else {
-			a.updateBranch(lm, v, lm.BranchUpdateNamed(b.Name), b)
+	if a.branchControls() && !b.Remote && b.Upstream != "" && !inOther {
+		if act, cancel := branchUpdateItem(m, lm, v.git, b); act {
+			switch {
+			case cancel:
+				v.git.cancel()
+			case b.Current:
+				a.updateBranch(lm, v, lm.BranchUpdate(), b)
+			default:
+				a.updateBranch(lm, v, lm.BranchUpdateNamed(b.Name), b)
+			}
 		}
 	}
 	if !b.Remote && m.Item("Push…").Icon(iconPush).Chosen() {
@@ -927,6 +956,23 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 	}
 }
 
+// branchUpdateItem 是分支菜单里的「更新」。进行中时行首转圈、菜单不关；点正在跑的这一次是取消。
+func branchUpdateItem(m *popMenu, l locales.Messages, g *gitState, b gitx.Branch) (act, cancel bool) {
+	updating := g.updating(b.Name)
+	canCancel := updating && g.busyKind == gitUpdate && g.updateBranch == b.Name && g.cancel != nil
+	it := m.Item(l.BranchUpdate()).Icon(iconFetch).Spin(updating).Keep()
+	if canCancel {
+		it.Keys(l.CommonCancel())
+	}
+	if !it.Chosen() {
+		return false, false
+	}
+	if updating {
+		return canCancel, canCancel
+	}
+	return true, false
+}
+
 // updateBranch 用远端更新分支，做完提示拉到了几个提交。
 func (a *app) updateBranch(m locales.Messages, v *filesView, what string, b gitx.Branch) {
 	if a.typedFetch() {
@@ -939,20 +985,24 @@ func (a *app) updateBranch(m locales.Messages, v *filesView, what string, b gitx
 	g := v.git
 	run := func() {
 		var n int
-		a.gitDoKind(m, g, gitUpdate, what, func(ctx context.Context, root string) error {
-			before := gitx.Tip(ctx, root, "refs/heads/"+b.Name)
-			err := gitx.Update(ctx, root, b)
-			var left *gitx.AutostashLeft
-			if err == nil || errors.As(err, &left) {
-				n = gitx.Incoming(ctx, root, before, "refs/remotes/"+b.Upstream)
-			}
-			return err
-		}, func() {
-			if n == 0 {
-				a.notify(m.BranchUpToDate(b.Name), "", nil)
-			} else {
-				a.notify(m.BranchPulled(b.Name, n), "", nil)
-			}
+		a.gitStart(g, gitOp{
+			m: m, kind: gitUpdate, what: what, branch: b.Name,
+			fn: func(ctx context.Context, root string) error {
+				before := gitx.Tip(ctx, root, "refs/heads/"+b.Name)
+				err := gitx.Update(ctx, root, b)
+				var left *gitx.AutostashLeft
+				if err == nil || errors.As(err, &left) {
+					n = gitx.Incoming(ctx, root, before, "refs/remotes/"+b.Upstream)
+				}
+				return err
+			},
+			done: func() {
+				if n == 0 {
+					a.notify(m.BranchUpToDate(b.Name), "", nil)
+				} else {
+					a.notify(m.BranchPulled(b.Name, n), "", nil)
+				}
+			},
 		})
 	}
 	if w := a.workspace(v.wsID); b.Current && w != nil {

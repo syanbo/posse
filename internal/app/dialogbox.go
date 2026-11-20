@@ -27,10 +27,16 @@ func (b *dialogBox) reset() { b.dx, b.dy, b.ax, b.ay = 0, 0, 0, 0 }
 func (b *dialogBox) sized() bool { return b.w[b.mode] > 0 }
 
 // title 是对话框的标题行，按住拖动整个对话框。
-func (b *dialogBox) title(c *ui.Context, text string) {
-	row := ui.Row(c.Key("dialog-title")).AlignItems(ui.Center).Children(func() {
-		titleText(c, text, fsTitle)
+func (b *dialogBox) title(c *ui.Context, text string) { b.titleBar(c, text, nil) }
+
+// titleBar 同 title，标题右边可以再放关闭这类按钮。
+func (b *dialogBox) titleBar(c *ui.Context, text string, trailing func()) {
+	row := ui.Row(c.Key("dialog-title")).Gap(8).AlignItems(ui.Center).Children(func() {
+		titleText(c, text, fsTitle).Shrink(1)
 		ui.Spacer(c)
+		if trailing != nil {
+			trailing()
+		}
 	})
 	if dx, dy, held := row.Dragged(); held {
 		b.move(dx, dy)

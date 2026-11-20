@@ -368,6 +368,7 @@ type app struct {
 	// focusTerm 让下一帧把焦点交给终端：从文件栏拖文件进来后接着就能打字
 	focusTerm      bool
 	previews       map[string]*ui.Bitmap
+	hoverInfo      map[string]imageInfo      // 悬停预览下面的原图像素和文件大小，键和 previews 一样
 	iconEdit       iconEditor                // 更换项目图标的对话框
 	projIcons      map[string]projectIcon    // 项目自定义的图标，键是项目 ID
 	projIconCache  map[string]ui.ImageSource // 项目图标的图片，键是文件名

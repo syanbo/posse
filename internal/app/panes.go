@@ -79,6 +79,6 @@ func (a *app) dropPaneState(id string) {
 		a.linkCard = nil
 	}
 	if a.hoverTerm == id {
-		a.hoverImage, a.hoverTerm, a.previews = "", "", nil
+		a.hoverImage, a.hoverTerm, a.previews, a.hoverInfo = "", "", nil, nil
 	}
 }

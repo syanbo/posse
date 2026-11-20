@@ -1,6 +1,7 @@
 package app
 
 import (
+	"image"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -556,6 +557,7 @@ const (
 	hoverPreviewPx       = 2 * hoverPreviewMaxWidth // 2 倍屏下最宽时的像素
 	hoverPreviewMaxPx    = 2000                     // 高的上限：2 倍屏下 1000pt，长截图不至于解出几十 MB
 	hoverPreviewKeep     = 2                        // 最多留几张解码好的预览，换终端时全部放掉
+	hoverPreviewMeta     = 20                       // 图下面尺寸那一行：间距 4 加一行小字
 )
 
 // onHoverLink 是终端的悬停回调：持着终端的锁调用，只记下状态、在后台解码，不碰终端。
@@ -578,6 +580,7 @@ func (a *app) onHoverLink(v *termView, link string) {
 	a.previewLoading[path] = true
 	go func() {
 		img, err := media.FittedImage(path, hoverPreviewPx, hoverPreviewMaxPx)
+		info := imageFileInfo(path)
 		a.win.Update(func() {
 			delete(a.previewLoading, path)
 			if err != nil {
@@ -585,8 +588,15 @@ func (a *app) onHoverLink(v *termView, link string) {
 			}
 			if a.previews == nil || len(a.previews) >= hoverPreviewKeep {
 				a.previews = map[string]*ui.Bitmap{}
+				a.hoverInfo = map[string]imageInfo{}
 			}
 			a.previews[path] = ui.NewBitmap(img)
+			if info.w > 0 {
+				if a.hoverInfo == nil {
+					a.hoverInfo = map[string]imageInfo{}
+				}
+				a.hoverInfo[path] = info
+			}
 		})
 	}()
 }
@@ -604,10 +614,42 @@ func (a *app) hoverPreviewView(c *ui.Context, area ui.Element, termID string) {
 	}
 	b := area.Bounds()
 	iw, ih := bm.Size()
-	r := placeHoverPreview(b.W, b.H, x, y, float32(iw), float32(ih))
+	info := a.hoverInfo[a.hoverImage]
+	extra := float32(0)
+	if info.w > 0 {
+		extra = hoverPreviewMeta
+	}
+	r := placeHoverPreview(b.W, b.H, x, y, float32(iw), float32(ih), extra)
+	imgW := r.W - 2*hoverPreviewPad
 	floating(c, ui.Box(c).Absolute().Left(r.X).Top(r.Y).Padding(hoverPreviewPad)).Children(func() {
-		ui.Image(c, bm).Width(r.W - 2*hoverPreviewPad).Radius(rRow)
+		ui.Column(c).Gap(4).Width(imgW).Children(func() {
+			ui.Image(c, bm).Width(imgW).Radius(rRow)
+			if info.w > 0 {
+				ui.Text(c, imageMetaText(info)).FontSize(fsSmall).TextColor(c.Theme().TextMuted).SingleLine()
+			}
+		})
 	})
+}
+
+// imageFileInfo 读原图的像素和文件大小，不把整张图再解一遍。
+func imageFileInfo(path string) imageInfo {
+	var info imageInfo
+	st, err := os.Stat(path)
+	if err != nil {
+		return info
+	}
+	info.bytes = st.Size()
+	f, err := os.Open(path)
+	if err != nil {
+		return info
+	}
+	defer f.Close()
+	cfg, format, err := image.DecodeConfig(f)
+	if err != nil {
+		return info
+	}
+	info.w, info.h, info.format = cfg.Width, cfg.Height, format
+	return info
 }
 
 const hoverPreviewPad = 6
@@ -616,7 +658,7 @@ const hoverPreviewPad = 6
 // 指针下方、上方、右边、左边四处各按剩下的空间等比缩放，取图最大的一处；一样大时按这个顺序，横图照旧在上下。
 // 竖图放在左右能用满终端的高度。预览不能盖住指针：盖住了指针就不在链接上，预览会来回闪。
 // 最宽是终端宽的一半（360 到 800）；小图最多放大到原来的 360 宽，不再往上放大（按 2 倍屏算原图有多大）。
-func placeHoverPreview(bw, bh, x, y, iw, ih float32) ui.Rect {
+func placeHoverPreview(bw, bh, x, y, iw, ih, extra float32) ui.Rect {
 	const edge, below, above, side = 8, 20, 14, 12
 	pad := float32(2 * hoverPreviewPad)
 	maxW := min(max(bw/2, hoverPreviewMinWidth), hoverPreviewMaxWidth) - pad
@@ -624,19 +666,19 @@ func placeHoverPreview(bw, bh, x, y, iw, ih float32) ui.Rect {
 	if bw <= 0 || bh <= 0 {
 		// 还没排版出尺寸：照旧放在指针右下
 		w, h := fitSize(iw, ih, maxW, maxW*4)
-		return ui.Rect{X: x + side, Y: y + below, W: w + pad, H: h + pad}
+		return ui.Rect{X: x + side, Y: y + below, W: w + pad, H: h + pad + extra}
 	}
 	clamp := func(v, size, limit float32) float32 { return max(edge, min(v, limit-size-edge)) }
 	fullW, fullH := bw-2*edge-pad, bh-2*edge-pad
 	var best ui.Rect
 	var bestArea float32
 	try := func(availW, availH float32, at func(w, h float32) (float32, float32)) {
-		w, h := fitSize(iw, ih, availW, availH)
+		w, h := fitSize(iw, ih, availW, availH-extra)
 		if w <= 0 || h <= 0 || w*h <= bestArea {
 			return
 		}
 		bestArea = w * h
-		w, h = w+pad, h+pad
+		w, h = w+pad, h+pad+extra
 		px, py := at(w, h)
 		best = ui.Rect{X: px, Y: py, W: w, H: h}
 	}
@@ -646,8 +688,8 @@ func placeHoverPreview(bw, bh, x, y, iw, ih float32) ui.Rect {
 	try(min(maxW, x-side-edge-pad), fullH, func(w, h float32) (float32, float32) { return x - side - w, clamp(y-h/2, h, bh) })
 	if bestArea == 0 {
 		// 终端小到哪边都放不下：贴着左上角，至少看得见
-		w, h := fitSize(iw, ih, max(fullW, 40), max(fullH, 40))
-		return ui.Rect{X: edge, Y: edge, W: w + pad, H: h + pad}
+		w, h := fitSize(iw, ih, max(fullW, 40), max(fullH-extra, 40))
+		return ui.Rect{X: edge, Y: edge, W: w + pad, H: h + pad + extra}
 	}
 	return best
 }

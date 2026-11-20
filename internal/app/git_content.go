@@ -284,6 +284,9 @@ func (a *app) targetGitChanged(g *gitState, old *gitx.Status) {
 			}
 		case d.kind == docText && v.repoFor(d.path) == g && (headMoved || d.headFor != g.status.Commit):
 			a.loadTargetHead(v, d)
+			if headMoved && d.blame != nil {
+				a.reloadBlame(v, d)
+			}
 		}
 	}
 }

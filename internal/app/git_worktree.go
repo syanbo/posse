@@ -77,6 +77,7 @@ func (a *app) loadTargetWorktreeCompare(v *filesView, d *fileDoc) {
 				cd.changes[i] = f.FileChange
 			}
 			cd.loaded, cd.err, d.kind = true, "", docCompare
+			a.syncCompareFileDiff(v, cd)
 		})
 	}()
 }

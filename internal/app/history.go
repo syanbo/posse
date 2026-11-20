@@ -21,8 +21,9 @@ import (
 	"posse/locales"
 )
 
-// historyLimit 是列表和搜索最多取的会话数。
-const historyLimit = 200
+// historySearchLimit 是搜索最多取的会话数。列表不截断：侧栏只画看得到的行，
+// 一行只有标题、目录和时间，查询在出结果前已经扫过全部会话。
+const historySearchLimit = 200
 
 // historyBoardID 是侧栏里"历史"一项的 ID。
 const historyBoardID = "history"
@@ -246,7 +247,12 @@ func (r appRequest) fetchHistory(req int) {
 	if req != cur || !r.current() || r.client == nil {
 		return
 	}
-	params := map[string]any{"query": strings.TrimSpace(query), "agent": historyAgents[agentIdx], "limit": historyLimit}
+	query = strings.TrimSpace(query)
+	limit := 0 // 列表要全部会话，分组条数才和顶上的总计一致
+	if query != "" {
+		limit = historySearchLimit
+	}
+	params := map[string]any{"query": query, "agent": historyAgents[agentIdx], "limit": limit}
 	var res struct {
 		Sessions []history.Session `json:"sessions"`
 		Hits     []history.Hit     `json:"hits"`
@@ -727,9 +733,9 @@ func (a *app) historyTotals(c *ui.Context) {
 	count := m.HistorySessionCount(sessions)
 	if h.resQuery != "" {
 		count = m.HistoryMatchCount(sessions)
-		if sessions >= historyLimit {
-			// 搜索只取最相关的前 historyLimit 个
-			count = m.HistoryTopMatches(historyLimit)
+		if sessions >= historySearchLimit {
+			// 搜索只取最相关的前 historySearchLimit 个
+			count = m.HistoryTopMatches(historySearchLimit)
 		}
 	}
 	ui.Column(c).Padding(12, 20, 8, 20).Gap(8).Children(func() {
