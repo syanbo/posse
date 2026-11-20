@@ -372,18 +372,32 @@ func (s *ImageScanner) antigravityLine(raw []byte, offset int64) {
 	}
 }
 
+// agy 的工具结果是紧跟在调用后面的 GENERIC 记录，一次调几个工具时按顺序各占一步；
+// 结果记录没有调用 id，按步号对应。出错的结果 status 是 ERROR。
 func (s *UsageScanner) antigravityLine(raw []byte) {
 	var r antigravityRecord
-	if json.Unmarshal(raw, &r) != nil || r.Type != "PLANNER_RESPONSE" {
+	if json.Unmarshal(raw, &r) != nil {
+		return
+	}
+	if r.Type == "GENERIC" {
+		if r.Status == "ERROR" {
+			s.mcpResult(strconv.Itoa(r.Step), true)
+		}
+		return
+	}
+	if r.Type != "PLANNER_RESPONSE" {
 		return
 	}
 	s.at, _ = time.Parse(time.RFC3339Nano, r.Created)
-	for _, call := range r.ToolCalls {
+	for i, call := range r.ToolCalls {
 		args := antigravityArgs(call.Args)
 		var a struct {
 			Path        string
 			CommandLine string
-			Query       string `json:"query"`
+			Query       string          `json:"query"`
+			ServerName  string          // call_mcp_tool
+			ToolName    string          // call_mcp_tool
+			Arguments   json.RawMessage // call_mcp_tool
 		}
 		json.Unmarshal(args, &a)
 		switch call.Name {
@@ -393,13 +407,9 @@ func (s *UsageScanner) antigravityLine(raw []byte) {
 			s.command(a.CommandLine)
 		case "search_web":
 			s.addSearch(a.Query, call.Name)
-		default:
-			if strings.HasPrefix(call.Name, "mcp__") {
-				s.addMCP("", call.Name)
-				s.toolURL(args, mcpVia(call.Name))
-			} else {
-				s.webTool(call.Name, args)
-			}
+		case "call_mcp_tool":
+			s.mcpCall(strconv.Itoa(r.Step+1+i), a.ServerName, a.ToolName)
+			s.toolURL(a.Arguments, a.ServerName+"."+a.ToolName)
 		}
 	}
 }

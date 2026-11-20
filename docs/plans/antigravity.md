@@ -28,7 +28,7 @@
 
 truncated_fields 触发按 step_index、type、created_at 核验的完整日志回读。上下文仅能核实 input_tokens + cache_read_tokens，不猜模型窗口容量。图片与视频来自 media[].uri 和会话目录的实际产物。移到废纸篓只移动 brain/<UUID>；保留原生数据库，原生恢复可能重新生成日志。
 
-已观察的工具包括 read_file、run_command、edit_file、write_file、search_web、manage_task、swarm，args 的字段值还包含一层 JSON。技能统计识别 SKILL.md 读取，命令与网页搜索复用现有统计器。尚无真实 MCP 调用样本，兼容已有 mcp__ 命名规则，其余名称不猜服务归属。
+已观察的工具包括 read_file、run_command、edit_file、write_file、search_web、manage_task、swarm、call_mcp_tool，args 的字段值还包含一层 JSON（2026-11-20 用临时 stdio MCP 服务实测）。技能统计识别 SKILL.md 读取，命令与网页搜索复用现有统计器。MCP 调用是 `call_mcp_tool`，参数 `ServerName`、`ToolName`、`Arguments`（不是 `mcp__服务__工具`）；调用前 agy 先 `read_file` 读 `~/.gemini/antigravity-cli/mcp/<服务>/<工具>.json` 查工具说明（界面上的 Explored），不算调用。工具结果是紧跟调用的 GENERIC 记录，一次多个调用时按顺序各占一步、没有调用 id，按步号对应；出错时 status 为 ERROR，这次 MCP 调用不计次数、时间线标失败。CLI 没有自带的网页抓取工具（让它读网址时用 read_file 报错，再改用 search_web），网址只来自 search_web、命令和 MCP 参数。
 
 ## 技能与 MCP
 

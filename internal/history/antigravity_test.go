@@ -27,6 +27,47 @@ func antigravityFixture(t *testing.T, home string) string {
 	return path
 }
 
+// 行格式取自 agy 1.5.11 的真实会话：先读工具说明，再经 call_mcp_tool 调用；结果是紧跟的 GENERIC，出错时 status 为 ERROR。
+func TestAntigravityMCPUsage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "transcript.jsonl")
+	writeFile(t, path,
+		`{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-11-20T09:07:09Z","tool_calls":[{"name":"read_file","args":{"Path":"\"/Users/x/.gemini/antigravity-cli/mcp/droidmirror/device_list.json\""}},{"name":"read_file","args":{"Path":"\"/Users/x/.gemini/antigravity-cli/mcp/droidmirror/device_info.json\""}}]}`,
+		`{"step_index":2,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-11-20T09:07:10Z","content":"schema"}`,
+		`{"step_index":3,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-11-20T09:07:10Z","content":"schema"}`,
+		`{"step_index":4,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-11-20T09:07:10Z","tool_calls":[{"name":"call_mcp_tool","args":{"Arguments":"{}","ServerName":"\"droidmirror\"","ToolName":"\"device_list\""}},{"name":"call_mcp_tool","args":{"Arguments":"{\"url\":\"https://example.com/a\"}","ServerName":"\"droidmirror\"","ToolName":"\"device_info\""}}]}`,
+		`{"step_index":5,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-11-20T09:07:16Z","content":"devices"}`,
+		`{"step_index":6,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-11-20T09:07:16Z","content":"info"}`,
+		`{"step_index":7,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-11-20T09:07:16Z","tool_calls":[{"name":"call_mcp_tool","args":{"Arguments":"{}","ServerName":"\"droidmirror\"","ToolName":"\"screen_act\""}}]}`,
+		`{"step_index":8,"source":"MODEL","type":"GENERIC","status":"ERROR","error":"probe failure","created_at":"2026-11-20T09:07:20Z","content":"Encountered error in step execution: probe failure"}`,
+	)
+	u, err := NewUsageScanner("antigravity", path).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []MCPUsage{{Server: "droidmirror", Count: 2, Tools: []UsageItem{{Name: "device_info", Count: 1}, {Name: "device_list", Count: 1}}}}
+	if !reflect.DeepEqual(u.MCP, want) {
+		t.Fatalf("mcp: %+v", u.MCP)
+	}
+	var calls, failed int
+	for _, e := range u.Events {
+		if e.Server != "" {
+			calls++
+			if e.Failed {
+				failed++
+				if e.Tool != "screen_act" {
+					t.Fatalf("wrong call marked failed: %+v", e)
+				}
+			}
+		}
+	}
+	if calls != 3 || failed != 1 || len(u.Skills) != 0 {
+		t.Fatalf("events: %+v skills: %+v", u.Events, u.Skills)
+	}
+	if len(u.Web) != 1 || u.Web[0].Host != "example.com" {
+		t.Fatalf("web: %+v", u.Web)
+	}
+}
+
 func TestAntigravityHistory(t *testing.T) {
 	home := t.TempDir()
 	path := antigravityFixture(t, home)

@@ -78,6 +78,8 @@ const (
 //   - codex：用户点名的技能注入成 "<skill><name>…</name>"；MCP 调用是 McpToolCall 条目，同一次调用会记多遍，按 id 去重；
 //     执行的命令是 CommandExecution 条目，parsed_cmd 标出了读的文件。
 //   - grok：MCP 经 use_tool 调用，tool_name 是 <服务>__<工具>。
+//   - antigravity：MCP 经 call_mcp_tool 调用，参数 ServerName、ToolName、Arguments；调用前先 read_file
+//     ~/.gemini/antigravity-cli/mcp/<服务>/<工具>.json 查工具说明，不算调用。没有自带的网页抓取工具，只有 search_web。
 //   - cursor：MCP 经 CallDynamicTool 调用，namespace 是服务名（插件带的服务是 plugin-<插件>-<服务>），
 //     namespace 为 cursor 的是它自带的工具（WebSearch 等），不算 MCP。
 //   - 执行的命令：claude 的 Bash、codex 的 exec_command/shell（新版另有 CommandExecution，和前者同一个 id）、
@@ -91,7 +93,8 @@ const (
 //     codex 的会话带着这次可用的技能清单（developer 消息里的 Available skills，路径写成 r1/<名字>/SKILL.md，
 //     r1 是前面列的根目录），有清单时读的文件要对得上清单里的一条才算，名字也取清单里的。
 //   - MCP 调用出错或被拒不计入次数，时间线上标成失败：claude 看 tool_result 的 is_error，codex 看 McpToolCall
-//     的 status，grok 看 tool_result 以 "Failed to call" 开头；cursor 的会话不记结果，认不出。
+//     的 status，grok 看 tool_result 以 "Failed to call" 开头，antigravity 看对应那步 GENERIC 的 status；
+//     cursor 的会话不记结果，认不出。
 //     读 MCP 资源（claude 的 ListMcpResourcesTool、ReadMcpResourceTool，codex 的 list/read_mcp_resource）也算那个服务；
 //     codex 读资源的结果认不出出错，照算。
 type UsageScanner struct {
@@ -180,7 +183,7 @@ var usageMarkers = [][]byte{
 	[]byte(`"shell"`), []byte("CommandExecution"),
 	[]byte("WebFetch"), []byte("WebSearch"), []byte("web_search_call"), []byte("backend_tool_call"),
 	[]byte(`"web"`), []byte("web.search"), // codex 的 web.run（namespace 是 web）和 Extension 条目
-	[]byte(`"is_error":true`), []byte("Failed to call"), // claude、grok 的工具出错结果
+	[]byte(`"is_error":true`), []byte("Failed to call"), []byte(`"status":"ERROR"`), // claude、grok、antigravity 的工具出错结果
 	[]byte("McpResource"), []byte("mcp_resource"), // 读 MCP 资源
 }
 
