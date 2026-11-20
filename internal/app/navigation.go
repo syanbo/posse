@@ -107,12 +107,12 @@ func (a *app) navigationItems(c *ui.Context, local, target *app) {
 			for _, id := range a.navigationOrder() {
 				if !secondary && (id == skillsBoardID || id == mobileBoardID) {
 					secondary = true
-					hline(c).Margin(4, 8)
+					hline(c).AlignSelf(ui.Stretch).Margin(4, 0)
 				}
 				var item ui.Element
 				switch id {
 				case workspacesBoardID:
-					item = navigationButton(c, id, iconTerminal, m.SidebarWorkspaces(), a.workspaceModule(), nil)
+					item = navigationButton(c, id, iconTerminal, m.SidebarWorkspaces(), a.workspaceModule(), target.workspacesBadge(c))
 					if item.Clicked() {
 						a.openWorkspaces()
 					}
@@ -147,6 +147,23 @@ func (a *app) navigationItems(c *ui.Context, local, target *app) {
 	if navigationButton(c, settingsBoardID, iconSettings, a.withKey(a.moduleLabel(c, settingsBoardID, m.SettingsTitle()), "settings"), a.selected == settingsBoardID, nil).Clicked() {
 		a.openSettings()
 	}
+}
+
+// workspacesBadge 汇总聊天以外所有工作区的会话状态，聊天磁贴自己显示聊天的。
+func (a *app) workspacesBadge(c *ui.Context) func() {
+	status := ""
+	for _, w := range a.workspaces {
+		if a.isChat(w.ID) {
+			continue
+		}
+		if _, s := a.terminalSummary(w.Terminals); statusRank(s) > statusRank(status) {
+			status = s
+		}
+	}
+	if status == "" {
+		return nil
+	}
+	return func() { statusGlyph(c, status, smallIcon()) }
 }
 
 func navigationButton(c *ui.Context, key string, glyph *ui.SVG, label string, selected bool, badge func()) ui.Element {
@@ -199,9 +216,10 @@ func (a *app) sidebarNotices(c *ui.Context) {
 	a.errorBar(c)
 }
 
-// moduleHeader 是讨论、任务、历史这几个模块侧栏顶上的标题行，右边放这个模块的操作。
-func moduleHeader(c *ui.Context, title string, actions func()) {
-	ui.Row(c).Padding(12, iconBarPad(), 8, trafficLightX).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
+// moduleHeader 是工作区、聊天、讨论、任务、历史这几个模块侧栏顶上的标题行，右边放这个模块的操作。
+// 操作按钮有 buttonBox 和 compactBox 两种大小，行高按大的定，切换模块时标题和下面的列表不跳。
+func moduleHeader(c *ui.Context, title string, actions func()) ui.Element {
+	return ui.Row(c).MinHeight(buttonBox()+20).Padding(12, iconBarPad(), 8, trafficLightX).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
 		titleText(c, title, fsTitle).MaxLines(1).Shrink(1).MinWidth(0)
 		ui.Spacer(c)
 		actions()

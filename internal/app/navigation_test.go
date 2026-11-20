@@ -134,6 +134,10 @@ func TestPreviewNavigation(t *testing.T) {
 		narrow := previewApp(t)
 		previewDiscussion(narrow)
 		savePNG(t, newPreviewTesterSize(narrow, dark, 900, 560), "navigation-narrow-"+suffix+".png")
+		chat := previewApp(t)
+		chat.chatDir = chat.workspaces[0].Path
+		chat.selected = chat.workspaces[0].ID
+		savePNG(t, newPreviewTester(chat, dark), "navigation-chat-"+suffix+".png")
 	}
 }
 

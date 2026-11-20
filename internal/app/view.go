@@ -543,11 +543,11 @@ func (a *app) sidebar(c *ui.Context) {
 		return
 	}
 	if a.isChat(a.selected) {
+		a.chatHeader(c)
 		nav := ui.Scroll(c).Grow(1).MinHeight(0).Focusable().Label(L(c).ChatTitle())
 		nav.Children(func() {
-			ui.Column(c).Padding(6, navEnd, 12, trafficLightX-navPad).Children(func() {
+			ui.Column(c).Padding(0, navEnd, 12, trafficLightX-navPad).Children(func() {
 				if w := a.chatWorkspace(); w != nil {
-					a.sidebarItem(c, *w, L(c).ChatTitle(), false, false, nil)
 					a.sessionRows(c, *w, sidebarSessions(w.Terminals), nil)
 				}
 			})
@@ -555,13 +555,11 @@ func (a *app) sidebar(c *ui.Context) {
 		a.sidebarKeys(nav)
 		return
 	}
-	if len(a.projects) > 0 {
-		a.sidebarGroupSwitch(c)
-	}
+	a.sidebarGroupSwitch(c)
 	nav := ui.Scroll(c).Grow(1).Focusable().Label(L(c).SidebarWorkspaces())
 	a.projectDrop(c, nav)
 	nav.Children(func() {
-		ui.Column(c).Padding(6, navEnd, 12, trafficLightX-navPad).Gap(2).Children(func() {
+		ui.Column(c).Padding(0, navEnd, 12, trafficLightX-navPad).Gap(2).Children(func() {
 			if a.state.SidebarGroup == sidebarByStatus {
 				a.runningList(c)
 				return

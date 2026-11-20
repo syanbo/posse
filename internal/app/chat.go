@@ -87,6 +87,24 @@ func (a *app) chatSidebarItem(c *ui.Context) ui.Element {
 	return tile
 }
 
+// chatHeader 是聊天侧栏的标题行：右边的加号用上一次聊天的 agent 再开一个，右键是聊天工作区的菜单。
+func (a *app) chatHeader(c *ui.Context) {
+	l := L(c)
+	w := a.chatWorkspace()
+	header := moduleHeader(c, a.moduleLabel(c, chatBoardID, l.ChatTitle()), func() {
+		last := ""
+		if w != nil {
+			last = lastChatAgent(w)
+		}
+		if iconButton(c, iconPlus, a.withKey(l.KeysNewChatLabel(), "newChat")).Disabled(last == "").Clicked() && last != "" {
+			a.openChat(l, true)
+		}
+	})
+	if w != nil {
+		contextMenu(c, header, func(m *popMenu) { a.workspaceMenu(c, m, *w) })
+	}
+}
+
 // openChat 切到聊天工作区（停在上次看的标签），fresh 时再开一个新聊天：沿用最近一次聊天的 agent，
 // 还没聊过时只切过去，空工作区里有选 agent 的卡片。聊天目录还不是项目时先建目录、加成项目。
 func (a *app) openChat(l locales.Messages, fresh bool) {
