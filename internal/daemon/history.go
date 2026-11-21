@@ -37,6 +37,11 @@ type historyState struct {
 	lastRun     time.Time
 	lastErr     string
 	revision    uint64                       // 删除使进行中的旧索引失效，不能把旧轮完成当作已刷新。
+	gen         uint64                       // 一轮索引做完就加一，历史页靠它刷新，不必每秒重查。
+	again       bool                         // 这一轮还在跑时目录又有变化，做完再来一轮。
+	pageUntil   time.Time                    // 历史页还开着的截止时间；过了就停掉目录监视。
+	watchStop   *historyWatch                // 非空表示正在监视会话目录。
+	watchRoots  func() []string              // 测试替换要监视的目录，免得盯上用户本机的会话。
 	moveToTrash func(string) (string, error) // 测试替换为隔离回收目录。
 	// cancel 在常驻进程退出时停掉进行中的更新
 	ctx    context.Context
@@ -64,12 +69,25 @@ func (d *Daemon) closeHistory() {
 	h := &d.history
 	h.mu.Lock()
 	running := h.running
+	if h.watchStop != nil {
+		h.watchStop.cancel()
+	}
 	if h.cancel != nil {
 		h.cancel()
 	}
 	h.mu.Unlock()
 	if running != nil {
 		<-running
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		h.mu.Lock()
+		on := h.watchStop != nil
+		h.mu.Unlock()
+		if !on {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -91,7 +109,10 @@ func (d *Daemon) refreshHistory(ctx context.Context, force bool, wait time.Durat
 		done = make(chan struct{})
 		h.running = done
 		h.progress = history.Progress{}
+		h.again = false
 		go d.runHistoryUpdate(h.ctx, done, h.revision)
+	} else if done != nil && force {
+		h.again = true
 	}
 	h.mu.Unlock()
 	if done == nil {
@@ -121,7 +142,11 @@ func (d *Daemon) runHistoryUpdate(ctx context.Context, done chan struct{}, revis
 	h.lastRun = time.Now()
 	if h.revision != revision {
 		h.lastRun = time.Time{}
+	} else {
+		h.gen++
 	}
+	again := h.again
+	h.again = false
 	h.lastErr = ""
 	if err != nil {
 		h.lastErr = err.Error()
@@ -129,6 +154,9 @@ func (d *Daemon) runHistoryUpdate(ctx context.Context, done chan struct{}, revis
 	}
 	h.mu.Unlock()
 	close(done)
+	if again && ctx.Err() == nil {
+		d.refreshHistory(context.Background(), true, 0)
+	}
 }
 
 // updateHistory 默认起子进程更新索引；测试里 cfg.HistoryRoots 非空时在进程内更新。

@@ -130,6 +130,7 @@ type daemonStatus struct {
 	Pid          int               `json:"pid"`
 	StartedAt    time.Time         `json:"startedAt"`
 	GitTraceSeq  int64             `json:"gitTraceSeq"`  // 终端 git 命令记录的最新序号，旧常驻进程没有时为 0
+	HistoryGen   uint64            `json:"historyGen"`   // 会话索引做完的次数，旧常驻进程没有时为 0
 	MobileOnline []string          `json:"mobileOnline"` // 现在连着的手机，旧常驻进程没有这个字段
 	DeskViewer   string            `json:"deskViewer"`   // 正在看桌面的手机
 	DeskMissing  []string          `json:"deskMissing"`  // 看桌面缺的授权：screen、accessibility
@@ -607,13 +608,23 @@ func (a *app) windowShown() bool {
 // statusParams 是轮询 daemon.status 的参数：带上终端在用的配色，常驻进程换到所有终端上，
 // 新终端也按它起（见 daemon 的 windowColors）；窗口还没画过时不带，免得先报错一套
 func (a *app) statusParams() any {
+	a.history.mu.Lock()
+	open := a.history.visible
+	a.history.mu.Unlock()
+	p := map[string]any{}
+	if open {
+		p["history"] = true
+	}
 	switch a.shade.Load() {
 	case 1:
-		return map[string]any{"colors": windowColors(false)}
+		p["colors"] = windowColors(false)
 	case 2:
-		return map[string]any{"colors": windowColors(true)}
+		p["colors"] = windowColors(true)
 	}
-	return nil
+	if len(p) == 0 {
+		return nil
+	}
+	return p
 }
 
 // poll 定期从常驻进程拉取项目、工作区和终端状态；常驻进程不在时拉起它。
@@ -727,6 +738,11 @@ func (a *app) refreshRequest(q appRequest) {
 		// 带上终端在用的配色：常驻进程换到所有终端上，新终端也按它起（见 daemon 的 windowColors）
 		err = q.invoke(ctx, "daemon.status", a.statusParams(), &st)
 		statusOK = err == nil
+		if statusOK {
+			a.history.mu.Lock()
+			a.history.indexGen = st.HistoryGen
+			a.history.mu.Unlock()
+		}
 	}
 	if err == nil {
 		err = q.invoke(ctx, "workspace.list", nil, &r.workspaces)

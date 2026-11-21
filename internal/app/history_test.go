@@ -200,6 +200,46 @@ func TestFetchHistoryErrors(t *testing.T) {
 	}
 }
 
+// 索引做完（次数变了）马上刷新，不等 15 秒；同一次数不重复请求。
+func TestHistoryTickFollowsIndexGen(t *testing.T) {
+	var calls atomic.Int32
+	_, c := startFakeDaemon(t, map[string]rpc.Handler{"history.list": func(context.Context, json.RawMessage) (any, error) {
+		calls.Add(1)
+		return map[string]any{}, nil
+	}})
+	a := &app{c: c}
+	h := &a.history
+	h.mu.Lock()
+	h.visible = true
+	h.fetched = time.Now()
+	h.indexGen, h.appliedGen = 2, 1
+	h.mu.Unlock()
+	a.historyTick()
+	for calls.Load() == 0 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	a.runPending()
+	a.historyTick()
+	time.Sleep(30 * time.Millisecond)
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("%d list requests", n)
+	}
+}
+
+func TestStatusParamsReportsHistoryPage(t *testing.T) {
+	a := &app{}
+	if a.statusParams() != nil {
+		t.Fatal("history page is closed")
+	}
+	a.history.mu.Lock()
+	a.history.visible = true
+	a.history.mu.Unlock()
+	p, _ := a.statusParams().(map[string]any)
+	if p["history"] != true {
+		t.Fatalf("params %v", p)
+	}
+}
+
 // 列表不截断，搜索仍只取最相关的一批。分组条数才和顶上的总会话数一致。
 func TestHistoryListUnlimited(t *testing.T) {
 	var got struct {

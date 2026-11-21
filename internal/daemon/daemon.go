@@ -706,6 +706,8 @@ type statusResult struct {
 	Usage       *usageStatus `json:"usage,omitempty"`
 	// GitTraceSeq 是终端 git 命令记录的最新序号，界面看到它变了再取（git.trace）
 	GitTraceSeq int64 `json:"gitTraceSeq,omitempty"`
+	// HistoryGen 是会话索引做完的次数。历史页开着时看到它变了再刷新；旧窗口不认识这个字段。
+	HistoryGen uint64 `json:"historyGen,omitempty"`
 	// MobileOnline 是现在连着的手机的名字，界面在侧栏「手机」上标出来
 	MobileOnline []string `json:"mobileOnline,omitempty"`
 	// DeskViewer 是正在看桌面的手机，界面在手机页写出来并给「停止」（desk.stop）
@@ -720,10 +722,17 @@ type statusResult struct {
 func (d *Daemon) status(ctx context.Context, raw json.RawMessage) (any, error) {
 	// 窗口的轮询带着它的终端配色（见 windowColors）；CLI 不带
 	var p struct {
-		Colors *host.Colors `json:"colors"`
+		Colors  *host.Colors `json:"colors"`
+		History bool         `json:"history"`
 	}
-	if rpc.Decode(raw, &p) == nil && p.Colors != nil {
-		d.desktopWindowReported(ctx, *p.Colors)
+	if rpc.Decode(raw, &p) == nil {
+		if p.Colors != nil {
+			d.desktopWindowReported(ctx, *p.Colors)
+		}
+		// 历史页开着才监视会话目录。旧窗口不带这个字段，索引仍按查询时的 15 秒。
+		if p.History {
+			d.noteHistoryPage()
+		}
 	}
 	d.mu.Lock()
 	total, running := len(d.terms), 0
@@ -744,6 +753,7 @@ func (d *Daemon) status(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	r.Usage = d.usageSnapshot(!isDesktopRequest(ctx))
 	r.GitTraceSeq = d.gitTrace.latest()
+	r.HistoryGen = d.historyGeneration()
 	if d.mobile != nil {
 		for _, dv := range d.mobile.Devices() {
 			if dv.Online {

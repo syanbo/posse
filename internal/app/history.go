@@ -155,6 +155,9 @@ type historyView struct {
 	fetched time.Time
 	// inflight 是正在等的列表请求数：定时刷新只在没有在途请求时发，慢的时候不一秒叠一个
 	inflight int
+	// indexGen 是常驻进程索引做完的次数，appliedGen 是列表已经按它刷新过的次数。
+	indexGen   uint64
+	appliedGen uint64
 }
 
 // setSessions 换上新的会话列表，顺便分好组：分组要比较日期或目录，不放在每帧里做。
@@ -328,22 +331,29 @@ func (r appRequest) fetchHistory(req int) {
 	})
 }
 
-// historyTick 由轮询协程调用：历史页开着时定期刷新，常驻进程借此做增量索引。
+// historyTick 由轮询协程调用。历史页开着时，索引做完（indexGen 变了）就刷新；
+// 15 秒仍刷新一次，目录监视漏了事件时列表还能跟上。
 func (a *app) historyTick() {
 	h := &a.history
 	h.mu.Lock()
-	due := h.visible && h.inflight == 0 && time.Since(h.fetched) > 15*time.Second
+	genChanged := h.indexGen != 0 && h.indexGen != h.appliedGen
+	due := h.visible && h.inflight == 0 && (time.Since(h.fetched) > 15*time.Second || genChanged)
 	req := h.req
 	if due {
+		if genChanged {
+			h.appliedGen = h.indexGen
+		}
 		// 轮询协程不碰界面状态，沿用上次的查询条件
 		h.req++
 		req = h.req
 	}
 	h.mu.Unlock()
-	if due {
-		r := a.request()
-		go r.fetchHistory(req)
+	if !due {
+		return
 	}
+	r := a.request()
+	go r.fetchHistory(req)
+	r.update(func() { a.reloadOpenDetail() })
 }
 
 // historyGroupSwitch 选会话列表按时间还是按文件夹分组，记在 ui.json。
@@ -422,6 +432,40 @@ func (a *app) selectSession(sess history.Session, seq int) {
 			}
 			h.detail.closeImages()
 			d.request, d.imageReq = r, req
+			h.detail = &d
+		})
+	}()
+}
+
+// reloadOpenDetail 在索引更新后重读打开着的会话，展开状态和滚动位置留着。
+func (a *app) reloadOpenDetail() {
+	h := &a.history
+	if h.detail == nil || h.sel == "" {
+		return
+	}
+	sess := h.detail.Session
+	key := h.sel
+	h.detailReq++
+	req, r := h.detailReq, a.request()
+	go func() {
+		var d historyDetail
+		ctx, cancel := context.WithTimeout(a.windowContext(), 30*time.Second)
+		err := r.invoke(ctx, "history.show", map[string]any{"session": sess.ID, "path": sess.Path, "context": true}, &d)
+		cancel()
+		if err == nil && d.Context == nil && !r.client.Remote {
+			value, _ := history.ReadContext(d.Session.Agent, d.Session.Path, d.Session.Model)
+			d.Context = &value
+		}
+		r.update(func() {
+			if h.sel != key || h.detailReq != req || h.detail == nil {
+				return
+			}
+			if err != nil {
+				return
+			}
+			d.opened, d.openedV = h.detail.opened, h.detail.openedV
+			d.request, d.imageReq = r, req
+			h.detail.closeImages()
 			h.detail = &d
 		})
 	}()
