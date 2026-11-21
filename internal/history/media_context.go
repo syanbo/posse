@@ -37,7 +37,7 @@ func openMediaFile(path string) (*os.File, error) {
 }
 
 // 新接口保留增量偏移，但不让单条图片记录或扫描元数据无限增长。
-func mediaLines(ctx context.Context, f *os.File, fn func([]byte, int64) error) (int64, []byte, error) {
+func mediaLines(ctx context.Context, f io.Reader, fn func([]byte, int64) error) (int64, []byte, error) {
 	br := bufio.NewReaderSize(f, 64<<10)
 	var n int64
 	var tail, line []byte
@@ -83,16 +83,16 @@ func (s *ImageScanner) ScanContext(ctx context.Context) ([]ToolImage, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	f, err := openMediaFile(s.path)
+	stamp, zst := zstStampOf(s.path)
+	if zst && stamp == s.zst {
+		return s.images, nil
+	}
+	f, size, err := openScanFile(s.path, openMediaFile)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if fi.Size() < s.offset || !tailMatches(f, s.offset, s.tail) {
+	if size < s.offset || !tailMatches(f, s.offset, s.tail) {
 		s.offset, s.tail, s.tools, s.last, s.images = 0, nil, map[string]toolRef{}, nil, nil
 	}
 	if _, err := f.Seek(s.offset, io.SeekStart); err != nil {
@@ -141,6 +141,9 @@ func (s *ImageScanner) ScanContext(ctx context.Context) ([]ToolImage, error) {
 	if n > 0 {
 		s.tail = tail
 	}
+	if zst {
+		s.zst = stamp
+	}
 	return s.images, nil
 }
 
@@ -148,16 +151,16 @@ func (s *VideoScanner) ScanContext(ctx context.Context) ([]ToolVideo, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	f, err := openMediaFile(s.path)
+	stamp, zst := zstStampOf(s.path)
+	if zst && stamp == s.zst {
+		return s.videos, nil
+	}
+	f, size, err := openScanFile(s.path, openMediaFile)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if fi.Size() < s.offset || !tailMatches(f, s.offset, s.tail) {
+	if size < s.offset || !tailMatches(f, s.offset, s.tail) {
 		s.offset, s.tail, s.videos, s.seen = 0, nil, nil, map[string]int{}
 	}
 	if _, err := f.Seek(s.offset, io.SeekStart); err != nil {
@@ -191,6 +194,9 @@ func (s *VideoScanner) ScanContext(ctx context.Context) ([]ToolVideo, error) {
 	if n > 0 {
 		s.tail = tail
 	}
+	if zst {
+		s.zst = stamp
+	}
 	return s.videos, nil
 }
 
@@ -204,14 +210,19 @@ func ReadToolImageContext(ctx context.Context, path string, img ToolImage, maxBy
 	if img.OnDisk {
 		path = img.Path
 	}
-	f, err := openMediaFile(path)
+	if img.OnDisk {
+		f, err := openMediaFile(path)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		return ReadMediaBytes(ctx, f, maxBytes)
+	}
+	f, _, err := openScanFile(path, openMediaFile)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	if img.OnDisk {
-		return ReadMediaBytes(ctx, f, maxBytes)
-	}
 	if _, err := f.Seek(img.Offset, io.SeekStart); err != nil {
 		return nil, err
 	}

@@ -40,7 +40,8 @@ type ImageScanner struct {
 	agent  string
 	path   string
 	offset int64
-	tail   []byte             // offset 前的最后几个字节，用来发现文件被改写
+	tail   []byte // offset 前的最后几个字节，用来发现文件被改写
+	zst    zstStamp
 	tools  map[string]toolRef // 工具调用的 ID → 工具名和读的文件
 	last   *toolRef           // grok：上一行是工具结果时是它的工具
 	images []ToolImage
@@ -67,16 +68,16 @@ var imageMarkers = map[string][][]byte{
 // 文件变短，或 offset 前的字节和上次不一样（grok 压缩上下文时整个重写会话文件，
 // 不一定变短），说明被重写了，记下的偏移都作废，从头再读。
 func (s *ImageScanner) Scan() ([]ToolImage, error) {
-	f, err := os.Open(s.path)
+	stamp, zst := zstStampOf(s.path)
+	if zst && stamp == s.zst {
+		return s.images, nil
+	}
+	f, size, err := openScanFile(s.path, os.Open)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if fi.Size() < s.offset || !tailMatches(f, s.offset, s.tail) {
+	if size < s.offset || !tailMatches(f, s.offset, s.tail) {
 		s.offset, s.tail, s.tools, s.last, s.images = 0, nil, map[string]toolRef{}, nil, nil
 	}
 	if _, err := f.Seek(s.offset, io.SeekStart); err != nil {
@@ -103,6 +104,9 @@ func (s *ImageScanner) Scan() ([]ToolImage, error) {
 	s.offset += n
 	if n > 0 {
 		s.tail = tail
+	}
+	if err == nil && zst {
+		s.zst = stamp
 	}
 	return s.images, err
 }
@@ -437,7 +441,7 @@ func ReadToolImage(path string, img ToolImage) ([]byte, error) {
 	if img.OnDisk {
 		return os.ReadFile(img.Path)
 	}
-	f, err := os.Open(path)
+	f, _, err := openScanFile(path, os.Open)
 	if err != nil {
 		return nil, err
 	}

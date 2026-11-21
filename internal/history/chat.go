@@ -59,6 +59,11 @@ type ChatPage struct {
 // ReadChatTail 读会话文件里 beforeOffset 之前的最后 limit 条消息。
 // beforeOffset <= 0 表示从文件末尾开始。path 为空时按 agent 和 sessionID 找文件。
 func ReadChatTail(agent, sessionID, path string, limit int, beforeOffset int64) (ChatPage, error) {
+	if agent == "cursor" {
+		if db, id, ok := cursorIDESource(path); ok {
+			return readCursorIDEChat(db, id, limit, beforeOffset)
+		}
+	}
 	path, err := chatPath(agent, sessionID, path)
 	if err != nil {
 		return ChatPage{}, err
@@ -69,30 +74,16 @@ func ReadChatTail(agent, sessionID, path string, limit int, beforeOffset int64) 
 	if agent == "grok" {
 		return readGrokTail(path, limit, beforeOffset)
 	}
-	var src io.ReaderAt
-	var size int64
-	var paged bool
-	if strings.HasSuffix(path, ".jsonl.zst") {
-		// 压过的 rollout 不能按字节往回读，整份解开；偏移按解开后的位置算，翻页前后一致。
-		body, err := readAllTranscript(path)
-		if err != nil {
-			return ChatPage{}, err
-		}
-		src, size = bytes.NewReader(body), int64(len(body))
-		paged = agent == "codex" && bytes.Contains(body[:min(len(body), 32<<10)], []byte(`"paginated"`))
-	} else {
-		f, err := os.Open(path)
-		if err != nil {
-			return ChatPage{}, ErrChatNotFound
-		}
-		defer f.Close()
-		fi, err := f.Stat()
-		if err != nil {
-			return ChatPage{}, err
-		}
-		src, size = f, fi.Size()
-		paged = agent == "codex" && codexPaginated(path)
+	// 压过的 rollout 整份解开再往回读，偏移按解开后的位置算，翻页前后一致。
+	src, size, err := openScanFile(path, os.Open)
+	if errors.Is(err, errZstTooLarge) {
+		return ChatPage{}, err
 	}
+	if err != nil {
+		return ChatPage{}, ErrChatNotFound
+	}
+	defer src.Close()
+	paged := agent == "codex" && codexPaginated(src)
 	end := beforeOffset
 	if end <= 0 || end > size {
 		end = size
@@ -129,7 +120,7 @@ func ReadChatNew(agent, path string, from int64) (msgs []ChatMessage, next int64
 	if err != nil {
 		return nil, from, err
 	}
-	if strings.HasSuffix(path, ".jsonl.zst") {
+	if isZst(path) {
 		// 压过的 rollout 不再追加；整份内容由 ReadChatTail 解开读，这里只把位置推到文件尾。
 		return nil, fi.Size(), nil
 	}
@@ -143,7 +134,7 @@ func ReadChatNew(agent, path string, from int64) (msgs []ChatMessage, next int64
 	if err != nil {
 		return nil, from, err
 	}
-	paged := agent == "codex" && codexPaginated(path)
+	paged := agent == "codex" && codexPaginated(f)
 	full := &antigravityFull{path: path}
 	complete := b
 	next = from + int64(len(b))
@@ -196,23 +187,10 @@ func chatPath(agent, sessionID, path string) (string, error) {
 	return path, nil
 }
 
-func readAllTranscript(path string) ([]byte, error) {
-	r, err := openTranscript(path)
-	if err != nil {
-		return nil, ErrChatNotFound
-	}
-	defer r.Close()
-	return io.ReadAll(r)
-}
-
-func codexPaginated(path string) bool {
-	f, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	defer f.Close()
+// codexPaginated 看文件开头的 session_meta 是不是新格式。
+func codexPaginated(r io.ReaderAt) bool {
 	buf := make([]byte, 32<<10)
-	n, _ := f.Read(buf)
+	n, _ := r.ReadAt(buf, 0)
 	return bytes.Contains(buf[:n], []byte(`"paginated"`))
 }
 

@@ -350,6 +350,69 @@ func openTranscript(path string) (io.ReadCloser, error) {
 	return &zstdReadCloser{f: f, r: dec}, nil
 }
 
+// maxZstBody 是整份解开一个压缩会话文件的上限，防止异常文件占满内存。
+const maxZstBody = 1 << 30
+
+var errZstTooLarge = errors.New("compressed session file is too large to read")
+
+func isZst(path string) bool { return strings.HasSuffix(path, ".jsonl.zst") }
+
+// scanFile 是按偏移读的会话内容。Codex 压过的 .jsonl.zst 整份解开放在内存里，偏移按解开后的位置算；
+// 压缩文件不再追加，接着上次的偏移读和普通文件一样。
+type scanFile interface {
+	io.ReadSeeker
+	io.ReaderAt
+	io.Closer
+}
+
+type memFile struct{ *bytes.Reader }
+
+func (memFile) Close() error { return nil }
+
+// openScanFile 用 open 打开 path，返回内容和长度。普通文件原样交回。
+func openScanFile(path string, open func(string) (*os.File, error)) (scanFile, int64, error) {
+	f, err := open(path)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !isZst(path) {
+		fi, err := f.Stat()
+		if err != nil {
+			f.Close()
+			return nil, 0, err
+		}
+		return f, fi.Size(), nil
+	}
+	defer f.Close()
+	dec, err := zstd.NewReader(f, zstd.WithDecoderConcurrency(1))
+	if err != nil {
+		return nil, 0, err
+	}
+	defer dec.Close()
+	body, err := io.ReadAll(io.LimitReader(dec, maxZstBody+1))
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(body) > maxZstBody {
+		return nil, 0, errZstTooLarge
+	}
+	return memFile{bytes.NewReader(body)}, int64(len(body)), nil
+}
+
+// zstStamp 是压缩会话文件的大小和修改时间。扫描器记下上次扫完时的值，没变就直接用上次的结果，不再解开。
+type zstStamp struct{ size, mtime int64 }
+
+func zstStampOf(path string) (zstStamp, bool) {
+	if !isZst(path) {
+		return zstStamp{}, false
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return zstStamp{}, false
+	}
+	return zstStamp{fi.Size(), fi.ModTime().UnixNano()}, true
+}
+
 // readCompressed 解开整份 zstd 再按行解析。调用方已经把进度作废。
 func readCompressed(f *os.File, p parser, st *fileState) ([]Message, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
@@ -380,7 +443,7 @@ func fileTail(f *os.File, size int64) []byte {
 }
 
 // tailMatches 核对 offset 之前的字节是否和上次读到的一致。
-func tailMatches(f *os.File, offset int64, tail []byte) bool {
+func tailMatches(f io.ReaderAt, offset int64, tail []byte) bool {
 	if offset == 0 {
 		return true
 	}

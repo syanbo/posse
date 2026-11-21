@@ -100,6 +100,7 @@ const (
 type UsageScanner struct {
 	agent, path string
 	offset      int64
+	zst         zstStamp
 	skills      map[string]int
 	mcp         map[string]map[string]int
 	cli         map[string]int
@@ -145,16 +146,16 @@ func (s *UsageScanner) reset() {
 
 // Scan 读文件新增的完整行（末尾没写完的一行留到下次），返回到目前为止的统计；文件变短说明被重写，从头再读。
 func (s *UsageScanner) Scan() (Usage, error) {
-	f, err := os.Open(s.path)
+	stamp, zst := zstStampOf(s.path)
+	if zst && stamp == s.zst {
+		return s.result(), nil
+	}
+	f, size, err := openScanFile(s.path, os.Open)
 	if err != nil {
 		return Usage{}, err
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return Usage{}, err
-	}
-	if fi.Size() < s.offset {
+	if size < s.offset {
 		s.reset()
 	}
 	if _, err := f.Seek(s.offset, 0); err != nil {
@@ -170,6 +171,9 @@ func (s *UsageScanner) Scan() (Usage, error) {
 		}
 	})
 	s.offset += n
+	if err == nil && zst {
+		s.zst = stamp
+	}
 	return s.result(), err
 }
 

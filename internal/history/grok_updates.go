@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// grokUpdateParser 解析 updates.jsonl。这是 Grok 的完整流水：文本按 chunk 追加，
-// 同一角色的连续 chunk 合成一条；chat_history.jsonl 只是压缩后的上下文快照。
+// grokUpdateParser 解析 updates.jsonl。这是 Grok 的完整流水：回复按 chunk 追加，
+// 连续的回复 chunk 合成一条；chat_history.jsonl 只是压缩后的上下文快照。
 type grokUpdateParser struct{}
 
 // grokBuf 是还没交出去的一段正文。不写入 sessions.state：updates.jsonl 一有变化就整份重读，
@@ -49,8 +49,9 @@ func (p grokUpdateParser) line(raw []byte, st *fileState) []Message {
 		if update.SessionUpdate == "user_message_chunk" {
 			role = "user"
 		}
+		// 每个用户 chunk 是一次提问：同一 promptIndex 重发的两条也各算一条，和 chat_history 一致。
 		var out []Message
-		if st.grokBuf != nil && st.grokBuf.role != role {
+		if st.grokBuf != nil && (st.grokBuf.role != role || role == "user") {
 			out = p.flush(st)
 		}
 		if st.grokBuf == nil {

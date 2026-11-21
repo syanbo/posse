@@ -439,6 +439,8 @@ var zh = [][2]string{
 	{"trash: moving items to trash is not supported on this platform", "此系统暂不支持移到废纸篓"},
 	{"session and path required", "请指定会话及其文件路径"},
 	{"session file no longer matches the selected session", "会话文件已变化，请刷新后重新选择"},
+	{"Cursor IDE chats can't be resumed in a terminal; open them in Cursor", "Cursor IDE 里的对话不能在终端里恢复，请在 Cursor 中打开"},
+	{"compressed session file is too large to read", "压缩的会话文件过大，无法读取"},
 	{"cannot move a running session to trash", "会话仍在运行，请先关闭终端"},
 	{"session file is outside the supported history directories", "无法确认会话文件所属目录，未移动文件"},
 	{"history refresh is still running", "历史索引仍在更新"},

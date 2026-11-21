@@ -24,6 +24,7 @@ type VideoScanner struct {
 	path   string
 	offset int64
 	tail   []byte // offset 前的最后几个字节，用来发现文件被改写
+	zst    zstStamp
 	videos []ToolVideo
 	seen   map[string]int // 路径 → 在 videos 里的位置
 }
@@ -43,17 +44,17 @@ var videoPathRe = regexp.MustCompile(`(?i)(?:^|[\s"'(\[<=,:])((?:~/|/)[^\s"'<>|*
 
 // Scan 读文件新增的完整行，返回到目前为止的视频，按第一次出现的顺序；文件变短说明被重写，从头再读。
 func (s *VideoScanner) Scan() ([]ToolVideo, error) {
-	f, err := os.Open(s.path)
+	stamp, zst := zstStampOf(s.path)
+	if zst && stamp == s.zst {
+		return s.videos, nil
+	}
+	f, size, err := openScanFile(s.path, os.Open)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
 	// 文件变短或 offset 前的字节变了都是被重写了（同 ImageScanner），从头再读
-	if fi.Size() < s.offset || !tailMatches(f, s.offset, s.tail) {
+	if size < s.offset || !tailMatches(f, s.offset, s.tail) {
 		s.offset, s.tail, s.videos, s.seen = 0, nil, nil, map[string]int{}
 	}
 	if _, err := f.Seek(s.offset, io.SeekStart); err != nil {
@@ -67,6 +68,9 @@ func (s *VideoScanner) Scan() ([]ToolVideo, error) {
 	s.offset += n
 	if n > 0 {
 		s.tail = tail
+	}
+	if err == nil && zst {
+		s.zst = stamp
 	}
 	return s.videos, err
 }

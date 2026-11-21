@@ -415,6 +415,9 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 	if p.Path != "" && p.Session != "" && s.ID != p.Session {
 		return nil, rpc.Errorf(rpc.CodeConflict, "session file no longer matches the selected session")
 	}
+	if s.Agent == "cursor" && history.IsCursorIDEChat(s.Path) {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "Cursor IDE chats can't be resumed in a terminal; open them in Cursor")
+	}
 	if _, err := os.Stat(s.Path); err != nil {
 		return nil, err
 	}

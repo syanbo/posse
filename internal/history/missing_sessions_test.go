@@ -3,9 +3,11 @@ package history
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -400,5 +402,128 @@ func TestReadChatTailCompressedCodex(t *testing.T) {
 	fi, _ := os.Stat(path)
 	if msgs, next, err := ReadChatNew("codex", path, 3); err != nil || len(msgs) != 0 || next != fi.Size() {
 		t.Fatalf("new = %+v %d %v", msgs, next, err)
+	}
+}
+
+// 同一 promptIndex 重发的两次提问在 chat_history 里是两条，流水里也各算一条，不拼成一句。
+func TestGrokResentPromptStaysSeparate(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".grok", "sessions", "%2Fwork", "cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	updates := filepath.Join(dir, "updates.jsonl")
+	writeFile(t, updates,
+		`{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"最好补一个 firstask"},"_meta":{"promptIndex":6}}}}`,
+		`{"timestamp":1790000111,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"最后补一个 secondask"},"_meta":{"promptIndex":6}}}}`,
+		`{"timestamp":1790000113,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"好的"}}}}`)
+	page, err := ReadChatTail("grok", "", updates, 20, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := blockDump(page); got != "user:最好补一个 firstask | user:最后补一个 secondask | assistant:好的" {
+		t.Fatalf("chat = %s", got)
+	}
+	x := openIndex(t)
+	update(t, x, home)
+	hits := search(t, x, "secondask", SearchOptions{})
+	if len(hits) != 1 {
+		t.Fatalf("search = %+v", hits)
+	}
+	msgs, err := x.Transcript(context.Background(), hits[0].Session, TranscriptOptions{})
+	if err != nil || len(msgs) != 3 || msgs[0].Text != "最好补一个 firstask" || msgs[1].Text != "最后补一个 secondask" {
+		t.Fatalf("index = %+v %v", msgs, err)
+	}
+}
+
+// 手机按索引里的路径打开 IDE 对话：从 state.vscdb 读，带气泡时间，翻页前后一致；终端里恢复不了。
+func TestCursorIDEChatOnPhone(t *testing.T) {
+	home := t.TempDir()
+	db := cursorIDEFixture(t, home)
+	const id = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+	cursorIDEPut(t, db, "composerData:"+id, `{"name":"Phone","lastUpdatedAt":1790500000000,"fullConversationHeadersOnly":[{"bubbleId":"b1","type":1},{"bubbleId":"b2","type":2},{"bubbleId":"b3","type":2}]}`)
+	cursorIDEPut(t, db, "bubbleId:"+id+":b1", `{"type":1,"text":"where is the widget","createdAt":"2026-09-25T03:55:39.991Z"}`)
+	cursorIDEPut(t, db, "bubbleId:"+id+":b2", `{"type":2,"text":"","createdAt":"2026-09-25T03:55:41Z","toolFormerData":{"name":"run_terminal_cmd","rawArgs":"{\"command\":\"rg widget\"}","result":"{\"output\":\"panel.go:3\"}"}}`)
+	cursorIDEPut(t, db, "bubbleId:"+id+":b3", `{"type":2,"text":"In panel.go.","createdAt":"2026-09-25T03:55:45Z"}`)
+	db.Close()
+	path := cursorIDEPath(home, id)
+	if !IsCursorIDEChat(path) || IsCursorIDEChat(filepath.Join(home, ".cursor", "projects", "p", "agent-transcripts", id, id+".jsonl")) {
+		t.Fatal("IsCursorIDEChat")
+	}
+
+	page, err := ReadChatTail("cursor", id, path, 20, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := blockDump(page); got != "user:where is the widget | assistant:run_terminal_cmd | tool:panel.go:3 | assistant:In panel.go." {
+		t.Fatalf("chat = %s", got)
+	}
+	call := page.Messages[1].Blocks[0]
+	asked := time.Date(2026, 9, 25, 3, 55, 39, 991e6, time.UTC).UnixMilli()
+	if string(call.Input) != `{"command":"rg widget"}` || page.Messages[0].Timestamp == nil || *page.Messages[0].Timestamp != asked {
+		t.Fatalf("call %+v ts %v", call, page.Messages[0].Timestamp)
+	}
+	var seen []string
+	before := int64(0)
+	for {
+		p, err := ReadChatTail("cursor", id, path, 1, before)
+		if err != nil || len(p.Messages) != 1 {
+			t.Fatalf("page %+v %v", p, err)
+		}
+		seen = append([]string{p.Messages[0].ID}, seen...)
+		if !p.HasMore {
+			break
+		}
+		before = p.BeforeOffset
+	}
+	if strings.Join(seen, ",") != chatIDs(page) {
+		t.Fatalf("paged %v, want %s", seen, chatIDs(page))
+	}
+	if _, err := ReadChatTail("cursor", "eeeeeeee", cursorIDEPath(home, "eeeeeeee"), 20, 0); err != ErrChatNotFound {
+		t.Fatalf("missing chat err = %v", err)
+	}
+
+	x := openIndex(t)
+	update(t, x, home)
+	msgs, err := x.Transcript(context.Background(), Session{Agent: "cursor", ID: id, Path: path}, TranscriptOptions{})
+	if err != nil || len(msgs) != 4 || msgs[0].At.UnixMilli() != asked || msgs[2].Text != "panel.go:3" {
+		t.Fatalf("index = %+v %v", msgs, err)
+	}
+}
+
+// 压过的 Codex rollout 也能统计用量、读上下文和找图片。
+func TestCompressedCodexScans(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rollout-2026-10-02T09-02-00-zscan.jsonl.zst")
+	url := "data:image/png;base64," + base64.StdEncoding.EncodeToString([]byte("zpixels"))
+	writeZst(t, path, strings.Join([]string{
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"McpToolCall","id":"c2","server":"cua","tool":"js","status":"completed"}}}`,
+		`{"type":"response_item","payload":{"type":"function_call_output","output":[{"type":"input_image","image_url":"` + url + `"}]}}`,
+		`{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":134806},"model_context_window":828400}}}`,
+	}, "\n")+"\n")
+
+	us := NewUsageScanner("codex", path)
+	for range 2 {
+		u, err := us.Scan()
+		if err != nil || len(u.MCP) != 1 || u.MCP[0].Server != "cua" || u.MCP[0].Count != 1 {
+			t.Fatalf("usage %+v %v", u, err)
+		}
+	}
+	if c, ok := ReadContext("codex", path, ""); !ok || c.Window != 828400 {
+		t.Fatalf("context %+v %v", c, ok)
+	}
+	is := NewImageScanner("codex", path)
+	imgs, err := is.Scan()
+	if err != nil || len(imgs) != 1 {
+		t.Fatalf("images %+v %v", imgs, err)
+	}
+	if b, err := ReadToolImage(path, imgs[0]); err != nil || string(b) != "zpixels" {
+		t.Fatalf("read %q %v", b, err)
+	}
+	if b, err := ReadToolImageContext(context.Background(), path, imgs[0], 1<<20); err != nil || string(b) != "zpixels" {
+		t.Fatalf("read ctx %q %v", b, err)
+	}
+	ctxImgs, err := NewImageScanner("codex", path).ScanContext(context.Background())
+	if err != nil || len(ctxImgs) != 1 {
+		t.Fatalf("images ctx %+v %v", ctxImgs, err)
+	}
+	if again, err := is.Scan(); err != nil || len(again) != 1 {
+		t.Fatalf("rescan %+v %v", again, err)
 	}
 }

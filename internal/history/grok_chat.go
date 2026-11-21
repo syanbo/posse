@@ -191,7 +191,8 @@ func applyGrokUpdateLine(raw []byte, off, end int64, seg **grokChatSeg, flush fu
 		if update.SessionUpdate == "user_message_chunk" {
 			role = "user"
 		}
-		if *seg != nil && (*seg).role != role {
+		// 每个用户 chunk 是一次提问，不和前一条用户消息合并（同 grokUpdateParser）。
+		if *seg != nil && ((*seg).role != role || role == "user") {
 			flush()
 		}
 		if *seg == nil {

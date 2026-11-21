@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"crypto/md5"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -59,5 +60,43 @@ func TestHistoryResumeDuplicateIDUsesPath(t *testing.T) {
 	}
 	if len(d.terms) != 0 {
 		t.Fatal("invalid resume started terminal")
+	}
+}
+
+// Cursor IDE 的对话在 state.vscdb 里，cursor-agent 恢复不了：直接说明，不报文件不存在。
+func TestHistoryResumeCursorIDEChat(t *testing.T) {
+	d, _ := newTestDaemon(t)
+	home := t.TempDir()
+	d.cfg.HistoryRoots = &history.Roots{Home: home}
+	t.Cleanup(d.closeHistory)
+	const id = "55555555-5555-4555-8555-555555555555"
+	path := filepath.Join(home, "Library", "Application Support", "Cursor", "User", "globalStorage", "composer", id)
+	raw, _ := json.Marshal(historyResumeParams{Session: id, Path: path})
+	db, err := sql.Open("sqlite", filepath.Join(filepath.Dir(filepath.Dir(path)), "state.vscdb"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(filepath.Dir(path)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE cursorDiskKV (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)`,
+		`INSERT INTO cursorDiskKV VALUES('composerData:` + id + `', '{"name":"IDE chat","fullConversationHeadersOnly":[{"bubbleId":"b1","type":1}]}')`,
+		`INSERT INTO cursorDiskKV VALUES('bubbleId:` + id + `:b1', '{"type":1,"text":"hello"}')`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+	if d.refreshHistory(context.Background(), true, 10*time.Second) {
+		t.Fatal("index timeout")
+	}
+	_, err = d.historyResume(context.Background(), raw)
+	if err == nil || !strings.Contains(err.Error(), "Cursor IDE chats can't be resumed") {
+		t.Fatalf("resume IDE chat: %v", err)
+	}
+	if len(d.terms) != 0 {
+		t.Fatal("IDE chat resume started terminal")
 	}
 }

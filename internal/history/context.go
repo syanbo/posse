@@ -48,16 +48,11 @@ func ReadContext(agent, path, model string) (Context, bool) {
 	default:
 		return Context{}, false
 	}
-	f, err := os.Open(path)
+	f, end, err := openScanFile(path, os.Open)
 	if err != nil {
 		return Context{}, false
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return Context{}, false
-	}
-	end := fi.Size()
 	var tail []byte // 上一块开头不完整的那一行，拼到这一块后面
 	for read := int64(0); end > 0 && read < contextLimit; {
 		n := min(int64(contextChunk), end)

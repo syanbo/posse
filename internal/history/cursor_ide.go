@@ -203,9 +203,10 @@ func cursorSubagent(raw json.RawMessage) bool {
 }
 
 type cursorBubble struct {
-	Type int    `json:"type"`
-	Text string `json:"text"`
-	Tool *struct {
+	Type      int    `json:"type"`
+	Text      string `json:"text"`
+	CreatedAt string `json:"createdAt"`
+	Tool      *struct {
 		Name    string          `json:"name"`
 		RawArgs json.RawMessage `json:"rawArgs"`
 		Params  json.RawMessage `json:"params"`
@@ -213,20 +214,32 @@ type cursorBubble struct {
 	} `json:"toolFormerData"`
 }
 
-func cursorIDEMessages(db *sql.DB, ctx context.Context, id string, data cursorComposer) ([]Message, fileState, error) {
+// cursorIDETurn 是对话里的一个气泡，按 fullConversationHeadersOnly 的顺序。
+type cursorIDETurn struct {
+	id     string // bubbleId
+	role   string // user / assistant
+	text   string
+	at     int64 // 毫秒，气泡没记时间时为 0
+	tool   string
+	input  json.RawMessage
+	result string
+}
+
+// cursorIDETurns 读一个对话的全部气泡。查询出错时返回错误，不交出残缺的结果。
+func cursorIDETurns(ctx context.Context, db *sql.DB, id string, data cursorComposer) ([]cursorIDETurn, error) {
 	bubbles := map[string]cursorBubble{}
 	prefix := "bubbleId:" + id + ":"
 	// 按主键区间查：LIKE 用不上 key 的索引，每个会话都要扫一遍整张表。
 	rows, err := db.QueryContext(ctx, `SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ?`, prefix, "bubbleId:"+id+";")
 	if err != nil {
-		return nil, fileState{}, err
+		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var key string
 		var value []byte
 		if err := rows.Scan(&key, &value); err != nil {
-			return nil, fileState{}, err
+			return nil, err
 		}
 		var b cursorBubble
 		if json.Unmarshal(value, &b) != nil {
@@ -235,6 +248,45 @@ func cursorIDEMessages(db *sql.DB, ctx context.Context, id string, data cursorCo
 		bubbles[strings.TrimPrefix(key, prefix)] = b
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	var out []cursorIDETurn
+	for _, h := range data.Headers {
+		b, ok := bubbles[h.BubbleID]
+		if !ok {
+			continue
+		}
+		kind := h.Type
+		if kind == 0 {
+			kind = b.Type
+		}
+		t := cursorIDETurn{id: h.BubbleID, role: "assistant", text: strings.TrimSpace(b.Text), at: parseTime(b.CreatedAt)}
+		if kind == 1 {
+			t.role = "user"
+			t.text = strings.TrimSpace(systemReminder.ReplaceAllString(t.text, ""))
+		} else if kind != 2 {
+			continue
+		}
+		if b.Tool != nil && b.Tool.Name != "" {
+			t.tool = b.Tool.Name
+			t.input = b.Tool.RawArgs
+			if len(t.input) == 0 || string(t.input) == "null" {
+				t.input = b.Tool.Params
+			}
+			t.input = unwrapJSON(t.input)
+			t.result = cursorToolResult(b.Tool.Result)
+		}
+		if t.text == "" && t.tool == "" {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+func cursorIDEMessages(db *sql.DB, ctx context.Context, id string, data cursorComposer) ([]Message, fileState, error) {
+	turns, err := cursorIDETurns(ctx, db, id, data)
+	if err != nil {
 		return nil, fileState{}, err
 	}
 	var st fileState
@@ -249,40 +301,26 @@ func cursorIDEMessages(db *sql.DB, ctx context.Context, id string, data cursorCo
 		st.Updated = st.Created
 	}
 	var msgs []Message
-	for _, h := range data.Headers {
-		b, ok := bubbles[h.BubbleID]
-		if !ok {
-			continue
+	for _, t := range turns {
+		at := t.at
+		if at == 0 {
+			at = st.Updated
 		}
-		kind := h.Type
-		if kind == 0 {
-			kind = b.Type
-		}
-		role := "assistant"
-		if kind == 1 {
-			role = "user"
-		} else if kind != 2 {
-			continue
-		}
-		at := st.Updated
-		if text := strings.TrimSpace(b.Text); text != "" {
-			if role == "user" {
+		if t.text != "" {
+			text := t.text
+			if t.role == "user" {
 				text = userText(&st, text)
 			}
 			if text != "" {
-				msgs = append(msgs, msg(role, text, at))
+				msgs = append(msgs, msg(t.role, text, at))
 			}
 		}
-		if b.Tool != nil && b.Tool.Name != "" {
-			input := b.Tool.RawArgs
-			if len(input) == 0 || string(input) == "null" {
-				input = b.Tool.Params
+		if t.tool != "" {
+			if c := toolCall(t.tool, t.input); c != "" {
+				msgs = append(msgs, msg("tool", c, at))
 			}
-			if t := toolCall(b.Tool.Name, unwrapJSON(input)); t != "" {
-				msgs = append(msgs, msg("tool", t, at))
-			}
-			if t := cursorToolResult(b.Tool.Result); t != "" {
-				msgs = append(msgs, msg("tool", t, at))
+			if t.result != "" {
+				msgs = append(msgs, msg("tool", t.result, at))
 			}
 		}
 	}
@@ -294,12 +332,9 @@ func cursorIDEMessages(db *sql.DB, ctx context.Context, id string, data cursorCo
 }
 
 func cursorToolResult(raw json.RawMessage) string {
-	if len(raw) == 0 || string(raw) == "null" {
+	raw = unwrapJSON(raw)
+	if len(raw) == 0 {
 		return ""
-	}
-	var s string
-	if json.Unmarshal(raw, &s) == nil {
-		return clip(s, toolClip)
 	}
 	var obj struct {
 		Output string `json:"output"`
@@ -307,5 +342,83 @@ func cursorToolResult(raw json.RawMessage) string {
 	if json.Unmarshal(raw, &obj) == nil && obj.Output != "" {
 		return clip(obj.Output, toolClip)
 	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return clip(s, toolClip)
+	}
 	return clip(string(raw), toolClip)
+}
+
+// IsCursorIDEChat 报告会话路径是不是 state.vscdb 里的 IDE 对话。这种会话没有自己的文件，
+// cursor-agent 也恢复不了（--resume 只认 CLI 的会话）。
+func IsCursorIDEChat(path string) bool {
+	_, _, ok := cursorIDESource(path)
+	return ok
+}
+
+// cursorIDESource 从索引里的 IDE 对话路径（globalStorage/composer/<ID>）取回库路径和对话 ID。
+func cursorIDESource(path string) (db, id string, ok bool) {
+	if path == "" {
+		return "", "", false
+	}
+	dir := filepath.Dir(path)
+	storage := filepath.Dir(dir)
+	id = filepath.Base(path)
+	if filepath.Base(dir) != "composer" || !strings.HasSuffix(storage, filepath.Join("Cursor", "User", "globalStorage")) || id == "" || id == "." {
+		return "", "", false
+	}
+	return filepath.Join(storage, "state.vscdb"), id, true
+}
+
+// readCursorIDEChat 给手机读一个 IDE 对话。偏移是气泡在对话里的位置（每个气泡占两格：正文和工具调用一条，
+// 工具结果一条），翻页前后一致。
+func readCursorIDEChat(dbPath, id string, limit int, beforeOffset int64) (ChatPage, error) {
+	if _, err := os.Stat(dbPath); err != nil {
+		return ChatPage{}, ErrChatNotFound
+	}
+	db, err := openCursorIDE(dbPath)
+	if err != nil {
+		return ChatPage{}, err
+	}
+	defer db.Close()
+	ctx := context.Background()
+	var value []byte
+	if err := db.QueryRowContext(ctx, `SELECT value FROM cursorDiskKV WHERE key=?`, "composerData:"+id).Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ChatPage{}, ErrChatNotFound
+		}
+		return ChatPage{}, err
+	}
+	var data cursorComposer
+	if json.Unmarshal(value, &data) != nil {
+		return ChatPage{}, ErrChatNotFound
+	}
+	turns, err := cursorIDETurns(ctx, db, id, data)
+	if err != nil {
+		return ChatPage{}, err
+	}
+	var msgs []ChatMessage
+	for i, t := range turns {
+		off := int64(i+1) * 2
+		var blocks []ChatBlock
+		if t.text != "" {
+			blocks = append(blocks, sanitizeBlock(ChatBlock{Type: "text", Text: t.text}))
+		}
+		if t.tool != "" && t.role == "assistant" {
+			blocks = append(blocks, sanitizeBlock(ChatBlock{Type: "tool-call", Name: t.tool, CallID: t.id, Input: grokBlockInput(t.input)}))
+		}
+		if len(blocks) > 0 {
+			msgs = append(msgs, ChatMessage{ID: "bubble-" + t.id, Role: t.role, Blocks: blocks, Timestamp: stamp(t.at), Source: "transcript", Offset: off})
+		}
+		if t.tool != "" && t.result != "" {
+			msgs = append(msgs, ChatMessage{
+				ID: "bubble-" + t.id + "-result", Role: "tool", Timestamp: stamp(t.at), Source: "transcript", Offset: off + 1,
+				Blocks: []ChatBlock{sanitizeBlock(ChatBlock{Type: "tool-result", Output: t.result, CallID: t.id})},
+			})
+		}
+	}
+	if limit <= 0 {
+		limit = 40
+	}
+	return window(msgs, limit, beforeOffset), nil
 }
