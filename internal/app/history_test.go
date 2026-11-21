@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -16,6 +17,16 @@ import (
 	"posse/internal/history"
 	"posse/internal/rpc"
 )
+
+func TestHandoffText(t *testing.T) {
+	got := handoffText(history.Session{ID: "abc", Cwd: "/work/shop"})
+	if !strings.Contains(got, "session: abc") || !strings.Contains(got, "directory: /work/shop") || !strings.Contains(got, "posse history show abc") {
+		t.Fatal(got)
+	}
+	if strings.Contains(handoffText(history.Session{ID: "abc"}), "directory:") {
+		t.Fatal("empty directory was written")
+	}
+}
 
 // 历史列表里上下键换选中：只走看得见的会话，折起来的分组跳过，到头不动。
 func TestHistoryArrowKeys(t *testing.T) {

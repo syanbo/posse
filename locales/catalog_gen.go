@@ -9475,6 +9475,22 @@ func (msgs Messages) HistoryContinueInPosse() string {
 	return Catalog.Format(msgs.locale, "historyContinueInPosse", nil)
 }
 
+// HistoryCopyHandoff says "Copy Handoff"
+// in the language the app shows.
+//
+// History: button that copies a paste for the next session, with the id,
+// directory, and show command.
+func HistoryCopyHandoff() string { return In(i18n.Locale()).HistoryCopyHandoff() }
+
+// HistoryCopyHandoff says "Copy Handoff"
+// in the language of msgs.
+//
+// History: button that copies a paste for the next session, with the id,
+// directory, and show command.
+func (msgs Messages) HistoryCopyHandoff() string {
+	return Catalog.Format(msgs.locale, "historyCopyHandoff", nil)
+}
+
 // HistoryCopyResumeCommand says "Copy Resume Command"
 // in the language the app shows.
 //

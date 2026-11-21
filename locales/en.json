@@ -3499,6 +3499,10 @@
   "@historyContinueInPosse": {
     "description": "History: button that resumes the session in a new terminal."
   },
+  "historyCopyHandoff": "Copy Handoff",
+  "@historyCopyHandoff": {
+    "description": "History: button that copies a paste for the next session, with the id, directory, and show command."
+  },
   "historyCopyResumeCommand": "Copy Resume Command",
   "@historyCopyResumeCommand": {
     "description": "History: button that copies the shell command resuming the session."

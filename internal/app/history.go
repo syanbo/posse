@@ -586,6 +586,17 @@ func resumeCommand(s history.Session) string {
 	return cmd
 }
 
+// handoffText 是贴给下一个 agent 的交接：会话 ID、目录、查看命令。
+func handoffText(s history.Session) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "session: %s\n", s.ID)
+	if s.Cwd != "" {
+		fmt.Fprintf(&b, "directory: %s\n", s.Cwd)
+	}
+	fmt.Fprintf(&b, "posse history show %s\n", s.ID)
+	return b.String()
+}
+
 // --- 界面
 
 func (a *app) historySidebarItem(c *ui.Context) ui.Element {
@@ -1093,6 +1104,9 @@ func (a *app) sessionDetail(c *ui.Context) {
 			}
 			if pressable(textButton(c, L(c).HistoryCopyResumeCommand())).Tooltip(resumeCommand(s)).Clicked() {
 				c.WriteClipboard(resumeCommand(s))
+			}
+			if pressable(textButton(c, L(c).HistoryCopyHandoff())).Tooltip(handoffText(s)).Clicked() {
+				c.WriteClipboard(handoffText(s))
 			}
 			if pressable(textButton(c, L(c).CommonMoveToTrash())).Clicked() {
 				a.askTrashSession(L(c), d)

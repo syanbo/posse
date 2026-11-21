@@ -734,6 +734,7 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	if p.Agent == "claude" && p.Event == "UserPromptSubmit" {
 		res.SessionTitle = s.TakeTitle()
 	}
+	res.Brief = d.sessionBrief(ctx, s, p)
 	res.AgentState = st
 	return res, nil
 }
@@ -760,6 +761,7 @@ type hookEventResult struct {
 	host.AgentState
 	SessionTitle string `json:"sessionTitle,omitempty"`
 	Deliver      string `json:"deliver,omitempty"` // 交给 agent 的任务提醒，posse hook 按各家的格式写到 stdout
+	Brief        string `json:"brief,omitempty"`   // 新开的 Claude、Codex 在这个目录里最近几条会话
 }
 
 // hookPermission 先照常记下等待状态，再只在有 Posse 手机看着这个会话时挂起等决定。

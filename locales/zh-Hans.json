@@ -611,6 +611,7 @@
   "historyContext": "上下文 {percent}%",
   "historyContextTip": "最后一次请求用了 {used} / {window} token",
   "historyContinueInPosse": "在 Posse 里继续",
+  "historyCopyHandoff": "复制交接",
   "historyCopyResumeCommand": "复制恢复命令",
   "historyEmptyBody": "Posse 会读取 ~/.claude、~/.codex、~/.cursor、~/.grok、~/.gemini/antigravity-cli 里的会话记录，只读不改。",
   "historyEmptyTitle": "还没有会话记录",

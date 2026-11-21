@@ -701,6 +701,7 @@ func cmdHook(e *env, args []string) error {
 	var out struct {
 		SessionTitle string `json:"sessionTitle"`
 		Deliver      string `json:"deliver"`
+		Brief        string `json:"brief"`
 	}
 	if err := rpc.Call(ctx, socket, "hook.event", params, &out); err != nil {
 		fmt.Fprintln(e.errOut, "posse hook:", err)
@@ -720,6 +721,10 @@ func cmdHook(e *env, args []string) error {
 			"hookEventName": "UserPromptSubmit", "sessionTitle": out.SessionTitle,
 		}})
 		fmt.Fprintln(e.out, string(b))
+	}
+	// 新开的 Claude、Codex：这个目录最近几条会话，给模型接着用
+	if out.Brief != "" {
+		fmt.Fprintln(e.out, agent.DeliveryOutput(args[0], args[1], out.Brief))
 	}
 	return nil
 }

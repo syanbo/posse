@@ -107,6 +107,72 @@ type hookParams struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
+func TestHookWritesSessionBrief(t *testing.T) {
+	dir := t.TempDir()
+	sock := filepath.Join(dir, "s.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := rpc.NewServer()
+	srv.Handle("hook.event", func(_ context.Context, raw json.RawMessage) (any, error) {
+		return map[string]any{"brief": "Recent sessions"}, nil
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Serve(ctx, ln)
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Close()
+	defer func(f *os.File) { os.Stdin = f }(os.Stdin)
+	os.Stdin = r
+	t.Setenv("POSSE_TERMINAL_ID", "t_1")
+	t.Setenv("POSSE_SOCKET", sock)
+	var out, errOut bytes.Buffer
+	if err := cmdHook(&env{out: &out, errOut: &errOut}, []string{"claude", "SessionStart"}); err != nil {
+		t.Fatal(err)
+	}
+	want := agent.DeliveryOutput("claude", "SessionStart", "Recent sessions") + "\n"
+	if out.String() != want {
+		t.Fatalf("stdout %s", out.String())
+	}
+}
+
+func TestHookDeliverBeatsBrief(t *testing.T) {
+	dir := t.TempDir()
+	sock := filepath.Join(dir, "s.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := rpc.NewServer()
+	srv.Handle("hook.event", func(_ context.Context, raw json.RawMessage) (any, error) {
+		return map[string]any{"deliver": "nudge", "brief": "Recent sessions"}, nil
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Serve(ctx, ln)
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Close()
+	defer func(f *os.File) { os.Stdin = f }(os.Stdin)
+	os.Stdin = r
+	t.Setenv("POSSE_TERMINAL_ID", "t_1")
+	t.Setenv("POSSE_SOCKET", sock)
+	var out, errOut bytes.Buffer
+	if err := cmdHook(&env{out: &out, errOut: &errOut}, []string{"claude", "PostToolUse"}); err != nil {
+		t.Fatal(err)
+	}
+	want := agent.DeliveryOutput("claude", "PostToolUse", "nudge") + "\n"
+	if out.String() != want {
+		t.Fatalf("stdout %s", out.String())
+	}
+}
+
 // 极大的截断 JSON 或不是对象的 JSON：解析时只读到 maxHookInput 为止，剩下的读掉不留，不带 payload。
 func TestHookInputHardCap(t *testing.T) {
 	defer func(n int) { maxHookInput = n }(maxHookInput)
