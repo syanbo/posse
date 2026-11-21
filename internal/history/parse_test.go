@@ -67,10 +67,16 @@ func parseAll(t *testing.T, src source, p parser) ([]Message, fileState) {
 	}
 	defer f.Close()
 	var st fileState
+	if _, _, claudeSub := nestedTranscript(src.transcript); claudeSub {
+		st.inSubagent = true
+	}
 	if pr, ok := src.parser.(preparer); ok {
 		pr.prepare(src.transcript, &st)
 	}
 	msgs, _, _, err := readLines(f, p, &st)
+	if err == nil {
+		(&Index{}).applyParent(src, &st)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,8 +120,8 @@ func TestLineFilterSameResult(t *testing.T) {
 		}
 		n++
 	}
-	// claude、两份 codex（含被跳过的 guardian）、旧格式 codex、grok
-	if n != 6 || len(compact) != 6 {
+	// claude 主会话和子会话、两份 codex（含被跳过的 guardian）、旧格式 codex、grok、antigravity
+	if n != 7 || len(compact) != 7 {
 		t.Fatalf("checked %d spaced and %d compact files", n, len(compact))
 	}
 }

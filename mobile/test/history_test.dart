@@ -19,12 +19,23 @@ void main() {
           'updatedAt': '2026-10-18T10:00:00Z',
           'messages': 12,
           'path': '/p/s1.jsonl',
+          'children': [
+            {
+              'agent': 'claude',
+              'id': 'child',
+              'title': '子任务',
+              'path': '/p/child.jsonl',
+            },
+          ],
         },
         {'agent': 'codex'}, // 没有 ID 的不要
       ],
     });
     expect(list, hasLength(1));
     expect(list.single.title, '修登录');
+    expect(list.single.children, hasLength(1));
+    expect(list.single.children.single.id, 'child');
+    expect(list.single.children.single.title, '子任务');
     expect(list.single.folder, 'posse');
     expect(list.single.updatedAt!.isUtc, isFalse);
     final hits = parseHistory({
@@ -56,6 +67,33 @@ void main() {
       at(DateTime(2026, 8, 1)),
     ], now);
     expect(groups.map((g) => g.$1), ['今天', '昨天', '最近 7 天', '最近 30 天', '1 个月前']);
+  });
+
+  test('a tree follows its newest child when grouping by day', () {
+    final now = DateTime(2026, 10, 18, 9);
+    HistorySession at(String id, DateTime t, [List<HistorySession>? kids]) =>
+        HistorySession(
+          agent: 'claude',
+          id: id,
+          title: '',
+          cwd: '/work/app',
+          branch: '',
+          updatedAt: t,
+          messages: 0,
+          path: '',
+          children: kids ?? const [],
+        );
+    final parent = at('parent', DateTime(2026, 8, 1), [
+      at('kid', DateTime(2026, 10, 18, 8)),
+    ]);
+    final other = at('other', DateTime(2026, 10, 17));
+    final groups = groupHistory(zh, [other, parent], now);
+    expect(groups.map((g) => g.$1), ['今天', '昨天']);
+    expect(groups.first.$2.single.id, 'parent');
+    expect(parent.updatedAt, DateTime(2026, 8, 1));
+    expect(parent.latest, DateTime(2026, 10, 18, 8));
+    final folders = groupHistoryByFolder(zh, [other, parent], const []);
+    expect(folders.single.$2.map((s) => s.id), ['parent', 'other']);
   });
 
   test('time label', () {

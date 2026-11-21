@@ -13,6 +13,7 @@ class HistorySession {
     required this.path,
     this.snippet,
     this.matches = 0,
+    this.children = const [],
   });
 
   final String agent;
@@ -29,6 +30,19 @@ class HistorySession {
   /// 搜索时命中的那条消息的摘要和命中的消息数。
   final String? snippet;
   final int matches;
+
+  /// 挂在这条会话下面的子会话。搜索结果是平的，没有这项。
+  final List<HistorySession> children;
+
+  /// 这条会话和它所有子会话里最近的更新时间。列表按它排先后和分组，行上显示的仍是 [updatedAt]。
+  DateTime? get latest {
+    var t = updatedAt;
+    for (final c in children) {
+      final l = c.latest;
+      if (l != null && (t == null || l.isAfter(t))) t = l;
+    }
+    return t;
+  }
 
   /// 会话目录的最后一段，列表里当项目名看。
   String get folder {
@@ -58,6 +72,11 @@ class HistorySession {
           ? snippet.trim()
           : null,
       matches: (raw['matches'] as num?)?.toInt() ?? 0,
+      children: [
+        for (final item
+            in raw['children'] is List ? raw['children'] as List : const [])
+          ?HistorySession.fromJson(item),
+      ],
     );
   }
 }
@@ -69,7 +88,23 @@ List<HistorySession> parseHistory(Map<String, Object?> result) {
   return [for (final item in raw) ?HistorySession.fromJson(item)];
 }
 
+/// 按整棵树最近的更新时间（[HistorySession.latest]）从新到旧排；没有时间的排最后。
+/// sort 不稳定，同一时刻的按原来的先后。
+List<HistorySession> sortByLatest(List<HistorySession> sessions) {
+  final sorted = [...sessions];
+  final order = {for (var i = 0; i < sorted.length; i++) sorted[i]: i};
+  sorted.sort((a, b) {
+    final x = a.latest, y = b.latest;
+    final by = x == null || y == null
+        ? (x == null ? 1 : 0) - (y == null ? 1 : 0)
+        : y.compareTo(x);
+    return by != 0 ? by : order[a]! - order[b]!;
+  });
+  return sorted;
+}
+
 /// 列表照桌面历史页按时间分组：今天、昨天、最近 7 天、最近 30 天、1 个月前。
+/// 父会话旧、子会话新时整棵树跟子会话走。
 List<(String, List<HistorySession>)> groupHistory(
   AppLocalizations l,
   List<HistorySession> sessions,
@@ -88,8 +123,8 @@ List<(String, List<HistorySession>)> groupHistory(
   }
 
   final out = <(String, List<HistorySession>)>[];
-  for (final s in sessions) {
-    final l = label(s.updatedAt);
+  for (final s in sortByLatest(sessions)) {
+    final l = label(s.latest);
     if (out.isEmpty || out.last.$1 != l) {
       out.add((l, <HistorySession>[]));
     }
@@ -102,7 +137,7 @@ List<(String, List<HistorySession>)> groupHistory(
 const historyAgents = ['', 'claude', 'codex', 'cursor', 'grok', 'antigravity'];
 
 /// 照桌面历史页按文件夹分组：会话归到目录所在的项目（项目和它的工作区、worktree 取最长匹配），
-/// 不在任何项目里的用目录名；组按其中最近的会话排先后，组内最近的在前。
+/// 不在任何项目里的用目录名；组按其中最近的会话排先后，组内最近的在前（都看整棵树最近的时间）。
 /// [roots] 是（目录, 项目名）。
 List<(String, List<HistorySession>)> groupHistoryByFolder(
   AppLocalizations l,
@@ -128,18 +163,8 @@ List<(String, List<HistorySession>)> groupHistoryByFolder(
     return parts.isEmpty ? cwd : parts.last;
   }
 
-  final sorted = [...sessions];
-  // 没有时间的排最后；sort 不稳定，同一时刻的按原来的先后
-  final order = {for (var i = 0; i < sorted.length; i++) sorted[i]: i};
-  sorted.sort((a, b) {
-    final x = a.updatedAt, y = b.updatedAt;
-    final by = x == null || y == null
-        ? (x == null ? 1 : 0) - (y == null ? 1 : 0)
-        : y.compareTo(x);
-    return by != 0 ? by : order[a]! - order[b]!;
-  });
   final groups = <String, List<HistorySession>>{};
-  for (final s in sorted) {
+  for (final s in sortByLatest(sessions)) {
     groups.putIfAbsent(label(s.cwd), () => []).add(s);
   }
   return [for (final e in groups.entries) (e.key, e.value)];

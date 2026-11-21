@@ -636,6 +636,7 @@
   "historyNoResults": "没有找到“{query}”",
   "historyNoResultsBody": "中文按字匹配，英文按词的开头匹配；加引号可以搜整句。",
   "historyOpenInFinderTip": "在访达中打开 {path}",
+  "historyOpenSubagent": "打开子会话",
   "historyQueryFailed": "查询失败：{error}",
   "historyRoleTool": "工具",
   "historyRoleUser": "你",

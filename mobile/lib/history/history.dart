@@ -384,7 +384,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (s.folder.isNotEmpty) s.folder,
       if (s.branch.isNotEmpty) s.branch,
     ].join(' · ');
-    return RowTile(
+    final tile = RowTile(
       chevron: false,
       leading: AgentTile(agent: s.agent, size: Ic.large),
       title: Text(
@@ -431,6 +431,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
           builder: (_) => HistorySessionScreen(model: widget.model, session: s),
         ),
       ),
+    );
+    if (s.children.isEmpty) return tile;
+    return Column(
+      children: [
+        tile,
+        for (final child in s.children)
+          Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: _row(context, child, now),
+          ),
+      ],
     );
   }
 }

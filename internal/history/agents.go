@@ -25,8 +25,11 @@ import (
 func discover(r Roots) []source {
 	var out []source
 	claude := filepath.Join(r.Home, ".claude", "projects")
-	// 只要项目目录下一层的会话文件；<会话>/subagents/ 里是子 agent 的过程记录
 	for _, p := range globFiles(filepath.Join(claude, "*", "*.jsonl")) {
+		out = append(out, source{agent: "claude", transcript: p, parser: claudeParser{}})
+	}
+	// <会话>/subagents/ 是用户发起的子会话，挂到父会话下面，不和主会话混在列表里
+	for _, p := range globFiles(filepath.Join(claude, "*", "*", "subagents", "*.jsonl")) {
 		out = append(out, source{agent: "claude", transcript: p, parser: claudeParser{}})
 	}
 	out = append(out, discoverCodex(r)...)
@@ -47,8 +50,8 @@ func discover(r Roots) []source {
 		}
 		return dir
 	}
-	for _, p := range globFiles(filepath.Join(r.Home, ".cursor", "projects", "*", "agent-transcripts", "*", "*.jsonl")) {
-		project := filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(p))))
+	addCursor := func(p string) {
+		project := cursorProjectOf(p)
 		src := source{agent: "cursor", transcript: p, parser: cursorParser{}}
 		switch metas := cursorMeta[sessionIDFromPath(p)]; len(metas) {
 		case 0:
@@ -70,9 +73,31 @@ func discover(r Roots) []source {
 		}
 		out = append(out, src)
 	}
+	for _, p := range globFiles(filepath.Join(r.Home, ".cursor", "projects", "*", "agent-transcripts", "*", "*.jsonl")) {
+		addCursor(p)
+	}
+	for _, p := range globFiles(filepath.Join(r.Home, ".cursor", "projects", "*", "agent-transcripts", "*", "subagents", "*.jsonl")) {
+		addCursor(p)
+	}
 	out = append(out, discoverGrok(r)...)
 	out = append(out, discoverAntigravity(r)...)
 	return out
+}
+
+// cursorProjectOf 从转录路径取出项目目录名。子会话比主会话多一层 subagents。
+func cursorProjectOf(path string) string {
+	dir := filepath.Dir(path)
+	for dir != "." && dir != string(filepath.Separator) {
+		if filepath.Base(dir) == "agent-transcripts" {
+			return filepath.Base(filepath.Dir(dir))
+		}
+		next := filepath.Dir(dir)
+		if next == dir {
+			break
+		}
+		dir = next
+	}
+	return ""
 }
 
 // discoverCodex 收录 rollout-*.jsonl 和 Codex 压过的 rollout-*.jsonl.zst。
@@ -133,10 +158,10 @@ func discoverGrok(r Roots) []source {
 var antigravityApps = []string{"antigravity", "antigravity-ide", "antigravity-cli"}
 
 // discoverAntigravity 收录桌面、IDE 和 CLI 三处转录。摘要库和元数据缓存仍在 CLI 目录，
-// 用来排除子会话、补标题和目录。同一个 UUID 出现多份时留修改时间最新的那份。
+// 用来把派生会话挂到父会话上，并补标题和目录。同一个 UUID 出现多份时留修改时间最新的那份。
 func discoverAntigravity(r Roots) []source {
 	base := AntigravityBase(r.Home)
-	children := antigravityChildren(base)
+	parents := antigravityParents(base)
 	meta := filepath.Join(base, "cache", "conversation_metadata.json")
 	type pick struct {
 		path  string
@@ -146,7 +171,7 @@ func discoverAntigravity(r Roots) []source {
 	for _, app := range antigravityApps {
 		for _, p := range globFiles(filepath.Join(r.Home, ".gemini", app, "brain", "*", ".system_generated", "logs", "transcript.jsonl")) {
 			id := filepath.Base(AntigravityBrainDir(p))
-			if id == "" || children[id] {
+			if id == "" {
 				continue
 			}
 			mt := mtimeOf(p)
@@ -158,7 +183,7 @@ func discoverAntigravity(r Roots) []source {
 	}
 	var out []source
 	for id, p := range best {
-		out = append(out, source{agent: "antigravity", transcript: p.path, meta: meta, parser: antigravityParser{id: id, full: &antigravityFull{path: p.path}}})
+		out = append(out, source{agent: "antigravity", transcript: p.path, meta: meta, parent: parents[id], parser: antigravityParser{id: id, full: &antigravityFull{path: p.path}}})
 	}
 	return out
 }
@@ -361,6 +386,7 @@ type claudeRecord struct {
 	Cwd              string `json:"cwd"`
 	GitBranch        string `json:"gitBranch"`
 	SessionID        string `json:"sessionId"`
+	AgentID          string `json:"agentId"`
 	Timestamp        string `json:"timestamp"`
 	AiTitle          string `json:"aiTitle"`
 	CustomTitle      string `json:"customTitle"`
@@ -445,7 +471,8 @@ func (claudeParser) line(raw []byte, st *fileState) []Message {
 	default:
 		return nil
 	}
-	if r.IsSidechain {
+	// 主会话里的 isSidechain 是子会话的副本。子会话文件自己的正文也带这个标记，那一份要留下
+	if r.IsSidechain && !st.inSubagent {
 		return nil
 	}
 	at := parseTime(r.Timestamp)
@@ -456,7 +483,14 @@ func (claudeParser) line(raw []byte, st *fileState) []Message {
 	if r.GitBranch != "" && r.GitBranch != "HEAD" {
 		st.Branch = r.GitBranch
 	}
-	if st.SessionID == "" {
+	if st.inSubagent {
+		if st.Parent == "" && r.SessionID != "" {
+			st.Parent = r.SessionID
+		}
+		if r.AgentID != "" {
+			st.SessionID = r.AgentID
+		}
+	} else if st.SessionID == "" {
 		st.SessionID = r.SessionID
 	}
 	if r.Type == "user" && (r.IsMeta || r.IsCompactSummary) {
@@ -519,6 +553,7 @@ type codexParser struct{}
 type codexRecord struct {
 	Timestamp string `json:"timestamp"`
 	Type      string `json:"type"`
+	Ordinal   *int   `json:"ordinal"`
 	Payload   struct {
 		Type         string          `json:"type"`
 		ID           string          `json:"id"`
@@ -542,9 +577,10 @@ type codexRecord struct {
 			Query   string   `json:"query"`
 			Command []string `json:"command"`
 		} `json:"action"`
-		HistoryMode string    `json:"history_mode"`
-		Model       string    `json:"model"`
-		Item        codexItem `json:"item"`
+		HistoryMode  string    `json:"history_mode"`
+		HistoryStart int       `json:"subagent_history_start_ordinal"`
+		Model        string    `json:"model"`
+		Item         codexItem `json:"item"`
 	} `json:"payload"`
 }
 
@@ -582,6 +618,37 @@ func (codexParser) wants(raw []byte, st *fileState) bool {
 	return hasFieldValue(raw, typeKey, codexLegacyTypes)
 }
 
+// codexSpawn 认出用户在会话里用 spawn_agent 派出去的子线程，并记下父线程和任务名。
+// 其它带 subagent 的来源（自动审批、审查）不是。
+func codexSpawn(raw json.RawMessage, st *fileState) bool {
+	var src struct {
+		Subagent struct {
+			ThreadSpawn struct {
+				Parent string `json:"parent_thread_id"`
+				Path   string `json:"agent_path"`
+				Nick   string `json:"agent_nickname"`
+			} `json:"thread_spawn"`
+		} `json:"subagent"`
+	}
+	if json.Unmarshal(raw, &src) != nil {
+		return false
+	}
+	spawn := src.Subagent.ThreadSpawn
+	if spawn.Parent == "" && spawn.Path == "" {
+		return false
+	}
+	if st.Parent == "" {
+		st.Parent = spawn.Parent
+	}
+	if spawn.Path != "" {
+		st.Spawn = spawn.Path
+	}
+	if st.Title == "" {
+		st.Title = spawnTitle(spawn.Path, spawn.Nick)
+	}
+	return true
+}
+
 // codexInjected 是 Codex 以用户身份写进会话、但不是用户输入的内容的开头。
 var codexInjected = []string{
 	"<environment_context>", "# AGENTS.md instructions", "<user_instructions>", "<permissions instructions>",
@@ -597,8 +664,15 @@ func (codexParser) line(raw []byte, st *fileState) []Message {
 	}
 	p := &r.Payload
 	at := parseTime(r.Timestamp)
+	// 子线程开头复制了父线程的历史。序号追平 subagent_history_start_ordinal 之后才是它自己的内容
+	if st.Inherit > 0 && r.Type != "session_meta" && r.Type != "turn_context" && r.Ordinal != nil && *r.Ordinal < st.Inherit {
+		return nil
+	}
 	switch r.Type {
 	case "session_meta":
+		if st.Inherit > 0 && st.SessionID != "" {
+			return nil
+		}
 		if st.SessionID == "" {
 			st.SessionID = p.ID
 		}
@@ -612,8 +686,12 @@ func (codexParser) line(raw []byte, st *fileState) []Message {
 			st.Mode = p.HistoryMode
 		}
 		touch(st, parseTime(p.Timestamp))
-		// 自动审批、定时任务等不是用户发起的会话
-		if strings.Contains(string(p.Source), `"subagent"`) || (p.ThreadSource != "" && p.ThreadSource != "user") {
+		if codexSpawn(p.Source, st) {
+			if p.HistoryStart > 0 {
+				st.Inherit = p.HistoryStart
+			}
+		} else if strings.Contains(string(p.Source), `"subagent"`) || (p.ThreadSource != "" && p.ThreadSource != "user") {
+			// 自动审批、/review、压缩、记忆整理，以及不是用户发起的线程
 			st.Skip = true
 		}
 		return nil

@@ -143,16 +143,17 @@ type historyView struct {
 
 // setSessions 换上新的会话列表，顺便分好组：分组要比较日期或目录，不放在每帧里做。
 // 按文件夹分组时同一组的排在一起，组按其中最近的会话排先后；组内都是最近的在前。
+// 先后和按天分组都看整棵树最近的更新时间（父会话旧、子会话新时跟子会话走），行上显示的仍是各自的时间。
 func (h *historyView) setSessions(ss []history.Session) {
 	ss = slices.Clone(ss)
 	// 换分组方式时传进来的是上一次排过的列表，先排回按时间
-	slices.SortStableFunc(ss, func(x, y history.Session) int { return y.UpdatedAt.Compare(x.UpdatedAt) })
+	history.SortByLatest(ss)
 	groups := make([]string, len(ss))
 	for i, s := range ss {
 		if h.folderOf != nil {
 			groups[i] = h.folderOf(s.Cwd)
 		} else {
-			groups[i] = dayGroup(s.UpdatedAt)
+			groups[i] = dayGroup(s.Latest())
 		}
 	}
 	if h.folderOf != nil {
@@ -683,7 +684,7 @@ func (a *app) stepSession(step int) {
 	} else {
 		for i, r := range h.groupRows() {
 			if r.session >= 0 {
-				items = append(items, item{h.sessions[r.session], -1, i})
+				items = append(items, item{h.rowSession(r), -1, i})
 			}
 		}
 	}
@@ -864,14 +865,14 @@ func (a *app) sessionList(c *ui.Context) {
 	c.After(30 * time.Second)
 	h.list.Key = func(i int) any {
 		if r := rows[i]; r.session >= 0 {
-			return sessionKey(h.sessions[r.session])
+			return sessionKey(h.rowSession(r))
 		}
 		return "group:" + rows[i].group
 	}
 	fadeEdges(ui.List(c, &h.list, len(rows), func(i int) {
 		r := rows[i]
 		if r.session >= 0 {
-			a.sessionRow(c, h.sessions[r.session], nil)
+			a.sessionRow(c, h.rowSession(r), nil, len(r.path))
 			return
 		}
 		open := h.isGroupOpen(r.group)
@@ -901,10 +902,12 @@ func (a *app) sessionList(c *ui.Context) {
 }
 
 // historyRow 是会话列表的一行：分组标题（session 为 -1）或一个会话。
+// path 是从这一组里的顶层会话走到子会话的下标。
 type historyRow struct {
 	group   string
-	count   int // 分组里的会话数
+	count   int // 分组里的顶层会话数
 	session int
+	path    []int
 }
 
 func (h *historyView) isGroupOpen(g string) bool {
@@ -925,12 +928,32 @@ func (h *historyView) groupRows() []historyRow {
 		rows = append(rows, historyRow{group: g, count: j - i, session: -1})
 		if h.isGroupOpen(g) {
 			for k := i; k < j; k++ {
-				rows = append(rows, historyRow{group: g, session: k})
+				rows = appendSessionRows(rows, g, k, h.sessions[k], nil)
 			}
 		}
 		i = j
 	}
 	return rows
+}
+
+func appendSessionRows(rows []historyRow, group string, session int, s history.Session, path []int) []historyRow {
+	rows = append(rows, historyRow{group: group, session: session, path: append([]int(nil), path...)})
+	for i := range s.Children {
+		next := append(append([]int(nil), path...), i)
+		rows = appendSessionRows(rows, group, session, s.Children[i], next)
+	}
+	return rows
+}
+
+func (h *historyView) rowSession(r historyRow) history.Session {
+	s := h.sessions[r.session]
+	for _, i := range r.path {
+		if i < 0 || i >= len(s.Children) {
+			break
+		}
+		s = s.Children[i]
+	}
+	return s
 }
 
 func (a *app) hitList(c *ui.Context) {
@@ -943,7 +966,7 @@ func (a *app) hitList(c *ui.Context) {
 	h.list.Key = func(i int) any { return sessionKey(h.hits[i].Session) }
 	fadeEdges(ui.List(c, &h.list, len(h.hits), func(i int) {
 		hit := h.hits[i]
-		a.sessionRow(c, hit.Session, &hit)
+		a.sessionRow(c, hit.Session, &hit, 0)
 	}).Grow(1).Padding(8, 0).Gap(4), &h.list, colors(c.Theme()).side)
 }
 
@@ -956,10 +979,10 @@ func (a *app) historyEmpty(c *ui.Context, title, body string) {
 }
 
 // sessionRow 是列表里的一个会话；搜索时多一行命中的摘要。
-func (a *app) sessionRow(c *ui.Context, s history.Session, hit *history.Hit) {
+func (a *app) sessionRow(c *ui.Context, s history.Session, hit *history.Hit, depth int) {
 	t := c.Theme()
 	h := &a.history
-	row := ui.Row(c.Key(sessionKey(s))).Margin(0, 8).Padding(8, 12).Gap(12).Radius(rControl).AlignItems(ui.Center)
+	row := ui.Row(c.Key(sessionKey(s))).Margin(0, 8, 0, 8+float32(depth)*treeIndent).Padding(8, 12).Gap(12).Radius(rControl).AlignItems(ui.Center)
 	selectedBg(c, row, h.sel == sessionKey(s))
 	row.Children(func() {
 		agentTile(c, s.Agent, tileMedium())
@@ -1088,7 +1111,8 @@ func (a *app) sessionDetail(c *ui.Context) {
 		transcript := ui.List(c, &h.messages, len(msgs), func(i int) {
 			it := msgs[i]
 			if it.tools != nil {
-				a.toolRun(c, d, it.tools)
+				expanded := i+1 < len(msgs) && msgs[i+1].tools == nil && msgs[i+1].msg.Seq == it.tools[0].Seq
+				a.toolRun(c, d, it.tools, expanded)
 				return
 			}
 			a.messageView(c, s, it.msg, ns, it.msg.Seq == h.hitSeq)
@@ -1103,30 +1127,50 @@ const transcriptInset = cardPad - 12
 // transcriptWidth 是对话的版心宽度：默认字号下一行四十几个汉字，随 Markdown 字号等比放宽。
 func (a *app) transcriptWidth() float32 { return 680 * a.mdSize() / defaultEditorFontSize }
 
-// toolRun 是折起来的一串工具调用：点一下展开或收起。
-func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message) {
+// toolRun 是折起来的一串工具调用：点一下展开或收起。打开子会话的按钮在这一行旁边，不放进可点的折叠条里。
+func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message, expanded bool) {
 	t := c.Theme()
 	open := d.opened[run[0].Seq]
-	row := ui.Row(c.Key("tools")).Height(sz(26)).Margin(0, transcriptInset).Padding(0, 12).Gap(6).Radius(rControl).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
-	selectedBg(c, row, false)
-	row.Children(func() {
-		turn := float32(0)
-		if open {
-			turn = 90
+	ui.Row(c.Key("tools-line")).Margin(0, transcriptInset).Gap(6).AlignItems(ui.Center).AlignSelf(ui.Start).Children(func() {
+		row := ui.Row(c.Key("tools")).Height(sz(26)).Padding(0, 12).Gap(6).Radius(rControl).AlignItems(ui.Center).Role(ui.RoleButton)
+		selectedBg(c, row, false)
+		row.Children(func() {
+			turn := float32(0)
+			if open {
+				turn = 90
+			}
+			ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted).Rotate(turn)
+			ui.Text(c, L(c).HistoryToolCalls(len(run))).FontSize(fsSmall).TextColor(t.TextMuted)
+		})
+		if row.Clicked() {
+			if d.opened == nil {
+				d.opened = map[int]bool{}
+			}
+			if open {
+				delete(d.opened, run[0].Seq)
+			} else {
+				d.opened[run[0].Seq] = true
+			}
+			d.openedV++
 		}
-		ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted).Rotate(turn)
-		ui.Text(c, L(c).HistoryToolCalls(len(run))).FontSize(fsSmall).TextColor(t.TextMuted)
+		if !expanded {
+			a.subagentButtons(c, d.Session, run)
+		}
 	})
-	if row.Clicked() {
-		if d.opened == nil {
-			d.opened = map[int]bool{}
+}
+
+// subagentButtons 打开这次工具调用派出去的子会话。同一条只出现一次。
+func (a *app) subagentButtons(c *ui.Context, parent history.Session, msgs []history.Message) {
+	seen := map[string]bool{}
+	for _, m := range msgs {
+		if m.ChildPath == "" || seen[m.ChildPath] {
+			continue
 		}
-		if open {
-			delete(d.opened, run[0].Seq)
-		} else {
-			d.opened[run[0].Seq] = true
+		seen[m.ChildPath] = true
+		child := history.Session{Agent: parent.Agent, ID: m.Child, Path: m.ChildPath}
+		if pressable(textButton(c.Key(m.ChildPath), L(c).HistoryOpenSubagent())).Clicked() {
+			a.selectSession(child, -1)
 		}
-		d.openedV++
 	}
 }
 
@@ -1157,6 +1201,7 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 		switch m.Role {
 		case "tool":
 			highlighted(c, text, ns).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(8).LineHeight(1.5).Selectable()
+			a.subagentButtons(c, s, []history.Message{m})
 		case "assistant":
 			// agent 的回复按 Markdown 显示；用户自己打的字原样显示
 			ui.Column(c).Selectable().Children(func() {

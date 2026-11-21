@@ -16,7 +16,7 @@ import (
 )
 
 // Cursor 的 Chat / Composer 存在 state.vscdb，不写 agent-transcripts。
-// 已经有转录文件的会话以转录为准，这里不另收一份。子会话留给后续的嵌套，不单列。
+// 已经有转录文件的会话以转录为准，这里不另收一份。带子会话标记的挂到父会话下面。
 
 func cursorIDEDatabase(home string) string {
 	return filepath.Join(home, "Library", "Application Support", "Cursor", "User", "globalStorage", "state.vscdb")
@@ -100,7 +100,11 @@ func (x *Index) updateCursorIDE(ctx context.Context, roots Roots, known map[stri
 			continue
 		}
 		var data cursorComposer
-		if json.Unmarshal(value, &data) != nil || len(data.Headers) == 0 || cursorSubagent(data.Subagent) {
+		if json.Unmarshal(value, &data) != nil || len(data.Headers) == 0 {
+			continue
+		}
+		parent := cursorComposerParent(data)
+		if cursorSubagent(data.Subagent) && (parent == "" || parent == id) {
 			continue
 		}
 		sum := sha256.Sum256(value)
@@ -137,6 +141,7 @@ func (x *Index) updateCursorIDE(ctx context.Context, roots Roots, known map[stri
 			continue
 		}
 		st.SessionID = c.id
+		st.Parent = cleanParent(cursorComposerParent(c.data), c.id)
 		if err := x.save(ctx, source{agent: "cursor", transcript: path}, known[path], true, st, msgs, size, mtime, size, c.sum, 0); err != nil {
 			return false, err
 		}

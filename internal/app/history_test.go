@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/client"
+	"posse/internal/history"
 	"posse/internal/rpc"
 )
 
@@ -120,6 +121,30 @@ func TestHistoryGroupByFolder(t *testing.T) {
 		if h.sessions[i].ID != id {
 			t.Fatalf("time order broken at %d: %s", i, h.sessions[i].ID)
 		}
+	}
+}
+
+// 父会话很久没动、子会话今天更新：整棵树排在前面、归到"今天"，子会话缩进在父会话下面。
+func TestHistoryGroupByTreeLatest(t *testing.T) {
+	now := time.Now()
+	h := &historyView{}
+	h.setSessions([]history.Session{
+		{Agent: "claude", ID: "other", Path: "/o", UpdatedAt: now.AddDate(0, 0, -1)},
+		{Agent: "claude", ID: "parent", Path: "/p", UpdatedAt: now.AddDate(0, 0, -40),
+			Children: []history.Session{{Agent: "claude", ID: "kid", Path: "/k", UpdatedAt: now}}},
+	})
+	if h.sessions[0].ID != "parent" || h.groups[0] != groupToday || h.groups[1] != groupYesterday {
+		t.Fatalf("order = %v %v", h.sessions[0].ID, h.groups)
+	}
+	rows := h.groupRows()
+	if len(rows) < 3 || rows[0].session >= 0 || rows[0].count != 1 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	if s := h.rowSession(rows[1]); s.ID != "parent" || len(rows[1].path) != 0 {
+		t.Fatalf("row 1 = %+v", rows[1])
+	}
+	if s := h.rowSession(rows[2]); s.ID != "kid" || len(rows[2].path) != 1 {
+		t.Fatalf("row 2 = %+v", rows[2])
 	}
 }
 

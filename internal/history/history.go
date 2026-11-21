@@ -29,6 +29,10 @@ type Session struct {
 	Messages  int       `json:"messages"`
 	Path      string    `json:"path"`            // 会话文件；分成几段的是最新的一段
 	Model     string    `json:"model,omitempty"` // 最近一次回复用的模型
+	// Parent 是父会话的 ID。子会话挂在父会话下面，不单独占列表的一行
+	Parent string `json:"parent,omitempty"`
+	// Children 是直接派生出来的子会话，只有列表查询填它
+	Children []Session `json:"children,omitempty"`
 	// Parts 是分成几段的会话的全部文件，从早到晚；只有一段时为空。只有 Find 填它
 	Parts []string `json:"parts,omitempty"`
 }
@@ -38,6 +42,9 @@ type Message struct {
 	Role string    `json:"role"` // user | assistant | tool
 	Text string    `json:"text"`
 	At   time.Time `json:"at,omitzero"`
+	// Child 是这次工具调用派出去的子会话，只有读父会话正文时填
+	Child     string `json:"child,omitempty"`
+	ChildPath string `json:"childPath,omitempty"`
 }
 
 // Hit 是一个命中的会话，带上最相关的一条消息的摘要。
@@ -52,8 +59,9 @@ type Hit struct {
 }
 
 type Index struct {
-	db    *sql.DB
-	codex codexTitles // 更新索引时读过的 codex 会话名
+	db          *sql.DB
+	codex       codexTitles       // 更新索引时读过的 codex 会话名
+	grokParents map[string]string // 更新索引时读过的 Grok 子会话登记
 }
 
 const schema = `
@@ -78,7 +86,9 @@ CREATE TABLE IF NOT EXISTS sessions (
 	tail BLOB,
 	state TEXT NOT NULL DEFAULT '',
 	-- 元数据旁路文件（grok 的 summary.json）的 mtime
-	meta_mtime INTEGER NOT NULL DEFAULT 0
+	meta_mtime INTEGER NOT NULL DEFAULT 0,
+	-- 父会话的 session_id。空字符串是顶层会话
+	parent TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS sessions_sid ON sessions(session_id);
 CREATE INDEX IF NOT EXISTS sessions_updated ON sessions(updated_at);
@@ -104,7 +114,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS titles_fts USING fts5(
 `
 
 // schemaVersion 变化时清空重建：索引是派生数据，重建比迁移简单可靠。只改了某一家的解析规则改 parserVersions。
-const schemaVersion = "5"
+const schemaVersion = "6"
 
 // Open 打开索引供更新用，版本不对时清空重建。
 func Open(path string) (*Index, error) {
@@ -218,7 +228,7 @@ func fromMS(v int64) time.Time {
 // 模型只记在增量读取的状态里，不单独成列。
 func sessionCols(prefix string) string {
 	var b strings.Builder
-	for _, c := range []string{"agent", "session_id", "title", "first_prompt", "cwd", "branch", "created_at", "updated_at", "messages", "path"} {
+	for _, c := range []string{"agent", "session_id", "title", "first_prompt", "cwd", "branch", "created_at", "updated_at", "messages", "path", "parent"} {
 		b.WriteString(prefix + c + ", ")
 	}
 	b.WriteString("COALESCE(json_extract(NULLIF(" + prefix + "state, ''), '$.model'), '')")
@@ -229,7 +239,7 @@ func scanSession(sc interface{ Scan(...any) error }, extra ...any) (Session, err
 	var s Session
 	var first string
 	var created, updated int64
-	dest := append([]any{&s.Agent, &s.ID, &s.Title, &first, &s.Cwd, &s.Branch, &created, &updated, &s.Messages, &s.Path, &s.Model}, extra...)
+	dest := append([]any{&s.Agent, &s.ID, &s.Title, &first, &s.Cwd, &s.Branch, &created, &updated, &s.Messages, &s.Path, &s.Parent, &s.Model}, extra...)
 	if err := sc.Scan(dest...); err != nil {
 		return s, err
 	}
@@ -279,9 +289,12 @@ func groupKeyOf(alias string) string {
 const groupKey = `agent, CASE agent WHEN 'codex' THEN session_id ELSE path END`
 
 // merged 是合并后的会话表，供 FROM 使用：part 为 1 的行代表一个会话，parts 是它有几段。
-// where 筛的是每一段（ListOptions.where 用空别名生成）。
+// where 筛的是每一段（ListOptions.where 用空别名生成）。Codex 子线程续写的段不带父线程，
+// parent 取同一会话任一段的（不受 where 影响：只有继承历史、没有消息的第一段也算）。
 func merged(where string) string {
 	return `(SELECT id, agent, session_id, title, cwd, branch, updated_at, path, state,
+		CASE agent WHEN 'codex' THEN COALESCE((SELECT MAX(q.parent) FROM sessions q WHERE q.agent = 'codex' AND q.session_id = sessions.session_id), '')
+			ELSE parent END AS parent,
 		FIRST_VALUE(first_prompt) OVER (PARTITION BY ` + groupKey + ` ORDER BY created_at, id) AS first_prompt,
 		MIN(created_at) OVER g AS created_at, SUM(messages) OVER g AS messages, COUNT(*) OVER g AS parts,
 		ROW_NUMBER() OVER (PARTITION BY ` + groupKey + ` ORDER BY updated_at DESC, id DESC) AS part
@@ -324,16 +337,26 @@ func (x *Index) parts(ctx context.Context, s Session) ([]part, error) {
 	return out, rows.Err()
 }
 
-// Sessions 按最近更新排列会话。
+// Sessions 列出会话，子会话挂在父会话下。顶层按整棵树最近的更新时间排（Session.Latest），
+// Limit 截的是顶层：截掉的父会话连同子会话一起不出现。
 func (x *Index) Sessions(ctx context.Context, o ListOptions) ([]Session, error) {
 	if ok, err := x.ready(ctx); !ok {
 		return nil, err
 	}
+	out, err := x.nested(ctx, o)
+	if err != nil {
+		return nil, err
+	}
+	if o.Limit > 0 && len(out) > o.Limit {
+		out = out[:o.Limit]
+	}
+	return out, nil
+}
+
+// nested 是 o 筛出的全部会话挂好父子关系，不截断。
+func (x *Index) nested(ctx context.Context, o ListOptions) ([]Session, error) {
 	where, args := o.where("")
 	q := `SELECT ` + sessionCols("") + ` FROM ` + merged(where) + ` WHERE part = 1 ORDER BY updated_at DESC`
-	if o.Limit > 0 {
-		q += fmt.Sprintf(" LIMIT %d", o.Limit)
-	}
 	rows, err := x.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -347,7 +370,10 @@ func (x *Index) Sessions(ctx context.Context, o ListOptions) ([]Session, error) 
 		}
 		out = append(out, s)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return nestSessions(out), nil
 }
 
 // Find 按会话 ID 或其前缀查找；前缀对应多个会话时报错列出候选。
@@ -464,7 +490,7 @@ func (x *Index) Transcript(ctx context.Context, s Session, o TranscriptOptions) 
 		if limit >= 0 && len(out) > limit {
 			out = out[len(out)-limit:]
 		}
-		return out, nil
+		return x.withChildren(ctx, s, out)
 	}
 	rows, err := x.db.QueryContext(ctx, `SELECT seq, role, at, text FROM (
 		SELECT m.seq, m.role, m.at, m.text FROM messages m JOIN sessions s ON s.id = m.session
@@ -473,7 +499,20 @@ func (x *Index) Transcript(ctx context.Context, s Session, o TranscriptOptions) 
 	if err != nil {
 		return nil, err
 	}
-	return scanMessages(rows)
+	msgs, err := scanMessages(rows)
+	if err != nil {
+		return nil, err
+	}
+	return x.withChildren(ctx, s, msgs)
+}
+
+func (x *Index) withChildren(ctx context.Context, s Session, msgs []Message) ([]Message, error) {
+	children, err := x.childRefs(ctx, s)
+	if err != nil || len(children) == 0 {
+		return msgs, err
+	}
+	linkChildMessages(msgs, children)
+	return msgs, nil
 }
 
 func scanMessages(rows *sql.Rows) ([]Message, error) {
@@ -626,23 +665,15 @@ func (x *Index) Stats(ctx context.Context) (Stats, error) {
 	if ok, err := x.ready(ctx); !ok {
 		return st, err
 	}
-	rows, err := x.db.QueryContext(ctx, `SELECT agent, COUNT(DISTINCT CASE agent WHEN 'codex' THEN session_id ELSE path END), SUM(messages) FROM sessions WHERE messages > 0 GROUP BY agent`)
+	// 和列表同一套父子关系：挂在父会话下的不另算一条，会话数等于列表的顶层条数
+	roots, err := x.nested(ctx, ListOptions{})
 	if err != nil {
 		return st, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var agent string
-		var n, m int
-		if err := rows.Scan(&agent, &n, &m); err != nil {
-			return st, err
-		}
-		st.ByAgent[agent] = n
-		st.Sessions += n
-		st.Messages += m
-	}
-	if err := rows.Err(); err != nil {
-		return st, err
+	for _, s := range roots {
+		st.ByAgent[s.Agent]++
+		st.Sessions++
+		st.Messages += s.Messages
 	}
 	var at string
 	if x.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key='indexed_at'`).Scan(&at) == nil {

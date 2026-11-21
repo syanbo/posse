@@ -74,34 +74,6 @@ func openAntigravitySummaries(base string) *sql.DB {
 	return db
 }
 
-// 子会话关系另存 SQLite；只读查询失败时仍可用摘要缓存里的 Internal 标记。
-func antigravityChildren(base string) map[string]bool {
-	db := openAntigravitySummaries(base)
-	if db == nil {
-		return nil
-	}
-	defer db.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	rows, err := db.QueryContext(ctx, `SELECT conversation_id FROM conversation_summaries WHERE parent_conversation_id != '' OR nesting_depth > 0 UNION SELECT conversation_id FROM conversation_parents WHERE parent_id != ''`)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	out := map[string]bool{}
-	for rows.Next() {
-		var id string
-		if rows.Scan(&id) != nil {
-			return nil
-		}
-		out[id] = true
-	}
-	if rows.Err() != nil {
-		return nil
-	}
-	return out
-}
-
 // 元数据缓存是 CLI 的摘要快照，原生 SQLite 里还有 protobuf；只读缓存，不改写原生存储。
 type antigravityMetadata struct {
 	Conversations map[string]struct {
@@ -228,10 +200,12 @@ func (p antigravityParser) meta(path string, st *fileState) error {
 	}
 	st.SessionID = p.id
 	if m, ok := data.Conversations[p.id]; ok {
-		st.Skip = m.Internal || m.Summary.Internal || m.Summary.ParentConversationID != ""
-		if m.Summary.ID != "" && m.Summary.ID != p.id {
+		if m.Internal || m.Summary.Internal || (m.Summary.ID != "" && m.Summary.ID != p.id) {
 			st.Skip = true
 			return nil
+		}
+		if m.Summary.ParentConversationID != "" && m.Summary.ParentConversationID != p.id {
+			st.Parent = m.Summary.ParentConversationID
 		}
 		st.Title = m.Summary.Title
 		if len(m.Summary.WorkspaceURIs) > 0 {

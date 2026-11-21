@@ -9833,6 +9833,22 @@ func (msgs Messages) HistoryOpenInFinderTip(path string) string {
 	return Catalog.Format(msgs.locale, "historyOpenInFinderTip", map[string]any{"path": path})
 }
 
+// HistoryOpenSubagent says "Open Subagent"
+// in the language the app shows.
+//
+// History: button on the tool call that started a subagent, opening that
+// session.
+func HistoryOpenSubagent() string { return In(i18n.Locale()).HistoryOpenSubagent() }
+
+// HistoryOpenSubagent says "Open Subagent"
+// in the language of msgs.
+//
+// History: button on the tool call that started a subagent, opening that
+// session.
+func (msgs Messages) HistoryOpenSubagent() string {
+	return Catalog.Format(msgs.locale, "historyOpenSubagent", nil)
+}
+
 // HistoryQueryFailed says "Query failed: {error}"
 // in the language the app shows.
 //

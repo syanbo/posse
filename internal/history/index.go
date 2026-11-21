@@ -29,6 +29,7 @@ type source struct {
 	meta       string
 	cwd        func() string // 记录里没有目录时的备选（cursor 从项目目录名还原）
 	parser     parser
+	parent     string // 发现阶段就能确定的父会话 ID（Antigravity 摘要库）
 }
 
 // fileState 是一份会话文件解析到一半时需要记住的东西，存进 sessions.state，
@@ -44,8 +45,15 @@ type fileState struct {
 	Updated     int64  `json:"updated,omitempty"`
 	Seq         int    `json:"seq,omitempty"`
 	Mode        string `json:"mode,omitempty"` // codex 的记录格式
-	// Skip 为真表示这份文件不是用户的会话（如 agent 内部的子任务），不入库
+	// Skip 为真表示这份文件不是用户发起的会话（自动审批、压缩、记忆整理），不入库
 	Skip bool `json:"skip,omitempty"`
+	// Parent 是父会话 ID。Spawn 是父会话工具输出里能对上的那段（Codex 的 agent_path）
+	Parent string `json:"parent,omitempty"`
+	Spawn  string `json:"spawn,omitempty"`
+	// Inherit 是 Codex 子线程从父线程复制进来的历史的结束序号，这一行之前的内容不入库
+	Inherit int `json:"inherit,omitempty"`
+	// inSubagent 表示这份文件本身就是 Claude 子会话，里面的 isSidechain 是正文
+	inSubagent bool
 	// Model 是最近一次回复用的模型
 	Model string `json:"model,omitempty"`
 	// LastAt 是上一条有时间的消息的时间：记录里没有时间的消息沿用它
@@ -94,6 +102,8 @@ const tailLen = 64
 
 // Update 增量更新索引：新文件整份读入，追加过的文件只读新增的行，消失的文件从索引删除。
 func (x *Index) Update(ctx context.Context, roots Roots, progress func(Progress)) error {
+	x.grokParents = grokSubagentParents(filepath.Join(roots.Home, ".grok", "sessions"))
+	defer func() { x.grokParents = nil }()
 	sources := discover(roots)
 	known, err := x.knownFiles(ctx)
 	if err != nil {
@@ -173,6 +183,7 @@ type knownFile struct {
 	tail      []byte
 	state     string
 	metaMtime int64
+	parent    string
 }
 
 // parserVersions 是各家解析规则的版本。只改了某一家的解析时改这里：只重读这一家的文件，表结构版本不变，
@@ -202,7 +213,7 @@ func (x *Index) staleParsers(ctx context.Context) (map[string]bool, error) {
 }
 
 func (x *Index) knownFiles(ctx context.Context) (map[string]knownFile, error) {
-	rows, err := x.db.QueryContext(ctx, `SELECT path, id, size, mtime, offset, tail, state, meta_mtime,
+	rows, err := x.db.QueryContext(ctx, `SELECT path, id, size, mtime, offset, tail, state, meta_mtime, parent,
 		CASE WHEN COALESCE(json_extract(NULLIF(state, ''), '$.skip'), 0) THEN '' ELSE COALESCE(NULLIF(title, ''), first_prompt) END
 		FROM sessions`)
 	if err != nil {
@@ -213,7 +224,7 @@ func (x *Index) knownFiles(ctx context.Context) (map[string]knownFile, error) {
 	for rows.Next() {
 		var path string
 		var k knownFile
-		if err := rows.Scan(&path, &k.id, &k.size, &k.mtime, &k.offset, &k.tail, &k.state, &k.metaMtime, &k.title); err != nil {
+		if err := rows.Scan(&path, &k.id, &k.size, &k.mtime, &k.offset, &k.tail, &k.state, &k.metaMtime, &k.parent, &k.title); err != nil {
 			return nil, err
 		}
 		out[path] = k
@@ -241,7 +252,9 @@ func (x *Index) updateFile(ctx context.Context, src source, k knownFile, roots R
 		metaMtime = mtimeOf(src.meta)
 	}
 	if k.id != 0 && size == k.size && mtime == k.mtime && metaMtime == k.metaMtime {
-		return nil
+		if p, ok := x.externalParent(src, sessionIDHint(src, k.state)); !ok || p == k.parent {
+			return nil
+		}
 	}
 	f, err := os.Open(src.transcript)
 	if err != nil {
@@ -261,6 +274,9 @@ func (x *Index) updateFile(ctx context.Context, src source, k knownFile, roots R
 		offset = 0
 	} else if k.state != "" {
 		json.Unmarshal([]byte(k.state), &st)
+	}
+	if _, _, claudeSub := nestedTranscript(src.transcript); claudeSub {
+		st.inSubagent = true
 	}
 	var msgs []Message
 	var tail []byte
@@ -318,6 +334,7 @@ func (x *Index) updateFile(ctx context.Context, src source, k knownFile, roots R
 			st.SessionID = filepath.Base(filepath.Dir(src.transcript))
 		}
 	}
+	x.applyParent(src, &st)
 	return x.save(ctx, src, k, reset, st, msgs, size, mtime, offset, tail, metaMtime)
 }
 
@@ -573,18 +590,18 @@ func (x *Index) save(ctx context.Context, src source, k knownFile, reset bool, s
 	}
 	if id == 0 {
 		res, err := tx.ExecContext(ctx, `INSERT INTO sessions(agent, session_id, path, title, first_prompt, cwd, branch, created_at, updated_at,
-			messages, size, mtime, offset, tail, state, meta_mtime) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			messages, size, mtime, offset, tail, state, meta_mtime, parent) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			src.agent, st.SessionID, src.transcript, st.Title, st.FirstPrompt, st.Cwd, st.Branch, st.Created, st.Updated,
-			count, size, mtime, offset, tail, string(stateJSON), metaMtime)
+			count, size, mtime, offset, tail, string(stateJSON), metaMtime, st.Parent)
 		if err != nil {
 			return err
 		}
 		id, _ = res.LastInsertId()
 	} else {
 		_, err := tx.ExecContext(ctx, `UPDATE sessions SET session_id=?, title=?, first_prompt=?, cwd=?, branch=?, created_at=?, updated_at=?,
-			messages=?, size=?, mtime=?, offset=?, tail=?, state=?, meta_mtime=? WHERE id=?`,
+			messages=?, size=?, mtime=?, offset=?, tail=?, state=?, meta_mtime=?, parent=? WHERE id=?`,
 			st.SessionID, st.Title, st.FirstPrompt, st.Cwd, st.Branch, st.Created, st.Updated,
-			count, size, mtime, offset, tail, string(stateJSON), metaMtime, id)
+			count, size, mtime, offset, tail, string(stateJSON), metaMtime, st.Parent, id)
 		if err != nil {
 			return err
 		}

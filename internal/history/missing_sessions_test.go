@@ -160,8 +160,11 @@ func TestCursorIDEChats(t *testing.T) {
 	if hits := search(t, x, "ideonlyword", SearchOptions{}); len(hits) != 1 {
 		t.Fatalf("search = %+v", hits)
 	}
-	if hits := search(t, x, "subagentonlyide", SearchOptions{}); len(hits) != 0 {
-		t.Fatalf("subagent listed: %+v", hits)
+	if len(ss[0].Children) != 1 || ss[0].Children[0].ID != sub || ss[0].Children[0].Title != "subtask" {
+		t.Fatalf("children = %+v", ss[0].Children)
+	}
+	if hits := search(t, x, "subagentonlyide", SearchOptions{}); len(hits) != 1 || hits[0].Parent != id {
+		t.Fatalf("subagent search = %+v", hits)
 	}
 	if hits := search(t, x, "panel.go", SearchOptions{}); len(hits) != 1 || hits[0].Role != "tool" {
 		t.Fatalf("tool = %+v", hits)

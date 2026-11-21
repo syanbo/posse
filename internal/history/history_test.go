@@ -76,7 +76,7 @@ func fixtures(t *testing.T, home string) {
 		`{"type":"user","cwd":"/work/shop","gitBranch":"main","sessionId":"`+claudeSID+`","timestamp":"2026-10-01T10:00:00Z","message":{"role":"user","content":"帮我清理磁盘上的缓存 <system-reminder>secret reminder text</system-reminder>"}}`,
 		`{"type":"user","isMeta":true,"timestamp":"2026-10-01T10:00:01Z","message":{"role":"user","content":"Base directory for this skill: injectedskillbody"}}`,
 		`{"type":"assistant","timestamp":"2026-10-01T10:00:02Z","message":{"role":"assistant","model":"claude-opus-5-5","content":[{"type":"thinking","thinking":"hidden thoughts"},{"type":"text","text":"好的，先看看 Library/Caches 有多大。"},{"type":"tool_use","name":"Bash","input":{"command":"du -sh ~/Library/Caches"}}]}}`,
-		`{"type":"user","timestamp":"2026-10-01T10:00:03Z","message":{"role":"user","content":[{"type":"tool_result","content":"12G\t/Users/x/Library/Caches"}]}}`,
+		`{"type":"user","timestamp":"2026-10-01T10:00:03Z","message":{"role":"user","content":[{"type":"tool_result","content":"12G\t/Users/x/Library/Caches\nagentId: subagentx0123456789"}]}}`,
 		`{"type":"user","timestamp":"2026-10-01T10:00:04Z","message":{"role":"user","content":"<local-command-stdout>compacted output</local-command-stdout>"}}`,
 		`{"type":"user","timestamp":"2026-10-01T10:00:05Z","message":{"role":"user","content":"<command-name>/review</command-name>\n<command-message>review</command-message>\n<command-args>branch-x</command-args>"}}`,
 		// 工作中插进来的话；后台任务通知同样是 queued_command，但不是人发的
@@ -85,9 +85,9 @@ func fixtures(t *testing.T, home string) {
 		`{"type":"attachment","timestamp":"2026-10-01T10:00:08Z","attachment":{"type":"queued_command","prompt":"<task-notification>bgtasknote</task-notification>","commandMode":"task-notification","origin":{"kind":"task-notification"}}}`,
 		`{"type":"ai-title","aiTitle":"磁盘清理","sessionId":"`+claudeSID+`"}`,
 	)
-	// 子 agent 的过程记录不算会话
-	writeFile(t, filepath.Join(home, ".claude", "projects", "-work-shop", claudeSID, "subagents", "agent-x.jsonl"),
-		`{"type":"user","cwd":"/work/shop","sessionId":"`+claudeSID+`","timestamp":"2026-10-01T10:00:00Z","message":{"role":"user","content":"subagentonlyword"}}`)
+	// 用户发起的子会话挂在父会话下面。正文带 isSidechain，agentId 出现在父会话的工具结果里
+	writeFile(t, filepath.Join(home, ".claude", "projects", "-work-shop", claudeSID, "subagents", "agent-subagentx0123456789.jsonl"),
+		`{"type":"user","isSidechain":true,"agentId":"subagentx0123456789","cwd":"/work/shop","sessionId":"`+claudeSID+`","timestamp":"2026-10-01T10:00:00Z","message":{"role":"user","content":"subagentonlyword"}}`)
 
 	codex := filepath.Join(home, ".codex", "sessions", "2026", "10", "02", "rollout-2026-10-02T09-00-00-c0dex.jsonl")
 	writeFile(t, codex,
@@ -162,6 +162,9 @@ func TestIndexAgents(t *testing.T) {
 			t.Errorf("%s session = %+v, want %+v", agent, s, want)
 		}
 	}
+	if kids := got["claude"].Children; len(kids) != 1 || kids[0].ID != "subagentx0123456789" || kids[0].Parent != claudeSID {
+		t.Fatalf("claude children = %+v", got["claude"].Children)
+	}
 	if got["claude"].Model != "claude-opus-5-5" || got["grok"].Model != "grok-4.7-build" {
 		t.Errorf("models: claude %q grok %q", got["claude"].Model, got["grok"].Model)
 	}
@@ -172,13 +175,14 @@ func TestIndexAgents(t *testing.T) {
 		t.Errorf("cursor updated = %v", c.UpdatedAt)
 	}
 
-	// 注入的内容、思考过程、子 agent 和自动审批会话都不进索引
-	for _, q := range []string{"secret", "injectedskillbody", "hidden", "compacted", "subagentonlyword", "agentsmdinjected", "guardianonlyword", "grokrulesinjected", "Grok"} {
+	// 注入的内容、思考过程、自动审批会话都不进索引。用户发起的子会话能搜到
+	for _, q := range []string{"secret", "injectedskillbody", "hidden", "compacted", "agentsmdinjected", "guardianonlyword", "grokrulesinjected", "Grok"} {
 		if hits := search(t, x, q, SearchOptions{}); len(hits) != 0 {
 			t.Errorf("search %q = %v, want nothing", q, ids(hits))
 		}
 	}
 	for q, want := range map[string]string{
+		"subagentonlyword":   "claude:subagentx0123456789",
 		"磁盘":                 "claude:" + claudeSID, // 中文子串
 		"caches":             "claude:" + claudeSID, // 工具调用和输出
 		"/review branch-x":   "claude:" + claudeSID, // 斜杠命令
@@ -209,6 +213,19 @@ func TestIndexAgents(t *testing.T) {
 	}
 	if strings.Join(roles, ",") != "user,tool,tool,tool,assistant" {
 		t.Errorf("codex transcript roles = %v", roles)
+	}
+	claudeMsgs, err := x.Transcript(ctx, got["claude"], TranscriptOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var linked bool
+	for _, m := range claudeMsgs {
+		if m.Child == "subagentx0123456789" && m.ChildPath != "" {
+			linked = true
+		}
+	}
+	if !linked {
+		t.Fatalf("claude tool result not linked: %+v", claudeMsgs)
 	}
 	if !strings.Contains(msgs[1].Text, "shell: rg retry") || !strings.Contains(msgs[2].Text, "a.go") {
 		t.Errorf("codex transcript = %+v", msgs)

@@ -142,8 +142,16 @@ func cmdHistoryList(e *env, args []string) error {
 		}
 		w := e.table()
 		fmt.Fprintln(w, "SESSION\tAGENT\tUPDATED\tMSGS\tDIR\tTITLE")
+		// 子会话缩进打在父会话下面，时间是它自己的
+		var row func(s history.Session, depth int)
+		row = func(s history.Session, depth int) {
+			fmt.Fprintf(w, "%s%s\t%s\t%s\t%d\t%s\t%s\n", strings.Repeat("  ", depth), s.ID, s.Agent, age(s.UpdatedAt), s.Messages, dash(tildePath(s.Cwd)), oneLine(s.Title, 60))
+			for _, c := range s.Children {
+				row(c, depth+1)
+			}
+		}
 		for _, s := range res.Sessions {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", s.ID, s.Agent, age(s.UpdatedAt), s.Messages, dash(tildePath(s.Cwd)), oneLine(s.Title, 60))
+			row(s, 0)
 		}
 		w.Flush()
 	})

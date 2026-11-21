@@ -185,8 +185,15 @@ func TestAntigravitySubagents(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := discover(Roots{Home: home}); len(got) != 0 {
-		t.Fatal(got)
+	got := discover(Roots{Home: home})
+	if len(got) != 1 || got[0].parent != "parent" {
+		t.Fatalf("discover = %+v", got)
+	}
+	x := openIndex(t)
+	update(t, x, home)
+	ss, err := x.Sessions(context.Background(), ListOptions{Agent: "antigravity"})
+	if err != nil || len(ss) != 1 || ss[0].ID != antigravitySID || ss[0].Parent != "parent" {
+		t.Fatalf("orphan child = %+v %v", ss, err)
 	}
 }
 

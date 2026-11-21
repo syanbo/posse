@@ -3642,6 +3642,10 @@
       }
     }
   },
+  "historyOpenSubagent": "Open Subagent",
+  "@historyOpenSubagent": {
+    "description": "History: button on the tool call that started a subagent, opening that session."
+  },
   "historyQueryFailed": "Query failed: {error}",
   "@historyQueryFailed": {
     "description": "History: notice above the list when the query fails.",
