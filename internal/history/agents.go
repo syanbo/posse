@@ -199,6 +199,9 @@ func globFiles(pattern string) []string {
 // 和 Orca 一致，同一个词在 Orca 里能搜到的工具输出，这里也能搜到。
 const toolClip = 3072
 
+// thinkClip 是一段思考过程的字符上限：详情里要能看清原因，又不把整段推理痕迹灌进索引。
+const thinkClip = 8192
+
 // promptClip 是会话第一句话（无标题时当标题）的字符数上限。
 const promptClip = 200
 
@@ -216,6 +219,14 @@ func clip(s string, n int) string {
 		return s
 	}
 	return s[:i] + "…"
+}
+
+// thinkMsg 把一段思考收成 reasoning。没有正文（加密思考、空摘要）时丢掉。
+func thinkMsg(text string, at int64) []Message {
+	if t := clip(text, thinkClip); t != "" {
+		return []Message{msg("reasoning", t, at)}
+	}
+	return nil
 }
 
 func parseTime(s string) int64 {
@@ -324,6 +335,7 @@ func toolCall(name string, input json.RawMessage) string {
 type contentBlock struct {
 	Type      string          `json:"type"`
 	Text      string          `json:"text"`
+	Thinking  string          `json:"thinking"`
 	Name      string          `json:"name"`
 	Input     json.RawMessage `json:"input"`
 	Content   json.RawMessage `json:"content"`
@@ -503,6 +515,12 @@ func (claudeParser) line(raw []byte, st *fileState) []Message {
 	var out []Message
 	for _, b := range blocks {
 		switch {
+		case b.Type == "thinking":
+			text := b.Thinking
+			if text == "" {
+				text = b.Text
+			}
+			out = append(out, thinkMsg(text, at)...)
 		case b.Type == "text" && r.Type == "user":
 			if t := claudeUserText(st, b.Text); t != "" {
 				out = append(out, msg("user", t, at))
@@ -569,6 +587,10 @@ type codexRecord struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
+		Summary []struct {
+			Text string `json:"text"`
+		} `json:"summary"`
+		Text      string          `json:"text"`
 		Name      string          `json:"name"`
 		Arguments string          `json:"arguments"`
 		Input     string          `json:"input"`
@@ -607,8 +629,8 @@ type codexItem struct {
 // codexParser.line 会处理的记录类型：两种格式都要的元数据，加上各自格式读消息的那一类
 // （新格式的 item_completed 是 payload 里的 type）。
 var (
-	codexPagedTypes  = quoted("session_meta", "turn_context", "item_completed")
-	codexLegacyTypes = quoted("session_meta", "turn_context", "response_item")
+	codexPagedTypes  = quoted("session_meta", "turn_context", "item_completed", "agent_reasoning")
+	codexLegacyTypes = quoted("session_meta", "turn_context", "response_item", "agent_reasoning")
 )
 
 func (codexParser) wants(raw []byte, st *fileState) bool {
@@ -705,7 +727,12 @@ func (codexParser) line(raw []byte, st *fileState) []Message {
 		return nil
 	case "event_msg":
 		// 新格式的会话以事件为准：其中的用户消息不含 Codex 注入的环境和 AGENTS.md，
-		// 改动按文件分开记录；同一内容的 response_item 不再读，免得重复
+		// 改动按文件分开记录；同一内容的 response_item 不再读，免得重复。
+		// agent_reasoning 两种格式都有，不进搜索，只进详情。
+		if p.Type == "agent_reasoning" {
+			touch(st, at)
+			return thinkMsg(p.Text, at)
+		}
 		if st.Mode != "paginated" || p.Type != "item_completed" {
 			return nil
 		}
@@ -748,6 +775,14 @@ func (codexParser) line(raw []byte, st *fileState) []Message {
 		case "assistant":
 			return []Message{msg("assistant", strings.Join(texts, "\n"), at)}
 		}
+	case "reasoning":
+		var parts []string
+		for _, s := range p.Summary {
+			if t := strings.TrimSpace(s.Text); t != "" {
+				parts = append(parts, t)
+			}
+		}
+		return thinkMsg(strings.Join(parts, "\n"), at)
 	case "function_call":
 		return []Message{msg("tool", toolCall(p.Name, json.RawMessage(p.Arguments)), at)}
 	case "custom_tool_call":
@@ -785,6 +820,16 @@ func codexItemMessages(st *fileState, it codexItem, at int64) []Message {
 		if t := join(); t != "" {
 			return []Message{msg("assistant", t, at)}
 		}
+	case "Reasoning":
+		text := join()
+		if t := strings.TrimSpace(it.Text); t != "" {
+			if text != "" {
+				text += "\n" + t
+			} else {
+				text = t
+			}
+		}
+		return thinkMsg(text, at)
 	case "Plan":
 		if t := strings.TrimSpace(it.Text); t != "" {
 			return []Message{msg("assistant", t, at)}
@@ -939,6 +984,12 @@ func (cursorParser) line(raw []byte, st *fileState) []Message {
 	var out []Message
 	for _, b := range blocks {
 		switch {
+		case b.Type == "thinking":
+			text := b.Thinking
+			if text == "" {
+				text = b.Text
+			}
+			out = append(out, thinkMsg(text, 0)...)
 		case b.Type == "text" && r.Role == "user":
 			text, at := cursorUserText(b.Text)
 			touch(st, at)
@@ -1042,7 +1093,10 @@ type grokRecord struct {
 	ToolCallID  string          `json:"tool_call_id"`
 	ToolCalls   []grokToolCall  `json:"tool_calls"`
 	Synthetic   string          `json:"synthetic_reason"`
-	Kind        struct {
+	Summary     []struct {
+		Text string `json:"text"`
+	} `json:"summary"`
+	Kind struct {
 		ToolType string `json:"tool_type"`
 		Action   struct {
 			Query string `json:"query"`
@@ -1054,7 +1108,7 @@ var grokQuery = regexp.MustCompile(`(?s)<user_query>(.*?)</user_query>`)
 
 // grokTypes 是 grokParser.line 会处理的记录类型；别的记录只可能带模型。
 var (
-	grokTypes   = quoted("user", "assistant", "tool_result", "backend_tool_call")
+	grokTypes   = quoted("user", "assistant", "tool_result", "backend_tool_call", "reasoning")
 	grokModelID = []byte(`"model_id"`)
 )
 
@@ -1270,6 +1324,14 @@ func (grokParser) line(raw []byte, st *fileState) []Message {
 		if t := clip(textOf(r.Content), toolClip); t != "" {
 			return []Message{msg("tool", t, at)}
 		}
+	case "reasoning":
+		var parts []string
+		for _, s := range r.Summary {
+			if t := strings.TrimSpace(s.Text); t != "" {
+				parts = append(parts, t)
+			}
+		}
+		return thinkMsg(strings.Join(parts, "\n"), at)
 	case "backend_tool_call":
 		if q := r.Kind.Action.Query; q != "" {
 			return []Message{msg("tool", r.Kind.ToolType+" "+q, at)}

@@ -668,9 +668,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final approval = _visibleApproval();
     final canvas = Theme.of(context).scaffoldBackgroundColor;
     final settings = widget.model.settings;
-    final entries = foldTranscript(_window.messages)
-        .where((e) => settings.showReasoning || e.message?.role != 'reasoning')
-        .toList();
+    final entries = foldTranscript(
+      settings.showReasoning
+          ? _window.messages
+          : withoutReasoning(_window.messages),
+    ).toList();
     final entryKeys = transcriptKeys(entries);
     final c = PosseColors.of(context);
     final echoes = _echoes.items;
@@ -937,9 +939,11 @@ class _ChatScreenState extends State<ChatScreen> {
   /// 倒序列表的下标顺序：下标 0 是视觉底部。不含「更早的消息」那一行，它只加在尾部。
   ChatTail _tail() {
     final settings = widget.model.settings;
-    final entries = foldTranscript(_window.messages)
-        .where((e) => settings.showReasoning || e.message?.role != 'reasoning')
-        .toList();
+    final entries = foldTranscript(
+      settings.showReasoning
+          ? _window.messages
+          : withoutReasoning(_window.messages),
+    ).toList();
     final echoes = _echoes.items;
     final keys = <String>[];
     final sizes = <int>[];

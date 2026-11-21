@@ -28,6 +28,33 @@ bool _repeatsUser(ChatMessage? last, ChatMessage message) {
       message.blocks.every((block) => block.type == 'text');
 }
 
+/// 对话页关掉「显示思考」时丢掉思考消息，以及夹在回复里的思考块。
+List<ChatMessage> withoutReasoning(List<ChatMessage> messages) {
+  final out = <ChatMessage>[];
+  for (final message in messages) {
+    if (message.role == 'reasoning') continue;
+    final blocks = message.blocks
+        .where((block) => block.type != 'reasoning')
+        .toList();
+    if (blocks.isEmpty) continue;
+    if (blocks.length == message.blocks.length) {
+      out.add(message);
+      continue;
+    }
+    out.add(
+      ChatMessage(
+        id: message.id,
+        role: message.role,
+        blocks: blocks,
+        timestamp: message.timestamp,
+        source: message.source,
+        transcriptOffset: message.transcriptOffset,
+      ),
+    );
+  }
+  return out;
+}
+
 /// 连续的工具调用折成一行。桌面历史详情默认也这样，避免每条工具占一整块。
 List<TranscriptEntry> foldTranscript(List<ChatMessage> messages) {
   final out = <TranscriptEntry>[];

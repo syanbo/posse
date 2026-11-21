@@ -85,6 +85,19 @@ func TestAntigravityHistory(t *testing.T) {
 	if got := search(t, x, "secret", SearchOptions{}); len(got) != 0 {
 		t.Fatal(got)
 	}
+	transcript, err := x.Transcript(context.Background(), s, TranscriptOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var thought bool
+	for _, m := range transcript {
+		if m.Role == "reasoning" && m.Text == "secret reasoning" {
+			thought = true
+		}
+	}
+	if !thought {
+		t.Fatal(transcript)
+	}
 	if got := search(t, x, "private", SearchOptions{}); len(got) != 0 {
 		t.Fatal(got)
 	}

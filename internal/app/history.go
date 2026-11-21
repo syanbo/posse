@@ -68,8 +68,8 @@ type transcriptItem struct {
 	tools []history.Message
 }
 
-// visible 返回要列出的行：全显示工具时逐条列出；否则连续的工具调用折成一行"工具调用 N 次"，
-// 点开的组和命中的那条照常列出。结果缓存在会话上。
+// visible 返回要列出的行：连续的思考折成一行，点开才展开。全显示工具时工具逐条列出；
+// 否则连续的工具调用折成一行"工具调用 N 次"，点开的组和命中的那条照常列出。结果缓存在会话上。
 func (d *historyDetail) visible(tools bool, hitSeq int) []transcriptItem {
 	key := fmt.Sprint(tools, hitSeq, d.openedV)
 	if d.items != nil && key == d.itemsKey {
@@ -78,6 +78,22 @@ func (d *historyDetail) visible(tools bool, hitSeq int) []transcriptItem {
 	d.items, d.itemsKey = d.items[:0], key
 	for i := 0; i < len(d.Messages); i++ {
 		m := d.Messages[i]
+		if m.Role == "reasoning" {
+			j := i
+			for j < len(d.Messages) && d.Messages[j].Role == "reasoning" {
+				j++
+			}
+			run := d.Messages[i:j]
+			hit := slices.ContainsFunc(run, func(t history.Message) bool { return t.Seq == hitSeq })
+			d.items = append(d.items, transcriptItem{msg: run[0], tools: run})
+			if d.opened[run[0].Seq] || hit {
+				for _, t := range run {
+					d.items = append(d.items, transcriptItem{msg: t})
+				}
+			}
+			i = j - 1
+			continue
+		}
 		if m.Role != "tool" || tools {
 			d.items = append(d.items, transcriptItem{msg: m})
 			continue
@@ -1112,7 +1128,11 @@ func (a *app) sessionDetail(c *ui.Context) {
 			it := msgs[i]
 			if it.tools != nil {
 				expanded := i+1 < len(msgs) && msgs[i+1].tools == nil && msgs[i+1].msg.Seq == it.tools[0].Seq
-				a.toolRun(c, d, it.tools, expanded)
+				if it.msg.Role == "reasoning" {
+					a.thinkRun(c, d, it.tools, expanded)
+				} else {
+					a.toolRun(c, d, it.tools, expanded)
+				}
 				return
 			}
 			a.messageView(c, s, it.msg, ns, it.msg.Seq == h.hitSeq)
@@ -1126,6 +1146,33 @@ const transcriptInset = cardPad - 12
 
 // transcriptWidth 是对话的版心宽度：默认字号下一行四十几个汉字，随 Markdown 字号等比放宽。
 func (a *app) transcriptWidth() float32 { return 680 * a.mdSize() / defaultEditorFontSize }
+
+// thinkRun 是折起来的一段思考：点一下展开或收起。不跟着「显示工具调用」开关。
+func (a *app) thinkRun(c *ui.Context, d *historyDetail, run []history.Message, expanded bool) {
+	t := c.Theme()
+	open := d.opened[run[0].Seq]
+	row := ui.Row(c.Key("think")).Height(sz(26)).Margin(0, transcriptInset).Padding(0, 12).Gap(6).Radius(rControl).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
+	selectedBg(c, row, false)
+	row.Children(func() {
+		turn := float32(0)
+		if open || expanded {
+			turn = 90
+		}
+		ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted).Rotate(turn)
+		ui.Text(c, L(c).HistoryRoleReasoning()).FontSize(fsSmall).TextColor(t.TextMuted)
+	})
+	if row.Clicked() {
+		if d.opened == nil {
+			d.opened = map[int]bool{}
+		}
+		if open {
+			delete(d.opened, run[0].Seq)
+		} else {
+			d.opened[run[0].Seq] = true
+		}
+		d.openedV++
+	}
+}
 
 // toolRun 是折起来的一串工具调用：点一下展开或收起。打开子会话的按钮在这一行旁边，不放进可点的折叠条里。
 func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message, expanded bool) {
@@ -1199,6 +1246,8 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 		})
 		text := strings.TrimSpace(m.Text)
 		switch m.Role {
+		case "reasoning":
+			highlighted(c, text, ns).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Selectable()
 		case "tool":
 			highlighted(c, text, ns).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(8).LineHeight(1.5).Selectable()
 			a.subagentButtons(c, s, []history.Message{m})
@@ -1283,6 +1332,8 @@ func roleName(m locales.Messages, role, agent string) string {
 		return agentTitle(agent)
 	case "tool":
 		return m.HistoryRoleTool()
+	case "reasoning":
+		return m.HistoryRoleReasoning()
 	}
 	return ""
 }

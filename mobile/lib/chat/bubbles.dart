@@ -241,12 +241,94 @@ class MessageBubble extends StatelessWidget {
         style: const TextStyle(fontSize: Fs.body, height: Lh.read),
       );
     }
-    final style = role == 'reasoning'
-        ? TextStyle(fontStyle: FontStyle.italic, color: muted, height: Lh.read)
-        : role == 'system'
+    if (block.type == 'reasoning' || role == 'reasoning') {
+      return MarkdownView(
+        text,
+        style: TextStyle(
+          fontStyle: FontStyle.italic,
+          color: muted,
+          height: Lh.read,
+        ),
+      );
+    }
+    final style = role == 'system'
         ? TextStyle(fontSize: Fs.small, color: muted, height: Lh.body)
         : const TextStyle(fontSize: Fs.body, height: Lh.read);
     return MarkdownView(text, style: style);
+  }
+}
+
+/// 历史详情里的一段思考：默认收着，点开才看到正文。
+class ThinkingRun extends StatefulWidget {
+  const ThinkingRun({super.key, required this.blocks});
+
+  final List<ChatBlock> blocks;
+
+  @override
+  State<ThinkingRun> createState() => _ThinkingRunState();
+}
+
+class _ThinkingRunState extends State<ThinkingRun> {
+  var _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = chatMuted(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _open = !_open),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+              decoration: BoxDecoration(
+                color: PosseColors.of(context).fill,
+                borderRadius: BorderRadius.circular(Rd.button),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    context.l10n.chatRoleReasoning,
+                    style: TextStyle(fontSize: Fs.small, color: muted),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    _open
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    size: Ic.small,
+                    color: muted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 0, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final block in widget.blocks)
+                    if ((block.text ?? '').isNotEmpty)
+                      MarkdownView(
+                        block.text!,
+                        style: TextStyle(
+                          fontStyle: FontStyle.italic,
+                          color: muted,
+                          height: Lh.read,
+                        ),
+                      ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

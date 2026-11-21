@@ -96,6 +96,7 @@ type antigravityRecord struct {
 	Status      string `json:"status"`
 	Created     string `json:"created_at"`
 	Content     string `json:"content"`
+	Thinking    string `json:"thinking"`
 	Model       string `json:"model"`
 	InputTokens int    `json:"input_tokens"`
 	CacheTokens int    `json:"cache_read_tokens"`
@@ -175,6 +176,7 @@ func (p antigravityParser) line(raw []byte, st *fileState) []Message {
 			out = append(out, msg("user", text, at))
 		}
 	case "PLANNER_RESPONSE":
+		out = append(out, thinkMsg(r.Thinking, at)...)
 		if text := strings.TrimSpace(r.Content); text != "" {
 			out = append(out, msg("assistant", text, at))
 		}
@@ -296,6 +298,9 @@ func decodeAntigravityLine(raw []byte, off int64) *ChatMessage {
 			blocks = append(blocks, ChatBlock{Type: "text", Text: text})
 		}
 	case "PLANNER_RESPONSE":
+		if text := strings.TrimSpace(r.Thinking); text != "" {
+			blocks = append(blocks, ChatBlock{Type: "reasoning", Text: text})
+		}
 		if text := strings.TrimSpace(r.Content); text != "" {
 			blocks = append(blocks, ChatBlock{Type: "text", Text: text})
 		}
@@ -320,7 +325,19 @@ func decodeAntigravityLine(raw []byte, off int64) *ChatMessage {
 	if len(blocks) == 0 {
 		return nil
 	}
+	if role == "assistant" && onlyReasoning(blocks) {
+		role = "reasoning"
+	}
 	return &ChatMessage{ID: "antigravity-" + strconv.Itoa(r.Step), Role: role, Blocks: blocks, Timestamp: stamp(parseTime(r.Created)), Source: "antigravity", Offset: off}
+}
+
+func onlyReasoning(blocks []ChatBlock) bool {
+	for _, b := range blocks {
+		if b.Type != "reasoning" {
+			return false
+		}
+	}
+	return true
 }
 
 func antigravityContext(line []byte) (Context, bool) {

@@ -3655,6 +3655,10 @@
       }
     }
   },
+  "historyRoleReasoning": "Thinking",
+  "@historyRoleReasoning": {
+    "description": "History: the agent's thinking, as the speaker of a message and the folded row."
+  },
   "historyRoleTool": "Tool",
   "@historyRoleTool": {
     "description": "History: a tool result, as the speaker of a message."

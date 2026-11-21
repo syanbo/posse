@@ -116,7 +116,7 @@ func (s *grokChatSeg) message() *ChatMessage {
 		blocks[i] = sanitizeBlock(blocks[i])
 	}
 	role := s.role
-	if role != "user" {
+	if role != "user" && role != "reasoning" {
 		role = "assistant"
 	}
 	return &ChatMessage{
@@ -186,10 +186,13 @@ func applyGrokUpdateLine(raw []byte, off, end int64, seg **grokChatSeg, flush fu
 	}
 	at := grokMillis(row.Timestamp)
 	switch update.SessionUpdate {
-	case "user_message_chunk", "agent_message_chunk":
+	case "user_message_chunk", "agent_message_chunk", "agent_thought_chunk":
 		role := "assistant"
-		if update.SessionUpdate == "user_message_chunk" {
+		switch update.SessionUpdate {
+		case "user_message_chunk":
 			role = "user"
+		case "agent_thought_chunk":
+			role = "reasoning"
 		}
 		// 每个用户 chunk 是一次提问，不和前一条用户消息合并（同 grokUpdateParser）。
 		if *seg != nil && ((*seg).role != role || role == "user") {

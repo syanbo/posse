@@ -9863,6 +9863,22 @@ func (msgs Messages) HistoryQueryFailed(error string) string {
 	return Catalog.Format(msgs.locale, "historyQueryFailed", map[string]any{"error": error})
 }
 
+// HistoryRoleReasoning says "Thinking"
+// in the language the app shows.
+//
+// History: the agent's thinking, as the speaker of a message and the folded
+// row.
+func HistoryRoleReasoning() string { return In(i18n.Locale()).HistoryRoleReasoning() }
+
+// HistoryRoleReasoning says "Thinking"
+// in the language of msgs.
+//
+// History: the agent's thinking, as the speaker of a message and the folded
+// row.
+func (msgs Messages) HistoryRoleReasoning() string {
+	return Catalog.Format(msgs.locale, "historyRoleReasoning", nil)
+}
+
 // HistoryRoleTool says "Tool"
 // in the language the app shows.
 //

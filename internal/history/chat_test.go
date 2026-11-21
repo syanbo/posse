@@ -19,7 +19,7 @@ func TestChatSchemaUnchanged(t *testing.T) {
 	if schemaVersion != "6" {
 		t.Fatalf("schemaVersion %s", schemaVersion)
 	}
-	if parserVersions["claude"] != "4" || parserVersions["codex"] != "2" || parserVersions["grok"] != "4" {
+	if parserVersions["claude"] != "5" || parserVersions["codex"] != "3" || parserVersions["grok"] != "5" || parserVersions["cursor"] != "2" || parserVersions["antigravity"] != "2" {
 		t.Fatalf("parserVersions %v", parserVersions)
 	}
 }
@@ -394,13 +394,16 @@ func TestChatGrok(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if dump := blockDump(page); strings.Contains(dump, "grokrulesinjected") || strings.Contains(dump, "thinkinghidden") || strings.Contains(dump, "只在快照里") || strings.Contains(dump, "toolintentonly") {
+	if dump := blockDump(page); strings.Contains(dump, "grokrulesinjected") || strings.Contains(dump, "只在快照里") || strings.Contains(dump, "toolintentonly") || !strings.Contains(dump, "reasoning:thinkinghidden") {
 		t.Fatalf("kept injected %s", dump)
 	}
-	if len(page.Messages) != 4 {
+	if len(page.Messages) != 5 {
 		t.Fatalf("count %d %s", len(page.Messages), blockDump(page))
 	}
-	user, asst, tool, back := page.Messages[0], page.Messages[1], page.Messages[2], page.Messages[3]
+	user, thought, asst, tool, back := page.Messages[0], page.Messages[1], page.Messages[2], page.Messages[3], page.Messages[4]
+	if thought.Role != "reasoning" || len(thought.Blocks) != 1 || thought.Blocks[0].Text != "thinkinghidden" {
+		t.Fatalf("thought %+v", thought)
+	}
 	if user.Role != "user" || user.Blocks[0].Text != "配置 Ghostty 主题" || user.Timestamp == nil || *user.Timestamp != 1790000100000 {
 		t.Fatalf("user %+v", user)
 	}

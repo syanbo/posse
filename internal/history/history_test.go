@@ -124,6 +124,7 @@ func fixtures(t *testing.T, home string) {
 	// 正文以 updates.jsonl 为准。chat_history 里的 "theme = Mocha" 不再入库。
 	writeFile(t, filepath.Join(grokDir, "updates.jsonl"),
 		`{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"配置 Ghostty 主题"},"_meta":{"promptIndex":0}}}}`,
+		`{"timestamp":1790000104,"params":{"update":{"sessionUpdate":"agent_thought_chunk","content":{"text":"thoughtonly"}}}}`,
 		`{"timestamp":1790000105,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"先读当前"}}}}`,
 		`{"timestamp":1790000106,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"配置。"}}}}`,
 		`{"timestamp":1790000107,"params":{"update":{"sessionUpdate":"tool_call","toolCallId":"ws_x_call-a-1","title":"read_file","rawInput":{"target_file":"~/.config/ghostty/config"}}}}`,
@@ -176,7 +177,7 @@ func TestIndexAgents(t *testing.T) {
 	}
 
 	// 注入的内容、思考过程、自动审批会话都不进索引。用户发起的子会话能搜到
-	for _, q := range []string{"secret", "injectedskillbody", "hidden", "compacted", "agentsmdinjected", "guardianonlyword", "grokrulesinjected", "Grok"} {
+	for _, q := range []string{"secret", "injectedskillbody", "hidden", "thoughtonly", "compacted", "agentsmdinjected", "guardianonlyword", "grokrulesinjected", "Grok"} {
 		if hits := search(t, x, q, SearchOptions{}); len(hits) != 0 {
 			t.Errorf("search %q = %v, want nothing", q, ids(hits))
 		}
@@ -214,6 +215,21 @@ func TestIndexAgents(t *testing.T) {
 	if strings.Join(roles, ",") != "user,tool,tool,tool,assistant" {
 		t.Errorf("codex transcript roles = %v", roles)
 	}
+	assertReasoning := func(s Session, text string) {
+		t.Helper()
+		got, err := x.Transcript(ctx, s, TranscriptOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range got {
+			if m.Role == "reasoning" && strings.Contains(m.Text, text) {
+				return
+			}
+		}
+		t.Errorf("%s transcript has no reasoning %q", s.Agent, text)
+	}
+	assertReasoning(got["claude"], "hidden thoughts")
+	assertReasoning(got["grok"], "thoughtonly")
 	claudeMsgs, err := x.Transcript(ctx, got["claude"], TranscriptOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -240,7 +256,7 @@ func TestIndexAgents(t *testing.T) {
 		times = append(times, m.Role+"@"+fmt.Sprint(m.At.Unix()))
 	}
 	// 用户 100、连续的回复 chunk 合成一条（105）、工具调用 107、工具结果 108
-	if want := "user@1790000100,assistant@1790000105,tool@1790000107,tool@1790000108"; strings.Join(times, ",") != want {
+	if want := "user@1790000100,reasoning@1790000104,assistant@1790000105,tool@1790000107,tool@1790000108"; strings.Join(times, ",") != want {
 		t.Errorf("grok times = %v, want %s", times, want)
 	}
 }

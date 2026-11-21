@@ -638,6 +638,7 @@
   "historyOpenInFinderTip": "在访达中打开 {path}",
   "historyOpenSubagent": "打开子会话",
   "historyQueryFailed": "查询失败：{error}",
+  "historyRoleReasoning": "思考",
   "historyRoleTool": "工具",
   "historyRoleUser": "你",
   "historySearchLabel": "搜索会话",

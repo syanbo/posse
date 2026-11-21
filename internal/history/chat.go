@@ -663,7 +663,7 @@ func decodeClaudeLine(raw []byte, off int64) *ChatMessage {
 			if strings.TrimSpace(text) == "" {
 				continue
 			}
-			blocks = append(blocks, ChatBlock{Type: "text", Text: text})
+			blocks = append(blocks, ChatBlock{Type: "reasoning", Text: text})
 		case "tool_use":
 			if filtered {
 				continue
@@ -687,7 +687,8 @@ func decodeClaudeLine(raw []byte, off int64) *ChatMessage {
 	if r.Type == "user" && allType(blocks, "tool-result") {
 		role = "tool"
 	}
-	if thinking && !toolish {
+	// 只有思考、没有正文时整条是 reasoning。思考和回复在同一条里时回复仍是助手消息，思考单独成块。
+	if thinking && !toolish && !hasTextBlock(blocks) {
 		role = "reasoning"
 	}
 	if interrupted(blocks) {
@@ -698,6 +699,15 @@ func decodeClaudeLine(raw []byte, off int64) *ChatMessage {
 		ID: chatID(r.UUID, r.Message.ID, off), Role: role, Blocks: blocks,
 		Timestamp: stamp(parseTime(r.Timestamp)), Source: "transcript", ParentID: r.ParentUUID, Offset: off,
 	}
+}
+
+func hasTextBlock(blocks []ChatBlock) bool {
+	for _, b := range blocks {
+		if b.Type == "text" {
+			return true
+		}
+	}
+	return false
 }
 
 func claudePieces(raw json.RawMessage) ([]claudePiece, bool) {
@@ -1006,6 +1016,18 @@ func decodeGrokLine(raw []byte, off int64, gt *grokTimes, last *int64, keys *[]g
 		}
 		role = "tool"
 		blocks = []ChatBlock{{Type: "tool-result", Output: out, CallID: r.ToolCallID}}
+	case "reasoning":
+		var parts []string
+		for _, s := range r.Summary {
+			if t := strings.TrimSpace(s.Text); t != "" {
+				parts = append(parts, t)
+			}
+		}
+		if len(parts) == 0 {
+			return nil
+		}
+		role = "reasoning"
+		blocks = []ChatBlock{{Type: "text", Text: strings.Join(parts, "\n")}}
 	case "backend_tool_call":
 		if r.Kind.ToolType == "" && r.Kind.Action.Query == "" {
 			return nil
@@ -1052,7 +1074,7 @@ func grokInput(args string) json.RawMessage {
 
 func sanitizeBlock(b ChatBlock) ChatBlock {
 	switch b.Type {
-	case "text":
+	case "text", "reasoning":
 		b.Text = cutRunes(b.Text, chatTextCap)
 	case "tool-result":
 		if utf8.RuneCountInString(b.Output) > chatBlockCap {

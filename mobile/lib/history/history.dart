@@ -581,10 +581,7 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
     final s = widget.session;
-    final settings = widget.model.settings;
-    final entries = foldTranscript(_window.messages)
-        .where((e) => settings.showReasoning || e.message?.role != 'reasoning')
-        .toList();
+    final entries = _foldThinking(foldTranscript(_window.messages).toList());
     final entryKeys = transcriptKeys(entries);
     // 和对话页一样按身份认行：读进更早的一页时，展开着的工具组不会错配到别的行上
     final rowKeys = <String>[
@@ -693,12 +690,52 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
         initiallyOpen: widget.model.settings.expandTools,
       );
     }
-    return MessageBubble(
-      message: entry.message!,
-      blocks: entry.blocks,
-      agent: agent,
-    );
+    final message = entry.message!;
+    if (message.role == 'reasoning') {
+      return ThinkingRun(blocks: entry.blocks);
+    }
+    if (entry.blocks.any((block) => block.type == 'reasoning')) {
+      final thoughts = entry.blocks
+          .where((block) => block.type == 'reasoning')
+          .toList();
+      final rest = entry.blocks
+          .where((block) => block.type != 'reasoning')
+          .toList();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ThinkingRun(blocks: thoughts),
+          if (rest.isNotEmpty)
+            MessageBubble(message: message, blocks: rest, agent: agent),
+        ],
+      );
+    }
+    return MessageBubble(message: message, blocks: entry.blocks, agent: agent);
   }
+}
+
+/// 连续的思考收成一行。夹在回复里的思考块留给那一行自己折。
+List<TranscriptEntry> _foldThinking(List<TranscriptEntry> entries) {
+  final out = <TranscriptEntry>[];
+  for (final entry in entries) {
+    final message = entry.message;
+    if (!entry.tools &&
+        message != null &&
+        message.role == 'reasoning' &&
+        out.isNotEmpty) {
+      final prev = out.last;
+      final prevMessage = prev.message;
+      if (prevMessage != null && prevMessage.role == 'reasoning') {
+        out[out.length - 1] = TranscriptEntry.message(prevMessage, [
+          ...prev.blocks,
+          ...entry.blocks,
+        ]);
+        continue;
+      }
+    }
+    out.add(entry);
+  }
+  return out;
 }
 
 /// 历史页的 agent 筛选：一行小标签，选中的和别处的选中项一样是淡底陶土字，没选的只是灰字。

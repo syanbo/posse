@@ -18,7 +18,7 @@ type grokBuf struct {
 	at   int64
 }
 
-var grokUpdateContent = quoted("user_message_chunk", "agent_message_chunk", "tool_call", "tool_call_update")
+var grokUpdateContent = quoted("user_message_chunk", "agent_message_chunk", "agent_thought_chunk", "tool_call", "tool_call_update")
 
 func (grokUpdateParser) wants(raw []byte, _ *fileState) bool {
 	return hasFieldValue(raw, grokUpdateKey, grokUpdateContent)
@@ -44,10 +44,13 @@ func (p grokUpdateParser) line(raw []byte, st *fileState) []Message {
 	}
 	at := grokMillis(row.Timestamp)
 	switch update.SessionUpdate {
-	case "user_message_chunk", "agent_message_chunk":
+	case "user_message_chunk", "agent_message_chunk", "agent_thought_chunk":
 		role := "assistant"
-		if update.SessionUpdate == "user_message_chunk" {
+		switch update.SessionUpdate {
+		case "user_message_chunk":
 			role = "user"
+		case "agent_thought_chunk":
+			role = "reasoning"
 		}
 		// 每个用户 chunk 是一次提问：同一 promptIndex 重发的两条也各算一条，和 chat_history 一致。
 		var out []Message
@@ -99,6 +102,8 @@ func (p grokUpdateParser) flush(st *fileState) []Message {
 	if buf.role == "user" {
 		text = grokUserBody(text)
 		text = userText(st, text)
+	} else if buf.role == "reasoning" {
+		text = clip(text, thinkClip)
 	} else {
 		text = strings.TrimSpace(text)
 	}
