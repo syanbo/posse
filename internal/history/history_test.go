@@ -121,14 +121,16 @@ func fixtures(t *testing.T, home string) {
 		`{"type":"reasoning","summary":[],"encrypted_content":"xx"}`,
 		`{"type":"assistant","model_id":"grok-4.7-build","content":"先读当前配置。","tool_calls":[{"id":"call-a-1","name":"read_file","arguments":"{\"target_file\":\"~/.config/ghostty/config\"}"}]}`,
 		`{"type":"tool_result","tool_call_id":"call-a-1","content":"theme = Mocha"}`)
-	// chat_history 不带时间，时间在 updates.jsonl：回复按开头对上分段输出，工具按调用 ID（可能带前缀）
+	// 正文以 updates.jsonl 为准。chat_history 里的 "theme = Mocha" 不再入库。
 	writeFile(t, filepath.Join(grokDir, "updates.jsonl"),
 		`{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"配置 Ghostty 主题"},"_meta":{"promptIndex":0}}}}`,
 		`{"timestamp":1790000105,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"先读当前"}}}}`,
 		`{"timestamp":1790000106,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"配置。"}}}}`,
-		`{"timestamp":1790000107,"params":{"update":{"sessionUpdate":"tool_call","toolCallId":"ws_x_call-a-1"}}}`)
+		`{"timestamp":1790000107,"params":{"update":{"sessionUpdate":"tool_call","toolCallId":"ws_x_call-a-1","title":"read_file","rawInput":{"target_file":"~/.config/ghostty/config"}}}}`,
+		`{"timestamp":1790000107,"params":{"update":{"sessionUpdate":"tool_call_update","toolCallId":"ws_x_call-a-1","title":"Read config","content":[{"type":"content","content":{"type":"text","text":"toolintentonly"}}]}}}`,
+		`{"timestamp":1790000108,"params":{"update":{"sessionUpdate":"tool_call_update","toolCallId":"ws_x_call-a-1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"theme = Mocha"}}],"rawOutput":{"type":"ReadFile"}}}}`)
 	writeFile(t, filepath.Join(grokDir, "summary.json"),
-		`{"info":{"id":"33333333-3333-4333-8333-333333333333","cwd":"/work/grok"},"generated_title":"Ghostty 主题","head_branch":"dev","created_at":"2026-09-01T00:00:00Z","updated_at":"2026-09-02T00:00:00Z","last_active_at":"2026-09-03T00:00:00Z"}`)
+		`{"info":{"id":"33333333-3333-4333-8333-333333333333","cwd":"/work/grok"},"generated_title":"Ghostty 主题","current_model_id":"grok-4.7-build","head_branch":"dev","created_at":"2026-09-01T00:00:00Z","updated_at":"2026-09-02T00:00:00Z","last_active_at":"2026-09-03T00:00:00Z"}`)
 }
 
 func TestIndexAgents(t *testing.T) {
@@ -220,8 +222,8 @@ func TestIndexAgents(t *testing.T) {
 	for _, m := range msgs {
 		times = append(times, m.Role+"@"+fmt.Sprint(m.At.Unix()))
 	}
-	// 用户 100、回复 105（第一段输出）、工具调用沿用回复所在记录的时间、工具结果按调用 ID 107
-	if want := "user@1790000100,assistant@1790000105,tool@1790000105,tool@1790000107"; strings.Join(times, ",") != want {
+	// 用户 100、连续的回复 chunk 合成一条（105）、工具调用 107、工具结果 108
+	if want := "user@1790000100,assistant@1790000105,tool@1790000107,tool@1790000108"; strings.Join(times, ",") != want {
 		t.Errorf("grok times = %v, want %s", times, want)
 	}
 }
@@ -445,11 +447,11 @@ func TestParserVersionReparse(t *testing.T) {
 		t.Fatalf("time without updates.jsonl: %v", msgs[0].At)
 	}
 
-	// 补上时间来源；聊天记录本身没变，正常的增量更新不会重读
+	// updates.jsonl 一出现就换成这份全文，不等解析规则升级
 	os.WriteFile(updates, body, 0o644)
 	update(t, x, home)
-	if msgs, _ = x.Transcript(ctx, grok(), TranscriptOptions{}); !msgs[0].At.IsZero() {
-		t.Fatal("reparsed without a parser change")
+	if msgs, _ = x.Transcript(ctx, grok(), TranscriptOptions{}); msgs[0].At.Unix() != 1790000100 {
+		t.Fatalf("updates.jsonl not used: %+v", msgs)
 	}
 	// 索引里记的是旧版解析规则
 	x.db.Exec(`UPDATE meta SET value='1' WHERE key='parser:grok'`)

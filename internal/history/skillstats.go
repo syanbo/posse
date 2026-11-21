@@ -66,14 +66,18 @@ func SkillStats(ctx context.Context, roots Roots, cache string, progress func(do
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		seen[src.transcript] = true
-		fi, err := os.Stat(src.transcript)
+		path := src.transcript
+		if src.agent == "grok" {
+			path = grokSnapshot(path)
+		}
+		seen[path] = true
+		fi, err := os.Stat(path)
 		if err != nil {
 			continue
 		}
-		f, ok := c.Files[src.transcript]
+		f, ok := c.Files[path]
 		if !ok || f.Size != fi.Size() || f.Mtime != fi.ModTime().UnixMilli() {
-			c.Files[src.transcript] = scanSkillUses(src.agent, src.transcript, fi)
+			c.Files[path] = scanSkillUses(src.agent, path, fi)
 			changed = true
 		}
 		if progress != nil && (i%50 == 0 || i == len(sources)-1) {

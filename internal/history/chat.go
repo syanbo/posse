@@ -69,22 +69,36 @@ func ReadChatTail(agent, sessionID, path string, limit int, beforeOffset int64) 
 	if agent == "grok" {
 		return readGrokTail(path, limit, beforeOffset)
 	}
-	f, err := os.Open(path)
-	if err != nil {
-		return ChatPage{}, ErrChatNotFound
-	}
-	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return ChatPage{}, err
+	var src io.ReaderAt
+	var size int64
+	var paged bool
+	if strings.HasSuffix(path, ".jsonl.zst") {
+		// 压过的 rollout 不能按字节往回读，整份解开；偏移按解开后的位置算，翻页前后一致。
+		body, err := readAllTranscript(path)
+		if err != nil {
+			return ChatPage{}, err
+		}
+		src, size = bytes.NewReader(body), int64(len(body))
+		paged = agent == "codex" && bytes.Contains(body[:min(len(body), 32<<10)], []byte(`"paginated"`))
+	} else {
+		f, err := os.Open(path)
+		if err != nil {
+			return ChatPage{}, ErrChatNotFound
+		}
+		defer f.Close()
+		fi, err := f.Stat()
+		if err != nil {
+			return ChatPage{}, err
+		}
+		src, size = f, fi.Size()
+		paged = agent == "codex" && codexPaginated(path)
 	}
 	end := beforeOffset
-	if end <= 0 || end > fi.Size() {
-		end = fi.Size()
+	if end <= 0 || end > size {
+		end = size
 	}
-	paged := agent == "codex" && codexPaginated(path)
 	full := &antigravityFull{path: path}
-	msgs, more, err := readBackward(f, end, limit, func(line []byte, off int64) *ChatMessage {
+	msgs, more, err := readBackward(src, end, limit, func(line []byte, off int64) *ChatMessage {
 		if agent == "antigravity" {
 			line = full.line(line)
 		}
@@ -114,6 +128,10 @@ func ReadChatNew(agent, path string, from int64) (msgs []ChatMessage, next int64
 	fi, err := f.Stat()
 	if err != nil {
 		return nil, from, err
+	}
+	if strings.HasSuffix(path, ".jsonl.zst") {
+		// 压过的 rollout 不再追加；整份内容由 ReadChatTail 解开读，这里只把位置推到文件尾。
+		return nil, fi.Size(), nil
 	}
 	if from < 0 || from > fi.Size() {
 		from = 0
@@ -178,6 +196,15 @@ func chatPath(agent, sessionID, path string) (string, error) {
 	return path, nil
 }
 
+func readAllTranscript(path string) ([]byte, error) {
+	r, err := openTranscript(path)
+	if err != nil {
+		return nil, ErrChatNotFound
+	}
+	defer r.Close()
+	return io.ReadAll(r)
+}
+
 func codexPaginated(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -190,7 +217,7 @@ func codexPaginated(path string) bool {
 }
 
 // readBackward 从 end（不含）往前解码，凑够 limit+1 条就停。返回按时间正序的最后 limit 条。
-func readBackward(f *os.File, end int64, limit int, decode func([]byte, int64) *ChatMessage) ([]ChatMessage, bool, error) {
+func readBackward(f io.ReaderAt, end int64, limit int, decode func([]byte, int64) *ChatMessage) ([]ChatMessage, bool, error) {
 	want := limit + 1
 	var newest []ChatMessage
 	// pending 是还没遇到行首的那一行已读出的几块，从后往前存：只在还没读到文件头（pos > 0）时留下，
@@ -272,16 +299,24 @@ func readBackward(f *os.File, end int64, limit int, decode func([]byte, int64) *
 }
 
 func readGrokTail(path string, limit int, beforeOffset int64) (ChatPage, error) {
-	msgs, _, err := readGrokAll(path)
+	body := grokChatFile(path)
+	var msgs []ChatMessage
+	var err error
+	if filepath.Base(body) == "updates.jsonl" {
+		msgs, _, err = readGrokUpdateNew(body, 0)
+	} else {
+		msgs, _, err = readGrokAll(body)
+	}
 	if err != nil {
 		return ChatPage{}, err
 	}
 	return window(msgs, limit, beforeOffset), nil
 }
 
-// ChatCursor 记着一个对话流读到哪里。grok 的消息时间要从头对着 updates.jsonl 建，
-// 接着上一次的位置读时留着建好的时间表和读过的记录里找时间用的部分，只读两个文件新写的部分；
-// 结果和每次整份重读一样。
+// ChatCursor 记着一个对话流读到哪里。Grok 有非空 updates.jsonl 时正文就是这份流水，
+// 每次按完整行重放，把还在增长的那条（起始位置在 from 之前）再交出去，手机按 id 替换。
+// 没有流水时消息时间要从头对着 updates.jsonl 建，接着上一次的位置读时留着建好的时间表，
+// 只读两个文件新写的部分；结果和每次整份重读一样。
 type ChatCursor struct {
 	grok *grokCursor
 }
@@ -345,6 +380,12 @@ func (c *ChatCursor) ReadNew(agent, path string, from int64) ([]ChatMessage, int
 	if agent != "grok" {
 		return ReadChatNew(agent, path, from)
 	}
+	body := grokChatFile(path)
+	if filepath.Base(body) == "updates.jsonl" {
+		c.grok = nil
+		return readGrokUpdateNew(body, from)
+	}
+	path = body
 	if g := c.grok; g != nil && g.path == path && g.end == from && g.chat.still(path) && g.upd.still(grokUpdatesPath(path)) {
 		if msgs, ok := g.next(); ok {
 			return msgs, g.end, nil

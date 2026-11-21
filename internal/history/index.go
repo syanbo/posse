@@ -12,7 +12,10 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 // Roots 是各 agent 会话目录所在的用户主目录；测试时指向临时目录。
@@ -51,6 +54,8 @@ type fileState struct {
 	GrokUpdates int64 `json:"grokUpdates,omitempty"`
 	// grok 的消息时间表，读新行前从旁路文件现建，不存
 	grok *grokTimes
+	// grokBuf 是 updates.jsonl 里还没合成一条的正文，读完当前文件就交出去，不存
+	grokBuf *grokBuf
 }
 
 // parser 解析一种 agent 的会话文件。
@@ -127,6 +132,13 @@ func (x *Index) Update(ctx context.Context, roots Roots, progress func(Progress)
 		if progress != nil && (i%20 == 0 || i == len(sources)-1) {
 			progress(Progress{Done: i + 1, Total: len(sources)})
 		}
+	}
+	ideDone, err := x.updateCursorIDE(ctx, roots, known, sources, seen, redo["cursor"])
+	if err != nil {
+		return err
+	}
+	if !ideDone && redo["cursor"] {
+		unsettled["cursor"] = true
 	}
 	for path, k := range known {
 		if !seen[path] {
@@ -239,7 +251,12 @@ func (x *Index) updateFile(ctx context.Context, src source, k knownFile, roots R
 
 	var st fileState
 	offset := k.offset
-	reset := k.id == 0 || size < k.offset || !tailMatches(f, k.offset, k.tail)
+	// 压缩后的 rollout 不是按行追加的：文件一变就整份解开重读，进度按压缩文件的长度记。
+	// updates.jsonl 的一条回复跨多次追加。读完会把还没写完的半条刷进库，缓冲又不进 state，
+	// 下次只读新行会把后半段当成另一条，所以文件一变也整份重读。
+	compressed := strings.HasSuffix(src.transcript, ".jsonl.zst")
+	replay := filepath.Base(src.transcript) == "updates.jsonl"
+	reset := compressed || replay || k.id == 0 || size < k.offset || !tailMatches(f, k.offset, k.tail)
 	if reset {
 		offset = 0
 	} else if k.state != "" {
@@ -250,7 +267,14 @@ func (x *Index) updateFile(ctx context.Context, src source, k knownFile, roots R
 	if pr, ok := src.parser.(preparer); ok && size > offset {
 		pr.prepare(src.transcript, &st)
 	}
-	if size > offset {
+	if compressed {
+		msgs, err = readCompressed(f, src.parser, &st)
+		if err != nil {
+			return err
+		}
+		offset = size
+		tail = fileTail(f, size)
+	} else if size > offset {
 		if _, err := f.Seek(offset, io.SeekStart); err != nil {
 			return err
 		}
@@ -289,8 +313,70 @@ func (x *Index) updateFile(ctx context.Context, src source, k knownFile, roots R
 	}
 	if st.SessionID == "" {
 		st.SessionID = sessionIDFromPath(src.transcript)
+		// updates.jsonl / chat_history.jsonl 的文件名不是会话 ID，ID 在会话目录名上。
+		if src.agent == "grok" && (st.SessionID == "updates" || st.SessionID == "chat_history") {
+			st.SessionID = filepath.Base(filepath.Dir(src.transcript))
+		}
 	}
 	return x.save(ctx, src, k, reset, st, msgs, size, mtime, offset, tail, metaMtime)
+}
+
+type zstdReadCloser struct {
+	f *os.File
+	r *zstd.Decoder
+}
+
+func (z *zstdReadCloser) Read(p []byte) (int, error) { return z.r.Read(p) }
+
+func (z *zstdReadCloser) Close() error {
+	z.r.Close()
+	return z.f.Close()
+}
+
+// openTranscript 打开会话文件。Codex 把旧 rollout 压成 .jsonl.zst 后，明文文件就没了。
+func openTranscript(path string) (io.ReadCloser, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasSuffix(path, ".jsonl.zst") {
+		return f, nil
+	}
+	dec, err := zstd.NewReader(f)
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return &zstdReadCloser{f: f, r: dec}, nil
+}
+
+// readCompressed 解开整份 zstd 再按行解析。调用方已经把进度作废。
+func readCompressed(f *os.File, p parser, st *fileState) ([]Message, error) {
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	dec, err := zstd.NewReader(f)
+	if err != nil {
+		return nil, err
+	}
+	defer dec.Close()
+	msgs, _, _, err := readLines(dec, p, st)
+	return msgs, err
+}
+
+func fileTail(f *os.File, size int64) []byte {
+	n := tailLen
+	if int64(n) > size {
+		n = int(size)
+	}
+	if n == 0 {
+		return nil
+	}
+	buf := make([]byte, n)
+	if _, err := f.ReadAt(buf, size-int64(len(buf))); err != nil {
+		return nil
+	}
+	return buf
 }
 
 // tailMatches 核对 offset 之前的字节是否和上次读到的一致。
@@ -320,16 +406,36 @@ func readLines(r io.Reader, p parser, st *fileState) ([]Message, int64, []byte, 
 		if len(trimmed) == 0 || trimmed[0] != '{' || (filter != nil && !filter.wants(trimmed, st)) {
 			return
 		}
-		for _, m := range p.line(trimmed, st) {
-			m.Seq = st.Seq
-			st.Seq++
-			msgs = append(msgs, m)
-		}
+		msgs = append(msgs, takeMessages(p, trimmed, st)...)
 	})
+	if err == nil {
+		if end, ok := p.(flusher); ok && !st.Skip {
+			for _, m := range end.flush(st) {
+				m.Seq = st.Seq
+				st.Seq++
+				msgs = append(msgs, m)
+			}
+		}
+	}
 	if err != nil {
 		return nil, 0, nil, err
 	}
 	return msgs, n, tail, nil
+}
+
+// flusher 在读完最后一行后交回还攒着的消息。流式分段要等角色切换或文件结束才算一条。
+type flusher interface {
+	flush(st *fileState) []Message
+}
+
+func takeMessages(p parser, raw []byte, st *fileState) []Message {
+	var out []Message
+	for _, m := range p.line(raw, st) {
+		m.Seq = st.Seq
+		st.Seq++
+		out = append(out, m)
+	}
+	return out
 }
 
 // scanLines 逐个交出完整的行（含换行符），到最后一个完整行为止；超过 maxLine 的行跳过。
@@ -380,7 +486,8 @@ func scanLines(r io.Reader, fn func(line []byte, n int64)) (int64, []byte, error
 
 func sessionIDFromPath(path string) string {
 	base := filepath.Base(path)
-	return base[:len(base)-len(filepath.Ext(base))]
+	base = strings.TrimSuffix(base, ".zst")
+	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
 func (x *Index) save(ctx context.Context, src source, k knownFile, reset bool, st fileState, msgs []Message,

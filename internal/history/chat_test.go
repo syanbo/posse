@@ -378,28 +378,24 @@ func TestChatCodex(t *testing.T) {
 func TestChatGrok(t *testing.T) {
 	dir := t.TempDir()
 	chat := filepath.Join(dir, "chat_history.jsonl")
-	writeFile(t, chat,
-		`{"type":"system","content":"You are Grok"}`,
-		`{"type":"user","content":[{"type":"text","text":"<user_info>\nWorkspace Path: /work/grok\n</user_info>\n<rules>grokrulesinjected</rules>"}]}`,
-		`{"type":"user","content":[{"type":"text","text":"<user_query>\n配置 Ghostty 主题\n</user_query>"}],"prompt_index":0}`,
-		`{"type":"reasoning","summary":[],"encrypted_content":"xx"}`,
-		`{"type":"assistant","model_id":"grok-4.7-build","content":"先读当前配置。","tool_calls":[{"id":"call-a-1","name":"read_file","arguments":"{\"target_file\":\"~/.config/ghostty/config\"}"}]}`,
-		`{"type":"tool_result","tool_call_id":"call-a-1","content":"theme = Mocha"}`,
-		`{"type":"user","content":[{"type":"text","text":"[Image extracted from tool result above]"},{"type":"image","url":"data:image/png;base64,AA=="}],"synthetic_reason":"system_reminder"}`,
-		`{"type":"backend_tool_call","kind":{"tool_type":"web_search","action":{"query":"posse"}}}`,
-	)
+	writeFile(t, chat, `{"type":"assistant","content":"只在快照里"}`)
 	writeFile(t, filepath.Join(dir, "updates.jsonl"),
-		`{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"配置 Ghostty 主题"},"_meta":{"promptIndex":0}}}}`,
+		`{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"<user_query>\n配置 Ghostty 主题\n</user_query>"},"_meta":{"promptIndex":0}}}}`,
+		`{"timestamp":1790000101,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"<user_info>\nWorkspace Path: /work/grok\n</user_info>\n<rules>grokrulesinjected</rules>"}}}}`,
+		`{"timestamp":1790000104,"params":{"update":{"sessionUpdate":"agent_thought_chunk","content":{"text":"thinkinghidden"}}}}`,
 		`{"timestamp":1790000105,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"先读当前"}}}}`,
 		`{"timestamp":1790000106,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"配置。"}}}}`,
-		`{"timestamp":1790000107,"params":{"update":{"sessionUpdate":"tool_call","toolCallId":"ws_x_call-a-1"}}}`,
+		`{"timestamp":1790000107,"params":{"update":{"sessionUpdate":"tool_call","toolCallId":"ws_x_call-a-1","title":"read_file","rawInput":{"target_file":"~/.config/ghostty/config"}}}}`,
+		`{"timestamp":1790000107,"params":{"update":{"sessionUpdate":"tool_call_update","toolCallId":"ws_x_call-a-1","title":"Read config","content":[{"type":"content","content":{"type":"text","text":"toolintentonly"}}]}}}`,
+		`{"timestamp":1790000108,"params":{"update":{"sessionUpdate":"tool_call_update","toolCallId":"ws_x_call-a-1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"theme = Mocha"}}],"rawOutput":{"type":"ReadFile"}}}}`,
+		`{"timestamp":1790000109,"params":{"update":{"sessionUpdate":"tool_call","toolCallId":"ws_x_call-b","title":"web_search","rawInput":"posse"}}}`,
 	)
 	page, err := ReadChatTail("grok", "", chat, 20, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(blockDump(page), "grokrulesinjected") || strings.Contains(blockDump(page), "You are Grok") {
-		t.Fatalf("kept injected %s", blockDump(page))
+	if dump := blockDump(page); strings.Contains(dump, "grokrulesinjected") || strings.Contains(dump, "thinkinghidden") || strings.Contains(dump, "只在快照里") || strings.Contains(dump, "toolintentonly") {
+		t.Fatalf("kept injected %s", dump)
 	}
 	if len(page.Messages) != 4 {
 		t.Fatalf("count %d %s", len(page.Messages), blockDump(page))
@@ -409,16 +405,17 @@ func TestChatGrok(t *testing.T) {
 		t.Fatalf("user %+v", user)
 	}
 	if asst.Role != "assistant" || asst.Timestamp == nil || *asst.Timestamp != 1790000105000 || len(asst.Blocks) != 2 ||
+		asst.Blocks[0].Text != "先读当前配置。" ||
 		asst.Blocks[1].Type != "tool-call" || asst.Blocks[1].Name != "read_file" || asst.Blocks[1].CallID != "call-a-1" ||
 		string(asst.Blocks[1].Input) != `{"target_file":"~/.config/ghostty/config"}` {
 		t.Fatalf("assistant %+v", asst)
 	}
 	if tool.Role != "tool" || tool.Blocks[0].Output != "theme = Mocha" || tool.Blocks[0].CallID != "call-a-1" ||
-		tool.Timestamp == nil || *tool.Timestamp != 1790000107000 {
+		tool.Timestamp == nil || *tool.Timestamp != 1790000108000 {
 		t.Fatalf("tool %+v", tool)
 	}
 	if back.Role != "assistant" || back.Blocks[0].Name != "web_search" || string(back.Blocks[0].Input) != `{"text":"posse"}` ||
-		back.Timestamp == nil || *back.Timestamp != 1790000107000 {
+		back.Timestamp == nil || *back.Timestamp != 1790000109000 {
 		t.Fatalf("backend %+v input %s", back, back.Blocks[0].Input)
 	}
 	last, err := ReadChatTail("grok", "", chat, 1, 0)
@@ -428,6 +425,39 @@ func TestChatGrok(t *testing.T) {
 	prev, err := ReadChatTail("grok", "", chat, 1, last.BeforeOffset)
 	if err != nil || len(prev.Messages) != 1 || prev.Messages[0].Role != "tool" || prev.Messages[0].Offset >= last.Messages[0].Offset {
 		t.Fatalf("prev %+v", prev)
+	}
+}
+
+// 没有流水（或是空文件）时手机仍读 chat_history.jsonl。这份快照自己不带时间。
+func TestChatGrokSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	chat := filepath.Join(dir, "chat_history.jsonl")
+	writeFile(t, chat,
+		`{"type":"user","content":[{"type":"text","text":"<user_info>\n<rules>grokrulesinjected</rules>"}]}`,
+		`{"type":"user","content":[{"type":"text","text":"<user_query>\n配置 Ghostty 主题\n</user_query>"}],"prompt_index":0}`,
+		`{"type":"assistant","content":"先读当前配置。","tool_calls":[{"id":"call-a-1","name":"read_file","arguments":"{\"target_file\":\"~/.config/ghostty/config\"}"}]}`,
+		`{"type":"tool_result","tool_call_id":"call-a-1","content":"theme = Mocha"}`,
+		`{"type":"backend_tool_call","kind":{"tool_type":"web_search","action":{"query":"posse"}}}`,
+	)
+	for _, name := range []string{"missing", "empty"} {
+		t.Run(name, func(t *testing.T) {
+			if name == "empty" {
+				if err := os.WriteFile(filepath.Join(dir, "updates.jsonl"), nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			page, err := ReadChatTail("grok", "", chat, 20, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(blockDump(page), "grokrulesinjected") || len(page.Messages) != 4 {
+				t.Fatalf("%s", blockDump(page))
+			}
+			if page.Messages[0].Timestamp != nil || page.Messages[1].Blocks[1].CallID != "call-a-1" ||
+				page.Messages[2].Blocks[0].Output != "theme = Mocha" || page.Messages[3].Blocks[0].Name != "web_search" {
+				t.Fatalf("%+v", page.Messages)
+			}
+		})
 	}
 }
 
@@ -516,39 +546,27 @@ func TestReadChatTailCursor(t *testing.T) {
 	}
 }
 
-// 对话流接着读 grok：分几轮往两个文件追加（含没写完的半行），ChatCursor 每轮只读新的部分，
-// 读出的消息、时间和位置要和每轮整份重读一样。
+// 对话流接着读 grok 的 updates.jsonl：分几轮追加（含没写完的半行）。
+// 每一轮和整份重读一样；按 id 替换后和整页一样。同目录的快照不参与。
 func TestChatCursorGrokMatchesFullRead(t *testing.T) {
 	dir := t.TempDir()
 	chat := filepath.Join(dir, "chat_history.jsonl")
 	updates := filepath.Join(dir, "updates.jsonl")
-	writeFile(t, chat, `{"type":"system","content":"You are Grok"}`)
-	writeFile(t, updates, `{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"第一问"},"_meta":{"promptIndex":0}}}}`)
-	rounds := []struct{ upd, chat string }{
-		{`{"timestamp":1790000105,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"先读"}}}}` + "\n",
-			`{"type":"user","content":[{"type":"text","text":"<user_query>第一问</user_query>"}],"prompt_index":0}` + "\n"},
-		{`{"timestamp":1790000107,"params":{"update":{"sessionUpdate":"tool_call","toolCallId":"ws_x_call-a-1"}}}` + "\n" + `{"timestamp":17900`,
-			`{"type":"assistant","content":"先读配置。","tool_calls":[{"id":"call-a-1","name":"read_file","arguments":"{}"}]}` + "\n" + `{"type":"tool_res`},
-		{`00110,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"改好了"}}}}` + "\n",
-			`ult","tool_call_id":"call-a-1","content":"theme = Mocha"}` + "\n"},
-		{`{"timestamp":1790000120,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"第二问"},"_meta":{"promptIndex":1}}}}` + "\n",
-			`{"type":"assistant","content":"改好了。"}` + "\n" + `{"type":"user","content":[{"type":"text","text":"<user_query>第二问</user_query>"}],"prompt_index":1}` + "\n"},
-		{"", `{"type":"assistant","content":"没有对上的时间，沿用上一条"}` + "\n"},
-	}
-	add := func(path, s string) {
-		f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		f.WriteString(s)
-		f.Close()
+	writeFile(t, chat, `{"type":"assistant","content":"只在快照里"}`)
+	writeFile(t, updates, `{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"第一问"}}}}`)
+	rounds := []string{
+		`{"timestamp":1790000105,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"先读"}}}}` + "\n",
+		`{"timestamp":1790000107,"params":{"update":{"sessionUpdate":"tool_call","toolCallId":"ws_x_call-a-1","title":"read_file","rawInput":{}}}}` + "\n" + `{"timestamp":17900`,
+		`00110,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"改好了"}}}}` + "\n",
+		`{"timestamp":1790000120,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"第二问"}}}}` + "\n",
 	}
 	var cur ChatCursor
-	var got []ChatMessage
+	var order []string
+	byID := map[string]ChatMessage{}
 	var pos int64
-	for i, r := range rounds {
-		add(updates, r.upd)
-		add(chat, r.chat)
+	var asstID string
+	for i, chunk := range rounds {
+		appendText(t, updates, chunk)
 		want, wantNext, err := ReadChatNew("grok", chat, pos)
 		if err != nil {
 			t.Fatal(err)
@@ -562,25 +580,46 @@ func TestChatCursorGrokMatchesFullRead(t *testing.T) {
 		if string(a) != string(b) || next != wantNext {
 			t.Fatalf("round %d:\n got %s next %d\nwant %s next %d", i, a, next, b, wantNext)
 		}
-		if i > 0 && (cur.grok == nil || cur.grok.end != next) {
-			t.Fatalf("round %d: cursor not kept: %+v", i, cur.grok)
+		if i == 1 {
+			for _, m := range msgs {
+				if strings.Contains(blockText(m), "改好了") || strings.Contains(blockText(m), "17900") {
+					t.Fatalf("partial line leaked: %s", a)
+				}
+			}
 		}
-		got = append(got, msgs...)
+		for _, m := range msgs {
+			if _, ok := byID[m.ID]; !ok {
+				order = append(order, m.ID)
+			}
+			byID[m.ID] = m
+			if m.Role == "assistant" {
+				asstID = m.ID
+			}
+		}
 		pos = next
+	}
+	if asstID == "" || byID[asstID].Blocks[0].Text != "先读改好了" || byID[asstID].Blocks[1].Name != "read_file" {
+		t.Fatalf("assistant %+v", byID[asstID])
 	}
 	full, err := ReadChatTail("grok", "", chat, 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, _ := json.Marshal(got)
-	b, _ := json.Marshal(full.Messages)
-	if string(a) != string(b) || len(got) != 6 {
-		t.Fatalf("accumulated %s\nfull %s", a, b)
+	if strings.Contains(blockDump(full), "只在快照里") || len(full.Messages) != len(order) {
+		t.Fatalf("full %s", blockDump(full))
 	}
-	// 文件被重写变短：位置对不上，整份重读
-	writeFile(t, chat, `{"type":"user","content":[{"type":"text","text":"<user_query>新的</user_query>"}],"prompt_index":0}`)
+	for i, m := range full.Messages {
+		got := byID[order[i]]
+		a, _ := json.Marshal(got)
+		b, _ := json.Marshal(m)
+		if order[i] != m.ID || string(a) != string(b) {
+			t.Fatalf("merged %s\nfull %s", a, b)
+		}
+	}
+	// 流水被整份换掉：从头读到新内容，不读快照
+	writeFile(t, updates, `{"timestamp":1790000300,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"新的"}}}}`)
 	msgs, _, err := cur.ReadNew("grok", chat, 0)
-	if err != nil || len(msgs) != 1 || msgs[0].Timestamp == nil || *msgs[0].Timestamp != 1790000100000 {
+	if err != nil || len(msgs) != 1 || msgs[0].Blocks[0].Text != "新的" || msgs[0].Timestamp == nil || *msgs[0].Timestamp != 1790000300000 {
 		t.Fatalf("rewritten: %+v %v", msgs, err)
 	}
 }

@@ -27,7 +27,7 @@ func CheckTrashSession(ctx context.Context, s Session) error {
 			if s.Agent == "codex" {
 				p = codexParser{}
 			}
-			f, err := os.Open(path)
+			f, err := openTranscript(path)
 			if err != nil {
 				return err
 			}
@@ -115,12 +115,14 @@ func TrashPaths(home string, s Session) []string {
 				return nil
 			}
 		}
-		return parts
+		return codexTrashPaths(parts)
 	case "antigravity":
 		dir := AntigravityBrainDir(s.Path)
-		expected := filepath.Join(home, ".gemini", "antigravity-cli", "brain", s.ID)
-		if dir == expected && isDir(dir) && under(s.Path, ".gemini", "antigravity-cli", "brain", s.ID) && under(dir, ".gemini", "antigravity-cli", "brain") {
-			return []string{dir}
+		for _, app := range antigravityApps {
+			expected := filepath.Join(home, ".gemini", app, "brain", s.ID)
+			if dir == expected && isDir(dir) && under(s.Path, ".gemini", app, "brain", s.ID) && under(dir, ".gemini", app, "brain") {
+				return []string{dir}
+			}
 		}
 	case "grok":
 		if dir := filepath.Dir(s.Path); filepath.Base(dir) == s.ID && under(dir, ".grok", "sessions") {
@@ -130,6 +132,33 @@ func TrashPaths(home string, s Session) []string {
 		if dir := filepath.Dir(s.Path); filepath.Base(dir) == s.ID && under(dir, ".cursor", "projects") {
 			return []string{dir}
 		}
+		// IDE 对话在 state.vscdb 里，没有单独的会话文件，不移库。
 	}
 	return nil
+}
+
+// codexTrashPaths 把同一份 rollout 的另一种编码一起带走。只带磁盘上还在的那个。
+func codexTrashPaths(parts []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(p string) {
+		if p == "" || seen[p] {
+			return
+		}
+		if fi, err := os.Lstat(p); err != nil || fi.IsDir() {
+			return
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	for _, p := range parts {
+		add(p)
+		switch {
+		case strings.HasSuffix(p, ".jsonl.zst"):
+			add(strings.TrimSuffix(p, ".zst"))
+		case strings.HasSuffix(p, ".jsonl"):
+			add(p + ".zst")
+		}
+	}
+	return out
 }

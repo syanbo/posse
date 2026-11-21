@@ -181,7 +181,7 @@ func TestTranscriptOptions(t *testing.T) {
 	}
 }
 
-// grok 增量读取：新的回复不能对上之前回复用过的分段，结果和整份重读一致。
+// grok 的流水增量读取：后一次回复另起一条，时间和整份重读一致。有 updates.jsonl 时不再索引 chat_history。
 func TestGrokIncrementalTimes(t *testing.T) {
 	home := t.TempDir()
 	dir := filepath.Join(home, ".grok", "sessions", "%2Fwork%2Fg", "44444444-4444-4444-8444-444444444444")
@@ -190,14 +190,14 @@ func TestGrokIncrementalTimes(t *testing.T) {
 		`{"type":"user","content":[{"type":"text","text":"<user_query>看看配置</user_query>"}],"prompt_index":0}`,
 		`{"type":"assistant","content":"好的，先看看配置。"}`)
 	writeFile(t, updates,
-		`{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","_meta":{"promptIndex":0}}}}`,
+		`{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"看看配置"},"_meta":{"promptIndex":0}}}}`,
 		`{"timestamp":1790000105,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"好的"}}}}`,
 		`{"timestamp":1790000106,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"，先看看配置。"}}}}`)
 	x := openIndex(t)
 	update(t, x, home)
 
 	appendFile(t, updates,
-		`{"timestamp":1790000150,"params":{"update":{"sessionUpdate":"user_message_chunk","_meta":{"promptIndex":1}}}}`,
+		`{"timestamp":1790000150,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"改成浅色"},"_meta":{"promptIndex":1}}}}`,
 		`{"timestamp":1790000200,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"好的"}}}}`,
 		`{"timestamp":1790000201,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"，已经改好了。"}}}}`)
 	appendFile(t, chat,
@@ -206,7 +206,7 @@ func TestGrokIncrementalTimes(t *testing.T) {
 	update(t, x, home)
 
 	times := func(x *Index) string {
-		msgs, err := x.Transcript(context.Background(), Session{Path: chat}, TranscriptOptions{})
+		msgs, err := x.Transcript(context.Background(), Session{Path: updates}, TranscriptOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -224,6 +224,42 @@ func TestGrokIncrementalTimes(t *testing.T) {
 	update(t, full, home)
 	if got := times(full); got != want {
 		t.Errorf("full reparse times = %s, want %s", got, want)
+	}
+}
+
+// 索引跑在一条回复的两次追加之间时，后半段要并回同一条，不能变成另一条助手消息。
+func TestGrokUpdatesReplayMergesChunks(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".grok", "sessions", "%2Fwork%2Fg", "44444444-4444-4444-8444-444444444444")
+	updates := filepath.Join(dir, "updates.jsonl")
+	writeFile(t, updates,
+		`{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"看看配置"}}}}`,
+		`{"timestamp":1790000105,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"好的"}}}}`)
+	x := openIndex(t)
+	update(t, x, home)
+	appendFile(t, updates, `{"timestamp":1790000106,"params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"，先看看配置。"}}}}`)
+	update(t, x, home)
+
+	text := func(idx *Index) string {
+		t.Helper()
+		msgs, err := idx.Transcript(context.Background(), Session{Path: updates}, TranscriptOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, m := range msgs {
+			out = append(out, m.Role+":"+m.Text)
+		}
+		return strings.Join(out, "|")
+	}
+	want := "user:看看配置|assistant:好的，先看看配置。"
+	if got := text(x); got != want {
+		t.Fatalf("incremental = %s", got)
+	}
+	full := openIndex(t)
+	update(t, full, home)
+	if got := text(full); got != want {
+		t.Fatalf("full = %s", got)
 	}
 }
 

@@ -29,14 +29,7 @@ func discover(r Roots) []source {
 	for _, p := range globFiles(filepath.Join(claude, "*", "*.jsonl")) {
 		out = append(out, source{agent: "claude", transcript: p, parser: claudeParser{}})
 	}
-	codex := filepath.Join(r.Home, ".codex")
-	for _, dir := range []string{"sessions", "archived_sessions"} {
-		for _, p := range walkFiles(filepath.Join(codex, dir), func(path string, d fs.DirEntry) bool {
-			return strings.HasPrefix(d.Name(), "rollout-") && strings.HasSuffix(d.Name(), ".jsonl")
-		}) {
-			out = append(out, source{agent: "codex", transcript: p, parser: codexParser{}})
-		}
-	}
+	out = append(out, discoverCodex(r)...)
 	// cursor 的标题、目录和时间在 ~/.cursor/chats/<md5(目录)>/<会话>/meta.json。
 	// 会话 ID 会跨目录重复（本机实测有不同目录、不同标题的两个会话同一个 ID），所以一个 ID 可能有几份
 	cursorMeta := map[string][]string{}
@@ -77,17 +70,95 @@ func discover(r Roots) []source {
 		}
 		out = append(out, src)
 	}
-	for _, p := range globFiles(filepath.Join(r.Home, ".grok", "sessions", "*", "*", "chat_history.jsonl")) {
-		out = append(out, source{agent: "grok", transcript: p, meta: filepath.Join(filepath.Dir(p), "summary.json"), parser: grokParser{}})
+	out = append(out, discoverGrok(r)...)
+	out = append(out, discoverAntigravity(r)...)
+	return out
+}
+
+// discoverCodex 收录 rollout-*.jsonl 和 Codex 压过的 rollout-*.jsonl.zst。
+// 同一份两种编码都在时只索引明文：压缩文件是旧副本，两边都收会把同一会话接成两段。
+func discoverCodex(r Roots) []source {
+	var paths []string
+	codex := filepath.Join(r.Home, ".codex")
+	for _, dir := range []string{"sessions", "archived_sessions"} {
+		paths = append(paths, walkFiles(filepath.Join(codex, dir), func(path string, d fs.DirEntry) bool {
+			name := d.Name()
+			return strings.HasPrefix(name, "rollout-") && (strings.HasSuffix(name, ".jsonl") || strings.HasSuffix(name, ".jsonl.zst"))
+		})...)
 	}
-	base := AntigravityBase(r.Home)
-	children := antigravityChildren(base)
-	for _, p := range globFiles(filepath.Join(base, "brain", "*", ".system_generated", "logs", "transcript.jsonl")) {
-		id := filepath.Base(AntigravityBrainDir(p))
-		if children[id] {
+	plain := map[string]bool{}
+	for _, p := range paths {
+		if strings.HasSuffix(p, ".jsonl") {
+			plain[p] = true
+		}
+	}
+	var out []source
+	for _, p := range paths {
+		if strings.HasSuffix(p, ".jsonl.zst") && plain[strings.TrimSuffix(p, ".zst")] {
 			continue
 		}
-		out = append(out, source{agent: "antigravity", transcript: p, meta: filepath.Join(base, "cache", "conversation_metadata.json"), parser: antigravityParser{id: id, full: &antigravityFull{path: p}}})
+		out = append(out, source{agent: "codex", transcript: p, parser: codexParser{}})
+	}
+	return out
+}
+
+// discoverGrok 有 updates.jsonl 时用它当正文。chat_history.jsonl 是压缩后的上下文快照，
+// 更早的轮次不在里面；文件是空的或还没生成时才退回快照。
+func discoverGrok(r Roots) []source {
+	root := filepath.Join(r.Home, ".grok", "sessions")
+	dirs := map[string]string{}
+	for _, p := range globFiles(filepath.Join(root, "*", "*", "updates.jsonl")) {
+		if fi, err := os.Stat(p); err == nil && fi.Size() > 0 {
+			dirs[filepath.Dir(p)] = p
+		}
+	}
+	for _, p := range globFiles(filepath.Join(root, "*", "*", "chat_history.jsonl")) {
+		dir := filepath.Dir(p)
+		if _, ok := dirs[dir]; !ok {
+			dirs[dir] = p
+		}
+	}
+	var out []source
+	for dir, transcript := range dirs {
+		src := source{agent: "grok", transcript: transcript, meta: filepath.Join(dir, "summary.json"), parser: parser(grokParser{})}
+		if filepath.Base(transcript) == "updates.jsonl" {
+			src.parser = grokUpdateParser{}
+		}
+		out = append(out, src)
+	}
+	return out
+}
+
+// antigravityApps 是会写 brain/<UUID> 明文转录的数据目录，都在 ~/.gemini 下。
+var antigravityApps = []string{"antigravity", "antigravity-ide", "antigravity-cli"}
+
+// discoverAntigravity 收录桌面、IDE 和 CLI 三处转录。摘要库和元数据缓存仍在 CLI 目录，
+// 用来排除子会话、补标题和目录。同一个 UUID 出现多份时留修改时间最新的那份。
+func discoverAntigravity(r Roots) []source {
+	base := AntigravityBase(r.Home)
+	children := antigravityChildren(base)
+	meta := filepath.Join(base, "cache", "conversation_metadata.json")
+	type pick struct {
+		path  string
+		mtime int64
+	}
+	best := map[string]pick{}
+	for _, app := range antigravityApps {
+		for _, p := range globFiles(filepath.Join(r.Home, ".gemini", app, "brain", "*", ".system_generated", "logs", "transcript.jsonl")) {
+			id := filepath.Base(AntigravityBrainDir(p))
+			if id == "" || children[id] {
+				continue
+			}
+			mt := mtimeOf(p)
+			if old, ok := best[id]; ok && old.mtime >= mt {
+				continue
+			}
+			best[id] = pick{p, mt}
+		}
+	}
+	var out []source
+	for id, p := range best {
+		out = append(out, source{agent: "antigravity", transcript: p.path, meta: meta, parser: antigravityParser{id: id, full: &antigravityFull{path: p.path}}})
 	}
 	return out
 }
@@ -1136,6 +1207,7 @@ type grokSummary struct {
 	} `json:"info"`
 	SessionSummary string `json:"session_summary"`
 	GeneratedTitle string `json:"generated_title"`
+	CurrentModelID string `json:"current_model_id"`
 	HeadBranch     string `json:"head_branch"`
 	CreatedAt      string `json:"created_at"`
 	UpdatedAt      string `json:"updated_at"`
@@ -1169,6 +1241,9 @@ func (grokParser) meta(path string, st *fileState) error {
 	}
 	if s.HeadBranch != "" {
 		st.Branch = s.HeadBranch
+	}
+	if st.Model == "" {
+		st.Model = s.CurrentModelID
 	}
 	st.Created = parseTime(s.CreatedAt)
 	st.Updated = max(parseTime(s.UpdatedAt), parseTime(s.LastActiveAt))

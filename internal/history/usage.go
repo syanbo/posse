@@ -885,6 +885,9 @@ func sortItems(items []UsageItem) {
 
 // TranscriptPath 找一个会话的文件：hooks 报过路径就用它，否则按各家的目录结构和会话 ID 找。找不到返回空。
 func TranscriptPath(agent, sessionID, reported string) string {
+	if agent == "grok" {
+		reported = grokSnapshot(reported)
+	}
 	if reported != "" {
 		if _, err := os.Stat(reported); err == nil {
 			return reported

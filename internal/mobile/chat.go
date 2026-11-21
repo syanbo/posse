@@ -199,8 +199,23 @@ func (c *conn) sessionTerminal(agentName, sessionID string) host.Terminal {
 // chatTick 看一眼文件。ok 为 false 表示流该停（发送失败）。wait 是这一轮之后再等多久：
 // 文件还没有时从 500ms 翻倍到 5s，已经有文件就保持 500ms。读到的消息另交给 seen。
 func (c *conn) chatTick(reqID string, a *chatSub, path *string, pos *int64, inode *uint64, cursor *history.ChatCursor, announced, ready *bool, delay *time.Duration, seen func([]history.ChatMessage)) (bool, time.Duration) {
-	if *path == "" {
-		*path = history.TranscriptPath(a.Agent, a.SessionID, "")
+	// Grok 的正文会在 chat_history 和 updates 之间换。每次按请求路径重判，换了就整页重读。
+	reported := a.TranscriptPath
+	if *path != "" {
+		reported = *path
+	}
+	watch := *path
+	if a.Agent == "grok" || *path == "" {
+		watch = history.ChatWatchPath(a.Agent, a.SessionID, reported)
+	}
+	if watch != *path {
+		if *ready {
+			// inode 对不上才会整页替换。先清掉旧文件的 inode，换过来的文件走 replacement。
+			*inode = 0
+			*pos = 0
+		}
+		*path = watch
+		*cursor = history.ChatCursor{}
 	}
 	fi, err := os.Stat(*path)
 	if err != nil || fi.IsDir() {
