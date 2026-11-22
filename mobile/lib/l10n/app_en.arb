@@ -560,6 +560,10 @@
   "@deskConnecting": {
     "description": "Remote Desktop: banner while connecting."
   },
+  "deskConnectionDetails": "Connection Details",
+  "@deskConnectionDetails": {
+    "description": "Remote Desktop: status button tooltip for opening or closing connection details."
+  },
   "deskConnectionNote": "By default the picture goes to the connected computer by subscription, and the computer picks the port. This changes the UDP address, for debugging.",
   "@deskConnectionNote": {
     "description": "Remote Desktop › connection settings sheet: explanation."
@@ -567,10 +571,6 @@
   "deskConnectionSettings": "Connection Settings",
   "@deskConnectionSettings": {
     "description": "Remote Desktop › connection settings sheet: title."
-  },
-  "deskDebug": "Debug",
-  "@deskDebug": {
-    "description": "Remote Desktop: floating bar button tooltip that shows the debug panel."
   },
   "deskDebugDecode": "Decode {ms} ms",
   "@deskDebugDecode": {
@@ -662,13 +662,9 @@
       }
     }
   },
-  "deskDisconnect": "Disconnect",
-  "@deskDisconnect": {
-    "description": "Remote Desktop: floating bar button tooltip."
-  },
   "deskDisconnected": "Disconnected",
   "@deskDisconnected": {
-    "description": "Remote Desktop: banner after the user disconnected."
+    "description": "Remote Desktop: banner after the viewing session stopped."
   },
   "deskDisplayNumbered": "Display {number}",
   "@deskDisplayNumbered": {
@@ -838,13 +834,17 @@
   "@deskFailScreenPermission": {
     "description": "Remote Desktop: banner when Posse lacks the screen recording permission on the Mac."
   },
+  "deskFitScreen": "Fit to Screen",
+  "@deskFitScreen": {
+    "description": "Remote Desktop › picture menu: show the entire selected desktop or window on the phone again after zooming."
+  },
   "deskForgetPassword": "Forget Password",
   "@deskForgetPassword": {
     "description": "Remote Desktop › unlock sheet: button."
   },
   "deskFpsStill": "Still",
   "@deskFpsStill": {
-    "description": "Remote Desktop: floating bar label in place of the frame rate when the picture isn’t changing."
+    "description": "Remote Desktop: connection details label in place of the frame rate when the picture isn’t changing."
   },
   "deskQuality": "Resolution",
   "@deskQuality": {
@@ -934,6 +934,10 @@
   "@deskGestureZoomedDrag": {
     "description": "Remote Desktop › gesture help: how to pan in direct touch mode."
   },
+  "deskHighLatency": "High Latency",
+  "@deskHighLatency": {
+    "description": "Remote Desktop: short status when the connection to the Mac has high latency."
+  },
   "deskHost": "Host",
   "@deskHost": {
     "description": "Remote Desktop › connection settings sheet: field label."
@@ -1020,7 +1024,11 @@
   },
   "deskReconnect": "Reconnect",
   "@deskReconnect": {
-    "description": "Remote Desktop: floating bar tooltip and banner button after disconnecting."
+    "description": "Remote Desktop: banner button after the Mac stopped this viewing session."
+  },
+  "deskReconnecting": "Reconnecting…",
+  "@deskReconnecting": {
+    "description": "Remote Desktop: short status while reconnecting to the Mac."
   },
   "deskRemember": "Remember",
   "@deskRemember": {
@@ -1061,6 +1069,14 @@
   "deskToPortrait": "Switch to Portrait",
   "@deskToPortrait": {
     "description": "Remote Desktop: floating bar button tooltip."
+  },
+  "deskToolbarCollapse": "Collapse Toolbar",
+  "@deskToolbarCollapse": {
+    "description": "Remote Desktop: floating toolbar button tooltip when expanded."
+  },
+  "deskToolbarExpand": "Expand Toolbar",
+  "@deskToolbarExpand": {
+    "description": "Remote Desktop: floating toolbar button tooltip when collapsed."
   },
   "deskUdpAddress": "UDP Address",
   "@deskUdpAddress": {

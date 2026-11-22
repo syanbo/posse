@@ -149,8 +149,6 @@ class DeskGestures {
   int _clicks = 0;
   Offset? _lastTapScreen;
 
-  /// 最后一次单击在视图里的位置。
-  Offset? get lastTap => _lastTapScreen;
   Duration _lastTapTime = Duration.zero;
 
   bool get trackpad => _trackpad;
@@ -164,13 +162,7 @@ class DeskGestures {
   }
 
   /// 指针在视图里的位置。
-  Offset get cursorView {
-    final image = deskImageRect(fit, viewport);
-    return Offset(
-      image.left + cursor.x * image.width,
-      image.top + cursor.y * image.height,
-    );
-  }
+  Offset get cursorView => deskViewPoint(cursor, fit, viewport);
 
   bool get needsTick =>
       _fingers.isNotEmpty || _flick != null || _graceFrom != null;

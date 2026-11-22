@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -14,8 +15,10 @@ import 'package:posse_mobile/desk/gestures.dart';
 import 'package:posse_mobile/desk/hint.dart';
 import 'package:posse_mobile/desk/key_bar.dart';
 import 'package:posse_mobile/desk/mods.dart';
+import 'package:posse_mobile/desk/plugin.dart';
 import 'package:posse_mobile/desk/toolbar.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
 import 'package:posse_mobile/ui/theme.dart';
 
 import 'shot_fonts.dart';
@@ -192,49 +195,115 @@ void main() {
     expect(find.text('右键'), findsNothing);
   });
 
-  testWidgets('toolbar stays open and header controls are separate', (
+  testWidgets('connection status shows text only when attention is needed', (
     tester,
   ) async {
-    var backs = 0;
-    var helps = 0;
-    await tester.pumpWidget(
+    Future<void> pump(
+      int? latency, {
+      bool unresponsive = false,
+      bool reconnecting = false,
+    }) => tester.pumpWidget(
       MaterialApp(
         theme: posseTheme(Brightness.dark),
         home: Scaffold(
-          body: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  DeskBackButton(onBack: () => backs++),
-                  const DeskStatusPill(
-                    latency: Duration(milliseconds: 40),
-                    unresponsive: false,
-                    fps: 60,
-                    video: true,
-                  ),
-                ],
-              ),
-              _toolbar(onSettings: () => helps++),
-            ],
+          body: DeskStatusPill(
+            latency: latency == null ? null : Duration(milliseconds: latency),
+            unresponsive: unresponsive,
+            reconnecting: reconnecting,
+            detailsOpen: false,
+            onTap: () {},
           ),
         ),
       ),
     );
-    await tester.pump(const Duration(seconds: 10));
-    expect(find.text('60 fps'), findsOneWidget);
-    expect(find.byKey(const Key('desk-toolbar-orientation')), findsOneWidget);
+    final status = find.byKey(const Key('desk-status'));
+    await pump(299);
+    expect(tester.getSize(status).width, deskControlExtent);
     expect(
-      find.descendant(
-        of: find.byKey(const Key('desk-toolbar')),
-        matching: find.byKey(const Key('desk-toolbar-back')),
-      ),
+      find.descendant(of: status, matching: find.byType(Text)),
       findsNothing,
     );
-    await tester.tap(find.byKey(const Key('desk-toolbar-back')));
-    expect(backs, 1);
-    await tester.tap(find.byKey(const Key('desk-toolbar-settings')));
-    expect(helps, 1);
+    await pump(300);
+    expect(find.text(zh.deskHighLatency), findsOneWidget);
+    await pump(300, unresponsive: true);
+    expect(find.text(zh.chatLatencyUnresponsive), findsOneWidget);
+    await pump(null, reconnecting: true);
+    expect(find.text(zh.deskReconnecting), findsOneWidget);
+  });
+
+  testWidgets('the toolbar starts collapsed and collapses after key controls', (
+    tester,
+  ) async {
+    addTearDown(tester.view.reset);
+    _surface(tester, const Size(800, 400), FakeViewPadding.zero);
+    _mockDeskChannels(tester);
+    final model = PosseAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+    );
+    addTearDown(model.dispose);
+    model.updateSettings((s) => s.deskGesturesSeen = true);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.dark),
+        home: DeskPage(model: model),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final bar = find.byKey(const Key('desk-toolbar'));
+    final toggle = find.byKey(const Key('desk-toolbar-toggle'));
+    final shortcuts = find.byKey(const Key('desk-toolbar-shortcuts'));
+    final keyboard = find.byKey(const Key('desk-toolbar-keyboard'));
+    final settings = find.byKey(const Key('desk-toolbar-settings'));
+    final home = tester.getCenter(toggle);
+    expect(tester.getSize(bar), const Size.square(deskControlExtent));
+    expect(shortcuts, findsNothing);
+
+    await _expandToolbar(tester);
+    expect(tester.getCenter(toggle), home);
+    expect(
+      tester.getCenter(keyboard).dx,
+      lessThan(tester.getCenter(shortcuts).dx),
+    );
+    expect(
+      tester.getCenter(shortcuts).dx,
+      lessThan(tester.getCenter(settings).dx),
+    );
+    expect(find.byIcon(Icons.link_off_rounded), findsNothing);
+    expect(find.byIcon(Icons.speed_rounded), findsNothing);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(shortcuts, findsNothing);
+
+    await _expandToolbar(tester);
+    await tester.tap(shortcuts);
+    await tester.pumpAndSettle();
+    expect(find.byType(DeskKeyBar), findsOneWidget);
+    expect(shortcuts, findsNothing);
+
+    Finder keyBarKeyboard(IconData icon) => find.descendant(
+      of: find.byType(DeskKeyBar),
+      matching: find.byIcon(icon),
+    );
+    await _expandToolbar(tester);
+    await tester.tap(keyBarKeyboard(Icons.keyboard_rounded));
+    await tester.pumpAndSettle();
+    expect(keyboard, findsNothing);
+    await tester.tap(keyBarKeyboard(Icons.keyboard_hide_rounded));
+    await tester.pumpAndSettle();
+
+    await _expandToolbar(tester);
+    await tester.tap(shortcuts);
+    await tester.pumpAndSettle();
+    expect(find.byType(DeskKeyBar), findsNothing);
+
+    await _expandToolbar(tester);
+    await tester.tap(keyboard);
+    await tester.pumpAndSettle();
+    expect(find.byType(DeskKeyBar), findsOneWidget);
+    expect(keyboard, findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
   });
 
   testWidgets('taps beside the toolbar still reach the picture', (
@@ -328,16 +397,14 @@ void main() {
             body: Center(
               child: DeskToolbar(
                 landscape: landscape,
+                expanded: true,
                 keyboardUp: false,
                 shortcuts: false,
-                debugOpen: false,
-                stopped: false,
+                onToggle: () {},
                 onOrientation: () => turns++,
                 onKeyboard: () {},
                 onShortcuts: () {},
-                onDebug: () {},
                 onSettings: () {},
-                onDisconnect: () {},
               ),
             ),
           ),
@@ -466,12 +533,62 @@ void main() {
       expect(orientations.last, ['DeviceOrientation.portraitUp']);
       expect(edges, isNot(contains(false)));
 
-      nav.pop();
+      await tester.tap(find.byKey(const Key('desk-toolbar-back')));
       await tester.pumpAndSettle();
+      expect(find.byType(DeskPage), findsNothing);
       expect(orientations.last, isEmpty);
       expect(edges.last, isFalse);
     },
   );
+
+  testWidgets('a reopened desk waits for the previous desktop stream to end', (
+    tester,
+  ) async {
+    _mockDeskChannels(tester);
+    final rpc = _DeskRpc()..sendEndOnUnsubscribe = false;
+    final model = _DeskModel(rpc);
+    final receiver = _DeskReceiver();
+    addTearDown(model.dispose);
+    addTearDown(rpc.frames.close);
+    addTearDown(receiver.frames.close);
+    model.updateSettings((s) => s.deskGesturesSeen = true);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.dark),
+        home: const SizedBox.shrink(),
+      ),
+    );
+    final nav = tester.state<NavigatorState>(find.byType(Navigator));
+    DeskRoute route() => DeskRoute(
+      builder: (_) => DeskPage(model: model, receiver: receiver),
+    );
+    Future<void> transition() async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      await _flushStreamCleanup(tester);
+    }
+
+    nav.push(route());
+    await transition();
+    expect(rpc.calls, ['desk.subscribe']);
+
+    nav.pop();
+    nav.push(route());
+    await transition();
+    expect(rpc.calls, ['desk.subscribe', 'desk.unsubscribe']);
+    await tester.tapAt(tester.getCenter(find.byType(DeskPage)));
+    await tester.pump();
+    expect(receiver.inputs, 0);
+
+    rpc.frames.add({'type': 'end', 'reason': 'unsubscribed'});
+    await _flushStreamCleanup(tester);
+    expect(rpc.calls, ['desk.subscribe', 'desk.unsubscribe', 'desk.subscribe']);
+
+    rpc.sendEndOnUnsubscribe = true;
+    await tester.tap(find.byKey(const Key('desk-toolbar-back')));
+    await transition();
+    expect(rpc.calls.last, 'desk.unsubscribe');
+  });
 
   testWidgets(
     'free position persists and header stays fixed across keyboard and rotation',
@@ -501,14 +618,24 @@ void main() {
       Rect bar() => tester.getRect(find.byKey(const Key('desk-toolbar')));
       Rect back() => tester.getRect(find.byKey(const Key('desk-toolbar-back')));
       Rect status() => tester.getRect(find.byKey(const Key('desk-status')));
+      final toggle = find.byKey(const Key('desk-toolbar-toggle'));
+      Future<void> checkTogglePosition() async {
+        final before = tester.getCenter(toggle);
+        await _expandToolbar(tester);
+        expect((tester.getCenter(toggle) - before).distance, lessThan(0.001));
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect((tester.getCenter(toggle) - before).distance, lessThan(0.001));
+      }
+
       final first = bar();
       final backAt = back();
       final statusAt = status();
       expect(first.right, 392);
       expect(first.top, greaterThan(backAt.bottom));
-      expect(first.height, greaterThan(first.width));
+      expect(first.size, const Size.square(deskControlExtent));
       await tester.drag(
-        find.byKey(const Key('desk-toolbar-handle')),
+        find.byKey(const Key('desk-toolbar-toggle')),
         const Offset(-220, 300),
       );
       await tester.pumpAndSettle();
@@ -516,16 +643,18 @@ void main() {
       expect(moved.left, greaterThan(50));
       expect(moved.right, lessThan(300));
       expect(moved.top, greaterThan(first.top + 200));
+      expect(find.byKey(const Key('desk-toolbar-settings')), findsNothing);
       expect(back(), backAt);
       expect(status(), statusAt);
       final saved = model.settings.deskToolbarPortrait;
       expect(AppSettings.decode(store.data).deskToolbarPortrait, saved);
+      await checkTogglePosition();
 
       // 键盘只推开实际被遮住的工具条，不改变偏好；固定控件也不跟着动。
       tester.view.viewInsets = const FakeViewPadding(bottom: 450);
       await tester.pumpAndSettle();
       expect(bar().bottom, lessThanOrEqualTo(342));
-      expect(bar().width, greaterThan(bar().height));
+      expect(bar().size, first.size);
       expect(model.settings.deskToolbarPortrait, saved);
       expect(back(), backAt);
       expect(status(), statusAt);
@@ -540,14 +669,15 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(bar().right, 792);
-      expect(bar().width, greaterThan(bar().height));
+      expect(bar().size, first.size);
       await tester.drag(
-        find.byKey(const Key('desk-toolbar-handle')),
+        find.byKey(const Key('desk-toolbar-toggle')),
         const Offset(-180, 100),
       );
       await tester.pumpAndSettle();
       final side = bar();
       expect(model.settings.deskToolbarLandscape, isNot(const Offset(1, 0)));
+      await checkTogglePosition();
 
       _surface(
         tester,
@@ -568,6 +698,16 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(bar(), side);
+      await _expandToolbar(tester);
+      await tester.drag(toggle, const Offset(-70, 45));
+      await tester.pumpAndSettle();
+      final expandedToggle = tester.getCenter(toggle);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(
+        (tester.getCenter(toggle) - expandedToggle).distance,
+        lessThan(0.001),
+      );
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
     },
@@ -656,7 +796,7 @@ void main() {
     await pump(240);
     await tester.pumpAndSettle();
     await tester.drag(
-      find.byKey(const Key('desk-toolbar-handle')),
+      find.byKey(const Key('desk-toolbar-toggle')),
       const Offset(-30, 24),
     );
     await tester.pumpAndSettle();
@@ -669,7 +809,7 @@ void main() {
 
   for (final (screen, keyboard) in [
     (const Size(568, 320), 250.0),
-    (const Size(320, 568), 470.0),
+    (const Size(280, 568), 470.0),
   ]) {
     testWidgets('controls remain reachable above tall keyboard on $screen', (
       tester,
@@ -691,6 +831,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await _expandToolbar(tester);
       Rect rect(String key) => tester.getRect(find.byKey(Key(key)));
       final bar = rect('desk-toolbar');
       expect(bar.height, deskControlExtent);
@@ -705,13 +846,13 @@ void main() {
         await tester.drag(scroll, const Offset(-500, 0));
         await tester.pumpAndSettle();
       }
-      final disconnect = rect('desk-toolbar-disconnect');
-      expect(disconnect.left, greaterThanOrEqualTo(bar.left));
-      expect(disconnect.right, lessThanOrEqualTo(bar.right));
+      final settings = rect('desk-toolbar-settings');
+      expect(settings.left, greaterThanOrEqualTo(bar.left));
+      expect(settings.right, lessThanOrEqualTo(bar.right));
       expect(tester.takeException(), isNull);
       tester.view.viewInsets = FakeViewPadding.zero;
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('desk-toolbar-handle')), findsOneWidget);
+      expect(find.byKey(const Key('desk-toolbar-toggle')), findsOneWidget);
       expect(model.settings.deskToolbarPortrait, const Offset(1, 0));
       expect(model.settings.deskToolbarLandscape, const Offset(1, 0));
       await tester.pumpWidget(const SizedBox.shrink());
@@ -719,7 +860,7 @@ void main() {
     });
   }
 
-  testWidgets('landscape debug panel clears the default horizontal toolbar', (
+  testWidgets('connection details open from the signal and tuck away tools', (
     tester,
   ) async {
     addTearDown(tester.view.reset);
@@ -738,12 +879,21 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('desk-toolbar-debug')));
+    await _expandToolbar(tester);
+    final signal = find.byKey(const Key('desk-status'));
+    await tester.tap(signal);
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('desk-toolbar-keyboard')), findsNothing);
+    expect(find.text(zh.deskDebugLoss('0')), findsOneWidget);
+    expect(find.text(zh.deskDebugHeadline('— fps', '0')), findsOneWidget);
     final bar = tester.getRect(find.byKey(const Key('desk-toolbar')));
-    final panel = tester.getRect(find.byKey(const Key('desk-debug-panel')));
+    final details = find.byKey(const Key('desk-debug-panel'));
+    final panel = tester.getRect(details);
     expect(panel.top, greaterThan(bar.bottom));
     expect(bar.overlaps(panel), isFalse);
+    await tester.tap(signal);
+    await tester.pumpAndSettle();
+    expect(details, findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
@@ -772,6 +922,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await _expandToolbar(tester);
       await tester.tap(find.byKey(const Key('desk-toolbar-settings')));
       await tester.pumpAndSettle();
       expect(find.text(zh.settingsDeskPasswords), findsOneWidget);
@@ -785,6 +936,8 @@ void main() {
       expect(find.text('直接点按模式'), findsOneWidget);
       await tester.tap(find.byKey(const Key('desk-gesture-hint')));
       await tester.pumpAndSettle();
+      expect(find.byKey(const Key('desk-toolbar-settings')), findsNothing);
+      await _expandToolbar(tester);
       await tester.tap(find.byKey(const Key('desk-toolbar-settings')));
       await tester.pumpAndSettle();
       await tester.tap(find.text(zh.deskGestureTitle));
@@ -841,6 +994,8 @@ void main() {
         final suffix =
             '${landscape ? 'landscape' : 'portrait'}-${dark ? 'dark' : 'light'}';
         await shot('desk-controls-$suffix');
+        await _expandToolbar(tester);
+        await shot('desk-controls-expanded-$suffix');
         await tester.tap(find.byKey(const Key('desk-toolbar-settings')));
         await tester.pumpAndSettle();
         await shot('desk-settings-$suffix');
@@ -854,31 +1009,209 @@ void main() {
 
   test('the picture rises just enough to show the last tap', () {
     // 没点过不动
-    expect(deskLift(tapY: null, screenHeight: 800, covered: 300), 0);
+    expect(deskLift(targetY: null, screenHeight: 800, covered: 300), 0);
     // 点在露着的地方不动
-    expect(deskLift(tapY: 200, screenHeight: 800, covered: 300), 0);
+    expect(deskLift(targetY: 200, screenHeight: 800, covered: 300), 0);
     // 点在会被盖住的地方：露到盖住的边上面 48
-    expect(deskLift(tapY: 600, screenHeight: 800, covered: 300), 148);
+    expect(deskLift(targetY: 600, screenHeight: 800, covered: 300), 148);
     // 最多移盖住的那么高
-    expect(deskLift(tapY: 790, screenHeight: 800, covered: 300), 300);
+    expect(deskLift(targetY: 790, screenHeight: 800, covered: 300), 300);
+    expect(deskLift(targetY: 800, screenHeight: 800, covered: 300), 300);
+    expect(deskLift(targetY: 810, screenHeight: 800, covered: 300), 0);
   });
+
+  testWidgets(
+    'fit to screen resets zoom locally even without display metadata',
+    (tester) async {
+      final rpc = await _pumpDeskPicture(tester);
+      final picture = find.byKey(const Key('desk-picture'));
+      final view = find.byKey(const Key('desk-toolbar-view'));
+      final fit = tester.getRect(picture);
+      await _expandToolbar(tester);
+      expect(view, findsNothing);
+
+      final left = await tester.startGesture(
+        const Offset(370, 200),
+        pointer: 1,
+      );
+      final right = await tester.startGesture(
+        const Offset(430, 200),
+        pointer: 2,
+      );
+      await left.moveBy(const Offset(-80, 0));
+      await right.moveBy(const Offset(80, 0));
+      await left.up();
+      await right.up();
+      await tester.pumpAndSettle();
+      expect(tester.getSize(picture).width, greaterThan(fit.width));
+      await tester.tap(view);
+      await tester.pumpAndSettle();
+      expect(find.text(zh.deskFitScreen), findsOneWidget);
+      expect(find.text(zh.deskEntireScreen), findsNothing);
+      await tester.tap(find.text(zh.deskFitScreen));
+      await tester.pumpAndSettle();
+      expect(tester.getRect(picture), fit);
+      expect(find.text(zh.deskFitScreen), findsNothing);
+      await _expandToolbar(tester);
+      expect(view, findsNothing);
+      expect(rpc.calls, ['desk.subscribe']);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _flushStreamCleanup(tester);
+      expect(rpc.calls, ['desk.subscribe', 'desk.unsubscribe']);
+    },
+  );
+
+  for (final trackpad in [true, false]) {
+    testWidgets('keyboard reveals the ${trackpad ? 'cursor' : 'last tap'}', (
+      tester,
+    ) async {
+      await _pumpDeskPicture(tester, trackpad: trackpad);
+      final picture = find.byKey(const Key('desk-picture'));
+      final before = tester.getRect(picture);
+      if (trackpad) {
+        await tester.tapAt(const Offset(400, 190));
+        await tester.dragFrom(const Offset(400, 190), const Offset(0, 150));
+      } else {
+        await tester.tapAt(const Offset(400, 340));
+      }
+      await _expandToolbar(tester);
+      await tester.tap(find.byKey(const Key('desk-toolbar-keyboard')));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 110);
+      await tester.pumpAndSettle();
+      final raised = tester.getRect(picture);
+      expect(raised.top, lessThan(before.top - 70));
+      expect(raised.size, before.size);
+
+      if (trackpad) {
+        await tester.dragFrom(const Offset(400, 210), const Offset(0, -120));
+        await tester.pumpAndSettle();
+        expect(tester.getRect(picture).top, greaterThan(raised.top + 50));
+      }
+
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pumpAndSettle();
+      expect(tester.getRect(picture), before);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _flushStreamCleanup(tester);
+    });
+  }
+}
+
+Future<void> _flushStreamCleanup(WidgetTester tester) async {
+  // 让取消广播监听的 Future 和测试帧里的延续交替跑完。
+  for (var turn = 0; turn < 4; turn++) {
+    await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+  }
+  await tester.pump();
+}
+
+Future<_DeskRpc> _pumpDeskPicture(
+  WidgetTester tester, {
+  bool trackpad = true,
+}) async {
+  addTearDown(tester.view.reset);
+  _surface(tester, const Size(800, 400), FakeViewPadding.zero);
+  _mockDeskChannels(tester);
+  final rpc = _DeskRpc();
+  final receiver = _DeskReceiver();
+  final model = _DeskModel(rpc);
+  addTearDown(model.dispose);
+  addTearDown(receiver.frames.close);
+  addTearDown(rpc.frames.close);
+  model.updateSettings((s) {
+    s.deskGesturesSeen = true;
+    s.deskTrackpad = trackpad;
+  });
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: posseTheme(Brightness.dark),
+      home: DeskPage(model: model, receiver: receiver),
+    ),
+  );
+  await tester.pump();
+  expect(receiver.frames.hasListener, isTrue);
+  receiver.frames.add(const DeskStats(video: true, width: 1600, height: 900));
+  await tester.pumpAndSettle();
+  return rpc;
+}
+
+class _DeskReceiver extends DeskReceiver {
+  final frames = StreamController<DeskStats>.broadcast();
+  var inputs = 0;
+
+  @override
+  Stream<DeskStats> stats() => frames.stream;
+
+  @override
+  Future<void> sendInput(Uint8List plain) async {
+    inputs++;
+  }
+
+  @override
+  Future<void> stop() async {}
+}
+
+class _DeskRpc implements PhoneRpc {
+  final frames = StreamController<Map<String, Object?>>.broadcast();
+  final calls = <String>[];
+  var sendEndOnUnsubscribe = true;
+
+  @override
+  Future<RpcStream> subscribe(
+    String method,
+    Map<String, Object?> params,
+  ) async {
+    calls.add(method);
+    return RpcStream(method, frames.stream, () async {});
+  }
+
+  @override
+  Future<Map<String, Object?>> call(
+    String method,
+    Map<String, Object?> params, {
+    Duration? timeout,
+  }) async {
+    calls.add(method);
+    if (method == 'desk.unsubscribe' && sendEndOnUnsubscribe) {
+      frames.add({'type': 'end', 'reason': 'unsubscribed'});
+    }
+    return {};
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _DeskModel extends PosseAppModel {
+  _DeskModel(this.rpc)
+    : super(store: MemoryPairingStore(), settingsStore: MemorySettingsStore());
+
+  @override
+  final PhoneRpc rpc;
+
+  @override
+  String get connectedUrl => 'ws://127.0.0.1:6789';
 }
 
 DeskToolbar _toolbar({VoidCallback? onSettings, bool landscape = false}) =>
     DeskToolbar(
       landscape: landscape,
+      expanded: true,
       keyboardUp: false,
       shortcuts: false,
-      debugOpen: false,
-      stopped: false,
+      onToggle: () {},
       onOrientation: () {},
       onKeyboard: () {},
       onShortcuts: () {},
-      onDebug: () {},
       onSettings: onSettings ?? () {},
-      onDisconnect: () {},
       onView: () {},
     );
+
+Future<void> _expandToolbar(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('desk-toolbar-toggle')));
+  await tester.pumpAndSettle();
+}
 
 void _surface(WidgetTester tester, Size size, FakeViewPadding inset) {
   tester.view.physicalSize = size;

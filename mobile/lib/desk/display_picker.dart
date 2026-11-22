@@ -10,15 +10,14 @@ import 'displays.dart';
 /// 选好的画面：整块屏或一个窗口，[id] 是屏的 ID 或窗口的 ID。
 typedef DeskPick = ({bool window, int id});
 
-/// 选看什么：上面是屏（多块时按真实排布画出各块，块里写名字和分辨率，点哪块切哪块），下面是当前空间里的窗口，
-/// [windows] 打开时现要。最上面是清晰度和帧率（[fps] 为 null 时电脑不支持手选、不显示，0 是自动），
-/// 选了经 [onFps] 立即交出去、面板不关。返回选中的屏或窗口，取消为 null。
+/// 返回选中的屏或窗口，取消为 null。[onFitScreen] 只调整手机上的视口。
 Future<DeskPick?> pickDeskView(
   BuildContext context,
   DeskDisplays displays, {
-  required Future<List<DeskWindow>> windows,
+  Future<List<DeskWindow>>? windows,
   ValueListenable<int>? generation,
   ValueListenable<DeskDisplays>? target,
+  VoidCallback? onFitScreen,
   int? resolution,
   Future<void> Function(int)? onResolution,
   int? fps,
@@ -26,14 +25,16 @@ Future<DeskPick?> pickDeskView(
 }) async {
   BuildContext? sheetContext;
   final openedAt = generation?.value;
-  void invalidate() {
+  bool isCurrent() {
     final current = target?.value ?? displays;
-    // 目标变化后旧勾选已失效，收起面板让回退提示可见；尺寸变化不影响选择。
-    if (generation?.value == openedAt &&
+    return generation?.value == openedAt &&
         current.current == displays.current &&
-        current.window?.id == displays.window?.id) {
-      return;
-    }
+        current.window?.id == displays.window?.id;
+  }
+
+  void invalidate() {
+    // 目标变化后旧勾选已失效，收起面板让回退提示可见；尺寸变化不影响选择。
+    if (isCurrent()) return;
     // 生命周期回调和页面销毁都可能发生在导航锁内，只移除这张旧面板。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sheet = sheetContext;
@@ -59,6 +60,29 @@ Future<DeskPick?> pickDeskView(
         invalidate();
         final c = PosseColors.of(sheet);
         void pick(DeskPick p) => Navigator.of(sheet).pop(p);
+        final fitAction = onFitScreen == null
+            ? null
+            : RowTile(
+                leading: Icon(
+                  Icons.fit_screen_rounded,
+                  size: Ic.medium,
+                  color: c.muted,
+                ),
+                title: Text(sheet.l10n.deskFitScreen),
+                chevron: false,
+                onTap: () {
+                  if (!isCurrent()) return;
+                  Navigator.of(sheet).pop();
+                  onFitScreen();
+                },
+              );
+        if (fitAction != null &&
+            displays.list.isEmpty &&
+            windows == null &&
+            resolution == null &&
+            fps == null) {
+          return SafeArea(top: false, child: fitAction);
+        }
         // 只看窗口时屏上不打勾，排布图照样标出窗口所在的那块
         final watching = displays.window;
         // 面板高度固定、内容在里面滚：窗口列表常在弹出动画途中才到，跟着内容长高面板会跳一下
@@ -71,6 +95,7 @@ Future<DeskPick?> pickDeskView(
           child: SizedBox(
             height: height,
             child: _StreamChoices(
+              fitAction: fitAction,
               resolution: resolution,
               onResolution: onResolution,
               fps: fps,
@@ -78,103 +103,110 @@ Future<DeskPick?> pickDeskView(
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    Section(
-                      title: sheet.l10n.deskEntireScreen,
-                      inset: 48,
-                      children: [
-                        // 多块屏只画排布图，名字和分辨率写在各块里
-                        if (displays.several)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                            child: SizedBox(
-                              height: 150,
-                              child: DeskDisplayMap(
-                                displays: displays,
-                                onPick: (id) => pick((window: false, id: id)),
+                    if (displays.list.isNotEmpty)
+                      Section(
+                        title: sheet.l10n.deskEntireScreen,
+                        inset: 48,
+                        children: [
+                          // 多块屏只画排布图，名字和分辨率写在各块里
+                          if (displays.several)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                12,
+                                16,
+                                12,
                               ),
-                            ),
-                          )
-                        else
-                          for (final d in displays.list)
-                            RowTile(
-                              key: Key('desk-display-${d.id}'),
-                              leading: Icon(
-                                Icons.desktop_windows_rounded,
-                                size: Ic.medium,
-                                color: d.id == displays.current
-                                    ? c.accent
-                                    : c.muted,
-                              ),
-                              title: Text(
-                                deskDisplayName(sheet.l10n, displays, d),
-                              ),
-                              subtitle: Text(_resolution(sheet.l10n, d)),
-                              trailing:
-                                  watching == null && d.id == displays.current
-                                  ? Icon(
-                                      Icons.check_rounded,
-                                      size: Ic.medium,
-                                      color: c.accent,
-                                    )
-                                  : null,
-                              chevron: false,
-                              onTap: () => pick((window: false, id: d.id)),
-                            ),
-                      ],
-                    ),
-                    FutureBuilder<List<DeskWindow>>(
-                      future: windows,
-                      builder: (context, snap) {
-                        final list = snap.data;
-                        return Section(
-                          title: context.l10n.deskWindows,
-                          inset: 48,
-                          children: [
-                            if (snap.connectionState != ConnectionState.done)
-                              _Note(
-                                key: const Key('desk-windows-loading'),
-                                context.l10n.deskListingWindows,
-                              )
-                            else if (snap.hasError)
-                              _Note(context.l10n.deskWindowsError)
-                            else if (list == null || list.isEmpty)
-                              _Note(context.l10n.deskWindowsEmpty)
-                            else
-                              for (final w in list)
-                                RowTile(
-                                  key: Key('desk-window-${w.id}'),
-                                  leading: _AppIcon(
-                                    w,
-                                    color: w.id == watching?.id
-                                        ? c.accent
-                                        : c.muted,
-                                  ),
-                                  title: Text(
-                                    w.label,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: Text(
-                                    w.title.isNotEmpty
-                                        ? w.app
-                                        : '${w.width.round()} × ${w.height.round()}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  trailing: w.id == watching?.id
-                                      ? Icon(
-                                          Icons.check_rounded,
-                                          size: Ic.medium,
-                                          color: c.accent,
-                                        )
-                                      : null,
-                                  chevron: false,
-                                  onTap: () => pick((window: true, id: w.id)),
+                              child: SizedBox(
+                                height: 150,
+                                child: DeskDisplayMap(
+                                  displays: displays,
+                                  onPick: (id) => pick((window: false, id: id)),
                                 ),
-                          ],
-                        );
-                      },
-                    ),
+                              ),
+                            )
+                          else
+                            for (final d in displays.list)
+                              RowTile(
+                                key: Key('desk-display-${d.id}'),
+                                leading: Icon(
+                                  Icons.desktop_windows_rounded,
+                                  size: Ic.medium,
+                                  color: d.id == displays.current
+                                      ? c.accent
+                                      : c.muted,
+                                ),
+                                title: Text(
+                                  deskDisplayName(sheet.l10n, displays, d),
+                                ),
+                                subtitle: Text(_resolution(sheet.l10n, d)),
+                                trailing:
+                                    watching == null && d.id == displays.current
+                                    ? Icon(
+                                        Icons.check_rounded,
+                                        size: Ic.medium,
+                                        color: c.accent,
+                                      )
+                                    : null,
+                                chevron: false,
+                                onTap: () => pick((window: false, id: d.id)),
+                              ),
+                        ],
+                      ),
+                    if (windows != null)
+                      FutureBuilder<List<DeskWindow>>(
+                        future: windows,
+                        builder: (context, snap) {
+                          final list = snap.data;
+                          return Section(
+                            title: context.l10n.deskWindows,
+                            inset: 48,
+                            children: [
+                              if (snap.connectionState != ConnectionState.done)
+                                _Note(
+                                  key: const Key('desk-windows-loading'),
+                                  context.l10n.deskListingWindows,
+                                )
+                              else if (snap.hasError)
+                                _Note(context.l10n.deskWindowsError)
+                              else if (list == null || list.isEmpty)
+                                _Note(context.l10n.deskWindowsEmpty)
+                              else
+                                for (final w in list)
+                                  RowTile(
+                                    key: Key('desk-window-${w.id}'),
+                                    leading: _AppIcon(
+                                      w,
+                                      color: w.id == watching?.id
+                                          ? c.accent
+                                          : c.muted,
+                                    ),
+                                    title: Text(
+                                      w.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: Text(
+                                      w.title.isNotEmpty
+                                          ? w.app
+                                          : '${w.width.round()} × ${w.height.round()}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    trailing: w.id == watching?.id
+                                        ? Icon(
+                                            Icons.check_rounded,
+                                            size: Ic.medium,
+                                            color: c.accent,
+                                          )
+                                        : null,
+                                    chevron: false,
+                                    onTap: () => pick((window: true, id: w.id)),
+                                  ),
+                            ],
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),
@@ -192,6 +224,7 @@ Future<DeskPick?> pickDeskView(
 class _StreamChoices extends StatefulWidget {
   const _StreamChoices({
     required this.child,
+    this.fitAction,
     this.resolution,
     this.onResolution,
     this.fps,
@@ -199,6 +232,7 @@ class _StreamChoices extends StatefulWidget {
   });
 
   final Widget child;
+  final Widget? fitAction;
   final int? resolution;
   final Future<void> Function(int)? onResolution;
   final int? fps;
@@ -253,6 +287,7 @@ class _StreamChoicesState extends State<_StreamChoices> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        ?widget.fitAction,
         if (hasChoices)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),

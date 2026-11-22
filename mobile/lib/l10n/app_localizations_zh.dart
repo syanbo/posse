@@ -424,14 +424,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deskConnecting => '正在连接';
 
   @override
+  String get deskConnectionDetails => '连接详情';
+
+  @override
   String get deskConnectionNote =>
       '默认走订阅。画面发到现在连着的电脑，端口由电脑分配。这里改的是 UDP 地址，留着调试。';
 
   @override
   String get deskConnectionSettings => '连接设置';
-
-  @override
-  String get deskDebug => '调试';
 
   @override
   String deskDebugDecode(String ms) {
@@ -472,9 +472,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String deskDebugView(String zoom, String x, String y) {
     return '缩放 $zoom  平移 $x, $y';
   }
-
-  @override
-  String get deskDisconnect => '断开';
 
   @override
   String get deskDisconnected => '已断开';
@@ -580,6 +577,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deskFailScreenPermission => '请到 Mac 上允许屏幕录制';
 
   @override
+  String get deskFitScreen => '适应屏幕';
+
+  @override
   String get deskForgetPassword => '忘掉密码';
 
   @override
@@ -652,6 +652,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deskGestureZoomedDrag => '放大后单指拖动';
 
   @override
+  String get deskHighLatency => '高延迟';
+
+  @override
   String get deskHost => '主机';
 
   @override
@@ -718,6 +721,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deskReconnect => '重新连接';
 
   @override
+  String get deskReconnecting => '正在重连';
+
+  @override
   String get deskRemember => '记住';
 
   @override
@@ -743,6 +749,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get deskToPortrait => '切到竖屏';
+
+  @override
+  String get deskToolbarCollapse => '收起工具条';
+
+  @override
+  String get deskToolbarExpand => '展开工具条';
 
   @override
   String get deskUdpAddress => 'UDP 地址';

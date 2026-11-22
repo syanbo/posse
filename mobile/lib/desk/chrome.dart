@@ -100,15 +100,20 @@ String deskFpsLabel(
   return '${fps.toStringAsFixed(0)} fps';
 }
 
-/// 键盘弹出时画面上移多少：最后点的那一处（多半是要打字的输入框）露在被盖住的部分上面，
-/// 留一行字的余量。没点过、或本来就露着时不动，最多移被盖住的那么高。
+/// 键盘弹出时画面上移多少：当前操作位置露在被盖住的部分上面，
+/// 留一行字的余量。位置已在视口外或本来就露着时不动，最多移被盖住的那么高。
 double deskLift({
-  required double? tapY,
+  required double? targetY,
   required double screenHeight,
   required double covered,
 }) {
-  if (tapY == null || covered <= 0) return 0;
+  if (targetY == null ||
+      targetY < 0 ||
+      targetY > screenHeight ||
+      covered <= 0) {
+    return 0;
+  }
   const margin = 48.0;
-  final need = tapY + margin - (screenHeight - covered);
+  final need = targetY + margin - (screenHeight - covered);
   return need.clamp(0.0, covered);
 }

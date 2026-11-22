@@ -87,6 +87,15 @@ Rect deskImageRect(DeskFrame fit, DeskViewport viewport) {
   );
 }
 
+/// 整屏 0–1 的位置在当前视口里的坐标，可能落在裁剪区域之外。
+Offset deskViewPoint(DeskPoint point, DeskFrame fit, DeskViewport viewport) {
+  final image = deskImageRect(fit, viewport);
+  return Offset(
+    image.left + point.x * image.width,
+    image.top + point.y * image.height,
+  );
+}
+
 /// 视图坐标换成整屏 0–1。落在画面外（留空，或放大后还没盖到的地方）返回空。
 DeskPoint? mapDesktop({
   required double x,

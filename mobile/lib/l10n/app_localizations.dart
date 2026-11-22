@@ -806,6 +806,12 @@ abstract class AppLocalizations {
   /// **'Connecting…'**
   String get deskConnecting;
 
+  /// Remote Desktop: status button tooltip for opening or closing connection details.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection Details'**
+  String get deskConnectionDetails;
+
   /// Remote Desktop › connection settings sheet: explanation.
   ///
   /// In en, this message translates to:
@@ -817,12 +823,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Connection Settings'**
   String get deskConnectionSettings;
-
-  /// Remote Desktop: floating bar button tooltip that shows the debug panel.
-  ///
-  /// In en, this message translates to:
-  /// **'Debug'**
-  String get deskDebug;
 
   /// Remote Desktop › debug panel: decode time.
   ///
@@ -872,13 +872,7 @@ abstract class AppLocalizations {
   /// **'Zoom {zoom}  pan {x}, {y}'**
   String deskDebugView(String zoom, String x, String y);
 
-  /// Remote Desktop: floating bar button tooltip.
-  ///
-  /// In en, this message translates to:
-  /// **'Disconnect'**
-  String get deskDisconnect;
-
-  /// Remote Desktop: banner after the user disconnected.
+  /// Remote Desktop: banner after the viewing session stopped.
   ///
   /// In en, this message translates to:
   /// **'Disconnected'**
@@ -1040,13 +1034,19 @@ abstract class AppLocalizations {
   /// **'Allow screen recording on the Mac'**
   String get deskFailScreenPermission;
 
+  /// Remote Desktop › picture menu: show the entire selected desktop or window on the phone again after zooming.
+  ///
+  /// In en, this message translates to:
+  /// **'Fit to Screen'**
+  String get deskFitScreen;
+
   /// Remote Desktop › unlock sheet: button.
   ///
   /// In en, this message translates to:
   /// **'Forget Password'**
   String get deskForgetPassword;
 
-  /// Remote Desktop: floating bar label in place of the frame rate when the picture isn’t changing.
+  /// Remote Desktop: connection details label in place of the frame rate when the picture isn’t changing.
   ///
   /// In en, this message translates to:
   /// **'Still'**
@@ -1184,6 +1184,12 @@ abstract class AppLocalizations {
   /// **'Drag one finger when zoomed in'**
   String get deskGestureZoomedDrag;
 
+  /// Remote Desktop: short status when the connection to the Mac has high latency.
+  ///
+  /// In en, this message translates to:
+  /// **'High Latency'**
+  String get deskHighLatency;
+
   /// Remote Desktop › connection settings sheet: field label.
   ///
   /// In en, this message translates to:
@@ -1310,11 +1316,17 @@ abstract class AppLocalizations {
   /// **'Port must be from 1 to 65535'**
   String get deskPortRange;
 
-  /// Remote Desktop: floating bar tooltip and banner button after disconnecting.
+  /// Remote Desktop: banner button after the Mac stopped this viewing session.
   ///
   /// In en, this message translates to:
   /// **'Reconnect'**
   String get deskReconnect;
+
+  /// Remote Desktop: short status while reconnecting to the Mac.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnecting…'**
+  String get deskReconnecting;
 
   /// Remote Desktop › unlock sheet: checkbox chip.
   ///
@@ -1363,6 +1375,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Switch to Portrait'**
   String get deskToPortrait;
+
+  /// Remote Desktop: floating toolbar button tooltip when expanded.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse Toolbar'**
+  String get deskToolbarCollapse;
+
+  /// Remote Desktop: floating toolbar button tooltip when collapsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand Toolbar'**
+  String get deskToolbarExpand;
 
   /// Remote Desktop › debug panel: button that opens connection settings.
   ///

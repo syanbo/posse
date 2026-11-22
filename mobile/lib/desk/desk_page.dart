@@ -39,7 +39,7 @@ const _markFade = Duration(milliseconds: 280);
 const _cursorRingSize = 16.0;
 
 /// 左缘拖动是画面平移，Listener 不参与手势竞争，和页面返回会一起发生。
-/// 返回放在工具条上。
+/// 返回用画面上方的独立按钮。
 class DeskRoute extends MaterialPageRoute<void> {
   DeskRoute({required super.builder});
 
@@ -69,6 +69,9 @@ class _Mark {
 
 class _DeskPageState extends State<DeskPage>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  // 退订按连接生效，原生接收器也只有一个。新页面要等旧页面完成清理再开始。
+  static Future<void>? _lastWatchClosed;
+
   late final DeskReceiver _receiver = widget.receiver ?? DeskReceiver();
   late final DeskGestures _gestures;
   final _log = DeskEventLog();
@@ -88,12 +91,14 @@ class _DeskPageState extends State<DeskPage>
     widget.model.settings.deskToolbarLandscape,
   );
 
-  /// 最后一次单击在舞台里的纵坐标。键盘弹出时画面上移，让它不被盖住。
-  double? _typeY;
+  // 记桌面坐标，键盘打开前后缩放和转屏都能定位到同一处。
+  DeskPoint? _lastDirectTap;
+  var _keyboardVisible = false;
 
   StreamSubscription<DeskStats>? _statsSub;
   StreamSubscription<Map<String, Object?>>? _deskFrames;
   RpcStream? _deskSub;
+  Future<void>? _deskEnded;
   PhoneRpc? _rpcNow;
   Timer? _retry;
   Timer? _lockRetry;
@@ -162,8 +167,12 @@ class _DeskPageState extends State<DeskPage>
   DeskTrafficKeys? _keys;
   String? _hostNow;
   var _watchTail = Future<void>.value();
+  Completer<void>? _watchClosed;
   var _up = false;
   var _background = false;
+  var _toolbarOpen = false;
+  // 展开时选定按钮在工具条的哪一端，免得拖过屏幕中线时换边。
+  var _toolbarToggleAlignment = Alignment.topLeft;
   var _debugOpen = false;
 
   /// 悬浮工具条里点「手势」重新打开的提示，和第一次进页面的是同一层。
@@ -178,6 +187,8 @@ class _DeskPageState extends State<DeskPage>
   }
 
   SystemUiMode? _ui;
+
+  bool get _receiverAvailable => widget.receiver != null || deskSupported;
 
   @override
   void initState() {
@@ -212,8 +223,10 @@ class _DeskPageState extends State<DeskPage>
     );
     _keyboard.addListener(_keyboardChanged);
     _input.addListener(_onTyped);
-    if (deskSupported) {
-      _statsSub = _receiver.stats().listen(_onStats);
+    if (_receiverAvailable) {
+      final closed = _watchClosed = Completer<void>();
+      _watchTail = _lastWatchClosed ?? _watchTail;
+      _lastWatchClosed = closed.future;
     }
     deskChromeLease.acquire(_lease);
     unawaited(lockDeskOrientation(widget.model.settings.deskLandscape));
@@ -241,15 +254,8 @@ class _DeskPageState extends State<DeskPage>
     _gen++;
     _link.release();
     _retry?.cancel();
-    final tail = _sendTail;
+    if (_watchClosed case final closed?) unawaited(_closeWatch(closed));
     _inputLine.dispose();
-    unawaited(() async {
-      await tail;
-      await _drainPackets();
-      await _dropDesk(unsubscribe: true);
-      await _stopReceiver();
-    }());
-    unawaited(_statsSub?.cancel());
     _keyboard.removeListener(_keyboardChanged);
     _input.removeListener(_onTyped);
     _keyboard.dispose();
@@ -284,6 +290,9 @@ class _DeskPageState extends State<DeskPage>
   }
 
   String? get _autoHost => deskHostOf(widget.model.connectedUrl);
+
+  bool get _reconnecting =>
+      widget.model.link != null && widget.model.rpc == null;
 
   /// 直连发到哪。经隧道连着又没有同一台电脑的局域网地址时为空，只能靠中转。
   String? get _udpHost {
@@ -321,8 +330,7 @@ class _DeskPageState extends State<DeskPage>
     switch (event) {
       case DeskTapEvent(:final at, :final clicks):
         _click(at, deskButtonLeft, clicks);
-        _typeY = _gestures.lastTap?.dy;
-        if (_keyboardUp) setState(() {});
+        if (!_gestures.trackpad) _lastDirectTap = at;
       case DeskRightClickEvent(:final at):
         _click(at, deskButtonRight, 1);
       case DeskDragEvent(:final phase, :final at):
@@ -425,7 +433,7 @@ class _DeskPageState extends State<DeskPage>
     _sendTail = _sendTail.then((_) => _drainPackets());
     // 测试里没有确认号，周期重发会让 pumpAndSettle 停不下来。
     // 接收停了（断开、锁屏、切后台）就不会再有确认号，不重发；再开始时 _link.reset() 清掉没确认的
-    if (_link.needsRetry && deskSupported && _up) _armRetry();
+    if (_link.needsRetry && _receiverAvailable && _up) _armRetry();
   }
 
   void _armRetry() {
@@ -441,7 +449,7 @@ class _DeskPageState extends State<DeskPage>
   Future<void> _drainPackets() async {
     while (_packets.isNotEmpty) {
       final packet = _packets.removeAt(0);
-      if (!deskSupported) continue;
+      if (_statsSub == null) continue;
       try {
         await _receiver.sendInput(packet);
       } on PlatformException {
@@ -486,8 +494,30 @@ class _DeskPageState extends State<DeskPage>
   }
 
   void _toggleDebug() {
-    setState(() => _debugOpen = !_debugOpen);
+    setState(() {
+      _debugOpen = !_debugOpen;
+      _toolbarOpen = false;
+    });
+    if (_debugOpen) _keyboard.unfocus();
   }
+
+  void _toggleToolbar(bool landscape) {
+    setState(() {
+      _toolbarOpen = !_toolbarOpen;
+      if (!_toolbarOpen) return;
+      final anchor = (landscape ? _anchorSide : _anchorTop).value;
+      _toolbarToggleAlignment = Alignment(
+        anchor.dx > 0.5 ? 1 : -1,
+        anchor.dy > 0.5 ? 1 : -1,
+      );
+      _debugOpen = false;
+    });
+  }
+
+  VoidCallback _toolbarAction(VoidCallback action) => () {
+    setState(() => _toolbarOpen = false);
+    action();
+  };
 
   Future<void> _showSettings() async {
     _keyboard.unfocus();
@@ -514,36 +544,6 @@ class _DeskPageState extends State<DeskPage>
     setState(() => _hintOpen = false);
   }
 
-  Future<void> _disconnect() {
-    if (_stopped) return _enqueue(() => _ensureBody(force: true));
-    _stopped = true;
-    _lockRetry?.cancel();
-    _lockRetry = null;
-    return _enqueue(_disconnectBody);
-  }
-
-  Future<void> _disconnectBody() async {
-    _gen++;
-    _stats = const DeskStats();
-    _statsTick.value = const DeskStats();
-    if (mounted) {
-      setState(() {
-        _fail = null;
-        _endNote = null;
-        _noAccess = false;
-        _macLocked = false;
-        _indirect = false;
-        _up = false;
-        _texture = null;
-      });
-    }
-    await _releaseHeld();
-    await _dropDesk(unsubscribe: true);
-    await _stopReceiver();
-    _keys = null;
-    _readyPort = null;
-  }
-
   void _followComputer() {
     if (!mounted || _stopped || _background) return;
     final rpc = widget.model.rpc;
@@ -559,7 +559,10 @@ class _DeskPageState extends State<DeskPage>
       if (_typing.reopened(_input.text) case final pad?) _input.value = pad;
     }
     if (!mounted || up == _keyboardUp) return;
-    setState(() => _keyboardUp = up);
+    setState(() {
+      _keyboardUp = up;
+      if (up) _toolbarOpen = false;
+    });
   }
 
   void _setBackground(bool background) {
@@ -633,6 +636,24 @@ class _DeskPageState extends State<DeskPage>
     return run;
   }
 
+  Future<void> _closeWatch(Completer<void> closed) async {
+    final watch = _watchTail;
+    final sends = _sendTail;
+    try {
+      await watch;
+      final stats = _statsSub;
+      if (stats == null) return;
+      await sends;
+      await _drainPackets();
+      await _dropDesk(unsubscribe: true, waitForEnd: true);
+      await stats.cancel();
+      await _stopReceiver();
+    } finally {
+      if (identical(_lastWatchClosed, closed.future)) _lastWatchClosed = null;
+      closed.complete();
+    }
+  }
+
   Future<void> _ensure({bool force = false}) {
     return _enqueue(() => _ensureBody(force: force));
   }
@@ -645,10 +666,11 @@ class _DeskPageState extends State<DeskPage>
       _lockRetry = null;
     }
     // 没有桌面插件（测试）时先返回，不会去解析域名。
-    if (!deskSupported) {
+    if (!_receiverAvailable) {
       setState(() => _fail = 'no_plugin');
       return;
     }
+    _statsSub ??= _receiver.stats().listen(_onStats);
     final rpc = widget.model.rpc;
     final host = _autoHost;
     if (rpc == null || host == null || host.isEmpty) {
@@ -689,6 +711,7 @@ class _DeskPageState extends State<DeskPage>
     setState(() {
       // 可能换了一台电脑，等这次订阅报来的屏
       _displayState.value = DeskDisplays.none;
+      _lastDirectTap = null;
       _fail = null;
       _endNote = null;
       _noAccess = false;
@@ -726,18 +749,28 @@ class _DeskPageState extends State<DeskPage>
       setState(() => _fail = 'rpc');
       return;
     }
-    if (!mounted || gen != _gen) {
-      await stream.cancel();
-      return;
+    // 请求在关闭页面时也可能已经发出，交给退出清理统一退订。
+    final ended = Completer<void>();
+    void signalEnd() {
+      if (!ended.isCompleted) ended.complete();
     }
+
+    _deskEnded = ended.future;
     _deskSub = stream;
     _deskFrames = stream.frames.listen(
       (frame) {
-        unawaited(_enqueue(() => _onDeskFrame(frame, gen, rpc)));
+        if (frame['type'] == 'end') signalEnd();
+        if (mounted && gen == _gen) {
+          unawaited(_enqueue(() => _onDeskFrame(frame, gen, rpc)));
+        }
       },
       onError: (Object error) {
-        unawaited(_enqueue(() => _onDeskError(error, gen)));
+        signalEnd();
+        if (mounted && gen == _gen) {
+          unawaited(_enqueue(() => _onDeskError(error, gen)));
+        }
       },
+      onDone: signalEnd,
     );
   }
 
@@ -784,6 +817,7 @@ class _DeskPageState extends State<DeskPage>
         if (displays.current != _displays.current ||
             displays.window?.id != _displays.window?.id) {
           _gestures.cursor = const DeskPoint(0.5, 0.5);
+          _lastDirectTap = null;
         }
         setState(() => _displayState.value = displays);
         if (displays.gone) _note(context.l10n.deskWindowGone);
@@ -796,19 +830,28 @@ class _DeskPageState extends State<DeskPage>
   /// 这台电脑的公钥：按它记上次看的屏，换地址、重新扫码都不变。
   String? get _computerKey => widget.model.offer?.publicKeyB64;
 
+  bool get _canFitScreen =>
+      _stats.video && _gestures.viewport.zoom > deskMinZoom;
+
+  bool get _canPickView => _displays.list.isNotEmpty || _canFitScreen;
+
   /// 悬浮工具条的「画面」：选一块屏或一个窗口。选的屏记下来，窗口不记（关掉就没了）。让 Mac 切过去，
   /// 切好了 Mac 推新的 displays，画面也换过来；新画面的大小、比例和原来的不一样，缩放回到 1 倍。
   Future<void> _pickView() async {
     final rpc = _rpcNow;
     if (rpc == null) return;
+    _keyboard.unfocus();
     final key = _computerKey;
     final gen = _gen;
     final pick = await pickDeskView(
       context,
       _displays,
-      windows: rpc.call('desk.windows', const {}).then(DeskWindow.parseList),
+      windows: _displays.list.isNotEmpty
+          ? rpc.call('desk.windows', const {}).then(DeskWindow.parseList)
+          : null,
       generation: _watchGeneration,
       target: _displayState,
+      onFitScreen: _canFitScreen ? _resetZoom : null,
       resolution: deskResolutionOffer(
         _resolutionChoice,
         widget.model.settings,
@@ -1046,20 +1089,37 @@ class _DeskPageState extends State<DeskPage>
     await _drainPackets();
   }
 
-  Future<void> _dropDesk({required bool unsubscribe}) async {
+  Future<void> _dropDesk({
+    required bool unsubscribe,
+    bool waitForEnd = false,
+  }) async {
     final frames = _deskFrames;
     final sub = _deskSub;
+    final ended = _deskEnded;
     _deskFrames = null;
     _deskSub = null;
+    _deskEnded = null;
+    if (unsubscribe && waitForEnd) await _unsubscribe(ended);
     await frames?.cancel();
     await sub?.cancel();
-    if (!unsubscribe) return;
+    if (unsubscribe && !waitForEnd) await _unsubscribe();
+  }
+
+  Future<void> _unsubscribe([Future<void>? ended]) async {
     final rpc = _rpcNow;
     if (rpc == null) return;
     try {
-      await rpc.call('desk.unsubscribe', const {});
+      await rpc.call(
+        'desk.unsubscribe',
+        const {},
+        timeout: ended == null
+            ? const Duration(seconds: 20)
+            : const Duration(seconds: 2),
+      );
+      // 退订回执只确认发出了停止信号，Mac 释放采集后才推 end。
+      if (ended != null) await ended.timeout(const Duration(seconds: 2));
     } on Object {
-      // 连接已经没了。
+      // 连接可能已经没了，或旧电脑没来得及发结束通知。
     }
   }
 
@@ -1070,7 +1130,7 @@ class _DeskPageState extends State<DeskPage>
       _stats = const DeskStats();
       _statsTick.value = const DeskStats();
     }
-    if (!deskSupported) return;
+    if (!_receiverAvailable) return;
     try {
       await _receiver.stop();
     } on PlatformException {
@@ -1175,9 +1235,11 @@ class _DeskPageState extends State<DeskPage>
   }
 
   void _pointer(void Function() body) {
+    final hadView = _canPickView;
     body();
     _frame.value++;
     _syncTicker();
+    if (_toolbarOpen && hadView != _canPickView) setState(() {});
   }
 
   _Mark? _mark(int pointer) {
@@ -1225,6 +1287,7 @@ class _DeskPageState extends State<DeskPage>
       mark.solid = false;
       mark.fadeAt = _now;
     });
+    if (_keyboardVisible) setState(() {});
   }
 
   void _cancel(PointerCancelEvent event) {
@@ -1503,7 +1566,7 @@ class _DeskPageState extends State<DeskPage>
     final keys = _chrome.keysVisible(_keyboardUp);
     // 键盘和快捷键栏盖在画面上，画面不跟着缩：缩了整张桌面变小，字更难看清
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-    final screen = MediaQuery.sizeOf(context);
+    _keyboardVisible = keyboard > 0;
     final covered =
         keyboard +
         (keys
@@ -1511,17 +1574,12 @@ class _DeskPageState extends State<DeskPage>
                   1 +
                   MediaQuery.paddingOf(context).bottom
             : 0);
-    final lift = deskLift(
-      tapY: keyboard > 0 ? _typeY : null,
-      screenHeight: screen.height,
-      covered: covered,
-    );
     return Scaffold(
       backgroundColor: DeskColors.letterbox,
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          Positioned.fill(child: _stage(colors, landscape, lift, covered)),
+          Positioned.fill(child: _stage(colors, landscape, covered)),
           Positioned(
             left: 0,
             right: 0,
@@ -1548,12 +1606,7 @@ class _DeskPageState extends State<DeskPage>
     );
   }
 
-  Widget _stage(
-    PosseColors colors,
-    bool landscape,
-    double lift,
-    double covered,
-  ) {
+  Widget _stage(PosseColors colors, bool landscape, double covered) {
     final banner = _banner();
     // 状态栏藏起来之后 padding 会变 0，刘海还在，用 viewPadding 把胶囊让开。
     final pad = MediaQuery.viewPaddingOf(context);
@@ -1577,18 +1630,36 @@ class _DeskPageState extends State<DeskPage>
         fit: StackFit.expand,
         children: [
           const ColoredBox(color: DeskColors.letterbox),
-          TweenAnimationBuilder<double>(
-            tween: Tween(end: lift),
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            builder: (context, dy, child) =>
-                Transform.translate(offset: Offset(0, -dy), child: child),
-            child: Padding(
-              padding: picturePad,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  _fitStage(constraints.maxWidth, constraints.maxHeight);
-                  return Stack(
+          Padding(
+            padding: picturePad,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                _fitStage(constraints.maxWidth, constraints.maxHeight);
+                final focus = !_keyboardVisible
+                    ? null
+                    : widget.model.settings.deskTrackpad
+                    ? _gestures.cursor
+                    : _lastDirectTap;
+                final point = focus == null
+                    ? null
+                    : deskViewPoint(focus, _gestures.fit, _gestures.viewport);
+                final lift = deskLift(
+                  targetY:
+                      point != null &&
+                          point.dx >= 0 &&
+                          point.dx <= constraints.maxWidth
+                      ? point.dy
+                      : null,
+                  screenHeight: constraints.maxHeight,
+                  covered: covered,
+                );
+                return TweenAnimationBuilder<double>(
+                  tween: Tween(end: lift),
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, dy, child) =>
+                      Transform.translate(offset: Offset(0, -dy), child: child),
+                  child: Stack(
                     fit: StackFit.expand,
                     children: [
                       AnimatedBuilder(
@@ -1608,9 +1679,9 @@ class _DeskPageState extends State<DeskPage>
                       if (banner != null)
                         Center(child: _bannerView(colors, banner)),
                     ],
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
           ),
           if (!compactToolbar)
@@ -1623,6 +1694,7 @@ class _DeskPageState extends State<DeskPage>
                 key: ValueKey(landscape),
                 anchor: landscape ? _anchorSide : _anchorTop,
                 bottomInset: math.max(0, covered + 8 - bottom),
+                toggleAlignment: _toolbarOpen ? _toolbarToggleAlignment : null,
                 onDragEnd: () => _saveBarPosition(landscape),
                 child: _toolbar(landscape),
               ),
@@ -1651,10 +1723,14 @@ class _DeskPageState extends State<DeskPage>
                         if (locked) _lockPill(colors),
                         if (locked && _debugOpen) const SizedBox(height: 8),
                         if (_debugOpen)
-                          ValueListenableBuilder<DeskStats>(
-                            valueListenable: _statsTick,
-                            builder: (context, stats, _) =>
-                                _debugPanel(colors, stats),
+                          ListenableBuilder(
+                            listenable: widget.model,
+                            builder: (context, _) =>
+                                ValueListenableBuilder<DeskStats>(
+                                  valueListenable: _statsTick,
+                                  builder: (context, stats, _) =>
+                                      _debugPanel(colors, stats),
+                                ),
                           ),
                       ],
                     ),
@@ -1673,22 +1749,19 @@ class _DeskPageState extends State<DeskPage>
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: _toolbar(landscape, compact: true),
+                      child: Align(child: _toolbar(landscape, compact: true)),
                     ),
                   )
                 else
                   const Spacer(),
                 ListenableBuilder(
                   listenable: widget.model,
-                  builder: (context, _) => ValueListenableBuilder<DeskStats>(
-                    valueListenable: _statsTick,
-                    builder: (context, stats, _) => DeskStatusPill(
-                      latency: widget.model.latency,
-                      unresponsive: widget.model.unresponsive,
-                      fps: stats.fps,
-                      still: stats.still,
-                      video: stats.video,
-                    ),
+                  builder: (context, _) => DeskStatusPill(
+                    latency: widget.model.latency,
+                    unresponsive: widget.model.unresponsive,
+                    reconnecting: _reconnecting,
+                    detailsOpen: _debugOpen,
+                    onTap: _toggleDebug,
                   ),
                 ),
               ],
@@ -1726,17 +1799,16 @@ class _DeskPageState extends State<DeskPage>
   Widget _toolbar(bool landscape, {bool compact = false}) => DeskToolbar(
     landscape: landscape,
     compact: compact,
+    expanded: _toolbarOpen,
+    toggleAlignment: _toolbarToggleAlignment,
     keyboardUp: _keyboardUp,
     shortcuts: _chrome.shortcuts,
-    debugOpen: _debugOpen,
-    stopped: _stopped,
-    onOrientation: _toggleOrientation,
-    onKeyboard: _toggleKeyboard,
-    onShortcuts: _toggleShortcuts,
-    onDebug: _toggleDebug,
-    onSettings: () => unawaited(_showSettings()),
-    onDisconnect: () => unawaited(_disconnect()),
-    onView: _displays.list.isNotEmpty ? () => unawaited(_pickView()) : null,
+    onToggle: () => _toggleToolbar(landscape),
+    onOrientation: _toolbarAction(_toggleOrientation),
+    onKeyboard: _toolbarAction(_toggleKeyboard),
+    onShortcuts: _toolbarAction(_toggleShortcuts),
+    onSettings: _toolbarAction(() => unawaited(_showSettings())),
+    onView: _canPickView ? _toolbarAction(() => unawaited(_pickView())) : null,
   );
 
   /// 手指移动和惯性只重建这一层。顶栏、快捷键栏、调试浮层不在这里。
@@ -1752,7 +1824,10 @@ class _DeskPageState extends State<DeskPage>
           top: image.top,
           width: image.width,
           height: image.height,
-          child: const ColoredBox(color: DeskColors.picture),
+          child: const ColoredBox(
+            key: Key('desk-picture'),
+            color: DeskColors.picture,
+          ),
         ),
         if (_texture != null)
           Positioned(
@@ -1949,6 +2024,14 @@ class _DeskPageState extends State<DeskPage>
   Widget _debugPanel(PosseColors colors, DeskStats stats) {
     final view = _gestures.viewport;
     final l = context.l10n;
+    final delay = widget.model.latency;
+    final latency = _reconnecting
+        ? l.deskReconnecting
+        : widget.model.unresponsive
+        ? l.chatLatencyUnresponsiveLabel
+        : delay == null
+        ? null
+        : l.chatLatencyLabel(delay.inMilliseconds);
     final headline = l.deskDebugHeadline(
       deskFpsLabel(l, stats.fps, video: stats.video, still: stats.still),
       stats.received.toStringAsFixed(0),
@@ -1974,6 +2057,7 @@ class _DeskPageState extends State<DeskPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (latency != null) Text(latency),
                 Text(headline),
                 Text(rate),
                 Text(l.deskDebugLoss('${stats.loss}')),

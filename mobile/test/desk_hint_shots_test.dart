@@ -145,6 +145,7 @@ void main() {
                               context,
                               _displays,
                               windows: Future.value(const []),
+                              onFitScreen: () {},
                               resolution: 1080,
                               onResolution: (_) async {},
                               fps: 0,

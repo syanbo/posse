@@ -64,6 +64,8 @@ class LatencyLabel extends StatelessWidget {
   }
 }
 
+bool latencyIsHigh(Duration? latency) => (latency?.inMilliseconds ?? 0) >= 300;
+
 /// 信号格的颜色：满格绿色，两格灰色，一格琥珀色，没响应红色。
 Color latencyColor(
   PosseColors c,
@@ -73,8 +75,7 @@ Color latencyColor(
   if (unresponsive) return c.danger;
   final ms = latency?.inMilliseconds ?? 0;
   if (ms < 150) return c.sage;
-  if (ms < 300) return c.muted;
-  return c.honey;
+  return latencyIsHigh(latency) ? c.honey : c.muted;
 }
 
 /// 信号格：一眼看出连接好不好。150 ms 内满格，300 ms 起只剩一格，
@@ -85,6 +86,7 @@ IconData latencyIcon(Duration? latency, {bool unresponsive = false}) {
   }
   final ms = latency?.inMilliseconds ?? 0;
   if (ms < 150) return Icons.signal_cellular_alt_rounded;
-  if (ms < 300) return Icons.signal_cellular_alt_2_bar_rounded;
-  return Icons.signal_cellular_alt_1_bar_rounded;
+  return latencyIsHigh(latency)
+      ? Icons.signal_cellular_alt_1_bar_rounded
+      : Icons.signal_cellular_alt_2_bar_rounded;
 }

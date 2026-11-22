@@ -5,11 +5,9 @@ import 'package:flutter/material.dart';
 import '../chat/latency_label.dart';
 import '../l10n/l10n.dart';
 import '../ui/theme.dart';
-import 'chrome.dart';
+import 'chrome.dart' show deskBarTrack;
 
 const deskControlExtent = 40.0;
-const _handleExtent = 24.0;
-const _barPadding = 4.0;
 
 /// anchor 按未被键盘遮住前的范围保存，键盘只限制实际显示位置。
 class DeskBarSlot extends StatefulWidget {
@@ -18,12 +16,14 @@ class DeskBarSlot extends StatefulWidget {
     required this.anchor,
     required this.onDragEnd,
     this.bottomInset = 0,
+    this.toggleAlignment,
     required this.child,
   });
 
   final ValueNotifier<Offset> anchor;
   final VoidCallback onDragEnd;
   final double bottomInset;
+  final Alignment? toggleAlignment;
   final Widget child;
 
   @override
@@ -47,7 +47,11 @@ class _DeskBarSlotState extends State<DeskBarSlot> {
       valueListenable: widget.anchor,
       builder: (context, anchor, child) => CustomSingleChildLayout(
         key: _slot,
-        delegate: _BarLayout(anchor, widget.bottomInset),
+        delegate: _BarLayout(
+          anchor,
+          widget.bottomInset,
+          widget.toggleAlignment,
+        ),
         child: child,
       ),
       child: GestureDetector(
@@ -62,23 +66,23 @@ class _DeskBarSlotState extends State<DeskBarSlot> {
           final slot = _slot.currentContext!.findRenderObject()! as RenderBox;
           final bar = _bar.currentContext!.findRenderObject()! as RenderBox;
           // 同一帧内也会收到多次移动，不能用尚未重排的 RenderBox 位置累加。
-          final next = _dragAt! + details.delta;
-          final x = deskBarTrack(slot.size.width, bar.size.width);
-          final y = deskBarTrack(slot.size.height, bar.size.height);
-          final bottom = math.max(
-            0.0,
-            slot.size.height - widget.bottomInset - bar.size.height,
+          final from = _dragAt!;
+          final layout = _BarLayout(
+            widget.anchor.value,
+            widget.bottomInset,
+            widget.toggleAlignment,
           );
-          final canMoveX = slot.size.width > bar.size.width;
-          final at = Offset(
-            next.dx.clamp(0.0, canMoveX ? x : 0.0),
-            next.dy.clamp(0.0, bottom),
+          final at = layout.constrainPosition(
+            slot.size,
+            bar.size,
+            from + details.delta,
           );
           _dragAt = at;
-          final previous = widget.anchor.value;
-          widget.anchor.value = Offset(
-            canMoveX ? at.dx / x : previous.dx,
-            bottom > 0 ? at.dy / y : previous.dy,
+          widget.anchor.value = layout.anchorAfterDrag(
+            slot.size,
+            bar.size,
+            from,
+            at,
           );
         },
         onPanEnd: (_) => _finishDrag(),
@@ -95,10 +99,41 @@ class _DeskBarSlotState extends State<DeskBarSlot> {
 }
 
 class _BarLayout extends SingleChildLayoutDelegate {
-  _BarLayout(this.anchor, this.bottomInset);
+  _BarLayout(this.anchor, this.bottomInset, this.toggleAlignment);
 
   final Offset anchor;
   final double bottomInset;
+  final Alignment? toggleAlignment;
+
+  Size _anchorSize(Size bar) =>
+      toggleAlignment == null ? bar : const Size.square(deskControlExtent);
+
+  Offset _toggleOffset(Size bar) =>
+      toggleAlignment?.alongOffset(
+        Offset(bar.width - deskControlExtent, bar.height - deskControlExtent),
+      ) ??
+      Offset.zero;
+
+  Offset constrainPosition(Size size, Size bar, Offset position) => Offset(
+    position.dx.clamp(0.0, math.max(0.0, size.width - bar.width)),
+    position.dy.clamp(
+      0.0,
+      math.max(0.0, size.height - bar.height - bottomInset),
+    ),
+  );
+
+  Offset anchorAfterDrag(Size size, Size bar, Offset from, Offset at) {
+    final reference = _anchorSize(bar);
+    final toggle = at + _toggleOffset(bar);
+    return Offset(
+      from.dx == at.dx
+          ? anchor.dx
+          : toggle.dx / deskBarTrack(size.width, reference.width),
+      from.dy == at.dy
+          ? anchor.dy
+          : toggle.dy / deskBarTrack(size.height, reference.height),
+    );
+  }
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
@@ -111,17 +146,22 @@ class _BarLayout extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    final x = math.max(0.0, size.width - childSize.width);
-    final y = math.max(0.0, size.height - childSize.height);
-    return Offset(
-      anchor.dx * x,
-      (anchor.dy * y).clamp(0.0, math.max(0.0, y - bottomInset)),
+    final reference = _anchorSize(childSize);
+    final x = math.max(0.0, size.width - reference.width);
+    final y = math.max(0.0, size.height - reference.height);
+    // 以收起按钮为锚点，有足够空间时展开和收起都留在手指下。
+    return constrainPosition(
+      size,
+      childSize,
+      Offset(anchor.dx * x, anchor.dy * y) - _toggleOffset(childSize),
     );
   }
 
   @override
   bool shouldRelayout(_BarLayout oldDelegate) =>
-      anchor != oldDelegate.anchor || bottomInset != oldDelegate.bottomInset;
+      anchor != oldDelegate.anchor ||
+      bottomInset != oldDelegate.bottomInset ||
+      toggleAlignment != oldDelegate.toggleAlignment;
 }
 
 class DeskBackButton extends StatelessWidget {
@@ -151,50 +191,75 @@ class DeskStatusPill extends StatelessWidget {
     super.key,
     required this.latency,
     required this.unresponsive,
-    required this.fps,
-    required this.video,
-    this.still = false,
+    required this.reconnecting,
+    required this.detailsOpen,
+    required this.onTap,
   });
 
   final Duration? latency;
   final bool unresponsive;
-  final double fps;
-  final bool video;
-  final bool still;
+  final bool reconnecting;
+  final bool detailsOpen;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final unknown = latency == null && !unresponsive;
-    return Listener(
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        key: const Key('desk-status'),
-        height: deskControlExtent,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: c.glass,
+    final label = reconnecting
+        ? l.deskReconnecting
+        : unresponsive
+        ? l.chatLatencyUnresponsive
+        : latencyIsHigh(latency)
+        ? l.deskHighLatency
+        : null;
+    final icon = reconnecting
+        ? latencyIcon(null, unresponsive: true)
+        : latencyIcon(latency, unresponsive: unresponsive);
+    final color = reconnecting
+        ? c.honey
+        : unknown
+        ? c.faint
+        : latencyColor(c, latency, unresponsive: unresponsive);
+    return Tooltip(
+      message: l.deskConnectionDetails,
+      child: Semantics(
+        button: true,
+        expanded: detailsOpen,
+        child: Material(
+          color: detailsOpen ? c.tint : c.glass,
           borderRadius: BorderRadius.circular(Rd.pill),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              unknown
-                  ? Icons.signal_cellular_alt_rounded
-                  : latencyIcon(latency, unresponsive: unresponsive),
-              size: Ic.inline,
-              color: unknown
-                  ? c.faint
-                  : latencyColor(c, latency, unresponsive: unresponsive),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: const Key('desk-status'),
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width / 2,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox.square(
+                    dimension: deskControlExtent,
+                    child: Icon(icon, size: Ic.medium, color: color),
+                  ),
+                  if (label != null) ...[
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: statusLineStyle(c.text),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                ],
+              ),
             ),
-            const SizedBox(width: 6),
-            Text(
-              deskFpsLabel(context.l10n, fps, video: video, still: still),
-              key: const Key('desk-fps'),
-              style: statusLineStyle(c.text),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -206,16 +271,15 @@ class DeskToolbar extends StatelessWidget {
     super.key,
     required this.landscape,
     this.compact = false,
+    required this.expanded,
+    this.toggleAlignment = Alignment.topLeft,
     required this.keyboardUp,
     required this.shortcuts,
-    required this.debugOpen,
-    required this.stopped,
+    required this.onToggle,
     required this.onOrientation,
     required this.onKeyboard,
     required this.onShortcuts,
-    required this.onDebug,
     required this.onSettings,
-    required this.onDisconnect,
     this.onView,
   });
 
@@ -223,40 +287,43 @@ class DeskToolbar extends StatelessWidget {
 
   /// 键盘上方放不下一行时临时放进顶部两端控件之间，横向滚动访问所有操作。
   final bool compact;
+  final bool expanded;
+  final Alignment toggleAlignment;
   final bool keyboardUp;
   final bool shortcuts;
-  final bool debugOpen;
-  final bool stopped;
+  final VoidCallback onToggle;
   final VoidCallback onOrientation;
   final VoidCallback onKeyboard;
   final VoidCallback onShortcuts;
-  final VoidCallback onDebug;
   final VoidCallback onSettings;
-  final VoidCallback onDisconnect;
 
-  /// 电脑还没报屏（或太旧不报）时为空，按钮不出现。
+  /// 有屏幕可选或画面已放大时才显示入口。
   final VoidCallback? onView;
 
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
     final l = context.l10n;
-    final icons = <Widget>[
-      _DeskButton(
-        buttonKey: const Key('desk-toolbar-orientation'),
-        icon: landscape
-            ? Icons.stay_current_landscape_rounded
-            : Icons.stay_current_portrait_rounded,
-        tooltip: landscape ? l.deskToPortrait : l.deskToLandscape,
-        onTap: onOrientation,
+    final toggle = Semantics(
+      button: true,
+      expanded: expanded,
+      child: _DeskButton(
+        buttonKey: const Key('desk-toolbar-toggle'),
+        icon: expanded ? Icons.close_rounded : Icons.more_horiz_rounded,
+        tooltip: expanded ? l.deskToolbarCollapse : l.deskToolbarExpand,
+        onTap: onToggle,
       ),
-      if (onView case final pick?)
-        _DeskButton(
-          buttonKey: const Key('desk-toolbar-view'),
-          icon: Icons.desktop_windows_rounded,
-          tooltip: l.deskViewTip,
-          onTap: pick,
-        ),
+    );
+    if (!expanded) {
+      return Material(
+        key: const Key('desk-toolbar'),
+        color: c.glass,
+        borderRadius: BorderRadius.circular(Rd.pill),
+        clipBehavior: Clip.antiAlias,
+        child: toggle,
+      );
+    }
+    final icons = <Widget>[
       _DeskButton(
         buttonKey: const Key('desk-toolbar-keyboard'),
         icon: keyboardUp ? Icons.keyboard_hide_rounded : Icons.keyboard_rounded,
@@ -271,12 +338,20 @@ class DeskToolbar extends StatelessWidget {
         on: shortcuts,
         onTap: onShortcuts,
       ),
+      if (onView case final pick?)
+        _DeskButton(
+          buttonKey: const Key('desk-toolbar-view'),
+          icon: Icons.desktop_windows_rounded,
+          tooltip: l.deskViewTip,
+          onTap: pick,
+        ),
       _DeskButton(
-        buttonKey: const Key('desk-toolbar-debug'),
-        icon: Icons.speed_rounded,
-        tooltip: l.deskDebug,
-        on: debugOpen,
-        onTap: onDebug,
+        buttonKey: const Key('desk-toolbar-orientation'),
+        icon: landscape
+            ? Icons.stay_current_landscape_rounded
+            : Icons.stay_current_portrait_rounded,
+        tooltip: landscape ? l.deskToPortrait : l.deskToLandscape,
+        onTap: onOrientation,
       ),
       _DeskButton(
         buttonKey: const Key('desk-toolbar-settings'),
@@ -284,71 +359,37 @@ class DeskToolbar extends StatelessWidget {
         tooltip: l.settingsTitle,
         onTap: onSettings,
       ),
-      _DeskButton(
-        buttonKey: const Key('desk-toolbar-disconnect'),
-        icon: stopped ? Icons.refresh_rounded : Icons.link_off_rounded,
-        tooltip: stopped ? l.deskReconnect : l.deskDisconnect,
-        onTap: onDisconnect,
-      ),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
-        final verticalHeight =
-            icons.length * deskControlExtent + _handleExtent + _barPadding * 2;
+        final extent = (icons.length + 1) * deskControlExtent;
         final horizontal =
-            compact || landscape || constraints.maxHeight < verticalHeight;
-        final handle = SizedBox(
-          key: const Key('desk-toolbar-handle'),
-          width: horizontal ? _handleExtent : deskControlExtent,
-          height: horizontal ? deskControlExtent : _handleExtent,
-          child: Icon(
-            horizontal
-                ? Icons.drag_indicator_rounded
-                : Icons.drag_handle_rounded,
-            size: Ic.small,
-            color: c.muted,
-          ),
-        );
-        final children = [if (!compact) handle, ...icons];
-        final contentWidth =
-            icons.length * deskControlExtent + (compact ? 0 : _handleExtent);
-        final availableWidth = math.max(
-          0.0,
-          constraints.maxWidth - _barPadding * 2,
-        );
-        final scroll = horizontal && contentWidth > availableWidth;
+            compact || landscape || constraints.maxHeight < extent;
+        final toggleAtEnd =
+            !compact &&
+            (horizontal ? toggleAlignment.x : toggleAlignment.y) > 0;
+        final scroll = horizontal && extent > constraints.maxWidth;
+        final children = [
+          if (!toggleAtEnd) toggle,
+          if (scroll)
+            Flexible(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(mainAxisSize: MainAxisSize.min, children: icons),
+              ),
+            )
+          else
+            ...icons,
+          if (toggleAtEnd) toggle,
+        ];
         return Material(
           key: const Key('desk-toolbar'),
           color: c.glass,
           borderRadius: BorderRadius.circular(Rd.card),
           clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: _barPadding,
-              vertical: compact ? 0 : _barPadding,
-            ),
-            child: !horizontal
-                ? Column(mainAxisSize: MainAxisSize.min, children: children)
-                : scroll
-                ? SizedBox(
-                    width: availableWidth,
-                    child: Row(
-                      children: [
-                        if (!compact) handle,
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: icons,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : Row(mainAxisSize: MainAxisSize.min, children: children),
-          ),
+          child: horizontal
+              ? Row(mainAxisSize: MainAxisSize.min, children: children)
+              : Column(mainAxisSize: MainAxisSize.min, children: children),
         );
       },
     );

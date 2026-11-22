@@ -440,14 +440,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deskConnecting => 'Connecting…';
 
   @override
+  String get deskConnectionDetails => 'Connection Details';
+
+  @override
   String get deskConnectionNote =>
       'By default the picture goes to the connected computer by subscription, and the computer picks the port. This changes the UDP address, for debugging.';
 
   @override
   String get deskConnectionSettings => 'Connection Settings';
-
-  @override
-  String get deskDebug => 'Debug';
 
   @override
   String deskDebugDecode(String ms) {
@@ -488,9 +488,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String deskDebugView(String zoom, String x, String y) {
     return 'Zoom $zoom  pan $x, $y';
   }
-
-  @override
-  String get deskDisconnect => 'Disconnect';
 
   @override
   String get deskDisconnected => 'Disconnected';
@@ -605,6 +602,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deskFailScreenPermission => 'Allow screen recording on the Mac';
 
   @override
+  String get deskFitScreen => 'Fit to Screen';
+
+  @override
   String get deskForgetPassword => 'Forget Password';
 
   @override
@@ -679,6 +679,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deskGestureZoomedDrag => 'Drag one finger when zoomed in';
 
   @override
+  String get deskHighLatency => 'High Latency';
+
+  @override
   String get deskHost => 'Host';
 
   @override
@@ -748,6 +751,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deskReconnect => 'Reconnect';
 
   @override
+  String get deskReconnecting => 'Reconnecting…';
+
+  @override
   String get deskRemember => 'Remember';
 
   @override
@@ -773,6 +779,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deskToPortrait => 'Switch to Portrait';
+
+  @override
+  String get deskToolbarCollapse => 'Collapse Toolbar';
+
+  @override
+  String get deskToolbarExpand => 'Expand Toolbar';
 
   @override
   String get deskUdpAddress => 'UDP Address';

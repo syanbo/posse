@@ -30,6 +30,7 @@ Future<void> _openPicker(
   WidgetTester tester, {
   int? fps,
   ValueChanged<int>? onFps,
+  VoidCallback? onFitScreen,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -40,6 +41,7 @@ Future<void> _openPicker(
             context,
             _displays,
             windows: Future.value(const <DeskWindow>[]),
+            onFitScreen: onFitScreen,
             fps: fps,
             onFps: onFps,
           ),
@@ -53,6 +55,23 @@ Future<void> _openPicker(
 }
 
 void main() {
+  testWidgets('fit to screen is above the stream choices', (tester) async {
+    var fitted = false;
+    await _openPicker(
+      tester,
+      fps: 30,
+      onFps: (_) {},
+      onFitScreen: () => fitted = true,
+    );
+    final fit = find.text('适应屏幕');
+    final fps = find.byKey(const Key('desk-fps'));
+    expect(tester.getBottomLeft(fit).dy, lessThan(tester.getTopLeft(fps).dy));
+    await tester.tap(fit);
+    await tester.pumpAndSettle();
+    expect(fitted, isTrue);
+    expect(fps, findsNothing);
+  });
+
   test('the frame rate row shows only for a computer that offers it', () {
     final s = AppSettings()..deskFps['pk1'] = 30;
     // ready 没带 fps（旧电脑）：不显示
