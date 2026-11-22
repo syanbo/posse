@@ -3,6 +3,14 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.29
+
+- 跨行复制命令时保留参数间的空格。带选项的命令可保留换行或用空格连接，断行网址仍可不加空格拼接。
+
+### English
+
+- Copying wrapped commands preserves argument boundaries. Commands with options can keep their line breaks or join with spaces. Split URLs can still join without spaces.
+
 ## 0.1.28
 
 - 普通「复制」和键盘复制快捷键遇到跨行选区时先预览。疑似折行的命令默认用空格连接，断行网址默认直接拼接，多行代码可保留原有换行和缩进。
