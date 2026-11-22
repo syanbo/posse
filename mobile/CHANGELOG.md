@@ -3,6 +3,20 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.27
+
+- 终端复制会接回自动折行，保留正文的换行和缩进。跨硬换行的选区支持预览「复制为单行」，可用空格连接或直接拼接。重连后保留软换行需要 Mac 0.1.43。
+- 终端可长按 OSC 8 超链接复制完整地址；对话和历史可长按 Markdown 链接或复制代码块原文。
+- 历史支持 Codex 压缩会话、Cursor 编辑器对话和 Grok 完整对话流水，子会话挂在父会话下，思考过程默认折叠。支持启动和恢复 Antigravity 会话。
+- 远程桌面工具条可拖动，返回和连接状态固定在顶部。键盘按操作位置避让，画面保持原缩放比例。
+
+### English
+
+- Terminal copy joins automatic wraps and preserves line breaks and indentation in the original text. For selections across hard breaks, Copy as One Line previews joining with or without spaces. Preserving soft wraps after reconnecting requires Posse for Mac 0.1.43.
+- Long-press an OSC 8 terminal hyperlink to copy its full address. In Chat and History, long-press Markdown links or use the copy button on code blocks.
+- History reads compressed Codex sessions, Cursor editor conversations, and complete Grok transcripts. Child sessions appear under their parent, and reasoning is collapsed by default. Antigravity sessions can be started and resumed.
+- The remote desktop toolbar can be dragged, with Back and connection status fixed at the top. The keyboard keeps the active area visible at the current zoom.
+
 ## 0.1.26
 
 - 看桌面的清晰度和帧率改为紧凑入口，选项以浮层展开，不再挤动屏幕与窗口列表；展开、切组和收起带过渡动画，选完保持面板打开。
