@@ -172,64 +172,88 @@ void main() {
     expect(find.text('复制'), findsNothing);
   });
 
-  testWidgets('复制保留真正的换行，单行预览允许选择连接方式', (tester) async {
-    // 避免压缩任务在弹框动画期间不断重排到假时钟的当前时刻。
+  testWidgets('普通复制预览 xcrun 命令并用空格拼接', (tester) async {
     final controller = TerminalControllerImpl(scheduleCompressionIdle: (_) {});
     addTearDown(controller.dispose);
-    final copied = <String>[];
-    final messenger = tester.binding.defaultBinaryMessenger;
-    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'Clipboard.setData') {
-        copied.add((call.arguments as Map)['text'] as String);
-      }
-      return null;
-    });
-    addTearDown(() {
-      messenger.setMockMethodCallHandler(SystemChannels.platform, null);
-    });
+    final copied = _recordClipboard(tester);
+    const wrapped =
+        'xcrun notarytool\n'
+        '  store-credentials posse --team-id\n'
+        '  QKSM9Z4U85';
+    const command =
+        'xcrun notarytool store-credentials posse --team-id QKSM9Z4U85';
+    await tester.pumpWidget(_board(controller, width: 560));
+    await tester.pump();
+    controller.write(utf8.encode(wrapped.replaceAll('\n', '\r\n')));
+    controller.selectRange(
+      start: const Position(row: 0, col: 0),
+      end: const Position(row: 2, col: 11),
+      pointTag: .viewport,
+    );
+    expect(controller.selectedText(), wrapped);
+    await tester.pump();
+
+    await tester.tap(find.text('复制'));
+    await tester.pumpAndSettle();
+    expect(find.text(command), findsOneWidget);
+    expect(copied, isEmpty);
+    await tester.tap(_inCopyDialog('复制'));
+    await tester.pumpAndSettle();
+    expect(copied, [command]);
+  });
+
+  testWidgets('普通复制预览断行链接，可取消或切换到原样复制', (tester) async {
+    final controller = TerminalControllerImpl(scheduleCompressionIdle: (_) {});
+    addTearDown(controller.dispose);
+    final copied = _recordClipboard(tester);
+    const wrapped = 'https://example.com/lo  \n  ng?x=1&y=2';
     await tester.pumpWidget(_board(controller));
     await tester.pump();
-    controller.write(utf8.encode('https://example.com/lo  \r\n  ng?x=1&y=2'));
-    void select() {
-      controller.selectRange(
-        start: const Position(row: 0, col: 0),
-        end: const Position(row: 1, col: 11),
-        pointTag: .viewport,
-      );
-    }
-
-    select();
+    controller.write(utf8.encode(wrapped.replaceAll('\n', '\r\n')));
+    controller.selectRange(
+      start: const Position(row: 0, col: 0),
+      end: const Position(row: 1, col: 11),
+      pointTag: .viewport,
+    );
     await tester.pump();
     await tester.tap(find.text('复制'));
-    await tester.pump();
-    expect(copied, ['https://example.com/lo  \n  ng?x=1&y=2']);
-
-    select();
-    await tester.pump();
-    await tester.tap(find.byTooltip('复制为单行'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('https://example.com/lo ng?x=1&y=2'), findsOneWidget);
-    await tester.tap(find.text('直接拼接'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('https://example.com/long?x=1&y=2'), findsOneWidget);
-    final dialog = find.byType(AlertDialog);
-    await tester.tap(find.descendant(of: dialog, matching: find.text('取消')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(_inCopyDialog('取消'));
+    await tester.pumpAndSettle();
     expect(controller.hasSelection, isTrue);
-    expect(copied, hasLength(1));
+    expect(copied, isEmpty);
 
-    await tester.tap(find.byTooltip('复制为单行'));
+    await tester.tap(find.text('复制'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保留换行'));
+    await tester.pumpAndSettle();
+    expect(_inCopyDialog(wrapped), findsOneWidget);
+    await tester.tap(_inCopyDialog('复制'));
+    await tester.pumpAndSettle();
+    expect(copied, [wrapped]);
+  });
+
+  testWidgets('普通复制默认保留多行代码和命令续行符', (tester) async {
+    final controller = TerminalControllerImpl(scheduleCompressionIdle: (_) {});
+    addTearDown(controller.dispose);
+    final copied = _recordClipboard(tester);
+    const code = 'git log --oneline \\\n    --all';
+    await tester.pumpWidget(_board(controller));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('直接拼接'));
+    controller.write(utf8.encode(code.replaceAll('\n', '\r\n')));
+    controller.selectRange(
+      start: const Position(row: 0, col: 0),
+      end: const Position(row: 1, col: 8),
+      pointTag: .viewport,
+    );
     await tester.pump();
-    await tester.tap(find.descendant(of: dialog, matching: find.text('复制')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(copied.last, 'https://example.com/long?x=1&y=2');
-    expect(controller.hasSelection, isFalse);
+    await tester.tap(find.text('复制'));
+    await tester.pumpAndSettle();
+    expect(_inCopyDialog(code), findsOneWidget);
+    await tester.tap(_inCopyDialog('复制'));
+    await tester.pumpAndSettle();
+    expect(copied, [code]);
   });
 
   testWidgets('跨软换行的链接复制成原本的一行', (tester) async {
@@ -253,10 +277,14 @@ void main() {
     );
     await tester.pump();
     expect(controller.selectedText(), url);
-    expect(find.byTooltip('复制为单行'), findsNothing);
+    final copied = _recordClipboard(tester);
+    await tester.tap(find.text('复制'));
+    await tester.pump();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(copied, [url]);
   });
 
-  testWidgets('选到末尾空行时不显示单行复制', (tester) async {
+  testWidgets('选到末尾空行时直接复制', (tester) async {
     final controller = TerminalController();
     addTearDown(controller.dispose);
     await tester.pumpWidget(_board(controller));
@@ -269,17 +297,43 @@ void main() {
     );
     await tester.pump();
     expect(find.text('复制'), findsOneWidget);
-    expect(find.byTooltip('复制为单行'), findsNothing);
+    final copied = _recordClipboard(tester);
+    await tester.tap(find.text('复制'));
+    await tester.pump();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(copied, ['only this line']);
   });
 }
 
-Widget _board(TerminalController controller, {double height = 280}) {
+Finder _inCopyDialog(String text) =>
+    find.descendant(of: find.byType(AlertDialog), matching: find.text(text));
+
+List<String> _recordClipboard(WidgetTester tester) {
+  final copied = <String>[];
+  final messenger = tester.binding.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+    if (call.method == 'Clipboard.setData') {
+      copied.add((call.arguments as Map)['text'] as String);
+    }
+    return null;
+  });
+  addTearDown(() {
+    messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+  });
+  return copied;
+}
+
+Widget _board(
+  TerminalController controller, {
+  double width = 420,
+  double height = 280,
+}) {
   return MaterialApp(
     home: Scaffold(
       body: Align(
         alignment: Alignment.topLeft,
         child: SizedBox(
-          width: 420,
+          width: width,
           height: height,
           child: LayoutBuilder(
             builder: (context, constraints) {

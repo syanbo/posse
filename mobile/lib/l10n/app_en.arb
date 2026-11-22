@@ -2590,9 +2590,13 @@
   "@terminalCopyJoinWithSpace": {
     "description": "Single-line copy: join the selected rows with one space at each break."
   },
-  "terminalCopySingleLine": "Copy as one line",
-  "@terminalCopySingleLine": {
-    "description": "Terminal selection action and preview title."
+  "terminalCopyKeepLineBreaks": "Keep line breaks",
+  "@terminalCopyKeepLineBreaks": {
+    "description": "Terminal copy option that preserves the selected line breaks."
+  },
+  "terminalCopySelection": "Copy selection",
+  "@terminalCopySelection": {
+    "description": "Terminal copy preview title for selections with line breaks."
   },
   "terminalExited": "The terminal has exited",
   "@terminalExited": {

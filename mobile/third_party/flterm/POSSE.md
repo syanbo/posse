@@ -27,6 +27,6 @@ pub.dev 上 flterm 0.0.5 的副本（MIT），`pubspec.yaml` 用 `dependency_ove
 - `lib/src/foundation/scrollback_clears.dart`、`widgets/terminal_controller_impl.dart`、`rendering/terminal_renderer.dart`：主屏幕上程序清了回滚（CSI 3J，手机复位重接也带）后先不画，输出停下 60～120ms 再画，最多等一秒，和同步更新的等待同时计时；程序切进备用屏幕就不再等。Cursor 的 Ink 在要改的行超出屏幕时清屏清回滚、把整段对话从头重写，不包同步更新；几百 KB 经网络分段到，原版每段出一帧，中间闪出对话开头。libghostty 不报清回滚，控制器写入前扫 3J（切在两批之间也认得出）记次数；不按回滚行数变少判断：回滚满了裁掉旧页时也会变少。
 
 - `lib/src/widgets/terminal_view.dart`、`terminal_gesture_detector.dart`、`link_interaction.dart`：长按 OSC 8 链接时把格子里的原始地址交给外层，松手不触发点击。
-- `lib/src/widgets/terminal_controller.dart`、`terminal_controller_impl.dart`：`selectionHasLineBreak` 按选区内的行标记判断复制是否保留换行，供外层显示单行复制入口。
+- `lib/src/widgets/terminal_view.dart`、`terminal_shortcut_scope.dart`：键盘复制快捷键可交给外层，和触摸选区的复制按钮共用多行预览。
 
 升级 flterm 时从 pub 缓存重新复制，再把上面的改动补回来。

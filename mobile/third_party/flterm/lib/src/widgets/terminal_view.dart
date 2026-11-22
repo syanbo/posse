@@ -105,6 +105,9 @@ class TerminalView extends StatefulWidget {
   /// Ctrl+C/V/A/K on Windows.
   final Map<ShortcutActivator, Intent>? shortcuts;
 
+  /// Posse: 让快捷键和选区浮层共用外层的复制流程。
+  final VoidCallback? onCopy;
+
   /// Raw TTF/OTF font file bytes for exact metric extraction.
   ///
   /// When provided, takes priority over automatic font resolution. The
@@ -127,6 +130,7 @@ class TerminalView extends StatefulWidget {
     this.fontData,
     this.focusNode,
     this.shortcuts,
+    this.onCopy,
     this.scrollPhysics,
     this.scrollController,
     this.autofocus = false,
@@ -325,6 +329,7 @@ class _TerminalViewState extends State<TerminalView> {
         child: Focus(
           onKeyEvent: _handleKeyEvent,
           child: TerminalShortcutScope(
+            onCopy: widget.onCopy,
             onPaste: _handlePaste,
             controller: _controller,
             shortcuts: widget.shortcuts,

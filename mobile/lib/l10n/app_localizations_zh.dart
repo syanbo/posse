@@ -1851,7 +1851,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get terminalCopyJoinWithSpace => '用空格连接';
 
   @override
-  String get terminalCopySingleLine => '复制为单行';
+  String get terminalCopyKeepLineBreaks => '保留换行';
+
+  @override
+  String get terminalCopySelection => '复制选区';
 
   @override
   String get terminalExited => '终端已经退出';

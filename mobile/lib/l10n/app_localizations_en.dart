@@ -1953,7 +1953,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get terminalCopyJoinWithSpace => 'Join with spaces';
 
   @override
-  String get terminalCopySingleLine => 'Copy as one line';
+  String get terminalCopyKeepLineBreaks => 'Keep line breaks';
+
+  @override
+  String get terminalCopySelection => 'Copy selection';
 
   @override
   String get terminalExited => 'The terminal has exited';

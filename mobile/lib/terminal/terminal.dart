@@ -474,6 +474,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     scrollController: scrollController,
     linkSettings: LinkSettings(onActivate: _onLink),
     onHyperlinkLongPress: (uri) => unawaited(_copyLink(uri)),
+    onCopy: () => unawaited(copyTerminalSelection(context, _controller)),
     onContentRows: _onContentRows,
     onTap: _showKeyboard,
   );

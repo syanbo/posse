@@ -51,7 +51,6 @@ class SelectionChrome extends StatefulWidget {
 
 class _SelectionChromeState extends State<SelectionChrome> {
   var _selected = false;
-  var _multiline = false;
   SelectionAnchor? _anchor;
   SelectionEnds? _ends;
   Position? _fixedEnd;
@@ -88,7 +87,6 @@ class _SelectionChromeState extends State<SelectionChrome> {
 
   void _read() {
     _selected = widget.controller.hasSelection;
-    _multiline = widget.controller.selectionHasLineBreak;
     _anchor = widget.controller.selectionAnchor;
     _ends = widget.controller.selectionEnds;
   }
@@ -97,19 +95,14 @@ class _SelectionChromeState extends State<SelectionChrome> {
     final anchor = widget.controller.selectionAnchor;
     final ends = widget.controller.selectionEnds;
     final selected = widget.controller.hasSelection;
-    final multiline = widget.controller.selectionHasLineBreak;
     // 拖把手回滚时另一端会滚出屏幕，ends 变成 null；留着上一份，被拖的把手才不会被拆掉。
     final kept = ends ?? (_fixedEnd != null ? _ends : null);
     if (!mounted ||
-        (selected == _selected &&
-            multiline == _multiline &&
-            anchor == _anchor &&
-            kept == _ends)) {
+        (selected == _selected && anchor == _anchor && kept == _ends)) {
       return;
     }
     setState(() {
       _selected = selected;
-      _multiline = multiline;
       _anchor = anchor;
       _ends = kept;
     });
@@ -191,27 +184,6 @@ class _SelectionChromeState extends State<SelectionChrome> {
     _handleTimer = null;
   }
 
-  Future<void> _copySelection() async {
-    // 选到行尾或整段时末尾带着换行，粘贴到哪都会多一个回车
-    final text = trimPastedNewlines(widget.controller.selectedText());
-    widget.controller.clearSelection();
-    if (text.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: text));
-  }
-
-  Future<void> _copySingleLine() async {
-    final controller = widget.controller;
-    final original = trimPastedNewlines(controller.selectedText());
-    if (!_lineBreak.hasMatch(original)) return;
-    final text = await showPosseDialog<String>(
-      context: context,
-      builder: (_) => _SingleLineDialog(original),
-    );
-    if (text == null || !mounted) return;
-    if (identical(controller, widget.controller)) controller.clearSelection();
-    await Clipboard.setData(ClipboardData(text: text));
-  }
-
   @override
   Widget build(BuildContext context) {
     if (!_selected) return const SizedBox.shrink();
@@ -256,7 +228,7 @@ class _SelectionChromeState extends State<SelectionChrome> {
       cropX: widget.cropX,
       viewWidth: widget.width,
       viewHeight: viewHeight,
-      chipWidth: _multiline ? 164 : 132,
+      chipWidth: 132,
       chipHeight: 34,
     );
     return Positioned(
@@ -265,11 +237,9 @@ class _SelectionChromeState extends State<SelectionChrome> {
       child: FractionalTranslation(
         translation: const Offset(-0.5, 0),
         child: _CopyChip(
-          onCopy: () => unawaited(_copySelection()),
+          onCopy: () =>
+              unawaited(copyTerminalSelection(context, widget.controller)),
           onSelectAll: widget.controller.selectParagraph,
-          onCopySingleLine: _multiline
-              ? () => unawaited(_copySingleLine())
-              : null,
         ),
       ),
     );
@@ -318,15 +288,10 @@ class _SelectionChromeState extends State<SelectionChrome> {
 }
 
 class _CopyChip extends StatelessWidget {
-  const _CopyChip({
-    required this.onCopy,
-    required this.onSelectAll,
-    this.onCopySingleLine,
-  });
+  const _CopyChip({required this.onCopy, required this.onSelectAll});
 
   final VoidCallback onCopy;
   final VoidCallback onSelectAll;
-  final VoidCallback? onCopySingleLine;
 
   @override
   Widget build(BuildContext context) {
@@ -355,62 +320,98 @@ class _CopyChip extends StatelessWidget {
           Container(width: 1, height: 16, color: c.line),
           InkWell(
             onTap: onSelectAll,
-            borderRadius: onCopySingleLine == null
-                ? const BorderRadius.horizontal(
-                    right: Radius.circular(Rd.button),
-                  )
-                : null,
+            borderRadius: const BorderRadius.horizontal(
+              right: Radius.circular(Rd.button),
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Text(context.l10n.commonSelectAll, style: style),
             ),
           ),
-          if (onCopySingleLine != null) ...[
-            Container(width: 1, height: 16, color: c.line),
-            InkWell(
-              onTap: onCopySingleLine,
-              borderRadius: const BorderRadius.horizontal(
-                right: Radius.circular(Rd.button),
-              ),
-              child: Tooltip(
-                message: context.l10n.terminalCopySingleLine,
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Icon(
-                    Icons.wrap_text_rounded,
-                    color: c.accent,
-                    size: Ic.small,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 }
 
-final _lineBreak = RegExp(r'[ \t]*(?:\r\n?|\n)(?:[ \t]*(?:\r\n?|\n))*[ \t]*');
+final _lineBreak = RegExp(r'\r\n?|\n');
+final _whitespace = RegExp(r'\s');
+final _programWithArgument = RegExp(r'^[\w./~+-]+[ \t]+[\w./~+-]');
+final _commandOption = RegExp(r'(?:^|[ \t])--?[A-Za-z][\w-]*(?:[ \t=]|$)');
+final _explicitContinuation = RegExp(r'(?:\\|[:;]|\|\|?|&&)$');
 
-class _SingleLineDialog extends StatefulWidget {
-  const _SingleLineDialog(this.original);
-
-  final String original;
-
-  @override
-  State<_SingleLineDialog> createState() => _SingleLineDialogState();
+Future<void> copyTerminalSelection(
+  BuildContext context,
+  TerminalController controller,
+) async {
+  // 终端的软换行已由选区格式化器合并，留下的换行可能来自 CLI 排版或原文。
+  final original = trimPastedNewlines(controller.selectedText());
+  final lines = original.split(_lineBreak);
+  final text = lines.length > 1
+      ? await showPosseDialog<String>(
+          context: context,
+          builder: (_) => _SelectionCopyDialog(original, lines),
+        )
+      : original;
+  if (text == null || !context.mounted) return;
+  controller.clearSelection();
+  if (text.isNotEmpty) await Clipboard.setData(ClipboardData(text: text));
 }
 
-class _SingleLineDialogState extends State<_SingleLineDialog> {
-  var _space = true;
+enum _CopyMode { original, spaced, joined }
+
+// 选中建议仅改变预览，终端画面本身无法区分程序折行和手写的换行。
+_CopyMode _suggestCopyMode(List<String> lines, List<String> fragments) {
+  if (lines.length != fragments.length) return _CopyMode.original;
+  if (fragments.every((line) => !_whitespace.hasMatch(line))) {
+    final uri = Uri.tryParse(fragments.join());
+    if (uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty) {
+      return _CopyMode.joined;
+    }
+  }
+  final indent = lines.first.length - lines.first.trimLeft().length;
+  if (_programWithArgument.hasMatch(fragments.first) &&
+      lines
+          .skip(1)
+          .every((line) => line.length - line.trimLeft().length > indent) &&
+      !fragments
+          .take(fragments.length - 1)
+          .any(_explicitContinuation.hasMatch) &&
+      fragments.any(_commandOption.hasMatch)) {
+    return _CopyMode.spaced;
+  }
+  return _CopyMode.original;
+}
+
+class _SelectionCopyDialog extends StatefulWidget {
+  const _SelectionCopyDialog(this.original, this.lines);
+
+  final String original;
+  final List<String> lines;
+
+  @override
+  State<_SelectionCopyDialog> createState() => _SelectionCopyDialogState();
+}
+
+class _SelectionCopyDialogState extends State<_SelectionCopyDialog> {
+  late final _fragments = widget.lines
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+  late var _mode = _suggestCopyMode(widget.lines, _fragments);
 
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    final preview = widget.original.replaceAll(_lineBreak, _space ? ' ' : '');
+    final preview = switch (_mode) {
+      .original => widget.original,
+      .spaced => _fragments.join(' '),
+      .joined => _fragments.join(),
+    };
     return AlertDialog(
-      title: Text(l.terminalCopySingleLine),
+      title: Text(l.terminalCopySelection),
       scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -420,20 +421,27 @@ class _SingleLineDialogState extends State<_SingleLineDialog> {
             spacing: 8,
             runSpacing: 4,
             children: [
-              ChoiceChip(
-                label: Text(l.terminalCopyJoinWithSpace),
-                selected: _space,
-                onSelected: (_) => setState(() => _space = true),
-              ),
-              ChoiceChip(
-                label: Text(l.terminalCopyJoinDirectly),
-                selected: !_space,
-                onSelected: (_) => setState(() => _space = false),
-              ),
+              for (final mode in _CopyMode.values)
+                ChoiceChip(
+                  label: Text(switch (mode) {
+                    .original => l.terminalCopyKeepLineBreaks,
+                    .spaced => l.terminalCopyJoinWithSpace,
+                    .joined => l.terminalCopyJoinDirectly,
+                  }),
+                  selected: _mode == mode,
+                  onSelected: (_) => setState(() => _mode = mode),
+                ),
             ],
           ),
           const SizedBox(height: 12),
-          Text(preview, style: mono(Fs.small, height: Lh.code)),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Text(
+              preview,
+              softWrap: false,
+              style: mono(Fs.small, height: Lh.code),
+            ),
+          ),
         ],
       ),
       actions: [

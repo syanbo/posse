@@ -3350,11 +3350,17 @@ abstract class AppLocalizations {
   /// **'Join with spaces'**
   String get terminalCopyJoinWithSpace;
 
-  /// Terminal selection action and preview title.
+  /// Terminal copy option that preserves the selected line breaks.
   ///
   /// In en, this message translates to:
-  /// **'Copy as one line'**
-  String get terminalCopySingleLine;
+  /// **'Keep line breaks'**
+  String get terminalCopyKeepLineBreaks;
+
+  /// Terminal copy preview title for selections with line breaks.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy selection'**
+  String get terminalCopySelection;
 
   /// Terminal: notice when the terminal process ended.
   ///

@@ -80,6 +80,7 @@ abstract final class TerminalShortcuts {
 @internal
 class TerminalShortcutScope extends StatelessWidget {
   final Widget child;
+  final VoidCallback? onCopy;
   final VoidCallback? onPaste;
   final TerminalController controller;
 
@@ -93,6 +94,7 @@ class TerminalShortcutScope extends StatelessWidget {
     super.key,
     required this.child,
     required this.controller,
+    this.onCopy,
     this.onPaste,
     this.enableSelectAll = true,
     this.shortcuts,
@@ -106,12 +108,14 @@ class TerminalShortcutScope extends StatelessWidget {
         actions: <Type, Action<Intent>>{
           CopyIntent: _ConditionalAction<CopyIntent>(
             isEnabledFn: () => controller.hasSelection,
-            onInvokeFn: () {
-              final text = controller.selectedText();
-              if (text.isNotEmpty) {
-                unawaited(Clipboard.setData(ClipboardData(text: text)));
-              }
-            },
+            onInvokeFn:
+                onCopy ??
+                () {
+                  final text = controller.selectedText();
+                  if (text.isNotEmpty) {
+                    unawaited(Clipboard.setData(ClipboardData(text: text)));
+                  }
+                },
           ),
           PasteIntent: CallbackAction<PasteIntent>(
             onInvoke: (_) => onPaste?.call(),

@@ -4,6 +4,7 @@ import 'package:flterm/flterm.dart';
 // ignore: implementation_imports
 import 'package:flterm/src/rendering.dart' show measureCellMetrics;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Future<FocusNode> _pumpTerminal(
@@ -44,6 +45,36 @@ void main() {
     expect(taps, 1);
     expect(focus.hasFocus, isFalse);
   });
+
+  testWidgets('键盘复制把终端选区交给外层', (tester) async {
+    final controller = TerminalController();
+    final focus = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focus.dispose);
+    var copies = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalView(
+            controller: controller,
+            focusNode: focus,
+            onCopy: () => copies++,
+          ),
+        ),
+      ),
+    );
+    focus.requestFocus();
+    await tester.pump();
+    controller.write(utf8.encode('first\r\nsecond'));
+    controller.selectRange(
+      start: const Position(row: 0, col: 0),
+      end: const Position(row: 1, col: 5),
+    );
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    expect(copies, 1);
+  }, variant: const TargetPlatformVariant({TargetPlatform.iOS}));
 
   testWidgets('长按 OSC 8 续行取完整地址，纯文本仍可选中', (tester) async {
     final controller = TerminalController();
