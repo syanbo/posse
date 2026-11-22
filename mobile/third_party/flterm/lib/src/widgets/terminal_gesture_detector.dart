@@ -27,6 +27,7 @@ class TerminalGestureDetector extends StatefulWidget {
   final TerminalGestureSettings settings;
   final LinkInteraction links;
   final ValueChanged<ActivatedLink>? onLinkActivate;
+  final ValueChanged<String>? onHyperlinkLongPress;
   final ScrollController? scrollController;
 
   /// Posse: 设了就由外层决定点击后键盘怎么办，这里不再聚焦。
@@ -40,6 +41,7 @@ class TerminalGestureDetector extends StatefulWidget {
     required this.binding,
     required this.links,
     this.onLinkActivate,
+    this.onHyperlinkLongPress,
     this.scrollController,
     this.onTap,
     this.settings = const TerminalGestureSettings(),
@@ -216,7 +218,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
       _binding.clearSelection();
       _holdSelect = false;
       current.selectedWord = false;
-      current.brokeSelection = true;
+      current.suppressTap = true;
       return;
     }
     final finger = _Finger(
@@ -291,7 +293,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
   }
 
   bool _isTap(_Finger finger, PointerUpEvent event) {
-    if (_blocked || finger.selectedWord || finger.brokeSelection) return false;
+    if (_blocked || finger.selectedWord || finger.suppressTap) return false;
     final delta = event.position - finger.global;
     if (delta.dx.abs() + delta.dy.abs() > _tapSlop) return false;
     return event.timeStamp - finger.stamp <= _tapMax;
@@ -329,6 +331,15 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
       _longPressTimer = null;
       final held = _primary;
       if (!mounted || held == null || held.suppressSelect) return;
+      final onHyperlink = widget.onHyperlinkLongPress;
+      if (onHyperlink != null) {
+        final uri = widget.links.hyperlinkAt(widget.metrics.cellAt(held.local));
+        if (uri != null && uri.isNotEmpty) {
+          held.suppressTap = true;
+          onHyperlink(uri);
+          return;
+        }
+      }
       _selectWord(held.local);
       held.selectedWord = true;
     });
@@ -561,7 +572,7 @@ class _Finger {
   final PointerDeviceKind kind;
   var suppressSelect = false;
   var selectedWord = false;
-  var brokeSelection = false;
+  var suppressTap = false;
 }
 
 class _DragState {

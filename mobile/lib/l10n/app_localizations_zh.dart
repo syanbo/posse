@@ -46,6 +46,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get chatCopyCode => '复制代码';
+
+  @override
   String get chatDeny => '拒绝';
 
   @override
@@ -374,6 +377,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get commonClose => '关闭';
+
+  @override
+  String get commonCopied => '已复制';
 
   @override
   String get commonCopy => '复制';
@@ -1837,6 +1843,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get terminalClipboardEmpty => '剪贴板里没有文字或图片';
+
+  @override
+  String get terminalCopyJoinDirectly => '直接拼接';
+
+  @override
+  String get terminalCopyJoinWithSpace => '用空格连接';
+
+  @override
+  String get terminalCopySingleLine => '复制为单行';
 
   @override
   String get terminalExited => '终端已经退出';

@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/widgets.dart' show Offset;
-import 'package:libghostty/libghostty.dart' show Mods, Position, Terminal;
+import 'package:libghostty/libghostty.dart'
+    show GridRef, InvalidValueException, Mods, Position, Terminal;
 
 import '../foundation.dart';
 import '../links/activation_policy.dart';
@@ -60,6 +61,33 @@ final class LinkInteraction {
     : _resolver = resolver ?? LinkResolver();
 
   CellRange? get highlighted => _highlighted;
+
+  // Posse: 复制取单元格里的原始地址，避免把折断的纯文本误认为完整链接。
+  String? hyperlinkAt(Position cell) {
+    final context = _context;
+    if (context == null || !_settings.types.contains(LinkType.osc8)) {
+      return null;
+    }
+    if (cell.row < 0 ||
+        cell.row >= context.rows ||
+        cell.col < 0 ||
+        cell.col >= context.cols) {
+      return null;
+    }
+    try {
+      final ref = GridRef.at(context.terminal, cell, pointTag: .viewport);
+      if (ref.wide == .spacerTail && cell.col > 0) {
+        return GridRef.at(
+          context.terminal,
+          Position(row: cell.row, col: cell.col - 1),
+          pointTag: .viewport,
+        ).hyperlinkUri;
+      }
+      return ref.hyperlinkUri;
+    } on InvalidValueException {
+      return null;
+    }
+  }
 
   /// Clears hover and press state without invalidating detected links.
   void cancel() => _clearInteraction();

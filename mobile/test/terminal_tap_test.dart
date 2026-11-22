@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flterm/flterm.dart';
+// ignore: implementation_imports
+import 'package:flterm/src/rendering.dart' show measureCellMetrics;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,5 +43,51 @@ void main() {
     await tester.pump();
     expect(taps, 1);
     expect(focus.hasFocus, isFalse);
+  });
+
+  testWidgets('长按 OSC 8 续行取完整地址，纯文本仍可选中', (tester) async {
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    var opened = 0;
+    final addresses = <String>[];
+    final theme = TerminalTheme.dark();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalView(
+            padding: EdgeInsets.zero,
+            controller: controller,
+            theme: theme,
+            linkSettings: LinkSettings(onActivate: (_) => opened++),
+            onHyperlinkLongPress: addresses.add,
+          ),
+        ),
+      ),
+    );
+    const address = 'https://example.com/%2f?x=1&y=2';
+    controller.write(
+      utf8.encode(
+        '\x1b]8;;$address\x1b\\visible\r\nlabel\x1b]8;;\x1b\\\r\n'
+        'https://example.com/partial',
+      ),
+    );
+    await tester.pump();
+    final metrics = measureCellMetrics(
+      fontSize: theme.fontSize,
+      fontFamily: theme.fontFamily,
+      fontFamilyFallback: theme.fontFamilyFallback,
+      devicePixelRatio: tester.view.devicePixelRatio,
+    );
+    Offset centerOfRow(int row) =>
+        Offset(metrics.cellWidth / 2, metrics.cellHeight * (row + 0.5));
+    await tester.longPressAt(centerOfRow(1));
+    await tester.pump();
+    expect(addresses, [address]);
+    expect(opened, 0);
+    expect(controller.hasSelection, isFalse);
+    await tester.longPressAt(centerOfRow(2));
+    await tester.pump();
+    expect(addresses, [address]);
+    expect(controller.hasSelection, isTrue);
   });
 }

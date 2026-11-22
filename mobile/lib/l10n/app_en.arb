@@ -58,6 +58,10 @@
       }
     }
   },
+  "chatCopyCode": "Copy code",
+  "@chatCopyCode": {
+    "description": "Copy the original text inside a Markdown code block."
+  },
   "chatDeny": "Deny",
   "@chatDeny": {
     "description": "Chat: permission card button that denies the tool call."
@@ -495,6 +499,10 @@
   "commonClose": "Close",
   "@commonClose": {
     "description": "Button or tooltip: close."
+  },
+  "commonCopied": "Copied",
+  "@commonCopied": {
+    "description": "Brief feedback after text is copied."
   },
   "commonCopy": "Copy",
   "@commonCopy": {
@@ -2573,6 +2581,18 @@
   "terminalClipboardEmpty": "The clipboard has no text or image",
   "@terminalClipboardEmpty": {
     "description": "Terminal: notice after tapping Paste with nothing usable."
+  },
+  "terminalCopyJoinDirectly": "Join without spaces",
+  "@terminalCopyJoinDirectly": {
+    "description": "Single-line copy: join the selected rows without a separator."
+  },
+  "terminalCopyJoinWithSpace": "Join with spaces",
+  "@terminalCopyJoinWithSpace": {
+    "description": "Single-line copy: join the selected rows with one space at each break."
+  },
+  "terminalCopySingleLine": "Copy as one line",
+  "@terminalCopySingleLine": {
+    "description": "Terminal selection action and preview title."
   },
   "terminalExited": "The terminal has exited",
   "@terminalExited": {

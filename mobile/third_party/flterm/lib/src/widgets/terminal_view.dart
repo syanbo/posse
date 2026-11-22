@@ -73,6 +73,9 @@ class TerminalView extends StatefulWidget {
   /// Controls terminal link detection, styling, and activation callbacks.
   final LinkSettings linkSettings;
 
+  /// Posse: 长按 OSC 8 链接，交给外层处理原始地址。
+  final ValueChanged<String>? onHyperlinkLongPress;
+
   /// Padding around the terminal grid.
   ///
   /// Filled with the theme background color. The grid is sized from
@@ -133,6 +136,7 @@ class TerminalView extends StatefulWidget {
     this.onContentRows,
     this.mouseAutoHide = .onInput,
     this.linkSettings = const LinkSettings(),
+    this.onHyperlinkLongPress,
     this.gestureSettings = const TerminalGestureSettings(),
     this.onTap,
   });
@@ -341,6 +345,7 @@ class _TerminalViewState extends State<TerminalView> {
                   settings: widget.gestureSettings,
                   scrollController: _scrollController,
                   onLinkActivate: widget.linkSettings.onActivate,
+                  onHyperlinkLongPress: widget.onHyperlinkLongPress,
                   onTap: widget.onTap,
                   child: Listener(
                     onPointerDown: (e) => _scrollAnchor = e.localPosition,

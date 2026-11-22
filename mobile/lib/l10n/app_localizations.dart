@@ -158,6 +158,12 @@ abstract class AppLocalizations {
   /// **'{percent}% of context used'**
   String chatContextUsed(int percent);
 
+  /// Copy the original text inside a Markdown code block.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy code'**
+  String get chatCopyCode;
+
   /// Chat: permission card button that denies the tool call.
   ///
   /// In en, this message translates to:
@@ -709,6 +715,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Close'**
   String get commonClose;
+
+  /// Brief feedback after text is copied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get commonCopied;
 
   /// Button: copy the selection.
   ///
@@ -3325,6 +3337,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The clipboard has no text or image'**
   String get terminalClipboardEmpty;
+
+  /// Single-line copy: join the selected rows without a separator.
+  ///
+  /// In en, this message translates to:
+  /// **'Join without spaces'**
+  String get terminalCopyJoinDirectly;
+
+  /// Single-line copy: join the selected rows with one space at each break.
+  ///
+  /// In en, this message translates to:
+  /// **'Join with spaces'**
+  String get terminalCopyJoinWithSpace;
+
+  /// Terminal selection action and preview title.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy as one line'**
+  String get terminalCopySingleLine;
 
   /// Terminal: notice when the terminal process ended.
   ///

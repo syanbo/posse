@@ -216,6 +216,7 @@ type Mode uint16
 // Modes.
 const (
 	ModeCursorKeys     Mode = 1
+	ModeAutoWrap       Mode = 7
 	ModeCursorVisible  Mode = 25
 	ModeFocusEvent     Mode = 1004
 	ModeAltScroll      Mode = 1007

@@ -282,6 +282,9 @@ abstract class TerminalController extends ChangeNotifier
   /// separate regardless of wrapping.
   String selectedText({FormatterFormat format = .plain});
 
+  /// Posse: 选区是否跨过了复制时保留的换行。
+  bool get selectionHasLineBreak;
+
   /// Selects the inclusive range between two terminal cells.
   ///
   /// Coordinates are interpreted in [pointTag]. Use [PointTag.screen] for

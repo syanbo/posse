@@ -46,6 +46,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get chatCopyCode => 'Copy code';
+
+  @override
   String get chatDeny => 'Deny';
 
   @override
@@ -389,6 +392,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonClose => 'Close';
+
+  @override
+  String get commonCopied => 'Copied';
 
   @override
   String get commonCopy => 'Copy';
@@ -1939,6 +1945,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get terminalClipboardEmpty => 'The clipboard has no text or image';
+
+  @override
+  String get terminalCopyJoinDirectly => 'Join without spaces';
+
+  @override
+  String get terminalCopyJoinWithSpace => 'Join with spaces';
+
+  @override
+  String get terminalCopySingleLine => 'Copy as one line';
 
   @override
   String get terminalExited => 'The terminal has exited';

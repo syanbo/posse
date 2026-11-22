@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../l10n/l10n.dart';
 import '../ui/theme.dart';
+import '../ui/widgets.dart';
 import 'copy_chip.dart';
 
 /// 选区上的「复制 / 全选」和两端把手。
@@ -50,6 +51,7 @@ class SelectionChrome extends StatefulWidget {
 
 class _SelectionChromeState extends State<SelectionChrome> {
   var _selected = false;
+  var _multiline = false;
   SelectionAnchor? _anchor;
   SelectionEnds? _ends;
   Position? _fixedEnd;
@@ -86,6 +88,7 @@ class _SelectionChromeState extends State<SelectionChrome> {
 
   void _read() {
     _selected = widget.controller.hasSelection;
+    _multiline = widget.controller.selectionHasLineBreak;
     _anchor = widget.controller.selectionAnchor;
     _ends = widget.controller.selectionEnds;
   }
@@ -94,14 +97,19 @@ class _SelectionChromeState extends State<SelectionChrome> {
     final anchor = widget.controller.selectionAnchor;
     final ends = widget.controller.selectionEnds;
     final selected = widget.controller.hasSelection;
+    final multiline = widget.controller.selectionHasLineBreak;
     // 拖把手回滚时另一端会滚出屏幕，ends 变成 null；留着上一份，被拖的把手才不会被拆掉。
     final kept = ends ?? (_fixedEnd != null ? _ends : null);
     if (!mounted ||
-        (selected == _selected && anchor == _anchor && kept == _ends)) {
+        (selected == _selected &&
+            multiline == _multiline &&
+            anchor == _anchor &&
+            kept == _ends)) {
       return;
     }
     setState(() {
       _selected = selected;
+      _multiline = multiline;
       _anchor = anchor;
       _ends = kept;
     });
@@ -191,6 +199,19 @@ class _SelectionChromeState extends State<SelectionChrome> {
     await Clipboard.setData(ClipboardData(text: text));
   }
 
+  Future<void> _copySingleLine() async {
+    final controller = widget.controller;
+    final original = trimPastedNewlines(controller.selectedText());
+    if (!_lineBreak.hasMatch(original)) return;
+    final text = await showPosseDialog<String>(
+      context: context,
+      builder: (_) => _SingleLineDialog(original),
+    );
+    if (text == null || !mounted) return;
+    if (identical(controller, widget.controller)) controller.clearSelection();
+    await Clipboard.setData(ClipboardData(text: text));
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_selected) return const SizedBox.shrink();
@@ -210,11 +231,11 @@ class _SelectionChromeState extends State<SelectionChrome> {
       clipBehavior: Clip.none,
       fit: StackFit.expand,
       children: [
-        _copyButton(anchor, viewHeight),
         if (ends != null) ...[
           _handle(ends: ends, start: true),
           _handle(ends: ends, start: false),
         ],
+        _copyButton(anchor, viewHeight),
       ],
     );
   }
@@ -235,7 +256,7 @@ class _SelectionChromeState extends State<SelectionChrome> {
       cropX: widget.cropX,
       viewWidth: widget.width,
       viewHeight: viewHeight,
-      chipWidth: 132,
+      chipWidth: _multiline ? 164 : 132,
       chipHeight: 34,
     );
     return Positioned(
@@ -246,6 +267,9 @@ class _SelectionChromeState extends State<SelectionChrome> {
         child: _CopyChip(
           onCopy: () => unawaited(_copySelection()),
           onSelectAll: widget.controller.selectParagraph,
+          onCopySingleLine: _multiline
+              ? () => unawaited(_copySingleLine())
+              : null,
         ),
       ),
     );
@@ -294,10 +318,15 @@ class _SelectionChromeState extends State<SelectionChrome> {
 }
 
 class _CopyChip extends StatelessWidget {
-  const _CopyChip({required this.onCopy, required this.onSelectAll});
+  const _CopyChip({
+    required this.onCopy,
+    required this.onSelectAll,
+    this.onCopySingleLine,
+  });
 
   final VoidCallback onCopy;
   final VoidCallback onSelectAll;
+  final VoidCallback? onCopySingleLine;
 
   @override
   Widget build(BuildContext context) {
@@ -326,16 +355,97 @@ class _CopyChip extends StatelessWidget {
           Container(width: 1, height: 16, color: c.line),
           InkWell(
             onTap: onSelectAll,
-            borderRadius: const BorderRadius.horizontal(
-              right: Radius.circular(Rd.button),
-            ),
+            borderRadius: onCopySingleLine == null
+                ? const BorderRadius.horizontal(
+                    right: Radius.circular(Rd.button),
+                  )
+                : null,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Text(context.l10n.commonSelectAll, style: style),
             ),
           ),
+          if (onCopySingleLine != null) ...[
+            Container(width: 1, height: 16, color: c.line),
+            InkWell(
+              onTap: onCopySingleLine,
+              borderRadius: const BorderRadius.horizontal(
+                right: Radius.circular(Rd.button),
+              ),
+              child: Tooltip(
+                message: context.l10n.terminalCopySingleLine,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.wrap_text_rounded,
+                    color: c.accent,
+                    size: Ic.small,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+final _lineBreak = RegExp(r'[ \t]*(?:\r\n?|\n)(?:[ \t]*(?:\r\n?|\n))*[ \t]*');
+
+class _SingleLineDialog extends StatefulWidget {
+  const _SingleLineDialog(this.original);
+
+  final String original;
+
+  @override
+  State<_SingleLineDialog> createState() => _SingleLineDialogState();
+}
+
+class _SingleLineDialogState extends State<_SingleLineDialog> {
+  var _space = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    final preview = widget.original.replaceAll(_lineBreak, _space ? ' ' : '');
+    return AlertDialog(
+      title: Text(l.terminalCopySingleLine),
+      scrollable: true,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              ChoiceChip(
+                label: Text(l.terminalCopyJoinWithSpace),
+                selected: _space,
+                onSelected: (_) => setState(() => _space = true),
+              ),
+              ChoiceChip(
+                label: Text(l.terminalCopyJoinDirectly),
+                selected: !_space,
+                onSelected: (_) => setState(() => _space = false),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(preview, style: mono(Fs.small, height: Lh.code)),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l.commonCancel),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(preview),
+          child: Text(l.commonCopy),
+        ),
+      ],
     );
   }
 }

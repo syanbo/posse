@@ -108,3 +108,64 @@ func TestSnapshotRestoresLayout(t *testing.T) {
 		})
 	}
 }
+
+func TestSnapshotPreservesLineBreaks(t *testing.T) {
+	loadLib(t)
+	const edge = "abcdefghijklmno"
+	const wide = "abcdefghijklmn你xyz"
+	tests := []struct {
+		name, input string
+		wrapped     bool
+	}{
+		{"soft", edge + "next", true},
+		{"hard", edge + "\r\nnext", false},
+		{"wide at the edge", wide, true},
+		{"wide and autowrap disabled later", wide + "\x1b[?7l", true},
+		{"wide continuation overwritten", wide + "\rX", true},
+		{"wide continuation erased", wide + "\r\x1b[2X", true},
+		{"wide continuation cleared", wide + "\r\x1b[K", true},
+		{"wide continuation shifted", wide + "\r\x1b[2@", true},
+		{"erased continuation cell", edge + " next\r\x1b[X", true},
+		{"colored continuation cell", edge + " next\r\x1b[44m\x1b[X\x1b[0m", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			original := newTerm(t, 15, 5)
+			original.Write([]byte(lines(30) + tt.input + "\r\n" + lines(10)))
+			restored := newTerm(t, 15, 5)
+			restored.Write(original.Snapshot())
+			for _, term := range []*Terminal{original, restored} {
+				first, found := term.refAt(0, 30)
+				if !found || term.rowWrapped(first) != tt.wrapped {
+					t.Fatalf("line wrap differs in replay=%v", term == restored)
+				}
+			}
+			if restored.Mode(ModeAutoWrap) != original.Mode(ModeAutoWrap) {
+				t.Fatal("autowrap mode differs after replay")
+			}
+			for _, term := range []*Terminal{original, restored} {
+				if err := term.Resize(40, 5, 0, 0); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got, want := restored.Text(), original.Text(); got != want {
+				t.Fatalf("reflow differs after replay\nwant: %q\ngot:  %q", want, got)
+			}
+		})
+	}
+}
+
+func TestSnapshotPreservesLongHyperlinkTarget(t *testing.T) {
+	loadLib(t)
+	uri := "https://example.com/?q=" + strings.Repeat("a", 900)
+	original := newTerm(t, 15, 5)
+	original.Write([]byte("\x1b]8;;" + uri + "\x1b\\label\r\ncontinued\x1b]8;;\x1b\\"))
+	restored := newTerm(t, 15, 5)
+	restored.Write(original.Snapshot())
+	for _, term := range []*Terminal{original, restored} {
+		first, found := term.refAt(0, 1)
+		if !found || term.Hyperlink(first) != uri {
+			t.Fatalf("hyperlink target differs in replay=%v", term == restored)
+		}
+	}
+}

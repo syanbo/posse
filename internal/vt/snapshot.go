@@ -160,18 +160,6 @@ func (t *Terminal) cellText(c *snapCell, buf []uint32, out []byte) []byte {
 	return utf8.AppendRune(out, c.cp)
 }
 
-func (t *Terminal) cellLink(c *snapCell) string {
-	if !c.link {
-		return ""
-	}
-	var buf [2048]byte
-	var n uintptr
-	if !ok(call(fnGridRefHyperlinkURI, uintptr(unsafe.Pointer(&c.ref)), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), uintptr(unsafe.Pointer(&n)))) {
-		return ""
-	}
-	return string(buf[:n])
-}
-
 // writeCells 逐行写出回滚区和屏幕的全部行（含末尾空行，屏幕最底下 skip 行除外），使还原后回滚行数与屏幕布局一致。
 // 行内被跳过的空格子用光标右移越过而不写入，只有背景色的格子用带背景色的擦除还原。
 func (t *Terminal) writeCells(b *bytes.Buffer, skip int) {
@@ -179,6 +167,11 @@ func (t *Terminal) writeCells(b *bytes.Buffer, skip int) {
 	total := int(t.Scrollbar().Total) - max(skip, 0)
 	if total <= 0 {
 		return
+	}
+	if !t.Mode(ModeAutoWrap) {
+		// 程序可以先折行再关闭自动换行，重放时仍要还原已存在的软换行。
+		b.WriteString("\x1b[?7h")
+		defer b.WriteString("\x1b[?7l")
 	}
 	var cur style // 当前已输出的样式（零值为默认）
 	curSet := false
@@ -203,6 +196,11 @@ func (t *Terminal) writeCells(b *bytes.Buffer, skip int) {
 		b.WriteString("\x1b\\")
 		link = uri
 	}
+	moveRight := func(n int) {
+		b.WriteString("\x1b[")
+		b.WriteString(strconv.Itoa(n))
+		b.WriteByte('C')
+	}
 
 	for y := range total {
 		row, found := t.refAt(0, y)
@@ -219,12 +217,14 @@ func (t *Terminal) writeCells(b *bytes.Buffer, skip int) {
 				continue
 			}
 			if x > col {
-				b.WriteString("\x1b[")
-				b.WriteString(strconv.Itoa(x - col))
-				b.WriteByte('C')
+				moveRight(x - col)
 				col = x
 			}
-			setLink(t.cellLink(&c))
+			uri := ""
+			if c.link {
+				uri = t.Hyperlink(c.ref)
+			}
+			setLink(uri)
 			if c.bgOnly {
 				// 连续同色背景格合并成一次擦除
 				n := 1
@@ -257,11 +257,38 @@ func (t *Terminal) writeCells(b *bytes.Buffer, skip int) {
 		if y == total-1 {
 			break
 		}
-		// 软换行的行写满到最后一列时靠自动换行衔接，保留换行标记以便尺寸变化时重排
-		if col >= cols && t.rowWrapped(row) {
+		if t.rowWrapped(row) {
 			if nextRow, found := t.refAt(0, y+1); found {
-				if next, ok := t.cellAt(nextRow, 0); ok && next.hasText {
-					continue
+				if next, ok := t.cellAt(nextRow, 0); ok {
+					last, _ := t.cellAt(row, cols-1)
+					switch {
+					case cols > 1 && col < cols:
+						// 在末列重打宽字符，或用临时宽字符触发折行。擦整行保留前一行的宽字符占位，
+						// 擦前两格则把占位也还原成普通空格。
+						if col < cols-1 {
+							moveRight(cols - 1 - col)
+						}
+						if last.wide == SpacerHead && next.wide == WideChar && next.hasText {
+							continue
+						}
+						setLink("")
+						setStyle(style{size: unsafe.Sizeof(style{})})
+						b.WriteRune('\u754c')
+						if last.wide == SpacerHead {
+							b.WriteString("\r\x1b[K")
+						} else {
+							b.WriteString("\r\x1b[2X")
+						}
+						continue
+					case col >= cols:
+						if !next.hasText {
+							// 续行首格被擦掉时，先用临时字符触发折行，再擦回首格。
+							setLink("")
+							setStyle(style{size: unsafe.Sizeof(style{})})
+							b.WriteString(" \r\x1b[X")
+						}
+						continue
+					}
 				}
 			}
 		}

@@ -657,6 +657,26 @@ class TerminalControllerImpl extends TerminalController
   }
 
   @override
+  bool get selectionHasLineBreak {
+    final selection = terminal.selection;
+    if (selection == null) return false;
+    final a = selection.start.positionIn(.screen);
+    final b = selection.end.positionIn(.screen);
+    if (a == null || b == null || a.row == b.row) return false;
+    final (start, end) = a.row < b.row ? (a, b) : (b, a);
+    for (var row = start.row; row < end.row; row++) {
+      if (selection.rectangle || _screenRef(row, 0)?.rowWrap != true) {
+        if (_screenRef(end.row, end.col)?.content.isNotEmpty == true) {
+          return true;
+        }
+        // 能跨到空白行，但剪贴板仍可能只有开头一行。
+        return trimPastedNewlines(selectedText()).contains('\n');
+      }
+    }
+    return false;
+  }
+
+  @override
   void selectRange({
     required Position start,
     required Position end,

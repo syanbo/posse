@@ -39,6 +39,8 @@ sequenceDiagram
 
 滚动区域、线框字符集、制表位、光标形状、kitty 键盘单层、modifyOtherKeys、键盘应用模式、光标键模式、SGR 鼠标、自动换行、原点模式、插入模式、当前画笔都能带过去。
 
+快照重放时保留软换行，包含宽字符在行尾放不下移到下一行、续行首格被擦除的情况。这样接入端复制选区时能接回同一逻辑行，改宽度也能重排这一行。
+
 ## 从副本运行
 
 常驻进程不从 Posse.app 运行，从它的 APFS 克隆副本运行（`internal/spawn/runtime.go`）。终端里的进程对授权的负责进程是拉起它们的常驻进程，tccd 按那个常驻进程的程序路径核实身份。实测（PosseDev，2026-10-28，`log stream` 看 tccd 的 `AUTHREQ_ATTRIBUTION`）：

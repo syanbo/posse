@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:markdown/markdown.dart' as md;
 
 import '../l10n/l10n.dart';
@@ -6,20 +10,68 @@ import '../ui/highlight.dart';
 import '../ui/mermaid.dart';
 import '../ui/theme.dart';
 
-class MarkdownView extends StatelessWidget {
-  const MarkdownView(this.data, {super.key, this.style});
+class MarkdownView extends StatefulWidget {
+  const MarkdownView(
+    this.data, {
+    super.key,
+    this.style,
+    this.copyActions = false,
+  });
 
   final String data;
   final TextStyle? style;
+  final bool copyActions;
+
+  @override
+  State<MarkdownView> createState() => _MarkdownViewState();
+}
+
+class _MarkdownViewState extends State<MarkdownView> {
+  late var _nodes = _parse(widget.data);
+  final _links = <md.Element, LongPressGestureRecognizer>{};
+
+  @override
+  void didUpdateWidget(MarkdownView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data != widget.data) {
+      _disposeLinks();
+      _nodes = _parse(widget.data);
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposeLinks();
+    super.dispose();
+  }
+
+  void _disposeLinks() {
+    for (final link in _links.values) {
+      link.dispose();
+    }
+    _links.clear();
+  }
+
+  LongPressGestureRecognizer? _linkGesture(md.Element node) {
+    final address = node.attributes['href'];
+    if (address == null || address.isEmpty) return null;
+    return _links.putIfAbsent(
+      node,
+      () =>
+          LongPressGestureRecognizer()
+            ..onLongPress = () =>
+                unawaited(_copyMarkdownText(context, address)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final base = style ?? DefaultTextStyle.of(context).style;
-    final nodes = _parse(data);
-    if (nodes.isEmpty) return Text(data, style: base);
+    final base = widget.style ?? DefaultTextStyle.of(context).style;
+    if (_nodes.isEmpty) return Text(widget.data, style: base);
+    final links = widget.copyActions ? _linkGesture : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [for (final node in nodes) _block(context, node, base)],
+      children: [for (final node in _nodes) _block(context, node, base, links)],
     );
   }
 }
@@ -64,16 +116,30 @@ List<md.Node> _parse(String data) {
   return _parsed[data] = nodes;
 }
 
-Widget _block(BuildContext context, md.Node node, TextStyle base) {
+typedef _LinkGesture = LongPressGestureRecognizer? Function(md.Element);
+
+Widget _block(
+  BuildContext context,
+  md.Node node,
+  TextStyle base,
+  _LinkGesture? links,
+) {
   if (node is md.Element) {
     switch (node.tag) {
       case 'p':
         return Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Text.rich(TextSpan(children: _inline(context, node, base))),
+          child: Text.rich(
+            TextSpan(children: _inline(context, node, base, links)),
+          ),
         );
       case 'pre':
-        return markdownCodeBlock(context, node, base);
+        return markdownCodeBlock(
+          context,
+          node,
+          base,
+          copySource: links != null,
+        );
       case 'ul':
       case 'ol':
         final ordered = node.tag == 'ol';
@@ -92,7 +158,7 @@ Widget _block(BuildContext context, md.Node node, TextStyle base) {
                           text: ordered ? '${index++}. ' : '• ',
                           style: base.copyWith(color: _muted(context)),
                         ),
-                        ..._inline(context, child, base),
+                        ..._inline(context, child, base, links),
                       ],
                     ),
                   ),
@@ -113,6 +179,7 @@ Widget _block(BuildContext context, md.Node node, TextStyle base) {
                 context,
                 node,
                 base.copyWith(color: _muted(context)),
+                links,
               ),
             ),
           ),
@@ -134,20 +201,40 @@ Widget _block(BuildContext context, md.Node node, TextStyle base) {
         return Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 6),
           child: Text.rich(
-            TextSpan(style: heading, children: _inline(context, node, heading)),
+            TextSpan(
+              style: heading,
+              children: _inline(context, node, heading, links),
+            ),
           ),
         );
       default:
-        return Text.rich(TextSpan(children: _inline(context, node, base)));
+        return Text.rich(
+          TextSpan(children: _inline(context, node, base, links)),
+        );
     }
   }
   return Text(node.textContent, style: base);
 }
 
-List<InlineSpan> _inline(BuildContext context, md.Node node, TextStyle base) {
-  if (node is md.Text) return [TextSpan(text: node.text, style: base)];
+List<InlineSpan> _inline(
+  BuildContext context,
+  md.Node node,
+  TextStyle base,
+  _LinkGesture? links, [
+  GestureRecognizer? gesture,
+]) {
+  if (node is md.Text) {
+    return [TextSpan(text: node.text, style: base, recognizer: gesture)];
+  }
   if (node is! md.Element) {
-    return [TextSpan(text: node.textContent, style: base)];
+    return [TextSpan(text: node.textContent, style: base, recognizer: gesture)];
+  }
+  if (node.tag == 'pre' && links != null) {
+    return [
+      WidgetSpan(
+        child: markdownCodeBlock(context, node, base, copySource: true),
+      ),
+    ];
   }
   final style = switch (node.tag) {
     'strong' => base.copyWith(fontWeight: Fw.bold),
@@ -166,14 +253,25 @@ List<InlineSpan> _inline(BuildContext context, md.Node node, TextStyle base) {
     ),
     _ => base,
   };
-  if (node.tag == 'code') {
-    return [TextSpan(text: node.textContent, style: style)];
-  }
+  if (node.tag == 'a') gesture = links?.call(node);
   final children = node.children;
-  if (children == null || children.isEmpty) {
-    return [TextSpan(text: node.textContent, style: style)];
+  if (node.tag == 'code' || children == null || children.isEmpty) {
+    return [
+      TextSpan(text: node.textContent, style: style, recognizer: gesture),
+    ];
   }
-  return [for (final child in children) ..._inline(context, child, style)];
+  return [
+    for (final child in children)
+      ..._inline(context, child, style, links, gesture),
+  ];
+}
+
+Future<void> _copyMarkdownText(BuildContext context, String text) async {
+  await Clipboard.setData(ClipboardData(text: text));
+  if (!context.mounted) return;
+  ScaffoldMessenger.maybeOf(context)
+    ?..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(context.l10n.commonCopied)));
 }
 
 /// 围栏代码块：顶上一行语言名，代码不折行、横向滚动，认得出语言时着色。文件预览也用它。
@@ -181,8 +279,9 @@ List<InlineSpan> _inline(BuildContext context, md.Node node, TextStyle base) {
 Widget markdownCodeBlock(
   BuildContext context,
   md.Element node,
-  TextStyle base,
-) {
+  TextStyle base, {
+  bool copySource = false,
+}) {
   var lang = '';
   for (final child in node.children ?? const <md.Node>[]) {
     if (child is! md.Element || child.tag != 'code') continue;
@@ -190,22 +289,32 @@ Widget markdownCodeBlock(
     const prefix = 'language-';
     if (cls.startsWith(prefix)) lang = cls.substring(prefix.length);
   }
-  final code = node.textContent.trimRight();
+  final raw = node.textContent;
+  final code = raw.trimRight();
   final source = _codeBody(code, lang, base);
+  final copy = copySource && raw.isNotEmpty
+      ? IconButton(
+          tooltip: context.l10n.chatCopyCode,
+          icon: const Icon(Icons.content_copy_rounded, size: Ic.small),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => unawaited(_copyMarkdownText(context, raw)),
+        )
+      : null;
   if (lang.toLowerCase() == 'mermaid') {
     return MermaidBlock(
       code: code,
       source: source,
-      card: (trailing, body) => _codeCard(context, lang, trailing, body),
+      card: (trailing, body) =>
+          _codeCard(context, lang, [?trailing, ?copy], body),
     );
   }
-  return _codeCard(context, lang, null, source);
+  return _codeCard(context, lang, [?copy], source);
 }
 
 Widget _codeCard(
   BuildContext context,
   String lang,
-  Widget? trailing,
+  List<Widget> actions,
   Widget body,
 ) {
   return Container(
@@ -232,7 +341,7 @@ Widget _codeCard(
                   style: mono(Fs.small, color: _muted(context)),
                 ),
               ),
-              ?trailing,
+              ...actions,
             ],
           ),
         ),

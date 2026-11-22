@@ -244,6 +244,7 @@ class MessageBubble extends StatelessWidget {
     if (block.type == 'reasoning' || role == 'reasoning') {
       return MarkdownView(
         text,
+        copyActions: true,
         style: TextStyle(
           fontStyle: FontStyle.italic,
           color: muted,
@@ -254,7 +255,7 @@ class MessageBubble extends StatelessWidget {
     final style = role == 'system'
         ? TextStyle(fontSize: Fs.small, color: muted, height: Lh.body)
         : const TextStyle(fontSize: Fs.body, height: Lh.read);
-    return MarkdownView(text, style: style);
+    return MarkdownView(text, style: style, copyActions: true);
   }
 }
 

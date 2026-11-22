@@ -473,11 +473,17 @@ class _TerminalScreenState extends State<TerminalScreen>
     scrollPhysics: scrollPhysics,
     scrollController: scrollController,
     linkSettings: LinkSettings(onActivate: _onLink),
+    onHyperlinkLongPress: (uri) => unawaited(_copyLink(uri)),
     onContentRows: _onContentRows,
     onTap: _showKeyboard,
   );
 
   void _onContentRows(int rows) => _contentRows.value = rows;
+
+  Future<void> _copyLink(String uri) async {
+    await Clipboard.setData(ClipboardData(text: uri));
+    if (mounted) _flash(context.l10n.commonCopied);
+  }
 
   /// 轻点终端里的链接：网址交给系统浏览器，工作区里的文件在文件页里看。
   void _onLink(ActivatedLink link) {

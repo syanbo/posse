@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'package:flterm/flterm.dart' hide Key;
 // ignore: implementation_imports
 import 'package:flterm/src/rendering.dart' show measureCellMetrics;
+// ignore: implementation_imports
+import 'package:flterm/src/widgets/terminal_controller_impl.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/terminal/selection_chrome.dart';
 import 'package:posse_mobile/ui/theme.dart';
@@ -167,6 +170,106 @@ void main() {
     controller.clearSelection();
     await tester.pump();
     expect(find.text('复制'), findsNothing);
+  });
+
+  testWidgets('复制保留真正的换行，单行预览允许选择连接方式', (tester) async {
+    // 避免压缩任务在弹框动画期间不断重排到假时钟的当前时刻。
+    final controller = TerminalControllerImpl(scheduleCompressionIdle: (_) {});
+    addTearDown(controller.dispose);
+    final copied = <String>[];
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied.add((call.arguments as Map)['text'] as String);
+      }
+      return null;
+    });
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    await tester.pumpWidget(_board(controller));
+    await tester.pump();
+    controller.write(utf8.encode('https://example.com/lo  \r\n  ng?x=1&y=2'));
+    void select() {
+      controller.selectRange(
+        start: const Position(row: 0, col: 0),
+        end: const Position(row: 1, col: 11),
+        pointTag: .viewport,
+      );
+    }
+
+    select();
+    await tester.pump();
+    await tester.tap(find.text('复制'));
+    await tester.pump();
+    expect(copied, ['https://example.com/lo  \n  ng?x=1&y=2']);
+
+    select();
+    await tester.pump();
+    await tester.tap(find.byTooltip('复制为单行'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('https://example.com/lo ng?x=1&y=2'), findsOneWidget);
+    await tester.tap(find.text('直接拼接'));
+    await tester.pump();
+    expect(find.text('https://example.com/long?x=1&y=2'), findsOneWidget);
+    final dialog = find.byType(AlertDialog);
+    await tester.tap(find.descendant(of: dialog, matching: find.text('取消')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(controller.hasSelection, isTrue);
+    expect(copied, hasLength(1));
+
+    await tester.tap(find.byTooltip('复制为单行'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('直接拼接'));
+    await tester.pump();
+    await tester.tap(find.descendant(of: dialog, matching: find.text('复制')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(copied.last, 'https://example.com/long?x=1&y=2');
+    expect(controller.hasSelection, isFalse);
+  });
+
+  testWidgets('跨软换行的链接复制成原本的一行', (tester) async {
+    var cols = 0;
+    final controller = TerminalController()
+      ..onResize = (width, _) => cols = width;
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_board(controller));
+    await tester.pump();
+    final url =
+        'https://example.com/${List.filled(3, 'very-long-path/').join()}';
+    expect(url.length, greaterThan(cols));
+    controller.write(utf8.encode(url));
+    controller.selectRange(
+      start: const Position(row: 0, col: 0),
+      end: Position(
+        row: (url.length - 1) ~/ cols,
+        col: (url.length - 1) % cols,
+      ),
+      pointTag: .viewport,
+    );
+    await tester.pump();
+    expect(controller.selectedText(), url);
+    expect(find.byTooltip('复制为单行'), findsNothing);
+  });
+
+  testWidgets('选到末尾空行时不显示单行复制', (tester) async {
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_board(controller));
+    await tester.pump();
+    controller.write(utf8.encode('only this line\r\n\r\n'));
+    controller.selectRange(
+      start: const Position(row: 0, col: 0),
+      end: const Position(row: 1, col: 4),
+      pointTag: .viewport,
+    );
+    await tester.pump();
+    expect(find.text('复制'), findsOneWidget);
+    expect(find.byTooltip('复制为单行'), findsNothing);
   });
 }
 
