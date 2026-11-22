@@ -338,6 +338,7 @@ final _lineBreak = RegExp(r'\r\n?|\n');
 final _whitespace = RegExp(r'\s');
 final _programWithArgument = RegExp(r'^[\w./~+-]+[ \t]+[\w./~+-]');
 final _commandOption = RegExp(r'(?:^|[ \t])--?[A-Za-z][\w-]*(?:[ \t=]|$)');
+final _argumentStart = RegExp(r'^(?:--?[A-Za-z]|/|\.{1,2}/|~/)');
 final _explicitContinuation = RegExp(r'(?:\\|[:;]|\|\|?|&&)$');
 
 Future<void> copyTerminalSelection(
@@ -360,29 +361,28 @@ Future<void> copyTerminalSelection(
 
 enum _CopyMode { original, spaced, joined }
 
+bool _isWebLink(String value) {
+  final uri = Uri.tryParse(value);
+  return uri != null &&
+      (uri.scheme == 'http' || uri.scheme == 'https') &&
+      uri.host.isNotEmpty;
+}
+
 // 选中建议仅改变预览，终端画面本身无法区分程序折行和手写的换行。
-_CopyMode _suggestCopyMode(List<String> lines, List<String> fragments) {
-  if (lines.length != fragments.length) return _CopyMode.original;
-  if (fragments.every((line) => !_whitespace.hasMatch(line))) {
-    final uri = Uri.tryParse(fragments.join());
-    if (uri != null &&
-        (uri.scheme == 'http' || uri.scheme == 'https') &&
-        uri.host.isNotEmpty) {
-      return _CopyMode.joined;
-    }
+bool _looksLikeWrappedCommand(List<String> lines, List<String> fragments) {
+  if (lines.length != fragments.length ||
+      !_programWithArgument.hasMatch(fragments.first) ||
+      !fragments.any(_commandOption.hasMatch) ||
+      fragments
+          .take(fragments.length - 1)
+          .any(_explicitContinuation.hasMatch)) {
+    return false;
   }
   final indent = lines.first.length - lines.first.trimLeft().length;
-  if (_programWithArgument.hasMatch(fragments.first) &&
-      lines
+  return lines
           .skip(1)
-          .every((line) => line.length - line.trimLeft().length > indent) &&
-      !fragments
-          .take(fragments.length - 1)
-          .any(_explicitContinuation.hasMatch) &&
-      fragments.any(_commandOption.hasMatch)) {
-    return _CopyMode.spaced;
-  }
-  return _CopyMode.original;
+          .every((line) => line.length - line.trimLeft().length > indent) ||
+      fragments.skip(1).every(_argumentStart.hasMatch);
 }
 
 class _SelectionCopyDialog extends StatefulWidget {
@@ -400,7 +400,19 @@ class _SelectionCopyDialogState extends State<_SelectionCopyDialog> {
       .map((line) => line.trim())
       .where((line) => line.isNotEmpty)
       .toList();
-  late var _mode = _suggestCopyMode(widget.lines, _fragments);
+  late final _contiguousToken =
+      _fragments.length == widget.lines.length &&
+      !_fragments.any(_whitespace.hasMatch);
+  late final _wrappedLink = _contiguousToken && _isWebLink(_fragments.join());
+  // 无分隔符只适合选中的同一个词；命令的参数边界需要保留。
+  late final _canJoinDirectly =
+      _contiguousToken &&
+      (_wrappedLink || !_fragments.any(_commandOption.hasMatch));
+  late var _mode = _wrappedLink
+      ? _CopyMode.joined
+      : _looksLikeWrappedCommand(widget.lines, _fragments)
+      ? _CopyMode.spaced
+      : _CopyMode.original;
 
   @override
   Widget build(BuildContext context) {
@@ -422,15 +434,16 @@ class _SelectionCopyDialogState extends State<_SelectionCopyDialog> {
             runSpacing: 4,
             children: [
               for (final mode in _CopyMode.values)
-                ChoiceChip(
-                  label: Text(switch (mode) {
-                    .original => l.terminalCopyKeepLineBreaks,
-                    .spaced => l.terminalCopyJoinWithSpace,
-                    .joined => l.terminalCopyJoinDirectly,
-                  }),
-                  selected: _mode == mode,
-                  onSelected: (_) => setState(() => _mode = mode),
-                ),
+                if (mode != .joined || _canJoinDirectly)
+                  ChoiceChip(
+                    label: Text(switch (mode) {
+                      .original => l.terminalCopyKeepLineBreaks,
+                      .spaced => l.terminalCopyJoinWithSpace,
+                      .joined => l.terminalCopyJoinDirectly,
+                    }),
+                    selected: _mode == mode,
+                    onSelected: (_) => setState(() => _mode = mode),
+                  ),
             ],
           ),
           const SizedBox(height: 12),

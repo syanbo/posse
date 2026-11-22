@@ -1845,7 +1845,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get terminalClipboardEmpty => '剪贴板里没有文字或图片';
 
   @override
-  String get terminalCopyJoinDirectly => '直接拼接';
+  String get terminalCopyJoinDirectly => '不加空格拼接';
 
   @override
   String get terminalCopyJoinWithSpace => '用空格连接';

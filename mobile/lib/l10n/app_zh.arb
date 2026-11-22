@@ -540,7 +540,7 @@
   "settingsWorkspaceMeta": "工作区显示分支",
   "terminalCantOpenLink": "打不开这个链接：{url}",
   "terminalClipboardEmpty": "剪贴板里没有文字或图片",
-  "terminalCopyJoinDirectly": "直接拼接",
+  "terminalCopyJoinDirectly": "不加空格拼接",
   "terminalCopyJoinWithSpace": "用空格连接",
   "terminalCopyKeepLineBreaks": "保留换行",
   "terminalCopySelection": "复制选区",

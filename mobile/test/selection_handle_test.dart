@@ -196,7 +196,33 @@ void main() {
     await tester.tap(find.text('复制'));
     await tester.pumpAndSettle();
     expect(find.text(command), findsOneWidget);
+    expect(find.byType(ChoiceChip), findsNWidgets(2));
     expect(copied, isEmpty);
+    await tester.tap(_inCopyDialog('复制'));
+    await tester.pumpAndSettle();
+    expect(copied, [command]);
+  });
+
+  testWidgets('同缩进的命令路径仍用空格分开', (tester) async {
+    final controller = TerminalControllerImpl(scheduleCompressionIdle: (_) {});
+    addTearDown(controller.dispose);
+    final copied = _recordClipboard(tester);
+    const first = '  sudo du -sh /.Spotlight-V100';
+    const last = '  /.DocumentRevisions-V100 /.fseventsd';
+    final command = '${first.trim()} ${last.trim()}';
+    await tester.pumpWidget(_board(controller, width: 640));
+    await tester.pump();
+    controller.write(utf8.encode('$first\r\n$last'));
+    controller.selectRange(
+      start: const Position(row: 0, col: 0),
+      end: const Position(row: 1, col: last.length - 1),
+      pointTag: .viewport,
+    );
+    await tester.pump();
+    await tester.tap(find.text('复制'));
+    await tester.pumpAndSettle();
+    expect(find.text(command), findsOneWidget);
+    expect(find.byType(ChoiceChip), findsNWidgets(2));
     await tester.tap(_inCopyDialog('复制'));
     await tester.pumpAndSettle();
     expect(copied, [command]);
@@ -219,6 +245,7 @@ void main() {
     await tester.tap(find.text('复制'));
     await tester.pumpAndSettle();
     expect(find.text('https://example.com/long?x=1&y=2'), findsOneWidget);
+    expect(find.text('不加空格拼接'), findsOneWidget);
     await tester.tap(_inCopyDialog('取消'));
     await tester.pumpAndSettle();
     expect(controller.hasSelection, isTrue);
