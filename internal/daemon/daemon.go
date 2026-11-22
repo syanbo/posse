@@ -31,7 +31,7 @@ import (
 	"posse/internal/writecoord"
 )
 
-const Version = "0.1.42"
+const Version = "0.1.43"
 
 type Config struct {
 	Home       string

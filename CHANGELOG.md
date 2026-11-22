@@ -3,6 +3,20 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.43
+
+- 终端重连和重建快照时保留软换行。宽字符跨行或续行被程序重画后，复制和调整终端宽度仍能接回同一行。
+- 历史支持 Codex 压缩会话和 Cursor 编辑器对话，读取 Grok 完整对话流水，并收录更多 Antigravity 会话。Cursor 编辑器对话可从历史中单独删除。
+- 用户发起的子会话挂在父会话下。思考过程可在详情里展开，搜索匹配会话标题、对话正文和工具记录。桌面历史打开时，会话文件有变化就自动刷新。
+- 新开的 Claude Code 和 Codex 会收到当前目录最近会话的摘要。也可以在历史详情复制交接信息。
+
+### English
+
+- Terminal snapshots preserve soft wraps across reconnects and grid rebuilds. Copying and resizing keep wrapped lines together after wide characters cross a row boundary or a terminal app redraws the continuation.
+- History reads compressed Codex sessions, Cursor editor conversations, complete Grok transcripts, and additional Antigravity sessions. Individual Cursor editor conversations can be deleted from history.
+- User-initiated child sessions appear under their parent. Reasoning is expandable in session details. Search matches session titles, conversation text, and tool records. Desktop History refreshes when session files change.
+- New Claude Code and Codex sessions receive a summary of recent sessions in the current directory. The history detail view can copy handoff information.
+
 ## 0.1.42
 
 - 工作区、聊天、讨论、任务、历史的侧栏顶部统一为同一种标题行，切换时标题和列表不再上下跳动。聊天标题行右边的加号用上一次的 agent 再开一个聊天。
