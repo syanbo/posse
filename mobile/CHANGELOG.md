@@ -3,6 +3,14 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.28
+
+- 普通「复制」和键盘复制快捷键遇到跨行选区时先预览。疑似折行的命令默认用空格连接，断行网址默认直接拼接，多行代码可保留原有换行和缩进。
+
+### English
+
+- Terminal Copy and its keyboard shortcut preview selections with line breaks. Wrapped commands suggest joining with spaces, split URLs suggest joining without spaces, and multiline code can keep its original line breaks and indentation.
+
 ## 0.1.27
 
 - 终端复制会接回自动折行，保留正文的换行和缩进。跨硬换行的选区支持预览「复制为单行」，可用空格连接或直接拼接。重连后保留软换行需要 Mac 0.1.43。
