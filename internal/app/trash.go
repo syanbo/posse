@@ -24,7 +24,15 @@ func (a *app) askTrashSession(m locales.Messages, d *historyDetail) {
 		a.err = m.TrashSessionRunning()
 		return
 	}
-	a.confirm(m.TrashSessionConfirm(oneLine(s.Title)), m.TrashSessionBody(agentTitle(s.Agent)), m.CommonMoveToTrash(), func() {
+	title := m.TrashSessionConfirm(oneLine(s.Title))
+	body := m.TrashSessionBody(agentTitle(s.Agent))
+	verb := m.CommonMoveToTrash()
+	if history.IsCursorIDEChat(s.Path) {
+		title = m.HistoryDeleteCursorConfirm(oneLine(s.Title))
+		body = m.HistoryDeleteCursorBody()
+		verb = m.CommonDelete()
+	}
+	a.confirm(title, body, verb, func() {
 		go func() {
 			ctx, cancel := context.WithTimeout(a.windowContext(), time.Minute)
 			err := r.invoke(ctx, "history.trash", map[string]any{"session": s.ID, "path": s.Path}, nil)

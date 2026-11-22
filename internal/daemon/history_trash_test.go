@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"os"
@@ -149,6 +150,74 @@ func TestHistoryTrashSelectionAndRestoreBoundary(t *testing.T) {
 	}
 	if _, err := os.Stat(s.Path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCursorIDEChatIsDeleted(t *testing.T) {
+	d, _ := newTestDaemon(t)
+	root := t.TempDir()
+	d.cfg.HistoryRoots = &history.Roots{Home: root}
+	t.Cleanup(d.closeHistory)
+	id := "66666666-6666-4666-8666-666666666666"
+	dbPath := filepath.Join(root, "Library", "Application Support", "Cursor", "User", "globalStorage", "state.vscdb")
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE cursorDiskKV (key TEXT PRIMARY KEY, value TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO cursorDiskKV(key, value) VALUES(?, ?)`, "composerData:"+id,
+		`{"name":"IDE chat","lastUpdatedAt":1790500000000,"fullConversationHeadersOnly":[{"bubbleId":"b1","type":1}]}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO cursorDiskKV(key, value) VALUES(?, ?)`, "bubbleId:"+id+":b1", `{"type":1,"text":"hello from the editor"}`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if d.refreshHistory(context.Background(), true, 10*time.Second) {
+		t.Fatal("index timeout")
+	}
+	path := filepath.Join(filepath.Dir(dbPath), "composer", id)
+	s, err := d.findHistoryPath(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := "77777777-7777-4777-8777-777777777777"
+	db, err = sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO cursorDiskKV(key, value) VALUES(?, ?)`, "composerData:"+other, `{"name":"keep"}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO cursorDiskKV(key, value) VALUES(?, ?)`, "bubbleId:"+other+":b9", `{"type":1,"text":"stay"}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO cursorDiskKV(key, value) VALUES(?, ?)`, "agentKv:"+id, `{"note":"not this chat"}`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if err := d.moveHistoryToTrash(context.Background(), historyTrashParams{Session: s.ID, Path: s.Path}); err != nil {
+		t.Fatal(err)
+	}
+	db, err = sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM cursorDiskKV WHERE key=? OR key LIKE ?`, "composerData:"+id, "bubbleId:"+id+":%").Scan(&n); err != nil || n != 0 {
+		t.Fatalf("deleted chat keys = %d, %v", n, err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM cursorDiskKV WHERE key=? OR key=? OR key=?`, "composerData:"+other, "bubbleId:"+other+":b9", "agentKv:"+id).Scan(&n); err != nil || n != 3 {
+		t.Fatalf("other keys = %d, %v", n, err)
+	}
+	if _, err := d.findHistoryPath(context.Background(), path); err == nil {
+		t.Fatal("deleted chat stayed in the index")
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"time"
 
 	"posse/internal/history"
@@ -58,6 +59,18 @@ func (d *Daemon) moveHistoryToTrash(ctx context.Context, p historyTrashParams) e
 	if d.cfg.HistoryRoots != nil {
 		home = d.cfg.HistoryRoots.Home
 	}
+	if history.IsCursorIDEChat(s.Path) {
+		if filepath.Base(s.Path) != s.ID {
+			return rpc.Errorf(rpc.CodeConflict, "invalid Cursor chat id")
+		}
+		if err := history.DeleteCursorIDEChat(ctx, home, s.ID); err != nil {
+			if errors.Is(err, history.ErrCursorIDEBusy) {
+				return rpc.Errorf(rpc.CodeConflict, "%s", history.ErrCursorIDEBusy.Error())
+			}
+			return rpc.Errorf(rpc.CodeInternal, "delete Cursor chat: %v", err)
+		}
+		return d.forgetHistoryPath(ctx, s.Path)
+	}
 	paths := history.TrashPaths(home, s)
 	if len(paths) == 0 {
 		return rpc.Errorf(rpc.CodeConflict, "session file is outside the supported history directories")
@@ -78,6 +91,15 @@ func (d *Daemon) moveHistoryToTrash(ctx context.Context, p historyTrashParams) e
 		}
 	}
 	return nil
+}
+
+func (d *Daemon) forgetHistoryPath(ctx context.Context, path string) error {
+	idx, err := history.Open(HistoryDBPath(d.cfg.Home))
+	if err != nil {
+		return err
+	}
+	defer idx.Close()
+	return idx.ForgetPath(ctx, path)
 }
 
 func (d *Daemon) refreshHistoryFiles(ctx context.Context) error {

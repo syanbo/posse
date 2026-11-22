@@ -3507,6 +3507,19 @@
   "@historyCopyResumeCommand": {
     "description": "History: button that copies the shell command resuming the session."
   },
+  "historyDeleteCursorBody": "This deletes the chat from Cursor's database. It cannot be recovered. Other chats are left as they are.",
+  "@historyDeleteCursorBody": {
+    "description": "History: confirmation body for deleting one Cursor IDE chat from state.vscdb."
+  },
+  "historyDeleteCursorConfirm": "Delete “{title}” from Cursor?",
+  "@historyDeleteCursorConfirm": {
+    "description": "History: confirmation title for deleting one Cursor IDE chat.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "historyEmptyBody": "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor, ~/.grok and ~/.gemini/antigravity-cli, and never changes them.",
   "@historyEmptyBody": {
     "description": "History: empty list body."

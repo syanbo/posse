@@ -9505,6 +9505,38 @@ func (msgs Messages) HistoryCopyResumeCommand() string {
 	return Catalog.Format(msgs.locale, "historyCopyResumeCommand", nil)
 }
 
+// HistoryDeleteCursorBody says "This deletes the chat from Cursor's database. It cannot be recovered. Other chats are left as they are."
+// in the language the app shows.
+//
+// History: confirmation body for deleting one Cursor IDE chat from
+// state.vscdb.
+func HistoryDeleteCursorBody() string { return In(i18n.Locale()).HistoryDeleteCursorBody() }
+
+// HistoryDeleteCursorBody says "This deletes the chat from Cursor's database. It cannot be recovered. Other chats are left as they are."
+// in the language of msgs.
+//
+// History: confirmation body for deleting one Cursor IDE chat from
+// state.vscdb.
+func (msgs Messages) HistoryDeleteCursorBody() string {
+	return Catalog.Format(msgs.locale, "historyDeleteCursorBody", nil)
+}
+
+// HistoryDeleteCursorConfirm says "Delete “{title}” from Cursor?"
+// in the language the app shows.
+//
+// History: confirmation title for deleting one Cursor IDE chat.
+func HistoryDeleteCursorConfirm(title string) string {
+	return In(i18n.Locale()).HistoryDeleteCursorConfirm(title)
+}
+
+// HistoryDeleteCursorConfirm says "Delete “{title}” from Cursor?"
+// in the language of msgs.
+//
+// History: confirmation title for deleting one Cursor IDE chat.
+func (msgs Messages) HistoryDeleteCursorConfirm(title string) string {
+	return Catalog.Format(msgs.locale, "historyDeleteCursorConfirm", map[string]any{"title": title})
+}
+
 // HistoryEmptyBody says "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor, ~/.grok and ~/.gemini/antigravity-cli, and never changes …"
 // in the language the app shows.
 //

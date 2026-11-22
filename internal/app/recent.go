@@ -225,7 +225,11 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 						// 右下角悬停时有删除（移到废纸篓）；固定行高，按钮出现时卡片不跳
 						ui.Row(c).Height(sz(20)).AlignItems(ui.Center).Children(func() {
 							ui.Column(c).Grow(1).Shrink(1).Children(func() { sessionMeta(c, s) })
-							if row.Hovered() && iconButtonSized(c, iconTrash, m.CommonMoveToTrash(), compactBox(), smallIcon()).Clicked() {
+							tip := m.CommonMoveToTrash()
+							if history.IsCursorIDEChat(s.Path) {
+								tip = m.CommonDelete()
+							}
+							if row.Hovered() && iconButtonSized(c, iconTrash, tip, compactBox(), smallIcon()).Clicked() {
 								a.trashListedSession(m, s)
 							}
 						})

@@ -681,6 +681,19 @@ func deleteMessages(ctx context.Context, tx *sql.Tx, session int64) error {
 	return err
 }
 
+// ForgetPath 从索引去掉这个路径。源记录已经删掉、这一轮 IDE 扫描又没读完时，列表也不会把它留着。
+func (x *Index) ForgetPath(ctx context.Context, path string) error {
+	var id int64
+	err := x.db.QueryRowContext(ctx, `SELECT id FROM sessions WHERE path=?`, path).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return x.deleteSession(ctx, id)
+}
+
 func (x *Index) deleteSession(ctx context.Context, id int64) error {
 	tx, err := x.db.BeginTx(ctx, nil)
 	if err != nil {

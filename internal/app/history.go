@@ -1136,6 +1136,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 			})
 		})
 		// 放不下时折行（英文），"显示工具调用"靠右
+		ide := history.IsCursorIDEChat(s.Path)
 		ui.Row(c).Gap(8).Wrap().Children(func() {
 			if d.Terminal != "" {
 				if pressable(accentButton(c, L(c).HistorySwitchToTerminal())).Clicked() {
@@ -1143,16 +1144,20 @@ func (a *app) sessionDetail(c *ui.Context) {
 						a.openTerminal(w.ID, d.Terminal)
 					}
 				}
-			} else if pressable(accentButton(c, L(c).HistoryContinueInPosse())).Tooltip(resumeCommand(s)).Clicked() {
+			} else if !ide && pressable(accentButton(c, L(c).HistoryContinueInPosse())).Tooltip(resumeCommand(s)).Clicked() {
 				a.resumeSession(L(c), s)
 			}
-			if pressable(textButton(c, L(c).HistoryCopyResumeCommand())).Tooltip(resumeCommand(s)).Clicked() {
+			if !ide && pressable(textButton(c, L(c).HistoryCopyResumeCommand())).Tooltip(resumeCommand(s)).Clicked() {
 				c.WriteClipboard(resumeCommand(s))
 			}
 			if pressable(textButton(c, L(c).HistoryCopyHandoff())).Tooltip(handoffText(s)).Clicked() {
 				c.WriteClipboard(handoffText(s))
 			}
-			if pressable(textButton(c, L(c).CommonMoveToTrash())).Clicked() {
+			label := L(c).CommonMoveToTrash()
+			if ide {
+				label = L(c).CommonDelete()
+			}
+			if pressable(textButton(c, label)).Clicked() {
 				a.askTrashSession(L(c), d)
 			}
 			ui.Row(c).Grow(1).Justify(ui.End).Children(func() {

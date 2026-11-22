@@ -613,6 +613,8 @@
   "historyContinueInPosse": "在 Posse 里继续",
   "historyCopyHandoff": "复制交接",
   "historyCopyResumeCommand": "复制恢复命令",
+  "historyDeleteCursorBody": "这条对话会从 Cursor 的数据库里删掉，不能恢复。其它对话不动。",
+  "historyDeleteCursorConfirm": "删除 Cursor 里的「{title}」？",
   "historyEmptyBody": "Posse 会读取 ~/.claude、~/.codex、~/.cursor、~/.grok、~/.gemini/antigravity-cli 里的会话记录，只读不改。",
   "historyEmptyTitle": "还没有会话记录",
   "historyFilterByAgent": "按 agent 筛选",
