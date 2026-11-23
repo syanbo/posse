@@ -30,6 +30,8 @@ func (s *Scanner) ScanContext(ctx context.Context) (pasted, made []Item, err err
 		return
 	}
 	switch s.agent {
+	case "zcode":
+		return s.scanZCode(ctx)
 	case "claude":
 		if s.dir == "" {
 			s.dir = ClaudeImageDir(s.sid, s.transcript)

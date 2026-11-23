@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"maps"
+	"os"
 	"os/exec"
 	"slices"
 	"time"
@@ -231,14 +233,22 @@ func (a *app) withImagePath(it imageItem, f func(path string) error) {
 	if a.remoteHost() {
 		return
 	}
-	if it.Tool == nil {
+	if it.Tool == nil && it.InlineMime == "" {
 		if err := f(it.Path); err != nil {
 			a.err = errtext.Text(err)
 		}
 		return
 	}
 	go func() {
-		path, err := media.WriteToolImage(it.Item)
+		var path string
+		var err error
+		if it.Video {
+			ctx, cancel := context.WithTimeout(a.windowContext(), 30*time.Second)
+			defer cancel()
+			path, err = media.WriteInlineVideo(ctx, it.Item, os.TempDir())
+		} else {
+			path, err = media.WriteToolImage(it.Item)
+		}
 		a.update(func() {
 			if err == nil {
 				err = f(path)

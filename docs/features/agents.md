@@ -12,6 +12,8 @@ hooks 注入方式和 hook 的 stdout 规则见根目录 AGENTS.md。这里是 a
 
 技能页可以按 ZCode 筛选。Posse 扫描用户和工作区的 `.zcode/skills`、`.agents/skills` 及 `skills.roots`，向上扫到工作树根。用户目录优先于项目，同级 `.zcode` 优先，关闭上层的同名技能后下层可生效。开关按 `SKILL.md` 的绝对路径写进用户的 `~/.zcode/cli/config.json` 或工作区的 `.zcode/config.json` 的 `skills` 对象。整体关闭技能时，界面显示关闭状态。随 CLI 或插件发放的技能由 ZCode 自己列出。 [ZCode 技能说明](https://github.com/zai-org/ZCode/blob/v4.0.0/apps/zcode-cli/docs/usage/08-skills.md)
 
+桌面和手机粘贴图片时，Posse 保存这次粘贴的图片，再把文件路径送给 ZCode，由它读取该文件。ZCode 记下的媒体从终端的「图片」面板及手机「图片与视频」查看。
+
 ## 通用行为
 
 - 终端里的 agent 不只看启动参数：每次标题变化时取 PTY 的前台进程组（`Terminal.Foreground`），按它的 argv 认出 agent（`agent.OfProcess`；argv[0] 只是 `agent` 时看 exec 的路径：grok 和 Cursor 都装了叫 `agent` 的入口，指向谁看 PATH），和记录的不同就换过来、清掉旧会话信息（`session.detectAgent`）。这样在 grok 退出后的 shell 里手动敲 `claude`，图标和状态都跟着变。换上的 agent 没有 hooks 时，会话 ID 从它的参数里取（`agent.SessionFromArgs`：`--session-id`、`--resume <UUID>`，Codex 是 `resume <UUID>`，Antigravity 是 `--conversation <UUID>`），技能与工具面板凭它找会话文件。grok 和没经过同名脚本启动的没有 hooks，状态靠 OSC 7501（见下一条），没报过 7501 时靠标题（`agent.TitleOnlyStatus`：Claude 以 `✳` 开头是空闲，转动的圆形符号或盲文转圈符是工作中；grok 盲文转圈符开头是工作中，含 `Action Required` 是待处理，其余是空闲）。前台换成 shell、编辑器等不是 agent 的程序时不改，免得 agent 临时让出前台被当成退出。agent 退出时把它从终端上摘掉，终端退回普通 shell（侧栏不再列出，标签换回终端图标）：收到退出事件（Claude 的 SessionEnd 带 `prompt_input_exit` 等、Codex/Cursor 的 SessionEnd），或记下的 agent 进程组组长已经不在、exec 成了别的程序（`session.goneAgentPg`，标题变化时和每 2 秒查一次，崩溃、被杀、没有 hooks 的 agent 靠它）。

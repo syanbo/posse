@@ -104,6 +104,57 @@ func TestDesktopMediaListAndPath(t *testing.T) {
 	}
 }
 
+func TestDesktopZCodeMediaPath(t *testing.T) {
+	d, _ := newTestDaemon(t)
+	socket := desktopServer(t, d)
+	viewer := rpc.DesktopIdentity{InstanceID: d.instanceID, ClientID: "viewer"}
+	const sid = "sess_01234567-89ab-4cde-8f01-23456789abcd"
+	storage := t.TempDir()
+	t.Setenv("ZCODE_STORAGE_DIR", storage)
+	dir := filepath.Join(storage, "cli", "artifacts", sid)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	sourceImage := filepath.Join(dir, "prompt-attachment-1-tool-result-01234567-89ab-4cde-8f01-23456789abcd.txt")
+	data := pasteImageParams(t, nil).Data
+	if err := os.WriteFile(sourceImage, []byte("data:image/png;base64,"+base64.StdEncoding.EncodeToString(data)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var list rpc.MediaListResult
+	if err := mediaTestCall(t.Context(), socket, viewer, "media.list", rpc.MediaSource{Agent: "zcode", SessionID: sid}, &list); err != nil {
+		t.Fatal(err)
+	}
+	if !list.Found || len(list.Pasted) != 1 {
+		t.Fatalf("unexpected media list: %+v", list)
+	}
+	var path rpc.MediaPathResult
+	params := rpc.MediaPathParams{Item: list.Pasted[0]}
+	if err := mediaTestCall(t.Context(), socket, viewer, "media.path", params, &path); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(path.Path); err != nil || !bytes.Equal(got, data) {
+		t.Fatalf("ZCode artifact did not yield the original image: %v", err)
+	}
+	video := []byte("encoded video fixture")
+	sourceVideo := filepath.Join(dir, "video-tool-result-01234567-89ab-4cde-8f01-23456789abce.txt")
+	if err := os.WriteFile(sourceVideo, []byte("data:video/mp4;base64,"+base64.StdEncoding.EncodeToString(video)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := mediaTestCall(t.Context(), socket, viewer, "media.list", rpc.MediaSource{Agent: "zcode", SessionID: sid}, &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Made) != 1 || !list.Made[0].Video {
+		t.Fatalf("encoded video absent from media list: %+v", list.Made)
+	}
+	params = rpc.MediaPathParams{Item: list.Made[0], Original: true}
+	if err := mediaTestCall(t.Context(), socket, viewer, "media.path", params, &path); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(path.Path); err != nil || !bytes.Equal(got, video) || filepath.Ext(path.Path) != ".mp4" {
+		t.Fatalf("desktop download did not receive the decoded video: %v", err)
+	}
+}
+
 func TestDesktopMediaValidation(t *testing.T) {
 	d, _ := newTestDaemon(t)
 	socket := desktopServer(t, d)

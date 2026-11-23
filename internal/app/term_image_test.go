@@ -154,6 +154,24 @@ func TestLocalPasteImage(t *testing.T) {
 	}
 }
 
+func TestLocalZCodePasteImage(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	a := &app{}
+	v, conn := recTerminal(t, a)
+	a.workspaces = []workspace{{Terminals: []terminalInfo{{ID: v.id, Agent: "zcode"}}}}
+	input := clipboardTestPNG(t)
+	snapshot := bytes.Clone(input)
+	a.pasteImage(v, input)
+	input[0] = 0
+	waitFileUpdate(t, a)
+	a.runPending()
+	path := sent(t, conn)
+	got, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, snapshot) {
+		t.Fatalf("ZCode did not receive the image snapshot: %v", err)
+	}
+}
+
 func TestTargetPasteFiles(t *testing.T) {
 	for _, mode := range []string{"success", "failure", "viewer"} {
 		t.Run(mode, func(t *testing.T) {

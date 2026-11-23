@@ -17,7 +17,7 @@ import '../ui/widgets.dart';
 import '../workspace/models.dart';
 
 /// 能列图片和视频的 agent，同桌面图片面板。
-const mediaAgents = {'claude', 'codex', 'grok', 'cursor', 'antigravity'};
+const mediaAgents = {'claude', 'codex', 'grok', 'cursor', 'antigravity', 'zcode'};
 
 bool hasMedia(SessionTab tab) =>
     mediaAgents.contains(tab.agent) && (tab.sessionId?.isNotEmpty ?? false);

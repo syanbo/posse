@@ -97,6 +97,65 @@ func TestSessionMedia(t *testing.T) {
 	}
 }
 
+func TestZCodeSessionMediaDecodesInlineImage(t *testing.T) {
+	const sid = "sess_01234567-89ab-4cde-8f01-23456789abcd"
+	storage := t.TempDir()
+	t.Setenv("ZCODE_STORAGE_DIR", storage)
+	dir := filepath.Join(storage, "cli", "artifacts", sid)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 3, 2))); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "prompt-attachment-1-tool-result-01234567-89ab-4cde-8f01-23456789abcd.txt")
+	if err := os.WriteFile(path, []byte("data:image/png;base64,"+base64.StdEncoding.EncodeToString(buf.Bytes())), 0600); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{}
+	a := mediaParams{Agent: "zcode", SessionID: sid}
+	list, err := s.mediaList(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := list.(map[string]any)["pasted"].([]map[string]any)
+	if len(items) != 1 || items[0]["size"] != nil {
+		t.Fatalf("expected one decoded image with size supplied by read: %+v", items)
+	}
+	a.ID = items[0]["id"].(string)
+	res, err := s.mediaRead(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	part := res.(map[string]any)
+	if !bytes.Equal(part["content"].([]byte), buf.Bytes()) || part["mime"] != "image/png" {
+		t.Fatal("mobile read did not return the original PNG")
+	}
+	video := []byte("encoded video fixture")
+	path = filepath.Join(dir, "video-tool-result-01234567-89ab-4cde-8f01-23456789abce.txt")
+	if err := os.WriteFile(path, []byte("data:video/mp4;base64,"+base64.StdEncoding.EncodeToString(video)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	list, err = s.mediaList(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items = list.(map[string]any)["made"].([]map[string]any)
+	if len(items) != 1 || items[0]["kind"] != "video" || items[0]["size"] != nil {
+		t.Fatalf("unexpected video list: %+v", items)
+	}
+	a.ID, a.Offset, a.Limit = items[0]["id"].(string), 4, 7
+	res, err = s.mediaRead(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	part = res.(map[string]any)
+	if !bytes.Equal(part["content"].([]byte), video[4:11]) || part["mime"] != "video/mp4" || part["size"] != int64(len(video)) {
+		t.Fatalf("unexpected video range: %+v", part)
+	}
+}
+
 func TestCodexSessionMediaSnapshots(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	var buf bytes.Buffer

@@ -24,6 +24,40 @@ import (
 
 const zcodeHistoryPrefix = "zcode://"
 
+// ZCodeArtifactRefs 读取当前会话已保存在消息里的产物引用。分叉会复制引用，源文件留在另一个会话目录。
+func ZCodeArtifactRefs(ctx context.Context, home, sessionID string) ([]string, error) {
+	path := agent.ZCodeDatabase(home)
+	if fi, err := os.Stat(path); err != nil || !fi.Mode().IsRegular() {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	u := url.URL{Scheme: "file", Path: path, RawQuery: "mode=ro&_pragma=busy_timeout(500)"}
+	db, err := sql.Open("sqlite", u.String())
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(ctx, `SELECT DISTINCT j.value FROM part p,
+		json_tree(CASE WHEN json_valid(p.data) THEN p.data ELSE '{}' END) j
+		WHERE p.session_id = ? AND instr(p.data, 'zcode-artifact://') > 0
+		AND j.type = 'text' AND j.value LIKE 'zcode-artifact://%' AND length(j.value) <= 128`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var refs []string
+	for rows.Next() {
+		var ref string
+		if err := rows.Scan(&ref); err != nil {
+			return nil, err
+		}
+		refs = append(refs, ref)
+	}
+	return refs, rows.Err()
+}
+
 // snapshotZCodeDB 通过 SQLite 读主库及 WAL。app-server 启动时会迁移库，只把副本交给它。
 func snapshotZCodeDB(ctx context.Context, path, dest string) error {
 	u := url.URL{Scheme: "file", Path: path, RawQuery: "mode=ro&_pragma=busy_timeout(500)"}

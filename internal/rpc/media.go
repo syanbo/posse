@@ -18,7 +18,8 @@ type MediaListResult struct {
 }
 
 type MediaPathParams struct {
-	Item media.Item `json:"item"`
+	Item     media.Item `json:"item"`
+	Original bool       `json:"original,omitempty"`
 }
 
 type MediaPathResult struct {

@@ -150,7 +150,7 @@ func (s *Server) mediaList(a mediaParams) (any, error) {
 			if it.Tag != "" {
 				row["tag"] = it.Tag
 			}
-			if it.Path != "" {
+			if it.Path != "" && it.InlineMime == "" {
 				if fi, err := os.Stat(it.Path); err == nil {
 					row["size"] = fi.Size()
 				}
@@ -201,7 +201,14 @@ func (s *Server) mediaRead(a mediaParams) (any, error) {
 	}
 	var r io.ReaderAt
 	var size int64
-	if it.Video {
+	if it.Video && it.InlineMime != "" {
+		v, err := media.OpenInlineVideo(it)
+		if err != nil {
+			return nil, err
+		}
+		defer v.Close()
+		r, size = v, v.Size()
+	} else if it.Video {
 		f, err := os.Open(it.Path)
 		if err != nil {
 			return nil, err

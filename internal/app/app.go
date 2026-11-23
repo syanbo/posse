@@ -1269,8 +1269,7 @@ func (a *app) attachView(id string) *termView {
 		OnKey:       func(mods ui.Modifiers, key ui.Key) bool { return a.termKey(v, id, mods, key) },
 		OnText:      func(text string) bool { return a.termFindText(v, text) },
 		// 剪贴板里只有图片时 Cmd+V 拿不到文本：和 Orca 一样，由 Posse 把图片存成临时文件、粘贴它的路径，
-		// 所有 agent 终端都这样。Claude 和 Codex 会把粘贴的图片路径当成附件，其他 agent 能按路径读图。
-		// 让它们收 Ctrl+V 自己读剪贴板也行，但读剪贴板要调系统命令，粘贴时界面会闪一下
+		// Claude 和 Codex 会把粘贴的图片路径当成附件。
 		ContextMenu: func(x, y float32) {
 			a.termCtx, a.termCtxID = menuState{open: true, x: x, y: y}, id
 		},
@@ -1290,11 +1289,16 @@ func (a *app) attachView(id string) *termView {
 			if text, _ := d.Read(transfer.Text); len(text) > 0 {
 				return false
 			}
-			if _, t := a.findTerminal(id); t == nil || t.Agent == "" {
+			_, t := a.findTerminal(id)
+			if t == nil || t.Agent == "" {
 				return false
 			}
-			png := mygo.Clipboard.ReadImage()
+			png, _ := d.Read(transfer.PNG)
 			if len(png) == 0 {
+				if t.Agent == "zcode" {
+					// ZCode 的 Ctrl+V 会稍后重读系统剪贴板，无法绑定这次粘贴的内容。
+					return false
+				}
 				// 不是图片（比如复制的是文件），交给程序自己处理
 				v.term.Send([]byte{0x16})
 				return true

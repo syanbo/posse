@@ -255,6 +255,8 @@ func (a *app) openTargetImage(it imageItem, copy bool) {
 		path, err := it.Path, error(nil)
 		if !it.Video {
 			path, err = s.request.client.MediaPath(ctx, it.Item)
+		} else if it.InlineMime != "" {
+			path, err = s.request.client.MediaOriginal(ctx, it.Item)
 		}
 		a.update(func() {
 			if !valid() {

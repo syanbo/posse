@@ -193,6 +193,11 @@ func validateMediaItem(it media.Item) error {
 	if len(it.Key) > 16384 || len(it.Label) > 4096 || len(it.Tag) > 128 {
 		return rpc.Errorf(rpc.CodeBadRequest, "invalid session media item")
 	}
+	if it.InlineMime != "" {
+		if it.Tool != nil || it.Video && !media.IsInlineVideoMime(it.InlineMime) || !it.Video && !media.IsInlineImageMime(it.InlineMime) {
+			return rpc.Errorf(rpc.CodeBadRequest, "invalid session media item")
+		}
+	}
 	if it.Tool == nil {
 		return filePath(it.Path)
 	}
@@ -235,7 +240,7 @@ func (d *Daemon) mediaPath(ctx context.Context, raw json.RawMessage) (any, error
 	if err := validateMediaItem(it); err != nil {
 		return nil, err
 	}
-	if it.Tool == nil && !it.Video {
+	if it.Tool == nil && !it.Video && it.InlineMime == "" {
 		path := it.Path
 		if strings.Contains("/"+path+"/", "/../") {
 			// 文档入口会清理父目录段，先按目标文件系统解析，避免 link/.. 指向另一张图。
@@ -278,9 +283,33 @@ func (d *Daemon) mediaPath(ctx context.Context, raw json.RawMessage) (any, error
 			return nil, mediaReadError(ctx, err)
 		}
 		version := string(identity) + ":" + mediaDiskIdentity(fi)
-		key = fmt.Sprintf("video:%x", sha256.Sum256([]byte(version)))
+		key = fmt.Sprintf("video:%t:%x", p.Original, sha256.Sum256([]byte(version)))
 		if path := s.cached(key); path != "" {
 			return rpc.MediaPathResult{Path: path}, ctx.Err()
+		}
+		if p.Original {
+			if it.InlineMime == "" {
+				return rpc.MediaPathResult{Path: it.Path}, ctx.Err()
+			}
+			path, err := media.WriteInlineVideo(ctx, it, s.root)
+			if err != nil {
+				return nil, mediaReadError(ctx, err)
+			}
+			after, err := mediaFileInfo(it.Path, -1)
+			if err != nil || !mediaUnchanged(fi, after) {
+				os.Remove(path)
+				return nil, fileRPCError(files.ErrChanged)
+			}
+			decoded, err := mediaFileInfo(path, files.MaxSize)
+			if err == nil {
+				err = s.makeRoom(ctx, decoded.Size())
+			}
+			if err != nil {
+				os.Remove(path)
+				return nil, mediaReadError(ctx, err)
+			}
+			s.remember(key, path, decoded.Size())
+			return rpc.MediaPathResult{Path: path}, nil
 		}
 		work, err := os.MkdirTemp(s.root, "thumbnail-*")
 		if err != nil {
@@ -288,7 +317,15 @@ func (d *Daemon) mediaPath(ctx context.Context, raw json.RawMessage) (any, error
 		}
 		defer os.RemoveAll(work)
 		thumbCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		path, err := s.thumbnail(thumbCtx, it.Path, work)
+		source := it.Path
+		if it.InlineMime != "" {
+			source, err = media.WriteInlineVideo(thumbCtx, it, work)
+			if err != nil {
+				cancel()
+				return nil, mediaReadError(ctx, err)
+			}
+		}
+		path, err := s.thumbnail(thumbCtx, source, work)
 		cancel()
 		if err != nil {
 			return nil, mediaReadError(ctx, err)
@@ -318,6 +355,15 @@ func (d *Daemon) mediaPath(ctx context.Context, raw json.RawMessage) (any, error
 		after, err := mediaFileInfo(it.Path, -1)
 		if err != nil || !mediaUnchanged(fi, after) {
 			return nil, fileRPCError(files.ErrChanged)
+		}
+	} else if it.InlineMime != "" {
+		data, err = media.ReadInlineImage(ctx, it)
+		if err != nil {
+			return nil, mediaReadError(ctx, err)
+		}
+		key = fmt.Sprintf("image:%x:%x", sha256.Sum256(identity), sha256.Sum256(data))
+		if path := s.cached(key); path != "" {
+			return rpc.MediaPathResult{Path: path}, ctx.Err()
 		}
 	} else {
 		data, err = history.ReadToolImageContext(ctx, it.Src, *it.Tool, files.MaxSize)
@@ -366,14 +412,14 @@ func (s *mediaState) remove(key string) {
 	delete(s.artifacts, key)
 }
 
-func (s *mediaState) keep(ctx context.Context, key string, data []byte) (string, error) {
-	if int64(len(data)) > files.MaxSize || int64(len(data)) > s.maxBytes {
-		return "", fmt.Errorf("file exceeds the maximum size of %d bytes", min(int64(files.MaxSize), s.maxBytes))
+func (s *mediaState) makeRoom(ctx context.Context, size int64) error {
+	if size > files.MaxSize || size > s.maxBytes {
+		return fmt.Errorf("file exceeds the maximum size of %d bytes", min(int64(files.MaxSize), s.maxBytes))
 	}
 	if err := ctx.Err(); err != nil {
-		return "", err
+		return err
 	}
-	for len(s.artifacts) >= s.maxFiles || s.bytes+int64(len(data)) > s.maxBytes {
+	for len(s.artifacts) >= s.maxFiles || s.bytes+size > s.maxBytes {
 		oldest, age := "", ^uint64(0)
 		for k, v := range s.artifacts {
 			if v.used < age {
@@ -381,6 +427,19 @@ func (s *mediaState) keep(ctx context.Context, key string, data []byte) (string,
 			}
 		}
 		s.remove(oldest)
+	}
+	return nil
+}
+
+func (s *mediaState) remember(key, path string, size int64) {
+	s.clock++
+	s.artifacts[key] = mediaArtifact{path: path, size: size, used: s.clock}
+	s.bytes += size
+}
+
+func (s *mediaState) keep(ctx context.Context, key string, data []byte) (string, error) {
+	if err := s.makeRoom(ctx, int64(len(data))); err != nil {
+		return "", err
 	}
 	ext := ".png"
 	switch http.DetectContentType(data) {
@@ -418,9 +477,7 @@ func (s *mediaState) keep(ctx context.Context, key string, data []byte) (string,
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	s.clock++
-	s.artifacts[key] = mediaArtifact{path: f.Name(), size: int64(len(data)), used: s.clock}
-	s.bytes += int64(len(data))
+	s.remember(key, f.Name(), int64(len(data)))
 	kept = true
 	return f.Name(), nil
 }

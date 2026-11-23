@@ -43,20 +43,21 @@ const (
 
 // Item 是会话里的一张图片或一个视频。
 type Item struct {
-	Key   string // 粘贴的和 Codex 的是文件路径，Claude 工具返回的是它在会话文件里的位置，视频是路径加修改时间
-	N     int    // 粘贴的图片的序号
-	Label string // 文件名、工具名或 #序号；没有可显示的名字时为空，由 Tag 说是哪一类
-	Tag   string // TagGenerated、TagCodeOutput、TagPasted：窗口和手机按自己的语言写出这一类的叫法
-	At    time.Time
-	Path  string             // 磁盘上的图片或视频
-	Tool  *history.ToolImage // 工具返回的图片，内容在会话文件 Src 里
-	Src   string
-	Video bool
+	Key        string // 粘贴的和 Codex 的是文件路径，Claude 工具返回的是它在会话文件里的位置，视频是路径加修改时间
+	N          int    // 粘贴的图片的序号
+	Label      string // 文件名、工具名或 #序号；没有可显示的名字时为空，由 Tag 说是哪一类
+	Tag        string // TagGenerated、TagCodeOutput、TagPasted：窗口和手机按自己的语言写出这一类的叫法
+	At         time.Time
+	Path       string             // 磁盘上的图片或视频
+	Tool       *history.ToolImage // 工具返回的图片，内容在会话文件 Src 里
+	Src        string
+	Video      bool
+	InlineMime string `json:",omitempty"` // 磁盘文件保存了 data URL，打开时需解码。
 }
 
 // Supported 报告能不能列这个 agent 的图片。
 func Supported(agent string) bool {
-	return agent == "claude" || agent == "codex" || agent == "grok" || agent == "cursor" || agent == "antigravity"
+	return agent == "claude" || agent == "codex" || agent == "grok" || agent == "cursor" || agent == "antigravity" || agent == "zcode"
 }
 
 // Source 是图片从哪来：磁盘上的文件，或 agent 读的文件、返回它的工具。
@@ -72,6 +73,9 @@ func (it Item) Source() string {
 
 // Mime 是图片的类型；视频和认不出的为空。
 func (it Item) Mime() string {
+	if it.InlineMime != "" {
+		return it.InlineMime
+	}
 	if it.Video {
 		return ""
 	}
@@ -98,6 +102,7 @@ type Scanner struct {
 	images                 *history.ImageScanner
 	videos                 *history.VideoScanner
 	digests                map[string]fileDigest
+	zcodeFound             bool
 }
 
 func NewScanner(agent, sid, transcript string) *Scanner {
@@ -106,7 +111,7 @@ func NewScanner(agent, sid, transcript string) *Scanner {
 
 // Found 报告找没找到会话文件：没找到时列不出内嵌的图片，不能说成会话里没有图片。
 func (s *Scanner) Found() bool {
-	return s != nil && s.images != nil
+	return s != nil && (s.images != nil || s.zcodeFound)
 }
 
 // Same 报告 s 是不是这个会话的；会话 ID 和会话文件是 agent 启动后才报上来的，变了要换一个 Scanner。nil 不是任何会话的。
@@ -117,6 +122,9 @@ func (s *Scanner) Same(agent, sid, transcript string) bool {
 // Scan 返回粘贴的和 agent 生成的，都是新的在前。
 func (s *Scanner) Scan() (pasted, made []Item) {
 	switch s.agent {
+	case "zcode":
+		pasted, made, _ = s.scanZCode(context.Background())
+		return pasted, made
 	case "claude":
 		if s.dir == "" {
 			s.dir = ClaudeImageDir(s.sid, s.transcript)
@@ -507,10 +515,10 @@ func Decode(it Item, width int) (*image.RGBA, error) {
 		}
 		return ScaledImage(thumb, width)
 	}
-	if it.Tool == nil {
+	if it.Tool == nil && it.InlineMime == "" {
 		return ScaledImage(it.Path, width)
 	}
-	b, err := history.ReadToolImage(it.Src, *it.Tool)
+	b, err := ReadImage(it)
 	if err != nil {
 		return nil, err
 	}
@@ -522,6 +530,9 @@ func Decode(it Item, width int) (*image.RGBA, error) {
 func ReadImage(it Item) ([]byte, error) {
 	if it.Video {
 		return nil, errors.New("not an image")
+	}
+	if it.InlineMime != "" {
+		return ReadInlineImage(context.Background(), it)
 	}
 	if it.Tool == nil {
 		return os.ReadFile(it.Path)
@@ -550,17 +561,24 @@ func VideoThumb(it Item) (string, error) {
 	defer os.RemoveAll(tmp)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if err := exec.CommandContext(ctx, "/usr/bin/qlmanage", "-t", "-s", strconv.Itoa(videoThumbWidth), "-o", tmp, it.Path).Run(); err != nil {
+	path := it.Path
+	if it.InlineMime != "" {
+		path, err = WriteInlineVideo(ctx, it, tmp)
+		if err != nil {
+			return "", err
+		}
+	}
+	if err := exec.CommandContext(ctx, "/usr/bin/qlmanage", "-t", "-s", strconv.Itoa(videoThumbWidth), "-o", tmp, path).Run(); err != nil {
 		return "", err
 	}
 	// qlmanage 取不到缩略图时退出码也是 0，只是不出文件
-	if err := os.Rename(filepath.Join(tmp, filepath.Base(it.Path)+".png"), out); err != nil {
+	if err := os.Rename(filepath.Join(tmp, filepath.Base(path)+".png"), out); err != nil {
 		return "", err
 	}
 	return out, nil
 }
 
-// WriteToolImage 把工具返回的图片从会话文件写到临时目录，返回写出的路径。
+// WriteToolImage 把编码在会话产物里的图片写到临时目录，返回写出的路径。
 func WriteToolImage(it Item) (string, error) {
 	b, err := ReadImage(it)
 	if err != nil {
