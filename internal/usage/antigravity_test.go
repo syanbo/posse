@@ -47,3 +47,26 @@ func TestAntigravityRejectsUnrelatedOutput(t *testing.T) {
 		}
 	}
 }
+
+func TestAntigravityStatusQuotaPreservesOtherWindows(t *testing.T) {
+	s := Open(t.TempDir())
+	now := time.Now().Truncate(time.Second)
+	reset := now.Add(time.Hour)
+	s.Update(Usage{Agent: "antigravity", UpdatedAt: now.UnixMilli(), Windows: []Window{
+		{QuotaID: "a", Name: "Gemini", Percent: 10, Minutes: 10080, ResetsAt: reset.UnixMilli()},
+		{QuotaID: "b", Name: "Claude and GPT", Percent: 20, Minutes: 300, ResetsAt: reset.UnixMilli()},
+	}})
+	remaining := 0.75
+	update := map[string]AntigravityStatusQuota{"a": {Remaining: &remaining, Reset: reset.Format(time.RFC3339)}}
+	if !s.UpdateAntigravityStatusQuota(update, now.Add(time.Second)) {
+		t.Fatal("new quota was ignored")
+	}
+	remaining = 0.875
+	if s.UpdateAntigravityStatusQuota(update, now.Add(2*time.Second)) {
+		t.Fatal("another process's cached quota reversed the reading")
+	}
+	windows := s.List(now)[0].Windows
+	if len(windows) != 2 || windows[0].Name != "Gemini" || windows[0].Percent != 25 || windows[1].Percent != 20 {
+		t.Fatalf("partial status line replaced named windows: %+v", windows)
+	}
+}

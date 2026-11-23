@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -12,10 +13,22 @@ var antigravityValueFlags = []string{"--add-dir", "--agent", "--conversation", "
 const antigravityStrict = "strict"
 const antigravityStrictSettings = `{"toolPermission":"` + antigravityStrict + `"}`
 
+func (l Launcher) antigravityLaunchArgs() []string {
+	settings := map[string]json.RawMessage{}
+	args := l.antigravityPermissions(settings, false)
+	l.addAntigravityStatusLine(settings)
+	if len(settings) == 0 {
+		return args
+	}
+	encoded, _ := json.Marshal(settings)
+	return append(args, "--settings", Quote(string(encoded)))
+}
+
 // agy 的选项值可能长得像另一个选项，且多次给 --settings 时只有最后一个生效。
 func (l Launcher) manualAntigravityArgs(args []string) []string {
 	settingsIndex := -1
 	var settingsValue, settingsPrefix string
+	explicitPermission := false
 	for i := 0; i < len(args); i++ {
 		flag, value, inline := strings.Cut(args[i], "=")
 		if flag == "--" {
@@ -33,7 +46,7 @@ func (l Launcher) manualAntigravityArgs(args []string) []string {
 		}
 		switch flag {
 		case "--dangerously-skip-permissions", "--mode", "--sandbox":
-			return args
+			explicitPermission = true
 		}
 		if !inline && slices.Contains(antigravityValueFlags, flag) {
 			if i+1 == len(args) {
@@ -46,35 +59,103 @@ func (l Launcher) manualAntigravityArgs(args []string) []string {
 			settingsIndex, settingsValue, settingsPrefix = i, value, prefix
 		}
 	}
-	mode := PermissionMode(l.Home)
-	if settingsIndex == -1 {
-		if mode == PermissionAsk {
-			return append([]string{"--settings", antigravityStrictSettings}, args...)
-		}
-		return append(slices.Clone(skipArgs["antigravity"]), args...)
-	}
-
 	// 文件和无效输入交给 agy 本身读取、报错，避免把用户文件的内容展开到进程参数。
-	var settings map[string]json.RawMessage
-	if json.Unmarshal([]byte(settingsValue), &settings) != nil || settings == nil {
+	settings := map[string]json.RawMessage{}
+	if settingsIndex >= 0 && (json.Unmarshal([]byte(settingsValue), &settings) != nil || settings == nil) {
 		return args
 	}
+	keys := len(settings)
+	extra := l.antigravityPermissions(settings, explicitPermission)
+	updatedStatus := l.addAntigravityStatusLine(settings)
+	if settingsIndex < 0 && len(settings) > 0 {
+		encoded, _ := json.Marshal(settings)
+		return append(append(extra, "--settings", string(encoded)), args...)
+	}
+	if settingsIndex >= 0 && (updatedStatus || len(settings) != keys) {
+		encoded, _ := json.Marshal(settings)
+		args = slices.Clone(args)
+		args[settingsIndex] = settingsPrefix + string(encoded)
+	}
+	return append(extra, args...)
+}
+
+func (l Launcher) antigravityPermissions(settings map[string]json.RawMessage, explicit bool) []string {
 	for _, key := range []string{"toolPermission", "agentMode", "enableTerminalSandbox"} {
-		if _, explicit := settings[key]; explicit {
-			return args
+		if _, present := settings[key]; present {
+			explicit = true
 		}
 	}
-	if mode == PermissionSkip {
-		return append(slices.Clone(skipArgs["antigravity"]), args...)
+	if explicit {
+		return nil
+	}
+	if PermissionMode(l.Home) == PermissionSkip {
+		return slices.Clone(skipArgs["antigravity"])
 	}
 	settings["toolPermission"] = json.RawMessage(`"` + antigravityStrict + `"`)
-	merged, err := json.Marshal(settings)
-	if err != nil {
-		return args
+	return nil
+}
+
+// addAntigravityStatusLine 沿用用户原来的显示选项。新加的空状态栏堆在原生状态栏下方。
+func (l Launcher) addAntigravityStatusLine(settings map[string]json.RawMessage) bool {
+	if l.Exe == "" {
+		return false
 	}
-	updated := slices.Clone(args)
-	updated[settingsIndex] = settingsPrefix + string(merged)
-	return updated
+	raw, inline := settings["statusLine"]
+	if !inline {
+		var ok bool
+		raw, ok = AntigravityUserStatusLine()
+		if !ok {
+			return false
+		}
+	}
+	status := map[string]json.RawMessage{}
+	var original AntigravityStatusLine
+	if raw != nil && (json.Unmarshal(raw, &status) != nil || status == nil || json.Unmarshal(raw, &original) != nil) {
+		return false
+	}
+	if original.Enabled != nil && !*original.Enabled {
+		return false
+	}
+	command := Quote(l.Exe) + " statusline antigravity"
+	if original.Command == command || strings.HasPrefix(original.Command, command+" ") {
+		return false
+	}
+	switch {
+	case original.Command == "":
+		status["stack_with_default"] = json.RawMessage("true")
+	case inline:
+		command += " -- " + Quote(original.Command)
+	default:
+		// 用户配置文件里的命令在运行时读取，免得把原文暴露到新的进程参数里。
+		command += " --user"
+	}
+	status["command"], _ = json.Marshal(command)
+	settings["statusLine"], _ = json.Marshal(status)
+	return true
+}
+
+type AntigravityStatusLine struct {
+	Command string `json:"command"`
+	Enabled *bool  `json:"enabled"`
+}
+
+// AntigravityUserStatusLine 只读用户的状态栏设置。找不到配置文件表示用原生状态栏。
+func AntigravityUserStatusLine() (json.RawMessage, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, false
+	}
+	b, err := os.ReadFile(filepath.Join(home, ".gemini", "antigravity-cli", "settings.json"))
+	if os.IsNotExist(err) {
+		return nil, true
+	}
+	var config struct {
+		StatusLine json.RawMessage `json:"statusLine"`
+	}
+	if err != nil || json.Unmarshal(b, &config) != nil {
+		return nil, false
+	}
+	return config.StatusLine, true
 }
 
 // AntigravityAddedDirs 从 agy 的启动参数取 --add-dir，跳过提示词等选项值。

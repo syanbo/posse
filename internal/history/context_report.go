@@ -55,6 +55,15 @@ func ReportClaudeContext(home string, payload []byte) error {
 		r.Context = Context{}
 	}
 	r.Path = TranscriptPath("claude", in.Session, in.Path)
+	return writeReportedContext(home, in.Session, r, false)
+}
+
+// ReportAntigravityContext 保存 agy 的官方读数，包括首次请求前或压缩后的空读数。
+func ReportAntigravityContext(home, session, path string, c Context, at time.Time) error {
+	return writeReportedContext(home, "antigravity:"+session, contextReport{Context: c, Path: path, At: at.UnixNano()}, true)
+}
+
+func writeReportedContext(home, key string, r contextReport, dedupe bool) error {
 	if f, err := os.Open(r.Path); err == nil {
 		defer f.Close()
 		if fi, err := f.Stat(); err == nil {
@@ -67,9 +76,25 @@ func ReportClaudeContext(home string, payload []byte) error {
 	if err != nil {
 		return err
 	}
-	path := contextReportPath(home, in.Session)
-	if old, err := os.ReadFile(path); err == nil && string(old) == string(b) {
-		return nil
+	path := contextReportPath(home, key)
+	if old, err := os.ReadFile(path); err == nil {
+		if bytes.Equal(old, b) {
+			return nil
+		}
+		if dedupe {
+			var prev contextReport
+			if json.Unmarshal(old, &prev) == nil {
+				if prev.At >= r.At {
+					return nil
+				}
+				if r.Snapshot || r.At-prev.At < int64(30*time.Second) {
+					prev.At = r.At
+					if comparable, err := json.Marshal(prev); err == nil && bytes.Equal(comparable, b) {
+						return nil
+					}
+				}
+			}
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
@@ -112,10 +137,18 @@ func contextCompleteOffset(f *os.File, end int64) (int64, error) {
 // ReadReportedContext 只有新 usage、压缩或文件重写才使官方读数失效，普通日志不影响它。
 // 返回 true 也可能是明确的未知（例如刚压缩），调用方不应回退到旧的会话记录。
 func ReadReportedContext(home, agent, session, path string) (Context, bool) {
-	if agent != "claude" || session == "" {
+	if session == "" {
 		return Context{}, false
 	}
-	b, err := os.ReadFile(contextReportPath(home, session))
+	key := session
+	switch agent {
+	case "antigravity":
+		key = "antigravity:" + session
+	case "claude":
+	default:
+		return Context{}, false
+	}
+	b, err := os.ReadFile(contextReportPath(home, key))
 	if err != nil {
 		return Context{}, false
 	}
@@ -156,6 +189,13 @@ func ReadReportedContext(home, agent, session, path string) (Context, bool) {
 	compact, changed := false, false
 	for scan.Scan() {
 		line := scan.Bytes()
+		if agent == "antigravity" {
+			if _, ok := antigravityContext(line); ok {
+				changed = true
+				break
+			}
+			continue
+		}
 		if claudeCompactBoundary(line) {
 			compact = true
 		}

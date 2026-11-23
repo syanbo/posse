@@ -430,7 +430,14 @@ func (d *Daemon) historyShow(ctx context.Context, raw json.RawMessage) (any, err
 	}
 	res := historyShowResult{Session: s, Messages: msgs}
 	if p.Context {
-		value, _ := history.ReadContext(s.Agent, s.Path, s.Model)
+		var value history.Context
+		var ok bool
+		if s.Agent == "antigravity" {
+			value, ok = history.ReadReportedContext(d.cfg.Home, s.Agent, s.ID, s.Path)
+		}
+		if !ok {
+			value, _ = history.ReadContext(s.Agent, s.Path, s.Model)
+		}
 		// 空对象表示目标端已查过但没有用量；nil 留给不支持此字段的旧服务端。
 		res.Context = &value
 	}

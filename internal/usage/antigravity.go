@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -31,12 +32,10 @@ func FetchAntigravity(ctx context.Context, executable string, env []string, now 
 }
 
 type antigravityBucket struct {
-	Name      string   `json:"name"`
-	ID        string   `json:"id"`
-	Window    string   `json:"window"`
-	Remaining *float64 `json:"remaining_fraction"`
-	Reset     string   `json:"reset_time"`
-	Disabled  bool     `json:"disabled"`
+	AntigravityStatusQuota
+	Name   string `json:"name"`
+	ID     string `json:"id"`
+	Window string `json:"window"`
 }
 
 func parseAntigravityUsage(raw []byte, now time.Time) (Usage, error) {
@@ -84,7 +83,7 @@ func parseAntigravityUsage(raw []byte, now time.Time) (Usage, error) {
 			if name == "" {
 				continue
 			}
-			w := Window{Name: name, Minutes: minutes, Percent: (1 - *b.Remaining) * 100}
+			w := Window{QuotaID: b.ID, Name: name, Minutes: minutes, Percent: (1 - *b.Remaining) * 100}
 			if reset, err := time.Parse(time.RFC3339Nano, b.Reset); err == nil && reset.UnixMilli() > 0 {
 				w.ResetsAt = reset.UnixMilli()
 			}
@@ -97,8 +96,50 @@ func parseAntigravityUsage(raw []byte, now time.Time) (Usage, error) {
 	return u, nil
 }
 
-func (b antigravityBucket) hasFraction() bool {
-	return !b.Disabled && b.Remaining != nil && *b.Remaining >= 0 && *b.Remaining <= 1
+type AntigravityStatusQuota struct {
+	Remaining *float64 `json:"remaining_fraction"`
+	Reset     string   `json:"reset_time"`
+	Disabled  bool     `json:"disabled"`
+}
+
+// UpdateAntigravityStatusQuota 把状态栏读数合并到 /usage 确认过的额度池。
+func (s *Store) UpdateAntigravityStatusQuota(quota map[string]AntigravityStatusQuota, now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.f.Usages, func(u Usage) bool { return u.Agent == "antigravity" })
+	if i < 0 || s.f.Off {
+		return false
+	}
+	u := s.f.Usages[i]
+	if u.UpdatedAt > now.UnixMilli() {
+		return false
+	}
+	windows := slices.Clone(u.Windows)
+	for j, w := range windows {
+		q, ok := quota[w.QuotaID]
+		if !ok || w.QuotaID == "" || !q.hasFraction() {
+			continue
+		}
+		reset, err := time.Parse(time.RFC3339Nano, q.Reset)
+		ms := reset.UnixMilli()
+		percent := (1 - *q.Remaining) * 100
+		// 多个 agy 终端各有配置缓存，同一个计费窗口内旧读数不能把消耗往回拨。
+		if err != nil || ms <= now.UnixMilli() || ms < w.ResetsAt || ms == w.ResetsAt && percent < w.Percent {
+			continue
+		}
+		windows[j].ResetsAt, windows[j].Percent = ms, percent
+	}
+	if slices.Equal(windows, u.Windows) {
+		return false
+	}
+	u.Windows, u.UpdatedAt = windows, now.UnixMilli()
+	s.f.Usages[i] = u
+	s.saveLocked()
+	return true
+}
+
+func (q AntigravityStatusQuota) hasFraction() bool {
+	return !q.Disabled && q.Remaining != nil && *q.Remaining >= 0 && *q.Remaining <= 1
 }
 
 func antigravityMinutes(window string) int {

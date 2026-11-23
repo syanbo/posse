@@ -921,7 +921,7 @@ func TranscriptPath(agent, sessionID, reported string) string {
 	var pattern string
 	switch agent {
 	case "antigravity":
-		pattern = filepath.Join(home, ".gemini", "antigravity-cli", "brain", sessionID, ".system_generated", "logs", "transcript.jsonl")
+		pattern = AntigravityTranscriptPath(home, sessionID)
 	case "claude":
 		pattern = filepath.Join(home, ".claude", "projects", "*", sessionID+".jsonl")
 	case "grok":

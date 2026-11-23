@@ -163,6 +163,7 @@ func init() {
 		{"usage report", "Forward a Claude statusLine input to Posse (for your own statusLine script)", "< statusline.json", cmdUsageReport},
 		{"hook", "Report an agent hook event (used by agent hooks)", "<agent> <event> < payload.json", cmdHook},
 		{"statusline", "Claude statusLine injected by Posse: forwards plan usage, then runs your own statusLine and prints its output", "< statusline.json", cmdStatusline},
+		{"statusline antigravity", "Forward an Antigravity status line to Posse and print the user status line", "[-- COMMAND] < statusline.json", cmdAntigravityStatusline},
 		{"agent exec", "Run claude, codex, cursor-agent, grok or agy with the hooks and permission mode Posse injects (used by the shims in $POSSE_HOME/bin)", "<command> -- [args...]", cmdAgentExec},
 		{"agent zcode-plugin", "Prepare the local Posse status plugin for ZCode and print its directory", "", cmdZCodePlugin},
 		{"version", "Print the version", "", cmdVersion},

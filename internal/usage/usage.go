@@ -16,6 +16,7 @@ import (
 
 // Window 是一个限额窗口。
 type Window struct {
+	QuotaID  string  `json:"quotaId,omitempty"`  // agy 状态栏用 ID 上报，/usage 提供这个 ID 的名称和时窗
 	Unknown  bool    `json:"unknown,omitempty"`  // Codex 的窗口已重置但尚未取得新读数，只给调用方、不落盘
 	Percent  float64 `json:"percent"`            // 已用，0–100
 	Minutes  int     `json:"minutes,omitempty"`  // 窗口长度，0 是不知道

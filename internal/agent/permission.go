@@ -119,9 +119,6 @@ func (l Launcher) permissionArgs(name string) []string {
 	if PermissionMode(l.Home) == PermissionSkip {
 		return skipArgs[name]
 	}
-	if name == "antigravity" {
-		return []string{"--settings", Quote(antigravityStrictSettings)}
-	}
 	return nil
 }
 

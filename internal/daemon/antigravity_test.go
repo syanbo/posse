@@ -11,6 +11,7 @@ import (
 	"posse/internal/agent"
 	"posse/internal/history"
 	"posse/internal/procmem"
+	"posse/internal/usage"
 )
 
 // agy 不写终端标题、没有 hooks：会话按它持有的 presence 锁认，标题读它自己起的，posse 起的标题不被覆盖。
@@ -96,6 +97,46 @@ func TestSyncAntigravity(t *testing.T) {
 	d.syncAntigravity(s)
 	if st := s.Agent(); st.Title != "Something Else" {
 		t.Fatalf("native rename not shown: %+v", st)
+	}
+
+	d.usage.store = usage.Open(d.cfg.Home)
+	now := time.Now()
+	reset := now.Add(time.Hour).Truncate(time.Second)
+	d.usage.store.Update(usage.Usage{Agent: "antigravity", UpdatedAt: now.Add(-time.Minute).UnixMilli(),
+		Windows: []usage.Window{{QuotaID: "gemini-weekly", Name: "Gemini", Percent: 10, ResetsAt: reset.UnixMilli()}}})
+	path := filepath.Join(base, "brain", sid, ".system_generated", "logs", "transcript.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"type":"PLANNER_RESPONSE","input_tokens":1000}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	report := func(at time.Time, session, title string, current map[string]any) {
+		t.Helper()
+		call(t, d.antigravityStatusline, map[string]any{"terminal": s.ID, "at": at, "payload": map[string]any{
+			"product": "antigravity", "conversation_id": session, "conversation_title": title,
+			"transcript_path": filepath.Join(home, ".gemini", "antigravity", "brain", session, ".system_generated", "logs", "transcript.jsonl"),
+			"context_window":  map[string]any{"context_window_size": 1_048_576, "used_percentage": 19.7, "current_usage": current},
+			"quota":           map[string]any{"gemini-weekly": map[string]any{"remaining_fraction": 0.75, "reset_time": reset.Format(time.RFC3339)}},
+		}})
+	}
+	report(now, sid, "From status line", map[string]any{"input_tokens": 1_000, "cache_read_input_tokens": 2_000})
+	report(now.Add(-time.Second), sid, "Late status line", nil)
+	report(now.Add(time.Millisecond), "66fedceb-d0b4-48ef-af10-c6f3adac9977", "Wrong session", nil)
+	d.syncAntigravity(s)
+	if st := s.Agent(); st.SessionID != sid || st.Title != "From status line" || st.TranscriptPath != path {
+		t.Fatalf("status line binding: %+v", st)
+	}
+	if c, ok := history.ReadReportedContext(d.cfg.Home, "antigravity", sid, path); !ok || c.Used != 3000 || c.Percent() != 20 || c.Window != 1048576 {
+		t.Fatalf("status line context: %+v, %v", c, ok)
+	}
+	if got := d.usage.store.List(now)[0].Windows[0]; got.Percent != 25 || got.Name != "Gemini" {
+		t.Fatalf("status line quota: %+v", got)
+	}
+	d.usage.store.SetOff(true)
+	report(now.Add(2*time.Millisecond), sid, "From status line", nil)
+	if c, ok := history.ReadReportedContext(d.cfg.Home, "antigravity", sid, path); !ok || c.Used != 0 || c.Window != 0 {
+		t.Fatalf("empty report or quota switch affected context: %+v, %v", c, ok)
 	}
 }
 

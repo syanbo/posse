@@ -15,7 +15,8 @@ func TestAntigravityLaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := launch.Argv[len(launch.Argv)-1]
-	if !strings.HasPrefix(cmd, "agy --model 'model name' --effort 'high' --dangerously-skip-permissions -i "+Quote("do 'this'\nnext")) {
+	if !strings.HasPrefix(cmd, "agy --model 'model name' --effort 'high' --dangerously-skip-permissions") ||
+		!strings.Contains(cmd, " -i "+Quote("do 'this'\nnext")) {
 		t.Fatal(cmd)
 	}
 	if HasHooks("antigravity") {
@@ -41,6 +42,24 @@ func TestAntigravityLaunch(t *testing.T) {
 	b, _ := os.ReadFile(filepath.Join(l.Home, "bin", "agy"))
 	if !strings.Contains(string(b), "agent exec agy --") {
 		t.Fatal(string(b))
+	}
+}
+
+func TestAntigravityStatusLineWrapsExistingCommand(t *testing.T) {
+	l := Launcher{Exe: "/opt/My Posse/bin/posse", Home: t.TempDir()}
+	args := []string{"--mode=plan", "--settings", `{"statusLine":{"command":"printf 'custom'","padding":2},"model":"x"}`}
+	got := l.manualAntigravityArgs(args)
+	if len(got) != len(args) || got[0] != args[0] || got[1] != args[1] ||
+		!strings.Contains(got[2], `"model":"x"`) || !strings.Contains(got[2], `"padding":2`) ||
+		!strings.Contains(got[2], Quote(l.Exe)+" statusline antigravity -- ") || strings.Contains(got[2], "stack_with_default") {
+		t.Fatalf("wrapped settings: %q", got)
+	}
+	if twice := l.manualAntigravityArgs(got); !slices.Equal(twice, got) {
+		t.Fatalf("shim wrapped the same status line twice: %q", twice)
+	}
+	disabled := []string{"--mode=plan", "--settings", `{"statusLine":{"command":"printf custom","enabled":false}}`}
+	if got := l.manualAntigravityArgs(disabled); !slices.Equal(got, disabled) {
+		t.Fatalf("modified disabled status line: %q", got)
 	}
 }
 

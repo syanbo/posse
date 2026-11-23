@@ -26,4 +26,4 @@ Antigravity 会话位于 `~/.gemini/antigravity/brain`、`~/.gemini/antigravity-
 
 解析 USER_INPUT / PLANNER_RESPONSE / GENERIC：用户只取 `<USER_REQUEST>` 正文、剥离附加元数据与设置；工具参数解开嵌套 JSON。思考过程记进详情、默认折叠，不进搜索。带 truncated_fields 时按 step_index、type、created_at 核对后从同目录 transcript_full.jsonl 回读；缺失或身份不符则保留截断记录。手机对话增量读取使用同样规则。
 
-Antigravity 上下文取最近有效 PLANNER_RESPONSE 的 input_tokens + cache_read_tokens，缺少可核实的窗口容量，仅显示已用 token。媒体读取 media[].uri 的本地文件，以及 brain/<UUID> 下 .user_uploaded 和产物（目录扫描不跟随软链接）。移到废纸篓前核对 UUID、固定目录层级与软链接边界，移动整个 brain/<UUID>；这是日志和产物的删除，Antigravity 的 conversations/*.db、摘要缓存与搜索数据库保留，原生恢复可能重建日志。
+Antigravity 上下文优先显示官方状态栏上报的百分比和窗口容量。缺少有效上报时，从最近有效 PLANNER_RESPONSE 取 input_tokens + cache_read_tokens，显示已用 token。媒体读取 media[].uri 的本地文件，以及 brain/<UUID> 下 .user_uploaded 和产物（目录扫描不跟随软链接）。移到废纸篓前核对 UUID、固定目录层级与软链接边界，移动整个 brain/<UUID>；这是日志和产物的删除，Antigravity 的 conversations/*.db、摘要缓存与搜索数据库保留，原生恢复可能重建日志。

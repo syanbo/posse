@@ -61,6 +61,9 @@ type session struct {
 	agyDir         string
 	agyDirs        []string
 	agyRecordedSID string
+	agyReportMu    sync.Mutex
+	agyReportPG    int
+	agyReportAt    time.Time
 	// grok 上次空闲时标题里的会话名：工作中的标题只是状态，手机的标签名用它
 	grokName string
 	name     string    // 用户给标签起的名字（terminal.rename），桌面和手机共用，存在 terminals.title
@@ -564,6 +567,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("session.title", d.sessionTitle)
 	srv.Handle("git.trace", d.gitTraceList)
 	srv.Handle("usage.report", d.usageReport)
+	srv.Handle("statusline.antigravity", d.antigravityStatusline)
 	srv.Handle("daemon.stop", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		// 先回复再退出
 		time.AfterFunc(100*time.Millisecond, stop)

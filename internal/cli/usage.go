@@ -104,6 +104,44 @@ func cmdStatusline(e *env, args []string) error {
 	return nil
 }
 
+func cmdAntigravityStatusline(e *env, args []string) error {
+	at := time.Now()
+	payload, err := io.ReadAll(io.LimitReader(os.Stdin, 1<<20))
+	if err != nil {
+		return err
+	}
+	if terminal := os.Getenv("POSSE_TERMINAL_ID"); terminal != "" && json.Valid(payload) {
+		socket := os.Getenv("POSSE_SOCKET")
+		if socket == "" {
+			socket = e.socket
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		_ = rpc.Call(ctx, socket, "statusline.antigravity", map[string]any{
+			"terminal": terminal, "at": at, "payload": json.RawMessage(payload),
+		}, nil)
+		cancel()
+	}
+	var original string
+	switch {
+	case len(args) == 2 && args[0] == "--":
+		original = args[1]
+	case len(args) == 1 && args[0] == "--user":
+		raw, _ := agent.AntigravityUserStatusLine()
+		var line agent.AntigravityStatusLine
+		if json.Unmarshal(raw, &line) == nil && (line.Enabled == nil || *line.Enabled) && !strings.Contains(line.Command, " statusline antigravity") {
+			original = line.Command
+		}
+	}
+	if original == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", original)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = bytes.NewReader(payload), e.out, e.errOut
+	return cmd.Run()
+}
+
 // reportUsage 只在有用量时发，从不拉起常驻进程：它由 Claude 同步调用，不能拖慢状态行。
 func reportUsage(e *env, payload []byte) {
 	if !json.Valid(payload) || (!bytes.Contains(payload, []byte(`"rate_limits"`)) && !bytes.Contains(payload, []byte(`"context_window"`))) {

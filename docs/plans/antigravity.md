@@ -8,8 +8,9 @@
 - PTY 探针收到 `OSC 7501;?` 后应答，实测报告 `app=antigravity`、working、blocked（包括 auth）、idle、done。状态经现有 OSC 通道处理，子 agent 是否仍工作由 agy 的聚合报告决定。
 - `--settings` 拒绝 hooks、plugins、pluginPaths、pluginsPaths、hooksPath、defaultHooksPath、customizations，报 unknown setting。没有已核实的会话级挂载途径，因此不注入 hooks，不改用户 hooks.json；任务提醒空闲时输入，无 hooks 答题/审批卡和写文件痕迹。
 - `--conversation` 指向不存在的 UUID 会另建不同 ID 的会话，不能用于预分配 ID。agy 运行期间一直持有 `presence/<UUID>.lock`（也开着 `conversations/<UUID>.db`），常驻进程每 2 秒的 agent 检查读 agy 进程打开的文件（`procmem.OpenFiles`，`proc_pidfdinfo`）认出当前会话并绑定，`/new`、切换会话后跟着换；同时持有多个锁时不绑。恢复参数和 agent 执行 `posse session title` 带来的 `ANTIGRAVITY_CONVERSATION_ID` 也能绑定。不按最近修改时间或 cwd 猜归属。
+- 官方 `statusLine` 通过会话 `--settings` 接入，已有用户命令仍接收原始输入并输出原状态栏，只有 Posse 采集时保留原生状态栏。设置文件、禁用的自定义状态栏和无法解析的配置走进程锁和原生记录。报告只用于当前前台会话，旧报告和会话 ID 不符的报告丢弃。 [官方状态栏接口](https://antigravity.google/docs/cli/statusline/)
 - 手机对话写入时重查前台 agy 的会话锁。缺锁或有多个会话锁时拒绝写入，界面暂时保留上次识别到的会话。
-- agy 不写终端标题（OSC 0/2），标签和侧栏的会话名来自 agy 自己起的标题：首轮回复后约 3 秒写进 `conversation_summaries.db` 的 `title`（`cache/conversation_metadata.json` 更晚才有），绑定后只读查询，记成会话标题（`daemon/antigravity.go`）；已经显示标题后，原生标题变动时同步到 Posse；摘要仍是旧标题时保留 `posse session title` 的结果。`posse session title` 使用 agy 内置 Conversations API 的 `UpdateConversation`，按工具命令环境中的 `ANTIGRAVITY_CONVERSATION_ID` 写 `annotations.title`，确认回包的会话 ID 和标题后更新 Posse 标签。地址和令牌来自 `ANTIGRAVITY_LS_ADDRESS` 和 `ANTIGRAVITY_CSRF_TOKEN`，只请求本机回环地址；缺少这些环境变量时，命令提示在 agy 输入 `/rename <标题>`。agy 的 `-p` 模式拒绝执行 `/rename`。新终端环境隔离剥离 `ANTIGRAVITY_*` 和 `AGY_CLI_*`。
+- agy 不写终端标题（OSC 0/2），标签和侧栏的会话名来自 agy 自己起的标题：首轮回复后约 3 秒写进 `conversation_summaries.db` 的 `title`（`cache/conversation_metadata.json` 更晚才有），状态栏未上报时绑定后只读查询，记成会话标题（`daemon/antigravity.go`）；已经显示标题后，原生标题变动时同步到 Posse；摘要仍是旧标题时保留 `posse session title` 的结果。`posse session title` 使用 agy 内置 Conversations API 的 `UpdateConversation`，按工具命令环境中的 `ANTIGRAVITY_CONVERSATION_ID` 写 `annotations.title`，确认回包的会话 ID 和标题后更新 Posse 标签。地址和令牌来自 `ANTIGRAVITY_LS_ADDRESS` 和 `ANTIGRAVITY_CSRF_TOKEN`，只请求本机回环地址；缺少这些环境变量时，命令提示在 agy 输入 `/rename <标题>`。agy 的 `-p` 模式拒绝执行 `/rename`。新终端环境隔离剥离 `ANTIGRAVITY_*` 和 `AGY_CLI_*`。
 
 ## 会话数据
 
@@ -27,7 +28,7 @@
 
 日志提供 USER_INPUT、PLANNER_RESPONSE、GENERIC。摘要缓存的 summary 提供 ID、Title、WorkspaceURIs、UpdatedAt、Internal；is_internal 也用于过滤。SQLite 中 conversation_summaries 的 parent_conversation_id / nesting_depth、conversation_parents 的 parent_id 补充子会话过滤，查询失败回退缓存标记。conversations/*.db 含原生 protobuf，不改写。
 
-truncated_fields 触发按 step_index、type、created_at 核验的完整日志回读。上下文仅能核实 input_tokens + cache_read_tokens，不猜模型窗口容量。图片与视频来自 media[].uri 和会话目录的实际产物。移到废纸篓只移动 brain/<UUID>；保留原生数据库，原生恢复可能重新生成日志。
+truncated_fields 触发按 step_index、type、created_at 核验的完整日志回读。上下文优先用状态栏上报的窗口大小、已用百分比和当次输入；没有有效上报时从日志取 input_tokens + cache_read_tokens，显示已用 token。图片与视频来自 media[].uri 和会话目录的实际产物。移到废纸篓只移动 brain/<UUID>；保留原生数据库，原生恢复可能重新生成日志。
 
 已观察的工具包括 read_file、run_command、edit_file、write_file、search_web、manage_task、swarm、call_mcp_tool，args 的字段值还包含一层 JSON（2026-11-20 用临时 stdio MCP 服务实测）。技能统计识别 SKILL.md 读取，命令与网页搜索复用现有统计器。MCP 调用是 `call_mcp_tool`，参数 `ServerName`、`ToolName`、`Arguments`（不是 `mcp__服务__工具`）；调用前 agy 先 `read_file` 读 `~/.gemini/antigravity-cli/mcp/<服务>/<工具>.json` 查工具说明（界面上的 Explored），不算调用。工具结果是紧跟调用的 GENERIC 记录，一次多个调用时按顺序各占一步、没有调用 id，按步号对应；出错时 status 为 ERROR，这次 MCP 调用不计次数、时间线标失败。CLI 没有自带的网页抓取工具（让它读网址时用 read_file 报错，再改用 search_web），网址只来自 search_web、命令和 MCP 参数。
 
@@ -47,7 +48,7 @@ Posse 派发 Antigravity worker 时，在任务提示里告知 `posse history br
 
 ## 套餐与验收
 
-桌面和手机的套餐用量来自 `agy -p /usage --output-format json`。在 agy 1.5.14 验证返回各池的剩余比例及重置时间，查询不产生模型轮次。会话上下文 token 与套餐额度独立。
+桌面和手机的套餐用量来自 `agy -p /usage --output-format json`。在 agy 1.5.14 验证返回各池的剩余比例及重置时间，查询不产生模型轮次。状态栏也会按额度 ID 更新已确认的额度池，保留 `/usage` 给出的名称和窗口长度。自动及手动刷新仍可获取完整额度列表。会话上下文 token 与套餐额度独立。
 
 回归覆盖启动/恢复/手动转发与权限、OSC 状态、环境隔离、历史粗筛等价性、增量聊天与截断回读、子会话过滤、媒体 URI/产物扫描、废纸篓路径边界、技能继承/优先级/链接与 MCP 配置。桌面/手机共用的 agent 列表、图标、文案与上下文展示一并接入。CLI 参数参照 [官方 CLI reference](https://antigravity.google/docs/cli/reference)。
 

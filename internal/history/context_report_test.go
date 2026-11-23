@@ -98,6 +98,35 @@ func TestReportedContextWithoutTranscriptExpires(t *testing.T) {
 	}
 }
 
+func TestAntigravityReportedContextFollowsTranscript(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, "transcript.jsonl")
+	reply := []byte(`{"type":"PLANNER_RESPONSE","input_tokens":2000}` + "\n")
+	if err := os.WriteFile(path, reply, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	percent := 17.5
+	at := time.Now()
+	if err := ReportAntigravityContext(home, "s", path, Context{Used: 2000, Window: 100_000, ReportedPercent: &percent}, at); err != nil {
+		t.Fatal(err)
+	}
+	if c, ok := ReadReportedContext(home, "antigravity", "s", path); !ok || c.Percent() != 18 {
+		t.Fatalf("official Antigravity context: %+v, %v", c, ok)
+	}
+	if err := ReportAntigravityContext(home, "s", path, Context{}, at.Add(-time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if c, ok := ReadReportedContext(home, "antigravity", "s", path); !ok || c.Percent() != 18 {
+		t.Fatalf("older report replaced official context: %+v, %v", c, ok)
+	}
+	if err := os.WriteFile(path, append(reply, reply...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := ReadReportedContext(home, "antigravity", "s", path); ok {
+		t.Fatal("a new planner response kept the older context")
+	}
+}
+
 func TestReportedContextPartialUsage(t *testing.T) {
 	home := t.TempDir()
 	path := filepath.Join(home, "s.jsonl")

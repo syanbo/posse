@@ -121,7 +121,11 @@ func (l Launcher) Launch(name string, m Model, prompt string) (Launch, error) {
 		return Launch{}, fmt.Errorf("unknown agent %q (known: %s)", name, strings.Join(Known, ", "))
 	}
 	parts = append(parts, margs...)
-	parts = append(parts, l.permissionArgs(name)...)
+	if name == "antigravity" {
+		parts = append(parts, l.antigravityLaunchArgs()...)
+	} else {
+		parts = append(parts, l.permissionArgs(name)...)
+	}
 	if prompt != "" {
 		if name == "antigravity" {
 			parts = append(parts, "-i")
@@ -172,7 +176,11 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 		return Launch{}, fmt.Errorf("cannot resume %q sessions", name)
 	}
 	// codex 的已经加在 resume 子命令前面
-	if name != "codex" {
+	switch name {
+	case "antigravity":
+		parts = append(parts, l.antigravityLaunchArgs()...)
+	case "codex":
+	default:
 		parts = append(parts, l.permissionArgs(name)...)
 	}
 	cmd := strings.Join(parts, " ")

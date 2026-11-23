@@ -122,6 +122,7 @@ func (d *Daemon) antigravityAsk(ctx context.Context, force bool) {
 			if err != nil {
 				log.Printf("antigravity usage: %v", err)
 			} else if d.usageAgentOn("antigravity") {
+				u.UpdatedAt = time.Now().UnixMilli()
 				s.store.Update(u)
 			}
 			s.mu.Lock()

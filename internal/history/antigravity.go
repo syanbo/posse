@@ -18,6 +18,10 @@ func AntigravityBase(home string) string {
 	return filepath.Join(home, ".gemini", "antigravity-cli")
 }
 
+func AntigravityTranscriptPath(home, id string) string {
+	return filepath.Join(AntigravityBase(home), "brain", id, ".system_generated", "logs", "transcript.jsonl")
+}
+
 var antigravityUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // AntigravityOpenSession 从 agy 进程打开着的文件认出它正在用的会话：agy 运行期间一直持有
