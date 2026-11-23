@@ -3,6 +3,16 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.31
+
+- 连接安装了 ZCode CLI 的 Mac 后，可以新开 ZCode 终端、搜索会话历史并续接。需要 Posse for Mac 0.1.45 或更新版本。
+- 从 ZCode 终端的「更多」菜单查看会话图片、视频、工具调用次数和 Token 用量。可上传图片，让 ZCode 从文件路径读取。
+
+### English
+
+- Start ZCode terminals, search their history, and resume sessions on a connected Mac with the ZCode CLI installed. Requires Posse for Mac 0.1.45 or later.
+- Open the ZCode terminal's More menu to see session images, videos, tool counts, and token usage. Upload images for ZCode to read from their file paths.
+
 ## 0.1.30
 
 - Antigravity 在同一个终端切换会话时，对话和草稿跟随各自的会话。发送消息和压缩上下文前会核对目标会话。需搭配 Mac 0.1.44 或更新版本。
