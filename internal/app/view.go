@@ -150,7 +150,9 @@ func (a *app) build(c *ui.Context) {
 				}
 			})
 			if !a.sidebarSlot() {
-				a.sidebarNotices(c)
+				ui.Column(c).AlignSelf(ui.Start).MaxWidth(sidebarMax()).Shrink(0).Children(func() {
+					a.sidebarNotices(c)
+				})
 			}
 			a.statusBar(c, bw)
 		})
@@ -1384,16 +1386,20 @@ func (a *app) staleBar(c *ui.Context) {
 func sideNotice(c *ui.Context, danger bool, title, body string, onClose func(), actions func()) {
 	t := c.Theme()
 	bg, icon, tone := colors(t).tint, iconRefresh, t.Accent
+	align := ui.Center
+	if title == "" {
+		align = ui.Start
+	}
 	if danger {
 		bg, icon, tone = soft(t, t.Danger), iconInfo, t.Danger
 	}
 	ui.Column(c).Margin(0, 12, 8, 12).Padding(12, 8, 12, 12).Gap(8).Radius(rCard).Background(bg).Children(func() {
-		ui.Row(c).Gap(6).AlignItems(ui.Start).Children(func() {
+		ui.Row(c).Gap(6).AlignItems(align).Children(func() {
 			ui.Icon(c, icon).FontSize(smallIcon()).TextColor(tone).Shrink(0)
 			if title != "" {
-				ui.Text(c, title).FontSize(fsBody).FontWeight(fwMedium).Grow(1).Shrink(1).SingleLine()
+				ui.Text(c, title).FontSize(fsBody).FontWeight(fwMedium).Grow(1).Shrink(1).MinWidth(0)
 			} else {
-				ui.Text(c, body).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
+				ui.Text(c, body).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1).MinWidth(0)
 			}
 			if onClose != nil {
 				if iconButtonSized(c, iconClose, L(c).SidebarDismissNotice(), compactBox(), smallIcon()).Clicked() {

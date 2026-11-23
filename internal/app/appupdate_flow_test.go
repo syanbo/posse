@@ -51,6 +51,32 @@ func click(t *testing.T, tt *ui.Tester, label string) {
 	tt.Frame()
 }
 
+func TestUpdateNoticeStaysCompactWithoutSidebar(t *testing.T) {
+	a := previewApp(t)
+	a.state.SidebarHidden = true
+	a.upd.phase, a.upd.version = updateReady, "0.1.42"
+	tt := newPreviewTesterSize(a, false, 1900, minWindowHeight)
+	checkNotice := func() {
+		t.Helper()
+		for _, label := range []string{"Posse 0.1.42 已就绪", "更新时终端不会断开。", "重启更新", "更新内容", "关闭提示"} {
+			r, ok := tt.Find(label)
+			if !ok || r.X < navigationWidth() || r.X+r.W > navigationWidth()+sidebarMax() || r.Y+r.H > minWindowHeight-footHeight {
+				t.Fatalf("%q outside the notice area: %v", label, r)
+			}
+		}
+	}
+	checkNotice()
+	click(t, tt, "更新内容")
+	if a.selected != settingsBoardID || a.settingsTab != "about" {
+		t.Fatal("release notes did not open About")
+	}
+	checkNotice()
+	click(t, tt, "关闭提示")
+	if a.state.UpdateDismissed != a.upd.version || tt.HasText("Posse 0.1.42 已就绪") {
+		t.Fatal("update notice still shown after dismissal")
+	}
+}
+
 // 换完包、重开前问未保存文件时点了取消：再点「重启更新」、存好文件后要接着重开，不能没反应。
 func TestRestartAfterInstallCancelled(t *testing.T) {
 	a, tt, relaunches := updateFlowApp(t)

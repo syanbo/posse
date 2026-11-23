@@ -1802,6 +1802,16 @@ func TestPreviewSettingsI18n(t *testing.T) {
 			tt.SetLocale(lang)
 			tt.Frame()
 			savePNG(t, tt, "i18n-update-bar-"+lang+"-"+suffix+".png")
+			a.state.SidebarHidden = true
+			tt = newPreviewTesterSize(a, dark, minWindowWidth, minWindowHeight)
+			tt.SetLocale(lang)
+			tt.Frame()
+			savePNG(t, tt, "i18n-update-bar-collapsed-"+lang+"-"+suffix+".png")
+			a.openSettings()
+			tt = newPreviewTesterSize(a, dark, 1900, minWindowHeight)
+			tt.SetLocale(lang)
+			tt.Frame()
+			savePNG(t, tt, "i18n-update-bar-settings-"+lang+"-"+suffix+".png")
 		}
 	}
 }
