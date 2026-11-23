@@ -448,6 +448,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<SendOutcome> _send(
     String text, {
+    List<List<int>>? keys,
     required bool enter,
     required int epoch,
   }) async {
@@ -461,6 +462,7 @@ class _ChatScreenState extends State<ChatScreen> {
       current,
       terminal: tab.terminalId,
       text: text,
+      keys: keys,
       expectedSessionId: tab.sessionId,
       requireSessionGuard: tab.agent == 'antigravity',
       enter: enter,
@@ -610,7 +612,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// 有图就按顺序全部上传，说明和路径一次提交。任何一张失败，输入和图片都留着。
+  /// 有图就按顺序全部上传，等图片和说明都写入后提交。任何一张上传失败，恢复原草稿。
   Future<void> _submit() async {
     final current = _rpc;
     final images = List<Uint8List>.from(_pending);
@@ -637,6 +639,7 @@ class _ChatScreenState extends State<ChatScreen> {
     var accepted = false;
     try {
       var text = caption;
+      List<List<int>>? keys;
       if (images.isNotEmpty) {
         final paths = <String>[];
         for (final (i, image) in images.indexed) {
@@ -661,10 +664,18 @@ class _ChatScreenState extends State<ChatScreen> {
           paths.add(path);
         }
         setState(() => _upload = null);
-        text = imageMessage(caption, paths);
+        if (tab.agent == 'antigravity') {
+          keys = antigravityImageKeys(
+            caption,
+            paths,
+            imageOnlyCaption: l.chatImageCount(images.length),
+          );
+        }
+        if (keys == null) text = imageMessage(caption, paths);
       }
       accepted =
-          await _send(text, enter: true, epoch: epoch) == SendOutcome.accepted;
+          await _send(text, keys: keys, enter: true, epoch: epoch) ==
+          SendOutcome.accepted;
       if (accepted) {
         echo?.sent = true;
       }

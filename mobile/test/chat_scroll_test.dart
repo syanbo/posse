@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -100,6 +101,27 @@ class _SwitchingRpc extends FakeRpc {
       'type': 'snapshot',
       'messages': [text('reply', 'assistant', body, 4)],
     });
+  }
+}
+
+class _ImageSendRpc extends _SwitchingRpc {
+  final requests = <Map<String, Object?>>[];
+  var uploads = 0;
+
+  @override
+  Future<T> upload<T>(Future<T> Function() body) => body();
+
+  @override
+  Future<Map<String, Object?>> call(
+    String method,
+    Map<String, Object?> params, {
+    Duration? timeout,
+  }) {
+    if (method == 'clipboard.saveImageAsTempFile') {
+      return Future.value({'value': '/tmp/test dir/image-${++uploads}.png'});
+    }
+    if (method == 'terminal.sendForSession') requests.add(params);
+    return super.call(method, params, timeout: timeout);
   }
 }
 
@@ -315,6 +337,68 @@ void main() {
     expect(rpc.calls.where((method) => method.startsWith('terminal.send')), [
       'terminal.sendForSession',
     ]);
+  });
+
+  testWidgets('Antigravity 分别粘贴图片和说明，发送失败时恢复草稿', (tester) async {
+    final reply = Completer<Map<String, Object?>>();
+    final rpc = _ImageSendRpc()..sendReply = reply.future;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatScreen(model: FakeModel(rpc), tab: _antigravityTab),
+      ),
+    );
+    await tester.pump();
+    final field = find.byType(TextField);
+    final insert = tester
+        .widget<TextField>(field)
+        .contentInsertionConfiguration!
+        .onContentInserted;
+    for (final png in [
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC',
+    ]) {
+      insert(
+        KeyboardInsertedContent(
+          mimeType: 'image/png',
+          uri: '',
+          data: base64Decode(png),
+        ),
+      );
+    }
+    const caption = '第一行\n第二行';
+    await tester.enterText(field, caption);
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pump();
+    final request = rpc.requests.single;
+    expect(rpc.uploads, 2);
+    expect(request['terminal'], 't1');
+    expect(request['expectedSessionId'], 's1');
+    expect(request['enter'], isTrue);
+    expect(
+      (request['rawKeys'] as List<String>).map(
+        (key) => utf8.decode(base64Decode(key)),
+      ),
+      [
+        '\x1b[200~/tmp/test\\ dir/image-1.png\x1b[201~',
+        '\x1b[200~/tmp/test\\ dir/image-2.png\x1b[201~',
+        '\x1b[200~$caption\x1b[201~',
+      ],
+    );
+
+    reply.complete({
+      'send': {
+        'accepted': false,
+        'writeSettlement': {'outcome': 'refused'},
+      },
+    });
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).controller!.text, caption);
+    rpc.sendReply = null;
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pumpAndSettle();
+    expect(rpc.uploads, 2);
+    expect(rpc.requests, [request, request]);
   });
 
   testWidgets('停在中间发送后贴到底部，之后的回复不把它拉回去', (tester) async {

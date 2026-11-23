@@ -24,6 +24,41 @@ String imageMessage(String caption, List<String> paths) {
   return '$text\n$lines';
 }
 
+final _agyImageExtension = RegExp(
+  r'\.(?:png|jpe?g|gif|webp|bmp|tiff?|svg)$',
+  caseSensitive: false,
+);
+
+/// agy 把单独粘贴的图片路径识别成附件。说明和未支持的文件路径另发。
+List<List<int>>? antigravityImageKeys(
+  String caption,
+  List<String> paths, {
+  required String imageOnlyCaption,
+}) {
+  final keys = <List<int>>[];
+  final links = <String>[];
+  for (final path in paths) {
+    if (_agyImageExtension.hasMatch(path)) {
+      keys.add(_bracketedPaste(shellPath(path)));
+    } else {
+      links.add(path);
+    }
+  }
+  if (keys.isEmpty) return null;
+  final message = imageMessage(caption, links);
+  // agy 的输入框需要一段文字才会提交已暂存的附件。
+  final text = message.isEmpty ? imageOnlyCaption : message;
+  keys.add(
+    text.contains('\n') || text.contains('\r')
+        ? _bracketedPaste(text)
+        : utf8.encode(text),
+  );
+  return keys;
+}
+
+List<int> _bracketedPaste(String text) =>
+    utf8.encode('\x1b[200~${text.replaceAll('\x1b[201~', '')}\x1b[201~');
+
 /// 把 base64 切成服务端 append 用的 (offset, chunk)。offset 是已发送的字符数。
 List<(int, String)> imageChunks(String encoded) {
   final out = <(int, String)>[];

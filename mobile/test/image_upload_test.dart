@@ -195,6 +195,29 @@ void main() {
     expect(imageMessage('只要字', const []), '只要字');
   });
 
+  test('Antigravity keeps unsupported paths in the caption', () {
+    final mixed = antigravityImageKeys(' caption ', [
+      '/tmp/first.PNG',
+      '/tmp/second.heic',
+    ], imageOnlyCaption: '2 images');
+    expect(mixed?.map(utf8.decode), [
+      '\x1b[200~/tmp/first.PNG\x1b[201~',
+      '\x1b[200~caption\n/tmp/second.heic\x1b[201~',
+    ]);
+    expect(
+      antigravityImageKeys('', [
+        '/tmp/second.heic',
+      ], imageOnlyCaption: '1 image'),
+      isNull,
+    );
+    expect(
+      antigravityImageKeys('', [
+        '/tmp/first.PNG',
+      ], imageOnlyCaption: '1 image')?.map(utf8.decode),
+      ['\x1b[200~/tmp/first.PNG\x1b[201~', '1 image'],
+    );
+  });
+
   test('paste keeps text ahead of an image and ignores anything else', () {
     final image = Uint8List.fromList([1, 2, 3]);
     final both = choosePaste('路径', image);
