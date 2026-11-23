@@ -3,6 +3,22 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.44
+
+- 同步 Antigravity 的原生会话标题。历史记录缺少工作目录时，可以选工作区再恢复会话。
+- 技能页识别 Antigravity 的个人目录、启动时添加的目录和插件技能，并可开关支持的技能。MCP 详情可查看插件配置、测试服务连接。
+- Antigravity 任务可用 `posse history brief` 查阅当前目录的最近会话，接续之前的工作。打开远端终端时，命令速查按远端配置显示。
+- 桌面和手机端可查看 Antigravity 套餐余量及重置时间。手机端会跟随同一终端中的会话切换，在发送前核对目标会话。
+- 桌面终端默认使用 Menlo 字体。修复长链接卡片文字溢出，以及更新提示卡片在宽窗口中撑满的问题。
+
+### English
+
+- Sync native Antigravity conversation titles. When a history entry has no working directory, choose a workspace before resuming it.
+- The skills page discovers Antigravity skills from personal directories, directories added at launch, and plugins. Supported skills can be toggled, and MCP details show plugin settings and let you test server connections.
+- Antigravity workers can use `posse history brief` to pick up recent work from the current directory. The command reference for remote terminals reflects the remote host's configuration.
+- Desktop and mobile show Antigravity quota remaining and reset times. Mobile follows conversation switches within a terminal and checks the target conversation before sending.
+- Desktop terminals use Menlo by default. Long link previews now wrap, and update cards stay within their intended width in wide windows.
+
 ## 0.1.43
 
 - 终端重连和重建快照时保留软换行。宽字符跨行或续行被程序重画后，复制和调整终端宽度仍能接回同一行。
