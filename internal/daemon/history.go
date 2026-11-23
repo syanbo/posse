@@ -513,13 +513,26 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 		return historyResumeResult{terminalInfo: d.terminalInfo(t), AlreadyOpen: true}, nil
 	}
 	dir := s.Cwd
+	fromPosse := dir == "" && s.Agent == "antigravity" && p.Workspace == ""
+	if fromPosse {
+		dir, err = d.store.AntigravitySessionDir(ctx, s.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !filepath.IsAbs(dir) {
+			dir = ""
+		}
+	}
 	if dir != "" {
 		// 没留下文件的聊天文件夹在聊天结束时删掉了，恢复时建回来
 		if _, err := os.Stat(dir); os.IsNotExist(err) && d.isChatFolder(dir) {
 			os.Mkdir(dir, 0o755)
 		}
 		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
-			return nil, rpc.Errorf(rpc.CodeConflict, "the session's directory %s no longer exists", dir)
+			if !fromPosse {
+				return nil, rpc.Errorf(rpc.CodeConflict, "the session's directory %s no longer exists", dir)
+			}
+			dir = ""
 		}
 	}
 	var ws store.Workspace
@@ -531,6 +544,10 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 	default:
 		// 会话目录所在的工作区；没有时由调用方决定是否把目录加成项目
 		ws, err = d.currentWorkspace("", dir)
+		var re *rpc.Error
+		if fromPosse && errors.As(err, &re) && re.Code == rpc.CodeNotFound {
+			err = rpc.Errorf(rpc.CodeWorkspaceRequired, "the session has no recorded directory; pass a workspace")
+		}
 	}
 	if err != nil {
 		return nil, err

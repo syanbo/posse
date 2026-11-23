@@ -30,6 +30,11 @@ func TestAntigravityDirectoryBackfillBeforePrune(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for id, want := range map[string]string{"known": "/project", "ambiguous": "", "missing": ""} {
+		if dir, err := s.AntigravitySessionDir(t.Context(), id); err != nil || dir != want {
+			t.Fatalf("old records for %s: got %q, %v; want %q", id, dir, err, want)
+		}
+	}
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}

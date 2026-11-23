@@ -22,7 +22,7 @@
 
 历史详情里的助手 Markdown 图片会按会话根目录加载：Cwd 是绝对路径时用 Cwd，否则用会话文件父目录，相对路径和 `/images/x.png` 都按该根解释；工具消息仍是纯文本。远端图片经详情请求捕获的目标资源读取，不读本机同路径，换会话、详情请求换代或换主机时关闭旧加载器并丢弃迟到结果。
 
-Antigravity 会话位于 `~/.gemini/antigravity/brain`、`~/.gemini/antigravity-ide/brain` 和 `~/.gemini/antigravity-cli/brain` 下的 `<UUID>/.system_generated/logs/transcript.jsonl`。同一个 UUID 有多份时留修改时间最新的。标题、工作目录取 CLI 目录里 `cache/conversation_metadata.json` 的 summary，缓存缺失时保留正文索引、标题回退首句；缓存未提供 WorkspaceURIs 时目录仍未知。会话若尚未打开，从桌面或手机的历史页继续时可选工作区，CLI 可用 `--workspace`。SQLite `conversation_summaries.db` 只读查询父子关系（`conversation_summaries.parent_conversation_id` 和 `conversation_parents.parent_id`），派生会话挂在父会话下；缓存里的 Internal 标记仍排除内部会话。`sessions.parent` 这一列让 schemaVersion 升到 6，整份重建；只改某一家解析规则时仍用 parserVersions。
+Antigravity 会话位于 `~/.gemini/antigravity/brain`、`~/.gemini/antigravity-ide/brain` 和 `~/.gemini/antigravity-cli/brain` 下的 `<UUID>/.system_generated/logs/transcript.jsonl`。同一个 UUID 有多份时留修改时间最新的。标题、工作目录取 CLI 目录里 `cache/conversation_metadata.json` 的 summary，缓存缺失时保留正文索引、标题回退首句；缓存未提供 WorkspaceURIs 时，历史恢复会用 Posse 已确认且仍在已登记工作区内的目录。目录无记录、记录有歧义或无法使用时，桌面和手机提示选择工作区，CLI 可用 `--workspace`。手动指定工作区时覆盖 Posse 保存的目录。SQLite `conversation_summaries.db` 只读查询父子关系（`conversation_summaries.parent_conversation_id` 和 `conversation_parents.parent_id`），派生会话挂在父会话下；缓存里的 Internal 标记仍排除内部会话。`sessions.parent` 这一列让 schemaVersion 升到 6，整份重建；只改某一家解析规则时仍用 parserVersions。
 
 解析 USER_INPUT / PLANNER_RESPONSE / GENERIC：用户只取 `<USER_REQUEST>` 正文、剥离附加元数据与设置；工具参数解开嵌套 JSON。思考过程记进详情、默认折叠，不进搜索。带 truncated_fields 时按 step_index、type、created_at 核对后从同目录 transcript_full.jsonl 回读；缺失或身份不符则保留截断记录。手机对话增量读取使用同样规则。
 

@@ -52,4 +52,4 @@ Posse 派发 Antigravity worker 时，在任务提示里告知 `posse history br
 
 回归覆盖启动/恢复/手动转发与权限、OSC 状态、环境隔离、历史粗筛等价性、增量聊天与截断回读、子会话过滤、媒体 URI/产物扫描、废纸篓路径边界、技能继承/优先级/链接与 MCP 配置。桌面/手机共用的 agent 列表、图标、文案与上下文展示一并接入。CLI 参数参照 [官方 CLI reference](https://antigravity.google/docs/cli/reference)。
 
-验收结果：Go 全量测试、go vet、MyGo vet/i18n 检查通过；Flutter analyze、全量测试（563 通过，7 跳过）及新增上下文/设计规则测试通过。离屏检查浅色/深色的新建菜单、技能页和历史 token 展示。Posse Dev（`~/.posse-dev`）实测 agy 启动、信任提示的 waiting、结束 idle、会话标题绑定 UUID、`/exit` 清除 agent 身份，以及 history resume 回到同一 UUID。新建的临时目录会话在原生缓存与 SQLite 都没有 workspace URI，历史页可选工作区后恢复；CLI 可用 `--workspace`。
+验收结果：Go 全量测试、go vet、MyGo vet/i18n 检查通过；Flutter analyze、全量测试（563 通过，7 跳过）及新增上下文/设计规则测试通过。离屏检查浅色/深色的新建菜单、技能页和历史 token 展示。Posse Dev（`~/.posse-dev`）实测 agy 启动、信任提示的 waiting、结束 idle、会话标题绑定 UUID、`/exit` 清除 agent 身份，以及 history resume 回到同一 UUID。新建的临时目录会话在原生缓存与 SQLite 都可能缺少 workspace URI。历史恢复优先用原生目录，缺少时用 Posse 已确认的工作区目录。无可用目录时可选工作区，CLI 可用 `--workspace`。

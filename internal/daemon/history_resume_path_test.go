@@ -6,14 +6,117 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"posse/internal/agent"
 	"posse/internal/history"
+	"posse/internal/rpc"
+	"posse/internal/store"
 )
+
+func TestAntigravityResumeUsesKnownDirectory(t *testing.T) {
+	d, w := newTestDaemon(t)
+	d.cfg.HistoryRoots = &history.Roots{Home: t.TempDir()}
+	t.Cleanup(d.closeHistory)
+	known, explicit, native := filepath.Join(w.Path, "known' dir"), filepath.Join(w.Path, "explicit"), filepath.Join(w.Path, "native")
+	for _, dir := range []string{known, explicit, native} {
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	other := store.Workspace{ID: store.NewID("w_"), ProjectID: w.ProjectID, Name: "explicit", Path: explicit, Kind: "folder", CreatedAt: time.Now()}
+	if err := d.store.AddWorkspace(other); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	shell := filepath.Join(bin, "sh")
+	if err := os.WriteFile(shell, []byte("#!/bin/sh\nexport PATH="+agent.Quote(bin)+":/usr/bin:/bin\nexec /bin/sh -c \"$4\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "agy"), []byte("#!/bin/sh\nprintf 'TEST_AGY_CWD=%s\\n' \"$(pwd -P)\"\nexec /bin/sleep 30\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELL", shell)
+	d.launcher.Home = d.cfg.Home
+
+	tests := []struct {
+		name, savedDir, nativeDir, workspace, wantDir string
+	}{
+		{name: "saved", savedDir: known, wantDir: known},
+		{name: "native wins", savedDir: known, nativeDir: native, wantDir: native},
+		{name: "explicit workspace wins over saved directory", savedDir: known, workspace: other.ID, wantDir: explicit},
+		{name: "removed directory", savedDir: filepath.Join(w.Path, "removed")},
+		{name: "forgotten workspace", savedDir: t.TempDir()},
+		{name: "unknown directory"},
+	}
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root := d.cfg.HistoryRoots.Home
+	summaries := map[string]any{}
+	sessions := make([]string, len(tests))
+	for i, c := range tests {
+		id := fmt.Sprintf("11111111-1111-4111-8111-%012d", i)
+		sessions[i] = id
+		write(history.AntigravityTranscriptPath(root, id), `{"step_index":0,"type":"USER_INPUT","source":"USER_EXPLICIT","created_at":"2026-11-18T07:00:00Z","content":"Antigravity work"}`+"\n")
+		if c.savedDir != "" {
+			if err := d.store.RememberAntigravityDir(id, c.savedDir); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if c.nativeDir != "" {
+			u := url.URL{Scheme: "file", Path: c.nativeDir}
+			summaries[id] = map[string]any{"summary": map[string]any{"ID": id, "WorkspaceURIs": []string{u.String()}}}
+		}
+	}
+	b, _ := json.Marshal(map[string]any{"conversations": summaries})
+	write(filepath.Join(history.AntigravityBase(root), "cache", "conversation_metadata.json"), string(b))
+	if _, err := d.historyIndexNow(t.Context(), json.RawMessage(`{"wait":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	for i, c := range tests {
+		t.Run(c.name, func(t *testing.T) {
+			id := sessions[i]
+			p, _ := json.Marshal(historyResumeParams{Session: id, Path: history.AntigravityTranscriptPath(root, id), Workspace: c.workspace})
+			r, err := d.historyResume(t.Context(), p)
+			if c.wantDir == "" {
+				var re *rpc.Error
+				if !errors.As(err, &re) || re.Code != rpc.CodeWorkspaceRequired {
+					t.Fatalf("expected workspace picker, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			info := r.(historyResumeResult)
+			wantWS := w.ID
+			if c.workspace != "" {
+				wantWS = c.workspace
+			}
+			if info.WorkspaceID != wantWS || info.AgentState == nil || info.AgentState.SessionID != id {
+				t.Fatalf("resumed session: %+v", info)
+			}
+			waitScreen(t, d.liveSession(info.ID), "TEST_AGY_CWD="+resolvePath(c.wantDir))
+			if again, err := d.historyResume(t.Context(), p); err != nil || !again.(historyResumeResult).AlreadyOpen || again.(historyResumeResult).ID != info.ID {
+				t.Fatalf("resume did not reuse the terminal: %+v, %v", again, err)
+			}
+		})
+	}
+}
 
 func TestHistoryResumeDuplicateIDUsesPath(t *testing.T) {
 	d, _ := newTestDaemon(t)
