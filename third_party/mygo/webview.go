@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/surface"
@@ -51,6 +52,8 @@ type WebViewOptions struct {
 	// own elements, on macOS, Windows and Linux; a touchpad's pinch still
 	// goes to the page.
 	ScrollToContainer bool
+	// Posse 的首个网页在有尺寸并显示后才开始导航。
+	OnFirstPlacement func()
 }
 
 // errNoContent is returned by NewWebView for windows showing a page.
@@ -109,7 +112,7 @@ func (w *Window) newWebView(opts WebViewOptions, bg *background) (*WebView, erro
 		pw.detachSession()
 		return nil, fmt.Errorf("mygo: cannot create a web view: %w", err)
 	}
-	pw.native = &webViewNative{Window: w.native, web: nv}
+	pw.native = &webViewNative{Window: w.native, web: nv, onFirstPlacement: opts.OnFirstPlacement}
 	startContentRules(nv, opts.Page.ContentRules)
 	v := &WebView{pw}
 	pw.webView = v
@@ -156,6 +159,17 @@ func (v *WebView) Destroy() { onMain(v.w.destroyWebView) }
 // closed.
 func (v *WebView) IsDestroyed() bool { return v.w.destroyed.Load() }
 
+// NavigationState 供 Posse 区分旧页面仍在显示的阶段与新页面已提交、子资源仍在加载的阶段。
+func (v *WebView) NavigationState() (revision uint64, pending, loading bool) {
+	v.w.do(func(window platform.Window) {
+		n := window.(*webViewNative)
+		revision, loading = n.navigationRevision, n.IsLoading()
+		// 锚点跳转、停止加载和被拒绝的导航可能没有提交事件。
+		pending = n.navigationPhase != webNavigationIdle && loading
+	})
+	return
+}
+
 // SurfaceWebView returns the native web view for package ui to place, nil
 // once destroyed or for the content of another window, which is logged
 // once. Main thread only.
@@ -180,6 +194,7 @@ func (v *WebView) SurfaceWebView(conn *surface.Conn) platform.WebView {
 // placeWebViews shows the window's web views where its content's last
 // frame shows them, and notes where each is. Main thread only.
 func (w *Window) placeWebViews(views []platform.WebViewPlacement) {
+	var placed []func()
 	windows.Lock()
 	for _, pw := range w.webViews {
 		if n, ok := pw.native.(*webViewNative); ok {
@@ -187,6 +202,10 @@ func (w *Window) placeWebViews(views []platform.WebViewPlacement) {
 			for _, p := range views {
 				if p.WebView == n.web {
 					n.frame, n.shown = p.Frame, true
+					if n.onFirstPlacement != nil && p.Frame.W > 0 && p.Frame.H > 0 {
+						placed = append(placed, n.onFirstPlacement)
+						n.onFirstPlacement = nil
+					}
 				}
 			}
 		}
@@ -194,6 +213,9 @@ func (w *Window) placeWebViews(views []platform.WebViewPlacement) {
 	windows.Unlock()
 	if w.conn != nil {
 		w.conn.Surface.PlaceWebViews(views)
+	}
+	for _, fn := range placed {
+		postMain(fn)
 	}
 }
 
@@ -266,9 +288,42 @@ type webViewNative struct {
 	// frame is where the window's view last showed the web view, while
 	// shown; misplaced is set once a view of another window placed it,
 	// which is logged once.
-	frame     platform.RectF
-	shown     bool
-	misplaced bool
+	frame              platform.RectF
+	shown              bool
+	misplaced          bool
+	onFirstPlacement   func()
+	navigationRevision uint64
+	navigationPhase    webNavigationPhase
+}
+
+type webNavigationPhase uint8
+
+const (
+	webNavigationIdle webNavigationPhase = iota
+	webNavigationPending
+	webNavigationHistory
+)
+
+func (w *Window) noteWebViewNavigation(phase webNavigationPhase) {
+	if n, ok := w.native.(*webViewNative); ok {
+		n.navigationRevision++
+		n.navigationPhase = phase
+	}
+}
+
+func (w *Window) noteWebViewURL(target string) {
+	if n, ok := w.native.(*webViewNative); ok {
+		n.navigationRevision++
+		// Posse 的锚点跳转仍在同一文档，可以继续检查正在加载的页面。
+		if to, _, hasFragment := strings.Cut(target, "#"); hasFragment {
+			current := n.URL()
+			from, _, _ := strings.Cut(current, "#")
+			if current != target && from == to {
+				return
+			}
+		}
+		n.navigationPhase = webNavigationPending
+	}
 }
 
 func (n *webViewNative) Surface() platform.Surface   { return nil }

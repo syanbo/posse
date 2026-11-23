@@ -128,6 +128,7 @@ type webTab struct {
 
 func cmdWebOpen(e *env, args []string) error {
 	f := newWebFlags("web open", 30*time.Second)
+	reuse := f.fs.Bool("reuse", false, "")
 	pos, err := parse(f.fs, args)
 	if err != nil {
 		return err
@@ -136,7 +137,7 @@ func cmdWebOpen(e *env, args []string) error {
 		return err
 	}
 	var r webTab
-	return e.doApp(f, "web.open", f.params(map[string]any{"url": webArg(pos[0])}), &r, func() {
+	return e.doApp(f, "web.open", f.params(map[string]any{"url": webArg(pos[0]), "reuse": *reuse}), &r, func() {
 		fmt.Fprintf(e.out, "tab %d  %s\n", r.Tab, r.URL)
 	})
 }

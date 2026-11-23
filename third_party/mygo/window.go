@@ -1265,6 +1265,7 @@ func (p *Page) LoadURL(rawURL string) error {
 	}
 	p.w.page(func(n platform.Window) {
 		p.w.html = nil
+		p.w.noteWebViewURL(resolved)
 		n.LoadURL(resolved)
 	})
 	return nil
@@ -1283,6 +1284,7 @@ func (p *Page) LoadFile(path string) error {
 	}
 	p.w.page(func(n platform.Window) {
 		p.w.html = nil
+		p.w.noteWebViewNavigation(webNavigationPending)
 		n.LoadFile(abs, filepath.Dir(abs))
 	})
 	return nil
@@ -1361,6 +1363,7 @@ type htmlDocument struct {
 // thread only.
 func (w *Window) loadHTML(n platform.Window, html, baseURL string) {
 	w.html = &htmlDocument{html: html, baseURL: baseURL}
+	w.noteWebViewNavigation(webNavigationPending)
 	n.LoadHTML(html, baseURL)
 }
 
@@ -1379,19 +1382,31 @@ func (d *htmlDocument) isAt(url string) bool {
 }
 
 // Reload reloads the page.
-func (p *Page) Reload() { p.w.page(func(n platform.Window) { n.Reload(false) }) }
+func (p *Page) Reload() { p.reload(false) }
 
 // ReloadIgnoringCache reloads the page bypassing the cache.
-func (p *Page) ReloadIgnoringCache() { p.w.page(func(n platform.Window) { n.Reload(true) }) }
+func (p *Page) ReloadIgnoringCache() { p.reload(true) }
+
+func (p *Page) reload(ignoreCache bool) {
+	p.navigate(webNavigationPending, func(n platform.Window) { n.Reload(ignoreCache) })
+}
 
 // Stop stops loading the page.
 func (p *Page) Stop() { p.w.page(platform.Window.StopLoading) }
 
 // GoBack navigates back in history.
-func (p *Page) GoBack() { p.w.page(platform.Window.GoBack) }
+func (p *Page) GoBack() { p.navigate(webNavigationHistory, platform.Window.GoBack) }
 
 // GoForward navigates forward in history.
-func (p *Page) GoForward() { p.w.page(platform.Window.GoForward) }
+func (p *Page) GoForward() { p.navigate(webNavigationHistory, platform.Window.GoForward) }
+
+// Posse 的命令可能在收到原生导航事件前就检查页面。
+func (p *Page) navigate(phase webNavigationPhase, fn func(platform.Window)) {
+	p.w.page(func(n platform.Window) {
+		p.w.noteWebViewNavigation(phase)
+		fn(n)
+	})
+}
 
 // CanGoBack reports whether there is a previous page in history.
 func (p *Page) CanGoBack() bool { return pageGet(p.w, platform.Window.CanGoBack) }
@@ -1894,7 +1909,16 @@ func (h *windowHandler) WillNavigate(nav platform.Navigation) bool {
 	return !e.prevented
 }
 
-func (h *windowHandler) NavigationStarted(string) {}
+func (h *windowHandler) NavigationStarted(string) {
+	h.w.noteWebViewNavigation(webNavigationPending)
+}
+
+// Posse 用同页导航事件结束还没开始载入新文档的前进或后退。
+func (h *windowHandler) NavigationStayedInDocument() {
+	if n, ok := h.w.native.(*webViewNative); ok && n.navigationPhase == webNavigationHistory {
+		h.w.noteWebViewNavigation(webNavigationIdle)
+	}
+}
 
 // pageOrigin returns the origin of a page at rawURL, as scheme://host,
 // that of the page that made it for a blob: URL.
@@ -1912,6 +1936,7 @@ func pageOrigin(rawURL string) string {
 }
 
 func (h *windowHandler) NavigationCommitted(url string) {
+	h.w.noteWebViewNavigation(webNavigationIdle)
 	if doc := h.w.html; doc != nil {
 		switch {
 		case doc.shown:

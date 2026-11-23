@@ -2311,6 +2311,13 @@ func registerWindowClasses() {
 					w.h.NavigationCommitted(w.URL())
 				}
 			}),
+			method("_webView:navigation:didSameDocumentNavigation:", func(self id, _ objc.SEL, web, nav id, kind int64) {
+				// Posse 只处理锚点和历史回退，pushState、replaceState 不代表前进或后退完成。
+				const anchorNavigation, sessionStatePop = 0, 3
+				if w := b().windowFor(self); w != nil && w.host != nil && (kind == anchorNavigation || kind == sessionStatePop) {
+					w.h.NavigationStayedInDocument()
+				}
+			}),
 			method("webView:didFinishNavigation:", func(self id, _ objc.SEL, web, nav id) {
 				if w := b().windowFor(self); w != nil {
 					w.h.LoadFinished()

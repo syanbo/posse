@@ -13641,6 +13641,22 @@ func (msgs Messages) LinksOpenInBrowser() string {
 	return Catalog.Format(msgs.locale, "linksOpenInBrowser", nil)
 }
 
+// LinksOpenInCurrentWebTab says "Open in Current Web Tab"
+// in the language the app shows.
+//
+// Link card item: loads the link in the most recently shown web tab in the
+// workspace.
+func LinksOpenInCurrentWebTab() string { return In(i18n.Locale()).LinksOpenInCurrentWebTab() }
+
+// LinksOpenInCurrentWebTab says "Open in Current Web Tab"
+// in the language of msgs.
+//
+// Link card item: loads the link in the most recently shown web tab in the
+// workspace.
+func (msgs Messages) LinksOpenInCurrentWebTab() string {
+	return Catalog.Format(msgs.locale, "linksOpenInCurrentWebTab", nil)
+}
+
 // LinksOpenInFileTab says "Open in File Tab"
 // in the language the app shows.
 //

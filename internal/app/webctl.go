@@ -140,7 +140,7 @@ func (a *app) webDocs(w *workspace) []*webDoc {
 	var out []*webDoc
 	if v := a.files[w.ID]; v != nil {
 		for _, d := range v.docs {
-			if d.web != nil && d.web.view != nil && !d.web.view.IsDestroyed() {
+			if d.isLiveWebTab() {
 				out = append(out, d.web)
 			}
 		}
@@ -177,13 +177,18 @@ func (a *app) findWeb(t webTarget) (*webDoc, error) {
 			return wd, nil
 		}
 	}
-	return nil, rpc.Errorf(rpc.CodeNotFound, "no web tab %d in workspace %s; see posse web list", t.Tab, w.Label)
+	return nil, missingWebTab(w, t.Tab)
+}
+
+func missingWebTab(w *workspace, id int) error {
+	return rpc.Errorf(rpc.CodeNotFound, "no web tab %d in workspace %s; see posse web list", id, w.Label)
 }
 
 // webHandle 是交给后台用的网页标签：view 在主线程上取出，标签关掉时 webDoc.view 会被清掉。
 type webHandle struct {
-	id   int
-	view *mygo.WebView
+	id                  int
+	view                *mygo.WebView
+	waitingForPlacement bool
 }
 
 // target 在主线程上找网页标签，交回它的页面供后台调用（Eval、截图会等页面，不能占着主线程）。
@@ -198,7 +203,7 @@ func (a *app) target(ctx context.Context, t webTarget) (webHandle, error) {
 		case wd.failed != "":
 			ferr = rpc.Errorf(rpc.CodeConflict, "tab %d failed to load %s: %s", wd.id, wd.url, wd.failed)
 		default:
-			h = webHandle{wd.id, wd.view}
+			h = webHandle{id: wd.id, view: wd.view, waitingForPlacement: wd.firstURL != ""}
 		}
 	})
 	if err != nil {
@@ -245,7 +250,8 @@ func (a *app) webList(ctx context.Context, params json.RawMessage) (any, error) 
 func (a *app) webOpen(ctx context.Context, params json.RawMessage) (any, error) {
 	var p struct {
 		webTarget
-		URL string `json:"url"`
+		URL   string `json:"url"`
+		Reuse bool   `json:"reuse,omitempty"`
 	}
 	if err := rpc.Decode(params, &p); err != nil {
 		return nil, err
@@ -262,14 +268,26 @@ func (a *app) webOpen(ctx context.Context, params json.RawMessage) (any, error) 
 			ferr = err
 			return
 		}
-		// 不抢键盘：用户可能正在别的地方打字
-		wd, d := a.openWebTab(w, link, false)
-		if d.err != "" {
-			ferr = rpc.Errorf(rpc.CodeInternal, "%s", d.err)
-			return
+		var d *fileDoc
+		if p.Reuse {
+			d = a.reusableWebTab(w, p.Tab)
+			if d == nil && p.Tab != 0 {
+				ferr = missingWebTab(w, p.Tab)
+				return
+			}
 		}
-		wd.used = time.Now()
-		tab = webTab{Tab: wd.id, URL: link, Loading: true, Current: true}
+		// 不抢键盘：用户可能正在别的地方打字
+		if d == nil {
+			_, d = a.openWebTab(w, link, false)
+			if d.err != "" {
+				ferr = rpc.Errorf(rpc.CodeInternal, "%s", d.err)
+				return
+			}
+			d.web.used = time.Now()
+		} else {
+			a.reuseWebTab(w, d, link, false)
+		}
+		tab = webTab{Tab: d.web.id, URL: link, Loading: d.web.loading, Failed: d.web.failed, Current: true}
 	})
 	if err != nil {
 		return nil, err
@@ -349,9 +367,13 @@ func (a *app) webRun(ctx context.Context, params json.RawMessage) (any, error) {
 	if p.Args == nil {
 		args = []byte("[]")
 	}
-	// 载入中的页面也调：check 要在载入中返回 false，载入完的页面这时可能还没有 __posse
 	// 包成一个表达式：mygo 先按表达式编译，编译不过再当函数体跑，那次 SyntaxError 会进页面的 error 事件
-	return a.eval(ctx, p.webTarget, fmt.Sprintf("(() => {\n%s\nreturn window.__posse.%s(...%s)\n})()", webctlJS, p.Fn, args), p.Fn == "check")
+	js := fmt.Sprintf("(() => {\n%s\nreturn window.__posse.%s(...%s)\n})()", webctlJS, p.Fn, args)
+	if p.Fn == "check" {
+		waitForLoad := len(p.Args) > 0 && p.Args[0] == "load"
+		return a.checkWeb(ctx, p.webTarget, js, waitForLoad)
+	}
+	return a.eval(ctx, p.webTarget, js)
 }
 
 func (a *app) webEval(ctx context.Context, params json.RawMessage) (any, error) {
@@ -362,20 +384,42 @@ func (a *app) webEval(ctx context.Context, params json.RawMessage) (any, error) 
 	if err := rpc.Decode(params, &p); err != nil {
 		return nil, err
 	}
-	return a.eval(ctx, p.webTarget, p.JS, false)
+	return a.eval(ctx, p.webTarget, p.JS)
 }
 
-// eval 在页面里跑脚本。loading 为 true 时页面还在载入就回 false 而不是去跑。
-func (a *app) eval(ctx context.Context, t webTarget, js string, loading bool) (any, error) {
+func (a *app) eval(ctx context.Context, t webTarget, js string) (any, error) {
 	h, err := a.target(ctx, t)
 	if err != nil {
 		return nil, err
 	}
-	pg := h.view.Page()
-	if loading && pg.IsLoading() {
+	return h.eval(ctx, js)
+}
+
+func (a *app) checkWeb(ctx context.Context, t webTarget, js string, waitForLoad bool) (any, error) {
+	h, err := a.target(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	if h.waitingForPlacement {
 		return false, nil
 	}
-	v, err := pg.EvalContext(ctx, js)
+	revision, pending, loading := h.view.NavigationState()
+	if pending || (waitForLoad && loading) {
+		return false, nil
+	}
+	v, err := h.eval(ctx, js)
+	if matched, _ := v.(bool); err == nil && matched {
+		// 求值期间也可能开始了下一次跳转，旧页面的匹配不算。
+		after, pending, loading := h.view.NavigationState()
+		if after != revision || pending || (waitForLoad && loading) {
+			return false, nil
+		}
+	}
+	return v, err
+}
+
+func (h webHandle) eval(ctx context.Context, js string) (any, error) {
+	v, err := h.view.Page().EvalContext(ctx, js)
 	if je := (*mygo.EvalError)(nil); errors.As(err, &je) {
 		return nil, rpc.Errorf("js_error", "%s", je.Message)
 	}

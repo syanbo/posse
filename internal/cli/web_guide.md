@@ -22,10 +22,10 @@ Take a fresh `snapshot` after the page changes: refs stay on the elements they w
 
 | Command | What it does |
 |---|---|
-| `open <url>` | Open a new web tab in your workspace and show it (keyboard stays where the user is). `localhost:3000` is enough. A local HTML file path (relative or absolute) opens the file; pages it loads from its own folder and below work. |
+| `open <url> [--reuse [--tab N]]` | Open and show a web tab in your workspace without moving keyboard focus. `--reuse` uses the selected web tab or the most recently shown one, opening a new tab if neither exists. With `--tab N`, reuse that specific tab. `localhost:3000` and local HTML file paths also work. |
 | `list` | Your workspace's web tabs; `*` marks the one used without `--tab`. |
 | `goto <url>`, `reload`, `back`, `forward` | Navigate the tab. They return at once; follow with `wait`. |
-| `wait [--for load\|selector <css>\|text <s>]` | Wait until the page has loaded, a visible element matches, or the text appears. Exit code 3 on timeout. |
+| `wait [--for load\|selector <css>\|text <s>]` | `load` waits for the page's load event. `selector` and `text` can match the new page as soon as it is committed, while resources such as images are still loading. Exit code 3 on timeout. |
 | `snapshot` | Visible interactive elements, headings and landmarks as an indented list: `[ref] role "name" value=… checked disabled focused -> href`. |
 | `click <ref\|css>` | Scroll into view and click (pointer and mouse events, then click). |
 | `fill <ref\|css> <text>` | Set a text field, textarea, contenteditable or select (by option value or text), firing input and change. |

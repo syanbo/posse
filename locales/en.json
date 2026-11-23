@@ -4810,6 +4810,10 @@
   "@linksOpenInBrowser": {
     "description": "Link card item and web tab button: opens the URL in the default browser."
   },
+  "linksOpenInCurrentWebTab": "Open in Current Web Tab",
+  "@linksOpenInCurrentWebTab": {
+    "description": "Link card item: loads the link in the most recently shown web tab in the workspace."
+  },
   "linksOpenInFileTab": "Open in File Tab",
   "@linksOpenInFileTab": {
     "description": "Link card item: opens the file in a file tab."

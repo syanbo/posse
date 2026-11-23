@@ -6,6 +6,8 @@ github.com/egoist/mygo v0.7.4 的副本，go.mod 用 replace 指向这里。去�
 
 改动处的注释都带 `Posse`。
 
+`webview.go`、`window.go`：`WebViewOptions.OnFirstPlacement` 在首次以非零尺寸完成原生布局后回调，供 Posse 在视图显示后发起导航。`WebView.NavigationState` 记录导航开始和提交，Posse 检查元素或文本时，允许匹配仍在加载子资源的新页面，并拒绝跳转期间旧页面上的匹配。macOS 的同页前进后退由 WebKit 的同页导航回调结束等待。
+
 `ui/editor/posse_saved.go`：加 `Buffer.MarkSnapshotSaved(Snapshot)`，在 Buffer 的互斥锁内只把已保存文本设为提交快照的 rope，不改当前文本、版本、撤销/重做或行尾设置。异步保存期间的新编辑保持 Modified，撤销回已提交文本时恢复干净；保存字节由 `Snapshot.WriteTo` 按快照的行尾输出。调用方负责拒绝过期保存请求及属于其他 Buffer 的快照。测试见 `posse_saved_test.go`，包括并发快照、编辑和标记的 race 检查。
 
 `ui/editor` 的 diff 查看器：

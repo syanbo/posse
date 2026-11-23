@@ -903,6 +903,7 @@
   "linksCmdClick": "⌘ 点击",
   "linksCopyLink": "复制链接",
   "linksOpenInBrowser": "在浏览器中打开",
+  "linksOpenInCurrentWebTab": "在当前网页标签中打开",
   "linksOpenInFileTab": "在文件标签中打开",
   "linksOpenInPosse": "在 Posse 中打开",
   "linksOpenInPreview": "用预览打开",

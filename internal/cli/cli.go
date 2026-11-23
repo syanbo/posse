@@ -134,7 +134,7 @@ func init() {
 		{"session guide", "How to draft a session title (for agents)", "", cmdSessionGuide},
 		{"web", "Drive the web tabs of the Posse window: open, snapshot, click, fill, screenshot (posse web guide)", "<command>", cmdWeb},
 		{"web guide", "How agents drive web pages with posse web", "", cmdWebGuide},
-		{"web open", "Open a web tab in this workspace", "<url> [--workspace W] [--timeout 30s]", cmdWebOpen},
+		{"web open", "Open a web tab in this workspace", "<url> [--reuse [--tab N]] [--workspace W] [--timeout 30s]", cmdWebOpen},
 		{"web list", "List this workspace's web tabs", "[--workspace W] [--timeout 30s]", cmdWebList},
 		{"web goto", "Load a URL in the web tab", "<url> [--tab N] [--workspace W] [--timeout 30s]", webNav("goto", true)},
 		{"web reload", "Reload the web tab", "[--tab N] [--workspace W] [--timeout 30s]", webNav("reload", false)},

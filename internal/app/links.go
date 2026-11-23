@@ -449,6 +449,9 @@ func (a *app) urlCardItems(c *ui.Context, card *linkCard) {
 		a.openWeb(w, card.url)
 		a.linkCard = nil
 	}
+	if web {
+		a.reuseWebLink(c, w, card.url)
+	}
 	// 不是 http、https 的网址两种按法都交给系统，写在 Posse 里打开的那个
 	label, keys := L(c).CommonOpen(), a.posseKeys(L(c))
 	if web {
@@ -456,6 +459,13 @@ func (a *app) urlCardItems(c *ui.Context, card *linkCard) {
 	}
 	if linkCardItem(c, iconOpen, label, keys) {
 		c.OpenURL(card.url)
+		a.linkCard = nil
+	}
+}
+
+func (a *app) reuseWebLink(c *ui.Context, w *workspace, link string) {
+	if d := a.reusableWebTab(w, 0); d != nil && linkCardItem(c, iconForward, L(c).LinksOpenInCurrentWebTab(), "") {
+		a.reuseWebTab(w, d, link, true)
 		a.linkCard = nil
 	}
 }
@@ -493,11 +503,12 @@ func (a *app) pathCardItems(c *ui.Context, card *linkCard, width float32) {
 	hline(c).Margin(4, 6)
 	// 最常用的在最上面：在 Posse 里打开。网页直接打开的是渲染出来的页面，源码在文件标签里看
 	fileKeys := a.posseKeys(L(c))
-	if !a.remoteHost() && !card.isDir && isHTML(card.path) && a.cardWorkspace(card) != nil {
+	if w := a.cardWorkspace(card); !a.remoteHost() && !card.isDir && isHTML(card.path) && w != nil {
 		if linkCardItem(c, iconGlobe, L(c).LinksOpenInPosse(), fileKeys) {
 			a.openLinkWeb(card)
 			a.linkCard = nil
 		}
+		a.reuseWebLink(c, w, fileURL(card.path))
 		fileKeys = ""
 	}
 	if !card.isDir && linkCardItem(c, iconFile, L(c).LinksOpenInFileTab(), fileKeys) {

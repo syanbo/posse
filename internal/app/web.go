@@ -21,16 +21,17 @@ import (
 // webDoc 是网页标签的状态。跳转、载入、标题由页面事件更新；单页应用用 pushState 换地址不发事件，
 // 看得见时每画一帧对一次（syncWeb），webPoll 保证至少每秒画一帧。
 type webDoc struct {
-	id      int // posse web 里的标签编号，窗口进程内不重复
-	view    *mygo.WebView
-	url     string // 当前地址
-	title   string
-	addr    string // 地址栏里的文字，编辑中和 url 不同
-	editing bool   // 地址栏有焦点：页面跳转不覆盖正在输入的文字
-	loading bool
-	back    bool
-	forward bool
-	failed  string // 载入失败的原因，页面位置显示它；重新跳转时清掉
+	id       int // posse web 里的标签编号，窗口进程内不重复
+	view     *mygo.WebView
+	url      string // 当前地址
+	title    string
+	addr     string // 地址栏里的文字，编辑中和 url 不同
+	editing  bool   // 地址栏有焦点：页面跳转不覆盖正在输入的文字
+	loading  bool
+	back     bool
+	forward  bool
+	failed   string // 载入失败的原因，页面位置显示它；重新跳转时清掉
+	firstURL string // 首次布局前还没交给 WebKit 的地址
 	// used 是最近一次显示的时间，posse web 不带 --tab 时操作最近显示过的那个
 	used time.Time
 	// device 是手机预览的机型（webdevice.go），空是电脑；zoom 是已经设给页面的缩放，0 是没设过
@@ -85,7 +86,24 @@ func (a *app) openWebTab(w *workspace, link string, focus bool) (*webDoc, *fileD
 	}
 	// posse web 的脚本先注入一次，console 从页面自己的脚本运行前就开始记。
 	// 网址在下面挂好事件后再载入：本地文件要经 LoadFile，不能交给 WebViewOptions.URL
-	wv, err := a.win.NewWebView(mygo.WebViewOptions{Page: mygo.PageOptions{PreloadScript: webctlJS}})
+	var fallback *time.Timer
+	firstLoad := func() {
+		if fallback != nil {
+			fallback.Stop()
+		}
+		if wd.firstURL != "" && wd.view != nil && !wd.view.IsDestroyed() {
+			link := wd.firstURL
+			wd.firstURL = ""
+			a.loadWeb(wd, link)
+			if wd.failed != "" {
+				a.win.Invalidate()
+			}
+		}
+	}
+	wv, err := a.win.NewWebView(mygo.WebViewOptions{
+		Page:             mygo.PageOptions{PreloadScript: webctlJS},
+		OnFirstPlacement: firstLoad,
+	})
 	if err != nil {
 		d.kind, d.err = docError, errtext.Text(err)
 		return wd, d
@@ -136,13 +154,55 @@ func (a *app) openWebTab(w *workspace, link string, focus bool) (*webDoc, *fileD
 		}
 		return nil
 	})
-	a.loadWeb(wd, link)
+	if w.ID == a.selected {
+		wd.firstURL = link
+		// 遮挡或切走时没有布局，后台的 posse web 仍要能载入。
+		fallback = time.AfterFunc(100*time.Millisecond, func() { a.win.Update(firstLoad) })
+	} else {
+		a.loadWeb(wd, link)
+	}
 	return wd, d
+}
+
+// reuseWebTab 在同一工作区内切到指定的网页标签并跳转。focus 跟新开标签的规则一致。
+func (a *app) reuseWebTab(w *workspace, d *fileDoc, link string, focus bool) {
+	v := a.showFiles(w)
+	v.cur = d
+	d.focus = focus
+	a.loadWeb(d.web, link)
+	d.web.used = time.Now()
+}
+
+func (a *app) reusableWebTab(w *workspace, id int) *fileDoc {
+	v := a.files[w.ID]
+	if v == nil {
+		return nil
+	}
+	if id == 0 {
+		if v.cur.isLiveWebTab() {
+			return v.cur
+		}
+		wd := currentWeb(a.webDocs(w))
+		if wd == nil {
+			return nil
+		}
+		id = wd.id
+	}
+	for _, d := range v.docs {
+		if d.isLiveWebTab() && d.web.id == id {
+			return d
+		}
+	}
+	return nil
+}
+
+func (d *fileDoc) isLiveWebTab() bool {
+	return d != nil && d.web != nil && d.web.view != nil && !d.web.view.IsDestroyed()
 }
 
 // syncWeb 从 WebKit 读回地址和导航状态。只在主线程调。
 func (a *app) syncWeb(wd *webDoc) {
-	if wd.view == nil || wd.view.IsDestroyed() {
+	if wd.firstURL != "" || wd.view == nil || wd.view.IsDestroyed() {
 		return
 	}
 	p := wd.view.Page()
@@ -162,6 +222,10 @@ func (a *app) loadWeb(wd *webDoc, link string) {
 	if !wd.editing {
 		wd.addr = link
 	}
+	if wd.firstURL != "" {
+		wd.firstURL, wd.url = link, link
+		return
+	}
 	if err := loadPage(wd.view.Page(), link); err != nil {
 		wd.url, wd.loading, wd.failed = link, false, errtext.Text(err)
 	}
@@ -170,7 +234,7 @@ func (a *app) loadWeb(wd *webDoc, link string) {
 // reloadWeb 重新载入。载入失败的页面没有提交过，Reload 不知道载入什么，按原地址重新载入。
 func (a *app) reloadWeb(wd *webDoc) {
 	p := wd.view.Page()
-	if wd.failed != "" {
+	if wd.firstURL != "" || wd.failed != "" {
 		a.loadWeb(wd, wd.url)
 		return
 	}
@@ -236,6 +300,7 @@ func (a *app) webView(c *ui.Context, d *fileDoc) {
 			if navButton("web-stop", iconClose, L(c).WebStop(), true) {
 				// 页面已经显示出来、只差子资源时停下，WebKit 不一定再发载入结束的事件
 				p.Stop()
+				wd.firstURL = ""
 				wd.loading = false
 			}
 		} else if navButton("web-reload", iconRefresh, L(c).WebReload(), true) {

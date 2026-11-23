@@ -203,7 +203,7 @@ func (a *app) menuWeb(action string) {
 	case "reload":
 		a.reloadWeb(wd)
 	case "hardReload":
-		if wd.failed != "" {
+		if wd.firstURL != "" || wd.failed != "" {
 			a.reloadWeb(wd)
 			return
 		}

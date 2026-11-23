@@ -783,6 +783,8 @@ type WindowHandler interface {
 	WillNavigate(nav Navigation) bool
 	NavigationStarted(url string)
 	NavigationCommitted(url string)
+	// Posse 用同页导航事件区分历史跳转和新文档的载入。
+	NavigationStayedInDocument()
 	LoadFinished()
 	LoadFailed(url string, code int, description string)
 	TitleChanged(title string)
