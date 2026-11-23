@@ -19,6 +19,7 @@ import (
 //   - codex：state 库的 threads 和 session_index.jsonl
 //   - grok：会话目录的 summary.json
 //   - antigravity：通过当前 agy 的 ConversationService 写入原生标题
+//   - zcode：会话库的自定义标题
 //   - cursor：只在 Posse 里显示
 
 type sessionTitleParams struct {
@@ -56,11 +57,15 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%v", err)
 	}
+	if name == "zcode" {
+		s.zcodeMu.Lock()
+		defer s.zcodeMu.Unlock()
+	}
 	sid := p.SessionIDs[name]
 	if sid == "" {
 		sid = s.Agent().SessionID
 	}
-	if sid == "" && name != "cursor" && name != "antigravity" {
+	if sid == "" && name != "cursor" && name != "antigravity" && name != "zcode" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "the ID of this %s session is not known yet; send a message and try again", name)
 	}
 	var applies string
@@ -73,6 +78,24 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 	case "grok":
 		err = namer.WriteGrok(agentHome("GROK_HOME", ".grok"), sid, p.Cwd, title)
 		applies = "updated in Posse and grok’s session list; the name in grok changes after the session is reopened"
+	case "zcode":
+		path := d.zcodeDatabase()
+		pid, live := d.zcodeRuntime(ctx, s, path)
+		if pid > 0 && live == "" {
+			return nil, rpc.Errorf(rpc.CodeConflict, "ZCode session changed; run the command in the current session")
+		}
+		if live != "" {
+			sid = live
+		}
+		if sid == "" {
+			return nil, rpc.Errorf(rpc.CodeBadRequest, "the ID of this %s session is not known yet; send a message and try again", name)
+		}
+		current := s.Agent().SessionID
+		if requested := p.SessionIDs[name]; requested != "" && (requested != sid || current != "" && current != sid) {
+			return nil, rpc.Errorf(rpc.CodeConflict, "ZCode session changed; run the command in the current session")
+		}
+		err = namer.WriteZCode(ctx, path, sid, title, pid)
+		applies = "updated in Posse and the ZCode session list; the open ZCode view may need to be reopened"
 	case "antigravity":
 		if p.SessionIDs[name] == "" || p.AntigravityAddress == "" || p.AntigravityToken == "" {
 			applies = "shown in Posse. To update the native session name, enter /rename followed by this title in agy"
@@ -91,6 +114,9 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 		return nil, err
 	}
 	s.SetTitle(title, sid, name == "claude")
+	if name == "zcode" {
+		d.saveResume(s, false)
+	}
 	return sessionTitleResult{Title: title, Agent: name, Applies: applies}, nil
 }
 

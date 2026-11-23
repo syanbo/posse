@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"posse/internal/history"
 	"posse/internal/skills"
 )
 
@@ -24,6 +25,16 @@ func TestPreviewZCode(t *testing.T) {
 		t.Fatal("missing ZCode menu entry")
 	}
 	savePNG(t, tt, "zcode-menu.png")
+
+	a = previewApp(t)
+	a.workspaces[0].Terminals[0].Agent = "zcode"
+	previewUsagePanel(a)
+	a.usage.data = history.Usage{
+		Tools:  []history.UsageItem{{Name: "Bash", Count: 4}, {Name: "Read", Count: 2}},
+		Tokens: &history.TokenUsage{Total: 12940, Input: 12688, Output: 252, Requests: 5},
+	}
+	tt = newPreviewTester(a, false)
+	savePNG(t, tt, "zcode-tools.png")
 
 	a = previewApp(t)
 	previewHistory(a, "disk")

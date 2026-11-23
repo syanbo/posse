@@ -384,6 +384,10 @@
   "@chatToolFailed": {
     "description": "Chat: title of a tool result that returned an error."
   },
+  "chatToolsCalls": "Tool Calls",
+  "@chatToolsCalls": {
+    "description": "Skills & Tools: heading for tool invocation counts."
+  },
   "chatToolsCliOther": "Other Commands",
   "@chatToolsCliOther": {
     "description": "Skills & Tools: group header for command-line programs that are neither from Homebrew nor built in."
@@ -462,6 +466,34 @@
   "chatToolsTimeline": "Timeline",
   "@chatToolsTimeline": {
     "description": "Skills & Tools: section header of the list of calls, newest first."
+  },
+  "chatToolsTokenBreakdown": "Input {input} / Output {output}",
+  "@chatToolsTokenBreakdown": {
+    "description": "Skills & Tools: input and output tokens for the session.",
+    "placeholders": {
+      "input": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "output": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "chatToolsTokens": "{total} tokens / {requests, plural, one {{requests} request} other {{requests} requests}}",
+  "@chatToolsTokens": {
+    "description": "Skills & Tools: total tokens and model requests for the session.",
+    "placeholders": {
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "requests": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
   },
   "chatToolsTitle": "Skills & Tools",
   "@chatToolsTitle": {

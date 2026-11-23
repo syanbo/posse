@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"slices"
@@ -15,7 +16,7 @@ import (
 )
 
 // usageView 是右侧"技能与工具"面板的状态：当前终端的会话用到了哪些技能、MCP 工具、命令行程序和网址。
-// 会话文件在窗口进程里增量只读解析，不经过常驻进程。
+// 普通会话文件在窗口进程里增量解析，ZCode 的会话库由目标常驻进程读取。
 type usageView struct {
 	source  terminalUsageSource
 	version uint64
@@ -41,7 +42,7 @@ const usageRefresh = 3 * time.Second
 
 // usageSupported 报告能不能统计这个 agent 的会话。
 func usageSupported(agent string) bool {
-	return agent == "claude" || agent == "codex" || agent == "grok" || agent == "cursor" || agent == "antigravity"
+	return agent == "claude" || agent == "codex" || agent == "grok" || agent == "cursor" || agent == "antigravity" || agent == "zcode"
 }
 
 // pollUsage 在主线程调用：换了终端就重来，到点了就在后台读会话文件的新内容。
@@ -55,17 +56,27 @@ func (a *app) pollUsage(c *ui.Context, cur *terminalInfo) {
 		return
 	}
 	version, scanner := u.version, u.scanner
+	request := a.request()
 	go func() {
-		// 会话文件要等 agent 写下第一条记录才出现，找不到就下次再找
-		if scanner == nil {
-			if path := history.TranscriptPath(source.agent, source.session, source.transcript); path != "" {
-				scanner = history.NewUsageScanner(source.agent, path)
-			}
-		}
-		var data history.Usage
+		var result history.SessionUsage
 		var err error
-		if scanner != nil {
-			data, err = scanner.Scan()
+		// 会话文件要等 agent 写下第一条记录才出现，找不到就下次再找
+		if source.agent == "zcode" {
+			if source.session != "" && request.client != nil && request.current() {
+				ctx, cancel := context.WithTimeout(a.windowContext(), 5*time.Second)
+				defer cancel()
+				err = request.client.Call(ctx, "session.tools", map[string]string{"sessionId": source.session}, &result)
+			}
+		} else {
+			if scanner == nil {
+				if path := history.TranscriptPath(source.agent, source.session, source.transcript); path != "" {
+					scanner = history.NewUsageScanner(source.agent, path)
+				}
+			}
+			if scanner != nil {
+				result.Found = true
+				result.Usage, err = scanner.Scan()
+			}
 		}
 		a.win.Update(func() {
 			u := &a.usage
@@ -73,12 +84,15 @@ func (a *app) pollUsage(c *ui.Context, cur *terminalInfo) {
 				return
 			}
 			u.poll.done()
-			u.scanner, u.found = scanner, scanner != nil
+			if source.agent == "zcode" && !request.current() {
+				return
+			}
+			u.scanner, u.found = scanner, result.Found
 			u.err = ""
 			if err != nil {
 				u.err = errtext.Text(err)
-			} else if scanner != nil {
-				u.data = data
+			} else {
+				u.data = result.Usage
 			}
 		})
 	}()
@@ -103,7 +117,7 @@ func (a *app) usagePanel(c *ui.Context, cur *terminalInfo) ui.Element {
 					usageNote(c, m.CommonLoading())
 				case !u.found:
 					usageNote(c, m.UsageToolsNoFile())
-				case len(u.data.Skills) == 0 && len(u.data.MCP) == 0 && len(u.data.CLI) == 0 && len(u.data.Web) == 0 && u.data.Searches == 0:
+				case len(u.data.Skills) == 0 && len(u.data.MCP) == 0 && len(u.data.CLI) == 0 && len(u.data.Web) == 0 && u.data.Searches == 0 && len(u.data.Tools) == 0 && u.data.Tokens == nil:
 					usageNote(c, m.UsageToolsNone())
 				default:
 					a.usageFilter(c)
@@ -203,6 +217,23 @@ func (a *app) usageSummary(c *ui.Context, u history.Usage, mode usageMode) {
 		return
 	}
 	if mode == usageAll {
+		if u.Tokens != nil {
+			m := L(c)
+			ui.Column(c).Gap(usageSummaryInset).Children(func() {
+				usageNote(c, m.UsageToolsTokens(int(u.Tokens.Total), int(u.Tokens.Requests)))
+				usageNote(c, m.UsageToolsTokenBreakdown(int(u.Tokens.Input), int(u.Tokens.Output)))
+			})
+		}
+		if len(u.Tools) > 0 {
+			ui.Column(c).Gap(usageSummaryGap).Padding(0, usageSummaryInset).Children(func() {
+				ui.Text(c, L(c).UsageToolsCalls()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(c.Theme().TextMuted)
+				ui.Row(c).Wrap().Gap(usageSummaryGap).Children(func() {
+					for _, tool := range u.Tools {
+						a.usageChip(c, "tool-"+tool.Name, iconExtensions, mcpColor(c), tool.Name, tool.Count)
+					}
+				})
+			})
+		}
 		a.usageCLI(c, u)
 	}
 	if len(u.Web) > 0 || u.Searches > 0 {

@@ -37,10 +37,24 @@ type Usage struct {
 	MCP    []MCPUsage  `json:"mcp"`
 	CLI    []CLIUsage  `json:"cli,omitempty"`
 	Web    []WebUsage  `json:"web,omitempty"`
+	Tools  []UsageItem `json:"tools,omitempty"`
+	Tokens *TokenUsage `json:"tokens,omitempty"`
 	// Searches 是网页搜索的次数
 	Searches int `json:"searches,omitempty"`
 	// Events 是逐次的使用记录，按会话文件里的顺序（时间从早到晚），技能和 MCP、命令行程序、网址各留最近 maxUsageEvents 条
 	Events []UsageEvent `json:"events,omitempty"`
+}
+
+type TokenUsage struct {
+	Total    int64 `json:"total"`
+	Input    int64 `json:"input"`
+	Output   int64 `json:"output"`
+	Requests int64 `json:"requests"`
+}
+
+type SessionUsage struct {
+	Found bool `json:"found"`
+	Usage
 }
 
 // UsageEvent 是一次使用：技能（Skill 非空）、MCP 工具（Server、Tool）、命令行程序（CLI、Source，

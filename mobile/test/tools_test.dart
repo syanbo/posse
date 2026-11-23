@@ -139,6 +139,27 @@ void main() {
     expect(find.text('×3'), findsNWidgets(2));
   });
 
+  testWidgets('ZCode tool counts and tokens appear in All', (tester) async {
+    final usage = ToolUsage.fromJson({
+      'found': true,
+      'tools': [
+        {'name': 'Bash', 'count': 2},
+      ],
+      'tokens': {'total': 1200, 'input': 900, 'output': 300, 'requests': 1},
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.light),
+        home: Scaffold(body: ToolsView(usage: usage)),
+      ),
+    );
+    expect(find.text('工具调用'), findsOneWidget);
+    expect(find.text('Bash'), findsOneWidget);
+    expect(find.text('×2'), findsOneWidget);
+    expect(find.text('1,200 Token / 1 次请求'), findsOneWidget);
+    expect(find.text('输入 900 / 输出 300'), findsOneWidget);
+  });
+
   testWidgets('timeline time sits at the right edge', (tester) async {
     await tester.pumpWidget(host(ToolsFilter.all));
     final at = DateTime.utc(2026, 10, 28, 1, 5).toLocal();

@@ -297,6 +297,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatToolFailed => '工具失败';
 
   @override
+  String get chatToolsCalls => '工具调用';
+
+  @override
   String get chatToolsCliOther => '其他命令行';
 
   @override
@@ -349,6 +352,30 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatToolsTimeline => '时间线';
+
+  @override
+  String chatToolsTokenBreakdown(int input, int output) {
+    final intl.NumberFormat inputNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String inputString = inputNumberFormat.format(input);
+    final intl.NumberFormat outputNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String outputString = outputNumberFormat.format(output);
+
+    return '输入 $inputString / 输出 $outputString';
+  }
+
+  @override
+  String chatToolsTokens(int total, int requests) {
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+    final intl.NumberFormat requestsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String requestsString = requestsNumberFormat.format(requests);
+
+    return '$totalString Token / $requestsString 次请求';
+  }
 
   @override
   String get chatToolsTitle => '技能与工具';

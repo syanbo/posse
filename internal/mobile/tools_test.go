@@ -1,12 +1,24 @@
 package mobile
 
 import (
+	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"posse/internal/agent"
+	"posse/internal/history"
 	"posse/internal/term"
 )
+
+func (h *fakeHost) ZCodeSessionTools(ctx context.Context, id string) (history.SessionUsage, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return history.SessionUsage{}, err
+	}
+	return history.ReadZCodeUsage(ctx, agent.ZCodeDatabase(home), id)
+}
 
 // 技能与工具：没声明 posse.tools.v1 的连接看不到；会话文件还没出现时 found 为 false，
 // 出现后统计到 MCP 调用，再列时只读新增的部分。
@@ -52,5 +64,30 @@ func TestSessionTools(t *testing.T) {
 	got = result(t, p.next(p.call("session.tools", args)))
 	if m := got["mcp"].([]any)[0].(map[string]any); m["count"] != float64(2) {
 		t.Fatalf("incremental %v", m)
+	}
+
+	path := filepath.Join(t.TempDir(), "zcode.sqlite")
+	t.Setenv("ZCODE_SESSION_DB_PATH", path)
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	const sid = "sess_29b8ce03-b68a-4c32-b17d-0cf68ec2174f"
+	if _, err := db.Exec(`CREATE TABLE session(id TEXT PRIMARY KEY, directory TEXT, time_deleted INTEGER);
+		CREATE TABLE part(id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, time_updated INTEGER, data TEXT);
+		CREATE TABLE model_usage(id TEXT PRIMARY KEY, session_id TEXT, query_source TEXT, started_at INTEGER,
+			input_tokens INTEGER, output_tokens INTEGER, cache_creation_input_tokens INTEGER, cache_read_input_tokens INTEGER,
+			provider_total_tokens INTEGER, computed_total_tokens INTEGER);
+		INSERT INTO session VALUES (?, '/tmp/project', NULL);
+		INSERT INTO part VALUES ('tool', ?, 1, 1, '{"type":"tool","tool":"Read","state":{"status":"completed"}}');
+		INSERT INTO model_usage VALUES ('req', ?, 'main_turn', 1, 30, 15, 0, 0, 45, 45);`, sid, sid, sid); err != nil {
+		t.Fatal(err)
+	}
+	got = result(t, p.next(p.call("session.tools", map[string]any{"agent": "zcode", "sessionId": sid})))
+	tools, _ := got["tools"].([]any)
+	tokens, _ := got["tokens"].(map[string]any)
+	if got["found"] != true || len(tools) != 1 || tools[0].(map[string]any)["name"] != "Read" || tokens["total"] != float64(45) {
+		t.Fatalf("ZCode tools and tokens: %v", got)
 	}
 }

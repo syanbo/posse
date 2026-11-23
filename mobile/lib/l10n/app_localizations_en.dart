@@ -308,6 +308,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatToolFailed => 'Tool Failed';
 
   @override
+  String get chatToolsCalls => 'Tool Calls';
+
+  @override
   String get chatToolsCliOther => 'Other Commands';
 
   @override
@@ -364,6 +367,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatToolsTimeline => 'Timeline';
+
+  @override
+  String chatToolsTokenBreakdown(int input, int output) {
+    final intl.NumberFormat inputNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String inputString = inputNumberFormat.format(input);
+    final intl.NumberFormat outputNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String outputString = outputNumberFormat.format(output);
+
+    return 'Input $inputString / Output $outputString';
+  }
+
+  @override
+  String chatToolsTokens(int total, int requests) {
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+    final intl.NumberFormat requestsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String requestsString = requestsNumberFormat.format(requests);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      requests,
+      locale: localeName,
+      other: '$requestsString requests',
+      one: '$requestsString request',
+    );
+    return '$totalString tokens / $_temp0';
+  }
 
   @override
   String get chatToolsTitle => 'Skills & Tools';

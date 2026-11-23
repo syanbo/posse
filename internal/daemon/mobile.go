@@ -14,6 +14,7 @@ import (
 	"posse/internal/agent"
 	"posse/internal/desk"
 	"posse/internal/gitx"
+	"posse/internal/history"
 	"posse/internal/host"
 	"posse/internal/mobile"
 	"posse/internal/rpc"
@@ -262,6 +263,10 @@ func (h mobileHost) RecordGit(r mobile.GitRecord) {
 
 func (h mobileHost) RefreshUsage(ctx context.Context, params json.RawMessage) (any, error) {
 	return h.d.usageRefresh(ctx, params)
+}
+
+func (h mobileHost) ZCodeSessionTools(ctx context.Context, id string) (history.SessionUsage, error) {
+	return h.d.readZCodeTools(ctx, id)
 }
 
 func (h mobileHost) History(ctx context.Context, method string, params json.RawMessage) (any, error) {

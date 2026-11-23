@@ -531,6 +531,9 @@ var zh = [][2]string{
 	{"the computer can no longer find this session", "电脑上找不到这个会话了"},
 	{"the session’s original folder no longer exists on the computer", "会话原来的目录在电脑上已经不在了"},
 	{"only Claude, Codex, Grok, Cursor and Antigravity sessions are supported for now", "目前只支持 Claude、Codex、Grok、Cursor 和 Antigravity 会话"},
+	{"invalid ZCode session ID", "ZCode 会话 ID 无效"},
+	{"ZCode session was not found", "找不到 ZCode 会话"},
+	{"ZCode session changed; run the command in the current session", "ZCode 会话已切换，请在当前会话中重新运行命令"},
 	{"Unknown method: %s", "电脑上的 Posse 是旧版，不支持这个功能（{1}）：在电脑上更新 Posse"},
 
 	// 看桌面（常驻进程按用户选的语言写的默认人名、恢复终端时打的一行也在这里）

@@ -1,12 +1,25 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
 	"posse/internal/agent"
+	"posse/internal/history"
 	"posse/internal/host"
+	"posse/internal/rpc"
 )
+
+func (d *Daemon) zcodeSessionTools(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	return d.readZCodeTools(ctx, p.SessionID)
+}
 
 func (d *Daemon) zcodeDatabase() string {
 	d.agents.mu.Lock()
@@ -16,6 +29,46 @@ func (d *Daemon) zcodeDatabase() string {
 		storage = agent.CurrentZCodeStorage()
 	}
 	return storage.Database(d.agentDataHome())
+}
+
+func (d *Daemon) readZCodeTools(ctx context.Context, sessionID string) (history.SessionUsage, error) {
+	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	return history.ReadZCodeUsage(ctx, d.zcodeDatabase(), sessionID)
+}
+
+// zcodeRuntime 在 zcodeMu 内调用。进程同时持有多个顶层会话时只返回 PID，不能用缓存代替当前归属。
+func (d *Daemon) zcodeRuntime(ctx context.Context, s *session, path string) (pid int, sessionID string) {
+	pid = s.Foreground()
+	if name, _ := agent.OfProcess(pid); name != "zcode" {
+		return 0, ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel()
+	sid, title, ambiguous := history.ZCodeRuntimeSession(ctx, path, pid)
+	if s.Foreground() != pid || s.agentName() != "zcode" {
+		return 0, ""
+	}
+	if ambiguous {
+		return pid, ""
+	}
+	if sid == "" {
+		return 0, ""
+	}
+	if s.Agent().SessionID != sid {
+		s.zcodeTurn = ""
+		s.ResetAgent(host.AgentState{SessionID: sid, Title: title, Event: "process", At: time.Now()})
+		s.markRead()
+	}
+	return pid, sid
+}
+
+func (d *Daemon) syncZCode(ctx context.Context, s *session) {
+	if s.agentName() != "zcode" || !s.Running() || !s.zcodeMu.TryLock() {
+		return
+	}
+	defer s.zcodeMu.Unlock()
+	d.zcodeRuntime(ctx, s, d.zcodeDatabase())
 }
 
 func (d *Daemon) zcodeHook(s *session, p hookEventParams) {

@@ -615,6 +615,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("files.pasteFile", d.filesPasteFile)
 	srv.Handle("media.list", d.mediaList)
 	srv.Handle("media.path", d.mediaPath)
+	srv.Handle("session.tools", d.zcodeSessionTools)
 	srv.Handle("git.discover", d.gitDiscover)
 	srv.Handle("git.status", d.gitStatus)
 	srv.Handle("git.branches", d.gitBranches)

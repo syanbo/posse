@@ -24669,6 +24669,20 @@ func (msgs Messages) UsageTitle() string {
 	return Catalog.Format(msgs.locale, "usageTitle", nil)
 }
 
+// UsageToolsCalls says "Tool Calls"
+// in the language the app shows.
+//
+// Skills & Tools: heading for tool invocation counts.
+func UsageToolsCalls() string { return In(i18n.Locale()).UsageToolsCalls() }
+
+// UsageToolsCalls says "Tool Calls"
+// in the language of msgs.
+//
+// Skills & Tools: heading for tool invocation counts.
+func (msgs Messages) UsageToolsCalls() string {
+	return Catalog.Format(msgs.locale, "usageToolsCalls", nil)
+}
+
 // UsageToolsCLIOther says "Other Commands"
 // in the language the app shows.
 //
@@ -24917,6 +24931,38 @@ func UsageToolsTimeline() string { return In(i18n.Locale()).UsageToolsTimeline()
 // Skills & Tools panel: section heading.
 func (msgs Messages) UsageToolsTimeline() string {
 	return Catalog.Format(msgs.locale, "usageToolsTimeline", nil)
+}
+
+// UsageToolsTokenBreakdown says "Input {input, number} / Output {output, number}"
+// in the language the app shows.
+//
+// Skills & Tools: input and output tokens for the session.
+func UsageToolsTokenBreakdown(input int, output int) string {
+	return In(i18n.Locale()).UsageToolsTokenBreakdown(input, output)
+}
+
+// UsageToolsTokenBreakdown says "Input {input, number} / Output {output, number}"
+// in the language of msgs.
+//
+// Skills & Tools: input and output tokens for the session.
+func (msgs Messages) UsageToolsTokenBreakdown(input int, output int) string {
+	return Catalog.Format(msgs.locale, "usageToolsTokenBreakdown", map[string]any{"input": input, "output": output})
+}
+
+// UsageToolsTokens says "{total, number} tokens / {requests, plural, one {{requests, number} request} other {{requests, number} requests}}"
+// in the language the app shows.
+//
+// Skills & Tools: total tokens and model requests for the session.
+func UsageToolsTokens(total int, requests int) string {
+	return In(i18n.Locale()).UsageToolsTokens(total, requests)
+}
+
+// UsageToolsTokens says "{total, number} tokens / {requests, plural, one {{requests, number} request} other {{requests, number} requests}}"
+// in the language of msgs.
+//
+// Skills & Tools: total tokens and model requests for the session.
+func (msgs Messages) UsageToolsTokens(total int, requests int) string {
+	return Catalog.Format(msgs.locale, "usageToolsTokens", map[string]any{"total": total, "requests": requests})
 }
 
 // UsageToolsTitle says "Skills & Tools"

@@ -121,19 +121,24 @@ func TestEnvironStripsHostAgentVars(t *testing.T) {
 	t.Setenv("ANTIGRAVITY_CONVERSATION_ID", "parent-session")
 	t.Setenv("ANTIGRAVITY_LS_ADDRESS", "parent-server")
 	t.Setenv("AGY_CLI_DATA_DIR", "/parent")
+	t.Setenv("ZCODE_SESSION_ID", "parent-session")
+	t.Setenv("ZCODE_SESSION_DB_PATH", "/tmp/zcode-test.sqlite")
 	t.Setenv("GRADLE_OPTS", "-Dorg.gradle.console=plain")
 	t.Setenv("MAVEN_OPTS", "-Xmx2g")
 	env := strings.Join(Environ([]string{"POSSE_TERMINAL_ID=t_1"}), "\n")
 	if !strings.Contains(env, "MAVEN_OPTS=-Xmx2g") {
 		t.Fatal("user's MAVEN_OPTS dropped")
 	}
-	for _, bad := range []string{"ORCA_PANE_KEY=", "CLAUDECODE=", "NO_COLOR=", "FORCE_COLOR=", "GIT_EDITOR=", "GROK_AGENT=", "ANTIGRAVITY_", "AGY_CLI_", "GRADLE_OPTS="} {
+	for _, bad := range []string{"ORCA_PANE_KEY=", "CLAUDECODE=", "NO_COLOR=", "FORCE_COLOR=", "GIT_EDITOR=", "GROK_AGENT=", "ANTIGRAVITY_", "AGY_CLI_", "ZCODE_SESSION_ID=", "GRADLE_OPTS="} {
 		if strings.Contains(env, bad) {
 			t.Fatalf("environment leaks %s", bad)
 		}
 	}
 	if !strings.Contains(env, "POSSE_TERMINAL_ID=t_1") || !strings.Contains(env, "TERM=xterm-256color") {
 		t.Fatal("missing expected variables")
+	}
+	if !strings.Contains(env, "ZCODE_SESSION_DB_PATH=/tmp/zcode-test.sqlite") {
+		t.Fatal("ZCode database override was dropped")
 	}
 	// 程序据此把 [Image #N]、路径输出成超链接；外面设的值（比如 0）不能盖过它
 	t.Setenv("FORCE_HYPERLINK", "0")

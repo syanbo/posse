@@ -39,6 +39,7 @@ type Host interface {
 	// History 调常驻进程的会话历史接口：history.list、history.search 原样返回；
 	// history.resume 返回 ResumeResult。错误可以是 *rpc.Error，带上它的错误码
 	History(ctx context.Context, method string, params json.RawMessage) (any, error)
+	ZCodeSessionTools(ctx context.Context, id string) (history.SessionUsage, error)
 	// Usage 是各 agent 的套餐用量，和 daemon.status 里给窗口的一样
 	Usage() any
 	// RefreshUsage 让各家马上取一次用量（同窗口的刷新），做完返回新的读数；Codex、Cursor 要联网，最长半分钟

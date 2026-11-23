@@ -578,6 +578,12 @@ abstract class AppLocalizations {
   /// **'Tool Failed'**
   String get chatToolFailed;
 
+  /// Skills & Tools: heading for tool invocation counts.
+  ///
+  /// In en, this message translates to:
+  /// **'Tool Calls'**
+  String get chatToolsCalls;
+
   /// Skills & Tools: group header for command-line programs that are neither from Homebrew nor built in.
   ///
   /// In en, this message translates to:
@@ -673,6 +679,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Timeline'**
   String get chatToolsTimeline;
+
+  /// Skills & Tools: input and output tokens for the session.
+  ///
+  /// In en, this message translates to:
+  /// **'Input {input} / Output {output}'**
+  String chatToolsTokenBreakdown(int input, int output);
+
+  /// Skills & Tools: total tokens and model requests for the session.
+  ///
+  /// In en, this message translates to:
+  /// **'{total} tokens / {requests, plural, one {{requests} request} other {{requests} requests}}'**
+  String chatToolsTokens(int total, int requests);
 
   /// Skills & Tools: page title, opened from the session’s “…” menu.
   ///

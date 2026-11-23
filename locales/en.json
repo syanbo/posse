@@ -8815,6 +8815,10 @@
   "@usageTitle": {
     "description": "Plan Usage settings or status popover: heading for Title."
   },
+  "usageToolsCalls": "Tool Calls",
+  "@usageToolsCalls": {
+    "description": "Skills & Tools: heading for tool invocation counts."
+  },
   "usageToolsCLIOther": "Other Commands",
   "@usageToolsCLIOther": {
     "description": "Skills & Tools panel: group heading for command-line programs not from Homebrew or macOS."
@@ -8912,6 +8916,30 @@
   "usageToolsTimeline": "Timeline",
   "@usageToolsTimeline": {
     "description": "Skills & Tools panel: section heading."
+  },
+  "usageToolsTokenBreakdown": "Input {input, number} / Output {output, number}",
+  "@usageToolsTokenBreakdown": {
+    "description": "Skills & Tools: input and output tokens for the session.",
+    "placeholders": {
+      "input": {
+        "type": "int"
+      },
+      "output": {
+        "type": "int"
+      }
+    }
+  },
+  "usageToolsTokens": "{total, number} tokens / {requests, plural, one {{requests, number} request} other {{requests, number} requests}}",
+  "@usageToolsTokens": {
+    "description": "Skills & Tools: total tokens and model requests for the session.",
+    "placeholders": {
+      "total": {
+        "type": "int"
+      },
+      "requests": {
+        "type": "int"
+      }
+    }
   },
   "usageToolsTitle": "Skills & Tools",
   "@usageToolsTitle": {

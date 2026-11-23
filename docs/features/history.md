@@ -2,7 +2,7 @@
 
 `posse history` 的索引和查询，以及界面的历史页。
 
-- ZCode 的文字历史来自 CLI 会话库 `~/.zcode/cli/db/db.sqlite`，也支持登录 shell 导出的 `ZCODE_SESSION_DB_PATH` 和用户配置的 `storage.sessionDbPath`。索引子进程按数据库和 WAL 的变化，用 SQLite 只读备份创建临时副本，再让 `zcode app-server --stdio` 在副本上查询。列表与正文分别用 `session/list` 和正向分页的 `session/messages`。索引键是 `zcode://<sessionId>`，恢复时用会话 ID 和工作目录。单页响应超限时缩小页数重试，仍读不出的会话保留原有索引并报告错误，其他会话照常更新。历史正文只收用户与助手的文本。
+- ZCode 的文字历史来自 CLI 会话库 `~/.zcode/cli/db/db.sqlite`，也支持登录 shell 导出的 `ZCODE_SESSION_DB_PATH` 和用户配置的 `storage.sessionDbPath`。Posse 的历史索引、会话改名和桌面与手机的工具统计共用该路径。索引子进程按数据库和 WAL 的变化，用 SQLite 只读备份创建临时副本，再让 `zcode app-server --stdio` 在副本上查询。列表与正文分别用 `session/list` 和正向分页的 `session/messages`。索引键是 `zcode://<sessionId>`，恢复时用会话 ID 和工作目录。单页响应超限时缩小页数重试，仍读不出的会话保留原有索引并报告错误，其他会话照常更新。历史正文只收用户与助手的文本。会话改名后，下一轮索引会读取新的原生标题。
 - ZCode 的会话媒体面板按会话 ID 读取 `~/.zcode/cli/artifacts/<sessionId>`（使用自定义 `ZCODE_STORAGE_DIR` 时从该目录找 `cli/artifacts`），并从只读会话库查找分叉继承的附件。读回原始文件和 data URL 形式的图片与视频，后者在预览或下载时解码。提示附件显示在「粘贴」组，其余产物在「生成」组。会话正文中的文字和媒体面板各自读取。
 
 - 会话历史（`posse history`）：

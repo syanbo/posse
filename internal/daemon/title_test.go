@@ -178,6 +178,49 @@ func TestSessionTitleAntigravity(t *testing.T) {
 	}
 }
 
+func TestSessionTitleZCodeOnlyChangesBoundSession(t *testing.T) {
+	d, w := newTestDaemon(t)
+	path := filepath.Join(t.TempDir(), "native title.sqlite")
+	t.Setenv("ZCODE_SESSION_DB_PATH", path)
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	const sid = "sess_29b8ce03-b68a-4c32-b17d-0cf68ec2174f"
+	const other = "sess_68fe62ef-809f-4e83-a05a-1c2b3e4bf5d3"
+	if _, err := db.Exec(`PRAGMA journal_mode=WAL;
+		CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT, title_source TEXT, time_title_updated INTEGER, time_updated INTEGER);
+		INSERT INTO session VALUES (?, 'Story', 'generated', NULL, 123), (?, 'Other', 'generated', NULL, 123)`, sid, other); err != nil {
+		t.Fatal(err)
+	}
+	s, err := d.startTerminal(w, []string{"/bin/cat"}, "zcode", 80, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.setAgent(s, term.AgentState{Status: agent.StatusIdle, SessionID: sid})
+	call(t, d.terminalRename, map[string]any{"terminal": s.ID, "name": "old label"})
+	params := map[string]any{"terminal": s.ID, "title": "feat｜ZCode title", "sessionIds": map[string]string{"zcode": other}}
+	raw, _ := json.Marshal(params)
+	if _, err := d.sessionTitle(t.Context(), raw); err == nil || !strings.Contains(err.Error(), "session changed") {
+		t.Fatalf("wrong session accepted: %v", err)
+	}
+	params["sessionIds"] = nil
+	r := call(t, d.sessionTitle, params).(sessionTitleResult)
+	if r.Title == "" || r.Agent != "zcode" || s.Agent().Title != r.Title || s.userName() != "" {
+		t.Fatalf("rename result %+v, terminal %+v, label %q", r, s.Agent(), s.userName())
+	}
+	var title, source string
+	var changed, activity int64
+	err = db.QueryRow(`SELECT title, title_source, time_title_updated, time_updated FROM session WHERE id = ?`, sid).Scan(&title, &source, &changed, &activity)
+	if err != nil || title != r.Title || source != "custom" || changed <= 0 || activity != 123 {
+		t.Fatalf("stored title %q (%s), changed=%d, activity=%d: %v", title, source, changed, activity, err)
+	}
+	if err := db.QueryRow(`SELECT title FROM session WHERE id = ?`, other).Scan(&title); err != nil || title != "Other" {
+		t.Fatalf("another title changed to %q: %v", title, err)
+	}
+}
+
 func TestConcurrentSessionAndTerminalRename(t *testing.T) {
 	d, w := newTestDaemon(t)
 	s, err := d.startTerminal(w, []string{"/bin/cat"}, "cursor", 80, 20)

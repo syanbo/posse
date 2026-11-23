@@ -132,3 +132,129 @@ func TestZCodeHistoryContinuesAfterOversizedSession(t *testing.T) {
 		t.Fatalf("healthy session did not survive: %q, %v", sid, err)
 	}
 }
+
+func TestZCodeUsageReadsNativeSession(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zcode.sqlite")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;
+		CREATE TABLE session(id TEXT PRIMARY KEY, directory TEXT, time_deleted INTEGER);
+		CREATE TABLE part(id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, time_updated INTEGER, data TEXT);
+		CREATE TABLE tool_usage(id TEXT PRIMARY KEY, session_id TEXT, tool_call_id TEXT, tool_name TEXT, status TEXT, started_at INTEGER);
+		CREATE TABLE model_usage(id TEXT PRIMARY KEY, session_id TEXT, query_source TEXT, started_at INTEGER,
+			input_tokens INTEGER, output_tokens INTEGER, cache_creation_input_tokens INTEGER, cache_read_input_tokens INTEGER,
+			provider_total_tokens INTEGER, computed_total_tokens INTEGER);`); err != nil {
+		t.Fatal(err)
+	}
+	sid := healthyZCodeFixture
+	if _, err := db.Exec(`INSERT INTO session VALUES (?, '/tmp/project', NULL), (?, '/tmp/project', 1)`, sid, failedZCodeFixture); err != nil {
+		t.Fatal(err)
+	}
+	for i, data := range []string{
+		`{"type":"tool","callID":"skill","tool":"Skill","state":{"status":"completed","input":{"skill":"review"}}}`,
+		`{"type":"tool","callID":"shell","tool":"Bash","state":{"status":"error","input":{"command":"git status"}}}`,
+		`{"type":"tool","callID":"shell","tool":"Bash","state":{"status":"completed","input":{"command":"git status"}}}`,
+		`{"type":"tool","callID":"search","tool":"custom","state":{"status":"completed","input":{"url":"https://example.com"},
+			"metadata":{"display":{"kind":"mcp_tool","serverName":"docs","toolName":"fetch"}}}}`,
+		`{"type":"tool","callID":"denied","tool":"mcp__docs__fetch","state":{"status":"completed","metadata":{"providerIsError":true}}}`,
+		`{"type":"tool","callID":"running","tool":"Bash","state":{"status":"running","input":{"command":"git log"}}}`,
+		`{"type":"tool","callID":"screenshot","tool":"Screenshot","state":{"status":"completed","input":{"source":"browser_turn_end"}}}`,
+	} {
+		if _, err := db.Exec(`INSERT INTO part VALUES (?, ?, ?, ?, ?)`, i, sid, i, i, data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO tool_usage VALUES
+		('1', ?, 'skill', 'Skill', 'completed', 0),
+		('2', ?, 'shell', 'Bash', 'completed', 2),
+		('3', ?, 'search', 'custom', 'completed', 3),
+		('4', ?, 'denied', 'mcp__docs__fetch', 'error', 4),
+		('5', ?, 'running', 'Bash', 'running', 5),
+		('6', ?, 'no-part', 'Write', 'completed', 7)`, sid, sid, sid, sid, sid, sid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO model_usage VALUES
+		('m1', ?, 'main_turn', 1, 100, 10, 0, 20, 110, 110),
+		('m2', ?, 'main_turn', 2, 130, 20, 0, 40, 150, 150),
+		('m3', ?, 'title_generation', 3, 5, 3, 0, 7, 15, 15)`, sid, sid, sid); err != nil {
+		t.Fatal(err)
+	}
+	u, err := ReadZCodeUsage(t.Context(), path, sid)
+	if err != nil || !u.Found || u.Tokens == nil || *u.Tokens != (TokenUsage{Total: 175, Input: 142, Output: 33, Requests: 3}) {
+		t.Fatalf("session tokens: %+v, %v", u, err)
+	}
+	if len(u.Tools) != 3 || u.Tools[0] != (UsageItem{Name: "Bash", Count: 1}) || u.Tools[2] != (UsageItem{Name: "Write", Count: 1}) ||
+		len(u.Skills) != 1 || u.Skills[0] != (UsageItem{Name: "review", Count: 1}) ||
+		len(u.MCP) != 1 || u.MCP[0].Server != "docs" || u.MCP[0].Count != 1 ||
+		len(u.CLI) != 1 || u.CLI[0].Name != "git" || u.CLI[0].Count != 1 ||
+		len(u.Web) != 1 || u.Web[0].Host != "example.com" || !u.Events[len(u.Events)-1].Failed {
+		t.Fatalf("session tools: %+v", u.Usage)
+	}
+	if deleted, err := ReadZCodeUsage(t.Context(), path, failedZCodeFixture); err != nil || deleted.Found {
+		t.Fatalf("deleted session: %+v, %v", deleted, err)
+	}
+	const fork = "sess_01234567-89ab-4cde-8f01-23456789abcf"
+	if _, err := db.Exec(`INSERT INTO session VALUES (?, '/tmp/project', NULL);
+		INSERT INTO part SELECT 'fork-part', ?, time_created, time_updated, data FROM part WHERE id = '2'`, fork, fork); err != nil {
+		t.Fatal(err)
+	}
+	u, err = ReadZCodeUsage(t.Context(), path, fork)
+	if err != nil || !u.Found || len(u.Tools)+len(u.CLI)+len(u.Events) != 0 || u.Tokens != nil {
+		t.Fatalf("fork inherited usage: %+v, %v", u, err)
+	}
+}
+
+func TestZCodeUsageReadsPreLedgerDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.sqlite")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE session(id TEXT PRIMARY KEY, directory TEXT);
+		CREATE TABLE part(id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, time_updated INTEGER, data TEXT);
+		INSERT INTO session VALUES (?, '/tmp/project');
+		INSERT INTO part VALUES ('1', ?, 1, 1, '{"type":"tool","tool":"Read","state":{"status":"completed"}}')`,
+		healthyZCodeFixture, healthyZCodeFixture); err != nil {
+		t.Fatal(err)
+	}
+	u, err := ReadZCodeUsage(t.Context(), path, healthyZCodeFixture)
+	if err != nil || !u.Found || len(u.Tools) != 1 || u.Tools[0].Name != "Read" || u.Tokens != nil {
+		t.Fatalf("legacy session: %+v, %v", u, err)
+	}
+}
+
+func TestZCodeRuntimeSessionRequiresUniqueForegroundRoot(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zcode.sqlite")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	const child = "sess_01234567-89ab-4cde-8f01-23456789abcf"
+	if _, err := db.Exec(`CREATE TABLE session(id TEXT PRIMARY KEY, title TEXT, task_type TEXT, time_deleted INTEGER);
+		CREATE TABLE session_runtime_presence(session_id TEXT, process_id INTEGER)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO session VALUES (?, 'old', 'interactive', NULL), (?, 'current', 'fork', NULL), (?, 'child', 'subagent_child', NULL)`,
+		failedZCodeFixture, healthyZCodeFixture, child); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO session_runtime_presence VALUES (?, 41), (?, 42), (?, 42), (?, 42)`,
+		failedZCodeFixture, healthyZCodeFixture, healthyZCodeFixture, child); err != nil {
+		t.Fatal(err)
+	}
+	if id, title, ambiguous := ZCodeRuntimeSession(t.Context(), path, 42); id != healthyZCodeFixture || title != "current" || ambiguous {
+		t.Fatalf("foreground session = %q, %q, ambiguous=%v", id, title, ambiguous)
+	}
+	if _, err := db.Exec(`INSERT INTO session_runtime_presence VALUES (?, 42)`, failedZCodeFixture); err != nil {
+		t.Fatal(err)
+	}
+	if id, _, ambiguous := ZCodeRuntimeSession(t.Context(), path, 42); id != "" || !ambiguous {
+		t.Fatalf("foreground session = %q, ambiguous=%v", id, ambiguous)
+	}
+}

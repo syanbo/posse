@@ -41,7 +41,7 @@ func DesktopMethod(method string) (write, allowed bool) {
 	switch method {
 	case "daemon.info", "daemon.status", "project.list", "workspace.list", "workspace.show", "workspace.current", "workspace.diff", "usage.get",
 		"terminal.list", "terminal.show", "terminal.read", "terminal.wait", "terminal.cheatsheet", "task.list", "task.show", "git.trace", "git.discover", "git.status", "git.branches", "git.file", "git.blobRange", "git.log", "git.commitFiles", "git.blame", "git.compare", "git.worktreeCompare", "git.pushPreview", "git.divergence", "git.remotesContaining",
-		"history.list", "history.search", "history.show", "media.list", "media.path", "files.entry", "files.version", "files.stat", "files.readDirs", "files.readRange", "files.resourceRange", "files.resourceVersion", "files.list", "files.search", "files.symbols", "files.definition":
+		"history.list", "history.search", "history.show", "session.tools", "media.list", "media.path", "files.entry", "files.version", "files.stat", "files.readDirs", "files.readRange", "files.resourceRange", "files.resourceVersion", "files.list", "files.search", "files.symbols", "files.definition":
 		return false, true
 	case "git.history", "git.integrate", "git.stash", "git.commit", "git.paths", "git.branch", "git.update", "git.push", "git.fetch", "chat.ensure", "project.add", "project.set", "project.rm", "workspace.create", "workspace.rm", "workspace.relocate", "workspace.merge",
 		"terminal.create", "terminal.clear", "terminal.rename", "terminal.seen", "terminal.reclaimSize", "terminal.close",

@@ -120,6 +120,11 @@ const (
 	shadowDim  = 0.6 // 侧栏影子行（派到别的工作区的 worker）的不透明度
 )
 
+const (
+	usageSummaryInset = 4
+	usageSummaryGap   = 6
+)
+
 // 圆角按角色分五档，嵌套时外圆角 = 内圆角 + 内边距（规则见 docs/design.md）。
 const (
 	rSmall    = 4  // 小标签、小芯片、勾选框、小按钮

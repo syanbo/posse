@@ -14,6 +14,8 @@ hooks 注入方式和 hook 的 stdout 规则见根目录 AGENTS.md。这里是 a
 
 桌面和手机粘贴图片时，Posse 保存这次粘贴的图片，再把文件路径送给 ZCode，由它读取该文件。ZCode 记下的媒体从终端的「图片」面板及手机「图片与视频」查看。
 
+在 ZCode 会话中运行 `posse session title` 时，Posse 按原生库里前台进程唯一的顶层会话核对 `ZCODE_SESSION_ID`。没开状态插件时也按这份运行记录跟随 `/new`，子 agent 的会话不会换掉当前绑定。旧库没有运行记录时用已有绑定，尚未绑定时从工具环境取会话 ID。Posse 标签立即更新，ZCode 续接列表会显示新名字，已打开的 ZCode 界面可能需要重开。自动标题不会覆盖自定义标题。
+
 ## 通用行为
 
 - 终端里的 agent 不只看启动参数：每次标题变化时取 PTY 的前台进程组（`Terminal.Foreground`），按它的 argv 认出 agent（`agent.OfProcess`；argv[0] 只是 `agent` 时看 exec 的路径：grok 和 Cursor 都装了叫 `agent` 的入口，指向谁看 PATH），和记录的不同就换过来、清掉旧会话信息（`session.detectAgent`）。这样在 grok 退出后的 shell 里手动敲 `claude`，图标和状态都跟着变。换上的 agent 没有 hooks 时，会话 ID 从它的参数里取（`agent.SessionFromArgs`：`--session-id`、`--resume <UUID>`，Codex 是 `resume <UUID>`，Antigravity 是 `--conversation <UUID>`），技能与工具面板凭它找会话文件。grok 和没经过同名脚本启动的没有 hooks，状态靠 OSC 7501（见下一条），没报过 7501 时靠标题（`agent.TitleOnlyStatus`：Claude 以 `✳` 开头是空闲，转动的圆形符号或盲文转圈符是工作中；grok 盲文转圈符开头是工作中，含 `Action Required` 是待处理，其余是空闲）。前台换成 shell、编辑器等不是 agent 的程序时不改，免得 agent 临时让出前台被当成退出。agent 退出时把它从终端上摘掉，终端退回普通 shell（侧栏不再列出，标签换回终端图标）：收到退出事件（Claude 的 SessionEnd 带 `prompt_input_exit` 等、Codex/Cursor 的 SessionEnd），或记下的 agent 进程组组长已经不在、exec 成了别的程序（`session.goneAgentPg`，标题变化时和每 2 秒查一次，崩溃、被杀、没有 hooks 的 agent 靠它）。

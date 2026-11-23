@@ -105,6 +105,8 @@ class ToolUsage {
     this.cli = const [],
     this.web = const [],
     this.searches = 0,
+    this.tools = const [],
+    this.tokens,
     this.events = const [],
   });
 
@@ -114,6 +116,7 @@ class ToolUsage {
         if (e is Map) e.cast<String, Object?>(),
     ];
     int n(Object? v) => (v as num?)?.toInt() ?? 0;
+    final tokens = j['tokens'];
     return ToolUsage(
       found: j['found'] == true,
       skills: [
@@ -137,6 +140,18 @@ class ToolUsage {
           ToolCount(r['host'] as String? ?? '', n(r['count'])),
       ],
       searches: n(j['searches']),
+      tools: [
+        for (final r in rows(j['tools']))
+          ToolCount(r['name'] as String? ?? '', n(r['count'])),
+      ],
+      tokens: tokens is Map
+          ? (
+              total: n(tokens['total']),
+              input: n(tokens['input']),
+              output: n(tokens['output']),
+              requests: n(tokens['requests']),
+            )
+          : null,
       events: [for (final r in rows(j['events'])) ToolEvent.fromJson(r)],
     );
   }
@@ -149,6 +164,8 @@ class ToolUsage {
   /// 访问过的网站（按域名）和网页搜索的次数，旧版电脑没有。
   final List<ToolCount> web;
   final int searches;
+  final List<ToolCount> tools;
+  final ({int total, int input, int output, int requests})? tokens;
   final List<ToolEvent> events;
 }
 
@@ -338,6 +355,8 @@ class _ToolsScreenState extends State<ToolsScreen> {
     if (u.skills.isEmpty &&
         u.mcp.isEmpty &&
         u.cli.isEmpty &&
+        u.tools.isEmpty &&
+        u.tokens == null &&
         u.web.isEmpty &&
         u.searches == 0) {
       return EmptyState(
@@ -368,6 +387,7 @@ class ToolsView extends StatelessWidget {
     final steps = toolSteps(u.events, filter: filter);
     final noSkills = u.skills.isEmpty && u.mcp.isEmpty;
     final noWeb = u.web.isEmpty && u.searches == 0;
+    final tokens = u.tokens;
     final empty = switch (filter) {
       ToolsFilter.skills when noSkills => l.chatToolsNoSkills,
       ToolsFilter.web when noWeb => l.chatToolsNoWeb,
@@ -411,6 +431,33 @@ class ToolsView extends StatelessWidget {
                         icon: Icons.extension_rounded,
                         color: c.sky,
                         item: m,
+                      ),
+                  ],
+                ),
+              ],
+              if (filter == ToolsFilter.all && tokens != null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  l.chatToolsTokens(tokens.total, tokens.requests),
+                  style: TextStyle(fontSize: Fs.small, color: c.muted),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l.chatToolsTokenBreakdown(tokens.input, tokens.output),
+                  style: TextStyle(fontSize: Fs.small, color: c.muted),
+                ),
+              ],
+              if (filter == ToolsFilter.all && u.tools.isNotEmpty) ...[
+                _header(c, l.chatToolsCalls),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final tool in u.tools)
+                      _Chip(
+                        icon: Icons.extension_rounded,
+                        color: c.sky,
+                        item: tool,
                       ),
                   ],
                 ),
