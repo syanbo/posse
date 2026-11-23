@@ -50,7 +50,7 @@ class TerminalScreen extends StatefulWidget {
   final SessionTab tab;
 
   /// 设置里选了先开终端时，从这里切到对话页。
-  final VoidCallback? onOpenChat;
+  final ValueChanged<SessionTab>? onOpenChat;
 
   @override
   State<TerminalScreen> createState() => _TerminalScreenState();
@@ -269,7 +269,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     }
     _agentState = agentState;
     final key =
-        '${tab.title}|${tab.state}|${tab.toolName}|${widget.model.settings.terminalFontSize}|$_ended|${widget.model.rpc == null}';
+        '${tab.title}|${tab.agent}|${tab.sessionId}|${tab.state}|${tab.toolName}|${widget.model.settings.terminalFontSize}|$_ended|${widget.model.rpc == null}';
     if (key != _titleKey && mounted) setState(() => _titleKey = key);
   }
 
@@ -992,8 +992,8 @@ class _TerminalScreenState extends State<TerminalScreen>
               final nav = Navigator.of(context);
               final action = await showSessionMore(
                 context,
-                tab: widget.tab,
-                switchLabel: widget.onOpenChat == null
+                tab: _liveTab,
+                switchLabel: widget.onOpenChat == null || !_liveTab.eligible
                     ? null
                     : context.l10n.terminalSwitchToChat,
                 switchIcon: Icons.chat_bubble_outline_rounded,
@@ -1030,7 +1030,9 @@ class _TerminalScreenState extends State<TerminalScreen>
                   ),
                 );
               }
-              if (action == 'switch') widget.onOpenChat?.call();
+              if (action == 'switch' && _liveTab.eligible) {
+                widget.onOpenChat?.call(_liveTab);
+              }
               if (action == 'close' &&
                   await closeSession(this.context, widget.model, widget.tab)) {
                 nav.pop();

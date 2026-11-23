@@ -24,6 +24,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatCode => 'Code';
 
   @override
+  String chatCompactBodyGeneral(String agent) {
+    return '$agent will summarize the conversation so far to free up context.';
+  }
+
+  @override
   String chatCompactBody(int percent, String agent) {
     return '$percent% of the context is used. $agent will condense the conversation so far into a summary (/compact) to make room to keep going.';
   }
@@ -232,6 +237,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatSendRefused => 'Not delivered';
+
+  @override
+  String get chatSendRequiresMacUpdate =>
+      'Update Posse on the Mac to send from Chat, or switch to Terminal.';
 
   @override
   String get chatSendUnknown =>

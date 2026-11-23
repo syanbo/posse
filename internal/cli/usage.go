@@ -27,7 +27,7 @@ func cmdUsage(e *env, args []string) error {
 			fmt.Fprintln(e.out, "codex usage refresh failed:", st.CodexError)
 		}
 		if len(st.Usages) == 0 {
-			fmt.Fprintln(e.out, "no usage yet: it updates as Claude, Codex, Grok or Cursor run in Posse")
+			fmt.Fprintln(e.out, "no usage yet: it updates as Claude, Codex, Grok, Cursor or Antigravity run in Posse")
 			return
 		}
 		now := time.Now()

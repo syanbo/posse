@@ -823,6 +823,9 @@ func (d *Daemon) afterAgent(s *session, prev string, st host.AgentState) {
 	}
 	switch st.Status {
 	case agent.StatusIdle:
+		if prev == agent.StatusWorking && s.agentName() == "antigravity" {
+			go d.antigravityAsk(context.Background(), false)
+		}
 		go d.deliver(s.ID)
 		// 讨论 worker 汇报后停到输入框，下一轮这时才能派
 		d.discKick()

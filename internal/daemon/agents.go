@@ -25,6 +25,7 @@ const (
 type agentScan struct {
 	mu        sync.Mutex
 	installed []string
+	path      string
 }
 
 // installedAgents 是本机装了的 agent（按 agent.Known 的顺序），还没检测完时为 nil。
@@ -77,11 +78,17 @@ func (d *Daemon) detectLoop(ctx context.Context) {
 		}
 		got := agent.Installed(found, path, skip)
 		d.agents.mu.Lock()
+		newAntigravity := slices.Contains(got, "antigravity") &&
+			(!slices.Contains(d.agents.installed, "antigravity") || path != d.agents.path)
 		if !slices.Equal(got, d.agents.installed) {
 			log.Printf("installed agents: %s", strings.Join(got, ", "))
 		}
 		d.agents.installed = got
+		d.agents.path = path
 		d.agents.mu.Unlock()
+		if newAntigravity {
+			go d.antigravityAsk(ctx, false)
+		}
 		select {
 		case <-ctx.Done():
 			return

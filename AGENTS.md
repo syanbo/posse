@@ -79,7 +79,7 @@ third_party/mygo       带改动的 mygo v0.7.4（改动与升级方法见其中
 
 ## 关键约定
 
-- **Antigravity**：内部标识 `antigravity`、命令 `agy`；初始提示走 `-i`，恢复走 `--conversation UUID`。1.5.11 不支持会话级 hooks 配置，状态靠 OSC 7501（`app=antigravity`），任务提醒在空闲时输入，不改全局 hooks。会话 ID 来自恢复参数或 `ANTIGRAVITY_CONVERSATION_ID` 的会话命名调用；新会话尚未绑定 ID 时不猜日志归属。历史、技能与已核实边界见 `docs/plans/antigravity.md`。
+- **Antigravity**：内部标识 `antigravity`、命令 `agy`；初始提示走 `-i`，恢复走 `--conversation UUID`。1.5.11 不支持会话级 hooks 配置，状态靠 OSC 7501（`app=antigravity`），任务提醒在空闲时输入，不改全局 hooks。会话 ID 来自 agy 进程持有的会话锁、恢复参数或 `ANTIGRAVITY_CONVERSATION_ID` 的会话命名调用。历史、技能与已核实边界见 `docs/plans/antigravity.md`。
 
 - **锁与升级交接**（细则见 `docs/plans/terminal-host.md`）：常驻进程持有 `$POSSE_HOME/possed.lock` 直到完全退出，普通启动只在持锁时增删 socket/pid（拿到锁后 socket 仍有人应答则退出）。交接新进程先写 pid、立即接过旧 socket 服务，后台等锁拿到后再开手机服务；新建终端与交接经 `handoffState.startMu` 互斥；双向不兼容变更才递增 `handoffVersion`，兼容可选字段不加；交接终端及关联任务不记 `lost`，交接空档退出的终端记 `-1`，交接中 `terminal wait --for idle` 不算空闲，手机占尺寸时随 `DeskCols`/`DeskRows` 带回桌面尺寸。退出时 `rpc.Server` 最多等 3 秒写完在途回复，因请求 ctx 取消的回 `restarting`；长等待 RPC 必须响应 ctx，CLI 走 `doWait` 续等（`task ask` 改 `--resume`，`hook.permission.hold` 重挂）。
 - **拉起与运行副本**：拉起常驻进程和采集子进程一律经 `internal/spawn`（新会话 + `responsibility_spawnattrs_setdisclaim` 让其自身承担 TCC 授权，`daemon.OpenLog` 启动前超 5 MB 轮转为 `daemon.log.1`，`EnsureDaemon` 后台 `Wait` 防僵尸）。打包版常驻进程从 `~/Library/Application Support/Posse/runtime/` 下的 APFS 克隆副本运行（`spawn.Runtime`，终端记 `session.runtime`，启动时和终端退出后按引用回收，防换包后 TCC 拒访；详见 `docs/plans/terminal-host.md`）。重新打包覆盖后窗口进程会丢 TCC 授权，需重开窗口（`internal/app/relaunch.go`）。

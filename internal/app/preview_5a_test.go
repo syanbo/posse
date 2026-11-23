@@ -106,7 +106,7 @@ func TestPreview5A(t *testing.T) {
 		}},
 		{name: "usage", setup: func(a *app, m locales.Messages) {
 			a.state.RightPanel = panelUsage
-			a.usage = usageView{term: "t1", found: true, poll: panelPoll{at: time.Now()}, data: history.Usage{
+			a.usage = usageView{source: usageSource(&a.workspaces[0].Terminals[0]), found: true, poll: panelPoll{at: time.Now()}, data: history.Usage{
 				Skills: []history.UsageItem{{Name: "computer-use", Count: 3}, {Name: "chatgpt-imagegen", Count: 1}},
 				MCP:    []history.MCPUsage{{Server: "codex-cu", Count: 55}, {Server: "androidmirror", Count: 4}},
 				CLI: []history.CLIUsage{
@@ -120,7 +120,7 @@ func TestPreview5A(t *testing.T) {
 		}},
 		{name: "usage-empty", setup: func(a *app, m locales.Messages) {
 			a.state.RightPanel = panelUsage
-			a.usage = usageView{term: "t1", poll: panelPoll{at: time.Now()}}
+			a.usage = usageView{source: usageSource(&a.workspaces[0].Terminals[0]), poll: panelPoll{at: time.Now()}}
 		}},
 		{name: "memory", setup: func(a *app, m locales.Messages) {
 			w := a.workspaces[0]

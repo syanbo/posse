@@ -40,6 +40,8 @@ const (
 	CodeTimeout    = "timeout"
 	CodeInternal   = "internal"
 	CodeUnknown    = "unknown_method"
+	// CodeWorkspaceRequired 表示历史会话没记录目录，由调用方指定工作区。
+	CodeWorkspaceRequired = "workspace_required"
 	// CodeRestarting 是常驻进程退出（交接给新进程或重启）时打断的长等待，调用方可以重发
 	CodeRestarting = "restarting"
 )

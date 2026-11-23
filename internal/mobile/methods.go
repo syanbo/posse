@@ -23,6 +23,8 @@ import (
 type Host interface {
 	State() State
 	Terminal(id string) host.Terminal // 没有时为 nil
+	// TerminalSessionID 在写入对话输入前重查终端当前绑定的会话。
+	TerminalSessionID(id string) string
 	// SessionTerminal 是正在运行这个 agent 会话的终端，没有时为 nil。agent 为空时不看是哪个 agent。
 	// 对话流每轮、终端每次有输出都要找一次，不经 State（查库、读每个工作区的 HEAD）
 	SessionTerminal(agent, sessionID string) host.Terminal
@@ -635,7 +637,9 @@ func (c *conn) dispatch(req request) error {
 		}
 		return c.reply(req.ID, map[string]any{"unsubscribed": true})
 	case "terminal.send":
-		return c.sendInput(req.ID, p)
+		return c.sendInput(req.ID, p, false)
+	case "terminal.sendForSession":
+		return c.sendInput(req.ID, p, true)
 	case "nativeChat.readSession":
 		return c.readNativeChat(req.ID, p)
 	case "nativeChat.subscribe":
@@ -802,20 +806,24 @@ func (c *conn) eventsStream(ctx contextDone, id string) {
 
 type contextDone interface{ Done() <-chan struct{} }
 
-func (c *conn) sendInput(id string, p json.RawMessage) error {
+func (c *conn) sendInput(id string, p json.RawMessage, requireSession bool) error {
 	var a struct {
 		termParams
 		Text string `json:"text"`
 		Raw  string `json:"raw"` // 终端按键的原始字节，标准 base64。有它就按字节写
 		// Posse 扩展：一串按键，每个是标准 base64，一个一个写、中间隔 [keyGap]。有它就不看 raw。
 		// Cursor Agent 把一次读到的几个按键当成一段输入，Ctrl+U、退格原样插进输入框，只能分开送
-		RawKeys   []string `json:"rawKeys"`
-		Enter     bool     `json:"enter"`
-		Interrupt bool     `json:"interrupt"`
-		InputKind string   `json:"inputKind"`
+		RawKeys           []string `json:"rawKeys"`
+		Enter             bool     `json:"enter"`
+		Interrupt         bool     `json:"interrupt"`
+		InputKind         string   `json:"inputKind"`
+		ExpectedSessionID string   `json:"expectedSessionId"`
 	}
 	if err := json.Unmarshal(p, &a); err != nil {
 		return errorf("invalid_params", "%v", err)
+	}
+	if requireSession && a.ExpectedSessionID == "" {
+		return errorf("invalid_params", "expectedSessionId is required")
 	}
 	t := c.srv.host.Terminal(a.Terminal)
 	if t == nil {
@@ -846,6 +854,13 @@ func (c *conn) sendInput(id string, p json.RawMessage) error {
 	n := 0
 	accepted, outcome := true, "accepted"
 	write := func(p []byte) bool {
+		if a.ExpectedSessionID != "" && c.srv.host.TerminalSessionID(a.Terminal) != a.ExpectedSessionID {
+			accepted, outcome = false, "refused"
+			if n > 0 {
+				outcome = "unknown"
+			}
+			return false
+		}
 		if err := t.Send(p); err != nil {
 			accepted, outcome = false, "refused"
 			return false
@@ -863,7 +878,7 @@ func (c *conn) sendInput(id string, p json.RawMessage) error {
 				break
 			}
 		}
-		if len(payload) > 0 {
+		if accepted && len(payload) > 0 {
 			write(payload)
 		}
 		if accepted && a.Enter {

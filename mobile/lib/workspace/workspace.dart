@@ -299,35 +299,76 @@ String worktreeLabel(WorktreeRow row) {
   return '${row.repo} / ${row.name}';
 }
 
+Future<WorktreeRow?> showWorkspacePicker(
+  BuildContext context,
+  List<WorktreeRow> worktrees, {
+  String? selected,
+}) => showModalBottomSheet<WorktreeRow>(
+  context: context,
+  isScrollControlled: true,
+  showDragHandle: true,
+  useSafeArea: true,
+  builder: (sheet) {
+    final c = PosseColors.of(sheet);
+    return SizedBox(
+      height: MediaQuery.sizeOf(sheet).height * 0.7,
+      child: ListView(
+        children: [
+          Section(
+            title: sheet.l10n.sessionPickWorkspace,
+            inset: 48,
+            children: [
+              for (final row in worktrees)
+                RowTile(
+                  chevron: false,
+                  leading: LineIconView(
+                    LineIcon.folder,
+                    size: Ic.button,
+                    color: c.accent,
+                  ),
+                  title: Text(worktreeLabel(row)),
+                  subtitle: Text(
+                    row.branch.isNotEmpty ? row.branch : tildePath(row.path),
+                    style: mono(Fs.small, color: c.muted),
+                  ),
+                  trailing: row.id == selected
+                      ? Icon(Icons.check_rounded, color: c.accent)
+                      : null,
+                  onTap: () => Navigator.of(sheet).pop(row),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  },
+);
+
 /// 打开一个会话：有原生存档的 agent 进对话页（右上角能切到终端），其余直接进终端。
 void openSession(BuildContext context, PosseAppModel model, SessionTab tab) {
   final nav = Navigator.of(context);
-  if (!tab.eligible) {
-    nav.push(
-      MaterialPageRoute<void>(
-        builder: (_) => TerminalScreen(model: model, tab: tab),
-      ),
-    );
-    return;
-  }
   // 对话和终端二选一：顶栏的按钮在两者之间替换当前页，返回时回到打开会话之前的页面
-  late Route<void> Function() chat;
-  late Route<void> Function() terminal;
-  chat = () => MaterialPageRoute<void>(
+  late Route<void> Function(SessionTab) chat;
+  late Route<void> Function(SessionTab) terminal;
+  chat = (current) => MaterialPageRoute<void>(
     builder: (_) => ChatScreen(
       model: model,
-      tab: tab,
-      onOpenTerminal: () => nav.pushReplacement(terminal()),
+      tab: current,
+      onOpenTerminal: (live) => nav.pushReplacement(terminal(live)),
     ),
   );
-  terminal = () => MaterialPageRoute<void>(
+  terminal = (current) => MaterialPageRoute<void>(
     builder: (_) => TerminalScreen(
       model: model,
-      tab: tab,
-      onOpenChat: () => nav.pushReplacement(chat()),
+      tab: current,
+      onOpenChat: (live) => nav.pushReplacement(chat(live)),
     ),
   );
-  nav.push(model.settings.openMode == 'terminal' ? terminal() : chat());
+  nav.push(
+    !tab.eligible || model.settings.openMode == 'terminal'
+        ? terminal(tab)
+        : chat(tab),
+  );
 }
 
 /// 会话这一刻在做什么，一行话。

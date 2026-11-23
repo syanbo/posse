@@ -28,6 +28,23 @@ func TestHandoffText(t *testing.T) {
 	}
 }
 
+func TestHistoryResumeWorkspacePicker(t *testing.T) {
+	a := previewApp(t)
+	a.history.resumePicker = &historyResumePicker{request: a.request(), session: history.Session{ID: "agy"}}
+	tt := newTester(a.build, 900, 600)
+	tt.Frame()
+	if !tt.HasText("选择工作区") || !tt.HasText(a.workspaces[0].Label) {
+		t.Fatalf("workspace picker not shown: %v", tt.Texts())
+	}
+	if err := tt.Click("取消"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.history.resumePicker != nil {
+		t.Fatal("workspace picker stayed open after cancel")
+	}
+}
+
 // 历史列表里上下键换选中：只走看得见的会话，折起来的分组跳过，到头不动。
 func TestHistoryArrowKeys(t *testing.T) {
 	a := previewApp(t)

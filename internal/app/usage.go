@@ -17,12 +17,23 @@ import (
 // usageView 是右侧"技能与工具"面板的状态：当前终端的会话用到了哪些技能、MCP 工具、命令行程序和网址。
 // 会话文件在窗口进程里增量只读解析，不经过常驻进程。
 type usageView struct {
-	term    string // 统计的是哪个终端
+	source  terminalUsageSource
+	version uint64
 	scanner *history.UsageScanner
 	data    history.Usage
 	found   bool // 找到了会话文件
 	err     string
 	poll    panelPoll
+}
+
+type terminalUsageSource struct{ terminal, agent, session, transcript string }
+
+func usageSource(t *terminalInfo) terminalUsageSource {
+	s := terminalUsageSource{terminal: t.ID, agent: t.Agent}
+	if t.AgentState != nil {
+		s.session, s.transcript = t.AgentState.SessionID, t.AgentState.TranscriptPath
+	}
+	return s
 }
 
 // usageRefresh 是面板开着时多久增量读一次会话文件。
@@ -36,22 +47,19 @@ func usageSupported(agent string) bool {
 // pollUsage 在主线程调用：换了终端就重来，到点了就在后台读会话文件的新内容。
 func (a *app) pollUsage(c *ui.Context, cur *terminalInfo) {
 	u := &a.usage
-	if u.term != cur.ID {
-		*u = usageView{term: cur.ID}
+	source := usageSource(cur)
+	if u.source != source {
+		*u = usageView{source: source, version: u.version + 1}
 	}
 	if !usageSupported(cur.Agent) || !u.poll.due(c, usageRefresh) {
 		return
 	}
-	id, agent, scanner := cur.ID, cur.Agent, u.scanner
-	var sid, reported string
-	if cur.AgentState != nil {
-		sid, reported = cur.AgentState.SessionID, cur.AgentState.TranscriptPath
-	}
+	version, scanner := u.version, u.scanner
 	go func() {
 		// 会话文件要等 agent 写下第一条记录才出现，找不到就下次再找
 		if scanner == nil {
-			if path := history.TranscriptPath(agent, sid, reported); path != "" {
-				scanner = history.NewUsageScanner(agent, path)
+			if path := history.TranscriptPath(source.agent, source.session, source.transcript); path != "" {
+				scanner = history.NewUsageScanner(source.agent, path)
 			}
 		}
 		var data history.Usage
@@ -61,7 +69,7 @@ func (a *app) pollUsage(c *ui.Context, cur *terminalInfo) {
 		}
 		a.win.Update(func() {
 			u := &a.usage
-			if u.term != id {
+			if u.version != version {
 				return
 			}
 			u.poll.done()

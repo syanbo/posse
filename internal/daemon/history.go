@@ -467,7 +467,7 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 	case p.Workspace != "":
 		ws, err = d.workspace(p.Workspace)
 	case dir == "":
-		err = rpc.Errorf(rpc.CodeBadRequest, "the session has no recorded directory; pass a workspace")
+		err = rpc.Errorf(rpc.CodeWorkspaceRequired, "the session has no recorded directory; pass a workspace")
 	default:
 		// 会话目录所在的工作区；没有时由调用方决定是否把目录加成项目
 		ws, err = d.currentWorkspace("", dir)

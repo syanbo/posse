@@ -2,10 +2,55 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/history/history.dart';
 import 'package:posse_mobile/history/models.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/workspace/models.dart';
 
 import 'chat_scroll_test.dart' show FakeRpc, FakeModel, text, para;
 
 void main() {
+  testWidgets('没有目录的 Antigravity 历史可以选工作区后恢复', (tester) async {
+    final rpc = _ResumeRpc();
+    final model = FakeModel(rpc)
+      ..worktrees = const [
+        WorktreeRow(
+          id: 'project::workspace',
+          repo: 'Project',
+          name: 'Target workspace',
+          path: '/project',
+          branch: '',
+          live: 0,
+        ),
+      ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HistorySessionScreen(
+          model: model,
+          session: const HistorySession(
+            agent: 'antigravity',
+            id: 's1',
+            title: 'Antigravity',
+            cwd: '',
+            branch: '',
+            updatedAt: null,
+            messages: 1,
+            path: '/transcript.jsonl',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byWidgetPredicate((widget) => widget is FilledButton),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Project / Target workspace'));
+    await tester.pumpAndSettle();
+    expect(rpc.resume, [
+      {'session': 's1', 'path': '/transcript.jsonl'},
+      {'session': 's1', 'path': '/transcript.jsonl', 'workspace': 'workspace'},
+    ]);
+  });
+
   testWidgets('往上翻到头自动读更早的一页，不用点按钮', (tester) async {
     tester.view.physicalSize = const Size(1080, 2340);
     tester.view.devicePixelRatio = 3;
@@ -57,4 +102,24 @@ void main() {
     expect(find.text('更早的消息'), findsNothing);
     expect(find.textContaining('最开始的提示', findRichText: true), findsWidgets);
   });
+}
+
+class _ResumeRpc extends FakeRpc {
+  final resume = <Map<String, Object?>>[];
+
+  @override
+  Future<Map<String, Object?>> call(
+    String method,
+    Map<String, Object?> params, {
+    Duration? timeout,
+  }) async {
+    if (method != 'history.resume') {
+      return super.call(method, params, timeout: timeout);
+    }
+    resume.add(params);
+    if (!params.containsKey('workspace')) {
+      throw RpcException('workspace_required', 'A workspace is required');
+    }
+    return {'terminal': 't1', 'worktree': 'project::workspace'};
+  }
 }

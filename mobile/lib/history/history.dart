@@ -530,14 +530,40 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
   /// 让电脑在会话目录所在的工作区里开终端接着这个会话；已经开着的直接用那个终端。
   Future<void> _resume() async {
     final rpc = widget.model.rpc;
-    if (rpc == null) return;
+    if (rpc == null || _resuming) return;
     setState(() => _resuming = true);
     final messenger = ScaffoldMessenger.of(context);
     final l = context.l10n;
     try {
-      final res = await rpc.call('history.resume', {
+      final params = <String, Object?>{
         'session': widget.session.id,
-      });
+        if (widget.session.path.isNotEmpty) 'path': widget.session.path,
+      };
+      Map<String, Object?> res;
+      try {
+        res = await rpc.call('history.resume', params);
+      } on RpcException catch (error) {
+        if (error.code != 'workspace_required' &&
+            !(error.code == 'bad_request' && widget.session.cwd.isEmpty)) {
+          rethrow;
+        }
+        final model = widget.model;
+        if (!mounted || !identical(rpc, model.rpc)) return;
+        if (model.worktrees.isEmpty) await model.refreshWorktrees();
+        if (!mounted || !identical(rpc, model.rpc)) return;
+        if (model.worktrees.isEmpty) {
+          setState(() => _error = l.homeNoWorkspaces);
+          return;
+        }
+        final workspace = await showWorkspacePicker(context, model.worktrees);
+        if (workspace == null || !mounted || !identical(rpc, model.rpc)) return;
+        res = await rpc.call('history.resume', {
+          ...params,
+          'workspace': workspace.id.split('::').last,
+        });
+      }
+      if (!mounted || !identical(rpc, widget.model.rpc)) return;
+      setState(() => _error = null);
       final terminal = res['terminal'] as String? ?? '';
       final worktree = res['worktree'] as String? ?? '';
       messenger.showSnackBar(
@@ -554,7 +580,9 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e, context.l10n));
+      if (mounted && identical(rpc, widget.model.rpc)) {
+        setState(() => _error = friendlyError(e, context.l10n));
+      }
     } finally {
       if (mounted) setState(() => _resuming = false);
     }

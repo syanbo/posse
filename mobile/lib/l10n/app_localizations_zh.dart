@@ -24,6 +24,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatCode => '代码';
 
   @override
+  String chatCompactBodyGeneral(String agent) {
+    return '$agent 会把之前的对话整理成摘要，腾出上下文空间。';
+  }
+
+  @override
   String chatCompactBody(int percent, String agent) {
     return '上下文已用 $percent%。$agent 会把之前的对话压成一份摘要（/compact），腾出空间接着聊。';
   }
@@ -224,6 +229,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatSendRefused => '没写进去';
+
+  @override
+  String get chatSendRequiresMacUpdate => '请更新 Mac 上的 Posse，或切到终端发送。';
 
   @override
   String get chatSendUnknown => '未确认，先看聊天再重试';

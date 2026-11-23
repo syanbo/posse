@@ -83,6 +83,11 @@ func merge(old, in Usage) Usage {
 	if in.UpdatedAt < old.UpdatedAt {
 		main, other = old, in
 	}
+	// agy /usage 已经按组返回整份配额，同名分池可能同时有不同长度的窗口。
+	if in.Agent == "antigravity" {
+		main.Windows = slices.Clone(main.Windows)
+		return main
+	}
 	out := Usage{Agent: main.Agent, Plan: main.Plan, Spend: main.Spend, UpdatedAt: main.UpdatedAt}
 	// 有的来源不带套餐名（Claude 的 statusLine），较新的读数没有时沿用旧的
 	if out.Plan == "" {
@@ -202,7 +207,7 @@ func sameReading(a, b Usage) bool {
 }
 
 // order 是列出的顺序，和 agent.Known 一致。
-var order = []string{"claude", "codex", "grok", "cursor"}
+var order = []string{"claude", "codex", "grok", "cursor", "antigravity"}
 
 // file 是 $POSSE_HOME/usage.json 的内容。
 type file struct {
@@ -277,7 +282,7 @@ func (s *Store) List(now time.Time) []Usage {
 		u.Windows = slices.Clone(u.Windows)
 		for i, w := range u.Windows {
 			if w.ResetsAt > 0 && w.ResetsAt <= ms {
-				if u.Agent == "codex" {
+				if u.Agent == "codex" || u.Agent == "antigravity" {
 					u.Windows[i].Unknown = true
 				} else {
 					u.Windows[i] = Window{Minutes: w.Minutes, Name: w.Name, At: w.At}

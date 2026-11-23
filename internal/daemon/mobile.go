@@ -159,6 +159,21 @@ func (h mobileHost) Terminal(id string) host.Terminal {
 	return s.Terminal
 }
 
+func (h mobileHost) TerminalSessionID(id string) string {
+	s := h.d.liveSession(id)
+	if s == nil || !s.Running() {
+		return ""
+	}
+	switch s.agentName() {
+	case "":
+		return ""
+	case "antigravity":
+		// PTY 的输入交给前台进程。在它持有唯一会话锁时才允许对话写入。
+		return h.d.antigravityPresenceSessionID(s.Foreground())
+	}
+	return s.Agent().SessionID
+}
+
 // SessionTerminal 和从 State 里按会话 ID 找选到同一个：按工作区的顺序、工作区里按终端开的先后，
 // 只看还在运行的。只查一次工作区列表，不读各工作区的 HEAD、不查任务。
 func (h mobileHost) SessionTerminal(agentName, sessionID string) host.Terminal {

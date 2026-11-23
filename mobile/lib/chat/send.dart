@@ -4,7 +4,7 @@ import '../l10n/l10n.dart';
 import '../protocol/rpc.dart';
 import '../terminal/frames.dart';
 
-enum SendOutcome { accepted, refused, unknown }
+enum SendOutcome { accepted, refused, unknown, macUpdateRequired }
 
 /// [raw] 是终端模拟器要写进 PTY 的原始字节。对话输入走 [text]，由服务端按 UTF-8 写入。
 /// 带 [raw] 时也按 UTF-8 解出一份 text：不认 raw 的旧版 Posse 照样收得到按键。
@@ -15,12 +15,22 @@ Future<SendOutcome> sendTerminal(
   String text = '',
   List<int>? raw,
   List<List<int>>? keys,
+  String? expectedSessionId,
+  bool requireSessionGuard = false,
   required bool enter,
 }) async {
+  if (requireSessionGuard && (expectedSessionId?.isEmpty ?? true)) {
+    return SendOutcome.refused;
+  }
   if (keys != null) raw = [for (final k in keys) ...k];
   try {
-    final result = await rpc.call('terminal.send', {
+    // 旧版会忽略新参数；独立方法能在写入前确认 Mac 支持校验。
+    final method = requireSessionGuard
+        ? 'terminal.sendForSession'
+        : 'terminal.send';
+    final result = await rpc.call(method, {
       'terminal': terminal,
+      'expectedSessionId': ?expectedSessionId,
       if (keys != null) 'rawKeys': [for (final k in keys) base64.encode(k)],
       if (raw != null) ...{
         'raw': base64.encode(raw),
@@ -37,8 +47,14 @@ Future<SendOutcome> sendTerminal(
     if (send['accepted'] == true && outcome == 'accepted') {
       return SendOutcome.accepted;
     }
+    if (outcome == 'unknown') return SendOutcome.unknown;
     if (send['accepted'] == false || outcome == 'refused') {
       return SendOutcome.refused;
+    }
+    return SendOutcome.unknown;
+  } on RpcException catch (error) {
+    if (requireSessionGuard && error.missingMethod) {
+      return SendOutcome.macUpdateRequired;
     }
     return SendOutcome.unknown;
   } catch (_) {
@@ -51,6 +67,7 @@ String sendOutcomeText(AppLocalizations l, SendOutcome outcome) =>
       SendOutcome.accepted => '',
       SendOutcome.refused => l.chatSendRefused,
       SendOutcome.unknown => l.chatSendUnknown,
+      SendOutcome.macUpdateRequired => l.chatSendRequiresMacUpdate,
     };
 
 /// 清空 agent 的输入框，再执行一条斜杠命令（/compact）。[write] 往终端里写一串按键。
@@ -61,11 +78,13 @@ Future<SendOutcome> sendAgentCommand(
   String command, {
   Duration gap = const Duration(milliseconds: 300),
 }) async {
-  await write(clearLines());
-  await write(clearLines());
+  for (var i = 0; i < 2; i++) {
+    final cleared = await write(clearLines());
+    if (cleared != SendOutcome.accepted) return cleared;
+  }
   await Future<void>.delayed(gap);
   final typed = await write(utf8.encode(command));
-  if (typed == SendOutcome.refused) return typed;
+  if (typed != SendOutcome.accepted) return typed;
   await Future<void>.delayed(gap);
   return write(const [0x0d]);
 }

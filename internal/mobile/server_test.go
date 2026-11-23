@@ -105,6 +105,13 @@ func (h *fakeHost) Terminal(id string) host.Terminal {
 	return nil
 }
 
+func (h *fakeHost) TerminalSessionID(id string) string {
+	if t := h.Terminal(id); t != nil {
+		return t.Agent().SessionID
+	}
+	return ""
+}
+
 func (h *fakeHost) CreateTerminal(wid, agent, prompt, command string) (string, error) {
 	return "", errors.New("not supported")
 }
@@ -539,8 +546,19 @@ func TestTerminalSendRawKeepsUTF8(t *testing.T) {
 	p := dialPhone(t, srv, info)
 	const text = "看下今天"
 	raw := base64.StdEncoding.EncodeToString([]byte(text))
-	send := result(t, p.next(p.call("terminal.send", map[string]any{
-		"terminal": "t_1", "raw": raw, "enter": true,
+	tm.SetTitle("", "current", false)
+	missing := p.next(p.call("terminal.sendForSession", map[string]any{"terminal": "t_1", "raw": raw}))
+	if missing["ok"] != false || tm.ContainsText(text) {
+		t.Fatalf("send without a session ID was not rejected: %v", missing)
+	}
+	stale := result(t, p.next(p.call("terminal.sendForSession", map[string]any{
+		"terminal": "t_1", "raw": raw, "enter": true, "expectedSessionId": "old",
+	})))
+	if got := stale["send"].(map[string]any); got["accepted"] != false || got["bytesWritten"] != float64(0) {
+		t.Fatalf("stale session send %v", stale)
+	}
+	send := result(t, p.next(p.call("terminal.sendForSession", map[string]any{
+		"terminal": "t_1", "raw": raw, "enter": true, "expectedSessionId": "current",
 	})))
 	if send["send"].(map[string]any)["accepted"] != true {
 		t.Fatalf("raw send %v", send)

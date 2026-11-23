@@ -122,6 +122,12 @@ abstract class AppLocalizations {
   /// **'Code'**
   String get chatCode;
 
+  /// Chat: confirmation when the context window percentage is unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'{agent} will summarize the conversation so far to free up context.'**
+  String chatCompactBodyGeneral(String agent);
+
   /// Chat: body of the compact-context dialog. {percent} is the used percentage, {agent} the agent name.
   ///
   /// In en, this message translates to:
@@ -457,6 +463,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not delivered'**
   String get chatSendRefused;
+
+  /// Chat: notice when the Mac is too old to validate which Antigravity session receives the input.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Posse on the Mac to send from Chat, or switch to Terminal.'**
+  String get chatSendRequiresMacUpdate;
 
   /// Chat and Terminal: brief notice when it’s unknown whether the message reached the terminal.
   ///

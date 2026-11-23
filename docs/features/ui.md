@@ -39,5 +39,5 @@
 - 窗口最小 900×560：默认宽的侧栏旁边，默认字号的终端还有约 72 列。窗口窄时主区域状态栏先裁掉套餐用量，右边的按钮不被挤掉。
 - agent 痕迹的清理（`internal/app/traces.go`，记账见 `agents.md`）：删工作区时先查它的痕迹，有就把确认框换成带勾选的列表（没有时照旧），确认后先删工作区，成功了再清勾选的（worktree 工作区先查未提交的改动，有就不删、报在错误条上，没有再关掉它的终端后删除，所以开着终端也删得掉）；项目行右键「清理 agent 痕迹…」列出整个项目的。每项是路径、大小（后台算，目录最多数 5 秒）、在访达中显示，下面一行是 agent、时间和类型。新建的默认勾上，移到废纸篓（项目里清理时留下它的终端还开着的不勾）；自建的 worktree 默认不勾，勾了用 `git worktree remove`（有未提交改动时 git 拒绝，报在错误条上）；改过的已有文件和配置只列出、不给删。清掉的从账本里去掉；常驻进程是旧版本、没有这个接口时当作没有痕迹。
 
-- Antigravity 作为第五家 agent 出现在新建、讨论、历史筛选、技能和 MCP 状态中，图标与品牌色统一。会话 ID 已绑定时可看媒体和技能工具统计；历史详情只显示已用 token，不显示无法核实的上下文百分比。没有本地配额缓存，套餐用量栏不增加 Antigravity 卡片。
+- Antigravity 作为第五家 agent 出现在新建、讨论、历史筛选、技能和 MCP 状态中，图标与品牌色统一。会话 ID 已绑定时可看媒体和技能工具统计，切换会话后统计读取新会话文件。历史详情显示已用 token；套餐用量栏显示 `agy /usage` 的配额。
 - Antigravity 技能按项目 `.agents/skills`（兼容 `.agent/_agents/_agent`）、全局 `~/.gemini/config/skills` 和自带目录发现，支持 skills.json 的 entries/inherits、单个技能、嵌套 include_only、精确 exclude 与继承循环保护；CLI 专属的 `~/.gemini/antigravity-cli/skills`、`~/.gemini/skills` 优先且不受排除表影响。该列只展示读取状态，不提供未经核实的开关写入。MCP 读取全局 mcp_config.json；带工作区的扫描还读项目 `.agents/mcp_config.json`，状态为配置推算，不代表服务器在线。

@@ -9461,6 +9461,22 @@ func (msgs Messages) HistoryContextTip(used int, window int) string {
 	return Catalog.Format(msgs.locale, "historyContextTip", map[string]any{"used": used, "window": window})
 }
 
+// HistoryChooseWorkspace says "Choose a Workspace"
+// in the language the app shows.
+//
+// History: title of the workspace picker for a session with no recorded
+// directory.
+func HistoryChooseWorkspace() string { return In(i18n.Locale()).HistoryChooseWorkspace() }
+
+// HistoryChooseWorkspace says "Choose a Workspace"
+// in the language of msgs.
+//
+// History: title of the workspace picker for a session with no recorded
+// directory.
+func (msgs Messages) HistoryChooseWorkspace() string {
+	return Catalog.Format(msgs.locale, "historyChooseWorkspace", nil)
+}
+
 // HistoryContinueInPosse says "Continue in Posse"
 // in the language the app shows.
 //
@@ -9535,6 +9551,20 @@ func HistoryDeleteCursorConfirm(title string) string {
 // History: confirmation title for deleting one Cursor IDE chat.
 func (msgs Messages) HistoryDeleteCursorConfirm(title string) string {
 	return Catalog.Format(msgs.locale, "historyDeleteCursorConfirm", map[string]any{"title": title})
+}
+
+// HistoryNoWorkspace says "Add a workspace in Posse to continue this session."
+// in the language the app shows.
+//
+// History: empty state when there is no workspace for resuming a session.
+func HistoryNoWorkspace() string { return In(i18n.Locale()).HistoryNoWorkspace() }
+
+// HistoryNoWorkspace says "Add a workspace in Posse to continue this session."
+// in the language of msgs.
+//
+// History: empty state when there is no workspace for resuming a session.
+func (msgs Messages) HistoryNoWorkspace() string {
+	return Catalog.Format(msgs.locale, "historyNoWorkspace", nil)
 }
 
 // HistoryEmptyBody says "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor, ~/.grok and ~/.gemini/antigravity-cli, and never changes …"

@@ -49,14 +49,16 @@ class ChatScreen extends StatefulWidget {
   final SessionTab tab;
 
   /// 打开终端视图。放在外面，避免对话页依赖原生终端插件。
-  final VoidCallback? onOpenTerminal;
+  final ValueChanged<SessionTab>? onOpenTerminal;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
+typedef _InputDraft = ({String caption, List<Uint8List> images});
+
 class _ChatScreenState extends State<ChatScreen> {
-  final _window = ChatWindow();
+  var _window = ChatWindow();
   final _input = TextEditingController();
   final _scroll = ScrollController();
   late final ListObserverController _observer = ListObserverController(
@@ -72,6 +74,10 @@ class _ChatScreenState extends State<ChatScreen> {
   RpcStream? _tabs;
   String? _chatSubId;
   PhoneRpc? _bound;
+  (String?, String?)? _subscribedSession;
+  var _sessionEpoch = 0;
+  final _inputDrafts = <(String?, String?), _InputDraft>{};
+  final _submissions = <(String?, String?), _InputDraft>{};
   var _perm = const LivePermission();
   var _sending = false;
   var _loadingEarlier = false;
@@ -93,7 +99,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _uploaded = <Uint8List, String>{};
 
   /// 发出去、会话文件里还没出现的话。
-  final _echoes = LocalEchoes();
+  var _echoes = LocalEchoes();
 
   /// 人在看更早的消息时，底部又来了新内容。不用观察器的位置回调：它推迟到帧后，
   /// 每次布局都发，先后次序和贴底的跳转对不上，按钮会闪或在底部亮着。
@@ -134,6 +140,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   SessionTab get tab => _tab ?? widget.tab;
 
+  (String?, String?) get _session => (tab.agent, tab.sessionId);
+
   PhoneRpc? get _rpc => widget.model.rpc;
 
   @override
@@ -158,7 +166,9 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return;
     // 断线时草稿不再更新，撤掉；连上后电脑会重新推
     if (widget.model.rpc == null) _setDraft(null);
-    if (widget.model.rpc != _bound) _scheduleOpen();
+    if (widget.model.rpc != _bound || _subscribedSession != _session) {
+      _scheduleOpen();
+    }
   }
 
   void _scheduleOpen() {
@@ -199,23 +209,50 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _open() async {
     final rpc = _rpc;
-    if (!tab.eligible || _gone || rpc == null || identical(rpc, _bound)) return;
+    if (_gone || rpc == null) return;
+    final reconnect = !identical(rpc, _bound);
+    if (!reconnect && _subscribedSession == _session) return;
     final gen = ++_openGen;
     final previous = _bound;
     final previousChat = _chatSubId;
-    final previousTabs = _tabs?.id;
-    await _chat?.cancel();
-    await _tabs?.cancel();
+    final previousTabs = reconnect ? _tabs : null;
+    if (reconnect) {
+      _bound = null;
+      _tabs = null;
+    }
+    // 未开始监听的单订阅流关闭时不会完成 Future；订阅映射已同步移除。
+    unawaited(_chat?.cancel());
+    unawaited(previousTabs?.cancel());
     _chat = null;
-    _tabs = null;
-    _drop(previous, chatSubId: previousChat, tabsId: previousTabs);
-    if (gen != _openGen || _gone) return;
-    final subId = '${tab.agent}:${tab.sessionId}:live';
-    _chatSubId = subId;
+    _chatSubId = null;
+    _drop(previous, chatSubId: previousChat, tabsId: previousTabs?.id);
+    if (_gone || !identical(rpc, _rpc)) return;
     _status = null;
     _draft = null;
     _draftBase = '';
     try {
+      if (reconnect) {
+        final tabs = await rpc.subscribe('session.tabs.subscribe', {
+          'worktree': widget.tab.worktreeId,
+        });
+        if (_gone || !identical(rpc, _rpc)) {
+          _drop(rpc, tabsId: tabs.id);
+          unawaited(tabs.cancel());
+          return;
+        }
+        _bound = rpc;
+        _tabs = tabs;
+        tabs.frames.listen((frame) {
+          if (mounted && identical(tabs, _tabs) && identical(rpc, _rpc)) {
+            _receiveTabs(frame);
+          }
+        }, onError: (Object _) {});
+      }
+      if (gen != _openGen || _gone) return;
+      _subscribedSession = _session;
+      if (!tab.eligible) return;
+      final subId =
+          '${tab.agent}:${tab.sessionId}:${identityHashCode(this)}:$gen';
       final chat = await rpc.subscribe('nativeChat.subscribe', {
         'agent': tab.agent,
         'sessionId': tab.sessionId,
@@ -224,29 +261,19 @@ class _ChatScreenState extends State<ChatScreen> {
         'subscriptionId': subId,
         'capabilities': {'transcriptPending': 1},
       });
-      if (gen != _openGen || _gone) {
+      if (gen != _openGen || _gone || !identical(rpc, _rpc)) {
         _drop(rpc, chatSubId: subId);
-        await chat.cancel();
+        unawaited(chat.cancel());
         return;
       }
-      final tabs = await rpc.subscribe('session.tabs.subscribe', {
-        'worktree': tab.worktreeId,
-      });
-      if (gen != _openGen || _gone) {
-        _drop(rpc, chatSubId: subId, tabsId: tabs.id);
-        await chat.cancel();
-        await tabs.cancel();
-        return;
-      }
-      _bound = rpc;
+      _chatSubId = subId;
       _chat = chat;
-      _tabs = tabs;
       // 订阅是单订阅流，等动画的这段时间来的帧会留着
       if (!mounted) return;
       await routeSettled(context);
       if (gen != _openGen || _gone) return;
       chat.frames.listen((frame) {
-        if (!mounted || gen != _openGen) return;
+        if (!mounted || gen != _openGen || !identical(rpc, _rpc)) return;
         if (frame['type'] == 'permission') {
           final id = frame['requestId'];
           if (id is! String || id.isEmpty) return;
@@ -300,38 +327,64 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {});
         _loadEarlierIfAtTop();
       }, onError: (Object _) {});
-      tabs.frames.listen((frame) {
-        if (!mounted || gen != _openGen) return;
-        final nextTabs = tabsFromFrame(tab.worktreeId, frame);
-        if (nextTabs == null) return;
-        final before = _tail();
-        var changed = false;
-        final alive = nextTabs.any((t) => t.terminalId == tab.terminalId);
-        if (alive == _ended) {
-          _ended = !alive;
-          changed = true;
-        }
-        for (final next in nextTabs) {
-          if (next.terminalId != tab.terminalId) continue;
-          _tab = next;
-          _perm = _perm.observe(waiting: next.state == 'waiting');
-          changed = true;
-        }
-        if (!changed) return;
-        _anchor(before);
-        setState(() {});
-      }, onError: (Object _) {});
     } catch (error) {
       if (gen != _openGen || _gone) return;
-      _bound = null;
-      final tabsId = _tabs?.id;
-      await _chat?.cancel();
-      await _tabs?.cancel();
-      _chat = null;
-      _tabs = null;
-      _drop(rpc, chatSubId: subId, tabsId: tabsId);
+      _subscribedSession = null;
       if (mounted) setState(() => _notice = friendlyError(error, context.l10n));
     }
+  }
+
+  void _receiveTabs(Map<String, Object?> frame) {
+    final nextTabs = tabsFromFrame(widget.tab.worktreeId, frame);
+    if (nextTabs == null) return;
+    final before = _tail();
+    final identity = _session;
+    final next = nextTabs
+        .where((t) => t.terminalId == widget.tab.terminalId)
+        .firstOrNull;
+    if (next == null && _ended) return;
+    _ended = next == null;
+    if (next != null) _tab = next;
+    if (_session != identity) {
+      _switchSession(identity);
+    } else {
+      _perm = _perm.observe(waiting: tab.state == 'waiting' && !_ended);
+      _anchor(before);
+    }
+    setState(() {});
+  }
+
+  void _switchSession((String?, String?) previous) {
+    // 切换时先让旧流和仍在等待的发送、翻页失效，再读取新会话。
+    _openGen++;
+    _sessionEpoch++;
+    _subscribedSession = null;
+    final sending = _submissions[previous]?.images;
+    final unsentImages = [
+      for (final image in _pending)
+        if (!(sending?.contains(image) ?? false)) image,
+    ];
+    if (_input.text.isNotEmpty || unsentImages.isNotEmpty) {
+      _inputDrafts[previous] = (caption: _input.text, images: unsentImages);
+    }
+    final saved = _inputDrafts.remove(_session);
+    _input.text = saved?.caption ?? '';
+    _pending
+      ..clear()
+      ..addAll(saved?.images ?? const []);
+    _uploaded.clear();
+    _window = ChatWindow();
+    _echoes = LocalEchoes();
+    _perm = const LivePermission();
+    _status = _draft = _notice = null;
+    _draftBase = '';
+    _newBelow = _stick = _loadingEarlier = false;
+    _sending = _submissions.containsKey(_session);
+    _upload = _attach = null;
+    _attachRuns = 0;
+    _noticeTimer?.cancel();
+    _jumpToLatest();
+    _scheduleOpen();
   }
 
   /// 倒序列表打开就停在最新一条。自己刚发的话无条件回到底部。
@@ -362,6 +415,7 @@ class _ChatScreenState extends State<ChatScreen> {
         !tab.eligible) {
       return;
     }
+    final epoch = _sessionEpoch;
     setState(() => _loadingEarlier = true);
     try {
       final current = _rpc;
@@ -373,7 +427,7 @@ class _ChatScreenState extends State<ChatScreen> {
         'limit': 40,
         'beforeOffset': before,
       });
-      if (!mounted) return;
+      if (!_isCurrent(epoch) || !identical(current, _rpc)) return;
       // 更早的消息加在倒序列表的尾部（视觉顶部）。底部偏移是 0，已有下标不变，不用挪像素。
       final beforeCount = _window.messages.length;
       final tail = _tail();
@@ -382,29 +436,38 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {});
       if (_window.messages.length > beforeCount) _loadEarlierIfAtTop();
     } catch (error) {
-      if (mounted) setState(() => _notice = friendlyError(error, context.l10n));
+      if (_isCurrent(epoch)) {
+        setState(() => _notice = friendlyError(error, context.l10n));
+      }
     } finally {
-      if (mounted) setState(() => _loadingEarlier = false);
+      if (_isCurrent(epoch)) setState(() => _loadingEarlier = false);
     }
   }
 
-  Future<SendOutcome> _send(String text, {required bool enter}) async {
+  bool _isCurrent(int epoch) => mounted && epoch == _sessionEpoch;
+
+  Future<SendOutcome> _send(
+    String text, {
+    required bool enter,
+    required int epoch,
+  }) async {
+    if (!_isCurrent(epoch) || !tab.eligible || _ended) {
+      return SendOutcome.refused;
+    }
     final current = _rpc;
     if (current == null) return SendOutcome.unknown;
+    final l = context.l10n;
     final outcome = await sendTerminal(
       current,
       terminal: tab.terminalId,
       text: text,
+      expectedSessionId: tab.sessionId,
+      requireSessionGuard: tab.agent == 'antigravity',
       enter: enter,
     );
-    if (!mounted) return outcome;
-    final note = sendOutcomeText(context.l10n, outcome);
+    if (!_isCurrent(epoch)) return outcome;
+    final note = sendOutcomeText(l, outcome);
     _flash(note.isEmpty ? null : note);
-    setState(() {
-      if (outcome == SendOutcome.accepted && enter && text == _input.text) {
-        _input.clear();
-      }
-    });
     return outcome;
   }
 
@@ -421,20 +484,24 @@ class _ChatScreenState extends State<ChatScreen> {
   /// 照片不走这里：先在输入框上面预览，发送时才传。
   Future<void> _attachFiles(List<XFile> files) async {
     if (files.isEmpty || _rpc == null) return;
+    final epoch = _sessionEpoch;
     final paths = <String>[];
     _attachRuns++;
     try {
       for (final (i, file) in files.indexed) {
-        if (mounted) setState(() => _attach = (i, files.length, 0));
+        if (!_isCurrent(epoch)) return;
+        setState(() => _attach = (i, files.length, 0));
         paths.add(
           // 每份开始时取当前连接：选了几份、传第一份时换了连接，后面的走新连接
           await uploadOnCurrent(
-            () => _rpc,
+            () => _isCurrent(epoch) ? _rpc : null,
             (rpc) => uploadFile(
               rpc,
               file,
               onProgress: (done) {
-                if (mounted) setState(() => _attach = (i, files.length, done));
+                if (_isCurrent(epoch)) {
+                  setState(() => _attach = (i, files.length, done));
+                }
               },
             ),
           ),
@@ -442,8 +509,8 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } finally {
       // 中间某个传失败了，已经传上去的几个照样接进输入框（报错由调用方显示）
-      _attachRuns--;
-      if (mounted) {
+      if (_isCurrent(epoch)) {
+        _attachRuns--;
         if (_attachRuns == 0) setState(() => _attach = null);
         _appendPaths(paths);
       }
@@ -477,9 +544,11 @@ class _ChatScreenState extends State<ChatScreen> {
   /// 文字插进输入框，图片加进待发列表。两边都没有就告诉用户。
   Future<void> _pasteClipboard() async {
     if (_sending) return;
+    final epoch = _sessionEpoch;
+    final l = context.l10n;
     try {
       final paste = await readClipboardPaste();
-      if (!mounted) return;
+      if (!_isCurrent(epoch)) return;
       if (paste.isText) {
         _insertText(paste.text!);
         return;
@@ -488,9 +557,9 @@ class _ChatScreenState extends State<ChatScreen> {
         _addImages([paste.image!]);
         return;
       }
-      _flash(context.l10n.chatClipboardEmpty);
+      _flash(l.chatClipboardEmpty);
     } catch (error) {
-      if (mounted) _flash(friendlyError(error, context.l10n));
+      if (_isCurrent(epoch)) _flash(friendlyError(error, l));
     }
   }
 
@@ -506,9 +575,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _pickImage() async {
     if (_rpc == null || _sending) return;
+    final epoch = _sessionEpoch;
+    final l = context.l10n;
     try {
       final ask = await askImageSource(context);
-      if (ask == null || !mounted) return;
+      if (ask == null || !_isCurrent(epoch)) return;
       switch (ask) {
         case ImageAsk.gallery:
           final picked = await pickGalleryMedia();
@@ -521,19 +592,21 @@ class _ChatScreenState extends State<ChatScreen> {
               others.add(file);
             }
           }
-          _addImages(images);
-          await _attachFiles(others);
+          if (_isCurrent(epoch)) {
+            _addImages(images);
+            await _attachFiles(others);
+          }
         case ImageAsk.camera:
           final one = await pickOneImage(ImageSource.camera);
-          if (one != null) _addImages([one]);
+          if (one != null && _isCurrent(epoch)) _addImages([one]);
         case ImageAsk.clipboard:
           await _pasteClipboard();
         case ImageAsk.files:
           final file = await openFile();
-          if (file != null) await _attachFiles([file]);
+          if (file != null && _isCurrent(epoch)) await _attachFiles([file]);
       }
     } catch (error) {
-      if (mounted) _flash(friendlyError(error, context.l10n));
+      if (_isCurrent(epoch)) _flash(friendlyError(error, l));
     }
   }
 
@@ -542,8 +615,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final current = _rpc;
     final images = List<Uint8List>.from(_pending);
     final caption = _input.text;
-    if (current == null || _sending) return;
+    if (current == null || _sending || !tab.eligible || _ended) return;
     if (caption.trim().isEmpty && images.isEmpty) return;
+    final session = _session;
+    final epoch = _sessionEpoch;
+    final l = context.l10n;
     // 斜杠命令 agent 不记成用户消息，等不到对应的那条，不先画
     // 自己发的话无条件回到底部，不设保持位置：它晚一帧生效，会把刚贴底的画面拉回去
     final echo = caption.trimLeft().startsWith('/') && images.isEmpty
@@ -552,6 +628,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _stick = true;
     setState(() {
       _sending = true;
+      _submissions[session] = (caption: caption, images: images);
       // 输入框马上清空，话先画在对话末尾；没发出去再放回来
       _input.clear();
       if (images.isNotEmpty) _upload = (0, images.length, 0);
@@ -563,55 +640,88 @@ class _ChatScreenState extends State<ChatScreen> {
       if (images.isNotEmpty) {
         final paths = <String>[];
         for (final (i, image) in images.indexed) {
-          if (mounted) setState(() => _upload = (i, images.length, 0));
-          paths.add(
-            _uploaded[image] ??= await uploadOnCurrent(
-              () => _rpc,
-              (rpc) => uploadImage(
-                rpc,
-                image,
-                onProgress: (done) {
-                  if (mounted) {
-                    setState(() => _upload = (i, images.length, done));
-                  }
-                },
-              ),
-            ),
-          );
+          if (!_isCurrent(epoch)) return;
+          setState(() => _upload = (i, images.length, 0));
+          final path =
+              _uploaded[image] ??
+              await uploadOnCurrent(
+                () => _isCurrent(epoch) ? _rpc : null,
+                (rpc) => uploadImage(
+                  rpc,
+                  image,
+                  onProgress: (done) {
+                    if (_isCurrent(epoch)) {
+                      setState(() => _upload = (i, images.length, done));
+                    }
+                  },
+                ),
+              );
+          if (!_isCurrent(epoch)) return;
+          _uploaded[image] = path;
+          paths.add(path);
         }
-        if (mounted) setState(() => _upload = null);
+        setState(() => _upload = null);
         text = imageMessage(caption, paths);
       }
-      accepted = await _send(text, enter: true) == SendOutcome.accepted;
-      if (!mounted) return;
+      accepted =
+          await _send(text, enter: true, epoch: epoch) == SendOutcome.accepted;
       if (accepted) {
-        setState(() {
-          echo?.sent = true;
-          // 上传期间新加的图片留着，只去掉发出去的
-          _pending.removeRange(0, images.length);
-          for (final image in images) {
-            _uploaded.remove(image);
-          }
-        });
+        echo?.sent = true;
       }
     } catch (error) {
-      if (mounted) _flash(friendlyError(error, context.l10n));
+      if (_isCurrent(epoch)) _flash(friendlyError(error, l));
     } finally {
-      if (mounted) {
-        final before = _tail();
-        _sending = false;
-        _upload = null;
-        if (!accepted) {
-          if (echo != null) _echoes.remove(echo);
-          if (_input.text.isEmpty) _input.text = caption;
-        }
-        _anchor(before);
-        setState(() {});
+      _settleSubmission(session, accepted, echo);
+    }
+  }
+
+  void _settleSubmission(
+    (String?, String?) session,
+    bool accepted,
+    LocalEcho? echo,
+  ) {
+    final sent = _submissions.remove(session)!;
+    if (!mounted) return;
+    final active = session == _session;
+    final before = active ? _tail() : null;
+    if (!accepted) {
+      // 失败时把发送内容还给原会话；它可能已经有一份新草稿。
+      final draft = active
+          ? (caption: _input.text, images: _pending)
+          : _inputDrafts[session];
+      final restored = (
+        caption: [
+          sent.caption,
+          draft?.caption ?? '',
+        ].where((text) => text.isNotEmpty).join('\n'),
+        images: {...sent.images, ...?draft?.images}.toList(),
+      );
+      if (active) {
+        if (echo != null) _echoes.remove(echo);
+        _input.text = restored.caption;
+        _pending
+          ..clear()
+          ..addAll(restored.images);
+      } else {
+        _inputDrafts[session] = restored;
       }
+    }
+    if (before != null) {
+      if (accepted) {
+        _pending.removeWhere(sent.images.contains);
+        for (final image in sent.images) {
+          _uploaded.remove(image);
+        }
+      }
+      _sending = false;
+      _upload = null;
+      _anchor(before);
+      setState(() {});
     }
   }
 
   Future<void> _decide(String key) async {
+    final epoch = _sessionEpoch;
     setState(() => _sending = true);
     final id = _perm.requestId;
     final behavior = permissionBehavior(key);
@@ -625,14 +735,14 @@ class _ChatScreenState extends State<ChatScreen> {
             'behavior': behavior,
           });
           decided = true;
-          if (mounted) setState(() => _perm = _perm.settle());
+          if (_isCurrent(epoch)) setState(() => _perm = _perm.settle());
         } catch (_) {
           decided = false;
         }
       }
     }
-    if (!decided) await _send(key, enter: false);
-    if (mounted) setState(() => _sending = false);
+    if (!decided) await _send(key, enter: false, epoch: epoch);
+    if (_isCurrent(epoch)) setState(() => _sending = false);
   }
 
   Approval? _visibleApproval() {
@@ -649,17 +759,18 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _answer(List<String> lines) async {
+    final epoch = _sessionEpoch;
     setState(() => _sending = true);
     await runAnswerSteps(
       lines: lines,
       writeBody: (line) async {
-        await _send(line, enter: false);
+        await _send(line, enter: false, epoch: epoch);
       },
       writeEnter: () async {
-        await _send('', enter: true);
+        await _send('', enter: true, epoch: epoch);
       },
     );
-    if (mounted) setState(() => _sending = false);
+    if (_isCurrent(epoch)) setState(() => _sending = false);
   }
 
   @override
@@ -730,7 +841,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 );
               }
-              if (action == 'switch') widget.onOpenTerminal?.call();
+              if (action == 'switch') widget.onOpenTerminal?.call(tab);
               if (action == 'close' &&
                   await closeSession(this.context, widget.model, tab)) {
                 nav.pop();
@@ -847,23 +958,24 @@ class _ChatScreenState extends State<ChatScreen> {
               )
             else if (prompt != null && prompt.questions.isNotEmpty && !_sending)
               QuestionCard(questions: prompt.questions, onSubmit: _answer),
-            ChatComposer(
-              controller: _input,
-              images: _pending,
-              sending: _sending,
-              connected: _rpc != null,
-              ended: _ended,
-              hint: context.l10n.chatReplyHint(
-                chatWho(context.l10n, 'assistant', tab.agent),
+            if (tab.eligible || _ended)
+              ChatComposer(
+                controller: _input,
+                images: _pending,
+                sending: _sending,
+                connected: _rpc != null,
+                ended: _ended,
+                hint: context.l10n.chatReplyHint(
+                  chatWho(context.l10n, 'assistant', tab.agent),
+                ),
+                onChanged: (_) => setState(() {}),
+                onSubmit: _submit,
+                onPickImage: _pickImage,
+                onRemoveImage: (index) =>
+                    setState(() => _uploaded.remove(_pending.removeAt(index))),
+                onPaste: () => unawaited(_pasteClipboard()),
+                onContentInserted: _onContentInserted,
               ),
-              onChanged: (_) => setState(() {}),
-              onSubmit: _submit,
-              onPickImage: _pickImage,
-              onRemoveImage: (index) =>
-                  setState(() => _uploaded.remove(_pending.removeAt(index))),
-              onPaste: () => unawaited(_pasteClipboard()),
-              onContentInserted: _onContentInserted,
-            ),
           ],
         ),
       ),

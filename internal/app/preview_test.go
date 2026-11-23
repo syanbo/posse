@@ -540,7 +540,7 @@ func previewUsageEvents() []history.UsageEvent {
 // previewUsagePanel 打开右侧"技能与工具"面板：刚读过一次，预览期间不会再去找会话文件。
 func previewUsagePanel(a *app) {
 	a.state.RightPanel = panelUsage
-	a.usage = usageView{term: "t1", found: true, poll: panelPoll{at: time.Now()}, data: history.Usage{
+	a.usage = usageView{source: usageSource(&a.workspaces[0].Terminals[0]), found: true, poll: panelPoll{at: time.Now()}, data: history.Usage{
 		Skills: []history.UsageItem{{Name: "computer-use", Count: 3}, {Name: "chatgpt-imagegen", Count: 1}},
 		MCP: []history.MCPUsage{
 			{Server: "codex-cu", Count: 55, Tools: []history.UsageItem{{Name: "js", Count: 54}, {Name: "js_reset", Count: 1}}},

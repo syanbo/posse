@@ -31,8 +31,7 @@ typedef ContextSender = Future<SendOutcome> Function(
 );
 
 /// 标题下面状态行末尾的上下文用量：小圆环加「42%」，圆环已经说明是用量，不再写字。手机终端太窄，Claude 自己状态栏里的百分比常被截掉。
-/// Claude、Codex 显示百分比，Antigravity 只有 token 数；每 15 秒和每次状态变化时重读，电脑上的 posse 太旧（没有这个接口）就不再问。
-/// 点它问要不要压缩，确认后清空输入框、发 /compact（两家都认）。
+/// 读到百分比就画圆环，只有 token 数时显示读数；点它可以压缩会话。
 class ContextMeter extends StatefulWidget {
   const ContextMeter({
     super.key,
@@ -105,6 +104,7 @@ class _ContextMeterState extends State<ContextMeter> {
     try {
       if (tab.agent == 'antigravity') {
         int? tokens;
+        int? percent;
         if (read != null) {
           tokens = await read(tab);
         } else {
@@ -114,14 +114,17 @@ class _ContextMeterState extends State<ContextMeter> {
             if (tab.transcriptPath != null)
               'transcriptPath': tab.transcriptPath,
           });
-          tokens = res['known'] == true ? (res['used'] as num?)?.toInt() : null;
+          if (res['known'] == true) {
+            tokens = (res['used'] as num?)?.toInt();
+            percent = (res['percent'] as num?)?.toInt();
+          }
         }
         if (mounted &&
             tab.sessionId == widget.tab.sessionId &&
             tab.agent == widget.tab.agent) {
           setState(() {
             _tokens = tokens;
-            _percent = null;
+            _percent = percent;
           });
         }
         return;
@@ -141,13 +144,16 @@ class _ContextMeterState extends State<ContextMeter> {
 
   Future<void> _compact() async {
     final percent = _percent;
-    if (percent == null) return;
+    if (percent == null && _tokens == null) return;
+    final tab = widget.tab;
     final l = context.l10n;
-    final who = chatWho(l, 'assistant', widget.tab.agent);
+    final who = chatWho(l, 'assistant', tab.agent);
     final ok = await showPosseConfirm(
       context,
       title: l.chatCompactConfirm,
-      body: l.chatCompactBody(percent, who),
+      body: percent == null
+          ? l.chatCompactBodyGeneral(who)
+          : l.chatCompactBody(percent, who),
       confirm: l.chatCompactButton,
     );
     if (!ok || !mounted) return;
@@ -159,12 +165,22 @@ class _ContextMeterState extends State<ContextMeter> {
             : (SessionTab tab, List<int> raw) => sendTerminal(
                 rpc,
                 terminal: tab.terminalId,
+                expectedSessionId: tab.sessionId,
+                requireSessionGuard: tab.agent == 'antigravity',
                 raw: raw,
                 enter: false,
               ));
     if (send == null) return;
-    final tab = widget.tab;
-    final outcome = await sendAgentCommand((raw) => send(tab, raw), '/compact');
+    final outcome = await sendAgentCommand((raw) async {
+      if (!mounted ||
+          widget.tab.sessionId != tab.sessionId ||
+          widget.tab.terminalId != tab.terminalId ||
+          widget.tab.agent != tab.agent ||
+          !identical(rpc, widget.model.rpc)) {
+        return SendOutcome.refused;
+      }
+      return send(tab, raw);
+    }, '/compact');
     final note = sendOutcomeText(l, outcome);
     if (!mounted || note.isEmpty) return;
     ScaffoldMessenger.maybeOf(context)
@@ -176,17 +192,21 @@ class _ContextMeterState extends State<ContextMeter> {
     final percent = _percent;
     if (!_applies) return const SizedBox.shrink();
     final tokens = _tokens;
-    if (widget.tab.agent == 'antigravity') {
+    if (percent == null) {
       if (tokens == null) return const SizedBox.shrink();
       return Padding(
         padding: const EdgeInsets.only(left: statusLineGap),
-        child: Text(
-          context.l10n.chatContextTokens(tokens),
-          style: statusLineStyle(PosseColors.of(context).muted),
+        child: GestureDetector(
+          key: const Key('context-meter'),
+          behavior: HitTestBehavior.opaque,
+          onTap: () => unawaited(_compact()),
+          child: Text(
+            context.l10n.chatContextTokens(tokens),
+            style: statusLineStyle(PosseColors.of(context).muted),
+          ),
         ),
       );
     }
-    if (percent == null) return const SizedBox.shrink();
     final c = PosseColors.of(context);
     // 快满时提醒：Claude 到 80% 左右会自动压缩
     final color = percent >= 90

@@ -91,47 +91,10 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
   }
 
   Future<void> _pickWorktree() async {
-    final picked = await showModalBottomSheet<WorktreeRow>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (sheet) {
-        final c = PosseColors.of(sheet);
-        return SizedBox(
-          height: MediaQuery.sizeOf(sheet).height * 0.7,
-          child: ListView(
-            children: [
-              Section(
-                title: sheet.l10n.sessionPickWorkspace,
-                inset: 48,
-                children: [
-                  for (final row in widget.model.worktrees)
-                    RowTile(
-                      chevron: false,
-                      leading: LineIconView(
-                        LineIcon.folder,
-                        size: Ic.button,
-                        color: c.accent,
-                      ),
-                      title: Text(worktreeLabel(row)),
-                      subtitle: Text(
-                        row.branch.isNotEmpty
-                            ? row.branch
-                            : tildePath(row.path),
-                        style: mono(Fs.small, color: c.muted),
-                      ),
-                      trailing: row.id == _worktree?.id
-                          ? Icon(Icons.check_rounded, color: c.accent)
-                          : null,
-                      onTap: () => Navigator.of(sheet).pop(row),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+    final picked = await showWorkspacePicker(
+      context,
+      widget.model.worktrees,
+      selected: _worktree?.id,
     );
     if (picked != null) setState(() => _worktree = picked);
   }
@@ -168,8 +131,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
     }
   }
 
-  /// agent 启动后要过一会儿才通过 hooks 报上会话编号，有了编号才能开对话页。
-  /// 最多等 4 秒，等不到就先按终端打开，之后从终端页右上角也能切到对话。
+  /// 会话编号可能晚于启动结果，最久等 4 秒；之后也可以从终端页切到对话。
   Future<SessionTab> _waitForTab(String worktree, String terminal) async {
     final fallback = SessionTab(
       worktreeId: worktree,

@@ -209,7 +209,7 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 // planWindows 是这一家要显示的窗口。Cursor 有分池时照它的控制台和 Magpie 只列两池：
 // 总的 totalPercentUsed 按 Auto 池折算，远低于两池，和它们并排看着像算错了。
 func planWindows(u usage.Usage) []usage.Window {
-	if u.Agent == "codex" {
+	if u.Agent == "codex" || u.Agent == "antigravity" {
 		ws := slices.Clone(u.Windows)
 		for i, w := range ws {
 			if w.ResetsAt > 0 && w.ResetsAt <= time.Now().UnixMilli() {
@@ -420,7 +420,8 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 					}
 					// 一个窗口一行：名称、进度条、百分比、重置时间
 					ui.Row(c.Key(fmt.Sprint(j))).Gap(8).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, windowName(L(c), w)).FontSize(fsSmall).Width(planNameWidth()).Shrink(0).SingleLine()
+						name := windowName(L(c), w)
+						ui.Text(c, name).FontSize(fsSmall).Width(planNameWidth()).Shrink(0).SingleLine().Tooltip(name)
 						a.planBar(c, w)
 						ui.Text(c, planWindowPercent(L(c), a, w)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).
 							Width(pctW).Shrink(0).TextAlign(ui.End).SingleLine()

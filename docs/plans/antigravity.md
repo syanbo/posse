@@ -8,7 +8,8 @@
 - PTY 探针收到 `OSC 7501;?` 后应答，实测报告 `app=antigravity`、working、blocked（包括 auth）、idle、done。状态经现有 OSC 通道处理，子 agent 是否仍工作由 agy 的聚合报告决定。
 - `--settings` 拒绝 hooks、plugins、pluginPaths、pluginsPaths、hooksPath、defaultHooksPath、customizations，报 unknown setting。没有已核实的会话级挂载途径，因此不注入 hooks，不改用户 hooks.json；任务提醒空闲时输入，无 hooks 答题/审批卡和写文件痕迹。
 - `--conversation` 指向不存在的 UUID 会另建不同 ID 的会话，不能用于预分配 ID。agy 运行期间一直持有 `presence/<UUID>.lock`（也开着 `conversations/<UUID>.db`），常驻进程每 2 秒的 agent 检查读 agy 进程打开的文件（`procmem.OpenFiles`，`proc_pidfdinfo`）认出当前会话并绑定，`/new`、切换会话后跟着换；同时持有多个锁时不绑。恢复参数和 agent 执行 `posse session title` 带来的 `ANTIGRAVITY_CONVERSATION_ID` 也能绑定。不按最近修改时间或 cwd 猜归属。
-- agy 不写终端标题（OSC 0/2），标签和侧栏的会话名来自 agy 自己起的标题：首轮回复后约 3 秒写进 `conversation_summaries.db` 的 `title`（`cache/conversation_metadata.json` 更晚才有），绑定后只读查询，记成会话标题（`daemon/antigravity.go`）；已有 `posse session title` 起的标题时不覆盖。`posse session title` 使用 agy 内置 Conversations API 的 `UpdateConversation`，按工具命令环境中的 `ANTIGRAVITY_CONVERSATION_ID` 写 `annotations.title`，确认回包的会话 ID 和标题后更新 Posse 标签。地址和令牌来自 `ANTIGRAVITY_LS_ADDRESS` 和 `ANTIGRAVITY_CSRF_TOKEN`，只请求本机回环地址；缺少这些环境变量时，命令提示在 agy 输入 `/rename <标题>`。agy 的 `-p` 模式拒绝执行 `/rename`。新终端环境隔离剥离 `ANTIGRAVITY_*` 和 `AGY_CLI_*`。
+- 手机对话写入时重查前台 agy 的会话锁。缺锁或有多个会话锁时拒绝写入，界面暂时保留上次识别到的会话。
+- agy 不写终端标题（OSC 0/2），标签和侧栏的会话名来自 agy 自己起的标题：首轮回复后约 3 秒写进 `conversation_summaries.db` 的 `title`（`cache/conversation_metadata.json` 更晚才有），绑定后只读查询，记成会话标题（`daemon/antigravity.go`）；已经显示标题后，原生标题变动时同步到 Posse；摘要仍是旧标题时保留 `posse session title` 的结果。`posse session title` 使用 agy 内置 Conversations API 的 `UpdateConversation`，按工具命令环境中的 `ANTIGRAVITY_CONVERSATION_ID` 写 `annotations.title`，确认回包的会话 ID 和标题后更新 Posse 标签。地址和令牌来自 `ANTIGRAVITY_LS_ADDRESS` 和 `ANTIGRAVITY_CSRF_TOKEN`，只请求本机回环地址；缺少这些环境变量时，命令提示在 agy 输入 `/rename <标题>`。agy 的 `-p` 模式拒绝执行 `/rename`。新终端环境隔离剥离 `ANTIGRAVITY_*` 和 `AGY_CLI_*`。
 
 ## 会话数据
 
@@ -40,8 +41,8 @@ truncated_fields 触发按 step_index、type、created_at 核验的完整日志�
 
 ## 套餐与验收
 
-未找到现成的本地套餐配额缓存，不接套餐用量卡片，不调用私有 LanguageServer 凭据接口；会话上下文 token 与套餐额度独立。
+桌面和手机的套餐用量来自 `agy -p /usage --output-format json`。在 agy 1.5.14 验证返回各池的剩余比例及重置时间，查询不产生模型轮次。会话上下文 token 与套餐额度独立。
 
 回归覆盖启动/恢复/手动转发与权限、OSC 状态、环境隔离、历史粗筛等价性、增量聊天与截断回读、子会话过滤、媒体 URI/产物扫描、废纸篓路径边界、技能继承/优先级/链接与 MCP 配置。桌面/手机共用的 agent 列表、图标、文案与上下文展示一并接入。CLI 参数参照 [官方 CLI reference](https://antigravity.google/docs/cli/reference)。
 
-验收结果：Go 全量测试、go vet、MyGo vet/i18n 检查通过；Flutter analyze、全量测试（563 通过，7 跳过）及新增上下文/设计规则测试通过。离屏检查浅色/深色的新建菜单、技能页和历史 token 展示。Posse Dev（`~/.posse-dev`）实测 agy 启动、信任提示的 waiting、结束 idle、会话标题绑定 UUID、`/exit` 清除 agent 身份，以及 history resume 回到同一 UUID。新建的临时目录会话在原生缓存与 SQLite 都没有 workspace URI，恢复须显式指定工作区；不猜 cwd。
+验收结果：Go 全量测试、go vet、MyGo vet/i18n 检查通过；Flutter analyze、全量测试（563 通过，7 跳过）及新增上下文/设计规则测试通过。离屏检查浅色/深色的新建菜单、技能页和历史 token 展示。Posse Dev（`~/.posse-dev`）实测 agy 启动、信任提示的 waiting、结束 idle、会话标题绑定 UUID、`/exit` 清除 agent 身份，以及 history resume 回到同一 UUID。新建的临时目录会话在原生缓存与 SQLite 都没有 workspace URI，历史页可选工作区后恢复；CLI 可用 `--workspace`。

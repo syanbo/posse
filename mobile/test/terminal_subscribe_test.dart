@@ -49,9 +49,64 @@ class _Model extends PosseAppModel {
 
   @override
   PhoneRpc? get rpc => fake;
+
+  void bind(SessionTab tab) {
+    tabs = {
+      tab.worktreeId: [tab],
+    };
+    notifyListeners();
+  }
 }
 
 void main() {
+  testWidgets('a terminal can open chat after Antigravity binds a session', (
+    tester,
+  ) async {
+    final model = _Model(_RefusingRpc());
+    SessionTab? opened;
+    const before = SessionTab(
+      worktreeId: 'w',
+      title: 'Antigravity',
+      terminalId: 't1',
+      agent: 'antigravity',
+    );
+    const after = SessionTab(
+      worktreeId: 'w',
+      title: 'Antigravity',
+      terminalId: 't1',
+      agent: 'antigravity',
+      sessionId: 'current-session',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TerminalScreen(
+          model: model,
+          tab: before,
+          onOpenChat: (tab) => opened = tab,
+        ),
+      ),
+    );
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    model.bind(after);
+    await tester.pump();
+    tester
+        .widget<IconButton>(
+          find.widgetWithIcon(IconButton, Icons.more_horiz_rounded),
+        )
+        .onPressed!();
+    await tester.pump();
+    final switchRow = find.ancestor(
+      of: find.byIcon(Icons.chat_bubble_outline_rounded),
+      matching: find.byType(RowTile),
+    );
+    tester.widget<RowTile>(switchRow).onTap!();
+    await tester.pump();
+    expect(opened?.sessionId, 'current-session');
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('a refused subscription says so instead of spinning', (
     tester,
   ) async {

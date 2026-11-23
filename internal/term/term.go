@@ -65,6 +65,8 @@ type AgentState struct {
 	// TitlePending 是 Claude 还没拿到它（下一次 UserPromptSubmit 时经 hook 交过去）
 	Title        string `json:"title,omitempty"`
 	TitlePending bool   `json:"titlePending,omitempty"`
+	// NativeTitle 是上一次读到的原生标题，用来识别之后在 agy 里改名。
+	NativeTitle string `json:"nativeTitle,omitempty"`
 	// Subagents 是还在跑的后台子 agent（Claude 主线程 Stop 的 background_tasks，SubagentStop 划掉）：
 	// 它们跑着时主线程停下不算本轮完成
 	Subagents []string  `json:"subagents,omitempty"`
@@ -639,6 +641,7 @@ func (t *Terminal) SetTitle(title, sessionID string, pending bool) {
 		t.agent.TranscriptPath, t.agent.Message = "", ""
 		t.agent.ToolName, t.agent.ToolInput, t.agent.Prompt = "", "", ""
 		t.agent.Subagents = nil
+		t.agent.NativeTitle = ""
 	}
 	t.agent.Title, t.agent.TitlePending = title, pending
 	t.mu.Unlock()
@@ -708,6 +711,9 @@ func (t *Terminal) mergeAgent(s AgentState) AgentState {
 	// 标题跟着会话走：同一个会话的后续事件沿用，换了会话（新开的 agent、/clear）就不再是它的标题
 	if s.Title == "" && s.SessionID == t.agent.SessionID {
 		s.Title, s.TitlePending = t.agent.Title, t.agent.TitlePending
+	}
+	if s.NativeTitle == "" && s.SessionID == t.agent.SessionID {
+		s.NativeTitle = t.agent.NativeTitle
 	}
 	if s.Subagents == nil && s.SessionID == t.agent.SessionID {
 		s.Subagents = t.agent.Subagents

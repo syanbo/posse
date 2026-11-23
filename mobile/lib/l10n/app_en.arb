@@ -21,6 +21,11 @@
   "@chatCode": {
     "description": "Chat and Markdown: header of a code block that names no language."
   },
+  "chatCompactBodyGeneral": "{agent} will summarize the conversation so far to free up context.",
+  "@chatCompactBodyGeneral": {
+    "description": "Chat: confirmation when the context window percentage is unknown.",
+    "placeholders": {"agent": {"type": "String"}}
+  },
   "chatCompactBody": "{percent}% of the context is used. {agent} will condense the conversation so far into a summary (/compact) to make room to keep going.",
   "@chatCompactBody": {
     "description": "Chat: body of the compact-context dialog. {percent} is the used percentage, {agent} the agent name.",
@@ -292,6 +297,10 @@
   "chatSendRefused": "Not delivered",
   "@chatSendRefused": {
     "description": "Chat and Terminal: brief notice when the computer refused to write the message into the terminal."
+  },
+  "chatSendRequiresMacUpdate": "Update Posse on the Mac to send from Chat, or switch to Terminal.",
+  "@chatSendRequiresMacUpdate": {
+    "description": "Chat: notice when the Mac is too old to validate which Antigravity session receives the input."
   },
   "chatSendUnknown": "Not confirmed. Check the chat before retrying.",
   "@chatSendUnknown": {

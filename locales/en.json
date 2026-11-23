@@ -3501,6 +3501,10 @@
       }
     }
   },
+  "historyChooseWorkspace": "Choose a Workspace",
+  "@historyChooseWorkspace": {
+    "description": "History: title of the workspace picker for a session with no recorded directory."
+  },
   "historyContinueInPosse": "Continue in Posse",
   "@historyContinueInPosse": {
     "description": "History: button that resumes the session in a new terminal."
@@ -3525,6 +3529,10 @@
         "type": "String"
       }
     }
+  },
+  "historyNoWorkspace": "Add a workspace in Posse to continue this session.",
+  "@historyNoWorkspace": {
+    "description": "History: empty state when there is no workspace for resuming a session."
   },
   "historyEmptyBody": "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor, ~/.grok and ~/.gemini/antigravity-cli, and never changes them.",
   "@historyEmptyBody": {

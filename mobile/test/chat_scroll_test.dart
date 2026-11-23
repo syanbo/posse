@@ -32,7 +32,7 @@ class FakeRpc implements PhoneRpc {
     Duration? timeout,
   }) async {
     calls.add(method);
-    if (method == 'terminal.send') {
+    if (method == 'terminal.send' || method == 'terminal.sendForSession') {
       return {
         'send': {
           'accepted': true,
@@ -60,6 +60,49 @@ class FakeModel extends PosseAppModel {
   PhoneRpc? get rpc => fake;
 }
 
+class _SwitchingRpc extends FakeRpc {
+  final _streams = <String, StreamController<Map<String, Object?>>>{};
+  final sentSessions = <Object?>[];
+  Future<Map<String, Object?>>? sendReply;
+
+  @override
+  Future<RpcStream> subscribe(
+    String method,
+    Map<String, Object?> params,
+  ) async {
+    if (method != 'nativeChat.subscribe') {
+      return super.subscribe(method, params);
+    }
+    final id = params['sessionId'] as String;
+    final stream = StreamController<Map<String, Object?>>();
+    _streams[id] = stream;
+    return RpcStream(id, stream.stream, () async {});
+  }
+
+  @override
+  Future<Map<String, Object?>> call(
+    String method,
+    Map<String, Object?> params, {
+    Duration? timeout,
+  }) {
+    if (method == 'terminal.sendForSession') {
+      sentSessions.add(params['expectedSessionId']);
+      if (sendReply case final reply?) {
+        calls.add(method);
+        return reply;
+      }
+    }
+    return super.call(method, params, timeout: timeout);
+  }
+
+  void snapshot(String id, String body) {
+    _streams[id]!.add({
+      'type': 'snapshot',
+      'messages': [text('reply', 'assistant', body, 4)],
+    });
+  }
+}
+
 const tab = SessionTab(
   worktreeId: 'w',
   title: 'claude',
@@ -69,18 +112,32 @@ const tab = SessionTab(
   sessionId: 's1',
 );
 
-Map<String, Object?> tabsFrame(String state) => {
+const _antigravityTab = SessionTab(
+  worktreeId: 'w',
+  title: 'First session',
+  terminalId: 't1',
+  agent: 'antigravity',
+  state: 'idle',
+  sessionId: 's1',
+);
+
+Map<String, Object?> tabsFrame(
+  String state, {
+  String agent = 'claude',
+  String title = 'claude',
+  String? sessionId = 's1',
+}) => {
   'type': 'snapshot',
   'tabs': [
     {
       'type': 'terminal',
       'terminal': 't1',
-      'title': 'claude',
-      'launchAgent': 'claude',
+      'title': title,
+      'launchAgent': agent,
       'agentStatus': {
         'state': state,
-        'agentType': 'claude',
-        'providerSession': {'id': 's1'},
+        'agentType': agent,
+        if (sessionId != null) 'providerSession': {'id': sessionId},
       },
     },
   ],
@@ -155,6 +212,111 @@ ScrollPosition listPosition(WidgetTester tester) {
 }
 
 void main() {
+  testWidgets('Antigravity 切换时更换正文并隔离草稿', (tester) async {
+    final rpc = _SwitchingRpc();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatScreen(model: FakeModel(rpc), tab: _antigravityTab),
+      ),
+    );
+    await tester.pump();
+    rpc.snapshot('s1', 'First transcript');
+    await tester.pumpAndSettle();
+    expect(find.text('First transcript', findRichText: true), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'First draft');
+
+    rpc.tabs.add(tabsFrame('idle', agent: 'antigravity', sessionId: null));
+    await tester.pumpAndSettle();
+    expect(find.text('First transcript', findRichText: true), findsNothing);
+    expect(find.text('First draft'), findsNothing);
+
+    rpc.tabs.add(tabsFrame('idle', agent: 'antigravity', sessionId: 's2'));
+    await tester.pump();
+    rpc.snapshot('s1', 'Late old transcript');
+    rpc.snapshot('s2', 'Second transcript');
+    await tester.pumpAndSettle();
+    expect(find.text('Late old transcript', findRichText: true), findsNothing);
+    expect(find.text('Second transcript', findRichText: true), findsOneWidget);
+    expect(find.text('First draft'), findsNothing);
+    await tester.enterText(find.byType(TextField), 'Second message');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pumpAndSettle();
+    expect(rpc.sentSessions, ['s2']);
+
+    rpc.tabs.add(tabsFrame('idle', agent: 'antigravity'));
+    await tester.pumpAndSettle();
+    expect(find.text('First draft'), findsOneWidget);
+    expect(find.text('Second transcript', findRichText: true), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  for (final accepted in [true, false]) {
+    testWidgets('切换后按迟到回执整理原会话的草稿（写入成功 $accepted）', (tester) async {
+      final reply = Completer<Map<String, Object?>>();
+      final rpc = _SwitchingRpc()..sendReply = reply.future;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatScreen(model: FakeModel(rpc), tab: _antigravityTab),
+        ),
+      );
+      await tester.pump();
+      final field = find.byType(TextField);
+      await tester.enterText(field, 'Original message');
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+      await tester.pump();
+      expect(rpc.sentSessions, ['s1']);
+
+      rpc.tabs.add(tabsFrame('idle', agent: 'antigravity', sessionId: null));
+      rpc.tabs.add(tabsFrame('idle', agent: 'antigravity', sessionId: 's2'));
+      await tester.pump();
+      await tester.enterText(field, 'Other session draft');
+      reply.complete({
+        'send': {
+          'accepted': accepted,
+          'writeSettlement': {'outcome': accepted ? 'accepted' : 'refused'},
+        },
+      });
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(field).controller!.text,
+        'Other session draft',
+      );
+
+      rpc.tabs.add(tabsFrame('idle', agent: 'antigravity'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(field).controller!.text,
+        accepted ? '' : 'Original message',
+      );
+    });
+  }
+
+  testWidgets('旧 Mac 拒绝 Antigravity 对话写入时保留输入', (tester) async {
+    final reply = Completer<Map<String, Object?>>();
+    final rpc = _SwitchingRpc()..sendReply = reply.future;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatScreen(model: FakeModel(rpc), tab: _antigravityTab),
+      ),
+    );
+    await tester.pump();
+    final field = find.byType(TextField);
+    await tester.enterText(field, 'Keep this draft');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pump();
+    expect(rpc.sentSessions, ['s1']);
+    reply.completeError(RpcException('method_not_found', 'Unknown method'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).controller!.text, 'Keep this draft');
+    expect(find.text('请更新 Mac 上的 Posse，或切到终端发送。'), findsOneWidget);
+    expect(rpc.calls.where((method) => method.startsWith('terminal.send')), [
+      'terminal.sendForSession',
+    ]);
+  });
+
   testWidgets('停在中间发送后贴到底部，之后的回复不把它拉回去', (tester) async {
     final messages = <Map<String, Object?>>[
       for (var i = 0; i < 30; i++)

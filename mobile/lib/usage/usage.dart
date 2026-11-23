@@ -131,7 +131,9 @@ class AgentUsage {
 
   bool windowUnknown(UsageWindow w, DateTime now) =>
       w.unknown ||
-      (agent == 'codex' && w.resetsAt != null && !w.resetsAt!.isAfter(now));
+      ((agent == 'codex' || agent == 'antigravity') &&
+          w.resetsAt != null &&
+          !w.resetsAt!.isAfter(now));
 
   bool stale(DateTime now) =>
       agent == 'codex' &&

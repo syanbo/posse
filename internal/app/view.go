@@ -195,6 +195,7 @@ func (a *app) build(c *ui.Context) {
 		a.closeImages()
 	}
 	a.newWorkspaceDialog(c)
+	a.historyResumeDialog(c)
 	a.dispatchDialog(c)
 	a.newDiscussionDialog(c)
 	a.editDiscussionDialog(c)

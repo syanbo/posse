@@ -14,6 +14,7 @@ import (
 	"posse/internal/agent"
 	"posse/internal/history"
 	"posse/internal/rpc"
+	"posse/internal/term"
 	"posse/internal/usage"
 )
 
@@ -24,6 +25,7 @@ import (
 //     直接查 ChatGPT 的额度及重置卡，至少隔 codexAskEvery
 //   - Grok：标题变化时增量读它的日志
 //   - Cursor：启动时和 stop 时向 Cursor 查一次，至少隔 cursorEvery
+//   - Antigravity：检测到 agy 时和回合完成后用 agy /usage 查询，至少隔 antigravityEvery
 //   - 界面点刷新（usage.refresh）时各家都马上取一次，不管间隔
 //   - 设置页整个关掉（usage.json 的 off）后以上都不做，读数也不给界面和手机；
 //     设置里关掉的 agent（agents.json 的 disabled）同样不读不查、不给读数，重新打开时像启动时一样取一次
@@ -33,6 +35,7 @@ const (
 	codexAskEvery    = time.Minute
 	grokEvery        = 3 * time.Second
 	codexEvery       = 5 * time.Second
+	antigravityEvery = 5 * time.Minute
 )
 
 type usageState struct {
@@ -40,18 +43,20 @@ type usageState struct {
 	grok  *usage.GrokLog
 	http  *http.Client
 
-	mu           sync.Mutex
-	grokAt       time.Time
-	codexAt      map[string]time.Time // 按会话文件
-	claudeMod    time.Time            // 上次读 Claude 缓存时文件的修改时间
-	claudeAt     time.Time            // statusLine 上报时上次看缓存的时间
-	cursorAt     time.Time
-	cursorBusy   bool
-	cursorDenied bool // 读钥匙串要弹授权窗：本次常驻进程运行期间不再试
-	codexAskAt   time.Time
-	codexPending chan struct{}
-	codexError   string
-	disabled     []string // 上次给界面读数时关掉的 agent，用来认出重新打开的
+	mu                 sync.Mutex
+	grokAt             time.Time
+	codexAt            map[string]time.Time // 按会话文件
+	claudeMod          time.Time            // 上次读 Claude 缓存时文件的修改时间
+	claudeAt           time.Time            // statusLine 上报时上次看缓存的时间
+	cursorAt           time.Time
+	cursorBusy         bool
+	cursorDenied       bool // 读钥匙串要弹授权窗：本次常驻进程运行期间不再试
+	codexAskAt         time.Time
+	codexPending       chan struct{}
+	codexError         string
+	antigravityAt      time.Time
+	antigravityPending chan struct{}
+	disabled           []string // 上次给界面读数时关掉的 agent，用来认出重新打开的
 }
 
 // usageStatus 随 daemon.status 给界面。
@@ -80,9 +85,56 @@ func (d *Daemon) usageStart() {
 	d.claudeCacheUsage()
 	d.codexLatest()
 	go d.codexAsk(context.Background(), false)
+	go d.antigravityAsk(context.Background(), false)
 	d.grokUsage(true)
 	// Cursor 本地没有用量，不查就要等到下次用 Cursor 才有
 	d.cursorUsage(false)
+}
+
+func (d *Daemon) antigravityAsk(ctx context.Context, force bool) {
+	if !d.usageAgentOn("antigravity") || ctx.Err() != nil {
+		return
+	}
+	d.agents.mu.Lock()
+	path := d.agents.path
+	d.agents.mu.Unlock()
+	if path == "" {
+		path = os.Getenv("PATH")
+	}
+	executable := agent.LookPathAfter(agent.Command["antigravity"], path, agent.ShimDir(d.cfg.Home))
+	if executable == "" {
+		return
+	}
+	s := &d.usage
+	s.mu.Lock()
+	done := s.antigravityPending
+	if done == nil {
+		if !force && time.Since(s.antigravityAt) < antigravityEvery {
+			s.mu.Unlock()
+			return
+		}
+		done = make(chan struct{})
+		s.antigravityAt, s.antigravityPending = time.Now(), done
+		go func() {
+			queryCtx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+			defer cancel()
+			u, err := usage.FetchAntigravity(queryCtx, executable, term.Environ(nil), time.Now())
+			if err != nil {
+				log.Printf("antigravity usage: %v", err)
+			} else if d.usageAgentOn("antigravity") {
+				s.store.Update(u)
+			}
+			s.mu.Lock()
+			s.antigravityPending = nil
+			close(done)
+			s.mu.Unlock()
+		}()
+	}
+	s.mu.Unlock()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 }
 
 // usageOn 是要不要读取套餐用量：测试里没有 store，用户也可以在设置里整个关掉。
@@ -392,6 +444,7 @@ func (d *Daemon) usageRefresh(ctx context.Context, raw json.RawMessage) (any, er
 		},
 		func() { d.grokUsage(true) },
 		func() { d.cursorUsage(true) },
+		func() { d.antigravityAsk(ctx, force) },
 	} {
 		wg.Add(1)
 		go func() {

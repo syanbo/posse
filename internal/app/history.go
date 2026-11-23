@@ -141,11 +141,12 @@ type historyView struct {
 	list      ui.ListState
 	// resQuery、resAgent 是列表上这份结果对应的查询条件：新结果回来之前照旧显示它，
 	// 不至于一敲字就闪出"没有找到"；换了条件的结果回来时列表回到顶部
-	resQuery string
-	resAgent int
-	askedAt  time.Time // 最近一次请求发出（防抖结束）的时间
-	failed   string    // 最近一次请求的错误
-	messages ui.ListState
+	resQuery     string
+	resAgent     int
+	askedAt      time.Time // 最近一次请求发出（防抖结束）的时间
+	failed       string    // 最近一次请求的错误
+	messages     ui.ListState
+	resumePicker *historyResumePicker
 
 	mu      sync.Mutex
 	req     int // 列表请求的序号，只采用最新一次的结果
@@ -477,10 +478,10 @@ func (a *app) resumeSession(m locales.Messages, s history.Session) {
 	if !r.mayWrite() {
 		return
 	}
-	r.resumeSession(m, s)
+	r.resumeSession(m, s, "")
 }
 
-func (r appRequest) resumeSession(m locales.Messages, s history.Session) {
+func (r appRequest) resumeSession(m locales.Messages, s history.Session, workspaceID string) {
 	a := r.app
 	go func() {
 		var t struct {
@@ -488,9 +489,14 @@ func (r appRequest) resumeSession(m locales.Messages, s history.Session) {
 			WorkspaceID string `json:"workspaceId"`
 		}
 		ctx, cancel := context.WithTimeout(a.windowContext(), 30*time.Second)
-		err := r.invoke(ctx, "history.resume", map[string]any{"session": s.ID, "path": s.Path, "cols": 120, "rows": 36}, &t)
+		err := r.invoke(ctx, "history.resume", map[string]any{"session": s.ID, "path": s.Path, "workspace": workspaceID, "cols": 120, "rows": 36}, &t)
 		cancel()
 		var re *rpc.Error
+		if workspaceID == "" && errors.As(err, &re) && (re.Code == rpc.CodeWorkspaceRequired ||
+			(re.Code == rpc.CodeBadRequest && s.Cwd == "" && strings.HasPrefix(re.Message, "the session has no recorded directory"))) {
+			r.update(func() { a.history.resumePicker = &historyResumePicker{request: r, session: s} })
+			return
+		}
 		if errors.As(err, &re) && re.Code == rpc.CodeNotFound && s.Cwd != "" && strings.Contains(re.Message, "no workspace contains") {
 			r.update(func() {
 				a.confirm(m.HistoryAddProjectConfirm(shortPath(s.Cwd)),
@@ -501,7 +507,7 @@ func (r appRequest) resumeSession(m locales.Messages, s history.Session) {
 								return
 							}
 							r.refresh()
-							r.resumeSession(m, s)
+							r.resumeSession(m, s, "")
 						}()
 					})
 			})
@@ -516,6 +522,52 @@ func (r appRequest) resumeSession(m locales.Messages, s history.Session) {
 			r.update(func() { a.openTerminal(t.WorkspaceID, t.ID) })
 		}
 	}()
+}
+
+type historyResumePicker struct {
+	request appRequest
+	session history.Session
+}
+
+func (a *app) historyResumeDialog(c *ui.Context) {
+	p := a.history.resumePicker
+	if p == nil {
+		return
+	}
+	open := p.request.canWrite()
+	m, t := L(c), c.Theme()
+	ui.Modal(c, &open, func() {
+		ui.Column(c).Width(sz(440)).Gap(12).Children(func() {
+			titleText(c, m.HistoryChooseWorkspace(), fsTitle)
+			ui.Scroll(c).MaxHeight(sz(320)).Children(func() {
+				ui.Column(c).Gap(4).Children(func() {
+					any := false
+					for _, w := range a.workspaces {
+						if w.Missing || a.isChat(w.ID) {
+							continue
+						}
+						any = true
+						icon := func() { ui.Icon(c, iconFolder).FontSize(iconSize).TextColor(t.TextMuted) }
+						if a.navRowAt(c, "history-resume:"+w.ID, false, icon, w.Label, shortPath(w.Path), "", nil).Clicked() {
+							open = false
+							p.request.resumeSession(m, p.session, w.ID)
+						}
+					}
+					if !any {
+						ui.Text(c, m.HistoryNoWorkspace()).FontSize(fsSmall).TextColor(t.TextMuted)
+					}
+				})
+			})
+			ui.Row(c).Justify(ui.End).Children(func() {
+				if pressable(textButton(c, m.CommonCancel())).Clicked() {
+					open = false
+				}
+			})
+		})
+	})
+	if !open {
+		a.history.resumePicker = nil
+	}
 }
 
 // ago 是会话最后使用的时间，写成"20 分钟前"；分档和 elapsed 一样。

@@ -57,7 +57,7 @@ void main() {
     expect(find.text('81%'), findsOneWidget);
   });
 
-  testWidgets('Antigravity shows tokens without a compact action', (
+  testWidgets('Antigravity shows tokens and offers compact without a percent', (
     tester,
   ) async {
     Future<void> show(String agent) async {
@@ -78,7 +78,11 @@ void main() {
     await show('antigravity');
     expect(find.textContaining('12,345'), findsOneWidget);
     expect(find.textContaining('%'), findsNothing);
-    expect(find.byKey(const Key('context-meter')), findsNothing);
+    await tester.tap(find.byKey(const Key('context-meter')));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
     await show('codex');
     expect(find.text('12345%'), findsOneWidget);
   });
