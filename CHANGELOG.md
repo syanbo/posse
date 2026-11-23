@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.45
+
+- 接入智谱 ZCode 独立终端。支持会话历史搜索、恢复和原生改名，启用 Posse 的 ZCode 状态插件后可查看工作状态。
+- 技能页支持查看和开关 ZCode 技能，终端的命令速查收录 ZCode 命令。
+- 支持向 ZCode 粘贴图片，在会话媒体面板查看图片和视频，并在「技能与工具」查看工具调用次数和 Token 用量。
+
+### English
+
+- Run ZCode as a standalone agent. Search, resume, and rename native sessions. Enable Posse's ZCode status plugin to see when the agent is working.
+- Browse and toggle ZCode skills in Skills, and look up ZCode commands in the terminal command reference.
+- Paste images into ZCode, view session images and videos, and see tool counts and token usage in Skills & Tools.
+
 ## 0.1.44
 
 - 同步 Antigravity 的原生会话标题。历史记录缺少工作目录时，可以选工作区再恢复会话。
