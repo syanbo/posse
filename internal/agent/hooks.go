@@ -305,7 +305,7 @@ func TitleStatus(agentName, title, current string) (string, bool) {
 	return "", false
 }
 
-// HasHooks 报告这家 agent 启动时注入 hooks（grok 不注入，状态靠 OSC 7501 和标题）。
+// HasHooks 报告这家 agent 是否用 hooks 跟踪状态。agy 的 hooks 只用于交接和文件痕迹。
 func HasHooks(agentName string) bool {
 	switch agentName {
 	case "claude", "codex", "cursor":
@@ -384,6 +384,10 @@ func DeliveryOutput(agentName, event, text string) string {
 		v = map[string]string{"additional_context": text}
 	case agentName == "codex" && event == "Stop":
 		v = map[string]string{"decision": "block", "reason": text}
+	case agentName == "antigravity" && event == "SessionStart":
+		v = map[string]any{"injectSteps": []map[string]map[string]string{
+			{"systemMessage": {"systemMessage": text}},
+		}}
 	// Claude 的 Stop 也用 additionalContext：decision: block 会显示成 "Stop hook error"
 	default:
 		v = map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": event, "additionalContext": text}}

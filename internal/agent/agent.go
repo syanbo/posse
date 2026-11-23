@@ -103,7 +103,6 @@ func (l Launcher) Launch(name string, m Model, prompt string) (Launch, error) {
 			parts = append(parts, "--verbatim")
 		}
 	case "antigravity":
-		// agy 的会话设置不接受 hooks，状态由 OSC 7501 上报。
 		parts = []string{"agy"}
 	case "zcode":
 		parts = []string{"zcode"}
@@ -122,7 +121,11 @@ func (l Launcher) Launch(name string, m Model, prompt string) (Launch, error) {
 	}
 	parts = append(parts, margs...)
 	if name == "antigravity" {
-		parts = append(parts, l.antigravityLaunchArgs()...)
+		args, err := l.antigravityLaunchArgs()
+		if err != nil {
+			return Launch{}, err
+		}
+		parts = append(parts, args...)
 	} else {
 		parts = append(parts, l.permissionArgs(name)...)
 	}
@@ -178,7 +181,11 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 	// codex 的已经加在 resume 子命令前面
 	switch name {
 	case "antigravity":
-		parts = append(parts, l.antigravityLaunchArgs()...)
+		args, err := l.antigravityLaunchArgs()
+		if err != nil {
+			return Launch{}, err
+		}
+		parts = append(parts, args...)
 	case "codex":
 	default:
 		parts = append(parts, l.permissionArgs(name)...)

@@ -196,7 +196,7 @@ type knownFile struct {
 // parserVersions 是各家解析规则的版本。只改了某一家的解析时改这里：只重读这一家的文件，表结构版本不变，
 // 跨版本继续运行的旧常驻进程照常能查询。表结构或分词变了才改 schemaVersion（整份重建，旧常驻进程要重启）。
 var parserVersions = map[string]string{
-	"antigravity": "2", // 思考过程写入详情，不进搜索
+	"antigravity": "3", // 历史目录跳过 Posse 专用 hooks 目录
 	"claude":      "5", // 思考过程写入详情，不进搜索
 	"codex":       "3", // 思考过程写入详情，不进搜索
 	"grok":        "5", // 思考过程写入详情，不进搜索

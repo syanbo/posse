@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -90,7 +91,44 @@ func (d *Daemon) antigravityStatusline(ctx context.Context, raw json.RawMessage)
 	return nil, nil
 }
 
-// syncAntigravity 给 agy 终端补会话 ID 和标题：agy 没有 hooks、不能预分配会话 ID，也不写终端标题。
+// antigravityHook 只处理交接与写入，状态继续以 OSC 和前台进程为准。
+func (d *Daemon) antigravityHook(ctx context.Context, s *session, p hookEventParams) hookEventResult {
+	var payload struct {
+		Session    string   `json:"conversationId"`
+		Workspaces []string `json:"workspacePaths"`
+	}
+	if json.Unmarshal(p.Payload, &payload) != nil || payload.Session == "" || !s.Running() {
+		return hookEventResult{}
+	}
+	pg := s.Foreground()
+	name, args := agent.OfProcess(pg)
+	if name != "antigravity" || history.AntigravityOpenSession(d.agentDataHome(), procmem.OpenFiles(pg)) != payload.Session {
+		return hookEventResult{}
+	}
+	switch p.Event {
+	case "PostToolUse":
+		d.noteWrites(s, "antigravity", payload.Session, agent.ToolWrites(p.Agent, p.Event, p.Payload))
+	case "SessionStart":
+		dir := procmem.Cwd(pg)
+		if !filepath.IsAbs(dir) || filepath.Dir(dir) == dir {
+			return hookEventResult{}
+		}
+		dir = resolvePath(dir)
+		d.rememberAntigravityDir(s, payload.Session, dir)
+		// agy 会先挂载 --add-dir 的目录，再等待用户信任主工作区。
+		if agent.SessionFromArgs("antigravity", args) == payload.Session ||
+			!slices.ContainsFunc(payload.Workspaces, func(path string) bool { return resolvePath(path) == dir }) {
+			return hookEventResult{}
+		}
+		d.refreshHistory(ctx, false, 500*time.Millisecond)
+		if brief, err := d.indexedAntigravityBrief(ctx, dir, payload.Session); err == nil {
+			return hookEventResult{Brief: brief}
+		}
+	}
+	return hookEventResult{}
+}
+
+// syncAntigravity 给 agy 终端补会话 ID 和标题：agy 不能预分配会话 ID，也不写终端标题。
 // 会话按 agy 进程持有的 presence 锁认，后续原生改名也一起同步。
 func (d *Daemon) syncAntigravity(s *session) {
 	if s.agentName() != "antigravity" || !s.Running() {
@@ -114,7 +152,7 @@ func (d *Daemon) syncAntigravity(s *session) {
 	if dir == "" {
 		dir = s.Dir
 	}
-	dirs := agent.AntigravityAddedDirs(args, dir)
+	dirs := slices.DeleteFunc(agent.AntigravityAddedDirs(args, dir), agent.IsAntigravityHookDir)
 	sid := history.AntigravityOpenSession(d.agentDataHome(), procmem.OpenFiles(pg))
 	s.mu.Lock()
 	if s.agent != "antigravity" || s.agentPg != pg && s.agentPg != 0 {
@@ -122,19 +160,12 @@ func (d *Daemon) syncAntigravity(s *session) {
 		return
 	}
 	s.agyDir, s.agyDirs = dir, dirs
-	recorded := s.agyRecordedSID == sid
 	s.mu.Unlock()
 	if sid == "" {
 		return
 	}
-	if !recorded && filepath.IsAbs(processDir) {
-		if err := d.store.RememberAntigravityDir(sid, resolvePath(processDir)); err != nil {
-			log.Printf("terminal %s: record Antigravity directory: %v", s.ID, err)
-		} else {
-			s.mu.Lock()
-			s.agyRecordedSID = sid
-			s.mu.Unlock()
-		}
+	if filepath.IsAbs(processDir) {
+		d.rememberAntigravityDir(s, sid, resolvePath(processDir))
 	}
 	s.agyReportMu.Lock()
 	fresh := s.agyReportPG == pg && s.Agent().SessionID == sid && time.Since(s.agyReportAt) < antigravityReportFresh
@@ -149,6 +180,22 @@ func (d *Daemon) syncAntigravity(s *session) {
 		return
 	}
 	applyAntigravityIdentity(s, sid, title, "")
+}
+
+func (d *Daemon) rememberAntigravityDir(s *session, sid, dir string) {
+	s.mu.Lock()
+	recorded := s.agyRecordedSID == sid
+	s.mu.Unlock()
+	if recorded {
+		return
+	}
+	if err := d.store.RememberAntigravityDir(sid, dir); err != nil {
+		log.Printf("terminal %s: record Antigravity directory: %v", s.ID, err)
+		return
+	}
+	s.mu.Lock()
+	s.agyRecordedSID = sid
+	s.mu.Unlock()
 }
 
 func applyAntigravityIdentity(s *session, sid, title, path string) {

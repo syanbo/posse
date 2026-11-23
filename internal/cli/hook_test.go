@@ -34,16 +34,16 @@ func TestPermissionDecision(t *testing.T) {
 	}
 }
 
-// hook 参数不足也不能让 agent 看到失败：退出码 0，Cursor 照样拿到 {}。
+// hook 参数不足也不能让 agent 看到失败：退出码 0，需要 JSON 的 agent 照样拿到 {}。
 func TestHookMissingArgs(t *testing.T) {
-	for _, args := range [][]string{nil, {"claude"}, {"cursor"}} {
+	for _, args := range [][]string{nil, {"claude"}, {"cursor"}, {"antigravity"}} {
 		var out, errOut bytes.Buffer
 		e := &env{out: &out, errOut: &errOut}
 		if err := cmdHook(e, args); err != nil {
 			t.Fatalf("%v: %v", args, err)
 		}
 		want := ""
-		if len(args) == 1 && args[0] == "cursor" {
+		if len(args) == 1 && (args[0] == "cursor" || args[0] == "antigravity") {
 			want = "{}\n"
 		}
 		if out.String() != want {
@@ -130,13 +130,15 @@ func TestHookWritesSessionBrief(t *testing.T) {
 	os.Stdin = r
 	t.Setenv("POSSE_TERMINAL_ID", "t_1")
 	t.Setenv("POSSE_SOCKET", sock)
-	var out, errOut bytes.Buffer
-	if err := cmdHook(&env{out: &out, errOut: &errOut}, []string{"claude", "SessionStart"}); err != nil {
-		t.Fatal(err)
-	}
-	want := agent.DeliveryOutput("claude", "SessionStart", "Recent sessions") + "\n"
-	if out.String() != want {
-		t.Fatalf("stdout %s", out.String())
+	for _, name := range []string{"claude", "antigravity"} {
+		var out, errOut bytes.Buffer
+		if err := cmdHook(&env{out: &out, errOut: &errOut}, []string{name, "SessionStart"}); err != nil {
+			t.Fatal(err)
+		}
+		want := agent.DeliveryOutput(name, "SessionStart", "Recent sessions") + "\n"
+		if out.String() != want {
+			t.Fatalf("%s stdout %s", name, out.String())
+		}
 	}
 }
 

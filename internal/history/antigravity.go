@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"posse/internal/agent"
 )
 
 // AntigravityBase 是 agy 的数据目录。
@@ -214,8 +216,13 @@ func (p antigravityParser) meta(path string, st *fileState) error {
 			st.Parent = m.Summary.ParentConversationID
 		}
 		st.Title = m.Summary.Title
-		if len(m.Summary.WorkspaceURIs) > 0 {
-			st.Cwd = antigravityFileURI(m.Summary.WorkspaceURIs[0])
+		st.Cwd = ""
+		for _, uri := range m.Summary.WorkspaceURIs {
+			dir := antigravityFileURI(uri)
+			if dir != "" && !agent.IsAntigravityHookDir(dir) {
+				st.Cwd = dir
+				break
+			}
 		}
 		touch(st, parseTime(m.Summary.UpdatedAt))
 	}

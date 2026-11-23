@@ -19,7 +19,7 @@ func TestChatSchemaUnchanged(t *testing.T) {
 	if schemaVersion != "6" {
 		t.Fatalf("schemaVersion %s", schemaVersion)
 	}
-	if parserVersions["claude"] != "5" || parserVersions["codex"] != "3" || parserVersions["grok"] != "5" || parserVersions["cursor"] != "2" || parserVersions["antigravity"] != "2" {
+	if parserVersions["claude"] != "5" || parserVersions["codex"] != "3" || parserVersions["grok"] != "5" || parserVersions["cursor"] != "2" || parserVersions["antigravity"] != "3" {
 		t.Fatalf("parserVersions %v", parserVersions)
 	}
 }

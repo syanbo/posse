@@ -18,6 +18,11 @@ func TestToolWrites(t *testing.T) {
 		{"codex", "PostToolUse", `{"tool_name":"apply_patch","tool_input":{"input":"*** Begin Patch\n*** Add File: /Users/x/n.md\n+hi\n*** End Patch"}}`, []string{"/Users/x/n.md"}, nil},
 		{"cursor", "postToolUse", `{"tool_name":"Shell","tool_input":{"command":"touch /Users/x/y"}}`, nil, []string{"touch /Users/x/y"}},
 		{"claude", "PreToolUse", `{"tool_name":"Write","tool_input":{"file_path":"/a"}}`, nil, nil},
+		{"antigravity", "PostToolUse", `{"toolCall":{"name":"write_to_file","args":{"TargetFile":"/outside/a","Overwrite":true}}}`, []string{"/outside/a"}, nil},
+		{"antigravity", "PostToolUse", `{"toolCall":{"name":"write_file","args":{"Path":"/outside/a","Overwrite":true}}}`, []string{"/outside/a"}, nil},
+		{"antigravity", "PostToolUse", `{"toolCall":{"name":"run_command","args":{"CommandLine":"touch /outside/a","WaitMsBeforeAsync":5000}}}`, nil, []string{"touch /outside/a"}},
+		{"antigravity", "PostToolUse", `{"toolCall":{"name":"run_command","args":{"CommandLine":"touch /outside/a"}},"error":"exit status 1"}`, nil, nil},
+		{"antigravity", "PostToolUse", `{"toolCall":{"name":"view_file","args":{"AbsolutePath":"/outside/a"}}}`, nil, nil},
 	}
 	for _, c := range cases {
 		w := ToolWrites(c.agent, c.event, json.RawMessage(c.payload))

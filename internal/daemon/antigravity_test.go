@@ -14,7 +14,7 @@ import (
 	"posse/internal/usage"
 )
 
-// agy 不写终端标题、没有 hooks：会话按它持有的 presence 锁认，标题读它自己起的，posse 起的标题不被覆盖。
+// agy 不写终端标题：会话按它持有的 presence 锁认，标题读它自己起的，posse 起的标题不被覆盖。
 func TestSyncAntigravity(t *testing.T) {
 	d, w := newTestDaemon(t)
 	home := t.TempDir()

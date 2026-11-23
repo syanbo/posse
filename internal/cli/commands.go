@@ -647,18 +647,18 @@ func readHookInput(r io.Reader, limit int) []byte {
 func cmdHook(e *env, args []string) error {
 	if len(args) < 2 {
 		fmt.Fprintln(e.errOut, "posse hook: usage: posse hook <agent> <event>")
-		if len(args) == 1 && args[0] == "cursor" {
+		if len(args) == 1 && (args[0] == "cursor" || args[0] == "antigravity") {
 			fmt.Fprintln(e.out, "{}")
 		}
 		return nil
 	}
 	id := os.Getenv("POSSE_TERMINAL_ID")
 	payload := readHookInput(os.Stdin, maxHookPayload)
-	// Cursor 要从 stdout 读一个 JSON 回应，空对象表示不干预（不放行也不拦截）；
+	// Cursor 和 agy 要从 stdout 读一个 JSON 回应，空对象表示不干预；
 	// 其他 agent 不能有随意的输出，Claude 会把它注入模型上下文，只写它认的回应
-	cursorReply := "{}"
-	if args[0] == "cursor" {
-		defer func() { fmt.Fprintln(e.out, cursorReply) }()
+	hookReply := "{}"
+	if args[0] == "cursor" || args[0] == "antigravity" {
+		defer func() { fmt.Fprintln(e.out, hookReply) }()
 	}
 	if id == "" {
 		return nil
@@ -712,7 +712,7 @@ func cmdHook(e *env, args []string) error {
 	// 常驻进程交来的任务提醒：工具做完时进上下文，本轮结束时让 agent 接着处理
 	if out.Deliver != "" {
 		if args[0] == "cursor" {
-			cursorReply = agent.DeliveryOutput(args[0], args[1], out.Deliver)
+			hookReply = agent.DeliveryOutput(args[0], args[1], out.Deliver)
 		} else {
 			fmt.Fprintln(e.out, agent.DeliveryOutput(args[0], args[1], out.Deliver))
 		}
@@ -725,9 +725,16 @@ func cmdHook(e *env, args []string) error {
 		}})
 		fmt.Fprintln(e.out, string(b))
 	}
-	// 新开的 Claude、Codex：这个目录最近几条会话，给模型接着用
+	// 新会话：这个目录最近几条会话，给模型接着用
 	if out.Brief != "" {
-		fmt.Fprintln(e.out, agent.DeliveryOutput(args[0], args[1], out.Brief))
+		line := agent.DeliveryOutput(args[0], args[1], out.Brief)
+		if args[0] == "antigravity" {
+			if args[1] == "SessionStart" {
+				hookReply = line
+			}
+		} else {
+			fmt.Fprintln(e.out, line)
+		}
 	}
 	return nil
 }

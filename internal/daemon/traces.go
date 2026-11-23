@@ -175,7 +175,10 @@ func resolvePath(p string) string {
 
 // noteToolWrites 从 PostToolUse 的参数里记下工作区外的写入。在后台做：要 stat、查库，不拖慢 hook。
 func (d *Daemon) noteToolWrites(s *session, agentName, event string, payload json.RawMessage) {
-	w := agent.ToolWrites(agentName, event, payload)
+	d.noteWrites(s, agentName, s.Agent().SessionID, agent.ToolWrites(agentName, event, payload))
+}
+
+func (d *Daemon) noteWrites(s *session, agentName, sessionID string, w agent.Writes) {
 	if len(w.Files) == 0 && len(w.Commands) == 0 {
 		return
 	}
@@ -190,17 +193,17 @@ func (d *Daemon) noteToolWrites(s *session, agentName, event string, payload jso
 		}
 		home := sc.home
 		for _, f := range w.Files {
-			d.recordTrace(s, ws, sc, expandHome(f, home, cwd), "tool")
+			d.recordTrace(s, ws, sc, expandHome(f, home, cwd), "tool", agentName, sessionID)
 		}
 		for _, c := range w.Commands {
 			for _, t := range history.WriteTargets(c) {
-				d.recordTrace(s, ws, sc, expandHome(t, home, cwd), "shell")
+				d.recordTrace(s, ws, sc, expandHome(t, home, cwd), "shell", agentName, sessionID)
 			}
 		}
 	}()
 }
 
-func (d *Daemon) recordTrace(s *session, w store.Workspace, sc traceScope, path, source string) {
+func (d *Daemon) recordTrace(s *session, w store.Workspace, sc traceScope, path, source, agentName, sessionID string) {
 	if path == "" {
 		return
 	}
@@ -208,8 +211,11 @@ func (d *Daemon) recordTrace(s *session, w store.Workspace, sc traceScope, path,
 	if !ok || d.store.TraceCovering(p) {
 		return
 	}
+	if sessionID == "" {
+		sessionID = s.Agent().SessionID
+	}
 	t := store.Trace{Path: p, Kind: kind, ProjectID: w.ProjectID, WorkspaceID: w.ID, TerminalID: s.ID,
-		Agent: s.agentName(), SessionID: s.Agent().SessionID, Source: source, At: time.Now()}
+		Agent: agentName, SessionID: sessionID, Source: source, At: time.Now()}
 	if err := d.store.AddTrace(t); err != nil {
 		log.Printf("trace %s: %v", p, err)
 	}
@@ -260,7 +266,7 @@ func (d *Daemon) traceGit(r gitTraceRecord) {
 		}
 		p = resolvePath(p)
 		if !isWorktree {
-			d.recordTrace(s, w, sc, p, "git")
+			d.recordTrace(s, w, sc, p, "git", s.agentName(), s.Agent().SessionID)
 			return
 		}
 		if under(p, resolvePath(d.cfg.Home)) || d.isWorkspacePath(p) {

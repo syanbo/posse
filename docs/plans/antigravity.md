@@ -6,7 +6,7 @@
 
 - `agy -i <prompt>` 是交互初始提示，`-p` 是非交互单轮；位置参数属于子命令。恢复用 `--conversation <UUID>`，`--model`、`--effort` 原样透传。默认跳过审批用 `--dangerously-skip-permissions`；逐项确认经 `--settings` 设置 `toolPermission: strict`，覆盖 Auto 的自动批准。手动传入的权限选项、设置文件和内联权限设置由 agy 处理。普通内联设置与 Posse 的权限档位合并，重复 `--settings` 时以最后一个为准。 [官方权限说明](https://antigravity.google/docs/agent-settings#antigravity-cli)
 - PTY 探针收到 `OSC 7501;?` 后应答，实测报告 `app=antigravity`、working、blocked（包括 auth）、idle、done。状态经现有 OSC 通道处理，子 agent 是否仍工作由 agy 的聚合报告决定。
-- `--settings` 拒绝 hooks、plugins、pluginPaths、pluginsPaths、hooksPath、defaultHooksPath、customizations，报 unknown setting。没有已核实的会话级挂载途径，因此不注入 hooks，不改用户 hooks.json；任务提醒空闲时输入，无 hooks 答题/审批卡和写文件痕迹。
+- 1.5.15 实测 `--add-dir` 会从附加目录加载工作区 hooks。Posse 把自己的 `.agents/hooks.json` 放在 `$POSSE_HOME/.posse-antigravity-hooks`，交互启动和恢复时加入这个目录，用户和项目的 hooks 照常加载。任务提醒仍在空闲时输入，手机答题与审批仍在终端处理。
 - `--conversation` 指向不存在的 UUID 会另建不同 ID 的会话，不能用于预分配 ID。agy 运行期间一直持有 `presence/<UUID>.lock`（也开着 `conversations/<UUID>.db`），常驻进程每 2 秒的 agent 检查读 agy 进程打开的文件（`procmem.OpenFiles`，`proc_pidfdinfo`）认出当前会话并绑定，`/new`、切换会话后跟着换；同时持有多个锁时不绑。恢复参数和 agent 执行 `posse session title` 带来的 `ANTIGRAVITY_CONVERSATION_ID` 也能绑定。不按最近修改时间或 cwd 猜归属。
 - 官方 `statusLine` 通过会话 `--settings` 接入，已有用户命令仍接收原始输入并输出原状态栏，只有 Posse 采集时保留原生状态栏。设置文件、禁用的自定义状态栏和无法解析的配置走进程锁和原生记录。报告只用于当前前台会话，旧报告和会话 ID 不符的报告丢弃。 [官方状态栏接口](https://antigravity.google/docs/cli/statusline/)
 - 手机对话写入时重查前台 agy 的会话锁。缺锁或有多个会话锁时拒绝写入，界面暂时保留上次识别到的会话。
@@ -44,7 +44,9 @@ truncated_fields 触发按 step_index、type、created_at 核验的完整日志�
 
 ## 任务交接
 
-Posse 派发 Antigravity worker 时，在任务提示里告知 `posse history brief`。需要接续旧工作时，worker 可用它读取当前目录及子目录最近三条已索引会话的标题、最后一句和查看命令；有 `ANTIGRAVITY_CONVERSATION_ID` 时跳过自身。原生摘要缺少目录时，用 Posse 首次确认的会话目录或现存旧终端记录里的唯一目录补齐。手动开的会话也可运行此命令，`--cwd` 可指定目录。agy 1.5.14 仍拒绝通过会话 `--settings` 注入 hooks，因此普通新会话需要主动读取交接，不启动额外的模型轮次。
+Posse 里的新会话（包括任务 worker）在 `SessionStart` 首轮读取当前目录及子目录最近三条已索引会话的标题、最后一句和查看命令，通过 agy 的 `injectSteps` 注入同一轮。当前会话及恢复启动不重复带交接。首轮仅在 agy 已挂载主工作区时带交接。历史索引略过专用 hooks 目录。如果首次启动时原生摘要只写了该目录，交接和恢复用 Posse 从 agy 进程确认过的工作目录。也可主动运行 `posse history brief --cwd <目录>`。
+
+写文件工具和 shell 命令完成后，`PostToolUse` 把成功的写入交给 Posse 痕迹记录。Posse 只收前台 agy 唯一会话锁对应的事件，按既有规则记录工作区外仍存在的路径。
 
 ## 套餐与验收
 

@@ -695,6 +695,9 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 		d.zcodeHook(s, p)
 		return hookEventResult{}, nil
 	}
+	if p.Agent == "antigravity" {
+		return d.antigravityHook(ctx, s, p), nil
+	}
 	// Codex 的子 agent、agent 跑的命令里嵌套启动的 agent 都带着这个终端的 ID，它们结束时报的 SessionEnd
 	// 不是终端里正在跑的会话退出，当成退出会把主会话摘掉，直到它下一个 hook 才挂回来
 	if p.Event == "SessionEnd" {

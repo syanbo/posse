@@ -13,27 +13,35 @@ var antigravityValueFlags = []string{"--add-dir", "--agent", "--conversation", "
 const antigravityStrict = "strict"
 const antigravityStrictSettings = `{"toolPermission":"` + antigravityStrict + `"}`
 
-func (l Launcher) antigravityLaunchArgs() []string {
+func (l Launcher) antigravityLaunchArgs() ([]string, error) {
 	settings := map[string]json.RawMessage{}
 	args := l.antigravityPermissions(settings, false)
+	dir, err := l.writeAntigravityHooks()
+	if err != nil {
+		return nil, err
+	}
+	if dir != "" {
+		args = append(args, "--add-dir", Quote(dir))
+	}
 	l.addAntigravityStatusLine(settings)
 	if len(settings) == 0 {
-		return args
+		return args, nil
 	}
 	encoded, _ := json.Marshal(settings)
-	return append(args, "--settings", Quote(string(encoded)))
+	return append(args, "--settings", Quote(string(encoded))), nil
 }
 
 // agy 的选项值可能长得像另一个选项，且多次给 --settings 时只有最后一个生效。
-func (l Launcher) manualAntigravityArgs(args []string) []string {
+func (l Launcher) manualAntigravityArgs(args []string) ([]string, error) {
 	settingsIndex := -1
 	var settingsValue, settingsPrefix string
 	explicitPermission := false
+	hasHookDir := false
 	for i := 0; i < len(args); i++ {
 		flag, value, inline := strings.Cut(args[i], "=")
 		if flag == "--" {
 			if i != len(args)-1 {
-				return args
+				return args, nil
 			}
 			break
 		}
@@ -42,7 +50,7 @@ func (l Launcher) manualAntigravityArgs(args []string) []string {
 			flag = "-" + flag
 		}
 		if !strings.HasPrefix(flag, "-") || slices.Contains(passthrough["agy"], flag) {
-			return args
+			return args, nil
 		}
 		switch flag {
 		case "--dangerously-skip-permissions", "--mode", "--sandbox":
@@ -50,7 +58,7 @@ func (l Launcher) manualAntigravityArgs(args []string) []string {
 		}
 		if !inline && slices.Contains(antigravityValueFlags, flag) {
 			if i+1 == len(args) {
-				return args
+				return args, nil
 			}
 			i++
 			value, prefix = args[i], ""
@@ -58,25 +66,74 @@ func (l Launcher) manualAntigravityArgs(args []string) []string {
 		if flag == "--settings" {
 			settingsIndex, settingsValue, settingsPrefix = i, value, prefix
 		}
+		if flag == "--add-dir" && value == AntigravityHookDir(l.Home) {
+			hasHookDir = true
+		}
+	}
+	var hooks []string
+	if !hasHookDir {
+		dir, err := l.writeAntigravityHooks()
+		if err != nil {
+			return nil, err
+		}
+		if dir != "" {
+			hooks = []string{"--add-dir", dir}
+		}
 	}
 	// 文件和无效输入交给 agy 本身读取、报错，避免把用户文件的内容展开到进程参数。
 	settings := map[string]json.RawMessage{}
 	if settingsIndex >= 0 && (json.Unmarshal([]byte(settingsValue), &settings) != nil || settings == nil) {
-		return args
+		return append(hooks, args...), nil
 	}
 	keys := len(settings)
-	extra := l.antigravityPermissions(settings, explicitPermission)
+	extra := append(l.antigravityPermissions(settings, explicitPermission), hooks...)
 	updatedStatus := l.addAntigravityStatusLine(settings)
 	if settingsIndex < 0 && len(settings) > 0 {
 		encoded, _ := json.Marshal(settings)
-		return append(append(extra, "--settings", string(encoded)), args...)
+		return append(append(extra, "--settings", string(encoded)), args...), nil
 	}
 	if settingsIndex >= 0 && (updatedStatus || len(settings) != keys) {
 		encoded, _ := json.Marshal(settings)
 		args = slices.Clone(args)
 		args[settingsIndex] = settingsPrefix + string(encoded)
 	}
-	return append(extra, args...)
+	return append(extra, args...), nil
+}
+
+const antigravityHookDirName = ".posse-antigravity-hooks"
+
+// AntigravityHookDir 是只放 Posse hook 的附加目录，agy 会与原工作区的 hooks 一起读取。
+func AntigravityHookDir(home string) string { return filepath.Join(home, antigravityHookDirName) }
+
+// IsAntigravityHookDir 识别 agy 可能写进会话摘要的 Posse 内部目录，包括其他 Posse 实例的目录。
+func IsAntigravityHookDir(path string) bool {
+	return filepath.IsAbs(path) && filepath.Base(path) == antigravityHookDirName
+}
+
+func (l Launcher) writeAntigravityHooks() (string, error) {
+	if l.Exe == "" || l.Home == "" {
+		return "", nil
+	}
+	dir := AntigravityHookDir(l.Home)
+	handler := func(event string) map[string]any {
+		return map[string]any{"type": "command", "command": l.hookCommand("antigravity", event), "timeout": 3}
+	}
+	data, err := json.MarshalIndent(map[string]any{
+		"posse-handoff-and-traces": map[string]any{
+			"SessionStart": []any{handler("SessionStart")},
+			"PostToolUse": []any{map[string]any{
+				"matcher": antigravityWriteTools,
+				"hooks":   []any{handler("PostToolUse")},
+			}},
+		},
+	}, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := writeIfChanged(filepath.Join(dir, ".agents", "hooks.json"), data); err != nil {
+		return "", err
+	}
+	return dir, nil
 }
 
 func (l Launcher) antigravityPermissions(settings map[string]json.RawMessage, explicit bool) []string {

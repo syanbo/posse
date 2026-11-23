@@ -326,22 +326,7 @@ func (d *Daemon) historyBrief(ctx context.Context, raw json.RawMessage) (any, er
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "history brief requires an absolute project directory")
 	}
 	indexing := d.refreshHistory(ctx, false, historyWait)
-	idx, err := d.historyIndex()
-	if err != nil {
-		return nil, err
-	}
-	dirs, err := d.store.AntigravitySessionDirs(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var ids []string
-	dirRoot := resolvePath(p.Cwd)
-	for id, dir := range dirs {
-		if rel, err := filepath.Rel(dirRoot, resolvePath(dir)); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			ids = append(ids, id)
-		}
-	}
-	brief, err := idx.Brief(ctx, p.Cwd, p.Skip, ids...)
+	brief, err := d.indexedAntigravityBrief(ctx, p.Cwd, p.Skip)
 	if err != nil {
 		return nil, err
 	}
@@ -349,6 +334,26 @@ func (d *Daemon) historyBrief(ctx context.Context, raw json.RawMessage) (any, er
 		Brief  string        `json:"brief"`
 		Status historyStatus `json:"status"`
 	}{Brief: brief, Status: d.historyStatus(ctx, indexing)}, nil
+}
+
+// indexedAntigravityBrief 补上 agy 原生摘要尚未记录工作目录的会话。
+func (d *Daemon) indexedAntigravityBrief(ctx context.Context, cwd, skip string) (string, error) {
+	idx, err := d.historyIndex()
+	if err != nil {
+		return "", err
+	}
+	dirs, err := d.store.AntigravitySessionDirs(ctx)
+	if err != nil {
+		return "", err
+	}
+	var ids []string
+	dirRoot := resolvePath(cwd)
+	for id, dir := range dirs {
+		if rel, err := filepath.Rel(dirRoot, resolvePath(dir)); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			ids = append(ids, id)
+		}
+	}
+	return idx.Brief(ctx, cwd, skip, ids...)
 }
 
 type historyShowParams struct {

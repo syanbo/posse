@@ -19,10 +19,15 @@ var readOnlyTool = regexp.MustCompile(`(?i)read|grep|glob|search|fetch|view|^ls$
 // patchAddRe 是 apply_patch 里新建的文件。
 var patchAddRe = regexp.MustCompile(`(?m)^\*\*\* Add File: (.+)$`)
 
+const antigravityWriteTools = `^(run_command|write_to_file|replace_file_content|multi_replace_file_content|write_file|edit_file)$`
+
 // ToolWrites 从工具做完后的 hook（Claude、Codex 的 PostToolUse，Cursor 的 postToolUse）里取出写入。
 func ToolWrites(agentName, event string, payload json.RawMessage) Writes {
 	if event != "PostToolUse" && event != "postToolUse" {
 		return Writes{}
+	}
+	if agentName == "antigravity" {
+		return antigravityToolWrites(payload)
 	}
 	var p struct {
 		ToolName  string          `json:"tool_name"`
@@ -59,6 +64,43 @@ func ToolWrites(agentName, event string, payload json.RawMessage) Writes {
 		for _, k := range []string{"file_path", "notebook_path", "path", "target_file"} {
 			if f := str(k); f != "" {
 				w.Files = append(w.Files, f)
+			}
+		}
+	}
+	return w
+}
+
+func antigravityToolWrites(payload json.RawMessage) Writes {
+	var p struct {
+		Cwd      string `json:"cwd"`
+		Error    string `json:"error"`
+		ToolCall struct {
+			Name string                     `json:"name"`
+			Args map[string]json.RawMessage `json:"args"`
+		} `json:"toolCall"`
+	}
+	if json.Unmarshal(payload, &p) != nil || p.Error != "" {
+		return Writes{}
+	}
+	str := func(key string) string {
+		var value string
+		json.Unmarshal(p.ToolCall.Args[key], &value)
+		return value
+	}
+	w := Writes{Cwd: p.Cwd}
+	switch p.ToolCall.Name {
+	case "run_command":
+		if cwd := str("Cwd"); cwd != "" {
+			w.Cwd = cwd
+		}
+		if cmd := str("CommandLine"); cmd != "" {
+			w.Commands = append(w.Commands, cmd)
+		}
+	case "write_to_file", "replace_file_content", "multi_replace_file_content", "write_file", "edit_file":
+		for _, key := range []string{"TargetFile", "AbsolutePath", "FilePath", "Path", "path", "file_path"} {
+			if path := str(key); path != "" {
+				w.Files = append(w.Files, path)
+				break
 			}
 		}
 	}

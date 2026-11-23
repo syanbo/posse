@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"posse/internal/agent"
 	"posse/internal/history"
 	"posse/internal/store"
 )
@@ -65,11 +66,15 @@ func TestAntigravityBriefUsesKnownDirectory(t *testing.T) {
 		}
 	}
 	summaries := map[string]any{}
+	hookURI := url.URL{Scheme: "file", Path: agent.AntigravityHookDir(t.TempDir())}
 	for _, id := range []string{known, other, unknown} {
 		summary := map[string]any{"ID": id, "Title": "Previous Antigravity task"}
-		if id == other {
+		switch id {
+		case known, unknown:
+			summary["WorkspaceURIs"] = []string{hookURI.String()}
+		case other:
 			u := url.URL{Scheme: "file", Path: t.TempDir()}
-			summary["WorkspaceURIs"] = []string{u.String()}
+			summary["WorkspaceURIs"] = []string{hookURI.String(), u.String()}
 		}
 		summaries[id] = map[string]any{"summary": summary}
 		write(filepath.Join(base, "brain", id, ".system_generated", "logs", "transcript.jsonl"),

@@ -259,7 +259,7 @@ func workerPrompt(t store.Task, w store.Workspace) string {
 	fmt.Fprintf(&b, "  Write a report file under $POSSE_NOTES/tasks/%s/ (a git-ignored folder at the project root that outlives worktrees) unless the coordinator named another place.\n\n", t.ID)
 	b.WriteString("Stay inside the task: edit only what it lets you change, and ask before going beyond it. In the summary, name the evidence that shows the result, such as the command you ran and what it printed.\n")
 	if t.Agent == "antigravity" {
-		b.WriteString("If the task continues earlier work, run `posse history brief` from this directory for recent session summaries. Use them as background for the task below.\n")
+		b.WriteString("Use any recent session summaries you received as background. If you need to look them up again, run `posse history brief` from this directory.\n")
 	}
 	b.WriteString("After `posse task done`, stop and wait at the prompt: no new work, no polling. If the user talks to you directly, do what they say.\n")
 	fmt.Fprintf(&b, "The coordinator may send follow-up work for the same task later. Posse then gives you a reminder line: run `posse task check %s`, do the follow-up, and report it with `posse task done` again.\n", t.ID)

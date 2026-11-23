@@ -19,16 +19,20 @@ func TestAntigravityLaunch(t *testing.T) {
 		!strings.Contains(cmd, " -i "+Quote("do 'this'\nnext")) {
 		t.Fatal(cmd)
 	}
-	if HasHooks("antigravity") {
-		t.Fatal("unverified hooks enabled")
-	}
 	resume, err := l.Resume("antigravity", "11111111-1111-4111-8111-111111111111", "/a b")
 	if err != nil || !strings.Contains(strings.Join(resume.Argv, " "), "cd '/a b' && agy --conversation '") {
 		t.Fatal(resume, err)
 	}
-	entries, _ := os.ReadDir(l.Home)
-	if len(entries) != 0 {
-		t.Fatal("launch wrote settings", entries)
+	hookDir := AntigravityHookDir(l.Home)
+	for _, argv := range [][]string{launch.Argv, resume.Argv} {
+		if !strings.Contains(strings.Join(argv, " "), "--add-dir "+Quote(hookDir)) {
+			t.Fatal(argv)
+		}
+	}
+	hooks, err := os.ReadFile(filepath.Join(hookDir, ".agents", "hooks.json"))
+	if err != nil || !strings.Contains(string(hooks), "hook antigravity SessionStart") ||
+		!strings.Contains(string(hooks), "hook antigravity PostToolUse") {
+		t.Fatal(string(hooks), err)
 	}
 	if fromProcess("/bin/agy", []string{"agy"}) != "antigravity" {
 		t.Fatal("process not recognized")
@@ -48,17 +52,21 @@ func TestAntigravityLaunch(t *testing.T) {
 func TestAntigravityStatusLineWrapsExistingCommand(t *testing.T) {
 	l := Launcher{Exe: "/opt/My Posse/bin/posse", Home: t.TempDir()}
 	args := []string{"--mode=plan", "--settings", `{"statusLine":{"command":"printf 'custom'","padding":2},"model":"x"}`}
-	got := l.manualAntigravityArgs(args)
-	if len(got) != len(args) || got[0] != args[0] || got[1] != args[1] ||
-		!strings.Contains(got[2], `"model":"x"`) || !strings.Contains(got[2], `"padding":2`) ||
-		!strings.Contains(got[2], Quote(l.Exe)+" statusline antigravity -- ") || strings.Contains(got[2], "stack_with_default") {
+	managed := []string{"--add-dir", AntigravityHookDir(l.Home)}
+	got, err := l.manualAntigravityArgs(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(args)+len(managed) || !slices.Equal(got[:2], managed) || !slices.Equal(got[2:4], args[:2]) ||
+		!strings.Contains(got[4], `"model":"x"`) || !strings.Contains(got[4], `"padding":2`) ||
+		!strings.Contains(got[4], Quote(l.Exe)+" statusline antigravity -- ") || strings.Contains(got[4], "stack_with_default") {
 		t.Fatalf("wrapped settings: %q", got)
 	}
-	if twice := l.manualAntigravityArgs(got); !slices.Equal(twice, got) {
+	if twice, err := l.manualAntigravityArgs(got); err != nil || !slices.Equal(twice, got) {
 		t.Fatalf("shim wrapped the same status line twice: %q", twice)
 	}
 	disabled := []string{"--mode=plan", "--settings", `{"statusLine":{"command":"printf custom","enabled":false}}`}
-	if got := l.manualAntigravityArgs(disabled); !slices.Equal(got, disabled) {
+	if got, err := l.manualAntigravityArgs(disabled); err != nil || !slices.Equal(got, append(managed, disabled...)) {
 		t.Fatalf("modified disabled status line: %q", got)
 	}
 }
