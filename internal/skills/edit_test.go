@@ -135,7 +135,7 @@ func TestPlanToggle(t *testing.T) {
 		}
 	}
 	s := find(t, Scan(o), "a", ScopeUser)
-	if got := states(s); got != [NumAgents]State{Off, Off, Off, On} {
+	if got := states(s); got != [NumAgents]State{Off, Off, Off, On, ZCode: On} {
 		t.Errorf("关掉后 %v", got)
 	}
 	if _, err := PlanToggle(o, s, Cursor, false); err != ErrNoToggle {
@@ -151,7 +151,7 @@ func TestPlanToggle(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := states(find(t, Scan(o), "a", ScopeUser)); got != [NumAgents]State{On, On, On, On} {
+	if got := states(find(t, Scan(o), "a", ScopeUser)); got != [NumAgents]State{On, On, On, On, ZCode: On} {
 		t.Errorf("打开后 %v", got)
 	}
 	if b, _ := os.ReadFile(filepath.Join(h, ".claude", "settings.json")); strings.Contains(string(b), "skillOverrides") {

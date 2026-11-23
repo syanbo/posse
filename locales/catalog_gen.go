@@ -19929,30 +19929,34 @@ func (msgs Messages) SkillsNeedProject() string {
 	return Catalog.Format(msgs.locale, "skillsNeedProject", nil)
 }
 
-// SkillsNeverUsed says "Never used in sessions"
+// SkillsNeverUsed says "No usage recorded"
 // in the language the app shows.
 //
-// Skills and MCP lists: usage line for something never used.
+// Skills and MCP lists: usage line when the indexed sessions contain no
+// usage records.
 func SkillsNeverUsed() string { return In(i18n.Locale()).SkillsNeverUsed() }
 
-// SkillsNeverUsed says "Never used in sessions"
+// SkillsNeverUsed says "No usage recorded"
 // in the language of msgs.
 //
-// Skills and MCP lists: usage line for something never used.
+// Skills and MCP lists: usage line when the indexed sessions contain no
+// usage records.
 func (msgs Messages) SkillsNeverUsed() string {
 	return Catalog.Format(msgs.locale, "skillsNeverUsed", nil)
 }
 
-// SkillsNeverUsedNote says "No agent’s session history shows it being used."
+// SkillsNeverUsedNote says "The indexed sessions contain no usage records."
 // in the language the app shows.
 //
-// Skill and MCP details: usage card when never used.
+// Skill and MCP details: usage card when the indexed sessions contain no
+// usage records.
 func SkillsNeverUsedNote() string { return In(i18n.Locale()).SkillsNeverUsedNote() }
 
-// SkillsNeverUsedNote says "No agent’s session history shows it being used."
+// SkillsNeverUsedNote says "The indexed sessions contain no usage records."
 // in the language of msgs.
 //
-// Skill and MCP details: usage card when never used.
+// Skill and MCP details: usage card when the indexed sessions contain no
+// usage records.
 func (msgs Messages) SkillsNeverUsedNote() string {
 	return Catalog.Format(msgs.locale, "skillsNeverUsedNote", nil)
 }

@@ -7015,13 +7015,13 @@
   "@skillsNeedProject": {
     "description": "Error bar: installing or running an npx skills command with no project added."
   },
-  "skillsNeverUsed": "Never used in sessions",
+  "skillsNeverUsed": "No usage recorded",
   "@skillsNeverUsed": {
-    "description": "Skills and MCP lists: usage line for something never used."
+    "description": "Skills and MCP lists: usage line when the indexed sessions contain no usage records."
   },
-  "skillsNeverUsedNote": "No agent’s session history shows it being used.",
+  "skillsNeverUsedNote": "The indexed sessions contain no usage records.",
   "@skillsNeverUsedNote": {
-    "description": "Skill and MCP details: usage card when never used."
+    "description": "Skill and MCP details: usage card when the indexed sessions contain no usage records."
   },
   "skillsNewEllipsis": "New…",
   "@skillsNewEllipsis": {

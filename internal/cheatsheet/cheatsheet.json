@@ -1762,6 +1762,66 @@
   ]
  },
  {
+  "agent": "zcode",
+  "version": "0.18.0",
+  "docs": "https://github.com/zai-org/ZCode/tree/v4.0.0/apps/zcode-cli/docs/usage",
+  "skillPrefix": "/skill ",
+  "sections": [
+   {
+    "title": "会话与设置",
+    "titleEn": "Conversation & Settings",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/help",
+      "desc": "查看命令帮助",
+      "descEn": "Show command help"
+     },
+     {
+      "name": "/new",
+      "desc": "开始新会话",
+      "descEn": "Start a new conversation",
+      "warn": true
+     },
+     {
+      "name": "/resume",
+      "desc": "选择历史会话继续",
+      "descEn": "Choose a conversation to resume"
+     },
+     {
+      "name": "/model",
+      "desc": "选择模型",
+      "descEn": "Choose a model"
+     },
+     {
+      "name": "/plugins",
+      "desc": "查看插件",
+      "descEn": "Browse plugins"
+     },
+     {
+      "name": "/skill",
+      "args": "[名称]",
+      "argsEn": "[name]",
+      "desc": "列出技能或加载指定技能",
+      "descEn": "List skills or load a named skill"
+     }
+    ]
+   },
+   {
+    "title": "按键",
+    "titleEn": "Keys",
+    "kind": "key",
+    "items": [
+     {
+      "name": "Esc",
+      "desc": "中断当前生成",
+      "descEn": "Interrupt the current response"
+     }
+    ]
+   }
+  ]
+ },
+ {
   "agent": "antigravity",
   "version": "1.5.11",
   "docs": "https://antigravity.google/docs/cli/reference",

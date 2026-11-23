@@ -41,6 +41,10 @@ func CanToggle(a Agent, s Skill) bool {
 		st := s.Agents[a]
 		return st.agyToggle != "" && (st.State == On || st.State == Off)
 	}
+	if a == ZCode {
+		st := s.Agents[a]
+		return st.zcodeToggle && (st.State == On || st.State == Off)
+	}
 	switch s.Agents[a].State {
 	case On, Off:
 		return true
@@ -112,6 +116,14 @@ func PlanToggle(o Options, s Skill, a Agent, enable bool) (Change, error) {
 		ch.File = st.agyToggle
 		ch.Before = readText(ch.File)
 		ch.After, err = setAntigravityExclude(ch.Before, filepath.Base(st.Via), !enable)
+	case ZCode:
+		ch.File = zcodeUserConfig(o.Home)
+		if s.Scope == ScopeProject && o.Dir != "" {
+			ch.File = filepath.Join(o.Dir, ".zcode", "config.json")
+		}
+		ch.File = realDir(ch.File)
+		ch.Before = readText(ch.File)
+		ch.After, err = setZCodeSkill(ch.Before, readZCodeConfig(o.Home, o.Dir), s, enable)
 	}
 	if err != nil {
 		return Change{}, err
@@ -236,24 +248,32 @@ func readText(path string) string {
 
 // setJSONOverride 把顶层 skillOverrides 里 name 设成 value（空是删掉这一项；删空了连 skillOverrides 一起删）。
 func setJSONOverride(src, name, value string) (string, error) {
+	var raw json.RawMessage
+	if value != "" {
+		raw, _ = json.Marshal(value)
+	}
+	return setJSONObjectEntry(src, "settings.json", "skillOverrides", name, raw)
+}
+
+func setJSONObjectEntry(src, filename, object, name string, value json.RawMessage) (string, error) {
 	if strings.TrimSpace(src) == "" {
-		if value == "" {
+		if value == nil {
 			return src, nil
 		}
 		src = "{}\n"
 	}
 	// 顶层不是对象（[]、null）的也不碰：下面按最后一个 } 接着写
 	if !json.Valid([]byte(src)) || !strings.HasPrefix(strings.TrimSpace(src), "{") {
-		return "", errors.New("settings.json is not valid JSON; nothing changed")
+		return "", fmt.Errorf("%s is not valid JSON; nothing changed", filename)
 	}
-	keyStart, valStart, valEnd, found := topLevelKey(src, "skillOverrides")
+	keyStart, valStart, valEnd, found := topLevelKey(src, object)
 	// 已有的各项，保持原来的顺序；值原样留着（不是字符串的也不动）
 	var keys []string
 	vals := map[string]json.RawMessage{}
 	if found {
 		dec := json.NewDecoder(strings.NewReader(src[valStart:valEnd]))
 		if t, err := dec.Token(); err != nil || t != json.Delim('{') {
-			return "", errors.New("skillOverrides in settings.json is not an object; nothing changed")
+			return "", fmt.Errorf("%s in %s is not an object; nothing changed", object, filename)
 		}
 		for dec.More() {
 			t, err := dec.Token()
@@ -271,13 +291,21 @@ func setJSONOverride(src, name, value string) (string, error) {
 			vals[k] = v
 		}
 	}
-	if value == "" {
+	if value == nil {
 		keys = slices.DeleteFunc(keys, func(k string) bool { return k == name })
 	} else {
 		if !slices.Contains(keys, name) {
 			keys = append(keys, name)
 		}
-		vals[name], _ = json.Marshal(value)
+		// 单个条目也可能有此开关不认识的字段，修改时只覆盖传入的字段。
+		var oldFields, newFields map[string]json.RawMessage
+		if json.Unmarshal(vals[name], &oldFields) == nil && oldFields != nil && json.Unmarshal(value, &newFields) == nil {
+			for k, v := range newFields {
+				oldFields[k] = v
+			}
+			value, _ = json.Marshal(oldFields)
+		}
+		vals[name] = value
 	}
 	if len(keys) == 0 {
 		if !found {
@@ -324,7 +352,8 @@ func setJSONOverride(src, name, value string) (string, error) {
 	// 加在顶层对象最后一项后面
 	end := strings.LastIndexByte(src, '}')
 	body := strings.TrimRight(src[:end], " \t\r\n")
-	member := `"skillOverrides": ` + obj
+	key, _ := json.Marshal(object)
+	member := string(key) + ": " + obj
 	switch {
 	case ownLine && strings.HasSuffix(body, "{"):
 		member = "\n" + indent + member + "\n"
@@ -740,7 +769,7 @@ func LinkFor(o Options, s Skill, a Agent) (link string, ok bool) {
 	var dir string
 	switch s.Scope {
 	case ScopeUser:
-		dir = filepath.Join(o.Home, [NumAgents]string{".claude", ".agents", ".grok", ".cursor", ".gemini/config"}[a], "skills")
+		dir = filepath.Join(o.Home, [NumAgents]string{".claude", ".agents", ".grok", ".cursor", ".gemini/config", ".zcode"}[a], "skills")
 	case ScopeProject:
 		if o.Dir == "" {
 			return "", false
@@ -748,6 +777,9 @@ func LinkFor(o Options, s Skill, a Agent) (link string, ok bool) {
 		sub := ".agents"
 		if a == Claude {
 			sub = ".claude"
+		}
+		if a == ZCode {
+			sub = ".zcode"
 		}
 		dir = filepath.Join(o.Dir, sub, "skills")
 	default:

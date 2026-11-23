@@ -195,7 +195,7 @@ func (a *app) mcpTotals(c *ui.Context) {
 	}
 	var byAgent [skills.NumAgents]int
 	for _, sv := range s.mcp.Servers {
-		for _, ag := range skills.Agents {
+		for _, ag := range skills.Agents[:skills.ZCode] {
 			if sv.Agents[ag].State == skills.On {
 				byAgent[ag]++
 			}
@@ -209,7 +209,7 @@ func (a *app) mcpTotals(c *ui.Context) {
 			}
 		})
 		ui.Row(c).Gap(12).Wrap().Children(func() {
-			for _, ag := range skills.Agents {
+			for _, ag := range skills.Agents[:skills.ZCode] {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 					agentIcon(c, ag.String(), smallIcon())
 					ui.Text(c, fmt.Sprint(byAgent[ag])).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
@@ -241,7 +241,7 @@ func (a *app) mcpRow(c *ui.Context, sv skills.MCPServer, selected bool) ui.Eleme
 	row.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, sv.Name).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Grow(1).Shrink(1)
-			agentMarks(c, sv.Agents, nil, nil)
+			agentMarks(c, skills.Agents[:skills.ZCode], sv.Agents, nil, nil)
 		})
 		if len(sv.Defs) > 0 {
 			ui.Text(c, mcpLaunch(sv.Defs[0])).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine()
@@ -285,7 +285,7 @@ func (a *app) mcpDetail(c *ui.Context, sv skills.MCPServer) {
 	}
 	card(c).Padding(cardPad).Gap(4).Shrink(0).Children(func() {
 		cardTitle(c, m.SkillsAgentStatus()).Margin(0, 0, 4, 0)
-		for i, ag := range skills.Agents {
+		for i, ag := range skills.Agents[:skills.ZCode] {
 			if i > 0 {
 				hline(c)
 			}

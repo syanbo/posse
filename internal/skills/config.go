@@ -16,6 +16,7 @@ type configs struct {
 	claude map[string]string
 	codex  []codexEntry
 	grok   grokConfig
+	zcode  zcodeConfig
 	lock   map[string]lockEntry
 }
 
@@ -51,6 +52,7 @@ func readConfigs(home, dir string) configs {
 		c.codex = codex.Skills.Config
 	}
 	c.grok = readGrok(home)
+	c.zcode = readZCodeConfig(home, dir)
 	return c
 }
 

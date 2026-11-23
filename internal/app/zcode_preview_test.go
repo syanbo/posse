@@ -2,7 +2,10 @@ package app
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
+
+	"posse/internal/skills"
 )
 
 func TestPreviewZCode(t *testing.T) {
@@ -27,4 +30,23 @@ func TestPreviewZCode(t *testing.T) {
 	a.history.detail.Session.Agent = "zcode"
 	a.history.detail.Context = nil
 	savePNG(t, newPreviewTester(a, false), "zcode-history.png")
+
+	a = previewApp(t)
+	previewSkillsBoard(a, "")
+	t.Setenv("ZCODE_STORAGE_DIR", "")
+	home := t.TempDir()
+	skillDir := filepath.Join(home, ".zcode", "skills", "review")
+	if err := os.MkdirAll(skillDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: review\ndescription: Review the working tree.\n---\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	a.skills.cat = skills.Scan(skills.Options{Home: home})
+	a.skills.sel = skillDir
+	tt = newPreviewTester(a, false)
+	if _, ok := tt.Find("ZCode"); !ok {
+		t.Fatal("missing ZCode skills filter")
+	}
+	savePNG(t, tt, "zcode-skills.png")
 }

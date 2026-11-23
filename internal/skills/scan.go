@@ -1,4 +1,4 @@
-// Package skills 扫描五家 agent（Claude、Codex、Grok、Cursor、Antigravity）能读到的技能，按各家的读取规则和开关算出谁用得上，
+// Package skills 扫描各家 agent 能读到的技能，按各家的读取规则和开关算出谁用得上，
 // 找出断链、同名冲突、多余的链接这类问题。只读；改各家配置的在 config.go。规则的出处见 docs/plans/skills.md。
 package skills
 
@@ -24,14 +24,15 @@ const (
 	Grok
 	Cursor
 	Antigravity
+	ZCode
 	NumAgents
 )
 
 // Agents 按界面上的顺序列出各家。
-var Agents = [NumAgents]Agent{Claude, Codex, Grok, Cursor, Antigravity}
+var Agents = [NumAgents]Agent{Claude, Codex, Grok, Cursor, Antigravity, ZCode}
 
 func (a Agent) String() string {
-	return [...]string{"claude", "codex", "grok", "cursor", "antigravity"}[a]
+	return [...]string{"claude", "codex", "grok", "cursor", "antigravity", "zcode"}[a]
 }
 
 // Scope 是技能从哪一层来。
@@ -70,8 +71,9 @@ type Status struct {
 	// Ignored 表示是被 Grok 的 [skills] ignore 藏掉的（算作关了，打开时从 ignore 里去掉）。
 	Ignored bool
 	// Via 是这家从哪个路径读到它的（链接或目录本身）。
-	Via       string
-	agyToggle string
+	Via         string
+	agyToggle   string
+	zcodeToggle bool
 }
 
 // Skill 是一个技能。链接到同一个目录的算同一个。
@@ -154,7 +156,7 @@ type root struct {
 }
 
 func prios(claude, codex, grok, cursor int, agy ...int) [NumAgents]int {
-	p := [NumAgents]int{claude, codex, grok, cursor, -1}
+	p := [NumAgents]int{claude, codex, grok, cursor, -1, -1}
 	if len(agy) > 0 {
 		p[Antigravity] = agy[0]
 	}
@@ -166,6 +168,7 @@ func prios(claude, codex, grok, cursor int, agy ...int) [NumAgents]int {
 func roots(o Options, cfg configs) []root {
 	h := o.Home
 	no := -1
+	zcodeBase := len(cfg.zcode.roots)
 	grokClaude, grokCursor := 30, 40
 	if !cfg.grok.claudeSkills {
 		grokClaude = no
@@ -175,7 +178,8 @@ func roots(o Options, cfg configs) []root {
 	}
 	rs := []root{
 		{dir: filepath.Join(h, ".claude", "skills"), scope: ScopeUser, prio: prios(10, no, grokClaude, 30)},
-		{dir: filepath.Join(h, ".agents", "skills"), scope: ScopeUser, prio: prios(no, 10, 20, 20)},
+		{dir: filepath.Join(h, ".agents", "skills"), scope: ScopeUser, prio: zcodePriority(prios(no, 10, 20, 20), zcodeBase+1)},
+		{dir: filepath.Join(h, ".zcode", "skills"), scope: ScopeUser, prio: zcodePriority(prios(no, no, no, no), zcodeBase)},
 		{dir: filepath.Join(h, ".grok", "skills"), scope: ScopeUser, prio: prios(no, no, 10, no)},
 		{dir: filepath.Join(h, ".cursor", "skills"), scope: ScopeUser, prio: prios(no, no, grokCursor, 10)},
 		{dir: filepath.Join(h, ".codex", "skills"), scope: ScopeUser, prio: prios(no, no, no, 40)},
@@ -207,10 +211,20 @@ func roots(o Options, cfg configs) []root {
 			}
 			rs = append(rs,
 				root{dir: filepath.Join(d, ".grok", "skills"), scope: ScopeProject, prio: prios(no, no, p, no)},
-				root{dir: filepath.Join(d, ".agents", "skills"), scope: ScopeProject, prio: prios(no, p, p, cursorAt)},
+				root{dir: filepath.Join(d, ".agents", "skills"), scope: ScopeProject, prio: zcodePriority(prios(no, p, p, cursorAt), zcodeBase+3+2*p)},
+				root{dir: filepath.Join(d, ".zcode", "skills"), scope: ScopeProject, prio: zcodePriority(prios(no, no, no, no), zcodeBase+2+2*p)},
 				root{dir: filepath.Join(d, ".claude", "skills"), scope: ScopeProject, prio: prios(claude, no, p, cursorAt)},
 				root{dir: filepath.Join(d, ".cursor", "skills"), scope: ScopeProject, prio: prios(no, no, p, cursorAt)},
 			)
+		}
+	}
+	for i, dir := range cfg.zcode.roots {
+		rs = append(rs, root{dir: dir, scope: ScopeProject, prio: zcodePriority(prios(no, no, no, no), i)})
+	}
+	for _, r := range rs {
+		if p := r.prio[ZCode]; p >= 0 {
+			// ZCode 也读技能根自身的 SKILL.md。共享目录里的这份只归 ZCode。
+			rs = append(rs, root{dir: r.dir, scope: r.scope, prio: zcodePriority(prios(no, no, no, no), p), paths: []string{r.dir}})
 		}
 	}
 	return append(rs, antigravityRoots(o)...)
@@ -253,7 +267,7 @@ func Scan(o Options) Catalog {
 	var items []found
 	seenRoot := map[string]bool{}
 	for i, r := range rs {
-		if seenRoot[r.dir] && r.prio[Antigravity] < 0 {
+		if seenRoot[r.dir] && r.prio[Antigravity] < 0 && r.prio[ZCode] < 0 {
 			continue
 		}
 		seenRoot[r.dir] = true
@@ -406,12 +420,21 @@ func resolve(o Options, rs []root, cfg configs, items []found, cat *Catalog) []S
 				continue // 同一个目录经另一条路径已经算过
 			}
 			st := Status{Via: it.path, Inferred: a == Cursor}
+			if a == ZCode {
+				st.State, st.Why, st.zcodeToggle = cfg.zcode.state(s.File, filepath.Join(it.path, "SKILL.md"))
+				if st.State == Off {
+					s.Agents[a] = st
+					continue
+				}
+			}
 			if w, ok := winner[it.name]; ok && w.real != it.real {
 				st.State, st.Why = Shadowed, fmt.Sprintf("shadowed by %s with the same name", w.path)
 				addDuplicate(cat, it.name, it.path, w.path, a)
 			} else {
 				winner[it.name] = it
-				st.State, st.Why = cfg.state(a, s)
+				if a != ZCode {
+					st.State, st.Why = cfg.state(a, s)
+				}
 				if a == Antigravity {
 					st.agyToggle = it.agyToggle
 				}

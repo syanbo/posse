@@ -98,7 +98,7 @@ func TestScanAgents(t *testing.T) {
 
 	c := Scan(Options{Home: h})
 	s := find(t, c, "shared", ScopeUser)
-	if got := states(s); got != [NumAgents]State{On, On, On, On} {
+	if got := states(s); got != [NumAgents]State{On, On, On, On, ZCode: On} {
 		t.Errorf("shared 各家状态 %v", got)
 	}
 	if s.Source != "me/shared" || len(s.Paths) != 3 {
@@ -107,7 +107,7 @@ func TestScanAgents(t *testing.T) {
 	if s.SourceURL != "https://github.com/me/shared/tree/HEAD/skills/shared" {
 		t.Errorf("shared 来源网页 %q", s.SourceURL)
 	}
-	if got := states(find(t, c, "manual", ScopeUser)); got != [NumAgents]State{Unseen, On, Manual, Manual} {
+	if got := states(find(t, c, "manual", ScopeUser)); got != [NumAgents]State{Unseen, On, Manual, Manual, ZCode: On} {
 		t.Errorf("manual 各家状态 %v（Codex 不认 disable-model-invocation）", got)
 	}
 	if got := states(find(t, c, "grok-only", ScopeUser)); got != [NumAgents]State{Unseen, Unseen, On, Unseen} {
@@ -179,11 +179,11 @@ func TestScanConfigs(t *testing.T) {
 	write(t, filepath.Join(h, ".grok", "config.toml"), "[skills]\ndisabled = [\"a\"]\nignore = [\"~/.agents/skills/b\"]\n\n[compat.claude]\nskills = false\n")
 
 	c := Scan(Options{Home: h})
-	if got := states(find(t, c, "a", ScopeUser)); got != [NumAgents]State{Off, Off, Off, On} {
+	if got := states(find(t, c, "a", ScopeUser)); got != [NumAgents]State{Off, Off, Off, On, ZCode: On} {
 		t.Errorf("a %v", got)
 	}
 	// Codex 后写的 enabled = true 盖过前面的；Grok 的 ignore 藏掉 ~/.agents 那条（算关了），又不读 Claude 的目录
-	if got := states(find(t, c, "b", ScopeUser)); got != [NumAgents]State{Manual, On, Off, On} {
+	if got := states(find(t, c, "b", ScopeUser)); got != [NumAgents]State{Manual, On, Off, On, ZCode: On} {
 		t.Errorf("b %v", got)
 	}
 	if got := find(t, c, "c", ScopeUser).Agents[Claude]; got.State != On || got.Why == "" {
@@ -212,7 +212,7 @@ func TestScanProject(t *testing.T) {
 	}
 	// 仓库根的 .agents/skills：Codex、Grok 往上找得到，Claude 不读 .agents
 	lint := find(t, c, "lint", ScopeProject)
-	if got := states(lint); got != [NumAgents]State{Unseen, On, On, Unseen, On} {
+	if got := states(lint); got != [NumAgents]State{Unseen, On, On, Unseen, On, On} {
 		t.Errorf("仓库根的 lint %v", got)
 	}
 

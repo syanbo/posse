@@ -202,8 +202,12 @@ func (a *app) skillsSidebarItem(c *ui.Context) ui.Element {
 }
 
 // skillAgentLabels 是技能页按 agent 筛选的分段。
-func skillAgentLabels(m locales.Messages) []string {
-	return []string{m.CommonAll(), "Claude", "Codex", "Grok", "Cursor", "Antigravity"}
+func skillAgentLabels(m locales.Messages, agents []skills.Agent) []string {
+	labels := []string{m.CommonAll()}
+	for _, ag := range agents {
+		labels = append(labels, agentTitle(ag.String()))
+	}
+	return labels
 }
 
 // scopePosse 是列表里 Posse 自带技能的一组：它们装在用户目录里，扫描算作用户级，界面上单列出来。
@@ -313,12 +317,17 @@ func (a *app) skillsBoard(c *ui.Context) {
 		// 分页兼作标题：侧栏里叫「技能」，这里分技能和 MCP
 		segmented(c, &s.page, m.SkillsPageLabel(), a.moduleLabel(c, skillsBoardID, m.SkillsTitle()), a.moduleLabel(c, skillsBoardID, "MCP"))
 		placeholder := m.SkillsSearchSkills()
+		agents := skills.Agents[:]
 		if s.page == 1 {
 			placeholder = m.SkillsSearchMCP()
+			agents = skills.Agents[:skills.ZCode]
+			if s.agent > len(agents) {
+				s.agent = 0
+			}
 		}
 		fieldInputSized(c, &s.query, placeholder, 280, 100).Label(m.SkillsSearchLabel())
 		ui.Spacer(c)
-		segmented(c, &s.agent, m.SkillsAgentFilter(), skillAgentLabels(m)...)
+		segmented(c, &s.agent, m.SkillsAgentFilter(), skillAgentLabels(m, agents)...)
 		if s.page == 1 {
 			a.refreshButton(c)
 			a.closeBoardButton(c)
@@ -603,13 +612,13 @@ func (a *app) skillRow(c *ui.Context, sk skills.Skill, selected bool, onClick fu
 // skillMarks 是一行末尾四家的状态：用得上的是 agent 的色块，只能手动调用的淡一些，关了的更淡，
 // 读不到的是同形的淡底空块（不用淡图标，免得和关了混淆），四家对齐成列。悬停看原因。toggle 不为空时能开关的那几家点一下切换（先弹框确认）。
 func skillMarks(c *ui.Context, sk skills.Skill, toggle func(ag skills.Agent, enable bool)) {
-	agentMarks(c, sk.Agents, func(ag skills.Agent) bool { return toggle != nil && skills.CanToggle(ag, sk) }, toggle)
+	agentMarks(c, skills.Agents[:], sk.Agents, func(ag skills.Agent) bool { return toggle != nil && skills.CanToggle(ag, sk) }, toggle)
 }
 
-// agentMarks 是四家的状态标记，技能和 MCP 共用；can 说哪几家点一下能切换，toggle 为空时都不能。
-func agentMarks(c *ui.Context, sts [skills.NumAgents]skills.Status, can func(skills.Agent) bool, toggle func(ag skills.Agent, enable bool)) {
+// agentMarks 是技能和 MCP 共用的状态标记；can 说哪几家点一下能切换，toggle 为空时都不能。
+func agentMarks(c *ui.Context, agents []skills.Agent, sts [skills.NumAgents]skills.Status, can func(skills.Agent) bool, toggle func(ag skills.Agent, enable bool)) {
 	ui.Row(c).Gap(4).Shrink(0).Children(func() {
-		for _, ag := range skills.Agents {
+		for _, ag := range agents {
 			st := sts[ag]
 			size := smallIcon()
 			tip := skillStateTip(L(c), ag, st)
@@ -967,6 +976,7 @@ func scanRemoteProjectSkills(ctx context.Context, r appRequest, wsPath string) (
 		filepath.Join(wsPath, ".agents", "skills"),
 		filepath.Join(wsPath, ".claude", "skills"),
 		filepath.Join(wsPath, ".cursor", "skills"),
+		filepath.Join(wsPath, ".zcode", "skills"),
 	}
 	dirs, err := r.client.ReadDirectories(ctx, roots)
 	if err != nil {
