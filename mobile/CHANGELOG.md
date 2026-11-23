@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.30
+
+- Antigravity 在同一个终端切换会话时，对话和草稿跟随各自的会话。发送消息和压缩上下文前会核对目标会话。需搭配 Mac 0.1.44 或更新版本。
+- 可查看 Antigravity 套餐余量和重置时间。轻点会话的上下文读数可压缩上下文，终端的「更多」菜单可复制 `/skills` 和 `/mcp`。
+- Antigravity 的历史记录缺少工作目录时，可以选工作区再恢复会话。
+
+### English
+
+- When Antigravity switches conversations within a terminal, messages and drafts stay with their own conversations. Sending and compacting context check the target conversation. Requires Mac 0.1.44 or later.
+- See remaining Antigravity quota and reset times. Tap the context readout to compact context, or copy `/skills` and `/mcp` from the terminal's More menu.
+- When an Antigravity history entry has no working directory, choose a workspace before resuming it.
+
 ## 0.1.29
 
 - 跨行复制命令时保留参数间的空格。带选项的命令可保留换行或用空格连接，断行网址仍可不加空格拼接。
