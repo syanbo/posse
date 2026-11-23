@@ -1143,7 +1143,7 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 						}
 					}
 					ui.Text(c, fmt.Sprint(i+1)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Width(sz(36)).Shrink(0).TextAlign(ui.End)
-					blameLine(c, bd, f, i).FontSize(a.editorSize).Font(fontStack(a.editorFamily)).SingleLine().Shrink(1)
+					blameLine(c, bd, f, i).FontSize(a.editorSize).Font(fontStack(a.editorFamily, editorFontFamily)).SingleLine().Shrink(1)
 				})
 			}).Fill()
 			f.bar(c, a)

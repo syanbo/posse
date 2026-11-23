@@ -498,10 +498,6 @@ const defaultFontSize = 14
 // 窗口最小尺寸：默认宽的侧栏（272）旁边，默认字号的终端还有约 72 列；高度够放下对话框和 30 行左右的终端。
 const minWindowWidth, minWindowHeight = 900, 560
 
-// termFontFamily 与用户的 Ghostty 一致。中文显式回退到 PingFang SC：系统等宽字体的级联
-// 会取到比例宽度的"，""。"，在两格里居中后前后各空出一大块。
-const termFontFamily = "JetBrainsMono Nerd Font Mono, JetBrains Mono, PingFang SC, monospace"
-
 func newWindowApp(c *client.Client) *app {
 	a := newHostApp(c, c.Home)
 	a.host = newHostSession(localHostID, appName())

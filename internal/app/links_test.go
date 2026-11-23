@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,7 +83,9 @@ func TestClickOpensLinkCard(t *testing.T) {
 	var calls []string
 	done := make(chan struct{})
 	t.Cleanup(func() { close(done) })
-	term, err := terminal.New(terminal.Options{Conn: nopConn{done}, Font: a.termFont(),
+	font := a.termFont()
+	padding := terminal.Padding{X: 6, Y: 4}
+	term, err := terminal.New(terminal.Options{Conn: nopConn{done}, Font: font, Padding: padding,
 		LinkClick: func(link string, mods ui.Modifiers) bool {
 			calls = append(calls, link)
 			return a.openLink(v, link, mods)
@@ -116,29 +119,37 @@ func TestClickOpensLinkCard(t *testing.T) {
 	}
 	term.Feed([]byte(feed))
 	tt := newPreviewTester(a, true)
+	bounds, ok := tt.Find("Terminal")
+	if !ok {
+		t.Fatal("terminal view not found")
+	}
+	metrics := (ui.Font{Family: font.Family, Size: font.Size, Weight: font.Weight}).Metrics()
+	// 预览是 2×，终端把行高向上取整到整像素后再定位格子。
+	rowHeight := float32(math.Ceil(float64((metrics.Ascent+metrics.Descent+metrics.LineGap)*2)-0.05)) / 2
+	rowY := func(row int) float32 { return bounds.Y + padding.Y + (float32(row)+0.5)*rowHeight }
 
-	// 第 0–3 行是超链接，第 4–7 行是路径；行高约 18.5，第一行约在 y=51
+	// 第 0–3 行是超链接，第 4–7 行是路径
 	// 从链接上拖开：选文字，不打开
-	tt.Move(termX(42), 80)
+	tt.Move(termX(42), rowY(1))
 	tt.Frame()
-	tt.Press(termX(42), 80)
+	tt.Press(termX(42), rowY(1))
 	tt.Frame()
-	tt.Move(termX(82), 120)
+	tt.Move(termX(82), rowY(3))
 	tt.Frame()
-	tt.Release(termX(82), 120)
+	tt.Release(termX(82), rowY(3))
 	tt.Frame()
 	if a.linkCard != nil {
 		t.Fatal("drag from a link opened the card")
 	}
 	// 悬停时链接下面有下划线
-	tt.Move(termX(42), 80)
+	tt.Move(termX(42), rowY(1))
 	tt.Frame()
 	tt.Frame()
 	if os.Getenv("POSSE_PREVIEW_DIR") != "" {
 		savePNG(t, tt, "link-hover.png")
 	}
 	// 原地单击打开
-	tt.ClickAt(termX(42), 80)
+	tt.ClickAt(termX(42), rowY(1))
 	tt.Frame()
 	tt.Frame()
 	if a.linkCard == nil || a.linkCard.path != file || a.linkCard.isDir {
@@ -159,7 +170,7 @@ func TestClickOpensLinkCard(t *testing.T) {
 		t.Fatal("outside click did not close the card")
 	}
 	// Cmd+点击当前工作区外的目录：文件栏里显示不了，弹卡片
-	cmdClick(tt, termX(42), 155)
+	cmdClick(tt, termX(42), rowY(5))
 	if a.linkCard == nil || a.linkCard.path != sub || !a.linkCard.isDir {
 		t.Fatalf("Cmd+click on path: %+v", a.linkCard)
 	}
@@ -167,7 +178,7 @@ func TestClickOpensLinkCard(t *testing.T) {
 	tt.Frame()
 	// 设置成单击直接打开：反过来，Cmd+点击弹卡片
 	a.state.LinkClickOpens = true
-	cmdClick(tt, termX(42), 80)
+	cmdClick(tt, termX(42), rowY(1))
 	if a.linkCard == nil || a.linkCard.path != file {
 		t.Fatalf("Cmd+click with LinkClickOpens: %+v", a.linkCard)
 	}
@@ -177,7 +188,7 @@ func TestClickOpensLinkCard(t *testing.T) {
 
 	// 不存在的文件：单击和 Cmd+点击都没反应（第 8 行超链接、第 10 行路径）
 	calls = nil
-	for _, y := range []float32{51 + 8.5*18.5, 51 + 10.5*18.5} {
+	for _, y := range []float32{rowY(8), rowY(10)} {
 		tt.ClickAt(termX(42), y)
 		tt.Frame()
 		cmdClick(tt, termX(42), y)
@@ -187,7 +198,7 @@ func TestClickOpensLinkCard(t *testing.T) {
 	}
 
 	// 网址：单击弹出卡片、不打开，Cmd+点击直接打开、不弹卡片
-	urlY := float32(51 + 12.5*18.5)
+	urlY := rowY(12)
 	tt.ClickAt(termX(42), urlY)
 	tt.Frame()
 	tt.Frame()

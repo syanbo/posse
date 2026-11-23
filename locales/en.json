@@ -2352,9 +2352,15 @@
       }
     }
   },
-  "fontsDefault": "Default (JetBrains Mono)",
+  "fontsDefault": "Default ({name})",
   "@fontsDefault": {
-    "description": "Settings, font picker: the entry (and button text) for the built-in default font."
+    "description": "Settings, font picker: the entry and button text for the default font. name is the font family name.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Menlo"
+      }
+    }
   },
   "fontsEditorPreview": "Editor Preview",
   "@fontsEditorPreview": {

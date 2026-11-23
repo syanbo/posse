@@ -4,12 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
 	"posse/locales"
@@ -32,29 +34,62 @@ func TestEditorSizeOf(t *testing.T) {
 }
 
 func TestFontStack(t *testing.T) {
-	if got := fontStack(""); got != termFontFamily {
-		t.Errorf("fontStack(\"\") = %q", got)
+	a := &app{}
+	if got := a.termFont().Family; !strings.HasPrefix(got, "Menlo, PingFang SC, ") {
+		t.Errorf("default terminal font stack = %q", got)
 	}
-	if got := fontStack("Menlo"); got != "Menlo, "+termFontFamily {
-		t.Errorf("fontStack(Menlo) = %q", got)
+	if got := a.editorFont().Family; !strings.HasPrefix(got, "JetBrainsMono Nerd Font Mono, JetBrains Mono, ") {
+		t.Errorf("default editor font stack = %q", got)
+	}
+	a.termFamily = "JetBrains Mono"
+	if got := a.termFont().Family; got != "JetBrains Mono, "+termFontFamily {
+		t.Errorf("custom terminal font stack = %q", got)
+	}
+}
+
+func TestDefaultTerminalFontGrid(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Menlo is a macOS system font")
+	}
+	a := &app{fontSize: defaultFontSize}
+	done := make(chan struct{})
+	t.Cleanup(func() { close(done) })
+	term, err := terminal.New(terminal.Options{Conn: nopConn{done}, Font: a.termFont()})
+	if err != nil {
+		t.Skip("terminal unavailable:", err)
+	}
+	t.Cleanup(func() { term.Close() })
+	tt := newTester(func(c *ui.Context) { terminal.View(c, term).Grow(1) }, 500, 180)
+	tt.SetScale(2)
+	const text = "abc 中文，。 123"
+	term.Feed([]byte(text))
+	tt.Frame()
+	// 苹方成为主字体时，这个宽度只容得下 34 列。
+	if cols, _ := term.Size(); cols < 50 {
+		t.Fatalf("default terminal fits %d columns, want at least 50", cols)
+	}
+	if got := term.Text(); !strings.Contains(got, text) {
+		t.Fatalf("mixed terminal text = %q, want %q", got, text)
 	}
 }
 
 func TestFontRows(t *testing.T) {
 	all := []ui.FontFamily{{Name: "Helvetica"}, {Name: "Menlo", Monospaced: true}, {Name: "Monaco", Monospaced: true}, {Name: "PingFang SC"}}
 	labels := map[string]string{"PingFang SC": "苹方-简"}
-	rows := fontRows(locales.In("zh-Hans"), all, labels, "")
+	m := locales.In("zh-Hans")
+	defaultLabel := m.FontsDefault(defaultTermFontName)
+	rows := fontRows(m, all, labels, "", defaultLabel)
 	var got []string
 	for _, r := range rows {
 		got = append(got, r.header+r.label)
 	}
-	want := []string{"默认（JetBrains Mono）", "等宽字体", "Menlo", "Monaco", "其他字体", "Helvetica", "苹方-简"}
+	want := []string{"默认（Menlo）", "等宽字体", "Menlo", "Monaco", "其他字体", "Helvetica", "苹方-简"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("fontRows = %q", got)
 	}
 	// 中文名和原名都能搜，搜索时不列默认
 	for _, q := range []string{"苹方", "pingfang"} {
-		rows = fontRows(locales.In("zh-Hans"), all, labels, q)
+		rows = fontRows(m, all, labels, q, defaultLabel)
 		if len(rows) != 2 || rows[1].family != "PingFang SC" {
 			t.Fatalf("fontRows(%s) = %v", q, rows)
 		}
@@ -62,7 +97,7 @@ func TestFontRows(t *testing.T) {
 	if got := nextFont(rows, 0, 1); got != 1 {
 		t.Errorf("nextFont = %d, want 1", got)
 	}
-	rows = fontRows(locales.In("zh-Hans"), all, labels, "")
+	rows = fontRows(m, all, labels, "", defaultLabel)
 	if got := nextFont(rows, 4, -1); got != 3 {
 		t.Errorf("nextFont up over header = %d, want 3", got)
 	}
@@ -91,10 +126,19 @@ func TestFontPickerSearchEnter(t *testing.T) {
 	if err := tt.Click("终端字体"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Type("menlo")
+	tt.Type("monaco")
 	tt.Key(0, ui.KeyEnter)
-	if a.termFamily != "Menlo" || a.termPick.open {
+	if a.termFamily != "Monaco" || a.state.TermFont != "Monaco" || a.termPick.open {
 		t.Fatalf("termFamily = %q, open = %v", a.termFamily, a.termPick.open)
+	}
+	if err := tt.Click("终端字体"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("默认（Menlo）"); err != nil {
+		t.Fatal(err)
+	}
+	if a.termFamily != "" || a.state.TermFont != "" || a.termPick.open {
+		t.Fatalf("terminal font = %q, stored = %q, open = %v", a.termFamily, a.state.TermFont, a.termPick.open)
 	}
 }
 

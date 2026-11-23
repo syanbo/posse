@@ -6399,20 +6399,20 @@ func (msgs Messages) FontsDecrease(what string) string {
 	return Catalog.Format(msgs.locale, "fontsDecrease", map[string]any{"what": what})
 }
 
-// FontsDefault says "Default (JetBrains Mono)"
+// FontsDefault says "Default ({name})"
 // in the language the app shows.
 //
-// Settings, font picker: the entry (and button text) for the built-in
-// default font.
-func FontsDefault() string { return In(i18n.Locale()).FontsDefault() }
+// Settings, font picker: the entry and button text for the default font.
+// name is the font family name.
+func FontsDefault(name string) string { return In(i18n.Locale()).FontsDefault(name) }
 
-// FontsDefault says "Default (JetBrains Mono)"
+// FontsDefault says "Default ({name})"
 // in the language of msgs.
 //
-// Settings, font picker: the entry (and button text) for the built-in
-// default font.
-func (msgs Messages) FontsDefault() string {
-	return Catalog.Format(msgs.locale, "fontsDefault", nil)
+// Settings, font picker: the entry and button text for the default font.
+// name is the font family name.
+func (msgs Messages) FontsDefault(name string) string {
+	return Catalog.Format(msgs.locale, "fontsDefault", map[string]any{"name": name})
 }
 
 // FontsEditorPreview says "Editor Preview"

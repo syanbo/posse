@@ -16,18 +16,26 @@ import (
 )
 
 // 终端和编辑器各有字体、字号，存在 ui.json。编辑器指文件标签里的代码视图：编辑器、diff、逐行追溯、
-// Git 日志里的 diff、改动卡片。字体为空表示默认（termFontFamily）。
+// Git 日志里的 diff、改动卡片。字体为空表示使用各自的默认字体栈。
+
+const (
+	defaultTermFontName   = "Menlo"
+	defaultEditorFontName = "JetBrains Mono"
+	nerdFontFamily        = "JetBrainsMono Nerd Font Mono"
+	// 终端以等宽字体定列宽，苹方补足中文和两格宽的全角标点。
+	termFontFamily   = defaultTermFontName + ", PingFang SC, " + nerdFontFamily + ", monospace"
+	editorFontFamily = nerdFontFamily + ", " + defaultEditorFontName + ", PingFang SC, monospace"
+)
 
 // defaultEditorFontSize 比终端默认小一号：同样的字号下编辑器显得比终端挤。
 const defaultEditorFontSize = defaultFontSize - 1
 
-// fontStack 把用户选的字体接上默认字体栈当回退：提示符里的分支等图标只有 Nerd Font 有，
-// 中文回退到苹方的理由见 termFontFamily。
-func fontStack(family string) string {
+// fontStack 用默认字体栈补足用户字体缺少的字形，例如提示符里的 Nerd Font 图标。
+func fontStack(family, fallback string) string {
 	if family == "" {
-		return termFontFamily
+		return fallback
 	}
-	return family + ", " + termFontFamily
+	return family + ", " + fallback
 }
 
 // 字重、行高的默认值和范围。终端的行高是字体自身行高的倍数（Ghostty 的 adjust-cell-height），
@@ -44,13 +52,13 @@ const (
 func (a *app) termFont() terminal.Font {
 	s := a.state
 	weight, bold := weightsOf(s.TermWeight, s.TermBoldWeight)
-	return terminal.Font{Family: fontStack(a.termFamily), Size: a.fontSize, Weight: weight, BoldWeight: bold,
+	return terminal.Font{Family: fontStack(a.termFamily, termFontFamily), Size: a.fontSize, Weight: weight, BoldWeight: bold,
 		LineHeight: s.TermLineHeight, Antialiased: !s.TermSmooth}
 }
 
 func (a *app) editorFont() ui.Font {
 	weight, _ := weightsOf(a.state.EditorWeight, 0)
-	return ui.Font{Family: fontStack(a.editorFamily), Size: a.editorSize, Weight: weight, Antialiased: !a.state.EditorSmooth}
+	return ui.Font{Family: fontStack(a.editorFamily, editorFontFamily), Size: a.editorSize, Weight: weight, Antialiased: !a.state.EditorSmooth}
 }
 
 // editorBoldWeight 是编辑器里 Markdown 标题、加粗用的字重（editor.State.BoldWeight）。
@@ -170,11 +178,8 @@ func (a *app) loadFonts() ([]ui.FontFamily, map[string]string, bool) {
 	return systemFonts.list, systemFonts.labels, systemFonts.done
 }
 
-// fontLabel 是字体在列表和按钮上显示的名字：有本地化的名字就用它，空是默认。
-func fontLabel(m locales.Messages, family string, labels map[string]string) string {
-	if family == "" {
-		return m.FontsDefault()
-	}
+// fontLabel 优先使用字体的本地化名字。
+func fontLabel(family string, labels map[string]string) string {
 	if l := labels[family]; l != "" {
 		return l
 	}
@@ -197,11 +202,11 @@ type fontRow struct {
 // fontRows 照 Orca 列出系统的全部字体，不只是等宽的：等宽的在前面一组，其余在"其他字体"下。
 // 中文字体显示中文名，按显示的名字排序，原名和中文名都能搜。
 // 搜索时不列"默认"，第一个匹配的字体就是高亮的一行，回车直接选它。
-func fontRows(m locales.Messages, all []ui.FontFamily, labels map[string]string, query string) []fontRow {
+func fontRows(m locales.Messages, all []ui.FontFamily, labels map[string]string, query, defaultLabel string) []fontRow {
 	q := strings.ToLower(strings.TrimSpace(query))
 	var mono, other []fontRow
 	for _, f := range all {
-		label := fontLabel(m, f.Name, labels)
+		label := fontLabel(f.Name, labels)
 		if q != "" && !strings.Contains(strings.ToLower(f.Name), q) && !strings.Contains(strings.ToLower(label), q) {
 			continue
 		}
@@ -217,7 +222,7 @@ func fontRows(m locales.Messages, all []ui.FontFamily, labels map[string]string,
 	slices.SortStableFunc(other, byLabel)
 	var rows []fontRow
 	if q == "" {
-		rows = append(rows, fontRow{label: fontLabel(m, "", nil)})
+		rows = append(rows, fontRow{label: defaultLabel})
 	}
 	if len(mono) > 0 {
 		rows = append(append(rows, fontRow{header: m.FontsMono()}), mono...)
@@ -239,10 +244,10 @@ func nextFont(rows []fontRow, i, d int) int {
 }
 
 // fontPicker 是设置页里选字体的按钮：显示当前字体，点开是可搜索的字体列表，每项用它自己的字体写名字。
-func (a *app) fontPicker(c *ui.Context, p *fontPick, current, label string, pick func(family string)) {
+func (a *app) fontPicker(c *ui.Context, p *fontPick, current, label, fallback, defaultLabel string, pick func(family string)) {
 	t := c.Theme()
 	_, labels, _ := a.loadFonts()
-	name := fontLabel(L(c), current, labels)
+	name := cmp.Or(fontLabel(current, labels), defaultLabel)
 	b := ui.ButtonBase(c).Height(sz(28)).Width(240).Padding(0, 8, 0, 12).Gap(6).Radius(rControl).Label(label).AlignItems(ui.Center)
 	bg := colors(t).fill
 	if b.Hovered() {
@@ -250,7 +255,7 @@ func (a *app) fontPicker(c *ui.Context, p *fontPick, current, label string, pick
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() {
-		ui.Text(c, name).FontSize(fsBody).Font(fontStack(current)).SingleLine().Grow(1).Shrink(1)
+		ui.Text(c, name).FontSize(fsBody).Font(fontStack(current, fallback)).SingleLine().Grow(1).Shrink(1)
 		ui.Icon(c, iconDown).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 	})
 	if pressable(b).Clicked() {
@@ -262,20 +267,20 @@ func (a *app) fontPicker(c *ui.Context, p *fontPick, current, label string, pick
 	}
 	ui.PopoverBase(c, b, &p.open, func(panel ui.Element) {
 		floating(c, panel).Width(300).Padding(6).Gap(4)
-		panel.Children(func() { a.fontList(c, p, current, pick) })
+		panel.Children(func() { a.fontList(c, p, current, fallback, defaultLabel, pick) })
 	})
 }
 
 // fontRowHeight 是字体列表一行的高度，跟着界面字号缩放。
 func fontRowHeight() float32 { return sz(28) }
 
-func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(family string)) {
+func (a *app) fontList(c *ui.Context, p *fontPick, current, fallback, defaultLabel string, pick func(family string)) {
 	t, m := c.Theme(), L(c)
 	all, labels, done := a.loadFonts()
 	// 先画搜索框：它在这一帧就改写 p.query，下面按新的搜索词列出来。最后一个字和回车常落在同一帧，
 	// 按旧词列的话回车会落在分组标题上
 	in := fieldInput(c, &p.query, m.FontsSearch()).AutoFocus()
-	rows := fontRows(m, all, labels, p.query)
+	rows := fontRows(m, all, labels, p.query, defaultLabel)
 	if !done {
 		rows = rows[:min(len(rows), 1)]
 	}
@@ -350,7 +355,7 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 			if r.family == current {
 				box.Children(func() { ui.Icon(c, iconCheck).FontSize(fsBody).TextColor(t.Accent) })
 			}
-			ui.Text(c, label).FontSize(fsBody).Font(fontStack(r.family)).SingleLine().Grow(1).Shrink(1)
+			ui.Text(c, label).FontSize(fsBody).Font(fontStack(r.family, fallback)).SingleLine().Grow(1).Shrink(1)
 		})
 		if row.Clicked() {
 			choose(r.family)

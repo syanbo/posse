@@ -424,7 +424,7 @@ func (a *app) termFontSettings(c *ui.Context) {
 	m := L(c)
 	settingsCard(c, m.SettingsTerminalTitle(), m.SettingsTerminalNote(), func() {
 		settingsRow(c, m.SettingsFont(), func() {
-			a.fontPicker(c, &a.termPick, a.termFamily, m.SettingsTerminalFont(), a.setTermFamily)
+			a.fontPicker(c, &a.termPick, a.termFamily, m.SettingsTerminalFont(), termFontFamily, m.FontsDefault(defaultTermFontName), a.setTermFamily)
 		})
 		settingsRow(c, m.SettingsFontSize(), func() {
 			fontSizeStepper(c, a.fontSize, defaultFontSize, a.setFontSize)
@@ -479,7 +479,7 @@ func (a *app) editorFontSettings(c *ui.Context) {
 	m := L(c)
 	settingsCard(c, m.SettingsEditorTitle(), m.SettingsEditorNote(), func() {
 		settingsRow(c, m.SettingsFont(), func() {
-			a.fontPicker(c, &a.editorPick, a.editorFamily, m.SettingsEditorFont(), a.setEditorFamily)
+			a.fontPicker(c, &a.editorPick, a.editorFamily, m.SettingsEditorFont(), editorFontFamily, m.FontsDefault(defaultEditorFontName), a.setEditorFamily)
 		})
 		settingsRow(c, m.SettingsFontSize(), func() {
 			fontSizeStepper(c, a.editorSize, defaultEditorFontSize, a.setEditorFontSize)
