@@ -8,7 +8,7 @@
 - PTY 探针收到 `OSC 7501;?` 后应答，实测报告 `app=antigravity`、working、blocked（包括 auth）、idle、done。状态经现有 OSC 通道处理，子 agent 是否仍工作由 agy 的聚合报告决定。
 - `--settings` 拒绝 hooks、plugins、pluginPaths、pluginsPaths、hooksPath、defaultHooksPath、customizations，报 unknown setting。没有已核实的会话级挂载途径，因此不注入 hooks，不改用户 hooks.json；任务提醒空闲时输入，无 hooks 答题/审批卡和写文件痕迹。
 - `--conversation` 指向不存在的 UUID 会另建不同 ID 的会话，不能用于预分配 ID。agy 运行期间一直持有 `presence/<UUID>.lock`（也开着 `conversations/<UUID>.db`），常驻进程每 2 秒的 agent 检查读 agy 进程打开的文件（`procmem.OpenFiles`，`proc_pidfdinfo`）认出当前会话并绑定，`/new`、切换会话后跟着换；同时持有多个锁时不绑。恢复参数和 agent 执行 `posse session title` 带来的 `ANTIGRAVITY_CONVERSATION_ID` 也能绑定。不按最近修改时间或 cwd 猜归属。
-- agy 不写终端标题（OSC 0/2），标签和侧栏的会话名来自 agy 自己起的标题：首轮回复后约 3 秒写进 `conversation_summaries.db` 的 `title`（`cache/conversation_metadata.json` 更晚才有），绑定后只读查询，记成会话标题（`daemon/antigravity.go`）；已有 `posse session title` 起的标题时不覆盖。`posse session title` 仅改 Posse 展示；未找到可安全独立写回原生标题的稳定接口。环境隔离剥离 `ANTIGRAVITY_*` 和 `AGY_CLI_*`。
+- agy 不写终端标题（OSC 0/2），标签和侧栏的会话名来自 agy 自己起的标题：首轮回复后约 3 秒写进 `conversation_summaries.db` 的 `title`（`cache/conversation_metadata.json` 更晚才有），绑定后只读查询，记成会话标题（`daemon/antigravity.go`）；已有 `posse session title` 起的标题时不覆盖。`posse session title` 使用 agy 内置 Conversations API 的 `UpdateConversation`，按工具命令环境中的 `ANTIGRAVITY_CONVERSATION_ID` 写 `annotations.title`，确认回包的会话 ID 和标题后更新 Posse 标签。地址和令牌来自 `ANTIGRAVITY_LS_ADDRESS` 和 `ANTIGRAVITY_CSRF_TOKEN`，只请求本机回环地址；缺少这些环境变量时，命令提示在 agy 输入 `/rename <标题>`。agy 的 `-p` 模式拒绝执行 `/rename`。新终端环境隔离剥离 `ANTIGRAVITY_*` 和 `AGY_CLI_*`。
 
 ## 会话数据
 

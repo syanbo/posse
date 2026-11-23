@@ -1,5 +1,6 @@
 // Package namer 给 agent 会话起标题（posse session title）：规整标题格式，
-// 写进 Codex、Grok 自己存标题的地方。Claude 只接受 hook 返回的 sessionTitle，由常驻进程转交。
+// 通过 Codex、Grok 的会话存储或 Antigravity 的本地会话服务写入原生标题。
+// Claude 只接受 hook 返回的 sessionTitle，由常驻进程转交。
 package namer
 
 import (

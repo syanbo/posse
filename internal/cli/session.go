@@ -58,6 +58,10 @@ func cmdSessionTitle(e *env, args []string) error {
 		}
 	}
 	params["sessionIds"] = ids
+	if ids["antigravity"] != "" {
+		params["antigravityAddress"] = os.Getenv("ANTIGRAVITY_LS_ADDRESS")
+		params["antigravityToken"] = os.Getenv("ANTIGRAVITY_CSRF_TOKEN")
+	}
 	if wd, err := os.Getwd(); err == nil {
 		params["cwd"] = wd
 	}

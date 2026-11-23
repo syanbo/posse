@@ -18,15 +18,18 @@ import (
 //   - claude：只接受 UserPromptSubmit hook 返回的 sessionTitle，先记成待交，下一次提交时交过去
 //   - codex：state 库的 threads 和 session_index.jsonl
 //   - grok：会话目录的 summary.json
-//   - cursor、antigravity：没有核实过能写的地方，只在 Posse 里显示（antigravity 没起过时用 agy 自己的标题，见 antigravity.go）
+//   - antigravity：通过当前 agy 的 ConversationService 写入原生标题
+//   - cursor：只在 Posse 里显示
 
 type sessionTitleParams struct {
 	Terminal string `json:"terminal"`
 	Title    string `json:"title"`
 	// SessionIDs 是调用方环境里各 agent 注入的会话 ID（按 agent 名），比常驻进程记下的更准：
 	// 那是 agent 自己正在用的会话
-	SessionIDs map[string]string `json:"sessionIds"`
-	Cwd        string            `json:"cwd"` // grok 按工作目录分组存会话
+	SessionIDs         map[string]string `json:"sessionIds"`
+	Cwd                string            `json:"cwd"` // grok 按工作目录分组存会话
+	AntigravityAddress string            `json:"antigravityAddress"`
+	AntigravityToken   string            `json:"antigravityToken"`
 }
 
 type sessionTitleResult struct {
@@ -70,6 +73,13 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 	case "grok":
 		err = namer.WriteGrok(agentHome("GROK_HOME", ".grok"), sid, p.Cwd, title)
 		applies = "updated in Posse and grok’s session list; the name in grok changes after the session is reopened"
+	case "antigravity":
+		if p.SessionIDs[name] == "" || p.AntigravityAddress == "" || p.AntigravityToken == "" {
+			applies = "shown in Posse. To update the native session name, enter /rename followed by this title in agy"
+			break
+		}
+		err = namer.WriteAntigravity(ctx, p.AntigravityAddress, p.AntigravityToken, sid, title)
+		applies = "updated in Posse and Antigravity"
 	default:
 		applies = fmt.Sprintf("shown in Posse only; %s keeps its own session name", name)
 	}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -115,6 +117,64 @@ func TestSessionTitleCodexReplacesCustomName(t *testing.T) {
 	call(t, d.terminalRename, map[string]any{"terminal": s.ID, "name": "later custom name"})
 	if s.userName() != "later custom name" {
 		t.Fatal("later custom name was ignored")
+	}
+}
+
+func TestSessionTitleAntigravity(t *testing.T) {
+	d, w := newTestDaemon(t)
+	s, err := d.startTerminal(w, []string{"/bin/cat"}, "antigravity", 80, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.setAgent(s, term.AgentState{Status: agent.StatusIdle, SessionID: "previous"})
+	call(t, d.terminalRename, map[string]any{"terminal": s.ID, "name": "old custom name"})
+	const sid = "ce5e30fa-8b92-42ae-8769-e19e80bdc9da"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/jetski.product.v1.ConversationService/UpdateConversation" ||
+			r.Header.Get("Connect-Protocol-Version") != "1" || r.Header.Get("Content-Type") != "application/json" {
+			t.Error("wrong Antigravity request")
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+		if r.Header.Get("X-Antigravity-CSRF-Token") != "test-token" {
+			http.Error(w, "", http.StatusUnauthorized)
+			return
+		}
+		var p struct {
+			ConversationID string
+			Annotations    map[string]string
+		}
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil || p.ConversationID != sid || len(p.Annotations) != 1 {
+			t.Errorf("wrong Antigravity target or annotations: %+v, %v", p, err)
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"id": p.ConversationID, "annotations": p.Annotations})
+	}))
+	defer server.Close()
+	params := map[string]any{
+		"terminal": s.ID, "title": "fix｜原生标题",
+		"sessionIds":         map[string]string{"antigravity": sid},
+		"antigravityAddress": server.Listener.Addr().String(),
+		"antigravityToken":   "invalid-token",
+	}
+	raw, _ := json.Marshal(params)
+	if _, err := d.sessionTitle(t.Context(), raw); err == nil || !strings.Contains(err.Error(), "HTTP 401") {
+		t.Fatalf("expected native rename failure, got %v", err)
+	}
+	if s.userName() != "old custom name" || s.Agent().SessionID != "previous" {
+		t.Fatal("failed rename changed Posse state")
+	}
+	params["antigravityToken"] = "test-token"
+	r := call(t, d.sessionTitle, params).(sessionTitleResult)
+	if r.Applies != "updated in Posse and Antigravity" || s.userName() != "" ||
+		s.Agent().SessionID != sid || s.Agent().Title != r.Title {
+		t.Fatalf("result %+v, terminal %+v", r, s.Agent())
+	}
+	delete(params, "antigravityAddress")
+	r = call(t, d.sessionTitle, params).(sessionTitleResult)
+	if !strings.Contains(r.Applies, "/rename") {
+		t.Fatalf("missing native rename instruction: %+v", r)
 	}
 }
 
