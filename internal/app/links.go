@@ -464,7 +464,9 @@ func (a *app) urlCardItems(c *ui.Context, card *linkCard) {
 func (a *app) linkCardHead(c *ui.Context, text, value, label string) {
 	t := c.Theme()
 	ui.Row(c).Padding(2, 2, 0, 8).Gap(4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, text).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(2).Grow(1).Shrink(1).Selectable()
+		// 长网址、路径里的连续片段不能撑大文字的最小宽度，挤走复制按钮。
+		ui.Text(c, text).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).
+			MaxLines(2).Grow(1).Shrink(1).MinWidth(0).Selectable()
 		if iconButton(c.Key("copy"), iconCopy, label).Clicked() {
 			c.WriteClipboard(value)
 			a.linkCard = nil

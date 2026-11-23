@@ -697,3 +697,40 @@ func TestURLCardWorkspaceGone(t *testing.T) {
 		t.Fatal("live workspace lost the web tab item")
 	}
 }
+
+func TestLongURLCard(t *testing.T) {
+	a := previewApp(t)
+	link := "https://example.com/oauth/authorize?response_type=code&state=" + strings.Repeat("aB0123456789", 48) + "&scope=openid"
+	openCard := func() {
+		a.linkCard = &linkCard{url: link, ws: &a.workspaces[0], x: 200, y: 120, placed: true}
+	}
+	openCard()
+	tt := newPreviewTester(a, true)
+	if os.Getenv("POSSE_PREVIEW_DIR") != "" {
+		savePNG(t, tt, "link-long-url-card.png")
+	}
+	heading, headingOK := tt.Find(link)
+	copyButton, copyOK := tt.Find("复制链接")
+	const browserLabel = "在浏览器中打开"
+	browserRow, browserOK := tt.Find(browserLabel)
+	if !headingOK || !copyOK || !browserOK {
+		t.Fatal("URL card is missing its heading or actions")
+	}
+	if heading.X < browserRow.X || heading.X+heading.W > copyButton.X || copyButton.X+copyButton.W > browserRow.X+browserRow.W {
+		t.Fatalf("URL card header overflows: text %v, copy button %v, browser row %v", heading, copyButton, browserRow)
+	}
+	if err := tt.Click("复制链接"); err != nil {
+		t.Fatal(err)
+	}
+	if tt.Clipboard() != link {
+		t.Fatal("copy did not use the full URL")
+	}
+	openCard()
+	tt.Frame()
+	if err := tt.Click(browserLabel); err != nil {
+		t.Fatal(err)
+	}
+	if urls := tt.OpenedURLs(); len(urls) != 1 || urls[0] != link {
+		t.Fatalf("browser did not receive the full URL: %q", urls)
+	}
+}
