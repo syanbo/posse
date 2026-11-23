@@ -16,9 +16,10 @@ import (
 
 // 关掉套餐用量后，statusLine 报上来的读数不记、也不给界面；重新打开后照常记。
 func TestUsageOff(t *testing.T) {
-	// 重新打开时会像启动时一样读各家的本地记录：都指到空目录，Cursor、Codex 的联网查询关掉
+	// 重新打开时也会补查用量。隔离 PATH，免得测试拉起本机安装的 agy 并要求登录。
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("PATH", home)
 	t.Setenv("CLAUDE_CONFIG_DIR", home)
 	t.Setenv("CODEX_HOME", home)
 	t.Setenv("GROK_HOME", home)
