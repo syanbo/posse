@@ -33,11 +33,17 @@ truncated_fields 触发按 step_index、type、created_at 核验的完整日志�
 
 ## 技能与 MCP
 
-实现标准项目目录（含别名）、用户目录、自带目录，以及 skills.json 的 additive entries/inherits、直接技能路径、嵌套 include_only、精确 exclude；继承设深度与循环保护。CLI 专属两个技能目录优先且不受 exclude 影响。MCP 按配置推算启用状态，未做在线连接探测。
+技能扫描覆盖标准项目目录（含别名）、仓库 `.gemini/config.json` 的 `personal_customization_dir`、全局与自带目录。个人目录中的相对清单路径从仓库根解析，技能优先于项目同名项。本机命令速查和项目技能页签会按当前 agy 进程的启动目录和 `--add-dir` 补扫；远端命令速查由目标常驻进程扫描。会话运行中输入 `/add-dir` 新增的目录以原生 `/skills` 为准。
 
-本机内置文档与线上发现规则有差异（路径展开、排除匹配等），发现实现采用 [官方 customization discovery](https://antigravity.google/docs/customization-discovery/) 的精确名字/相对路径匹配、不展开 `~`。未实现个人仓库目录 `personal_customization_dir`、额外 `--add-dir` 与 Antigravity 插件携带的技能扫描，不能把技能页当作 agy `/skills` 的完整替代。
+`skills.json` 支持 entries/inherits、直接技能路径、嵌套 include_only 和精确 exclude，继承设深度与循环保护。发现采用[官方规则](https://antigravity.google/docs/customization-discovery/)的精确名称或相对路径匹配。CLI 专属两个技能目录优先且不受 exclude 影响。标准全局或 `.agents/skills` 下的技能可按目录名改对应 `skills.json` 的 exclude，保存前显示差异。由其他清单排除的、CLI 专属、插件和自带技能保持只读。
+
+全局、项目和 `plugins.json` 注册的插件按插件目录 ID 显示 `<插件>:<技能>` 和 `<插件>_<MCP 服务>`。插件技能只列真实子目录，与 agy 1.5.14 的插件列表一致。`config.json` 的显式开关优先于插件清单的默认状态。MCP 详情展示配置推算的启用状态，可手动对本地 stdio 或远程 Streamable HTTP 服务发起一次 `initialize` 握手。测试前重读有效配置和插件开关，按 stdio 的 `cwd` 启动。结果描述该次连接，OAuth 登录和当前 agy 会话的状态以 `/mcp` 为准。手机的 Antigravity 终端「更多」可复制 `/skills` 和 `/mcp`。
 
 安装 Posse 自带技能时，在 `~/.gemini/config/skills` 建立相对链接至 `~/.agents/skills`；用户已有同名对象保留。补链接由安装终端执行，关闭窗口后仍继续，失败以命令退出码呈现。内部技能内容版本递增，已有安装可按更新流程补齐链接。
+
+## 任务交接
+
+Posse 派发 Antigravity worker 时，在任务提示里告知 `posse history brief`。需要接续旧工作时，worker 可用它读取当前目录及子目录最近三条已索引会话的标题、最后一句和查看命令；有 `ANTIGRAVITY_CONVERSATION_ID` 时跳过自身。原生摘要缺少目录时，用 Posse 首次确认的会话目录或现存旧终端记录里的唯一目录补齐。手动开的会话也可运行此命令，`--cwd` 可指定目录。agy 1.5.14 仍拒绝通过会话 `--settings` 注入 hooks，因此普通新会话需要主动读取交接，不启动额外的模型轮次。
 
 ## 套餐与验收
 

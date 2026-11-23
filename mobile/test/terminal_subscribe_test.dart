@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
 import 'package:posse_mobile/protocol/rpc.dart';
@@ -12,6 +12,7 @@ import 'package:posse_mobile/workspace/models.dart';
 /// 订阅被常驻进程拒掉：错误回复在订阅返回之后才到，作为流里的错误送来。
 class _RefusingRpc implements PhoneRpc {
   final binaryCtl = StreamController<Uint8List>.broadcast();
+  final calls = <String>[];
 
   @override
   Stream<Uint8List> get binary => binaryCtl.stream;
@@ -35,7 +36,10 @@ class _RefusingRpc implements PhoneRpc {
     String method,
     Map<String, Object?> params, {
     Duration? timeout,
-  }) async => {};
+  }) async {
+    calls.add(method);
+    return {};
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -121,6 +125,51 @@ void main() {
       await tester.pump(const Duration(milliseconds: 10));
     }
     expect(find.byType(NoticeBar), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Antigravity MCP copies a command without typing it', (
+    tester,
+  ) async {
+    String? copied;
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String;
+      }
+      return null;
+    });
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    const tab = SessionTab(
+      worktreeId: 'w',
+      title: 'Antigravity',
+      terminalId: 't1',
+      agent: 'antigravity',
+    );
+    final rpc = _RefusingRpc();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TerminalScreen(model: _Model(rpc), tab: tab),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 10));
+    tester
+        .widget<IconButton>(
+          find.widgetWithIcon(IconButton, Icons.more_horiz_rounded),
+        )
+        .onPressed!();
+    await tester.pump();
+    expect(find.text('复制 /skills'), findsOneWidget);
+    final row = find.ancestor(
+      of: find.text('复制 /mcp'),
+      matching: find.byType(RowTile),
+    );
+    tester.widget<RowTile>(row).onTap!();
+    await tester.pump();
+    expect(copied, '/mcp');
+    expect(rpc.calls.where((m) => m.startsWith('terminal.send')), isEmpty);
     await tester.pumpWidget(const SizedBox());
   });
 }

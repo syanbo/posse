@@ -14853,6 +14853,118 @@ func (msgs Messages) McpHeaderKeys(names string) string {
 	return Catalog.Format(msgs.locale, "mcpHeaderKeys", map[string]any{"names": names})
 }
 
+// McpAntigravityInferredTip says "Based on the configuration. Run /mcp in Antigravity to see the current session’s status."
+// in the language the app shows.
+//
+// Antigravity MCP configuration status tooltip.
+func McpAntigravityInferredTip() string { return In(i18n.Locale()).McpAntigravityInferredTip() }
+
+// McpAntigravityInferredTip says "Based on the configuration. Run /mcp in Antigravity to see the current session’s status."
+// in the language of msgs.
+//
+// Antigravity MCP configuration status tooltip.
+func (msgs Messages) McpAntigravityInferredTip() string {
+	return Catalog.Format(msgs.locale, "mcpAntigravityInferredTip", nil)
+}
+
+// McpAntigravityProbe says "Test Antigravity Connection"
+// in the language the app shows.
+//
+// Button to test the configured Antigravity MCP connection.
+func McpAntigravityProbe() string { return In(i18n.Locale()).McpAntigravityProbe() }
+
+// McpAntigravityProbe says "Test Antigravity Connection"
+// in the language of msgs.
+//
+// Button to test the configured Antigravity MCP connection.
+func (msgs Messages) McpAntigravityProbe() string {
+	return Catalog.Format(msgs.locale, "mcpAntigravityProbe", nil)
+}
+
+// McpAntigravityProbeTip says "Opens a separate connection. A local server starts briefly."
+// in the language the app shows.
+//
+// Tooltip explaining the separate MCP connection test.
+func McpAntigravityProbeTip() string { return In(i18n.Locale()).McpAntigravityProbeTip() }
+
+// McpAntigravityProbeTip says "Opens a separate connection. A local server starts briefly."
+// in the language of msgs.
+//
+// Tooltip explaining the separate MCP connection test.
+func (msgs Messages) McpAntigravityProbeTip() string {
+	return Catalog.Format(msgs.locale, "mcpAntigravityProbeTip", nil)
+}
+
+// McpAntigravityProbeReady says "Server answered the handshake"
+// in the language the app shows.
+//
+// Configured MCP server responded to initialize.
+func McpAntigravityProbeReady() string { return In(i18n.Locale()).McpAntigravityProbeReady() }
+
+// McpAntigravityProbeReady says "Server answered the handshake"
+// in the language of msgs.
+//
+// Configured MCP server responded to initialize.
+func (msgs Messages) McpAntigravityProbeReady() string {
+	return Catalog.Format(msgs.locale, "mcpAntigravityProbeReady", nil)
+}
+
+// McpAntigravityProbeAuth says "Authorization needed. Check /mcp in Antigravity."
+// in the language the app shows.
+//
+// The configured MCP server rejected the connection without authorization.
+func McpAntigravityProbeAuth() string { return In(i18n.Locale()).McpAntigravityProbeAuth() }
+
+// McpAntigravityProbeAuth says "Authorization needed. Check /mcp in Antigravity."
+// in the language of msgs.
+//
+// The configured MCP server rejected the connection without authorization.
+func (msgs Messages) McpAntigravityProbeAuth() string {
+	return Catalog.Format(msgs.locale, "mcpAntigravityProbeAuth", nil)
+}
+
+// McpAntigravityProbeTimeout says "Connection timed out"
+// in the language the app shows.
+//
+// The MCP connection test timed out.
+func McpAntigravityProbeTimeout() string { return In(i18n.Locale()).McpAntigravityProbeTimeout() }
+
+// McpAntigravityProbeTimeout says "Connection timed out"
+// in the language of msgs.
+//
+// The MCP connection test timed out.
+func (msgs Messages) McpAntigravityProbeTimeout() string {
+	return Catalog.Format(msgs.locale, "mcpAntigravityProbeTimeout", nil)
+}
+
+// McpAntigravityProbeChanged says "Configuration changed. Rescan and try again."
+// in the language the app shows.
+//
+// The MCP configuration changed after scanning.
+func McpAntigravityProbeChanged() string { return In(i18n.Locale()).McpAntigravityProbeChanged() }
+
+// McpAntigravityProbeChanged says "Configuration changed. Rescan and try again."
+// in the language of msgs.
+//
+// The MCP configuration changed after scanning.
+func (msgs Messages) McpAntigravityProbeChanged() string {
+	return Catalog.Format(msgs.locale, "mcpAntigravityProbeChanged", nil)
+}
+
+// McpAntigravityProbeFailed says "Handshake failed. Check /mcp in Antigravity."
+// in the language the app shows.
+//
+// The configured MCP server did not answer initialize.
+func McpAntigravityProbeFailed() string { return In(i18n.Locale()).McpAntigravityProbeFailed() }
+
+// McpAntigravityProbeFailed says "Handshake failed. Check /mcp in Antigravity."
+// in the language of msgs.
+//
+// The configured MCP server did not answer initialize.
+func (msgs Messages) McpAntigravityProbeFailed() string {
+	return Catalog.Format(msgs.locale, "mcpAntigravityProbeFailed", nil)
+}
+
 // McpInferredTip says "Couldn’t ask the agent itself (program not found or timed out); inferred from the read rules in its docs"
 // in the language the app shows.
 //

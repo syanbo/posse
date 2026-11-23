@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -17,19 +18,16 @@ import (
 // cheatView 是右侧"命令速查"面板的状态：当前会话这家 agent 的内置命令、按键、输入前缀，
 // 和它在这个工作区用得上的技能。内置的部分是 Posse 带的表，技能和本机版本打开时在后台读。
 type cheatView struct {
-	term    string // 查的是哪个终端
-	agent   string // 和终端里的哪家 agent：同一个终端里可能退出一家、又启动另一家
-	query   string
-	version string // 终端里正在运行的 agent 的版本，认不出时为空
-	skills  []cheatSkill
-	loaded  bool // 读过一次技能和版本
-	poll    panelPoll
-}
-
-// cheatSkill 是一个能手动调用的技能；builtin 是 agent 自带的（扫到的「系统自带」目录）。
-type cheatSkill struct {
-	name, desc string
-	builtin    bool
+	term           string // 查的是哪个终端
+	agent          string // 和终端里的哪家 agent：同一个终端里可能退出一家、又启动另一家
+	query          string
+	version        string // 终端里正在运行的 agent 的版本，认不出时为空
+	skills         []cheatsheet.Skill
+	loaded         bool // 读过一次技能和版本
+	poll           panelPoll
+	agyDir         string
+	agyDirs        []string
+	viewGeneration uint64
 }
 
 // 面板的页签，顺序就是界面上的顺序；选的哪个记在 ui.json 的 cheatTab，所有会话共用。
@@ -52,24 +50,16 @@ const (
 	cheatRetry   = 3 * time.Second
 )
 
-// skillAgent 把 agent 名字换成技能扫描里的那一家。
-func skillAgent(name string) (skills.Agent, bool) {
-	for _, ag := range skills.Agents {
-		if ag.String() == name {
-			return ag, true
-		}
-	}
-	return 0, false
-}
-
 // pollCheat 在主线程调用：换了终端就重来，到点了在后台认版本、扫技能。
 func (a *app) pollCheat(c *ui.Context, cur *terminalInfo) {
 	v := &a.cheat
-	if v.term != cur.ID || v.agent != cur.Agent {
-		*v = cheatView{term: cur.ID, agent: cur.Agent}
+	generation := a.viewGeneration.Load()
+	if v.term != cur.ID || v.agent != cur.Agent || v.agyDir != cur.AntigravityDir || !slices.Equal(v.agyDirs, cur.AntigravityDirs) || v.viewGeneration != generation {
+		*v = cheatView{term: cur.ID, agent: cur.Agent, agyDir: cur.AntigravityDir, agyDirs: cur.AntigravityDirs, viewGeneration: generation}
 	}
+	remote := a.remoteHost()
 	every := cheatRefresh
-	if v.loaded && v.version == "" && cur.Running {
+	if !remote && v.loaded && v.version == "" && cur.Running {
 		every = cheatRetry
 	}
 	if !v.poll.due(c, every) {
@@ -79,28 +69,34 @@ func (a *app) pollCheat(c *ui.Context, cur *terminalInfo) {
 	if w := a.workspace(cur.WorkspaceID); w != nil {
 		dir = w.Path
 	}
-	go func() {
-		version := cheatsheet.Running(pid, agentName)
-		var list []cheatSkill
-		if ag, ok := skillAgent(agentName); ok {
-			cat := skills.Scan(skills.Options{Home: homeDir, Dir: dir})
-			for _, s := range cat.Skills {
-				st := s.Agents[ag].State
-				// Claude 账号同步的技能在 Claude 里带前缀（同步目录名推不出来），按名字贴进去不对，不列
-				if (st == skills.On || st == skills.Manual) && !s.Meta.UserHidden && !(ag == skills.Claude && s.Scope == skills.ScopeSynced) {
-					list = append(list, cheatSkill{name: s.Name, desc: s.Description, builtin: s.Scope == skills.ScopeSystem})
-				}
-			}
-			slices.SortFunc(list, func(x, y cheatSkill) int { return strings.Compare(x.name, y.name) })
+	o := skills.Options{Home: homeDir, Dir: dir, AntigravityDir: v.agyDir, AntigravityDirs: v.agyDirs}
+	apply := func(info cheatsheet.TerminalInfo) {
+		v := &a.cheat
+		if v.term != id || v.agent != agentName || v.agyDir != o.AntigravityDir || !slices.Equal(v.agyDirs, o.AntigravityDirs) || v.viewGeneration != generation {
+			return
 		}
-		a.win.Update(func() {
-			v := &a.cheat
-			if v.term != id || v.agent != agentName {
-				return
+		v.poll.done()
+		v.version, v.skills, v.loaded = info.Version, info.Skills, true
+	}
+	if remote {
+		r := a.request()
+		go func() {
+			ctx, cancel := context.WithTimeout(a.windowContext(), 10*time.Second)
+			defer cancel()
+			var info cheatsheet.TerminalInfo
+			if err := r.invoke(ctx, "terminal.cheatsheet", map[string]string{"terminal": id, "agent": agentName}, &info); err != nil {
+				info = cheatsheet.TerminalInfo{}
 			}
-			v.poll.done()
-			v.version, v.skills, v.loaded = version, list, true
-		})
+			r.update(func() { apply(info) })
+		}()
+		return
+	}
+	go func() {
+		info := cheatsheet.TerminalInfo{
+			Version: cheatsheet.Running(pid, agentName),
+			Skills:  cheatsheet.AvailableSkills(o, agentName),
+		}
+		a.update(func() { apply(info) })
 	}()
 }
 
@@ -196,9 +192,9 @@ func (a *app) cheatTab(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sheet,
 	if tab != cheatBuiltinSkills && tab != cheatSkills {
 		return shown
 	}
-	var sk []cheatSkill
+	var sk []cheatsheet.Skill
 	for _, s := range a.cheat.skills {
-		if s.builtin == (tab == cheatBuiltinSkills) && cheatMatch(q, s.name, s.desc) {
+		if s.Builtin == (tab == cheatBuiltinSkills) && cheatMatch(q, s.Name, s.Description) {
 			sk = append(sk, s)
 		}
 	}
@@ -216,7 +212,7 @@ func (a *app) cheatTab(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sheet,
 	}
 	a.cheatSection(c, fmt.Sprint("skills-", tab), cheatGroupTitle(title, same, q), func() {
 		for j, s := range sk {
-			it := cheatsheet.Item{Name: sheet.SkillPrefix + s.name, Desc: s.desc}
+			it := cheatsheet.Item{Name: sheet.SkillPrefix + s.Name, Desc: s.Description}
 			a.cheatRow(c, cur, cheatsheet.KindSkill, it, it.Name+" ", j)
 		}
 	})

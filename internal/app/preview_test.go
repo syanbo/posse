@@ -19,6 +19,7 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/cheatsheet"
 	"posse/internal/files"
 	"posse/internal/gitx"
 	"posse/internal/history"
@@ -837,7 +838,7 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		a.state.RightPanel = panelCheat
 		a.cheat = cheatView{term: "t1", agent: "claude", loaded: true, version: "9.9.9", poll: panelPoll{at: time.Now()},
-			skills: []cheatSkill{{name: "computer-use", desc: "Operate native macOS desktop apps"}, {name: "review-local", desc: "本地代码审查"}}}
+			skills: []cheatsheet.Skill{{Name: "computer-use", Description: "Operate native macOS desktop apps"}, {Name: "review-local", Description: "本地代码审查"}}}
 		// 四个页签：内置技能（默认）、技能、内置命令、快捷键
 		for i, name := range []string{"builtin-skills", "skills", "commands", "keys"} {
 			a.state.CheatTab = i

@@ -1,7 +1,9 @@
 package daemon
 
 import (
+	"log"
 	"os"
+	"path/filepath"
 
 	"posse/internal/agent"
 	"posse/internal/history"
@@ -21,9 +23,39 @@ func (d *Daemon) syncAntigravity(s *session) {
 	if pg <= 0 {
 		pg = s.Foreground()
 	}
-	sid := d.antigravityPresenceSessionID(pg)
+	if pg <= 0 {
+		return
+	}
+	name, args := agent.OfProcess(pg)
+	if name != "antigravity" {
+		return
+	}
+	processDir := procmem.Cwd(pg)
+	dir := processDir
+	if dir == "" {
+		dir = s.Dir
+	}
+	dirs := agent.AntigravityAddedDirs(args, dir)
+	sid := history.AntigravityOpenSession(d.agentDataHome(), procmem.OpenFiles(pg))
+	s.mu.Lock()
+	if s.agent != "antigravity" || s.agentPg != pg && s.agentPg != 0 {
+		s.mu.Unlock()
+		return
+	}
+	s.agyDir, s.agyDirs = dir, dirs
+	recorded := s.agyRecordedSID == sid
+	s.mu.Unlock()
 	if sid == "" {
 		return
+	}
+	if !recorded && filepath.IsAbs(processDir) {
+		if err := d.store.RememberAntigravityDir(sid, resolvePath(processDir)); err != nil {
+			log.Printf("terminal %s: record Antigravity directory: %v", s.ID, err)
+		} else {
+			s.mu.Lock()
+			s.agyRecordedSID = sid
+			s.mu.Unlock()
+		}
 	}
 	if s.Agent().SessionID != sid {
 		s.SetTitle("", sid, false)

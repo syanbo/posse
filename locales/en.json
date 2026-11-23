@@ -5247,6 +5247,22 @@
       }
     }
   },
+  "mcpAntigravityInferredTip": "Based on the configuration. Run /mcp in Antigravity to see the current session’s status.",
+  "@mcpAntigravityInferredTip": {"description": "Antigravity MCP configuration status tooltip."},
+  "mcpAntigravityProbe": "Test Antigravity Connection",
+  "@mcpAntigravityProbe": {"description": "Button to test the configured Antigravity MCP connection."},
+  "mcpAntigravityProbeTip": "Opens a separate connection. A local server starts briefly.",
+  "@mcpAntigravityProbeTip": {"description": "Tooltip explaining the separate MCP connection test."},
+  "mcpAntigravityProbeReady": "Server answered the handshake",
+  "@mcpAntigravityProbeReady": {"description": "Configured MCP server responded to initialize."},
+  "mcpAntigravityProbeAuth": "Authorization needed. Check /mcp in Antigravity.",
+  "@mcpAntigravityProbeAuth": {"description": "The configured MCP server rejected the connection without authorization."},
+  "mcpAntigravityProbeTimeout": "Connection timed out",
+  "@mcpAntigravityProbeTimeout": {"description": "The MCP connection test timed out."},
+  "mcpAntigravityProbeChanged": "Configuration changed. Rescan and try again.",
+  "@mcpAntigravityProbeChanged": {"description": "The MCP configuration changed after scanning."},
+  "mcpAntigravityProbeFailed": "Handshake failed. Check /mcp in Antigravity.",
+  "@mcpAntigravityProbeFailed": {"description": "The configured MCP server did not answer initialize."},
   "mcpInferredTip": "Couldn’t ask the agent itself (program not found or timed out); inferred from the read rules in its docs",
   "@mcpInferredTip": {
     "description": "MCP details: tooltip of the Inferred marker."

@@ -124,7 +124,7 @@ func Open(path string) (*Store, error) {
 	}
 	// 单写者足够，也避免 SQLITE_BUSY
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema + taskSchema + traceSchema + discussionSchema); err != nil {
+	if _, err := db.Exec(schema + taskSchema + traceSchema + discussionSchema + antigravitySchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
@@ -141,6 +141,10 @@ func Open(path string) (*Store, error) {
 			db.Close()
 			return nil, fmt.Errorf("migrate: %w", err)
 		}
+	}
+	if _, err := db.Exec(`INSERT OR IGNORE INTO antigravity_session_dirs(session_id,cwd) ` + antigravityTerminalDirs); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	for _, c := range [][3]string{
 		{"discussions", "mirror", "INTEGER NOT NULL DEFAULT 0"}, {"discussions", "shared", "INTEGER NOT NULL DEFAULT 0"},

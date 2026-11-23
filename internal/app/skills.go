@@ -45,8 +45,9 @@ type skillsView struct {
 	byUse   int // 列表排序：0 按名字，1 按用量（多的在前）
 	page    int // 0 技能，1 MCP
 
-	mcp    skills.MCPCatalog
-	mcpSel string // 选中的 MCP 服务名，或 skillIssuesKey
+	mcp      skills.MCPCatalog
+	mcpProbe *mcpProbeView
+	mcpSel   string // 选中的 MCP 服务名，或 skillIssuesKey
 
 	// 检查更新：点了才查（要联网），结果一直留着，更新后锁文件里的版本对上了标记自然消失
 	updates     *skills.Updates
@@ -66,10 +67,12 @@ type skillsView struct {
 
 // skillsPanelView 是文件栏「技能」页签的状态：当前工作区的项目级技能。
 type skillsPanelView struct {
-	key  string // 工作区目录，变了就重扫
-	real string // 解开链接后的工作区目录（/tmp 是 /private/tmp 的链接），技能目录是解开的，按它算相对路径
-	cat  skills.Catalog
-	poll panelPoll
+	key     string // 工作区目录，变了就重扫
+	agyDir  string
+	agyDirs []string
+	real    string // 解开链接后的工作区目录（/tmp 是 /private/tmp 的链接），技能目录是解开的，按它算相对路径
+	cat     skills.Catalog
+	poll    panelPoll
 }
 
 // findCodex、findGrok 找 codex、grok 可执行文件，测试里换掉免得拉起真的。
@@ -99,6 +102,7 @@ func (a *app) scanSkills() {
 	s := &a.skills
 	s.req++
 	s.loading = true
+	s.mcpProbe = nil
 	req := s.req
 	skillsWork.Add(1)
 	go func() {
@@ -901,8 +905,21 @@ func (a *app) openSkillFile(path string) {
 // pollSkillsPanel 在主线程调用：换了工作区就重扫，开着时定时重扫（项目里的技能常是 agent 刚写的）。
 func (a *app) pollSkillsPanel(c *ui.Context, w *workspace) {
 	p := &a.skillsTab
-	if p.key != w.Path {
-		*p = skillsPanelView{key: w.Path}
+	var agyDir string
+	var agyDirs []string
+	if !a.remoteHost() {
+		t := a.currentTerminal(w)
+		if v := a.files[w.ID]; t == nil && v != nil && a.filesActive(w) {
+			if i := slices.IndexFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == v.prevTerm }); i >= 0 {
+				t = &w.Terminals[i]
+			}
+		}
+		if t != nil && t.Agent == "antigravity" {
+			agyDir, agyDirs = t.AntigravityDir, t.AntigravityDirs
+		}
+	}
+	if p.key != w.Path || p.agyDir != agyDir || !slices.Equal(p.agyDirs, agyDirs) {
+		*p = skillsPanelView{key: w.Path, agyDir: agyDir, agyDirs: agyDirs}
 	}
 	if !p.poll.due(c, skillsRefresh) {
 		return
@@ -929,13 +946,13 @@ func (a *app) pollSkillsPanel(c *ui.Context, w *workspace) {
 		return
 	}
 	go func() {
-		cat := skills.Scan(skills.Options{Home: homeDir, Dir: key})
+		cat := skills.Scan(skills.Options{Home: homeDir, Dir: key, AntigravityDir: agyDir, AntigravityDirs: agyDirs})
 		real, err := filepath.EvalSymlinks(key)
 		if err != nil {
 			real = key
 		}
 		a.update(func() {
-			if p.key != key {
+			if p.key != key || p.agyDir != agyDir || !slices.Equal(p.agyDirs, agyDirs) {
 				return
 			}
 			p.poll.done()

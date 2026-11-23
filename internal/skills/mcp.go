@@ -31,6 +31,7 @@ type MCPDef struct {
 	Command   string
 	Args      []string
 	URL       string
+	Cwd       string
 	// EnvKeys、HeaderKeys 只记名字：值里常有密钥
 	EnvKeys    []string
 	HeaderKeys []string
@@ -88,24 +89,15 @@ func ScanMCP(ctx context.Context, o MCPOptions) MCPCatalog {
 		}
 		return s
 	}
-	agyFiles := []string{filepath.Join(o.Home, ".gemini", "config", "mcp_config.json")}
-	if o.Dir != "" {
-		dirs := upToRepo(o.Dir)
-		for i := len(dirs) - 1; i >= 0; i-- {
-			agyFiles = append(agyFiles, filepath.Join(dirs[i], ".agents", "mcp_config.json"))
+	visitAntigravityMCP(o, func(name string, def MCPDef, _ mcpJSONEntry) {
+		s := server(name)
+		s.Defs = append(s.Defs, def)
+		state := On
+		if def.Disabled {
+			state = Off
 		}
-	}
-	for _, file := range agyFiles {
-		for name, def := range readMCPJSON(file, Antigravity) {
-			s := server(name)
-			s.Defs = append(s.Defs, def)
-			state := On
-			if def.Disabled {
-				state = Off
-			}
-			s.Agents[Antigravity] = Status{State: state, Via: file, Inferred: true}
-		}
-	}
+		s.Agents[Antigravity] = Status{State: state, Via: def.File, Inferred: true}
+	})
 	claudeFile := filepath.Join(o.Home, ".claude.json")
 	cursorFile := filepath.Join(o.Home, ".cursor", "mcp.json")
 	claude := readMCPJSON(claudeFile, Claude)
@@ -183,43 +175,50 @@ func ScanMCP(ctx context.Context, o MCPOptions) MCPCatalog {
 
 // readMCPJSON 读 Claude、Cursor 那种 {"mcpServers": {名字: {command, args, url, env, headers}}} 的文件。
 func readMCPJSON(file string, ag Agent) map[string]MCPDef {
-	b, err := os.ReadFile(file)
-	if err != nil {
-		return nil
-	}
-	var f struct {
-		MCPServers map[string]struct {
-			Type      string            `json:"type"`
-			ServerURL string            `json:"serverUrl"`
-			Disabled  bool              `json:"disabled"`
-			Command   string            `json:"command"`
-			Args      []string          `json:"args"`
-			URL       string            `json:"url"`
-			Env       map[string]string `json:"env"`
-			Headers   map[string]string `json:"headers"`
-		} `json:"mcpServers"`
-	}
-	if json.Unmarshal(b, &f) != nil {
-		return nil
-	}
 	out := map[string]MCPDef{}
-	for name, s := range f.MCPServers {
-		d := MCPDef{Agent: ag, File: file, Transport: s.Type, Command: s.Command, Args: s.Args, URL: s.URL, EnvKeys: keys(s.Env), HeaderKeys: keys(s.Headers)}
-		if ag == Antigravity {
-			d.Disabled = s.Disabled
-			if d.URL == "" {
-				d.URL = s.ServerURL
-			}
-		}
-		if d.Transport == "" {
-			d.Transport = "stdio"
-			if d.URL != "" {
-				d.Transport = "http"
-			}
-		}
-		out[name] = d
+	for name, s := range readMCPEntries(file) {
+		out[name] = s.definition(file, ag)
 	}
 	return out
+}
+
+func readMCPEntries(file string) map[string]mcpJSONEntry {
+	var f struct {
+		MCPServers map[string]mcpJSONEntry `json:"mcpServers"`
+	}
+	if !readAntigravityJSON(file, &f) {
+		return nil
+	}
+	return f.MCPServers
+}
+
+type mcpJSONEntry struct {
+	Type      string            `json:"type"`
+	ServerURL string            `json:"serverUrl"`
+	Disabled  bool              `json:"disabled"`
+	Command   string            `json:"command"`
+	Args      []string          `json:"args"`
+	Cwd       string            `json:"cwd"`
+	URL       string            `json:"url"`
+	Env       map[string]string `json:"env"`
+	Headers   map[string]string `json:"headers"`
+}
+
+func (s mcpJSONEntry) definition(file string, ag Agent) MCPDef {
+	d := MCPDef{Agent: ag, File: file, Transport: s.Type, Command: s.Command, Args: s.Args, URL: s.URL, EnvKeys: keys(s.Env), HeaderKeys: keys(s.Headers)}
+	if ag == Antigravity {
+		d.Cwd, d.Disabled = s.Cwd, s.Disabled
+		if d.URL == "" {
+			d.URL = s.ServerURL
+		}
+	}
+	if d.Transport == "" {
+		d.Transport = "stdio"
+		if d.URL != "" {
+			d.Transport = "http"
+		}
+	}
+	return d
 }
 
 // tomlMCP 是 Codex、Grok 的 config.toml 里的 [mcp_servers.<名字>]。

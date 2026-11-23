@@ -157,6 +157,32 @@ func cmdHistoryList(e *env, args []string) error {
 	})
 }
 
+func cmdHistoryBrief(e *env, args []string) error {
+	fs := flag.NewFlagSet("history brief", flag.ContinueOnError)
+	cwd := fs.String("cwd", "", "")
+	if pos, err := parse(fs, args); err != nil {
+		return err
+	} else if len(pos) != 0 {
+		return fmt.Errorf("usage: posse history brief [--cwd DIR]")
+	}
+	dir, err := historyCwd(*cwd, *cwd == "")
+	if err != nil {
+		return err
+	}
+	var res struct {
+		Brief  string
+		Status historyStatus
+	}
+	return e.do("history.brief", map[string]string{"cwd": dir, "skip": os.Getenv(sessionEnv["antigravity"])}, &res, func() {
+		e.historyNote(res.Status)
+		if res.Brief == "" {
+			fmt.Fprintln(e.out, "no recent sessions in this directory")
+			return
+		}
+		fmt.Fprintln(e.out, res.Brief)
+	})
+}
+
 func cmdHistoryShow(e *env, args []string) error {
 	fs := flag.NewFlagSet("history show", flag.ContinueOnError)
 	tail := fs.Int("tail", 0, "")

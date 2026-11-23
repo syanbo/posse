@@ -999,6 +999,7 @@ class _TerminalScreenState extends State<TerminalScreen>
                 switchIcon: Icons.chat_bubble_outline_rounded,
                 media: hasMedia(_liveTab),
                 tools: hasTools(_liveTab),
+                antigravityCommands: _liveTab.agent == 'antigravity' && !_ended,
                 // 打开时终端保持电脑的尺寸，手机左右滑着看；关着时按手机屏幕重排
                 // agent 退出后临时按电脑布局看时开关也显示开着；只关掉这次让位时不改全局设置
                 desk: _fitDesktop,
@@ -1014,6 +1015,11 @@ class _TerminalScreenState extends State<TerminalScreen>
                 },
               );
               if (!mounted) return;
+              if (action != null && (action == '/skills' || action == '/mcp')) {
+                await Clipboard.setData(ClipboardData(text: action));
+                if (mounted) _flash(this.context.l10n.commonCopied);
+                return;
+              }
               if (action == 'media') {
                 nav.push(
                   MaterialPageRoute<void>(

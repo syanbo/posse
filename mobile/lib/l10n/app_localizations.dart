@@ -2972,6 +2972,24 @@ abstract class AppLocalizations {
   /// **'Skills, MCP servers, and command-line tools used'**
   String get sessionToolsNote;
 
+  /// Copy the native Antigravity list skills command.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy /skills'**
+  String get sessionAntigravityCopySkills;
+
+  /// Copy the native Antigravity MCP command.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy /mcp'**
+  String get sessionAntigravityCopyMcp;
+
+  /// Where to run the native Antigravity MCP command.
+  ///
+  /// In en, this message translates to:
+  /// **'Run it at the Antigravity prompt for live connection status'**
+  String get sessionAntigravityMcpNote;
+
   /// New Session: title of the workspace section.
   ///
   /// In en, this message translates to:

@@ -304,6 +304,44 @@ func (d *Daemon) historyList(ctx context.Context, raw json.RawMessage) (any, err
 	return historyListResult{Sessions: ss, Status: d.historyStatus(ctx, indexing)}, nil
 }
 
+func (d *Daemon) historyBrief(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p struct {
+		Cwd  string `json:"cwd"`
+		Skip string `json:"skip"`
+	}
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	p.Cwd = filepath.Clean(p.Cwd)
+	if !filepath.IsAbs(p.Cwd) || filepath.Dir(p.Cwd) == p.Cwd {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "history brief requires an absolute project directory")
+	}
+	indexing := d.refreshHistory(ctx, false, historyWait)
+	idx, err := d.historyIndex()
+	if err != nil {
+		return nil, err
+	}
+	dirs, err := d.store.AntigravitySessionDirs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	dirRoot := resolvePath(p.Cwd)
+	for id, dir := range dirs {
+		if rel, err := filepath.Rel(dirRoot, resolvePath(dir)); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			ids = append(ids, id)
+		}
+	}
+	brief, err := idx.Brief(ctx, p.Cwd, p.Skip, ids...)
+	if err != nil {
+		return nil, err
+	}
+	return struct {
+		Brief  string        `json:"brief"`
+		Status historyStatus `json:"status"`
+	}{Brief: brief, Status: d.historyStatus(ctx, indexing)}, nil
+}
+
 type historyShowParams struct {
 	Session string `json:"session"`
 	// Path 是会话文件，有它时按文件找：同一个 ID 可能对应几个不同的会话（见 history.FindPath）

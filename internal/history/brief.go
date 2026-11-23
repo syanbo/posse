@@ -17,11 +17,11 @@ const briefLineRunes = 160
 
 // Brief 是这个目录（含子目录）最近几条会话的交接：标题、最后一句用户或助手的话、查看命令。
 // 只读已经建好的索引，不更新。没有会话时返回空字符串。skipID 是正在开的这一条，不写进去。
-func (x *Index) Brief(ctx context.Context, cwd, skipID string) (string, error) {
+func (x *Index) Brief(ctx context.Context, cwd, skipID string, antigravityIDs ...string) (string, error) {
 	if strings.TrimRight(cwd, "/") == "" {
 		return "", nil
 	}
-	ss, err := x.Sessions(ctx, ListOptions{Cwd: cwd, Limit: briefLimit + 4})
+	ss, err := x.Sessions(ctx, ListOptions{Cwd: cwd, Limit: briefLimit + 4, antigravityIDs: antigravityIDs})
 	if err != nil || len(ss) == 0 {
 		return "", err
 	}

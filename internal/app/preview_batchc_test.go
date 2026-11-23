@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/cheatsheet"
 	"posse/internal/files"
 	"posse/internal/history"
 )
@@ -99,7 +100,7 @@ func TestPreviewBatchC(t *testing.T) {
 			a.state.RightPanel = panelCheat
 			a.state.CheatTab = cheatSkills
 			a.cheat = cheatView{term: "t1", agent: "claude", loaded: true, version: "9.9.9", poll: panelPoll{at: time.Now()},
-				skills: []cheatSkill{{name: "computer-use", desc: "Operate native macOS desktop apps"}}}
+				skills: []cheatsheet.Skill{{Name: "computer-use", Description: "Operate native macOS desktop apps"}}}
 		}},
 		{name: "c-cheat-empty", setup: func(t *testing.T, a *app) {
 			a.state.RightPanel = panelCheat

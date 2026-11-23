@@ -5,6 +5,7 @@ package history
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -251,9 +252,10 @@ func scanSession(sc interface{ Scan(...any) error }, extra ...any) (Session, err
 }
 
 type ListOptions struct {
-	Agent string
-	Cwd   string // 只列这个目录（含子目录）里的会话
-	Limit int
+	Agent          string
+	Cwd            string // 只列这个目录（含子目录）里的会话
+	Limit          int
+	antigravityIDs []string
 }
 
 func (o ListOptions) where(alias string) (string, []any) {
@@ -267,8 +269,14 @@ func (o ListOptions) where(alias string) (string, []any) {
 	}
 	if o.Cwd != "" {
 		cwd := strings.TrimRight(o.Cwd, "/")
-		where = append(where, "("+alias+"cwd = ? OR "+alias+"cwd LIKE ? ESCAPE '\\')")
+		match := alias + "cwd = ? OR " + alias + "cwd LIKE ? ESCAPE '\\'"
 		args = append(args, cwd, likeEscape(cwd)+"/%")
+		if len(o.antigravityIDs) != 0 {
+			ids, _ := json.Marshal(o.antigravityIDs)
+			match += " OR (" + alias + "agent='antigravity' AND " + alias + "cwd='' AND " + alias + "session_id IN (SELECT value FROM json_each(?)))"
+			args = append(args, string(ids))
+		}
+		where = append(where, "("+match+")")
 	}
 	return " WHERE " + strings.Join(where, " AND "), args
 }

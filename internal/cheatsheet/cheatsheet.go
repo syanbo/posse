@@ -163,6 +163,15 @@ func VersionIn(s string) string {
 // grok-1.0.73-macos-aarch64、cursor-agent/versions/2026.10.22-…），先从解开链接的程序路径和参数里取，
 // 取不到时程序本身就是这个 agent（不是 node 这类启动器）才跑一次 --version。
 func Running(shell int, agentName string) string {
+	return runningVersion(shell, agentName, true)
+}
+
+// RunningPathVersion 从目标进程路径认版本，避免只读 RPC 运行可执行文件。
+func RunningPathVersion(shell int, agentName string) string {
+	return runningVersion(shell, agentName, false)
+}
+
+func runningVersion(shell int, agentName string, probe bool) string {
 	pid := find(shell, agentName, 3)
 	if pid == 0 {
 		return ""
@@ -177,7 +186,7 @@ func Running(shell int, agentName string) string {
 			return v
 		}
 	}
-	if exe == "" || procmem.Name([]string{exe}) != cmd {
+	if !probe || exe == "" || procmem.Name([]string{exe}) != cmd {
 		return ""
 	}
 	return askVersion(exe)

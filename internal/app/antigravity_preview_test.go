@@ -40,5 +40,23 @@ func TestPreviewAntigravity(t *testing.T) {
 		previewSkillsBoard(a, "")
 		a.skills.cat.Skills[0].Agents[skills.Antigravity] = skills.Status{State: skills.On, Via: homeDir + "/.gemini/config/skills/archify"}
 		savePNG(t, newPreviewTester(a, dark), "antigravity-skills-"+suffix+".png")
+
+		a = previewApp(t)
+		previewSkillsBoard(a, "")
+		file := homeDir + "/.gemini/config/mcp_config.json"
+		a.skills.mcp.Servers = append(a.skills.mcp.Servers, skills.MCPServer{
+			Name: "fixture",
+			Defs: []skills.MCPDef{{Agent: skills.Antigravity, File: file, Transport: "stdio", Command: "/usr/local/bin/example-mcp"}},
+			Agents: [skills.NumAgents]skills.Status{
+				skills.Antigravity: {State: skills.On, Via: file, Inferred: true},
+			},
+		})
+		a.skills.page, a.skills.mcpSel = 1, "fixture"
+		a.skills.mcpProbe = &mcpProbeView{name: "fixture", result: skills.MCPProbeReady}
+		tt = newPreviewTester(a, dark)
+		if _, ok := tt.Find("测试 Antigravity 连接"); !ok {
+			t.Fatal("missing Antigravity MCP connection test")
+		}
+		savePNG(t, tt, "antigravity-mcp-"+suffix+".png")
 	}
 }

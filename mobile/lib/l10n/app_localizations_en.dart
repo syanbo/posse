@@ -1722,6 +1722,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Skills, MCP servers, and command-line tools used';
 
   @override
+  String get sessionAntigravityCopySkills => 'Copy /skills';
+
+  @override
+  String get sessionAntigravityCopyMcp => 'Copy /mcp';
+
+  @override
+  String get sessionAntigravityMcpNote =>
+      'Run it at the Antigravity prompt for live connection status';
+
+  @override
   String get sessionWorkspace => 'Workspace';
 
   @override

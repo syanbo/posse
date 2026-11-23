@@ -16,24 +16,26 @@ import (
 )
 
 type terminalInfo struct {
-	ID           string           `json:"id"`
-	WorkspaceID  string           `json:"workspaceId"`
-	Title        string           `json:"title,omitempty"`
-	Name         string           `json:"name,omitempty"` // 用户给标签起的名字
-	Command      []string         `json:"command"`
-	Dir          string           `json:"dir"`
-	Agent        string           `json:"agent,omitempty"`
-	AgentState   *host.AgentState `json:"agentState,omitempty"`
-	Running      bool             `json:"running"`
-	ExitCode     *int             `json:"exitCode,omitempty"`
-	Pid          int              `json:"pid"`
-	Cols         int              `json:"cols"`
-	Rows         int              `json:"rows"`
-	CreatedAt    time.Time        `json:"createdAt"`
-	LastOutputAt time.Time        `json:"lastOutputAt"`
-	IdleMs       int64            `json:"idleMs"`
-	WaitingTasks bool             `json:"waitingTasks,omitempty"` // 里面的 agent 正阻塞在 posse task wait 上
-	PhoneSized   bool             `json:"phoneSized,omitempty"`   // 手机正看着，终端按手机的尺寸排版
+	ID              string           `json:"id"`
+	WorkspaceID     string           `json:"workspaceId"`
+	Title           string           `json:"title,omitempty"`
+	Name            string           `json:"name,omitempty"` // 用户给标签起的名字
+	Command         []string         `json:"command"`
+	Dir             string           `json:"dir"`
+	Agent           string           `json:"agent,omitempty"`
+	AgentState      *host.AgentState `json:"agentState,omitempty"`
+	AntigravityDir  string           `json:"antigravityDir,omitempty"`
+	AntigravityDirs []string         `json:"antigravityDirs,omitempty"`
+	Running         bool             `json:"running"`
+	ExitCode        *int             `json:"exitCode,omitempty"`
+	Pid             int              `json:"pid"`
+	Cols            int              `json:"cols"`
+	Rows            int              `json:"rows"`
+	CreatedAt       time.Time        `json:"createdAt"`
+	LastOutputAt    time.Time        `json:"lastOutputAt"`
+	IdleMs          int64            `json:"idleMs"`
+	WaitingTasks    bool             `json:"waitingTasks,omitempty"` // 里面的 agent 正阻塞在 posse task wait 上
+	PhoneSized      bool             `json:"phoneSized,omitempty"`   // 手机正看着，终端按手机的尺寸排版
 	// Lost 是上一个常驻进程留下、还没恢复的终端（restore.go）：没有进程，接入或操作它时才拉起
 	Lost bool `json:"lost,omitempty"`
 	// Unread 是本轮完成了还没看（unread.go）
@@ -53,6 +55,11 @@ func (d *Daemon) terminalInfo(s *session) terminalInfo {
 	if st := s.Agent(); (st.Status != "" || st.SessionID != "") && info.Agent != "" {
 		info.AgentState = &st
 		info.Unread = st.Status == agent.StatusIdle && s.isUnread()
+	}
+	if info.Agent == "antigravity" {
+		s.mu.Lock()
+		info.AntigravityDir, info.AntigravityDirs = s.agyDir, s.agyDirs
+		s.mu.Unlock()
 	}
 	if !info.Running {
 		code := s.ExitCode()

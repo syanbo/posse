@@ -2,11 +2,34 @@ package skills
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestSkillConfigApplyIsolatedTemporaryFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "skills.json")
+	target := filepath.Join(dir, "unrelated")
+	write(t, target, "keep")
+	link(t, target, path+".posse-tmp")
+	first := Change{File: path, After: `{"exclude":["first"]}`}
+	second := Change{File: path, After: `{"exclude":["second"]}`}
+	if err := first.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.Apply(); !errors.Is(err, ErrStale) {
+		t.Fatalf("concurrent edit returned %v", err)
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != "keep" {
+		t.Fatalf("unrelated file changed: %q %v", got, err)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != first.After {
+		t.Fatalf("saved config = %q %v", got, err)
+	}
+}
 
 func TestSetJSONOverride(t *testing.T) {
 	cases := []struct{ name, src, key, value, want string }{

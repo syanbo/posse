@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -85,6 +86,117 @@ func TestAntigravityPersonalInheritsProject(t *testing.T) {
 	write(t, filepath.Join(home, ".gemini", "config", "skills.json"), `{"inherits":[{"path":"`+filepath.ToSlash(manifest)+`"}]}`)
 	if got := find(t, Scan(Options{Home: home}), "review", ScopeUser).Agents[Antigravity].State; got != On {
 		t.Fatal(got)
+	}
+}
+
+func TestAntigravityPersonalAndAdditionalRoots(t *testing.T) {
+	t.Setenv("USER", "alex")
+	home := t.TempDir()
+	repo, extra := filepath.Join(home, "repo"), filepath.Join(home, "extra")
+	write(t, filepath.Join(repo, ".git"), "")
+	write(t, filepath.Join(repo, ".gemini", "config.json"), `{"personal_customization_dir":"people/{user}"}`)
+	personal := filepath.Join(repo, "people", "alex", ".agents")
+	write(t, filepath.Join(personal, "skills.json"), `{"entries":[{"path":"team-skills"}]}`)
+	skill(t, filepath.Join(repo, "team-skills", "team"), "team", "")
+	skill(t, filepath.Join(personal, "skills", "review"), "review", "")
+	skill(t, filepath.Join(repo, ".agents", "skills", "review"), "review", "")
+	skill(t, filepath.Join(extra, ".agents", "skills", "extra"), "extra", "")
+	cat := Scan(Options{Home: home, Dir: repo, AntigravityDirs: []string{extra}})
+	winners := 0
+	for _, sk := range cat.Skills {
+		if sk.Name == "review" && sk.Agents[Antigravity].State == On {
+			winners++
+			if sk.Dir != realDir(filepath.Join(personal, "skills", "review")) {
+				t.Fatalf("personal skill did not win: %s", sk.Dir)
+			}
+		}
+	}
+	if winners != 1 {
+		t.Fatalf("enabled review skills = %d", winners)
+	}
+	if find(t, cat, "team", ScopeProject).Agents[Antigravity].State != On {
+		t.Fatal("personal manifest relative path did not resolve from repo")
+	}
+	s := find(t, cat, "extra", ScopeProject)
+	if s.Agents[Antigravity].State != On || s.Agents[Codex].State != Unseen {
+		t.Fatalf("additional workspace leaked to another agent: %+v", s.Agents)
+	}
+}
+
+func TestAntigravityPluginSkillsAndMCP(t *testing.T) {
+	home := t.TempDir()
+	repo := filepath.Join(home, "repo")
+	cfg := filepath.Join(home, ".gemini", "config")
+	global := filepath.Join(cfg, "plugins", "team")
+	project := filepath.Join(repo, ".agents", "plugins", "project")
+	registered := filepath.Join(repo, "bundles", "registered")
+	write(t, filepath.Join(cfg, "config.json"), `{"plugins":{"team":{"enabled":false}}}`)
+	write(t, filepath.Join(global, "plugin.json"), "{ // Native JSONC\n\"name\": \"Display Name\",}")
+	write(t, filepath.Join(project, ".antigravity-plugin", "plugin.json"), `{}`)
+	write(t, filepath.Join(registered, "plugin.json"), `{}`)
+	write(t, filepath.Join(repo, ".agents", "plugins.json"), `{"entries":[{"path":"bundles/registered"}]}`)
+	for _, dir := range []string{global, project, registered} {
+		skill(t, filepath.Join(dir, "skills", "review"), "review", "")
+		write(t, filepath.Join(dir, "mcp_config.json"), `{"mcpServers":{"local":{"command":"server"}}}`)
+	}
+	cat := Scan(Options{Home: home, Dir: repo})
+	if st := find(t, cat, "team:review", ScopePlugin).Agents[Antigravity]; st.State != Off {
+		t.Fatalf("disabled plugin: %+v", st)
+	}
+	for _, name := range []string{"project:review", "registered:review"} {
+		if st := find(t, cat, name, ScopeProject).Agents[Antigravity]; st.State != On {
+			t.Fatalf("project plugin %s: %+v", name, st)
+		}
+	}
+	statuses := map[string]State{}
+	for _, sv := range ScanMCP(context.Background(), MCPOptions{Home: home, Dir: repo}).Servers {
+		if len(sv.Defs) != 1 || !sv.Defs[0].Plugin {
+			t.Fatalf("bad plugin definition: %+v", sv.Defs)
+		}
+		statuses[sv.Name] = sv.Agents[Antigravity].State
+	}
+	if len(statuses) != 3 || statuses["team_local"] != Off || statuses["project_local"] != On || statuses["registered_local"] != On {
+		t.Fatal(statuses)
+	}
+}
+
+func TestAntigravityToggleKeepsManifestSettings(t *testing.T) {
+	home := t.TempDir()
+	repo := filepath.Join(home, "repo")
+	cfg := filepath.Join(repo, ".agents", "skills.json")
+	write(t, cfg, "{\n  \"entries\": [],\n  \"exclude\": [\"other\"]\n}\n")
+	skill(t, filepath.Join(repo, ".agents", "skills", "my-folder"), "my-name", "")
+	o := Options{Home: home, Dir: repo}
+	for _, enable := range []bool{false, true} {
+		s := find(t, Scan(o), "my-name", ScopeProject)
+		ch, err := PlanToggle(o, s, Antigravity, enable)
+		if err != nil || ch.File != cfg || !strings.Contains(ch.After, `"entries": []`) || strings.Contains(ch.After, `"my-folder"`) == enable {
+			t.Fatalf("toggle %v: %+v, %v", enable, ch, err)
+		}
+		if err := ch.Apply(); err != nil {
+			t.Fatal(err)
+		}
+		s = find(t, Scan(o), "my-name", ScopeProject)
+		if (s.Agents[Antigravity].State == On) != enable {
+			t.Fatalf("toggle %v resulted in %v", enable, s.Agents[Antigravity].State)
+		}
+	}
+}
+
+func TestAntigravityPluginSkillDirectoryLinks(t *testing.T) {
+	home := t.TempDir()
+	shared := filepath.Join(home, ".agents", "skills", "review")
+	skill(t, shared, "review", "")
+	plugin := filepath.Join(home, ".gemini", "config", "plugins", "kit")
+	write(t, filepath.Join(plugin, "plugin.json"), `{}`)
+	link(t, shared, filepath.Join(plugin, "skills", "review"))
+	skill(t, filepath.Join(plugin, "skills", "check"), "check", "")
+	cat := Scan(Options{Home: home})
+	if got := find(t, cat, "review", ScopeUser).Agents[Antigravity].State; got != Unseen {
+		t.Fatalf("plugin directory link made a shared skill available as %v", got)
+	}
+	if got := find(t, cat, "kit:check", ScopePlugin).Agents[Antigravity].State; got != On {
+		t.Fatalf("regular plugin skill = %v", got)
 	}
 }
 

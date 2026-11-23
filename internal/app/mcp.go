@@ -13,6 +13,62 @@ import (
 	"posse/locales"
 )
 
+type mcpProbeView struct {
+	name   string
+	result skills.MCPProbeResult
+}
+
+func (a *app) mcpProbeButton(c *ui.Context, sv skills.MCPServer) {
+	if a.remoteHost() || sv.Agents[skills.Antigravity].State != skills.On {
+		return
+	}
+	var def skills.MCPDef
+	for _, d := range sv.Defs {
+		if d.Agent == skills.Antigravity && d.File == sv.Agents[skills.Antigravity].Via && !d.Disabled {
+			def = d
+		}
+	}
+	if def.File == "" {
+		return
+	}
+	m := L(c)
+	p := a.skills.mcpProbe
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		button := textButton(c, m.McpAntigravityProbe()).Tooltip(m.McpAntigravityProbeTip())
+		if p != nil && p.result == "" {
+			button.Disabled(true)
+		}
+		if pressable(button).Clicked() {
+			p = &mcpProbeView{name: sv.Name}
+			a.skills.mcpProbe = p
+			o := skills.MCPOptions{Home: homeDir}
+			go func() {
+				result := skills.ProbeAntigravityMCP(a.windowContext(), o, sv.Name, def)
+				a.update(func() { p.result = result })
+			}()
+		}
+		if p == nil || p.name != sv.Name {
+			return
+		}
+		var note string
+		switch p.result {
+		case "":
+			note = m.CommonScanning()
+		case skills.MCPProbeReady:
+			note = m.McpAntigravityProbeReady()
+		case skills.MCPProbeAuth:
+			note = m.McpAntigravityProbeAuth()
+		case skills.MCPProbeTimeout:
+			note = m.McpAntigravityProbeTimeout()
+		case skills.MCPProbeChanged:
+			note = m.McpAntigravityProbeChanged()
+		default:
+			note = m.McpAntigravityProbeFailed()
+		}
+		ui.Text(c, note).FontSize(fsSmall).TextColor(c.Theme().TextMuted).Shrink(1)
+	})
+}
+
 // 技能页的 MCP 分页：四家用户级的 MCP 服务按名字合在一起，每行挂四家的状态，详情写各家从哪读到、
 // 每份配置怎么启动。只看不改：环境变量和请求头只列名字，值里常有密钥。扫描见 skills.ScanMCP。
 
@@ -65,7 +121,7 @@ func shellWord(s string) string {
 
 func mcpTransportLabel(m locales.Messages, t string) string {
 	switch t {
-	case "http":
+	case "http", "streamable-http":
 		return m.McpTransportHTTP()
 	case "sse":
 		return m.McpTransportSSE()
@@ -235,6 +291,7 @@ func (a *app) mcpDetail(c *ui.Context, sv skills.MCPServer) {
 			}
 			mcpAgentRow(c, sv, ag)
 		}
+		a.mcpProbeButton(c, sv)
 	})
 	card(c).Padding(cardPad).Gap(4).Shrink(0).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Margin(0, 0, 8, 0).Children(func() {
@@ -286,6 +343,9 @@ func mcpAgentRow(c *ui.Context, sv skills.MCPServer, ag skills.Agent) {
 }
 
 func mcpInferredTip(m locales.Messages, ag skills.Agent) string {
+	if ag == skills.Antigravity {
+		return m.McpAntigravityInferredTip()
+	}
 	if ag == skills.Cursor {
 		return m.McpCursorInferredTip()
 	}

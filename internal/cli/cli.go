@@ -151,6 +151,7 @@ func init() {
 		{"web console", "Print the page's recent console output and errors", "[--tab N] [--workspace W] [--timeout 30s]", cmdWebConsole},
 		{"history search", "Search past claude/codex/cursor/grok/antigravity sessions", "<query> [--agent A] [--cwd DIR | --here] [--role user|assistant|tool] [--limit N]", cmdHistorySearch},
 		{"history list", "List recent sessions", "[--agent A] [--cwd DIR | --here] [--limit N]", cmdHistoryList},
+		{"history brief", "Summarize recent sessions in the current directory", "[--cwd DIR]", cmdHistoryBrief},
 		{"history show", "Print a session's messages", "<session> [--tail N] [--tools]", cmdHistoryShow},
 		{"history resume", "Continue a past session in a new posse terminal", "<session> [--workspace W]", cmdHistoryResume},
 		{"history index", "Update the session history index now", "[--rebuild]", cmdHistoryIndex},

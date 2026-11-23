@@ -53,6 +53,8 @@ type terminalInfo struct {
 	ID, WorkspaceID, Title, Agent string
 	Dir                           string // 终端启动时的目录
 	AgentState                    *agentState
+	AntigravityDir                string
+	AntigravityDirs               []string
 	Running                       bool
 	ExitCode                      *int
 	Pid                           int    // 终端里 shell 的进程，底栏的内存浮窗按它的进程树统计

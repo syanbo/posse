@@ -58,6 +58,10 @@ func TestSyncAntigravity(t *testing.T) {
 	}
 
 	d.syncAntigravity(s)
+	dirs, err := d.store.AntigravitySessionDirs(t.Context())
+	if err != nil || dirs[sid] != resolvePath(w.Path) {
+		t.Fatalf("bound conversation directory = %q, %v", dirs[sid], err)
+	}
 	if st := s.Agent(); st.SessionID != sid || st.Title != "" {
 		t.Fatalf("before agy titles the session: %+v", st)
 	}

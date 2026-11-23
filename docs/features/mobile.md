@@ -85,6 +85,7 @@
 - 发送文件（回形针）：先放下键盘，再从相册选照片或视频、拍照、或从「文件」App 选，传到电脑后把路径当一次粘贴打进终端、不回车，路径里的空格、括号等加反斜杠（和把文件拖进 macOS 终端一样）。
 - 清空：agent 终端里删掉整个输入框（Ctrl+E、Ctrl+U、退格逐行删，最多 40 行），不用 Esc、^C（干活时是打断）；shell 终端只删当前行。Cursor Agent 把一次读到的几个按键当成一段输入、控制字符原样插进输入框，给它的按键经 `terminal.send` 的 `rawKeys` 由电脑隔 20ms 一个一个写，最多 20 行。
 - Exit：清空输入框后写上 `/exit`（Claude Code、Codex、Grok、Cursor、Antigravity 都认），隔 300ms 再写命令，不回车，由用户自己发送；不发 Ctrl+D，免得多出来的一次把 shell 也关了。没在运行 agent 的终端只提示。
+- Antigravity 终端右上角「更多」可复制 `/skills`、`/mcp`。粘贴到 agy 输入框运行，分别查看当前会话加载的技能和 MCP 的实时连接状态。复制时不会改动终端里的输入。
 - 立即发送：Claude Code 的 `chat:sendNow`，干活时排着队的消息马上交给模型。实际发的是同样绑定的 Ctrl+X Ctrl+S（Ctrl+Enter 要 kitty 键盘协议，手机终端发不出）。
 - 方向键、Home、End（内置和自定义）按程序当前的光标键模式编码：开着应用模式（DECCKM）时发 ESC O A，htop 这类 ncurses 程序只认这种；`posse terminal send --key` 也一样。
 

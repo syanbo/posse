@@ -69,3 +69,10 @@ func TestAntigravityManualArgs(t *testing.T) {
 		}
 	}
 }
+
+func TestAntigravityAddedDirs(t *testing.T) {
+	args := []string{"agy", "-i", "--add-dir=not-an-option", "--add-dir", "../shared", "--add-dir=/work/shared", "--add-dir=/tools", "--", "--add-dir=/ignored"}
+	if got, want := AntigravityAddedDirs(args, "/work/repo"), []string{"/work/shared", "/tools"}; !slices.Equal(got, want) {
+		t.Fatalf("added dirs = %q, want %q", got, want)
+	}
+}

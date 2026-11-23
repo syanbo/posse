@@ -1633,6 +1633,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sessionToolsNote => '用到的技能、MCP 和命令行程序';
 
   @override
+  String get sessionAntigravityCopySkills => '复制 /skills';
+
+  @override
+  String get sessionAntigravityCopyMcp => '复制 /mcp';
+
+  @override
+  String get sessionAntigravityMcpNote => '在 Antigravity 的输入框运行，查看实时连接状态';
+
+  @override
   String get sessionWorkspace => '工作区';
 
   @override

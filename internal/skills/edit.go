@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/BurntSushi/toml"
 )
@@ -33,8 +34,12 @@ var ErrStale = errors.New("the config file was just changed; rescan and try agai
 // CanToggle 报告 a 对 s 能不能开关：读得到、生效的那一份，状态是启用或关了（Claude 的 skillOverrides 设成别的值时也能改回）。
 func CanToggle(a Agent, s Skill) bool {
 	// Cursor 没有开关；Claude 账号同步的技能在 Claude 里带前缀（如 anthropic-skills:docx），skillOverrides 的键对不上
-	if a == Cursor || a == Antigravity || a == Claude && s.Scope == ScopeSynced {
+	if a == Cursor || a == Claude && s.Scope == ScopeSynced {
 		return false
+	}
+	if a == Antigravity {
+		st := s.Agents[a]
+		return st.agyToggle != "" && (st.State == On || st.State == Off)
 	}
 	switch s.Agents[a].State {
 	case On, Off:
@@ -102,6 +107,11 @@ func PlanToggle(o Options, s Skill, a Agent, enable bool) (Change, error) {
 		default:
 			ch.After, err = setTOMLList(ch.Before, "skills", "disabled", s.Name, true, nil)
 		}
+	case Antigravity:
+		st := s.Agents[Antigravity]
+		ch.File = st.agyToggle
+		ch.Before = readText(ch.File)
+		ch.After, err = setAntigravityExclude(ch.Before, filepath.Base(st.Via), !enable)
 	}
 	if err != nil {
 		return Change{}, err
@@ -112,32 +122,109 @@ func PlanToggle(o Options, s Skill, a Agent, enable bool) (Change, error) {
 	return ch, nil
 }
 
+func setAntigravityExclude(src, name string, exclude bool) (string, error) {
+	if strings.TrimSpace(src) == "" && exclude {
+		src = "{}\n"
+	}
+	if !json.Valid([]byte(src)) || !strings.HasPrefix(strings.TrimSpace(src), "{") {
+		return "", errors.New("skills.json is not valid JSON; nothing changed")
+	}
+	keyStart, start, end, exists := topLevelKey(src, "exclude")
+	var names []string
+	if exists && json.Unmarshal([]byte(src[start:end]), &names) != nil {
+		return "", errors.New("exclude in skills.json is not a list of strings; nothing changed")
+	}
+	if exclude == slices.Contains(names, name) {
+		return src, nil
+	}
+	if exclude {
+		names = append(names, name)
+	} else {
+		names = slices.DeleteFunc(names, func(v string) bool { return v == name })
+	}
+	if len(names) == 0 {
+		return removeMember(src, keyStart, end), nil
+	}
+	value, _ := json.Marshal(names)
+	if exists {
+		return src[:start] + string(value) + src[end:], nil
+	}
+	end = strings.LastIndexByte(src, '}')
+	body := strings.TrimRight(src[:end], " \t\r\n")
+	if !strings.HasSuffix(body, "{") {
+		body += ","
+	}
+	return body + "\n  \"exclude\": " + string(value) + "\n" + src[end:], nil
+}
+
 // Apply 写入改动：文件和算改动时不一样了就不写（ErrStale）；先写临时文件再改名。
 // 配置文件是符号链接（dotfiles 仓库常这样放）时写到它指向的文件，不把链接换成普通文件。
 func (ch Change) Apply() error {
-	if readText(ch.File) != ch.Before {
-		return ErrStale
-	}
-	file := ch.File
-	if real, err := filepath.EvalSymlinks(file); err == nil {
-		file = real
+	applyMu.Lock()
+	defer applyMu.Unlock()
+	file, mode, err := ch.checkedTarget()
+	if err != nil {
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return err
 	}
-	mode := os.FileMode(0o644)
-	if fi, err := os.Stat(file); err == nil {
-		mode = fi.Mode().Perm()
-	}
-	tmp := file + ".posse-tmp"
-	if err := os.WriteFile(tmp, []byte(ch.After), mode); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(file), ".posse-skills-*")
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, file); err != nil {
-		os.Remove(tmp)
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+	if _, err := tmp.WriteString(ch.After); err != nil {
 		return err
 	}
-	return nil
+	if err := tmp.Chmod(mode); err != nil {
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	current, currentMode, err := ch.checkedTarget()
+	if err != nil {
+		return err
+	}
+	if current != file || currentMode != mode {
+		return ErrStale
+	}
+	return os.Rename(tmp.Name(), file)
+}
+
+var applyMu sync.Mutex
+
+func (ch Change) checkedTarget() (string, os.FileMode, error) {
+	file, err := filepath.EvalSymlinks(ch.File)
+	if errors.Is(err, os.ErrNotExist) {
+		if _, statErr := os.Lstat(ch.File); !errors.Is(statErr, os.ErrNotExist) {
+			return "", 0, err
+		}
+		if ch.Before != "" {
+			return "", 0, ErrStale
+		}
+		return ch.File, 0o644, nil
+	}
+	if err != nil {
+		return "", 0, err
+	}
+	info, err := os.Stat(file)
+	if err != nil {
+		return "", 0, err
+	}
+	if !info.Mode().IsRegular() {
+		return "", 0, ErrStale
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return "", 0, err
+	}
+	if string(data) != ch.Before {
+		return "", 0, ErrStale
+	}
+	return file, info.Mode().Perm(), nil
 }
 
 func readText(path string) string {

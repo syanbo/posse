@@ -70,7 +70,8 @@ type Status struct {
 	// Ignored 表示是被 Grok 的 [skills] ignore 藏掉的（算作关了，打开时从 ignore 里去掉）。
 	Ignored bool
 	// Via 是这家从哪个路径读到它的（链接或目录本身）。
-	Via string
+	Via       string
+	agyToggle string
 }
 
 // Skill 是一个技能。链接到同一个目录的算同一个。
@@ -129,6 +130,9 @@ type Options struct {
 	Home string
 	// Dir 是工作区目录；非空时也扫它往上到仓库根的项目级技能。
 	Dir string
+	// AntigravityDirs 是当前 agy 的其他工作区目录，其他 agent 不扫描。
+	AntigravityDir  string
+	AntigravityDirs []string
 	// Codex 是 app-server 的 skills/list 结果（CodexList），没有时按文件推算。
 	Codex []CodexSkill
 }
@@ -142,9 +146,11 @@ type root struct {
 	// prefix 加在技能名前面（插件技能）。
 	prefix string
 	// walk 为真时往下各级找技能（Grok 的 [skills] paths：可以是目录，也可以是一个 SKILL.md）。
-	walk  bool
-	paths []string
-	allow func(string) bool
+	walk      bool
+	paths     []string
+	allow     func(string) bool
+	off       bool
+	agySwitch func(string) (bool, string)
 }
 
 func prios(claude, codex, grok, cursor int, agy ...int) [NumAgents]int {
@@ -229,12 +235,14 @@ func upToRepo(dir string) []string {
 
 // found 是在某个目录里找到的一项。
 type found struct {
-	root  int
-	path  string // 目录里的这一项（可能是链接）
-	real  string // 解开链接后的目录
-	name  string
-	meta  Meta
-	alias bool // path 是链接
+	root      int
+	path      string // 目录里的这一项（可能是链接）
+	real      string // 解开链接后的目录
+	name      string
+	meta      Meta
+	alias     bool // path 是链接
+	agyOff    bool
+	agyToggle string
 }
 
 // Scan 扫描各家的技能目录和配置。
@@ -257,6 +265,10 @@ func Scan(o Options) Catalog {
 			if err != nil {
 				continue
 			}
+			// agy 的插件技能列表只读真实子目录；普通技能发现仍支持链接。
+			if r.prio[Antigravity] >= 0 && r.prefix != "" && !fi.IsDir() {
+				continue
+			}
 			alias := fi.Mode()&os.ModeSymlink != 0
 			real, err := filepath.EvalSymlinks(p)
 			if err != nil {
@@ -274,7 +286,11 @@ func Scan(o Options) Catalog {
 			if name == "" {
 				name = filepath.Base(p)
 			}
-			items = append(items, found{root: i, path: p, real: real, name: r.prefix + name, meta: m, alias: alias})
+			it := found{root: i, path: p, real: real, name: r.prefix + name, meta: m, alias: alias}
+			if r.agySwitch != nil {
+				it.agyOff, it.agyToggle = r.agySwitch(p)
+			}
+			items = append(items, it)
 		}
 	}
 	cat.Skills = resolve(o, rs, cfg, items, &cat)
@@ -378,7 +394,7 @@ func resolve(o Options, rs []root, cfg configs, items []found, cat *Catalog) []S
 		// 这家读得到的各项，按优先级排；同名的先到先得
 		var seen []found
 		for _, it := range items {
-			if rs[it.root].prio[a] >= 0 && !cfg.hidden(a, it.path) {
+			if rs[it.root].prio[a] >= 0 && !rs[it.root].off && !it.agyOff && !cfg.hidden(a, it.path) {
 				seen = append(seen, it)
 			}
 		}
@@ -396,6 +412,9 @@ func resolve(o Options, rs []root, cfg configs, items []found, cat *Catalog) []S
 			} else {
 				winner[it.name] = it
 				st.State, st.Why = cfg.state(a, s)
+				if a == Antigravity {
+					st.agyToggle = it.agyToggle
+				}
 			}
 			s.Agents[a] = st
 		}
@@ -404,6 +423,8 @@ func resolve(o Options, rs []root, cfg configs, items []found, cat *Catalog) []S
 			s := &out[byDir[it.real]]
 			if rs[it.root].prio[a] >= 0 && cfg.hidden(a, it.path) && s.Agents[a].State == Unseen {
 				s.Agents[a] = Status{State: Off, Why: "listed in ignore of [skills] in config.toml", Via: it.path, Ignored: true}
+			} else if rs[it.root].prio[a] >= 0 && (rs[it.root].off || it.agyOff) && s.Agents[a].State == Unseen {
+				s.Agents[a] = Status{State: Off, Via: it.path, agyToggle: it.agyToggle}
 			}
 		}
 		for i := range out {

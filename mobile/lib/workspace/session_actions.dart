@@ -45,7 +45,7 @@ Future<bool> closeSession(
 /// 会话页、终端页右上角的"更多"：从底部滑上来的面板，和电脑列表的操作面板一样。
 /// [switchLabel] 是切到另一种看法（对话或终端），为空不显示；[desk] 不为空时有"电脑布局"开关，
 /// 拨动立刻生效、面板不收。[media] 时有"图片与视频"，[tools] 时有"技能与工具"。
-/// 返回 'switch'、'media'、'tools' 或 'close'，点外面收起时为 null。
+/// 返回选中的操作，点外面收起时为 null。
 Future<String?> showSessionMore(
   BuildContext context, {
   required SessionTab tab,
@@ -55,6 +55,7 @@ Future<String?> showSessionMore(
   ValueChanged<bool>? onDesk,
   bool media = false,
   bool tools = false,
+  bool antigravityCommands = false,
 }) {
   // 放在 builder 外面：拨开关会改设置、整个 App 重建，面板的 builder 跟着重跑，放在里面就被打回初值
   var on = desk ?? false;
@@ -101,6 +102,29 @@ Future<String?> showSessionMore(
                   subtitle: Text(l.sessionToolsNote),
                   onTap: () => Navigator.of(sheet).pop('tools'),
                 ),
+              if (antigravityCommands) ...[
+                RowTile(
+                  chevron: false,
+                  leading: Icon(
+                    Icons.content_copy_rounded,
+                    size: Ic.button,
+                    color: c.accent,
+                  ),
+                  title: Text(l.sessionAntigravityCopySkills),
+                  onTap: () => Navigator.of(sheet).pop('/skills'),
+                ),
+                RowTile(
+                  chevron: false,
+                  leading: Icon(
+                    Icons.content_copy_rounded,
+                    size: Ic.button,
+                    color: c.accent,
+                  ),
+                  title: Text(l.sessionAntigravityCopyMcp),
+                  subtitle: Text(l.sessionAntigravityMcpNote),
+                  onTap: () => Navigator.of(sheet).pop('/mcp'),
+                ),
+              ],
               if (desk != null)
                 StatefulBuilder(
                   builder: (context, setSheet) {

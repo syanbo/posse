@@ -2306,6 +2306,12 @@
     "description": "Session More sheet: row that opens the skills and tools the session used."
   },
   "sessionToolsNote": "Skills, MCP servers, and command-line tools used",
+  "sessionAntigravityCopySkills": "Copy /skills",
+  "@sessionAntigravityCopySkills": {"description": "Copy the native Antigravity list skills command."},
+  "sessionAntigravityCopyMcp": "Copy /mcp",
+  "@sessionAntigravityCopyMcp": {"description": "Copy the native Antigravity MCP command."},
+  "sessionAntigravityMcpNote": "Run it at the Antigravity prompt for live connection status",
+  "@sessionAntigravityMcpNote": {"description": "Where to run the native Antigravity MCP command."},
   "@sessionToolsNote": {
     "description": "Session More sheet: subtitle of Skills & Tools."
   },

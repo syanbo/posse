@@ -52,12 +52,15 @@ type session struct {
 	Command     []string
 	CreatedAt   time.Time
 
-	nameMu  sync.Mutex // 改名写库单独串行，不能让数据库等待占住 PTY 回调用的 mu
-	mu      sync.Mutex
-	agent   string // 终端里的 agent：启动时指定的，或之后在前台认出来的
-	hooked  bool   // agent 是 posse 启动的那个，带着注入的 hooks
-	agentPg int    // agent 的进程组（组长就是 agent 进程），在前台认出它或收到 hook 时记下，0 是还不知道
-	fg      int    // 上次检查时的前台进程组
+	nameMu         sync.Mutex // 改名写库单独串行，不能让数据库等待占住 PTY 回调用的 mu
+	mu             sync.Mutex
+	agent          string // 终端里的 agent：启动时指定的，或之后在前台认出来的
+	hooked         bool   // agent 是 posse 启动的那个，带着注入的 hooks
+	agentPg        int    // agent 的进程组（组长就是 agent 进程），在前台认出它或收到 hook 时记下，0 是还不知道
+	fg             int    // 上次检查时的前台进程组
+	agyDir         string
+	agyDirs        []string
+	agyRecordedSID string
 	// grok 上次空闲时标题里的会话名：工作中的标题只是状态，手机的标签名用它
 	grokName string
 	name     string    // 用户给标签起的名字（terminal.rename），桌面和手机共用，存在 terminals.title
@@ -99,6 +102,7 @@ func (s *session) markHooked(name string) {
 	defer s.mu.Unlock()
 	if name != s.agent {
 		s.agentPg, s.osc = 0, ""
+		s.agyDir, s.agyDirs = "", nil
 		s.discussionTurn = discussionTurn{}
 	}
 	s.agent, s.hooked = name, true
@@ -119,6 +123,7 @@ func (s *session) clearAgent(pg int) bool {
 		return false
 	}
 	s.agent, s.hooked, s.agentPg, s.osc = "", false, 0, ""
+	s.agyDir, s.agyDirs = "", nil
 	s.discussionTurn = discussionTurn{}
 	return true
 }
@@ -196,6 +201,7 @@ func (s *session) detectAgent() (name string, hooked, changed bool, sid string) 
 		s.agentPg = pg
 	case found != s.agent || s.hooked:
 		s.agent, s.hooked, s.agentPg, s.osc, changed = found, false, pg, "", true
+		s.agyDir, s.agyDirs = "", nil
 		s.discussionTurn = discussionTurn{}
 		sid = agent.SessionFromArgs(found, args)
 	default:
@@ -571,6 +577,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("workspace.relocate", d.workspaceRelocate)
 	srv.Handle("terminal.create", d.terminalCreate)
 	srv.Handle("terminal.list", d.terminalList)
+	srv.Handle("terminal.cheatsheet", d.terminalCheatsheet)
 	srv.Handle("terminal.show", d.terminalShow)
 	srv.Handle("terminal.read", d.terminalRead)
 	srv.Handle("terminal.send", d.terminalSend)
@@ -636,6 +643,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("files.definition", d.filesDefinition)
 	srv.Handle("history.search", d.historySearch)
 	srv.Handle("history.list", d.historyList)
+	srv.Handle("history.brief", d.historyBrief)
 	srv.Handle("history.show", d.historyShow)
 	srv.Handle("history.resume", d.historyResume)
 	srv.Handle("history.trash", d.historyTrash)

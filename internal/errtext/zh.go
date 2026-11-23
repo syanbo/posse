@@ -579,6 +579,8 @@ var zh = [][2]string{
 	{"the config file was just changed; rescan and try again", "配置文件刚被改过，重新扫描后再试"},
 	{"the config of %s needs no change", "{1} 的配置不用改"},
 	{"settings.json is not valid JSON; nothing changed", "settings.json 不是合法的 JSON，没有改"},
+	{"skills.json is not valid JSON; nothing changed", "skills.json 不是合法的 JSON，没有改"},
+	{"exclude in skills.json is not a list of strings; nothing changed", "skills.json 的 exclude 不是字符串列表，没有改"},
 	{"skillOverrides in settings.json is not an object; nothing changed", "settings.json 的 skillOverrides 不是对象，没有改"},
 	{"cannot read %s of [%s]; nothing changed", "没认出 [{2}] 的 {1}，没有改"},
 	{"the source must not start with -", "来源不能以 - 开头"},
