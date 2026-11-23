@@ -50,7 +50,7 @@ Posse 里的新会话（包括任务 worker）在 `SessionStart` 首轮读取当
 
 ## 套餐与验收
 
-桌面和手机的套餐用量来自 `agy -p /usage --output-format json`。在 agy 1.5.14 验证返回各池的剩余比例及重置时间，查询不产生模型轮次。状态栏也会按额度 ID 更新已确认的额度池，保留 `/usage` 给出的名称和窗口长度。自动及手动刷新仍可获取完整额度列表。会话上下文 token 与套餐额度独立。
+桌面和手机的套餐用量来自 `agy -p /usage --output-format json`。在 agy 1.5.14 验证返回各池的剩余比例及重置时间，查询不产生模型轮次。状态栏也会按额度 ID 更新已确认的额度池，保留 `/usage` 给出的名称和窗口长度。自动及手动刷新仍可获取完整额度列表。会话上下文 token 与套餐额度独立。额外 AI 积分余额来自 `agy -p /credits --output-format json`，只采用原生零模型轮次返回的读数。该输出未提供逐笔消费记录，桌面与手机可从详情打开 Google One 积分活动页查看。
 
 回归覆盖启动/恢复/手动转发与权限、OSC 状态、环境隔离、历史粗筛等价性、增量聊天与截断回读、子会话过滤、媒体 URI/产物扫描、废纸篓路径边界、技能继承/优先级/链接与 MCP 配置。桌面/手机共用的 agent 列表、图标、文案与上下文展示一并接入。CLI 参数参照 [官方 CLI reference](https://antigravity.google/docs/cli/reference)。
 

@@ -24311,6 +24311,40 @@ func (msgs Messages) UsageOldDaemonError() string {
 	return Catalog.Format(msgs.locale, "usageOldDaemonError", nil)
 }
 
+// UsageAICreditActivity says "View credit activity on Google One"
+// in the language the app shows.
+//
+// Plan usage details: opens the official Google One AI credits activity
+// page.
+func UsageAICreditActivity() string { return In(i18n.Locale()).UsageAICreditActivity() }
+
+// UsageAICreditActivity says "View credit activity on Google One"
+// in the language of msgs.
+//
+// Plan usage details: opens the official Google One AI credits activity
+// page.
+func (msgs Messages) UsageAICreditActivity() string {
+	return Catalog.Format(msgs.locale, "usageAICreditActivity", nil)
+}
+
+// UsageAICreditBalance says "AI credits remaining {count}{stale}"
+// in the language the app shows.
+//
+// Plan usage details: remaining Antigravity AI credits with optional age of
+// the reading.
+func UsageAICreditBalance(count int, stale string) string {
+	return In(i18n.Locale()).UsageAICreditBalance(count, stale)
+}
+
+// UsageAICreditBalance says "AI credits remaining {count}{stale}"
+// in the language of msgs.
+//
+// Plan usage details: remaining Antigravity AI credits with optional age of
+// the reading.
+func (msgs Messages) UsageAICreditBalance(count int, stale string) string {
+	return Catalog.Format(msgs.locale, "usageAICreditBalance", map[string]any{"count": count, "stale": stale})
+}
+
 // UsageOnDemand says "On-demand usage {used}{stale}"
 // in the language the app shows.
 //

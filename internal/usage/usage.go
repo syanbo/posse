@@ -52,17 +52,24 @@ type Resets struct {
 	At        int64 `json:"at,omitempty"`
 }
 
+// AICredits 是 agy 报告的额外 AI 积分余额，和套餐的额度池分别更新。
+type AICredits struct {
+	Remaining int64 `json:"remaining"`
+	At        int64 `json:"at"`
+}
+
 // Usage 是一家 agent 最近一次的读数。总额度窗口、套餐和套餐内金额来自同一份读数；
 // 分池窗口和下面几项各自带读数时间，来源不同、新旧不同。
 type Usage struct {
-	Agent     string   `json:"agent"`
-	Plan      string   `json:"plan,omitempty"`
-	Windows   []Window `json:"windows"`
-	Spend     *Spend   `json:"spend,omitempty"`    // 套餐内的金额（Cursor）
-	OnDemand  *Spend   `json:"onDemand,omitempty"` // 超出套餐后按量付费的部分
-	Shares    *Shares  `json:"shares,omitempty"`
-	Resets    *Resets  `json:"resets,omitempty"`
-	UpdatedAt int64    `json:"updatedAt"` // agent 给出这份读数的时间，Unix 毫秒
+	Agent     string     `json:"agent"`
+	Plan      string     `json:"plan,omitempty"`
+	Windows   []Window   `json:"windows"`
+	Spend     *Spend     `json:"spend,omitempty"`    // 套餐内的金额（Cursor）
+	OnDemand  *Spend     `json:"onDemand,omitempty"` // 超出套餐后按量付费的部分
+	Shares    *Shares    `json:"shares,omitempty"`
+	Resets    *Resets    `json:"resets,omitempty"`
+	AICredits *AICredits `json:"aiCredits,omitempty"`
+	UpdatedAt int64      `json:"updatedAt"` // agent 给出这份读数的时间，Unix 毫秒
 	// Covers 是这份读数对哪几类附加项是完整的：读到了、而这类里没有的那项就是确实没有了（取消了分池、关掉了按量付费），
 	// 并入时去掉比它旧的旧项。只在读取的这一刻有，不落盘、不给界面
 	Covers Covers `json:"-"`
@@ -87,6 +94,7 @@ func merge(old, in Usage) Usage {
 	// agy /usage 已经按组返回整份配额，同名分池可能同时有不同长度的窗口。
 	if in.Agent == "antigravity" {
 		main.Windows = slices.Clone(main.Windows)
+		main.AICredits = old.AICredits
 		return main
 	}
 	out := Usage{Agent: main.Agent, Plan: main.Plan, Spend: main.Spend, UpdatedAt: main.UpdatedAt}

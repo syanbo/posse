@@ -14,21 +14,94 @@ import (
 
 // FetchAntigravity 用 agy 自己的账号和配额查询。临时目录避免加载当前项目的配置。
 func FetchAntigravity(ctx context.Context, executable string, env []string, now time.Time) (Usage, error) {
-	dir, err := os.MkdirTemp("", "posse-agy-usage-")
+	out, err := runAntigravityQuery(ctx, executable, env, "/usage")
 	if err != nil {
 		return Usage{}, err
 	}
+	return parseAntigravityUsage(out, now)
+}
+
+func runAntigravityQuery(ctx context.Context, executable string, env []string, query string) ([]byte, error) {
+	dir, err := os.MkdirTemp("", "posse-agy-usage-")
+	if err != nil {
+		return nil, err
+	}
 	defer os.RemoveAll(dir)
-	cmd := exec.CommandContext(ctx, executable, "--settings", `{"disableSlashCommands":false}`, "-p", "/usage", "--output-format", "json", "--print-timeout", "10s")
+	cmd := exec.CommandContext(ctx, executable, "--settings", `{"disableSlashCommands":false}`, "-p", query, "--output-format", "json", "--print-timeout", "10s")
 	cmd.Dir, cmd.Env = dir, env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
 	if err != nil {
-		return Usage{}, fmt.Errorf("agy /usage: %w", err)
+		return out, fmt.Errorf("agy %s: %w", query, err)
 	}
-	return parseAntigravityUsage(out, now)
+	return out, nil
+}
+
+// FetchAntigravityCredits 读取原生 /credits。nil 且无错误表示 agy 明确没有可用的积分数据。
+func FetchAntigravityCredits(ctx context.Context, executable string, env []string, now time.Time) (*AICredits, error) {
+	out, queryErr := runAntigravityQuery(ctx, executable, env, "/credits")
+	var data struct {
+		Status  string `json:"status"`
+		Turns   *int   `json:"num_turns"`
+		Error   string `json:"error"`
+		Command struct {
+			Name string `json:"name"`
+			Data struct {
+				Remaining *int64 `json:"remaining_credits"`
+			} `json:"data"`
+		} `json:"command"`
+	}
+	if err := json.Unmarshal(out, &data); err != nil {
+		if queryErr != nil {
+			return nil, queryErr
+		}
+		return nil, fmt.Errorf("agy /credits did not return JSON: %w", err)
+	}
+	if data.Status == "ERROR" && data.Turns != nil && *data.Turns == 0 &&
+		data.Error == "/credits failed: retrieving credits: no credits info found" {
+		return nil, nil
+	}
+	if queryErr != nil {
+		return nil, queryErr
+	}
+	remaining := data.Command.Data.Remaining
+	if data.Status != "SUCCESS" || data.Turns == nil || *data.Turns != 0 ||
+		data.Command.Name != "credits" || remaining == nil || *remaining < 0 {
+		return nil, fmt.Errorf("agy did not return an AI credit balance")
+	}
+	return &AICredits{Remaining: *remaining, At: now.UnixMilli()}, nil
+}
+
+// UpdateAntigravityCredits 只更新余额，额度池可在其间独立刷新。
+func (s *Store) UpdateAntigravityCredits(credits *AICredits) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.f.Off {
+		return
+	}
+	i := slices.IndexFunc(s.f.Usages, func(u Usage) bool { return u.Agent == "antigravity" })
+	if i < 0 {
+		if credits == nil {
+			return
+		}
+		s.f.Usages = append(s.f.Usages, Usage{Agent: "antigravity", UpdatedAt: credits.At})
+		i = len(s.f.Usages) - 1
+	}
+	u := &s.f.Usages[i]
+	if u.AICredits == nil && credits == nil {
+		return
+	}
+	u.AICredits = credits
+	if len(u.Windows) == 0 {
+		if credits == nil {
+			s.f.Usages = slices.Delete(s.f.Usages, i, i+1)
+		} else {
+			u.UpdatedAt = credits.At
+		}
+	}
+	s.saveLocked()
 }
 
 type antigravityBucket struct {

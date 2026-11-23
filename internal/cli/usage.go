@@ -61,6 +61,9 @@ func cmdUsage(e *env, args []string) error {
 			if u.Resets != nil {
 				fmt.Fprintf(e.out, "  reset credits %d\n", u.Resets.Count)
 			}
+			if u.AICredits != nil {
+				fmt.Fprintf(e.out, "  AI credits   %d remaining\n", u.AICredits.Remaining)
+			}
 		}
 	})
 }

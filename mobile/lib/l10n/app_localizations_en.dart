@@ -2176,6 +2176,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Posse on the computer is too old. Update it to refresh.';
 
   @override
+  String get usageAICreditActivity => 'View credit activity on Google One';
+
+  @override
+  String usageAICreditBalance(int count, String stale) {
+    return 'AI credits remaining $count$stale';
+  }
+
+  @override
   String usageOnDemand(String used, String stale) {
     return 'On-demand usage $used$stale';
   }

@@ -117,13 +117,24 @@ func (d *Daemon) antigravityAsk(ctx context.Context, force bool) {
 		s.antigravityAt, s.antigravityPending = time.Now(), done
 		go func() {
 			queryCtx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-			defer cancel()
-			u, err := usage.FetchAntigravity(queryCtx, executable, term.Environ(nil), time.Now())
+			env := term.Environ(nil)
+			u, err := usage.FetchAntigravity(queryCtx, executable, env, time.Now())
+			cancel()
 			if err != nil {
 				log.Printf("antigravity usage: %v", err)
 			} else if d.usageAgentOn("antigravity") {
 				u.UpdatedAt = time.Now().UnixMilli()
 				s.store.Update(u)
+			}
+			if d.usageAgentOn("antigravity") {
+				creditsCtx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+				credits, err := usage.FetchAntigravityCredits(creditsCtx, executable, env, time.Now())
+				cancel()
+				if err != nil {
+					log.Printf("antigravity credits: %v", err)
+				} else if d.usageAgentOn("antigravity") {
+					s.store.UpdateAntigravityCredits(credits)
+				}
 			}
 			s.mu.Lock()
 			s.antigravityPending = nil

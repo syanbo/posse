@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
 import '../l10n/l10n.dart';
@@ -80,6 +81,8 @@ class AgentUsage {
     this.resets,
     this.resetsExpireAt,
     this.resetsAt,
+    this.aiCredits,
+    this.aiCreditsAt,
   });
 
   final String agent;
@@ -102,9 +105,13 @@ class AgentUsage {
   final DateTime? resetsExpireAt;
   final DateTime? resetsAt;
 
+  final int? aiCredits;
+  final DateTime? aiCreditsAt;
+
   factory AgentUsage.fromJson(Map<String, Object?> j) {
     final shares = j['shares'] as Map?;
     final resets = j['resets'] as Map?;
+    final credits = j['aiCredits'] as Map?;
     return AgentUsage(
       agent: j['agent'] as String? ?? '',
       plan: planName(j['plan'] as String? ?? ''),
@@ -126,6 +133,8 @@ class AgentUsage {
       resets: (resets?['count'] as num?)?.toInt(),
       resetsExpireAt: _ms(resets?['expiresAt']),
       resetsAt: _ms(resets?['at']),
+      aiCredits: (credits?['remaining'] as num?)?.toInt(),
+      aiCreditsAt: _ms(credits?['at']),
     );
   }
 
@@ -189,7 +198,7 @@ String planName(String s) =>
 String planLabel(AppLocalizations l, String plan) =>
     plan.replaceFirst('/mo', l.usagePerMonth);
 
-/// 详情里窗口下面的几行，和桌面端 planFacts 一致：套餐内用量的金额、按需用量、本周用量用在哪、重置卡。
+/// 详情里窗口下面的几行，和桌面端 planFacts 一致。
 /// 和整家的读数不是同一份的，后面写上是多久前的。
 List<String> usageFacts(AppLocalizations l, AgentUsage u, DateTime now) {
   String stale(DateTime? at) =>
@@ -231,6 +240,10 @@ List<String> usageFacts(AppLocalizations l, AgentUsage u, DateTime now) {
           ? l.usageResetCardsExpiring(rs, monthDay(l, exp), stale(u.resetsAt))
           : l.usageResetCards(rs, stale(u.resetsAt)),
     );
+  }
+  final credits = u.aiCredits;
+  if (credits != null) {
+    out.add(l.usageAICreditBalance(credits, stale(u.aiCreditsAt)));
   }
   return out;
 }
@@ -291,7 +304,9 @@ List<AgentUsage> _visibleUsages(
   String codexError,
   bool codexReading,
 ) {
-  final shown = usages.where((u) => u.windows.isNotEmpty).toList();
+  final shown = usages
+      .where((u) => u.windows.isNotEmpty || u.aiCredits != null)
+      .toList();
   if ((codexError.isNotEmpty || codexReading) &&
       !shown.any((u) => u.agent == 'codex')) {
     shown.add(
@@ -632,18 +647,23 @@ class _UsageChip extends StatelessWidget {
     final w = usage.headWindow;
     final unknown = usage.windowUnknown(w, DateTime.now());
     final urgent = !unknown && w.percent >= usageUrgent;
+    final creditsOnly = usage.windows.isEmpty ? usage.aiCredits : null;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         AgentTile(agent: usage.agent, size: Ic.small),
         const SizedBox(width: 4),
+        if (creditsOnly == null) ...[
+          Text(
+            windowShort(context.l10n, w.minutes),
+            style: TextStyle(fontSize: Fs.small, color: c.muted),
+          ),
+          const SizedBox(width: 4),
+        ],
         Text(
-          windowShort(context.l10n, w.minutes),
-          style: TextStyle(fontSize: Fs.small, color: c.muted),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          unknown
+          creditsOnly != null
+              ? context.l10n.usageAICreditBalance(creditsOnly, '')
+              : unknown
               ? context.l10n.usagePendingUpdate
               : '${shownPercent(w, remaining).round()}%',
           style: TextStyle(
@@ -1051,6 +1071,17 @@ class _UsageSheetState extends State<UsageSheet> {
                 style: TextStyle(fontSize: Fs.small, color: c.muted),
               ),
             ],
+            if (u.agent == 'antigravity')
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => launchUrl(
+                    Uri.https('one.google.com', '/ai/activity'),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                  child: Text(l.usageAICreditActivity),
+                ),
+              ),
           ],
           const SizedBox(height: 20),
           Text(

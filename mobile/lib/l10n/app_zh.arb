@@ -587,6 +587,8 @@
   "usageNamedWindow": "{name} {window}",
   "usageNotConnected": "电脑没有连上",
   "usageOldPosse": "电脑上的 Posse 太旧，更新后才能刷新",
+  "usageAICreditActivity": "在 Google One 查看积分明细",
+  "usageAICreditBalance": "AI 积分余额 {count}{stale}",
   "usageOnDemand": "按需用量 {used}{stale}",
   "usageOnDemandLimited": "按需用量 {used}，上限 {limit}{stale}",
   "usageOtherModels": "其他模型",

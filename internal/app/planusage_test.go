@@ -103,6 +103,9 @@ func TestPreviewPlanFreshness(t *testing.T) {
 				{Minutes: 300, Percent: 65, ResetsAt: now.Add(-time.Hour).UnixMilli()},
 				{Minutes: 10080, Percent: 85, ResetsAt: now.Add(42 * time.Minute).UnixMilli()},
 			}},
+			{Agent: "antigravity", UpdatedAt: now.UnixMilli(), AICredits: &usage.AICredits{Remaining: 2500, At: now.UnixMilli()}, Windows: []usage.Window{
+				{Name: "Gemini", Minutes: 10080, Percent: 25, ResetsAt: now.Add(time.Hour).UnixMilli()},
+			}},
 		}}
 		a.state.UsageRemaining = true
 		a.planOpen = true

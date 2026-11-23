@@ -167,7 +167,7 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 	}
 	var shown []usage.Usage
 	for _, u := range st.Usages {
-		if len(u.Windows) > 0 {
+		if len(u.Windows) > 0 || u.AICredits != nil {
 			shown = append(shown, u)
 		}
 	}
@@ -195,6 +195,11 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 			ui.Row(c.Key(u.Agent)).Gap(4).AlignItems(ui.Center).Shrink(0).
 				Children(func() {
 					agentIcon(c, u.Agent, smallIcon())
+					if len(u.Windows) == 0 && u.AICredits != nil {
+						ui.Text(c, L(c).UsageAICreditBalance(int(u.AICredits.Remaining), "")).
+							FontSize(fsSmall).FontFeatures("tnum").SingleLine()
+						return
+					}
 					ui.Text(c, windowShort(L(c), w.Minutes)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
 					ui.Text(c, planPercent(L(c), a, w)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).SingleLine()
 				})
@@ -278,7 +283,7 @@ func money(cents float64) string {
 	return fmt.Sprintf("$%.2f", cents/100)
 }
 
-// planFacts 是详情里窗口下面的几行：套餐内用量的金额、按需用量、本周用量用在哪、重置卡。
+// planFacts 是详情里窗口下面的几行：用量金额、用量分布、重置卡和积分。
 // 和整家的读数不是同一份的，后面写上是多久前的。
 func planFacts(m locales.Messages, u usage.Usage) []string {
 	stale := func(at int64) string {
@@ -312,6 +317,9 @@ func planFacts(m locales.Messages, u usage.Usage) []string {
 			line = m.UsageResetCardsExpiring(rs.Count, m.AppDate(time.UnixMilli(rs.ExpiresAt).Local()), stale(rs.At))
 		}
 		out = append(out, line)
+	}
+	if credits := u.AICredits; credits != nil {
+		out = append(out, m.UsageAICreditBalance(int(credits.Remaining), stale(credits.At)))
 	}
 	return out
 }
@@ -436,6 +444,13 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 				}
 				for _, f := range planFacts(L(c), u) {
 					ui.Text(c, f).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+				}
+				if u.Agent == "antigravity" {
+					ui.Row(c.Key("credit-activity")).Children(func() {
+						if pressable(textButton(c, L(c).UsageAICreditActivity())).Clicked() {
+							c.OpenURL("https://one.google.com/ai/activity")
+						}
+					})
 				}
 			})
 		}

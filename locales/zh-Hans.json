@@ -1639,6 +1639,8 @@
   "usageListSeparator": "，",
   "usageNamedWindow": "{name} {window}",
   "usageOldDaemonError": "常驻进程版本较旧，不支持刷新套餐用量：到设置页更新常驻进程后再试。",
+  "usageAICreditActivity": "在 Google One 查看积分明细",
+  "usageAICreditBalance": "AI 积分余额 {count}{stale}",
   "usageOnDemand": "按需用量 {used}{stale}",
   "usageOnDemandLimited": "按需用量 {used}，上限 {limit}{stale}",
   "usageOtherModels": "其他模型",

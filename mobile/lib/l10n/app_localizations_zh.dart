@@ -2060,6 +2060,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get usageOldPosse => '电脑上的 Posse 太旧，更新后才能刷新';
 
   @override
+  String get usageAICreditActivity => '在 Google One 查看积分明细';
+
+  @override
+  String usageAICreditBalance(int count, String stale) {
+    return 'AI 积分余额 $count$stale';
+  }
+
+  @override
   String usageOnDemand(String used, String stale) {
     return '按需用量 $used$stale';
   }

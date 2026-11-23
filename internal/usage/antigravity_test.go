@@ -1,9 +1,63 @@
 package usage
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestAntigravityCreditsQuery(t *testing.T) {
+	for _, tc := range []struct {
+		name, output string
+		exit         int
+		known, fail  bool
+	}{
+		{"zero balance", `{"status":"SUCCESS","num_turns":0,"command":{"name":"credits","data":{"remaining_credits":0}}}`, 0, true, false},
+		{"no wallet reading", `{"status":"ERROR","num_turns":0,"error":"/credits failed: retrieving credits: no credits info found"}`, 1, false, false},
+		{"missing balance", `{"status":"SUCCESS","num_turns":0,"command":{"name":"credits","data":{}}}`, 0, false, true},
+		{"model turn", `{"status":"SUCCESS","num_turns":1,"command":{"name":"credits","data":{"remaining_credits":0}}}`, 0, false, true},
+		{"other command", `{"status":"SUCCESS","num_turns":0,"command":{"name":"usage","data":{"remaining_credits":0}}}`, 0, false, true},
+		{"query failed", `{"status":"ERROR","num_turns":0,"error":"timeout"}`, 1, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			exe := filepath.Join(t.TempDir(), "agy")
+			script := fmt.Sprintf("#!/bin/sh\n[ \"$4\" = /credits ] || exit 2\ncat <<'JSON'\n%s\nJSON\nexit %d\n", tc.output, tc.exit)
+			if err := os.WriteFile(exe, []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			now := time.Now()
+			got, err := FetchAntigravityCredits(t.Context(), exe, nil, now)
+			if (err != nil) != tc.fail || (got != nil) != tc.known {
+				t.Fatalf("credits=%+v, err=%v", got, err)
+			}
+			if got != nil && (got.Remaining != 0 || got.At != now.UnixMilli()) {
+				t.Fatalf("credits=%+v", got)
+			}
+		})
+	}
+}
+
+func TestAntigravityCreditsSurviveQuotaRefresh(t *testing.T) {
+	home := t.TempDir()
+	store := Open(home)
+	now := time.Now()
+	credits := &AICredits{Remaining: 42, At: now.UnixMilli()}
+	store.UpdateAntigravityCredits(credits)
+	window := Window{QuotaID: "quota", Percent: 72}
+	store.Update(Usage{Agent: "antigravity", Windows: []Window{window}, UpdatedAt: now.Add(time.Minute).UnixMilli()})
+	store = Open(home)
+	got := store.List(now)[0]
+	if got.AICredits == nil || *got.AICredits != *credits || len(got.Windows) != 1 || got.Windows[0] != window {
+		t.Fatalf("unexpected persisted balance or quota: %+v", got)
+	}
+	store.UpdateAntigravityCredits(nil)
+	got = store.List(now)[0]
+	if got.AICredits != nil || len(got.Windows) != 1 || got.Windows[0] != window {
+		t.Fatalf("credit clearing changed the quota: %+v", got)
+	}
+}
 
 func TestAntigravityQuotaWindows(t *testing.T) {
 	now := time.Date(2026, 11, 23, 5, 0, 0, 0, time.UTC)

@@ -8626,6 +8626,22 @@
   "@usageOldDaemonError": {
     "description": "Plan Usage settings or status popover: error message for OldDaemonError."
   },
+  "usageAICreditActivity": "View credit activity on Google One",
+  "@usageAICreditActivity": {
+    "description": "Plan usage details: opens the official Google One AI credits activity page."
+  },
+  "usageAICreditBalance": "AI credits remaining {count}{stale}",
+  "@usageAICreditBalance": {
+    "description": "Plan usage details: remaining Antigravity AI credits with optional age of the reading.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "stale": {
+        "type": "String"
+      }
+    }
+  },
   "usageOnDemand": "On-demand usage {used}{stale}",
   "@usageOnDemand": {
     "description": "Plan Usage settings or status popover: label for OnDemand. Values: used, stale.",

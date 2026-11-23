@@ -3620,6 +3620,18 @@ abstract class AppLocalizations {
   /// **'Posse on the computer is too old. Update it to refresh.'**
   String get usageOldPosse;
 
+  /// Plan usage details: opens the official Google One AI credits activity page.
+  ///
+  /// In en, this message translates to:
+  /// **'View credit activity on Google One'**
+  String get usageAICreditActivity;
+
+  /// Plan usage details: remaining Antigravity AI credits with optional age of the reading.
+  ///
+  /// In en, this message translates to:
+  /// **'AI credits remaining {count}{stale}'**
+  String usageAICreditBalance(int count, String stale);
+
   /// Plan Usage sheet: on-demand money spent; stale is usageStaleReading or empty.
   ///
   /// In en, this message translates to:

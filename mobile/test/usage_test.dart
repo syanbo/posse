@@ -45,6 +45,25 @@ void main() {
     expect(us[1].spend?.limit, 40000);
   });
 
+  testWidgets('Antigravity credits show an explicit zero and credit activity', (
+    tester,
+  ) async {
+    final u = AgentUsage.fromJson({
+      'agent': 'antigravity',
+      'aiCredits': {'remaining': 0, 'at': 1792389117408},
+      'updatedAt': 1792389117408,
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.light),
+        home: Scaffold(body: UsageSheet(usages: [u])),
+      ),
+    );
+    expect(find.text('AI 积分余额 0'), findsOneWidget);
+    expect(find.text('在 Google One 查看积分明细'), findsOneWidget);
+    expect(find.byType(UsageBar), findsNothing);
+  });
+
   test('Codex unknown preserves the reading and follows cached reset time', () {
     final now = DateTime(2026, 11, 12, 12);
     final status = UsageStatus.fromJson({
