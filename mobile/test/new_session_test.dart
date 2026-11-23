@@ -49,5 +49,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Open Terminal'), findsOneWidget);
     expect(find.text('Claude'), findsOneWidget);
+
+    model.agents = const ['claude', 'zcode'];
+    // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+    model.notifyListeners();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ZCode'));
+    await tester.pumpAndSettle();
+    expect(find.text('Open Terminal'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
   });
 }

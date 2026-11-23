@@ -2571,6 +2571,8 @@ func agentTitle(agent string) string {
 		return "Grok"
 	case "antigravity":
 		return "Antigravity"
+	case "zcode":
+		return "ZCode"
 	case "cursor":
 		return "Cursor"
 	}
@@ -2588,6 +2590,8 @@ func agentVendor(agent string) string {
 		return "xAI"
 	case "antigravity":
 		return "Google"
+	case "zcode":
+		return "Z.ai"
 	case "cursor":
 		return "Cursor"
 	}

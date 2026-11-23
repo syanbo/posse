@@ -51,7 +51,7 @@ func (d *Daemon) historyWatchRoots() []string {
 	if err != nil {
 		return nil
 	}
-	return history.WatchDirs(home)
+	return history.WatchDirs(home, d.zcodeDatabase())
 }
 
 // watchHistoryDirs 在历史页开着时盯会话目录。每个目录一个监视、不给每个文件建快照；

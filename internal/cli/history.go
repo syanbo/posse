@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
@@ -285,7 +286,8 @@ func cmdHistoryIndex(e *env, args []string) error {
 			fmt.Fprintln(e.out, string(b))
 		}
 	}
-	if err := idx.Update(ctx, history.Roots{Home: home}, report); err != nil {
+	zcode, _ := exec.LookPath("zcode")
+	if err := idx.Update(ctx, history.Roots{Home: home, ZCodeCLI: zcode}, report); err != nil {
 		return err
 	}
 	if *progress {

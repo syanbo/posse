@@ -49,6 +49,7 @@ class AgentTile extends StatelessWidget {
       'grok' => (brandGrokPath, c.text, c.card),
       'antigravity' => (brandAntigravityPath, Brand.antigravity, Colors.white),
       'cursor' => (brandCursorPath, Brand.cursor, Colors.white),
+      'zcode' => (brandZCodePath, Brand.zcode, Colors.white),
       _ => (null, c.fill, c.muted),
     };
     return Container(

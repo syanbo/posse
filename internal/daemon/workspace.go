@@ -276,6 +276,14 @@ func (d *Daemon) workspaceCreate(ctx context.Context, raw json.RawMessage) (any,
 			return nil, err
 		}
 	}
+	if p.Agent == "zcode" {
+		if !d.agentInstalled(p.Agent) {
+			return nil, rpc.Errorf(rpc.CodeBadRequest, "ZCode interactive CLI is not available on this Mac")
+		}
+		if _, err := d.launcher.Launch(p.Agent, p.Model, p.Prompt); err != nil {
+			return nil, rpc.Errorf(rpc.CodeBadRequest, "%v", err)
+		}
+	}
 	proj, err := d.project(p.Project)
 	if err != nil {
 		return nil, err

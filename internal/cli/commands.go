@@ -668,6 +668,9 @@ func cmdHook(e *env, args []string) error {
 		socket = e.socket
 	}
 	params := map[string]any{"terminalId": id, "agent": args[0], "event": args[1]}
+	if args[0] == "zcode" {
+		params["parentPid"] = os.Getppid()
+	}
 	if json.Valid(payload) {
 		params["payload"] = json.RawMessage(payload)
 	}

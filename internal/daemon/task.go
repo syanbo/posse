@@ -145,6 +145,8 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "agent required (%s)", strings.Join(agent.Known, ", "))
 	case p.Agent != "" && len(p.Command) > 0:
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "agent and command are exclusive")
+	case !agent.CanDispatch(p.Agent):
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "ZCode cannot be used for automated dispatch yet")
 	case p.Model != (agent.Model{}) && p.Agent == "":
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "model and effort require agent")
 	case p.Agent != "" && d.checkEnabled(p.Agent) != nil:
@@ -875,6 +877,9 @@ func (d *Daemon) deliver(terminalID string) {
 	}
 	s := d.liveSession(terminalID)
 	if s == nil || s.agentName() == "" || !s.Running() || s.Agent().Status != agent.StatusIdle && !agent.Parked(s.Agent()) && !s.discussionDelivery() {
+		return
+	}
+	if !agent.CanDispatch(s.agentName()) {
 		return
 	}
 	if wait := nudgeQuiet - time.Since(s.LastInput()); wait > 0 {

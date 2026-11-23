@@ -89,6 +89,9 @@ func (d *Daemon) startAgentWith(launch launchFunc, w store.Workspace, dir, name 
 	if err := d.checkEnabled(name); err != nil {
 		return nil, err
 	}
+	if name == "zcode" && !d.agentInstalled(name) {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "ZCode interactive CLI is not available on this Mac")
+	}
 	l, err := d.launcher.Launch(name, model, prompt)
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%v", err)
@@ -157,7 +160,7 @@ func (d *Daemon) launchTerminalLocked(w store.Workspace, argv []string, agentNam
 	}
 	info := t.Info()
 	s := &session{Terminal: t, ID: info.ID, WorkspaceID: info.WorkspaceID, Dir: info.Dir, Command: info.Command, CreatedAt: info.CreatedAt,
-		agent: agentName, hooked: agentName != "", name: revive.Title, saved: resumeRec{agent: agentName, sid: revive.SessionID, cwd: dir, label: revive.Label},
+		agent: agentName, hooked: agentName != "" && agentName != "zcode", name: revive.Title, saved: resumeRec{agent: agentName, sid: revive.SessionID, cwd: dir, label: revive.Label},
 		runtime: d.runtime}
 	d.mu.Lock()
 	d.terms[id] = s
@@ -212,7 +215,11 @@ func (d *Daemon) onTitle(id, title string) {
 func (d *Daemon) foreground(s *session) string {
 	name, _, changed, sid := s.detectAgent()
 	if changed {
-		s.ResetAgent(host.AgentState{Status: agent.StatusIdle, Event: "process", SessionID: sid, At: time.Now()})
+		status := agent.StatusIdle
+		if name == "zcode" {
+			status = ""
+		}
+		s.ResetAgent(host.AgentState{Status: status, Event: "process", SessionID: sid, At: time.Now()})
 		s.markRead()
 	}
 	return name
@@ -672,6 +679,7 @@ type hookEventParams struct {
 	Agent      string          `json:"agent"`
 	Event      string          `json:"event"`
 	Payload    json.RawMessage `json:"payload"`
+	ParentPID  int             `json:"parentPid"`
 }
 
 func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -682,6 +690,10 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	s := d.liveSession(p.TerminalID)
 	if s == nil {
 		return nil, rpc.Errorf(rpc.CodeNotFound, "terminal %s not found", p.TerminalID)
+	}
+	if p.Agent == "zcode" {
+		d.zcodeHook(s, p)
+		return hookEventResult{}, nil
 	}
 	// Codex 的子 agent、agent 跑的命令里嵌套启动的 agent 都带着这个终端的 ID，它们结束时报的 SessionEnd
 	// 不是终端里正在跑的会话退出，当成退出会把主会话摘掉，直到它下一个 hook 才挂回来
@@ -901,8 +913,12 @@ func (d *Daemon) agentLoop(ctx context.Context) {
 			ss = append(ss, s)
 		}
 		d.mu.Unlock()
+		zcodeInstalled := d.agentInstalled("zcode")
 		for _, s := range ss {
 			d.checkAgentGone(s)
+			if zcodeInstalled && s.Running() {
+				d.foreground(s)
+			}
 			d.syncAntigravity(s)
 			// 标题和进程检查发现的 agent 变化、shell 里换的目录在这里记下
 			d.saveResume(s, false)

@@ -80,6 +80,11 @@ type session struct {
 	hookSeq uint64    // 收到的 hook 事件计数：本轮结束时交了提醒，靠它看 agent 之后有没有接着做
 	turnAt  time.Time // 这一轮开始工作的时间，痕迹账本凭它判断文件是不是这一轮新建的
 	pushAt  time.Time // 上次给手机推送这个终端的时间（push.go）
+
+	zcodeMu   sync.Mutex
+	zcodePID  int
+	zcodeTurn string
+	zcodeAt   time.Time
 }
 
 func (s *session) userName() string {

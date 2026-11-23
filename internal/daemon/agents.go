@@ -26,6 +26,7 @@ type agentScan struct {
 	mu        sync.Mutex
 	installed []string
 	path      string
+	zcode     agent.ZCodeStorage
 }
 
 // installedAgents 是本机装了的 agent（按 agent.Known 的顺序），还没检测完时为 nil。
@@ -52,13 +53,14 @@ func (d *Daemon) checkEnabled(name string) error {
 // agentInstalled 报告 name 有没有装；还没检测完时当作装了，不挡用户。
 func (d *Daemon) agentInstalled(name string) bool {
 	got := d.installedAgents()
-	return got == nil || slices.Contains(got, name)
+	return got == nil && name != "zcode" || slices.Contains(got, name)
 }
 
 func (d *Daemon) detectLoop(ctx context.Context) {
 	skip := agent.ShimDir(d.cfg.Home)
 	var found []string
 	var path string
+	zcode := agent.CurrentZCodeStorage()
 	var shellAt time.Time
 	tick := time.NewTicker(agentStatEvery)
 	defer tick.Stop()
@@ -72,8 +74,11 @@ func (d *Daemon) detectLoop(ctx context.Context) {
 				}
 				log.Printf("detect agents in login shell: %v", err)
 				found, path = nil, agent.WithoutDir(os.Getenv("PATH"), skip)
+				if agent.ProbeZCode(ctx, agent.LookPathAfter(agent.Command["zcode"], path, skip)) {
+					found = []string{"zcode"}
+				}
 			} else {
-				found, path = det.Found, det.Path
+				found, path, zcode = det.Found, det.Path, det.ZCode
 			}
 		}
 		got := agent.Installed(found, path, skip)
@@ -84,7 +89,7 @@ func (d *Daemon) detectLoop(ctx context.Context) {
 			log.Printf("installed agents: %s", strings.Join(got, ", "))
 		}
 		d.agents.installed = got
-		d.agents.path = path
+		d.agents.path, d.agents.zcode = path, zcode
 		d.agents.mu.Unlock()
 		if newAntigravity {
 			go d.antigravityAsk(ctx, false)

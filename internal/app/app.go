@@ -471,10 +471,14 @@ func (a *app) agentChoices() []string {
 	return slices.DeleteFunc(slices.Clone(a.installedAgents()), func(n string) bool { return slices.Contains(a.disabled, n) })
 }
 
-// installedAgents 是常驻进程检测到装了的 agent；旧常驻进程不报、或还没检测完时全列。
+func (a *app) dispatchAgentChoices() []string {
+	return slices.DeleteFunc(a.agentChoices(), func(name string) bool { return !agent.CanDispatch(name) })
+}
+
+// installedAgents 优先用常驻进程的安装检测结果。
 func (a *app) installedAgents() []string {
 	if a.daemon.Agents == nil {
-		return agent.Known
+		return agent.FallbackAgents()
 	}
 	return a.daemon.Agents
 }

@@ -28,6 +28,8 @@ func fromProcess(exe string, args []string) string {
 		return "grok"
 	case "cursor-agent":
 		return "cursor"
+	case "zcode", "zcode-cli":
+		return "zcode"
 	case "agent":
 		// Cursor 另装了一个叫 agent 的入口，exec 时保留了 argv[0]，靠后面 index.js 的路径认
 		for _, a := range args[1:] {
@@ -60,17 +62,23 @@ func agentEntry(path string) string {
 
 var uuidRE = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
+func IsZCodeSession(id string) bool {
+	value, ok := strings.CutPrefix(id, "sess_")
+	return ok && uuidRE.MatchString(value)
+}
+
 // sessionFlags 是各家在参数里指定会话的选项：新会话的 ID，或继续的会话。
 var sessionFlags = map[string][]string{
 	"antigravity": {"--conversation"},
 	"claude":      {"--session-id", "-r", "--resume"},
 	"grok":        {"-s", "--session-id", "-r", "--resume"},
 	"cursor":      {"--resume"},
+	"zcode":       {"--resume"},
 }
 
 // SessionFromArgs 从 agent 进程的参数里取会话 ID：posse 的同名脚本补的 --session-id，或用户自己带的
 // --resume <ID>（codex 是 resume <ID>）。没有 hooks 的 agent 只能这样知道会话，技能与工具面板靠它找会话文件。
-// 只认 UUID：--resume 也可以跟标题，或者不跟值。
+// --resume 也可以跟标题，或者不跟值，只收各家确定的会话 ID 格式。
 func SessionFromArgs(name string, args []string) string {
 	if len(args) > 0 {
 		args = args[1:]
@@ -93,7 +101,7 @@ func SessionFromArgs(name string, args []string) string {
 			if !inline && i+1 < len(args) {
 				value = args[i+1]
 			}
-			if uuidRE.MatchString(value) {
+			if name == "zcode" && IsZCodeSession(value) || name != "zcode" && uuidRE.MatchString(value) {
 				return value
 			}
 		}

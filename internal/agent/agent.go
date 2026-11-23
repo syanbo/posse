@@ -15,7 +15,10 @@ import (
 )
 
 // Known 是支持一键启动的 agent。
-var Known = []string{"claude", "codex", "grok", "cursor", "antigravity"}
+var Known = []string{"claude", "codex", "grok", "cursor", "antigravity", "zcode"}
+
+// CanDispatch 要求 agent 能带首条提示进入交互会话，并能留下终端接收后续提醒。
+func CanDispatch(name string) bool { return name != "zcode" }
 
 // Launcher 生成 agent 的启动命令；Exe 是 hooks 回调的 posse 可执行文件。
 type Launcher struct {
@@ -67,6 +70,12 @@ func (m Model) args(agentName string) ([]string, error) {
 }
 
 func (l Launcher) Launch(name string, m Model, prompt string) (Launch, error) {
+	if name == "zcode" && (prompt != "" || m.Worker) {
+		return Launch{}, fmt.Errorf("ZCode requires entering the initial prompt in its terminal")
+	}
+	if name == "zcode" && (m.Name != "" || m.Effort != "") {
+		return Launch{}, fmt.Errorf("select the model and effort in the ZCode terminal")
+	}
 	margs, err := m.args(name)
 	if err != nil {
 		return Launch{}, err
@@ -96,6 +105,8 @@ func (l Launcher) Launch(name string, m Model, prompt string) (Launch, error) {
 	case "antigravity":
 		// agy 的会话设置不接受 hooks，状态由 OSC 7501 上报。
 		parts = []string{"agy"}
+	case "zcode":
+		parts = []string{"zcode"}
 	case "cursor":
 		plugin, err := l.cursorPlugin()
 		if err != nil {
@@ -146,6 +157,11 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 		parts = []string{"grok", "--resume", Quote(sessionID)}
 	case "antigravity":
 		parts = []string{"agy", "--conversation", Quote(sessionID)}
+	case "zcode":
+		if !IsZCodeSession(sessionID) {
+			return Launch{}, fmt.Errorf("invalid ZCode session ID")
+		}
+		parts = []string{"zcode", "--resume", Quote(sessionID)}
 	case "cursor":
 		plugin, err := l.cursorPlugin()
 		if err != nil {

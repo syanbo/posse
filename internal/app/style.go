@@ -646,6 +646,8 @@ func agentIcon(c *ui.Context, agent string, size float32) ui.Element {
 		icon, bg, fg = iconAntigravity, ui.Hex("#4285F4"), white
 	case "cursor":
 		icon, bg, fg = iconCursor, ui.Hex("#6E56CF"), white
+	case "zcode":
+		icon, bg, fg = iconZCode, ui.Hex("#151718"), white
 	}
 	e := tile(c, icon, size, bg, fg)
 	if agent == "codex" {

@@ -173,6 +173,15 @@ func (d *Daemon) updateHistory(ctx context.Context, progress func(history.Progre
 	defer cancel()
 	cmd := exec.CommandContext(ctx, d.launcher.Exe, "history", "index", "--progress")
 	cmd.Env = append(os.Environ(), "POSSE_HOME="+d.cfg.Home)
+	if path := d.zcodeDatabase(); path != "" {
+		cmd.Env = append(cmd.Env, "ZCODE_SESSION_DB_PATH="+path)
+	}
+	d.agents.mu.Lock()
+	path := d.agents.path
+	d.agents.mu.Unlock()
+	if path != "" {
+		cmd.Env = append(cmd.Env, "PATH="+path)
+	}
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -484,8 +493,14 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 	if s.Agent == "cursor" && history.IsCursorIDEChat(s.Path) {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "Cursor IDE chats can't be resumed in a terminal; open them in Cursor")
 	}
-	if _, err := os.Stat(s.Path); err != nil {
-		return nil, err
+	if s.Agent == "zcode" {
+		if d.installedAgents() != nil && !d.agentInstalled(s.Agent) {
+			return nil, rpc.Errorf(rpc.CodeBadRequest, "ZCode interactive CLI is not available on this Mac")
+		}
+	} else {
+		if _, err := os.Stat(s.Path); err != nil {
+			return nil, err
+		}
 	}
 	if t := d.sessionRunning(s); t != nil {
 		return historyResumeResult{terminalInfo: d.terminalInfo(t), AlreadyOpen: true}, nil
@@ -531,8 +546,11 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 	}
 	// 只记会话 ID 的情况：codex、cursor 改状态的第一个 hook 要到第一轮对话才来，先显示"启动中"就会一直停在那里
 	st := host.AgentState{Status: agent.StatusStarting, SessionID: s.ID, At: time.Now()}
-	if s.Agent == "codex" || s.Agent == "cursor" || s.Agent == "antigravity" {
+	if s.Agent == "codex" || s.Agent == "cursor" || s.Agent == "antigravity" || s.Agent == "zcode" {
 		st.Status = ""
+	}
+	if s.Agent == "zcode" {
+		st.Title = s.Title
 	}
 	t.SetAgent(st)
 	return historyResumeResult{terminalInfo: d.terminalInfo(t)}, nil

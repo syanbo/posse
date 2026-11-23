@@ -237,6 +237,7 @@ abstract final class Brand {
   static const claude = Color(0xFFD97757);
   static const antigravity = Color(0xFF4285F4);
   static const cursor = Color(0xFF6E56CF);
+  static const zcode = Color(0xFF151718);
   static const codexEdge = Color(0x1F000000); // Codex 的白底在浅色卡片上会融掉，描一圈细边
 }
 

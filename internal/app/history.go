@@ -675,6 +675,8 @@ func resumeCommand(s history.Session) string {
 		cmd = "agy --conversation " + id
 	case "cursor":
 		cmd = "cursor-agent --resume " + id
+	case "zcode":
+		cmd = "zcode --resume " + id
 	}
 	if s.Cwd != "" {
 		cmd = "cd " + agent.Quote(s.Cwd) + " && " + cmd
@@ -1209,7 +1211,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 			if ide {
 				label = L(c).CommonDelete()
 			}
-			if pressable(textButton(c, label)).Clicked() {
+			if s.Agent != "zcode" && pressable(textButton(c, label)).Clicked() {
 				a.askTrashSession(L(c), d)
 			}
 			ui.Row(c).Grow(1).Justify(ui.End).Children(func() {

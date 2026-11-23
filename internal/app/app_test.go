@@ -253,7 +253,7 @@ func TestIsDialError(t *testing.T) {
 // 常驻进程没报装了哪些时全列；报了就只列这些，一个都没装时为空。
 func TestAgentChoices(t *testing.T) {
 	a := &app{}
-	if got := a.agentChoices(); !slices.Equal(got, agent.Known) {
+	if got := a.agentChoices(); !slices.Equal(got, agent.FallbackAgents()) {
 		t.Fatalf("unknown: %v", got)
 	}
 	a.daemon.Agents = []string{"codex"}

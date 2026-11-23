@@ -124,7 +124,7 @@ class _MemberPageState extends State<MemberPage> {
       .toList();
 
   List<String> get agents => [
-    ...widget.api.model.agents,
+    ...widget.api.model.agents.where((name) => name != 'zcode'),
     if (agent.isNotEmpty && !widget.api.model.agents.contains(agent)) agent,
   ];
 

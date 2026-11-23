@@ -12,7 +12,11 @@ func TestLaunchInjectsNoSkills(t *testing.T) {
 	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	SetPermissionMode(l.Home, PermissionAsk)
 	for _, name := range Known {
-		r, err := l.Launch(name, Model{}, "do it")
+		prompt := "do it"
+		if !CanDispatch(name) {
+			prompt = ""
+		}
+		r, err := l.Launch(name, Model{}, prompt)
 		if err != nil {
 			t.Fatal(err)
 		}

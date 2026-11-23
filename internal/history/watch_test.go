@@ -16,11 +16,11 @@ func TestWatchDirs(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ".codex"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got := WatchDirs(home)
+	got := WatchDirs(home, "")
 	if !slices.Equal(got, []string{keep}) {
 		t.Fatalf("WatchDirs = %v", got)
 	}
-	if WatchDirs("") != nil {
+	if WatchDirs("", "") != nil {
 		t.Fatal("empty home")
 	}
 }

@@ -112,7 +112,8 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
       final res = await rpc.call('session.tabs.createTerminal', {
         'worktree': row.id,
         'agent': ?_agent,
-        if (_agent != null && prompt.isNotEmpty) 'agentPrompt': prompt,
+        if (_agent != null && _agent != 'zcode' && prompt.isNotEmpty)
+          'agentPrompt': prompt,
       });
       final tab = res['tab'];
       final terminal = tab is Map ? tab['terminal'] as String? : null;
@@ -139,7 +140,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
       terminalId: terminal,
       agent: _agent,
     );
-    if (_agent == null) return fallback;
+    if (_agent == null || _agent == 'zcode') return fallback;
     final deadline = DateTime.now().add(const Duration(seconds: 4));
     var latest = fallback;
     while (DateTime.now().isBefore(deadline)) {
@@ -228,7 +229,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
                 ],
               ),
             ),
-            if (_agent != null)
+            if (_agent != null && _agent != 'zcode')
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: TextField(
@@ -251,7 +252,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
                 child: Text(
                   _busy
                       ? l.sessionStarting
-                      : _agent == null
+                      : _agent == null || _agent == 'zcode'
                       ? l.sessionOpenTerminal
                       : l.sessionStartChat(chatWho(l, 'assistant', _agent)),
                 ),

@@ -236,7 +236,7 @@ func (h mobileHost) Agents() []string {
 	if got := h.d.enabledAgents(); got != nil {
 		return got
 	}
-	return agent.Known
+	return agent.FallbackAgents()
 }
 
 func (h mobileHost) Usage() any {

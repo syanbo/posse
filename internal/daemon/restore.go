@@ -204,7 +204,7 @@ const srcRestored = "— Posse restored the previous terminal —"
 // restoreCommand 决定恢复 t 时运行什么；t.SessionID 改成实际用的会话（新开的 agent 是新会话）。
 func (d *Daemon) restoreCommand(t *store.Terminal) (string, []string, *host.AgentState) {
 	name := t.Agent
-	if name != "" && d.checkEnabled(name) == nil {
+	if name != "" && d.checkEnabled(name) == nil && (name != "zcode" || d.installedAgents() == nil || d.agentInstalled(name)) {
 		var l agent.Launch
 		var err error
 		if t.SessionID != "" {
@@ -222,8 +222,11 @@ func (d *Daemon) restoreCommand(t *store.Terminal) (string, []string, *host.Agen
 			argv[len(argv)-1] = restoreBanner() + "; " + argv[len(argv)-1]
 			st := &host.AgentState{Status: agent.StatusStarting, SessionID: sid, At: time.Now()}
 			// 同 historyResume：codex、cursor 改状态的第一个 hook 要到第一轮对话才来
-			if name == "codex" || name == "cursor" || name == "antigravity" {
+			if name == "codex" || name == "cursor" || name == "antigravity" || name == "zcode" {
 				st.Status = ""
+			}
+			if name == "zcode" && sid != "" {
+				st.Title = t.Label
 			}
 			return name, argv, st
 		}

@@ -55,3 +55,15 @@ func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
+
+func cmdZCodePlugin(e *env, args []string) error {
+	if len(args) != 0 {
+		return fmt.Errorf("usage: posse agent zcode-plugin")
+	}
+	l := agent.Launcher{Exe: daemon.PosseLink(e.home), Home: e.home}
+	path, err := l.WriteZCodePlugin()
+	if err != nil {
+		return err
+	}
+	return e.emit(map[string]string{"path": path}, func() { fmt.Fprintln(e.out, path) })
+}

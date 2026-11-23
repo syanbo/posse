@@ -19,7 +19,10 @@ import (
 )
 
 // Roots 是各 agent 会话目录所在的用户主目录；测试时指向临时目录。
-type Roots struct{ Home string }
+type Roots struct {
+	Home     string
+	ZCodeCLI string
+}
 
 // source 是一份要索引的会话文件。transcript 是按行追加的 JSONL；
 // meta 是可选的元数据旁路文件，变化时整份重读。
@@ -150,6 +153,10 @@ func (x *Index) Update(ctx context.Context, roots Roots, progress func(Progress)
 	if !ideDone && redo["cursor"] {
 		unsettled["cursor"] = true
 	}
+	zcodeDone, zcodeErr := x.updateZCode(ctx, roots, known, seen, redo["zcode"])
+	if !zcodeDone && redo["zcode"] {
+		unsettled["zcode"] = true
+	}
 	for path, k := range known {
 		if !seen[path] {
 			if err := x.deleteSession(ctx, k.id); err != nil {
@@ -171,7 +178,7 @@ func (x *Index) Update(ctx context.Context, roots Roots, progress func(Progress)
 	}
 	_, err = x.db.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES('indexed_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
 		time.Now().UTC().Format(time.RFC3339Nano))
-	return err
+	return errors.Join(err, zcodeErr)
 }
 
 type knownFile struct {
@@ -194,6 +201,7 @@ var parserVersions = map[string]string{
 	"codex":       "3", // 思考过程写入详情，不进搜索
 	"grok":        "5", // 思考过程写入详情，不进搜索
 	"cursor":      "2", // 思考过程写入详情，不进搜索
+	"zcode":       "2",
 }
 
 // staleParsers 返回解析规则比索引里记录的新的 agent。

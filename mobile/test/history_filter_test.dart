@@ -164,14 +164,14 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    final grok = find.text('Grok');
-    expect(tester.getRect(grok).right, greaterThan(300));
+    final zcode = find.text('ZCode');
+    expect(tester.getRect(zcode).right, greaterThan(300));
     await tester.drag(find.text('Codex'), const Offset(-1000, 0));
     await tester.pumpAndSettle();
-    expect(tester.getRect(grok).right, lessThanOrEqualTo(300));
-    await tester.tap(grok);
+    expect(tester.getRect(zcode).right, lessThanOrEqualTo(300));
+    await tester.tap(zcode);
     await tester.pumpAndSettle();
-    expect(rpc.asked.last.$2['agent'], 'grok');
+    expect(rpc.asked.last.$2['agent'], 'zcode');
   });
 
   testWidgets('project page history tab only lists its own directory', (

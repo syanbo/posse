@@ -134,7 +134,15 @@ List<(String, List<HistorySession>)> groupHistory(
 }
 
 /// 历史页的 agent 筛选，和桌面的分段一一对应；空串是全部。
-const historyAgents = ['', 'claude', 'codex', 'cursor', 'grok', 'antigravity'];
+const historyAgents = [
+  '',
+  'claude',
+  'codex',
+  'cursor',
+  'grok',
+  'antigravity',
+  'zcode',
+];
 
 /// 照桌面历史页按文件夹分组：会话归到目录所在的项目（项目和它的工作区、worktree 取最长匹配），
 /// 不在任何项目里的用目录名；组按其中最近的会话排先后，组内最近的在前（都看整棵树最近的时间）。

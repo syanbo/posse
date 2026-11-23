@@ -123,6 +123,8 @@ String agentLabel(String? agent) {
       return 'Antigravity';
     case 'cursor':
       return 'Cursor';
+    case 'zcode':
+      return 'ZCode';
     default:
       if (agent == null || agent.isEmpty) return 'Agent';
       return agent;

@@ -552,6 +552,9 @@ func (h collabHost) Serve(ctx context.Context, s *collaboration.Session, method 
 		if !slices.Contains(agent.Known, p.Agent) {
 			return nil, collaboration.Errorf(collaboration.CodeBadRequest, "unknown agent %s", p.Agent)
 		}
+		if !agent.CanDispatch(p.Agent) {
+			return nil, collaboration.Errorf(collaboration.CodeBadRequest, "ZCode cannot be used for automated dispatch yet")
+		}
 		if len(p.Access) > 64*1024 || store.NormalizeAccess(p.Access, s.FP) != p.Access {
 			return nil, collaboration.Errorf(collaboration.CodeBadRequest, "invalid access")
 		}
