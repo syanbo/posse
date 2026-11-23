@@ -6,27 +6,32 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"posse/internal/history"
+	"posse/internal/host"
 	"posse/internal/term"
 )
 
-// draftRecording 是真实 Claude、Codex 跑一轮时每 200ms 读一次的屏幕（只留变了的帧），
+// draftRecording 是真实 agent 跑一轮时定时读到的屏幕（只留变了的帧），
 // 以及这一轮写进会话文件的助手正文和写入时刻。before 是录制前会话里最后一条回复。
 // 录法见 docs/plans/chat-draft.md；TUI 改版后重录，这个测试就是为了发现规则失效。
 type draftRecording struct {
 	Agent    string `json:"agent"`
 	Cols     int    `json:"cols"`
 	Before   string `json:"before"`
+	Prompt   string `json:"prompt"`
 	Messages []struct {
-		T    float64 `json:"t"`
-		Text string  `json:"text"`
+		T         float64 `json:"t"`
+		Text      string  `json:"text"`
+		DraftTail string  `json:"draftTail"`
 	} `json:"messages"`
 	Frames []struct {
-		T     float64  `json:"t"`
-		Lines []string `json:"lines"`
+		T       float64  `json:"t"`
+		Lines   []string `json:"lines"`
+		Working *bool    `json:"working"`
 	} `json:"frames"`
 }
 
@@ -52,6 +57,15 @@ func assistantText(text string) []history.ChatMessage {
 	return []history.ChatMessage{{Role: "assistant", Blocks: []history.ChatBlock{{Type: "text", Text: text}}}}
 }
 
+func (rec draftRecording) drafter() *drafter {
+	d := newDrafter(rec.Agent)
+	d.note(assistantText(rec.Before))
+	if rec.Prompt != "" {
+		d.note([]history.ChatMessage{{Role: "user", Blocks: []history.ChatBlock{{Type: "text", Text: rec.Prompt}}}})
+	}
+	return d
+}
+
 func TestDraftReplay(t *testing.T) {
 	files, _ := filepath.Glob("testdata/draft/*.json.gz")
 	if len(files) == 0 {
@@ -60,29 +74,38 @@ func TestDraftReplay(t *testing.T) {
 	for _, path := range files {
 		t.Run(strings.TrimSuffix(filepath.Base(path), ".json.gz"), func(t *testing.T) {
 			rec := loadDraftRecording(t, path)
-			d := newDrafter(rec.Agent)
-			d.note(assistantText(rec.Before))
+			d := rec.drafter()
+			norm := func(text string, screen bool) string {
+				if rec.Agent == "antigravity" {
+					return antigravityDraftNorm(text, screen)
+				}
+				return draftNorm(text)
+			}
 			var all []string
 			for _, m := range rec.Messages {
-				all = append(all, draftNorm(m.Text))
+				all = append(all, norm(m.Text, false))
 			}
 			next, last, shown := 0, "", 0
 			for _, fr := range rec.Frames {
 				// 会话文件在这一帧之前写进的正文
 				for next < len(rec.Messages) && rec.Messages[next].T <= fr.T {
-					// 写进文件前最后推的草稿就是这段正文。会话文件可能比屏幕上最后一两行先到
-					if want, got := all[next], draftNorm(last); last != "" &&
-						(!strings.HasPrefix(want, got) || len([]rune(got)) < len([]rune(want))*8/10) {
+					want, got := all[next], norm(last, true)
+					complete := len([]rune(got)) >= len([]rune(want))*8/10
+					// 一次更新可能同时补上多行并结束，按落盘前最后采到的正文末尾比较。
+					if tail := rec.Messages[next].DraftTail; tail != "" {
+						complete = strings.HasSuffix(got, norm(tail, true))
+					}
+					if last != "" && (!strings.HasPrefix(want, got) || !complete) {
 						t.Errorf("%.2fs: last draft before transcript differs\n draft: %s\n final: %s", fr.T, got, want)
 					}
 					d.note(assistantText(rec.Messages[next].Text))
 					next++
 				}
-				text, changed := d.next(fr.Lines, rec.Cols, true)
+				text, changed := d.next(fr.Lines, rec.Cols, fr.Working == nil || *fr.Working)
 				if !changed {
 					continue
 				}
-				n := draftNorm(text)
+				n := norm(text, true)
 				if text != "" {
 					shown++
 					// 草稿里只有正文：工具、提示、状态行都不进来
@@ -97,8 +120,9 @@ func TestDraftReplay(t *testing.T) {
 					}
 				}
 				// 同一块里只增不减
-				if last != "" && text != "" && !strings.HasPrefix(n, draftNorm(last)) && sameBlock(all, last, text) {
-					t.Errorf("%.2fs: draft shrank\n before: %s\n after:  %s", fr.T, draftNorm(last), n)
+				old := norm(last, true)
+				if last != "" && text != "" && !strings.HasPrefix(n, old) && sameBlock(all, old, n) {
+					t.Errorf("%.2fs: draft shrank\n before: %s\n after:  %s", fr.T, old, n)
 				}
 				last = text
 			}
@@ -123,9 +147,8 @@ func containsAny(all []string, n string) bool {
 
 // sameBlock 判断两份草稿出自同一条正文
 func sameBlock(all []string, a, b string) bool {
-	na, nb := draftNorm(a), draftNorm(b)
 	for _, k := range all {
-		if strings.Contains(k, na) && strings.Contains(k, nb) {
+		if strings.Contains(k, a) && strings.Contains(k, b) {
 			return true
 		}
 	}
@@ -207,21 +230,151 @@ func TestChatDraftFrames(t *testing.T) {
 	}
 }
 
+type draftScreenTerminal struct {
+	host.Terminal
+	screen func() []string
+}
+
+func (t draftScreenTerminal) Screen() []string { return t.screen() }
+
+type antigravityDraftHost struct {
+	*fakeHost
+	terminal host.Terminal
+	switched atomic.Bool
+}
+
+func (h *antigravityDraftHost) SessionTerminal(agent, id string) host.Terminal {
+	if agent == "antigravity" && id == "sid" {
+		return h.terminal
+	}
+	return nil
+}
+
+func (h *antigravityDraftHost) TerminalSessionID(string) string {
+	if h.switched.Load() {
+		return "other-session"
+	}
+	return "sid"
+}
+
+func TestAntigravityChatDraftFrames(t *testing.T) {
+	tm, err := term.Start(term.Options{ID: "t_1", Dir: t.TempDir(), Command: []string{"/bin/sh"}, Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	tm.SetAgent(term.AgentState{Status: "working", SessionID: "sid"})
+	h := &antigravityDraftHost{fakeHost: &fakeHost{terms: map[string]*term.Terminal{"t_1": tm}}}
+	var stage atomic.Int32
+	h.terminal = draftScreenTerminal{Terminal: host.Wrap(tm), screen: func() []string {
+		body := "  hello draft"
+		if stage.Load() == 2 {
+			// 模拟读屏期间真正的会话换了、标签上的 UUID 还没更新。
+			h.switched.Store(true)
+			body = "  foreign reply"
+		}
+		return []string{"> Test prompt", "  second line", "", body, "⣾  Generating...", "────", ">", "────", "esc to cancel"}
+	}}
+	transcript := filepath.Join(t.TempDir(), "transcript.jsonl")
+	user := `{"step_index":0,"type":"USER_INPUT","content":"Test prompt\nsecond line"}` + "\n"
+	appendLine := func(content string) {
+		t.Helper()
+		f, err := os.OpenFile(transcript, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		if _, err := f.WriteString(content); err != nil {
+			t.Fatal(err)
+		}
+	}
+	appendLine(user)
+	srv, err := New(t.TempDir(), h, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := dialPhone(t, srv, info)
+	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.draft.v1"},
+	})))
+	sub := p.call("nativeChat.subscribe", map[string]any{
+		"agent": "antigravity", "sessionId": "sid", "transcriptPath": transcript, "limit": 5,
+	})
+	if result(t, p.next(sub))["type"] != "snapshot" {
+		t.Fatal("missing snapshot")
+	}
+	waitDraft := func(want string) {
+		t.Helper()
+		for {
+			m, ok := p.nextWithin(sub, 3*time.Second)
+			if !ok {
+				t.Fatalf("no draft %q", want)
+			}
+			if f := result(t, m); f["type"] == "draft" {
+				if f["text"] != want {
+					t.Fatalf("draft = %v, want %q", f, want)
+				}
+				return
+			}
+		}
+	}
+	waitDraft("hello draft")
+	appendLine(`{"step_index":1,"type":"PLANNER_RESPONSE","content":"hello **draft**"}` + "\n")
+	waitDraft("")
+	appendLine(`{"step_index":2,"type":"USER_INPUT","content":"Test prompt\nsecond line"}` + "\n")
+	waitDraft("hello draft")
+	stage.Store(2)
+	waitDraft("")
+	if m, ok := p.nextWithin(sub, 600*time.Millisecond); ok {
+		t.Fatalf("unexpected frame after session switched: %v", result(t, m))
+	}
+}
+
+func TestAntigravityDraftRequiresReplyBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		screen []string
+		want   string
+	}{
+		{"multiline user input", []string{"> First line", "  wraps here", "", "  last paragraph"}, ""},
+		{"indented lines on subscribe", []string{"  wraps here", "", "  last paragraph"}, ""},
+		{"expanded tool still running", []string{"● Bash(printf example) (ctrl+o to collapse)", "  ⎿  tool output"}, ""},
+		{"expanded tool scrolled", []string{"     tool output", "     more content", "     last content (ctrl+o to collapse)"}, ""},
+		{"tool marker in user text", []string{"> First line", "  (ctrl+o to collapse)", "", "  last paragraph"}, ""},
+		{"thinking only", []string{"○ Thought for 19.8s (internal summary…)", "  summary continuation"}, ""},
+		{"reply after summarized thought", []string{"○ Thought for 19.8s (internal summary…)", "  summary continuation", "", "  The channel begins."}, "The channel begins."},
+		{"reply after collapsed thought", []string{"● Ran (printf example) (ctrl+o to expand)", "", "▸ Thought for 7s, 543 tokens", "", "  The channel begins."}, "The channel begins."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := draftRecording{Agent: "antigravity", Prompt: "First line wraps here\n\nlast paragraph"}.drafter()
+			screen := append(tc.screen, "⣷  Analyzing the prompt...", "└ Tip: /help", "────", "> Unsent input", "────", "esc to cancel")
+			if text, changed := d.next(screen, 80, true); text != tc.want || changed != (tc.want != "") {
+				t.Fatalf("draft = %q, changed = %v, want %q", text, changed, tc.want)
+			}
+		})
+	}
+}
+
 // 手机照帧拼出来的草稿要和电脑算出的一样；接着长的那些帧只带新加的部分。
 func TestDraftFrameAppend(t *testing.T) {
 	files, _ := filepath.Glob("testdata/draft/*.json.gz")
 	for _, path := range files {
 		t.Run(strings.TrimSuffix(filepath.Base(path), ".json.gz"), func(t *testing.T) {
 			rec := loadDraftRecording(t, path)
-			d := newDrafter(rec.Agent)
-			d.note(assistantText(rec.Before))
+			d := rec.drafter()
 			next, phone, appends, full, sent := 0, "", 0, 0, 0
 			for _, fr := range rec.Frames {
 				for next < len(rec.Messages) && rec.Messages[next].T <= fr.T {
 					d.note(assistantText(rec.Messages[next].Text))
 					next++
 				}
-				text, changed := d.next(fr.Lines, rec.Cols, true)
+				text, changed := d.next(fr.Lines, rec.Cols, fr.Working == nil || *fr.Working)
 				if !changed {
 					continue
 				}

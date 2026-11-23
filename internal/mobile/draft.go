@@ -42,6 +42,8 @@ type drafter struct {
 	head string
 	// known 是会话文件里最近一条助手正文，规范成只剩字母和数字
 	known string
+	// prompt 是 agy 最近的用户消息，用来跳过屏幕上同样有缩进的提示词续行。
+	prompt string
 	// sent 是最近推出去的草稿，last 是再上一次的（frame 据此只推新加的部分）
 	sent string
 	last string
@@ -49,7 +51,7 @@ type drafter struct {
 }
 
 func newDrafter(agent string) *drafter {
-	if agent != "claude" && agent != "codex" {
+	if agent != "claude" && agent != "codex" && agent != "antigravity" {
 		return nil
 	}
 	return &drafter{agent: agent}
@@ -60,35 +62,58 @@ func (d *drafter) note(msgs []history.ChatMessage) {
 	if d == nil {
 		return
 	}
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role != "assistant" {
-			continue
-		}
-		var b strings.Builder
-		for _, blk := range msgs[i].Blocks {
-			if blk.Type == "text" {
-				b.WriteString(blk.Text)
+	if d.agent == "antigravity" {
+		for _, msg := range msgs {
+			switch msg.Role {
+			case "user":
+				d.prompt, d.known = antigravityPromptNorm(draftMessageText(msg)), ""
+				d.rows, d.head = nil, ""
+			case "assistant":
+				if t := antigravityDraftNorm(draftMessageText(msg), false); t != "" {
+					d.known = t
+				}
 			}
 		}
-		if t := draftNorm(b.String()); t != "" {
-			d.known = t
-			return
+		return
+	}
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == "assistant" {
+			if t := draftNorm(draftMessageText(msgs[i])); t != "" {
+				d.known = t
+				return
+			}
 		}
 	}
 }
 
-// next 用这一帧屏幕算出草稿。working 是 agent 在干活（hooks 报的状态，或屏幕上有状态行）：
+func draftMessageText(msg history.ChatMessage) string {
+	var b strings.Builder
+	for _, blk := range msg.Blocks {
+		if blk.Type == "text" {
+			b.WriteString(blk.Text)
+		}
+	}
+	return b.String()
+}
+
+// next 用这一帧屏幕算出草稿。working 表示 agent 正在干活：
 // Claude、Codex 流式写正文时都不画状态行，不能只看它。changed 为 false 表示和上次推的一样。
 func (d *drafter) next(screen []string, cols int, working bool) (text string, changed bool) {
 	if d == nil {
 		return "", false
 	}
 	if !working {
-		d.rows = nil
+		d.rows, d.head = nil, ""
 		return d.emit("")
 	}
 	prev, head := d.rows, d.head
-	body, start, ok := replyBlock(d.agent, screen)
+	var body []string
+	var start, ok bool
+	if d.agent == "antigravity" {
+		body, start, ok = antigravityReplyBlock(screen, d.prompt, len(prev) != 0)
+	} else {
+		body, start, ok = replyBlock(d.agent, screen)
+	}
 	// same 是这一帧还是上一帧那块：块头那行还在写时会变长
 	same := false
 	switch {
@@ -105,7 +130,11 @@ func (d *drafter) next(screen []string, cols int, working bool) (text string, ch
 	}
 	text = draftText(d.rows, cols)
 	n := draftNorm(text)
-	if n == "" || strings.Contains(d.known, n) {
+	logged := n
+	if d.agent == "antigravity" && d.known != "" {
+		logged = antigravityDraftNorm(text, true)
+	}
+	if n == "" || logged != "" && strings.Contains(d.known, logged) {
 		text = ""
 	}
 	// 同一块缩回去了，当作重排的过渡帧

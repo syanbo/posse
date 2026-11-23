@@ -104,16 +104,19 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 	// 跳过的那次约好稍后再看，停下来的最后一帧不会漏
 	status, statusAt := "", time.Time{}
 	draft := newDrafter(a.Agent)
+	sendDraft := func(screen []string, cols int, working bool) bool {
+		if text, changed := draft.next(screen, cols, working); changed {
+			return c.stream(reqID, draft.frame(text)) == nil
+		}
+		return true
+	}
 	var recheck <-chan time.Time
 	sendStatus := func() bool {
 		wantStatus := c.hasCapability("posse.status.v1")
 		wantDraft := draft != nil && c.hasCapability("posse.draft.v1")
 		if term == nil {
 			// 终端不在了，草稿撤掉
-			if text, changed := draft.next(nil, 0, false); wantDraft && changed {
-				return c.stream(reqID, draft.frame(text)) == nil
-			}
-			return true
+			return !wantDraft || sendDraft(nil, 0, false)
 		}
 		if !wantStatus && !wantDraft {
 			return true
@@ -126,7 +129,22 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 		}
 		recheck = nil
 		statusAt = time.Now()
-		screen := term.Screen()
+		agy := wantDraft && a.Agent == "antigravity"
+		var screen []string
+		working := false
+		if !agy {
+			screen = term.Screen()
+		} else if term.Agent().Status == "working" {
+			tid := term.Info().ID
+			// 屏幕与已缓存的会话 UUID 不会同时更新，读取前后都核对前台会话锁。
+			if c.srv.host.TerminalSessionID(tid) == a.SessionID {
+				screen = term.Screen()
+				working = term.Agent().Status == "working" && c.srv.host.TerminalSessionID(tid) == a.SessionID
+				if !working {
+					screen = nil
+				}
+			}
+		}
 		next := agentStatus(screen)
 		if wantStatus && next != status {
 			status = next
@@ -136,10 +154,10 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 		}
 		if wantDraft {
 			cols, _ := term.Size()
-			working := term.Agent().Status == "working" || next != ""
-			if text, changed := draft.next(screen, cols, working); changed {
-				return c.stream(reqID, draft.frame(text)) == nil
+			if !agy {
+				working = term.Agent().Status == "working" || next != ""
 			}
+			return sendDraft(screen, cols, working)
 		}
 		return true
 	}
