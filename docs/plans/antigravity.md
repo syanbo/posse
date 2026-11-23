@@ -4,7 +4,7 @@
 
 ## 启动与状态
 
-- `agy -i <prompt>` 是交互初始提示，`-p` 是非交互单轮；位置参数属于子命令。恢复用 `--conversation <UUID>`，`--model`、`--effort` 原样透传。默认跳过审批用 `--dangerously-skip-permissions`；用户显式给权限参数时不补。
+- `agy -i <prompt>` 是交互初始提示，`-p` 是非交互单轮；位置参数属于子命令。恢复用 `--conversation <UUID>`，`--model`、`--effort` 原样透传。默认跳过审批用 `--dangerously-skip-permissions`；逐项确认经 `--settings` 设置 `toolPermission: strict`，覆盖 Auto 的自动批准。手动传入的权限选项、设置文件和内联权限设置由 agy 处理。普通内联设置与 Posse 的权限档位合并，重复 `--settings` 时以最后一个为准。 [官方权限说明](https://antigravity.google/docs/agent-settings#antigravity-cli)
 - PTY 探针收到 `OSC 7501;?` 后应答，实测报告 `app=antigravity`、working、blocked（包括 auth）、idle、done。状态经现有 OSC 通道处理，子 agent 是否仍工作由 agy 的聚合报告决定。
 - `--settings` 拒绝 hooks、plugins、pluginPaths、pluginsPaths、hooksPath、defaultHooksPath、customizations，报 unknown setting。没有已核实的会话级挂载途径，因此不注入 hooks，不改用户 hooks.json；任务提醒空闲时输入，无 hooks 答题/审批卡和写文件痕迹。
 - `--conversation` 指向不存在的 UUID 会另建不同 ID 的会话，不能用于预分配 ID。agy 运行期间一直持有 `presence/<UUID>.lock`（也开着 `conversations/<UUID>.db`），常驻进程每 2 秒的 agent 检查读 agy 进程打开的文件（`procmem.OpenFiles`，`proc_pidfdinfo`）认出当前会话并绑定，`/new`、切换会话后跟着换；同时持有多个锁时不绑。恢复参数和 agent 执行 `posse session title` 带来的 `ANTIGRAVITY_CONVERSATION_ID` 也能绑定。不按最近修改时间或 cwd 猜归属。

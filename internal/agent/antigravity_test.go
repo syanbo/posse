@@ -52,6 +52,10 @@ func TestAntigravityManualArgs(t *testing.T) {
 	}{
 		{nil, true}, {[]string{"-i", "models"}, true}, {[]string{"--model", "models", "-i", "--help"}, true},
 		{[]string{"--settings", `{"model":"x"}`}, true},
+		{[]string{"-i", "--sandbox"}, true},
+		{[]string{"--settings", `{"toolPermission":"strict"}`}, false},
+		{[]string{"-settings={\"agentMode\":\"auto\"}"}, false},
+		{[]string{"--settings", "preferences.json"}, false},
 		{[]string{"--mode=plan"}, false}, {[]string{"--sandbox"}, false}, {[]string{"--dangerously-skip-permissions"}, false},
 		{[]string{"--print=x"}, false}, {[]string{"-p", "prompt"}, false}, {[]string{"--prompt", "prompt"}, false},
 		{[]string{"models"}, false}, {[]string{"--model=x", "mcp", "list"}, false}, {[]string{"--", "-i"}, false},
@@ -66,6 +70,50 @@ func TestAntigravityManualArgs(t *testing.T) {
 		}
 		if !slices.Equal(got, want) {
 			t.Errorf("%q -> %q; want %q", tc.args, got, want)
+		}
+	}
+}
+
+func TestAntigravityAskPermissions(t *testing.T) {
+	l := Launcher{Home: t.TempDir()}
+	if err := SetPermissionMode(l.Home, PermissionAsk); err != nil {
+		t.Fatal(err)
+	}
+	launch, err := l.Launch("antigravity", Model{Worker: true}, "initial prompt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resume, err := l.Resume("antigravity", "previous", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range []Launch{launch, resume} {
+		cmd := command.Argv[len(command.Argv)-1]
+		if !strings.Contains(cmd, " --settings "+Quote(antigravityStrictSettings)) || strings.Contains(cmd, "--dangerously-skip-permissions") {
+			t.Errorf("ask mode: %s", cmd)
+		}
+	}
+	for _, c := range []struct{ args, want []string }{
+		{nil, []string{"--settings", antigravityStrictSettings}},
+		{[]string{"-i", "--mode"}, []string{"--settings", antigravityStrictSettings, "-i", "--mode"}},
+		{[]string{`-settings={"notifications":true}`}, []string{`-settings={"notifications":true,"toolPermission":"strict"}`}},
+		{[]string{"--settings", `{"toolPermission":"always-proceed"}`, "--settings", `{}`},
+			[]string{"--settings", `{"toolPermission":"always-proceed"}`, "--settings", antigravityStrictSettings}},
+	} {
+		got, err := l.ManualArgs("agy", c.args)
+		if err != nil || !slices.Equal(got, c.want) {
+			t.Errorf("%q -> %q, %v; want %q", c.args, got, err, c.want)
+		}
+	}
+	for _, args := range [][]string{
+		{"--mode=auto"}, {"-sandbox"}, {"--dangerously-skip-permissions"},
+		{"--settings", `{"toolPermission":"always-proceed"}`},
+		{"--settings", `{"enableTerminalSandbox":true}`}, {"--settings", "preferences.json"},
+		{"-p", "/usage"}, {"--help"}, {"acp"},
+	} {
+		got, err := l.ManualArgs("agy", args)
+		if err != nil || !slices.Equal(got, args) {
+			t.Errorf("%q -> %q, %v; want passthrough", args, got, err)
 		}
 	}
 }

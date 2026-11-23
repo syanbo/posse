@@ -27,11 +27,10 @@ var skipArgs = map[string][]string{
 // permissionFlags 是用户手动启动时自己指定权限的参数，带了就不再补：
 // Codex 的跳过参数和 -a、-s 同时给会直接报错退出。
 var permissionFlags = map[string][]string{
-	"antigravity": {"--dangerously-skip-permissions", "--mode", "--sandbox"},
-	"claude":      {"--dangerously-skip-permissions", "--permission-mode"},
-	"codex":       {"--dangerously-bypass-approvals-and-sandbox", "--approve-for-me", "--yolo", "--full-auto", "-a", "--ask-for-approval", "-s", "--sandbox"},
-	"cursor":      {"--yolo", "-f", "--force"},
-	"grok":        {"--permission-mode"},
+	"claude": {"--dangerously-skip-permissions", "--permission-mode"},
+	"codex":  {"--dangerously-bypass-approvals-and-sandbox", "--approve-for-me", "--yolo", "--full-auto", "-a", "--ask-for-approval", "-s", "--sandbox"},
+	"cursor": {"--yolo", "-f", "--force"},
+	"grok":   {"--permission-mode"},
 }
 
 func settingsPath(home string) string { return filepath.Join(home, "agents.json") }
@@ -115,12 +114,15 @@ func WithoutDisabled(home string, names []string) []string {
 	return slices.DeleteFunc(slices.Clone(names), func(n string) bool { return slices.Contains(off, n) })
 }
 
-// permissionArgs 是启动 name 时要加的权限参数。
+// permissionArgs 是启动 name 时拼进 shell 命令的权限参数。
 func (l Launcher) permissionArgs(name string) []string {
-	if PermissionMode(l.Home) != PermissionSkip {
-		return nil
+	if PermissionMode(l.Home) == PermissionSkip {
+		return skipArgs[name]
 	}
-	return skipArgs[name]
+	if name == "antigravity" {
+		return []string{"--settings", Quote(antigravityStrictSettings)}
+	}
+	return nil
 }
 
 // manualPermissionArgs 同 permissionArgs，但用户自己带了权限参数时不加。

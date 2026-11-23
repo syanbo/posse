@@ -110,10 +110,7 @@ var grokResumeFlags = []string{"-c", "--continue", "-r", "--resume", "-s", "--se
 // 不给 Claude 指定 --session-id：用户可能带了 --resume、--continue，会话 ID 由 hooks 报上来。
 func (l Launcher) ManualArgs(cmd string, args []string) ([]string, error) {
 	if cmd == "agy" {
-		if !antigravityInteractive(args) {
-			return args, nil
-		}
-		return append(l.manualPermissionArgs("antigravity", args), args...), nil
+		return l.manualAntigravityArgs(args), nil
 	}
 	skip := passthrough[cmd]
 	for _, a := range args {
