@@ -7766,6 +7766,156 @@
   "@tabSplitTooSmall": {
     "description": "Warning toast title: the focused pane is too small to be split."
   },
+  "tailscaleAdvanced": "Advanced",
+  "@tailscaleAdvanced": {
+    "description": "Mobile page, Built-in Tailscale card: collapsible section heading for optional settings."
+  },
+  "tailscaleAuthKey": "Auth Key (optional)",
+  "@tailscaleAuthKey": {
+    "description": "Mobile page, Built-in Tailscale card: label for the one-time pre-authentication key field."
+  },
+  "tailscaleAuthKeyNote": "Used once to sign in and never written to disk. Saving with an auth key turns on Built-in Tailscale if it is off.",
+  "@tailscaleAuthKeyNote": {
+    "description": "Mobile page, Built-in Tailscale card: helper note under the auth key field."
+  },
+  "tailscaleAuthKeyPlaceholder": "tskey-auth-…",
+  "@tailscaleAuthKeyPlaceholder": {
+    "description": "Mobile page, Built-in Tailscale card: placeholder for the one-time auth key field."
+  },
+  "tailscaleControlURL": "Control Server URL (Headscale)",
+  "@tailscaleControlURL": {
+    "description": "Mobile page, Built-in Tailscale card: label for the custom coordination server URL field."
+  },
+  "tailscaleControlURLPlaceholder": "Leave blank for official Tailscale",
+  "@tailscaleControlURLPlaceholder": {
+    "description": "Mobile page, Built-in Tailscale card: placeholder for the custom coordination server URL field."
+  },
+  "tailscaleCopyLoginURL": "Copy Login Link",
+  "@tailscaleCopyLoginURL": {
+    "description": "Mobile page, Built-in Tailscale card: button to copy the browser sign-in URL."
+  },
+  "tailscaleDisableBind": "Follow system proxy / VPN routing",
+  "@tailscaleDisableBind": {
+    "description": "Mobile page, Built-in Tailscale card: switch label to disable binding sockets directly to physical interfaces."
+  },
+  "tailscaleDisableBindNote": "Turn on if this network needs a proxy to reach Tailscale or DERP servers.",
+  "@tailscaleDisableBindNote": {
+    "description": "Mobile page, Built-in Tailscale card: helper note under the proxy routing switch."
+  },
+  "tailscaleError": "Error",
+  "@tailscaleError": {
+    "description": "Mobile page, Built-in Tailscale card: state after the title when an error occurred."
+  },
+  "tailscaleHostname": "Node Name",
+  "@tailscaleHostname": {
+    "description": "Mobile page, Built-in Tailscale card: label for the custom Tailscale hostname field."
+  },
+  "tailscaleHostnamePlaceholder": "Default: posse-<hostname>",
+  "@tailscaleHostnamePlaceholder": {
+    "description": "Mobile page, Built-in Tailscale card: placeholder for the custom Tailscale hostname field."
+  },
+  "tailscaleInvalidAuthURL": "The sign-in link is not a valid http/https URL.",
+  "@tailscaleInvalidAuthURL": {
+    "description": "Mobile page, Built-in Tailscale card: error when the auth URL returned by Tailscale cannot be opened."
+  },
+  "tailscaleNeedsApproval": "Awaiting Approval",
+  "@tailscaleNeedsApproval": {
+    "description": "Mobile page, Built-in Tailscale card: state after the title when tailnet admin approval is required."
+  },
+  "tailscaleNeedsApprovalNote": "Approve this device in your Tailscale admin console to finish connecting.",
+  "@tailscaleNeedsApprovalNote": {
+    "description": "Mobile page, Built-in Tailscale card: note for the Awaiting Approval state."
+  },
+  "tailscaleNeedsLogin": "Sign In Required",
+  "@tailscaleNeedsLogin": {
+    "description": "Mobile page, Built-in Tailscale card: state after the title when browser login is needed."
+  },
+  "tailscaleNeedsLoginNote": "Sign in with your Tailscale account in the browser to join your tailnet.",
+  "@tailscaleNeedsLoginNote": {
+    "description": "Mobile page, Built-in Tailscale card: note for the Sign In Required state."
+  },
+  "tailscaleNote": "Run an isolated Tailscale node inside Posse so your phone can connect directly from anywhere without installing the Tailscale app.",
+  "@tailscaleNote": {
+    "description": "Mobile page, Built-in Tailscale card: explanation shown when built-in Tailscale is turned off."
+  },
+  "tailscaleOldDaemon": "Update the daemon in Settings before using Built-in Tailscale.",
+  "@tailscaleOldDaemon": {
+    "description": "Mobile page, Built-in Tailscale card: error when the daemon predates built-in Tailscale support."
+  },
+  "tailscaleOpenLogin": "Open Login Page",
+  "@tailscaleOpenLogin": {
+    "description": "Mobile page, Built-in Tailscale card: primary button to open the Tailscale sign-in URL in the browser."
+  },
+  "tailscaleOpenLoginTip": "Open the Tailscale sign-in link in your default browser",
+  "@tailscaleOpenLoginTip": {
+    "description": "Mobile page, Built-in Tailscale card: tooltip for the Open Login Page button."
+  },
+  "tailscaleRefreshLogin": "Refresh Link",
+  "@tailscaleRefreshLogin": {
+    "description": "Mobile page, Built-in Tailscale card: button to request a fresh interactive login URL."
+  },
+  "tailscaleReset": "Reset Identity",
+  "@tailscaleReset": {
+    "description": "Mobile page, Built-in Tailscale card: button and confirm verb to sign out and clear local Tailscale state."
+  },
+  "tailscaleResetBody": "This signs out the built-in Tailscale node, clears its local keys and state, and turns it off. You will need to sign in again to reconnect.",
+  "@tailscaleResetBody": {
+    "description": "Mobile page, Built-in Tailscale card: body of the Reset Identity confirmation dialog."
+  },
+  "tailscaleResetConfirm": "Reset built-in Tailscale identity?",
+  "@tailscaleResetConfirm": {
+    "description": "Mobile page, Built-in Tailscale card: title of the Reset Identity confirmation dialog."
+  },
+  "tailscaleResetLocalOnly": "Local state was cleared, but remote sign-out failed: {reason}",
+  "@tailscaleResetLocalOnly": {
+    "description": "Mobile page, Built-in Tailscale card: warning after reset when local files were removed but control server logout failed.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "tailscaleResetTip": "Sign out and clear local built-in Tailscale keys",
+  "@tailscaleResetTip": {
+    "description": "Mobile page, Built-in Tailscale card: tooltip for the Reset Identity button."
+  },
+  "tailscaleRunning": "Connected",
+  "@tailscaleRunning": {
+    "description": "Mobile page, Built-in Tailscale card: state after the title when the node is connected."
+  },
+  "tailscaleRunningNote": "Included in the pairing QR code automatically when Address is set to Auto.",
+  "@tailscaleRunningNote": {
+    "description": "Mobile page, Built-in Tailscale card: note shown when the built-in Tailscale node is connected."
+  },
+  "tailscaleStarting": "Starting",
+  "@tailscaleStarting": {
+    "description": "Mobile page, Built-in Tailscale card: state after the title while the node is starting."
+  },
+  "tailscaleStartingNote": "Starting the built-in Tailscale node…",
+  "@tailscaleStartingNote": {
+    "description": "Mobile page, Built-in Tailscale card: note shown while the built-in Tailscale node is starting."
+  },
+  "tailscaleStopped": "Stopped",
+  "@tailscaleStopped": {
+    "description": "Mobile page, Built-in Tailscale card: state after the title when the node is stopped."
+  },
+  "tailscaleStoppedNote": "The built-in Tailscale node is stopped.",
+  "@tailscaleStoppedNote": {
+    "description": "Mobile page, Built-in Tailscale card: note shown when the node is stopped."
+  },
+  "tailscaleTitle": "Built-in Tailscale",
+  "@tailscaleTitle": {
+    "description": "Mobile page: title of the Built-in Tailscale card."
+  },
+  "tailscaleTitleState": "Built-in Tailscale · {state}",
+  "@tailscaleTitleState": {
+    "description": "Mobile page: title of the Built-in Tailscale card with its current state.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
   "tasksAssignTo": "Assign to",
   "@tasksAssignTo": {
     "description": "Dispatch Task dialog: label before the agent checkboxes."

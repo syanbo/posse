@@ -75,13 +75,31 @@ func TestDaemonTailscaleRPCsAndLockGate(t *testing.T) {
 		t.Fatalf("status after disable = %+v, want disabled", st)
 	}
 
-	// 重置节点应清理本地状态目录并将配置置为 disabled
+	// 关闭状态下保存高级设置（不开启节点），返回值必须立刻回显磁盘新配置而非旧 runtime opts
+	rawSt, err = d.tailscaleSet(context.Background(), json.RawMessage(`{
+		"hostname": "posse-disabled-edit",
+		"controlUrl": "https://hs.example.test",
+		"disableBindInterface": true
+	}`))
+	if err != nil {
+		t.Fatalf("tailscaleSet disabled edit: %v", err)
+	}
+	st = rawSt.(tslink.Status)
+	if st.Enabled || st.State != tslink.StateDisabled || st.Hostname != "posse-disabled-edit" ||
+		st.ControlURL != "https://hs.example.test" || !st.DisableBindInterface {
+		t.Fatalf("disabled set did not return persisted config: %+v", st)
+	}
+
+	// 重置节点应清理本地状态目录并将配置置为 disabled，同时回显保留的磁盘配置
 	rawReset, err := d.tailscaleReset(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("tailscaleReset: %v", err)
 	}
 	resetRes := rawReset.(tailscaleResetResult)
-	if !resetRes.LocalCleared || resetRes.Status.Enabled {
+	if !resetRes.LocalCleared || resetRes.Status.Enabled ||
+		resetRes.Status.Hostname != "posse-disabled-edit" ||
+		resetRes.Status.ControlURL != "https://hs.example.test" ||
+		!resetRes.Status.DisableBindInterface {
 		t.Fatalf("unexpected reset result: %+v", resetRes)
 	}
 

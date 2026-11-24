@@ -44,6 +44,7 @@ type uiState struct {
 	LogRefsWidth         float32   `json:"logRefsWidth,omitempty"`         // 日志左边分支树的宽度，0 表示默认
 	LogDetailWidth       float32   `json:"logDetailWidth,omitempty"`       // 日志、逐行追溯右边提交详情的宽度，0 表示默认
 	MobileAddress        string    `json:"mobileAddress,omitempty"`        // 配对手机时写进配对码的地址，空是自动（Tailscale 或局域网）
+	MobileAddressBuiltIn bool      `json:"mobileAddressBuiltIn,omitempty"` // MobileAddress 来自内置 Tailscale，换 IP 或下线时自动跟随/回退
 	MobileAddresses      []string  `json:"mobileAddresses,omitempty"`      // 用过的自定义地址，配对对话框里可选
 	FontSize             float32   `json:"fontSize,omitempty"`             // 终端字号，0 表示默认
 	TermFont             string    `json:"termFont,omitempty"`             // 终端字体，空表示默认

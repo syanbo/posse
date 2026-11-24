@@ -30,15 +30,18 @@ type mobileView struct {
 	qr       *ui.Bitmap
 	devices  []mobileDevice
 	// othersOpen 展开没报过身份的配对，不记进 ui.json
-	othersOpen bool
-	loading    bool
-	seq        int       // 每次取码加一，只认最后一次的结果
-	loadedAt   time.Time // 上次取码完成的时间，到点了再取一次
-	err        string
-	errAddr    string   // err 是用哪个地址取码时出的错
-	custom     string   // 正在输入的自定义地址
-	locals     []string // 本机检测到的 Tailscale、局域网地址，取码时顺便刷新
-	relay      relayView
+	othersOpen         bool
+	loading            bool
+	pairRefreshPending bool      // 内置 Tailscale 状态变化时若正在取码，等本轮结束后补刷一次
+	pairRefreshNotify  bool      // 补刷是否需要把错误显露给用户（如选中的内置地址失效回退自动时）
+	seq                int       // 每次取码加一，只认最后一次的结果
+	loadedAt           time.Time // 上次取码完成的时间，到点了再取一次
+	err                string
+	errAddr            string   // err 是用哪个地址取码时出的错
+	custom             string   // 正在输入的自定义地址
+	locals             []string // 本机检测到的 Tailscale、局域网地址，取码时顺便刷新
+	relay              relayView
+	tailscale          tailscaleView
 }
 
 // mobilePoll 是手机页开着时重取配对码和设备列表的间隔：手机扫码连上后旧码就作废了，
@@ -76,19 +79,21 @@ func (a *app) setMobileVisible(on bool) {
 			m.qr = ui.NewBitmap(img)
 		}
 	}
-	a.startMobile(false, a.state.MobileAddress, false)
+	a.startMobile(false, a.state.MobileAddress, a.state.MobileAddressBuiltIn, false)
+	a.loadTailscale()
 	a.loadRelay()
 }
 
-// startMobile 在界面线程里发起一次取码。poll 是手机页的定时刷新：出错不显示，也不改选中的地址。
-func (a *app) startMobile(rotate bool, addr string, poll bool) {
+// startMobile 在界面线程里发起一次取码。builtIn 表示 addr 来自内置 Tailscale 节点，
+// poll 是手机页的定时刷新：出错不显示，也不改选中的地址。
+func (a *app) startMobile(rotate bool, addr string, builtIn bool, poll bool) {
 	m := &a.mobile
 	m.seq++
 	m.loading = true
 	if !poll {
 		m.err = ""
 	}
-	go a.loadMobile(m.seq, rotate, addr, poll)
+	go a.loadMobile(m.seq, rotate, addr, builtIn, poll)
 }
 
 // pollMobile 在手机页开着、没有正在取码时，每隔 mobilePoll 取一次。
@@ -101,12 +106,12 @@ func (a *app) pollMobile(c *ui.Context) {
 		c.After(wait)
 		return
 	}
-	a.startMobile(false, a.state.MobileAddress, true)
+	a.startMobile(false, a.state.MobileAddress, a.state.MobileAddressBuiltIn, true)
 }
 
 // loadMobile 按 addr 取配对码并画成二维码；rotate 时换一个新码，旧码作废。
 // 成功后 addr 才成为选中的地址，自定义的记进 ui.json：填错的地址不留下。
-func (a *app) loadMobile(seq int, rotate bool, addr string, poll bool) {
+func (a *app) loadMobile(seq int, rotate bool, addr string, builtIn bool, poll bool) {
 	var info struct {
 		URL      string `json:"url"`
 		Code     string `json:"code"`
@@ -132,10 +137,20 @@ func (a *app) loadMobile(seq int, rotate bool, addr string, poll bool) {
 		}
 		m.locals = locals
 		m.loading, m.loadedAt = false, time.Now()
+		// 若本次请求使用的是内置 Tailscale 地址，且回包时内置状态已确认变更、下线或降级为旧版常驻进程，
+		// 不得把失效旧 IP 写回配置或展示过期二维码，清空旧码后立即按最新地址补刷。
+		if builtIn && addr != "" && (m.tailscale.loaded || m.tailscale.old) && m.tailscale.runningIP() != addr {
+			m.url, m.code, m.endpoint, m.qr = "", "", "", nil
+			m.pairRefreshPending = true
+			m.pairRefreshNotify = true
+			a.flushPendingPairRefresh()
+			return
+		}
 		if err != nil {
 			if !poll {
 				m.err, m.errAddr = errtext.Text(err), addr
 			}
+			a.flushPendingPairRefresh()
 			return
 		}
 		if m.url != info.URL || m.qr == nil {
@@ -150,32 +165,66 @@ func (a *app) loadMobile(seq int, rotate bool, addr string, poll bool) {
 			if m.errAddr == addr {
 				m.err = ""
 			}
+			a.flushPendingPairRefresh()
 			return
 		}
 		m.err = ""
 		if addr == m.custom {
 			m.custom = ""
 		}
-		a.setMobileAddress(addr)
+		a.setMobileAddress(addr, builtIn)
+		a.flushPendingPairRefresh()
 	})
 }
 
-func (a *app) setMobileAddress(addr string) {
+func (a *app) requestMobilePairRefresh(notify bool) {
+	m := &a.mobile
+	if !m.shown || a.c == nil {
+		return
+	}
+	if m.loading {
+		m.pairRefreshPending = true
+		if notify {
+			m.pairRefreshNotify = true
+		}
+		return
+	}
+	a.startMobile(false, a.state.MobileAddress, a.state.MobileAddressBuiltIn, !notify)
+}
+
+func (a *app) flushPendingPairRefresh() {
+	m := &a.mobile
+	if !m.pairRefreshPending {
+		return
+	}
+	notify := m.pairRefreshNotify
+	m.pairRefreshPending = false
+	m.pairRefreshNotify = false
+	if m.shown && !m.loading && a.c != nil {
+		a.startMobile(false, a.state.MobileAddress, a.state.MobileAddressBuiltIn, !notify)
+	}
+}
+
+func (a *app) setMobileAddress(addr string, builtIn bool) {
 	st := &a.state
-	if addr == st.MobileAddress && (addr == "" || slices.Contains(st.MobileAddresses, addr)) {
+	builtIn = builtIn && addr != ""
+	if addr == st.MobileAddress && builtIn == st.MobileAddressBuiltIn &&
+		(addr == "" || builtIn || slices.Contains(st.MobileAddresses, addr) || slices.Contains(a.mobile.locals, addr)) {
 		return
 	}
 	st.MobileAddress = addr
-	// 检测到的本机地址每次都列在下拉里，不记进自定义的列表
-	if addr != "" && !slices.Contains(st.MobileAddresses, addr) && !slices.Contains(a.mobile.locals, addr) {
+	st.MobileAddressBuiltIn = builtIn
+	// 检测到的本机地址和内置 Tailscale 地址每次都列在下拉里，不记进自定义的列表；
+	// 手工输入的自定义地址（builtIn=false）照常保留，即使碰巧与内置 IP 相同也不混淆来源。
+	if !builtIn && addr != "" && !slices.Contains(st.MobileAddresses, addr) && !slices.Contains(a.mobile.locals, addr) {
 		st.MobileAddresses = append(st.MobileAddresses, addr)
 	}
 	a.saveState()
 }
 
 // useMobileAddress 换配对码里的地址。地址不对时报错，二维码和下拉都还是原来的。
-func (a *app) useMobileAddress(addr string) {
-	a.startMobile(false, addr, false)
+func (a *app) useMobileAddress(addr string, builtIn bool) {
+	a.startMobile(false, addr, builtIn, false)
 }
 
 func (a *app) removeMobileAddress(addr string) {
@@ -183,7 +232,8 @@ func (a *app) removeMobileAddress(addr string) {
 	st.MobileAddresses = slices.DeleteFunc(st.MobileAddresses, func(s string) bool { return s == addr })
 	if st.MobileAddress == addr {
 		st.MobileAddress = ""
-		a.useMobileAddress("")
+		st.MobileAddressBuiltIn = false
+		a.useMobileAddress("", false)
 	}
 	a.saveState()
 }
@@ -276,6 +326,7 @@ func (a *app) mobileBoard(c *ui.Context) {
 			ui.Column(c).Width(720).Gap(16).Children(func() {
 				a.mobileDeskCard(c)
 				a.mobilePairCard(c)
+				a.mobileTailscaleCard(c)
 				a.mobileRelayCard(c)
 				a.mobileDevices(c)
 			})
@@ -359,7 +410,7 @@ func (a *app) mobilePairCard(c *ui.Context) {
 						}
 						if pressable(textButton(c, L(c).MobileNewCode())).Tooltip(L(c).MobileNewCodeTip()).Clicked() {
 							m.qr = nil
-							a.startMobile(true, a.state.MobileAddress, false)
+							a.startMobile(true, a.state.MobileAddress, a.state.MobileAddressBuiltIn, false)
 						}
 					})
 				}
@@ -487,26 +538,31 @@ func (a *app) mobileAddressPicker(c *ui.Context) {
 			// 下拉：自动、检测到的 Tailscale 和局域网地址、用过的自定义地址；选了具体地址，配对码里只有它
 			labels := []string{L(c).MobileAddressAuto()}
 			addrs := []string{""}
+			builtIns := []bool{false}
 			for _, ip := range m.locals {
 				label := L(c).MobileAddressLAN(ip)
 				if mobile.IsTailscale(ip) {
 					label = L(c).MobileAddressTailscale(ip)
 				}
-				labels, addrs = append(labels, label), append(addrs, ip)
+				labels, addrs, builtIns = append(labels, label), append(addrs, ip), append(builtIns, false)
+			}
+			if ip := m.tailscale.runningIP(); ip != "" && !slices.Contains(addrs, ip) {
+				labels, addrs, builtIns = append(labels, L(c).MobileAddressTailscale(ip)), append(addrs, ip), append(builtIns, true)
 			}
 			for _, s := range st.MobileAddresses {
 				if !slices.Contains(addrs, s) {
-					labels, addrs = append(labels, s), append(addrs, s)
+					labels, addrs, builtIns = append(labels, s), append(addrs, s), append(builtIns, false)
 				}
 			}
 			if i := slices.Index(addrs, st.MobileAddress); i < 0 {
-				labels, addrs = append(labels, st.MobileAddress), append(addrs, st.MobileAddress)
+				labels, addrs, builtIns = append(labels, st.MobileAddress), append(addrs, st.MobileAddress), append(builtIns, st.MobileAddressBuiltIn)
 			}
 			cur := labels[slices.Index(addrs, st.MobileAddress)]
 			sel := cur
 			ui.Box(c).Grow(1).Shrink(1).Children(func() {
 				if ui.Select(c, &sel, labels).Changed() && sel != cur {
-					a.useMobileAddress(addrs[slices.Index(labels, sel)])
+					idx := slices.Index(labels, sel)
+					a.useMobileAddress(addrs[idx], builtIns[idx])
 				}
 			})
 			if slices.Contains(st.MobileAddresses, st.MobileAddress) && pressable(textButton(c, L(c).CommonRemove())).Tooltip(L(c).MobileAddressRemoveTip()).Clicked() {
@@ -517,11 +573,11 @@ func (a *app) mobileAddressPicker(c *ui.Context) {
 			ui.Box(c).Grow(1).Shrink(1).Children(func() {
 				in := fieldInput(c, &m.custom, L(c).MobileAddressCustom())
 				if in.Submitted() && m.custom != "" {
-					a.useMobileAddress(m.custom)
+					a.useMobileAddress(m.custom, false)
 				}
 			})
 			if pressable(textButton(c, L(c).MobileUse())).Clicked() && m.custom != "" {
-				a.useMobileAddress(m.custom)
+				a.useMobileAddress(m.custom, false)
 			}
 		})
 		ui.Text(c, L(c).MobileAddressNote()).

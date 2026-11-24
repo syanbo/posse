@@ -21989,6 +21989,566 @@ func (msgs Messages) TabSplitTooSmall() string {
 	return Catalog.Format(msgs.locale, "tabSplitTooSmall", nil)
 }
 
+// TailscaleAdvanced says "Advanced"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: collapsible section heading for
+// optional settings.
+func TailscaleAdvanced() string { return In(i18n.Locale()).TailscaleAdvanced() }
+
+// TailscaleAdvanced says "Advanced"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: collapsible section heading for
+// optional settings.
+func (msgs Messages) TailscaleAdvanced() string {
+	return Catalog.Format(msgs.locale, "tailscaleAdvanced", nil)
+}
+
+// TailscaleAuthKey says "Auth Key (optional)"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: label for the one-time
+// pre-authentication key field.
+func TailscaleAuthKey() string { return In(i18n.Locale()).TailscaleAuthKey() }
+
+// TailscaleAuthKey says "Auth Key (optional)"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: label for the one-time
+// pre-authentication key field.
+func (msgs Messages) TailscaleAuthKey() string {
+	return Catalog.Format(msgs.locale, "tailscaleAuthKey", nil)
+}
+
+// TailscaleAuthKeyNote says "Used once to sign in and never written to disk. Saving with an auth key turns on Built-in Tailscale if it is off."
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: helper note under the auth key
+// field.
+func TailscaleAuthKeyNote() string { return In(i18n.Locale()).TailscaleAuthKeyNote() }
+
+// TailscaleAuthKeyNote says "Used once to sign in and never written to disk. Saving with an auth key turns on Built-in Tailscale if it is off."
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: helper note under the auth key
+// field.
+func (msgs Messages) TailscaleAuthKeyNote() string {
+	return Catalog.Format(msgs.locale, "tailscaleAuthKeyNote", nil)
+}
+
+// TailscaleAuthKeyPlaceholder says "tskey-auth-…"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: placeholder for the one-time auth
+// key field.
+func TailscaleAuthKeyPlaceholder() string { return In(i18n.Locale()).TailscaleAuthKeyPlaceholder() }
+
+// TailscaleAuthKeyPlaceholder says "tskey-auth-…"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: placeholder for the one-time auth
+// key field.
+func (msgs Messages) TailscaleAuthKeyPlaceholder() string {
+	return Catalog.Format(msgs.locale, "tailscaleAuthKeyPlaceholder", nil)
+}
+
+// TailscaleControlURL says "Control Server URL (Headscale)"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: label for the custom coordination
+// server URL field.
+func TailscaleControlURL() string { return In(i18n.Locale()).TailscaleControlURL() }
+
+// TailscaleControlURL says "Control Server URL (Headscale)"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: label for the custom coordination
+// server URL field.
+func (msgs Messages) TailscaleControlURL() string {
+	return Catalog.Format(msgs.locale, "tailscaleControlURL", nil)
+}
+
+// TailscaleControlURLPlaceholder says "Leave blank for official Tailscale"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: placeholder for the custom
+// coordination server URL field.
+func TailscaleControlURLPlaceholder() string {
+	return In(i18n.Locale()).TailscaleControlURLPlaceholder()
+}
+
+// TailscaleControlURLPlaceholder says "Leave blank for official Tailscale"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: placeholder for the custom
+// coordination server URL field.
+func (msgs Messages) TailscaleControlURLPlaceholder() string {
+	return Catalog.Format(msgs.locale, "tailscaleControlURLPlaceholder", nil)
+}
+
+// TailscaleCopyLoginURL says "Copy Login Link"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: button to copy the browser sign-in
+// URL.
+func TailscaleCopyLoginURL() string { return In(i18n.Locale()).TailscaleCopyLoginURL() }
+
+// TailscaleCopyLoginURL says "Copy Login Link"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: button to copy the browser sign-in
+// URL.
+func (msgs Messages) TailscaleCopyLoginURL() string {
+	return Catalog.Format(msgs.locale, "tailscaleCopyLoginURL", nil)
+}
+
+// TailscaleDisableBind says "Follow system proxy / VPN routing"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: switch label to disable binding
+// sockets directly to physical interfaces.
+func TailscaleDisableBind() string { return In(i18n.Locale()).TailscaleDisableBind() }
+
+// TailscaleDisableBind says "Follow system proxy / VPN routing"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: switch label to disable binding
+// sockets directly to physical interfaces.
+func (msgs Messages) TailscaleDisableBind() string {
+	return Catalog.Format(msgs.locale, "tailscaleDisableBind", nil)
+}
+
+// TailscaleDisableBindNote says "Turn on if this network needs a proxy to reach Tailscale or DERP servers."
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: helper note under the proxy routing
+// switch.
+func TailscaleDisableBindNote() string { return In(i18n.Locale()).TailscaleDisableBindNote() }
+
+// TailscaleDisableBindNote says "Turn on if this network needs a proxy to reach Tailscale or DERP servers."
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: helper note under the proxy routing
+// switch.
+func (msgs Messages) TailscaleDisableBindNote() string {
+	return Catalog.Format(msgs.locale, "tailscaleDisableBindNote", nil)
+}
+
+// TailscaleError says "Error"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: state after the title when an error
+// occurred.
+func TailscaleError() string { return In(i18n.Locale()).TailscaleError() }
+
+// TailscaleError says "Error"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: state after the title when an error
+// occurred.
+func (msgs Messages) TailscaleError() string {
+	return Catalog.Format(msgs.locale, "tailscaleError", nil)
+}
+
+// TailscaleHostname says "Node Name"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: label for the custom Tailscale
+// hostname field.
+func TailscaleHostname() string { return In(i18n.Locale()).TailscaleHostname() }
+
+// TailscaleHostname says "Node Name"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: label for the custom Tailscale
+// hostname field.
+func (msgs Messages) TailscaleHostname() string {
+	return Catalog.Format(msgs.locale, "tailscaleHostname", nil)
+}
+
+// TailscaleHostnamePlaceholder says "Default: posse-<hostname>"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: placeholder for the custom
+// Tailscale hostname field.
+func TailscaleHostnamePlaceholder() string { return In(i18n.Locale()).TailscaleHostnamePlaceholder() }
+
+// TailscaleHostnamePlaceholder says "Default: posse-<hostname>"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: placeholder for the custom
+// Tailscale hostname field.
+func (msgs Messages) TailscaleHostnamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "tailscaleHostnamePlaceholder", nil)
+}
+
+// TailscaleInvalidAuthURL says "The sign-in link is not a valid http/https URL."
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: error when the auth URL returned by
+// Tailscale cannot be opened.
+func TailscaleInvalidAuthURL() string { return In(i18n.Locale()).TailscaleInvalidAuthURL() }
+
+// TailscaleInvalidAuthURL says "The sign-in link is not a valid http/https URL."
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: error when the auth URL returned by
+// Tailscale cannot be opened.
+func (msgs Messages) TailscaleInvalidAuthURL() string {
+	return Catalog.Format(msgs.locale, "tailscaleInvalidAuthURL", nil)
+}
+
+// TailscaleNeedsApproval says "Awaiting Approval"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: state after the title when tailnet
+// admin approval is required.
+func TailscaleNeedsApproval() string { return In(i18n.Locale()).TailscaleNeedsApproval() }
+
+// TailscaleNeedsApproval says "Awaiting Approval"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: state after the title when tailnet
+// admin approval is required.
+func (msgs Messages) TailscaleNeedsApproval() string {
+	return Catalog.Format(msgs.locale, "tailscaleNeedsApproval", nil)
+}
+
+// TailscaleNeedsApprovalNote says "Approve this device in your Tailscale admin console to finish connecting."
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: note for the Awaiting Approval
+// state.
+func TailscaleNeedsApprovalNote() string { return In(i18n.Locale()).TailscaleNeedsApprovalNote() }
+
+// TailscaleNeedsApprovalNote says "Approve this device in your Tailscale admin console to finish connecting."
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: note for the Awaiting Approval
+// state.
+func (msgs Messages) TailscaleNeedsApprovalNote() string {
+	return Catalog.Format(msgs.locale, "tailscaleNeedsApprovalNote", nil)
+}
+
+// TailscaleNeedsLogin says "Sign In Required"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: state after the title when browser
+// login is needed.
+func TailscaleNeedsLogin() string { return In(i18n.Locale()).TailscaleNeedsLogin() }
+
+// TailscaleNeedsLogin says "Sign In Required"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: state after the title when browser
+// login is needed.
+func (msgs Messages) TailscaleNeedsLogin() string {
+	return Catalog.Format(msgs.locale, "tailscaleNeedsLogin", nil)
+}
+
+// TailscaleNeedsLoginNote says "Sign in with your Tailscale account in the browser to join your tailnet."
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: note for the Sign In Required
+// state.
+func TailscaleNeedsLoginNote() string { return In(i18n.Locale()).TailscaleNeedsLoginNote() }
+
+// TailscaleNeedsLoginNote says "Sign in with your Tailscale account in the browser to join your tailnet."
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: note for the Sign In Required
+// state.
+func (msgs Messages) TailscaleNeedsLoginNote() string {
+	return Catalog.Format(msgs.locale, "tailscaleNeedsLoginNote", nil)
+}
+
+// TailscaleNote says "Run an isolated Tailscale node inside Posse so your phone can connect directly from anywhere without installing the T…"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: explanation shown when built-in
+// Tailscale is turned off.
+func TailscaleNote() string { return In(i18n.Locale()).TailscaleNote() }
+
+// TailscaleNote says "Run an isolated Tailscale node inside Posse so your phone can connect directly from anywhere without installing the T…"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: explanation shown when built-in
+// Tailscale is turned off.
+func (msgs Messages) TailscaleNote() string {
+	return Catalog.Format(msgs.locale, "tailscaleNote", nil)
+}
+
+// TailscaleOldDaemon says "Update the daemon in Settings before using Built-in Tailscale."
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: error when the daemon predates
+// built-in Tailscale support.
+func TailscaleOldDaemon() string { return In(i18n.Locale()).TailscaleOldDaemon() }
+
+// TailscaleOldDaemon says "Update the daemon in Settings before using Built-in Tailscale."
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: error when the daemon predates
+// built-in Tailscale support.
+func (msgs Messages) TailscaleOldDaemon() string {
+	return Catalog.Format(msgs.locale, "tailscaleOldDaemon", nil)
+}
+
+// TailscaleOpenLogin says "Open Login Page"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: primary button to open the
+// Tailscale sign-in URL in the browser.
+func TailscaleOpenLogin() string { return In(i18n.Locale()).TailscaleOpenLogin() }
+
+// TailscaleOpenLogin says "Open Login Page"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: primary button to open the
+// Tailscale sign-in URL in the browser.
+func (msgs Messages) TailscaleOpenLogin() string {
+	return Catalog.Format(msgs.locale, "tailscaleOpenLogin", nil)
+}
+
+// TailscaleOpenLoginTip says "Open the Tailscale sign-in link in your default browser"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: tooltip for the Open Login Page
+// button.
+func TailscaleOpenLoginTip() string { return In(i18n.Locale()).TailscaleOpenLoginTip() }
+
+// TailscaleOpenLoginTip says "Open the Tailscale sign-in link in your default browser"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: tooltip for the Open Login Page
+// button.
+func (msgs Messages) TailscaleOpenLoginTip() string {
+	return Catalog.Format(msgs.locale, "tailscaleOpenLoginTip", nil)
+}
+
+// TailscaleRefreshLogin says "Refresh Link"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: button to request a fresh
+// interactive login URL.
+func TailscaleRefreshLogin() string { return In(i18n.Locale()).TailscaleRefreshLogin() }
+
+// TailscaleRefreshLogin says "Refresh Link"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: button to request a fresh
+// interactive login URL.
+func (msgs Messages) TailscaleRefreshLogin() string {
+	return Catalog.Format(msgs.locale, "tailscaleRefreshLogin", nil)
+}
+
+// TailscaleReset says "Reset Identity"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: button and confirm verb to sign out
+// and clear local Tailscale state.
+func TailscaleReset() string { return In(i18n.Locale()).TailscaleReset() }
+
+// TailscaleReset says "Reset Identity"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: button and confirm verb to sign out
+// and clear local Tailscale state.
+func (msgs Messages) TailscaleReset() string {
+	return Catalog.Format(msgs.locale, "tailscaleReset", nil)
+}
+
+// TailscaleResetBody says "This signs out the built-in Tailscale node, clears its local keys and state, and turns it off. You will need to sign …"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: body of the Reset Identity
+// confirmation dialog.
+func TailscaleResetBody() string { return In(i18n.Locale()).TailscaleResetBody() }
+
+// TailscaleResetBody says "This signs out the built-in Tailscale node, clears its local keys and state, and turns it off. You will need to sign …"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: body of the Reset Identity
+// confirmation dialog.
+func (msgs Messages) TailscaleResetBody() string {
+	return Catalog.Format(msgs.locale, "tailscaleResetBody", nil)
+}
+
+// TailscaleResetConfirm says "Reset built-in Tailscale identity?"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: title of the Reset Identity
+// confirmation dialog.
+func TailscaleResetConfirm() string { return In(i18n.Locale()).TailscaleResetConfirm() }
+
+// TailscaleResetConfirm says "Reset built-in Tailscale identity?"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: title of the Reset Identity
+// confirmation dialog.
+func (msgs Messages) TailscaleResetConfirm() string {
+	return Catalog.Format(msgs.locale, "tailscaleResetConfirm", nil)
+}
+
+// TailscaleResetLocalOnly says "Local state was cleared, but remote sign-out failed: {reason}"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: warning after reset when local
+// files were removed but control server logout failed.
+func TailscaleResetLocalOnly(reason string) string {
+	return In(i18n.Locale()).TailscaleResetLocalOnly(reason)
+}
+
+// TailscaleResetLocalOnly says "Local state was cleared, but remote sign-out failed: {reason}"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: warning after reset when local
+// files were removed but control server logout failed.
+func (msgs Messages) TailscaleResetLocalOnly(reason string) string {
+	return Catalog.Format(msgs.locale, "tailscaleResetLocalOnly", map[string]any{"reason": reason})
+}
+
+// TailscaleResetTip says "Sign out and clear local built-in Tailscale keys"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: tooltip for the Reset Identity
+// button.
+func TailscaleResetTip() string { return In(i18n.Locale()).TailscaleResetTip() }
+
+// TailscaleResetTip says "Sign out and clear local built-in Tailscale keys"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: tooltip for the Reset Identity
+// button.
+func (msgs Messages) TailscaleResetTip() string {
+	return Catalog.Format(msgs.locale, "tailscaleResetTip", nil)
+}
+
+// TailscaleRunning says "Connected"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: state after the title when the node
+// is connected.
+func TailscaleRunning() string { return In(i18n.Locale()).TailscaleRunning() }
+
+// TailscaleRunning says "Connected"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: state after the title when the node
+// is connected.
+func (msgs Messages) TailscaleRunning() string {
+	return Catalog.Format(msgs.locale, "tailscaleRunning", nil)
+}
+
+// TailscaleRunningNote says "Included in the pairing QR code automatically when Address is set to Auto."
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: note shown when the built-in
+// Tailscale node is connected.
+func TailscaleRunningNote() string { return In(i18n.Locale()).TailscaleRunningNote() }
+
+// TailscaleRunningNote says "Included in the pairing QR code automatically when Address is set to Auto."
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: note shown when the built-in
+// Tailscale node is connected.
+func (msgs Messages) TailscaleRunningNote() string {
+	return Catalog.Format(msgs.locale, "tailscaleRunningNote", nil)
+}
+
+// TailscaleStarting says "Starting"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: state after the title while the
+// node is starting.
+func TailscaleStarting() string { return In(i18n.Locale()).TailscaleStarting() }
+
+// TailscaleStarting says "Starting"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: state after the title while the
+// node is starting.
+func (msgs Messages) TailscaleStarting() string {
+	return Catalog.Format(msgs.locale, "tailscaleStarting", nil)
+}
+
+// TailscaleStartingNote says "Starting the built-in Tailscale node…"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: note shown while the built-in
+// Tailscale node is starting.
+func TailscaleStartingNote() string { return In(i18n.Locale()).TailscaleStartingNote() }
+
+// TailscaleStartingNote says "Starting the built-in Tailscale node…"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: note shown while the built-in
+// Tailscale node is starting.
+func (msgs Messages) TailscaleStartingNote() string {
+	return Catalog.Format(msgs.locale, "tailscaleStartingNote", nil)
+}
+
+// TailscaleStopped says "Stopped"
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: state after the title when the node
+// is stopped.
+func TailscaleStopped() string { return In(i18n.Locale()).TailscaleStopped() }
+
+// TailscaleStopped says "Stopped"
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: state after the title when the node
+// is stopped.
+func (msgs Messages) TailscaleStopped() string {
+	return Catalog.Format(msgs.locale, "tailscaleStopped", nil)
+}
+
+// TailscaleStoppedNote says "The built-in Tailscale node is stopped."
+// in the language the app shows.
+//
+// Mobile page, Built-in Tailscale card: note shown when the node is
+// stopped.
+func TailscaleStoppedNote() string { return In(i18n.Locale()).TailscaleStoppedNote() }
+
+// TailscaleStoppedNote says "The built-in Tailscale node is stopped."
+// in the language of msgs.
+//
+// Mobile page, Built-in Tailscale card: note shown when the node is
+// stopped.
+func (msgs Messages) TailscaleStoppedNote() string {
+	return Catalog.Format(msgs.locale, "tailscaleStoppedNote", nil)
+}
+
+// TailscaleTitle says "Built-in Tailscale"
+// in the language the app shows.
+//
+// Mobile page: title of the Built-in Tailscale card.
+func TailscaleTitle() string { return In(i18n.Locale()).TailscaleTitle() }
+
+// TailscaleTitle says "Built-in Tailscale"
+// in the language of msgs.
+//
+// Mobile page: title of the Built-in Tailscale card.
+func (msgs Messages) TailscaleTitle() string {
+	return Catalog.Format(msgs.locale, "tailscaleTitle", nil)
+}
+
+// TailscaleTitleState says "Built-in Tailscale · {state}"
+// in the language the app shows.
+//
+// Mobile page: title of the Built-in Tailscale card with its current state.
+func TailscaleTitleState(state string) string { return In(i18n.Locale()).TailscaleTitleState(state) }
+
+// TailscaleTitleState says "Built-in Tailscale · {state}"
+// in the language of msgs.
+//
+// Mobile page: title of the Built-in Tailscale card with its current state.
+func (msgs Messages) TailscaleTitleState(state string) string {
+	return Catalog.Format(msgs.locale, "tailscaleTitleState", map[string]any{"state": state})
+}
+
 // TasksAssignTo says "Assign to"
 // in the language the app shows.
 //

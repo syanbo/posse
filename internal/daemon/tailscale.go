@@ -140,12 +140,18 @@ func (d *Daemon) tailscaleStatus(_ context.Context, _ json.RawMessage) (any, err
 		st.ControlURL = cfg.ControlURL
 		st.DisableBindInterface = cfg.DisableBindInterface
 	}
+	return mergeDisabledConfig(st, cfg), nil
+}
+
+// mergeDisabledConfig 在节点处于禁用态时，把磁盘中已保存的配置合并到返回快照，
+// 避免未启动或刚关闭的节点回显旧的 runtime opts。
+func mergeDisabledConfig(st tslink.Status, cfg tslink.Config) tslink.Status {
 	if !cfg.Enabled && st.State == tslink.StateDisabled {
 		st.Hostname = cfg.Hostname
 		st.ControlURL = cfg.ControlURL
 		st.DisableBindInterface = cfg.DisableBindInterface
 	}
-	return st, nil
+	return st
 }
 
 type tailscaleSetParams struct {
@@ -193,7 +199,7 @@ func (d *Daemon) tailscaleSet(_ context.Context, raw json.RawMessage) (any, erro
 		if d.mobile != nil {
 			d.mobile.TailscaleChanged()
 		}
-		return d.ts.Status(), nil
+		return mergeDisabledConfig(d.ts.Status(), cfg), nil
 	}
 	hostname := cfg.Hostname
 	if hostname == "" {
@@ -261,7 +267,7 @@ func (d *Daemon) tailscaleReset(_ context.Context, _ json.RawMessage) (any, erro
 		return nil, rpc.Errorf(rpc.CodeInternal, "%v", resetErr)
 	}
 	out := tailscaleResetResult{
-		Status:       d.ts.Status(),
+		Status:       mergeDisabledConfig(d.ts.Status(), cfg),
 		LoggedOut:    res.LoggedOut,
 		LocalCleared: res.LocalCleared,
 	}
