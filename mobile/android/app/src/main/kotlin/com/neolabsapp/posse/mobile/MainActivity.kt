@@ -2,10 +2,15 @@ package com.neolabsapp.posse.mobile
 
 import android.Manifest
 import android.content.ContentValues
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaScannerConnection
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import io.flutter.embedding.android.FlutterActivity
@@ -24,6 +29,8 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        appContext = applicationContext
+        tsInit()
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         flutterEngine.platformViewsController.registry
             .registerViewFactory("posse/qr", QrScanViewFactory(messenger, this))
@@ -43,6 +50,22 @@ class MainActivity : FlutterActivity() {
             cameraResult?.success(false)
             cameraResult = result
             requestPermissions(arrayOf(Manifest.permission.CAMERA), REQUEST_CAMERA)
+        }
+        MethodChannel(messenger, "posse/tailscale").setMethodCallHandler { call, result ->
+            if (call.method != "stateDir") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            try {
+                val dir = File(noBackupFilesDir, "tailscale")
+                if (!dir.exists() && !dir.mkdirs()) {
+                    result.error("failed", "failed to create tailscale state directory", null)
+                    return@setMethodCallHandler
+                }
+                result.success(dir.absolutePath)
+            } catch (e: Exception) {
+                result.error("failed", e.message ?: "failed to prepare tailscale state directory", null)
+            }
         }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "posse/downloads")
             .setMethodCallHandler { call, result ->
@@ -160,9 +183,81 @@ class MainActivity : FlutterActivity() {
             System.loadLibrary("posse_quic")
         }
 
+        @Volatile
+        private var appContext: Context? = null
+
         // 在 packages/posse_quic/go/jni_android.go
         @JvmStatic
         private external fun quicReset()
+
+        // 在 packages/posse_quic/go/jni_android.go：注册底层物理网络绑定回调
+        @JvmStatic
+        private external fun tsInit()
+
+        // 由 Go (tsnet netns) 通过 JNI 调用：把 socket 绑定到底层非 VPN 物理网络，避免与系统 VPN 环路。
+        // 使用 ParcelFileDescriptor.fromFd 拷贝 fd 后绑定，关闭拷贝不影响 Go 持有的原始 fd。
+        @JvmStatic
+        fun bindSocketToActiveNetwork(fd: Int): Int {
+            val ctx = appContext ?: return 0
+            val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return 0
+            val net = pickUnderlyingNetwork(cm)
+            if (net == null) {
+                // 若存在活跃 VPN 但找不到底层物理网络，返回错误避免发包回环进 VPN；否则放行默认路由。
+                return if (hasActiveVpn(cm)) -2 else 0
+            }
+            return try {
+                ParcelFileDescriptor.fromFd(fd).use { pfd ->
+                    net.bindSocket(pfd.fileDescriptor)
+                }
+                0
+            } catch (_: Exception) {
+                -1
+            }
+        }
+
+        private fun pickUnderlyingNetwork(cm: ConnectivityManager): Network? {
+            val active = cm.activeNetwork
+            if (active != null && isUnderlyingNetwork(cm, active, requireValidated = true)) {
+                return active
+            }
+            @Suppress("DEPRECATION")
+            val all = cm.allNetworks
+            for (net in all) {
+                if (isUnderlyingNetwork(cm, net, requireValidated = true)) {
+                    return net
+                }
+            }
+            if (active != null && isUnderlyingNetwork(cm, active, requireValidated = false)) {
+                return active
+            }
+            for (net in all) {
+                if (isUnderlyingNetwork(cm, net, requireValidated = false)) {
+                    return net
+                }
+            }
+            return null
+        }
+
+        private fun isUnderlyingNetwork(
+            cm: ConnectivityManager,
+            net: Network,
+            requireValidated: Boolean,
+        ): Boolean {
+            val caps = cm.getNetworkCapabilities(net) ?: return false
+            if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false
+            if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)) return false
+            if (requireValidated && !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                return false
+            }
+            return true
+        }
+
+        private fun hasActiveVpn(cm: ConnectivityManager): Boolean {
+            val active = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(active) ?: return false
+            return caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ||
+                !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+        }
 
         private const val REQUEST_WRITE = 7301
         private const val REQUEST_CAMERA = 7302

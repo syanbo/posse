@@ -4,16 +4,20 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+part 'tailscale.dart';
+
 typedef _EventFn = Void Function(Int64, Int32, Pointer<Uint8>, Int32);
 
 @Native<
   Int64 Function(
+    Uint64,
     Pointer<Utf8>,
     Pointer<Uint8>,
     Int32,
@@ -22,6 +26,7 @@ typedef _EventFn = Void Function(Int64, Int32, Pointer<Uint8>, Int32);
   )
 >(symbol: 'hq_dial')
 external int _dial(
+  int gen,
   Pointer<Utf8> addr,
   Pointer<Uint8> token,
   int tokenLen,
@@ -30,9 +35,15 @@ external int _dial(
 );
 
 @Native<
-  Int64 Function(Pointer<Utf8>, Int32, Pointer<NativeFunction<_EventFn>>)
+  Int64 Function(
+    Uint64,
+    Pointer<Utf8>,
+    Int32,
+    Pointer<NativeFunction<_EventFn>>,
+  )
 >(symbol: 'hq_prepare')
 external int _prepare(
+  int gen,
   Pointer<Utf8> relay,
   int timeoutMs,
   Pointer<NativeFunction<_EventFn>> cb,
@@ -47,8 +58,8 @@ external int _send(int id, int type, Pointer<Uint8> data, int len);
 @Native<Void Function(Int64, Int32, Pointer<Utf8>)>(symbol: 'hq_close')
 external void _close(int id, int code, Pointer<Utf8> reason);
 
-@Native<Void Function()>(symbol: 'hq_reset')
-external void _reset();
+@Native<Uint64 Function()>(symbol: 'hq_engine_begin')
+external int _engineBegin();
 
 @Native<Void Function(Pointer<Uint8>)>(symbol: 'hq_free')
 external void _free(Pointer<Uint8> p);
@@ -208,11 +219,13 @@ class QuicException implements Exception {
   String toString() => 'QuicException: $message';
 }
 
+/// 第一次在主 isolate 使用本库时调用 hq_engine_begin()：清理上一个 Flutter 引擎遗留的连接、
+/// 回调与回环 UDP 桥，解冻状态并返回当前引擎代次。不要从次级后台 isolate 直接调用公开 QUIC/Tailscale API。
+final int _engineGen = _engineBegin();
+
 /// 所有连接共用一个回调。Go 从任意线程调它，事件按发生顺序进 Dart 的事件循环。
-/// 第一次用时先断掉进程里上一个 Flutter 引擎留下的连接：它们的回调已经失效（见 hq_reset），
-/// 安卓原生层在引擎销毁前已经断过一次，这里兜底。
 final _callback = () {
-  _reset();
+  _engineGen;
   return NativeCallable<_EventFn>.listener(_onEvent);
 }();
 final _live = <int, QuicConnection>{};
@@ -255,12 +268,16 @@ class QuicConnection {
     tok.asTypedList(token.length).setAll(0, token);
     try {
       final id = _dial(
+        _engineGen,
         addr,
         tok,
         token.length,
         timeout.inMilliseconds,
         _callback.nativeFunction,
       );
+      if (id < 0) {
+        throw QuicException('engine is not active');
+      }
       final conn = QuicConnection._(id);
       _live[id] = conn;
       await conn._opened.future;
@@ -268,6 +285,33 @@ class QuicConnection {
     } finally {
       malloc.free(addr);
       malloc.free(tok);
+    }
+  }
+
+  /// 经内置 Tailscale（tsnet 用户态 UDP）拨号 QUIC 到 [host]:[port]，使用 1200 B Initial MTU。
+  static Future<QuicConnection> dialTailscale(
+    String host,
+    int port, {
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final addr = (host.contains(':') ? '[$host]:$port' : '$host:$port')
+        .toNativeUtf8();
+    try {
+      final id = _tsDial(
+        _engineGen,
+        addr,
+        timeout.inMilliseconds,
+        _callback.nativeFunction,
+      );
+      if (id < 0) {
+        throw QuicException('engine is not active');
+      }
+      final conn = QuicConnection._(id);
+      _live[id] = conn;
+      await conn._opened.future;
+      return conn;
+    } finally {
+      malloc.free(addr);
     }
   }
 
@@ -281,10 +325,14 @@ class QuicConnection {
     final relay = '$relayHost:$relayPort'.toNativeUtf8();
     try {
       final id = _prepare(
+        _engineGen,
         relay,
         timeout.inMilliseconds,
         _callback.nativeFunction,
       );
+      if (id < 0) {
+        throw QuicException('engine is not active');
+      }
       final conn = QuicConnection._(id);
       _live[id] = conn;
       return QuicPunch._(conn, await conn._prepared.future);

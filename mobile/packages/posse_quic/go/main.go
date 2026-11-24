@@ -101,22 +101,52 @@ func (e *entry) finish(kind int, msg string) {
 		connMu.Lock()
 		delete(conns, e.id)
 		connMu.Unlock()
+		scheduleTSIdleTimerIfNeeded()
 	})
 }
 
 //export hq_dial
-func hq_dial(addr *C.char, token *C.uint8_t, tokenLen C.int32_t, timeoutMs C.int32_t, cb C.hq_event_fn) C.int64_t {
+func hq_dial(gen C.uint64_t, addr *C.char, token *C.uint8_t, tokenLen C.int32_t, timeoutMs C.int32_t, cb C.hq_event_fn) C.int64_t {
+	if addr == nil {
+		return -1
+	}
 	a := C.GoString(addr)
 	var tok []byte
-	if tokenLen > 0 {
+	if token != nil && tokenLen > 0 {
 		tok = C.GoBytes(unsafe.Pointer(token), C.int(tokenLen))
 	}
-	e, ctx := newEntry(cb, timeoutMs)
+	e, ctx := newEntry(uint64(gen), cb, timeoutMs)
+	if e == nil {
+		return -1
+	}
 	go e.run(ctx, a, tok)
 	return C.int64_t(e.id)
 }
 
-func newEntry(cb C.hq_event_fn, timeoutMs C.int32_t) (*entry, context.Context) {
+//export hq_ts_dial
+func hq_ts_dial(gen C.uint64_t, addr *C.char, timeoutMs C.int32_t, cb C.hq_event_fn) C.int64_t {
+	if addr == nil {
+		return -1
+	}
+	a := C.GoString(addr)
+	e, ctx := newEntry(uint64(gen), cb, timeoutMs)
+	if e == nil {
+		return -1
+	}
+	go e.serve(ctx, func(ctx context.Context) (*mquic.Conn, error) {
+		return dialTailscaleQUIC(ctx, a)
+	})
+	return C.int64_t(e.id)
+}
+
+// newEntry 在 tsLifecycleMu -> connMu 锁序下校验引擎代次并登记连接，
+// 防止引擎销毁（hq_reset）后旧 isolate 的并发拨号挂入已失效回调。
+func newEntry(gen uint64, cb C.hq_event_fn, timeoutMs C.int32_t) (*entry, context.Context) {
+	tsLifecycleMu.Lock()
+	if engineFrozen || gen == 0 || gen != engineGen {
+		tsLifecycleMu.Unlock()
+		return nil, nil
+	}
 	e := &entry{id: nextID.Add(1), out: make(chan outMsg, sendQueue), done: make(chan struct{})}
 	e.cb.Store(cb)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
@@ -124,6 +154,8 @@ func newEntry(cb C.hq_event_fn, timeoutMs C.int32_t) (*entry, context.Context) {
 	connMu.Lock()
 	conns[e.id] = e
 	connMu.Unlock()
+	cancelTSIdleTimerLocked()
+	tsLifecycleMu.Unlock()
 	return e, ctx
 }
 
@@ -131,8 +163,14 @@ func newEntry(cb C.hq_event_fn, timeoutMs C.int32_t) (*entry, context.Context) {
 // Dart 把地址交给 Mac（posse.punch），拿到 Mac 的地址后调 hq_dial_prepared；不用了调 hq_close。
 //
 //export hq_prepare
-func hq_prepare(relay *C.char, timeoutMs C.int32_t, cb C.hq_event_fn) C.int64_t {
-	e, ctx := newEntry(cb, timeoutMs)
+func hq_prepare(gen C.uint64_t, relay *C.char, timeoutMs C.int32_t, cb C.hq_event_fn) C.int64_t {
+	if relay == nil {
+		return -1
+	}
+	e, ctx := newEntry(uint64(gen), cb, timeoutMs)
+	if e == nil {
+		return -1
+	}
 	r := C.GoString(relay)
 	go func() {
 		p, err := mquic.Prepare(ctx, r)
@@ -293,11 +331,40 @@ func hq_close(id C.int64_t, code C.int32_t, reason *C.char) {
 }
 
 // hq_reset 不再回调、直接断开现有的所有连接，返回时已经没有正在进行的回调。安卓上 Flutter 引擎可能先于进程销毁
-// （Activity 被关掉），之后旧连接的事件调到失效的回调上会崩溃：原生层在引擎销毁前调它（jni_android.go），
-// 新引擎第一次用之前也调一次兜底。
+// （Activity 被关掉），之后旧连接的事件调到失效的回调上会崩溃：原生层在引擎销毁前调它（jni_android.go）。
+// 调用后会冻结旧引擎的代次（engineFrozen=true），防止旧 isolate 在销毁前把回调或拨号重新挂回；
+// 新引擎首次使用时调 hq_engine_begin() 解冻并获取新代次。
 //
 //export hq_reset
 func hq_reset() {
+	resetEngineState(true)
+}
+
+// hq_engine_begin 由新 Flutter 引擎初始化时调用一次：清理上一个引擎可能遗留的连接、回调与回环桥，
+// 递增代次并解除冻结状态，返回当前引擎代次。
+//
+//export hq_engine_begin
+func hq_engine_begin() C.uint64_t {
+	return C.uint64_t(resetEngineState(false))
+}
+
+func resetEngineState(freeze bool) uint64 {
+	// 严格遵循全局锁序：tsLifecycleMu -> (tsEmitMu | connMu | bridgeMu)
+	// 在同一个临界区内切代、取消旧引擎上下文并摘除旧连接与旧回环 UDP 桥，确保旧 reset 绝不会误关新引擎后来登记的桥。
+	tsLifecycleMu.Lock()
+	engineGen++
+	gen := engineGen
+	engineFrozen = freeze
+	oldCancel := engineCancel
+	engineCtx, engineCancel = context.WithCancel(context.Background())
+	tsCbGen.Add(1)
+	tsEmitMu.Lock()
+	tsCb.Store(nil)
+	tsEmitMu.Unlock()
+	if !freeze {
+		cancelTSIdleTimerLocked()
+	}
+
 	connMu.Lock()
 	old := make([]*entry, 0, len(conns))
 	for id, e := range conns {
@@ -305,10 +372,24 @@ func hq_reset() {
 		delete(conns, id)
 	}
 	connMu.Unlock()
+
+	bridgeMu.Lock()
+	oldBridges := make([]*udpBridge, 0, len(udpBridges))
+	for id, b := range udpBridges {
+		oldBridges = append(oldBridges, b)
+		delete(udpBridges, id)
+	}
+	bridgeMu.Unlock()
+	tsLifecycleMu.Unlock()
+
+	if oldCancel != nil {
+		oldCancel()
+	}
+
 	for _, e := range old {
 		e.cb.Store(nil)
 	}
-	// 只为等正在进行的回调调完
+	// 等正在进行的连接回调调完
 	emitMu.Lock()
 	emitMu.Unlock()
 	for _, e := range old {
@@ -327,6 +408,18 @@ func hq_reset() {
 			c.CloseNow()
 		}
 	}
+	// 只关闭本次在临界区内摘下的旧桥；若本次为冻结（引擎销毁）且代次尚未被新引擎接管，启动空闲关停定时器。
+	for _, b := range oldBridges {
+		b.closeDetached()
+	}
+	if freeze {
+		tsLifecycleMu.Lock()
+		if engineFrozen && engineGen == gen {
+			scheduleTSIdleTimerLocked()
+		}
+		tsLifecycleMu.Unlock()
+	}
+	return gen
 }
 
 // peerCloseCode 取对方关连接时给的码：读到了关闭帧，或者没来得及读、对方已经按同一个码关了整条连接

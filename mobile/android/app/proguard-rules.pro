@@ -12,3 +12,7 @@
 -keep class kotlin.Result { *; }
 -keep class kotlin.Result$Failure { *; }
 -keep class kotlin.coroutines.intrinsics.** { *; }
+# posse_quic/go/jni_android.go 通过 JNI 按名字反射调用 MainActivity.bindSocketToActiveNetwork(int)
+-keepclassmembers class com.neolabsapp.posse.mobile.MainActivity {
+    public static int bindSocketToActiveNetwork(int);
+}
