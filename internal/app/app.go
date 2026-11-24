@@ -252,6 +252,7 @@ type app struct {
 	editorFamily string // 编辑器字体，空是默认
 	settingsTab  string // 设置页左边选中的分类，空是第一个
 	profile      profileState
+	lark         larkUIState
 	avatars      map[string]avatarEntry // 头像图片，键是摘要
 	locale       string                 // 设置页选的界面语言（mygo.App.ChosenLocale），空是跟随系统
 	termPick     fontPick

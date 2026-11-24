@@ -116,7 +116,15 @@ func WithoutDisabled(home string, names []string) []string {
 
 // permissionArgs 是启动 name 时拼进 shell 命令的权限参数。
 func (l Launcher) permissionArgs(name string) []string {
-	if PermissionMode(l.Home) == PermissionSkip {
+	return l.permissionArgsFor(name, "")
+}
+
+func (l Launcher) permissionArgsFor(name, override string) []string {
+	mode := override
+	if mode != PermissionAsk && mode != PermissionSkip {
+		mode = PermissionMode(l.Home)
+	}
+	if mode == PermissionSkip {
 		return skipArgs[name]
 	}
 	return nil

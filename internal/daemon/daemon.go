@@ -263,9 +263,11 @@ type Daemon struct {
 	gitTrace *gitTrace // 终端里的 git 命令，测试里为空
 	ln       *gateListener
 	handoff  handoffState
-	agents   agentScan   // 本机装了哪些 agent（agents.go）
-	disc     discState   // 讨论的调度（discussion.go）
-	collab   collabState // 讨论的局域网协作（collab.go、collab_join.go）
+	agents   agentScan     // 本机装了哪些 agent（agents.go）
+	disc     discState     // 讨论的调度（discussion.go）
+	collab   collabState   // 讨论的局域网协作（collab.go、collab_join.go）
+	perms    permissionHub // 手机与飞书共用的权限审批协调（permission.go）
+	lark     larkState     // 飞书多机器人网关（lark.go）
 
 	// zsh 集成和同名脚本（agent.WriteShellFiles）：写成功一次就不再写
 	shellMu     sync.Mutex
@@ -447,6 +449,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if in == nil {
 		d.startMobile()
 		d.collabStart(ctx)
+		d.larkStart(ctx)
 	} else {
 		// 交接过来的不等锁就开始服务（hook 只等 2 秒），旧进程退出放锁之后才开手机服务：端口在它手里。
 		// 一直等下去，等不到也不退出，终端都在这个进程里
@@ -468,6 +471,7 @@ func Run(ctx context.Context, cfg Config) error {
 				d.disc.mu.Unlock()
 				// 协作端口和到房主的连接也在拿到锁之后：两代进程不会同时接受写入
 				d.collabStart(ctx)
+				d.larkStart(ctx)
 				d.discKick()
 				return
 			}
@@ -481,6 +485,7 @@ func Run(ctx context.Context, cfg Config) error {
 	d.register(srv, cancel)
 	log.Printf("posse daemon %s (%s) listening on %s (pid %d)", Version, Build, sock, os.Getpid())
 	err = srv.Serve(ctx, d.ln)
+	d.larkStop()
 	d.collabStop()
 	if d.mobile != nil {
 		d.mobile.Close()
@@ -711,6 +716,12 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("collab.status", d.collabStatus)
 	srv.Handle("collab.quota", d.collabQuota)
 	srv.Handle("collab.rename", d.collabRename)
+	srv.Handle("lark.profiles", d.larkProfiles)
+	srv.Handle("lark.bots.list", d.larkBotsList)
+	srv.Handle("lark.bots.save", d.larkBotSave)
+	srv.Handle("lark.bots.delete", d.larkBotDelete)
+	srv.Handle("lark.bots.toggle", d.larkBotToggle)
+	srv.Handle("lark.status", d.larkStatus)
 	srv.Handle("profile.get", d.profileGet)
 	srv.Handle("profile.set", d.profileSet)
 	srv.HandleStream("terminal.attach", d.terminalAttach)

@@ -12,16 +12,32 @@ var antigravityValueFlags = []string{"--add-dir", "--agent", "--conversation", "
 
 const antigravityStrict = "strict"
 const antigravityStrictSettings = `{"toolPermission":"` + antigravityStrict + `"}`
+const antigravityApprovalTools = `^(run_command|write_to_file|replace_file_content|multi_replace_file_content|write_file|edit_file|call_mcp_tool)$`
 
-func (l Launcher) antigravityLaunchArgs() ([]string, error) {
+func (l Launcher) antigravityLaunchArgs(permOverride string, externalApproval bool) ([]string, error) {
 	settings := map[string]json.RawMessage{}
-	args := l.antigravityPermissions(settings, false)
+	// 飞书外部审批开启时：由专属 PreToolUse hook 独占把关（允许→allow、拒绝→deny、超时→force_ask），
+	// 进程侧加 --dangerously-skip-permissions 避免 agy 在 hook 返回 allow 后再次弹出内置终端确认。
+	effectivePerm := permOverride
+	if externalApproval {
+		effectivePerm = PermissionSkip
+	}
+	args := l.antigravityPermissions(settings, false, effectivePerm)
 	dir, err := l.writeAntigravityHooks()
 	if err != nil {
 		return nil, err
 	}
 	if dir != "" {
 		args = append(args, "--add-dir", Quote(dir))
+	}
+	if externalApproval {
+		larkDir, err := l.writeAntigravityLarkHooks()
+		if err != nil {
+			return nil, err
+		}
+		if larkDir != "" {
+			args = append(args, "--add-dir", Quote(larkDir))
+		}
 	}
 	l.addAntigravityStatusLine(settings)
 	if len(settings) == 0 {
@@ -86,7 +102,7 @@ func (l Launcher) manualAntigravityArgs(args []string) ([]string, error) {
 		return append(hooks, args...), nil
 	}
 	keys := len(settings)
-	extra := append(l.antigravityPermissions(settings, explicitPermission), hooks...)
+	extra := append(l.antigravityPermissions(settings, explicitPermission, ""), hooks...)
 	updatedStatus := l.addAntigravityStatusLine(settings)
 	if settingsIndex < 0 && len(settings) > 0 {
 		encoded, _ := json.Marshal(settings)
@@ -101,13 +117,23 @@ func (l Launcher) manualAntigravityArgs(args []string) ([]string, error) {
 }
 
 const antigravityHookDirName = ".posse-antigravity-hooks"
+const antigravityLarkHookDirName = ".posse-antigravity-lark-hooks"
 
 // AntigravityHookDir 是只放 Posse hook 的附加目录，agy 会与原工作区的 hooks 一起读取。
 func AntigravityHookDir(home string) string { return filepath.Join(home, antigravityHookDirName) }
 
+// AntigravityLarkHookDir 是飞书卡片审批专用的附加目录，仅挂载 PreToolUse，不干扰普通 agy 终端。
+func AntigravityLarkHookDir(home string) string {
+	return filepath.Join(home, antigravityLarkHookDirName)
+}
+
 // IsAntigravityHookDir 识别 agy 可能写进会话摘要的 Posse 内部目录，包括其他 Posse 实例的目录。
 func IsAntigravityHookDir(path string) bool {
-	return filepath.IsAbs(path) && filepath.Base(path) == antigravityHookDirName
+	if !filepath.IsAbs(path) {
+		return false
+	}
+	base := filepath.Base(path)
+	return base == antigravityHookDirName || base == antigravityLarkHookDirName
 }
 
 func (l Launcher) writeAntigravityHooks() (string, error) {
@@ -115,15 +141,15 @@ func (l Launcher) writeAntigravityHooks() (string, error) {
 		return "", nil
 	}
 	dir := AntigravityHookDir(l.Home)
-	handler := func(event string) map[string]any {
-		return map[string]any{"type": "command", "command": l.hookCommand("antigravity", event), "timeout": 3}
+	handler := func(event string, timeout int) map[string]any {
+		return map[string]any{"type": "command", "command": l.hookCommand("antigravity", event), "timeout": timeout}
 	}
 	data, err := json.MarshalIndent(map[string]any{
 		"posse-handoff-and-traces": map[string]any{
-			"SessionStart": []any{handler("SessionStart")},
+			"SessionStart": []any{handler("SessionStart", 3)},
 			"PostToolUse": []any{map[string]any{
 				"matcher": antigravityWriteTools,
-				"hooks":   []any{handler("PostToolUse")},
+				"hooks":   []any{handler("PostToolUse", 3)},
 			}},
 		},
 	}, "", "  ")
@@ -136,7 +162,33 @@ func (l Launcher) writeAntigravityHooks() (string, error) {
 	return dir, nil
 }
 
-func (l Launcher) antigravityPermissions(settings map[string]json.RawMessage, explicit bool) []string {
+func (l Launcher) writeAntigravityLarkHooks() (string, error) {
+	if l.Exe == "" || l.Home == "" {
+		return "", nil
+	}
+	dir := AntigravityLarkHookDir(l.Home)
+	data, err := json.MarshalIndent(map[string]any{
+		"posse-lark-approval": map[string]any{
+			"PreToolUse": []any{map[string]any{
+				"matcher": antigravityApprovalTools,
+				"hooks": []any{map[string]any{
+					"type":    "command",
+					"command": l.hookCommand("antigravity", "PreToolUse"),
+					"timeout": 200,
+				}},
+			}},
+		},
+	}, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := writeIfChanged(filepath.Join(dir, ".agents", "hooks.json"), data); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+func (l Launcher) antigravityPermissions(settings map[string]json.RawMessage, explicit bool, override string) []string {
 	for _, key := range []string{"toolPermission", "agentMode", "enableTerminalSandbox"} {
 		if _, present := settings[key]; present {
 			explicit = true
@@ -145,7 +197,11 @@ func (l Launcher) antigravityPermissions(settings map[string]json.RawMessage, ex
 	if explicit {
 		return nil
 	}
-	if PermissionMode(l.Home) == PermissionSkip {
+	mode := override
+	if mode != PermissionAsk && mode != PermissionSkip {
+		mode = PermissionMode(l.Home)
+	}
+	if mode == PermissionSkip {
 		return slices.Clone(skipArgs["antigravity"])
 	}
 	settings["toolPermission"] = json.RawMessage(`"` + antigravityStrict + `"`)

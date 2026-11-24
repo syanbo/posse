@@ -674,14 +674,42 @@ func cmdHook(e *env, args []string) error {
 	if json.Valid(payload) {
 		params["payload"] = json.RawMessage(payload)
 	}
-	// Claude 的 PermissionRequest 可以在 stdout 带回决定。其余事件仍是 2 秒，并且不输出。
-	if args[0] == "claude" && args[1] == "PermissionRequest" {
-		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+	// Antigravity 的 PreToolUse 必须显式返回 decision 字段（空对象 {} 会被 agy 视作 deny）：
+	// 非飞书审批终端、Posse 内部讨论命令以及纯只读检查命令直接返回 allow；
+	// 写文件、改代码、MCP 调用及非只读命令挂起等待飞书审批，超时返回 deny（绝不自动放行）。
+	if args[0] == "antigravity" && args[1] == "PreToolUse" {
+		if os.Getenv("POSSE_LARK_APPROVAL") != "1" || isSafeLarkToolCall(payload) {
+			hookReply = `{"decision":"allow"}`
+			return nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 190*time.Second)
 		var out struct {
 			Behavior string `json:"behavior"`
 		}
 		err := rpc.Call(ctx, socket, "hook.permission.hold", params, &out)
-		// 常驻进程交接时被打断：到新进程上再挂一次，总时间还是 35 秒
+		for rpc.Retryable(err) && ctx.Err() == nil {
+			time.Sleep(300 * time.Millisecond)
+			err = rpc.Call(ctx, socket, "hook.permission.hold", params, &out)
+		}
+		cancel()
+		if err != nil {
+			fmt.Fprintln(e.errOut, "posse hook:", err)
+		}
+		hookReply = antigravityPermissionDecision(out.Behavior)
+		return nil
+	}
+	// Claude 的 PermissionRequest 可以在 stdout 带回决定。其余事件仍是 2 秒，并且不输出。
+	if args[0] == "claude" && args[1] == "PermissionRequest" {
+		wait := 35 * time.Second
+		if os.Getenv("POSSE_LARK_APPROVAL") == "1" {
+			wait = 190 * time.Second
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), wait)
+		var out struct {
+			Behavior string `json:"behavior"`
+		}
+		err := rpc.Call(ctx, socket, "hook.permission.hold", params, &out)
+		// 常驻进程交接时被打断：到新进程上再挂一次
 		for rpc.Retryable(err) && ctx.Err() == nil {
 			time.Sleep(300 * time.Millisecond)
 			err = rpc.Call(ctx, socket, "hook.permission.hold", params, &out)
@@ -751,6 +779,292 @@ func permissionDecision(behavior string) string {
 		},
 	})
 	return string(b)
+}
+
+// antigravityPermissionDecision 是交回给 agy PreToolUse 的决定。
+// agy 要求 decision 必填；飞书 worker 侧带 --dangerously-skip-permissions，超时或未决定时必须返回 deny，绝不自动放行。
+func antigravityPermissionDecision(behavior string) string {
+	switch behavior {
+	case "allow":
+		return `{"decision":"allow"}`
+	case "deny":
+		return `{"decision":"deny","reason":"Denied in Posse/Feishu"}`
+	default:
+		return `{"decision":"deny","reason":"Permission approval timed out in Posse/Feishu"}`
+	}
+}
+
+// isSafeLarkToolCall 放行飞书审批模式下的安全只读检查、Posse 讨论协作命令以及 $POSSE_NOTES/discussions/ 内的回复草稿写入，
+// 避免一次只读排查在飞书群刷出十几张无意义审批卡片；所有代码改动、非只读命令和 MCP 调用仍必须人工审批。
+func isSafeLarkToolCall(payload []byte) bool {
+	if len(payload) == 0 {
+		return false
+	}
+	var p struct {
+		ToolCall struct {
+			Name string         `json:"name"`
+			Args map[string]any `json:"args"`
+		} `json:"toolCall"`
+	}
+	if json.Unmarshal(payload, &p) != nil {
+		return false
+	}
+	switch p.ToolCall.Name {
+	case "write_file", "write_to_file":
+		return isDiscussionNoteWrite(p.ToolCall.Args)
+	case "run_command":
+		cmdLine, _ := p.ToolCall.Args["CommandLine"].(string)
+		return isSafeReadOnlyCommandLine(cmdLine)
+	default:
+		return false
+	}
+}
+
+func isDiscussionNoteWrite(args map[string]any) bool {
+	notes := strings.TrimSpace(os.Getenv("POSSE_NOTES"))
+	if notes == "" {
+		return false
+	}
+	target, _ := args["Path"].(string)
+	if target == "" {
+		target, _ = args["TargetFile"].(string)
+	}
+	target = strings.TrimSpace(target)
+	if target == "" || !filepath.IsAbs(target) {
+		return false
+	}
+	root := filepath.Join(filepath.Clean(notes), "discussions") + string(filepath.Separator)
+	clean := filepath.Clean(target)
+	return strings.HasPrefix(clean, root)
+}
+
+func isSafeReadOnlyCommandLine(cmdLine string) bool {
+	cmdLine = strings.TrimSpace(cmdLine)
+	if cmdLine == "" || strings.ContainsAny(cmdLine, "\n\r\x00`") || strings.Contains(cmdLine, "$(") {
+		return false
+	}
+	// 允许常见的无害错误流抑制（2>/dev/null、2>&1），其余任何重定向一律交人工审批
+	sanitized := strings.ReplaceAll(cmdLine, "2>/dev/null", "")
+	sanitized = strings.ReplaceAll(sanitized, "2>&1", "")
+	if strings.ContainsAny(sanitized, "><") {
+		return false
+	}
+	segs, ok := splitShellSegments(sanitized)
+	if !ok || len(segs) == 0 {
+		return false
+	}
+	for _, seg := range segs {
+		tokens, ok := splitShellTokens(seg)
+		if !ok || len(tokens) == 0 {
+			return false
+		}
+		if !isSafeReadOnlySegment(tokens) {
+			return false
+		}
+	}
+	return true
+}
+
+// splitShellSegments 在引号外按 |、;、&&、|| 切分简单命令段；遇到未闭合引号返回 false。
+func splitShellSegments(s string) ([]string, bool) {
+	var segs []string
+	var cur strings.Builder
+	var quote byte
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if quote != 0 {
+			if ch == '\\' && quote == '"' && i+1 < len(s) {
+				cur.WriteByte(ch)
+				i++
+				cur.WriteByte(s[i])
+				continue
+			}
+			if ch == quote {
+				quote = 0
+			}
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			quote = ch
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == ';' {
+			if t := strings.TrimSpace(cur.String()); t != "" {
+				segs = append(segs, t)
+			}
+			cur.Reset()
+			continue
+		}
+		if ch == '|' {
+			if i+1 < len(s) && s[i+1] == '|' {
+				i++
+			}
+			if t := strings.TrimSpace(cur.String()); t != "" {
+				segs = append(segs, t)
+			}
+			cur.Reset()
+			continue
+		}
+		if ch == '&' {
+			if i+1 < len(s) && s[i+1] == '&' {
+				i++
+				if t := strings.TrimSpace(cur.String()); t != "" {
+					segs = append(segs, t)
+				}
+				cur.Reset()
+				continue
+			}
+			// 后台执行 & 一律交人工审批
+			return nil, false
+		}
+		cur.WriteByte(ch)
+	}
+	if quote != 0 {
+		return nil, false
+	}
+	if t := strings.TrimSpace(cur.String()); t != "" {
+		segs = append(segs, t)
+	}
+	return segs, true
+}
+
+func splitShellTokens(s string) ([]string, bool) {
+	var out []string
+	var cur strings.Builder
+	var quote byte
+	hasToken := false
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if quote != 0 {
+			if ch == '\\' && quote == '"' && i+1 < len(s) {
+				i++
+				cur.WriteByte(s[i])
+				continue
+			}
+			if ch == quote {
+				quote = 0
+				continue
+			}
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			quote = ch
+			hasToken = true
+			continue
+		}
+		if ch == ' ' || ch == '\t' {
+			if hasToken {
+				out = append(out, cur.String())
+				cur.Reset()
+				hasToken = false
+			}
+			continue
+		}
+		if ch == '\\' && i+1 < len(s) {
+			i++
+			cur.WriteByte(s[i])
+			hasToken = true
+			continue
+		}
+		cur.WriteByte(ch)
+		hasToken = true
+	}
+	if quote != 0 {
+		return nil, false
+	}
+	if hasToken {
+		out = append(out, cur.String())
+	}
+	return out, true
+}
+
+func isSafeReadOnlySegment(tokens []string) bool {
+	if len(tokens) == 0 {
+		return false
+	}
+	cmd := filepath.Base(tokens[0])
+	args := tokens[1:]
+	switch cmd {
+	case "posse":
+		if len(args) < 2 {
+			return false
+		}
+		pair := args[0] + " " + args[1]
+		switch pair {
+		case "discussion read", "discussion summarize", "discussion mention",
+			"task check", "task done", "task ask":
+			return true
+		}
+		return false
+	case "ls", "pwd", "cat", "head", "tail", "wc", "stat", "file", "which",
+		"basename", "dirname", "realpath", "readlink", "echo", "printf",
+		"grep", "egrep", "fgrep", "rg", "sort", "uniq", "cut", "tr", "diff", "comm", "true", "false":
+		return true
+	case "find":
+		for _, a := range args {
+			switch a {
+			case "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprintf", "-fls":
+				return false
+			}
+		}
+		return true
+	case "sed":
+		hasN := false
+		for _, a := range args {
+			if a == "-i" || strings.HasPrefix(a, "-i") || a == "--in-place" || strings.HasPrefix(a, "--in-place=") {
+				return false
+			}
+			if a == "-n" {
+				hasN = true
+			}
+		}
+		return hasN
+	case "git":
+		return isSafeReadOnlyGit(args)
+	default:
+		return false
+	}
+}
+
+func isSafeReadOnlyGit(args []string) bool {
+	i := 0
+	for i < len(args) {
+		a := args[i]
+		switch {
+		case a == "-C" || a == "--git-dir" || a == "--work-tree" || a == "-c":
+			i += 2
+		case strings.HasPrefix(a, "-C") || strings.HasPrefix(a, "--git-dir=") || strings.HasPrefix(a, "--work-tree=") ||
+			a == "--no-pager" || a == "-P" || a == "--bare":
+			i++
+		case strings.HasPrefix(a, "-"):
+			return false
+		default:
+			sub := a
+			rest := args[i+1:]
+			switch sub {
+			case "status", "diff", "log", "show", "rev-parse", "ls-files", "ls-tree", "blame", "shortlog", "describe":
+				return true
+			case "branch":
+				for _, r := range rest {
+					switch r {
+					case "-d", "-D", "-m", "-M", "-c", "-C", "-f", "--delete", "--move", "--copy", "--force":
+						return false
+					}
+				}
+				return true
+			case "stash", "worktree":
+				return len(rest) >= 1 && rest[0] == "list"
+			case "remote":
+				return len(rest) == 0 || (len(rest) == 1 && (rest[0] == "-v" || rest[0] == "--verbose"))
+			default:
+				return false
+			}
+		}
+	}
+	return false
 }
 
 func cmdVersion(e *env, args []string) error {

@@ -786,8 +786,8 @@ type hookEventResult struct {
 	Brief        string `json:"brief,omitempty"`   // 新开的 Claude、Codex 在这个目录里最近几条会话
 }
 
-// hookPermission 先照常记下等待状态，再只在有 Posse 手机看着这个会话时挂起等决定。
-// 没有手机、桌面有人键入、或 30 秒到了，都返回空 behavior，hook 不往 stdout 写，TUI 自己弹框。
+// hookPermission 先照常记下等待状态，再在有飞书或 Posse 手机看着这个会话时挂起等决定。
+// 无人监听、桌面有人键入或超时，都返回空 behavior，hook 不干预，交回 TUI 自己弹框。
 func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p hookEventParams
 	if err := rpc.Decode(raw, &p); err != nil {
@@ -803,9 +803,21 @@ func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, 
 		st.Status = s.preferOSC(st.Status)
 		d.setAgent(s, st)
 	}
-	if d.mobile != nil && p.Agent == "claude" && p.Event == "PermissionRequest" {
-		behavior = d.mobile.HoldPermission(ctx, s.ID, p.Payload, s.LastInput)
-		// 常驻进程退出打断的挂起：让 hook 到新进程上再挂一次，手机重连后还能批
+	if (p.Agent == "claude" && p.Event == "PermissionRequest") || (p.Agent == "antigravity" && p.Event == "PreToolUse") {
+		var mobileHold func(context.Context) string
+		if d.mobile != nil && p.Agent == "claude" && p.Event == "PermissionRequest" {
+			mobileHold = func(mctx context.Context) string {
+				return d.mobile.HoldPermission(mctx, s.ID, p.Payload, s.LastInput)
+			}
+		}
+		lastInput := s.LastInput
+		if p.Agent == "antigravity" && p.Event == "PreToolUse" {
+			// Antigravity 在 PreToolUse 阻塞时终端尚未弹出审批框，
+			// 点击/聚焦/滚轮等窗口事件也会刷新 LastInput，不能据此误判「已在桌面终端处理」。
+			lastInput = nil
+		}
+		behavior = d.perms.Hold(ctx, s.ID, p.Agent, p.Payload, mobileHold, lastInput)
+		// 常驻进程退出打断的挂起：让 hook 到新进程上再挂一次
 		if behavior == "" && ctx.Err() != nil {
 			return nil, rpc.Errorf(rpc.CodeRestarting, "daemon is shutting down; retry")
 		}

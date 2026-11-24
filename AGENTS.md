@@ -74,7 +74,7 @@ third_party/mygo       带改动的 mygo v0.7.4（改动与升级方法见其中
 - `docs/features/agents.md`：agent 识别、手动启动 hooks、编排（`posse task`）、会话标题、自带技能、权限、恢复终端、`posse web`、文件去处与痕迹
 - `docs/features/git.md`：多仓库发现、改动/提交/储藏/回滚、diff、日志、比较、分支、worktree 同步合并及目标 Git 操作规则
 - `docs/features/remote.md`：SSH 远程工作区、桌面查看/接管租约（`desktop.*`）、跨入口写协调及目标文件/媒体/Git RPC 边界与状态机
-- `docs/features/files.md`、`history.md`、`discussions.md`、`usage.md`、`mobile.md`、`ui.md`：文件栏与编辑器、会话历史、讨论与局域网协作、套餐用量与防休眠、手机遥控与看桌面、桌面各界面行为
+- `docs/features/files.md`、`history.md`、`discussions.md`、`usage.md`、`mobile.md`、`ui.md`、`lark.md`：文件栏与编辑器、会话历史、讨论与局域网协作、套餐用量与防休眠、手机遥控与看桌面、桌面各界面行为、飞书多机器人网关
 - `docs/plans/terminal-host.md`：常驻进程无损交接（`daemon.handoff`）与 APFS 运行副本回收
 
 ## 关键约定

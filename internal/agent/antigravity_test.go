@@ -151,3 +151,45 @@ func TestAntigravityAddedDirs(t *testing.T) {
 		t.Fatalf("added dirs = %q, want %q", got, want)
 	}
 }
+
+func TestAntigravityExternalApprovalIsolatesPreToolUse(t *testing.T) {
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
+	normal, err := l.Launch("antigravity", Model{}, "hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalCmd := normal.Argv[len(normal.Argv)-1]
+	larkDir := AntigravityLarkHookDir(l.Home)
+	if strings.Contains(normalCmd, larkDir) {
+		t.Fatalf("normal launch should not include lark hook dir: %s", normalCmd)
+	}
+	baseHooks, err := os.ReadFile(filepath.Join(AntigravityHookDir(l.Home), ".agents", "hooks.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(baseHooks), "PreToolUse") {
+		t.Fatalf("base hooks.json should not contain PreToolUse: %s", baseHooks)
+	}
+
+	ext, err := l.Launch("antigravity", Model{Permission: PermissionAsk, ExternalApproval: true}, "hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	extCmd := ext.Argv[len(ext.Argv)-1]
+	if !strings.Contains(extCmd, "--dangerously-skip-permissions") {
+		t.Fatalf("external approval launch should skip double TUI prompt: %s", extCmd)
+	}
+	if !strings.Contains(extCmd, "--add-dir "+Quote(larkDir)) {
+		t.Fatalf("external approval launch missing lark hook dir: %s", extCmd)
+	}
+	larkHooks, err := os.ReadFile(filepath.Join(larkDir, ".agents", "hooks.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(larkHooks), "hook antigravity PreToolUse") {
+		t.Fatalf("lark hooks.json missing PreToolUse: %s", larkHooks)
+	}
+	if !IsAntigravityHookDir(AntigravityHookDir(l.Home)) || !IsAntigravityHookDir(larkDir) {
+		t.Fatalf("IsAntigravityHookDir should recognize both hook dirs")
+	}
+}

@@ -39,6 +39,11 @@ type Model struct {
 	// Worker 表示是 posse task 派出去的 worker：终端前面没人守着，Cursor 加 --trust，
 	// 不然在没信任过的目录（新建的 worktree）里卡在工作区信任框上，hooks 也还没起作用，不会报待处理
 	Worker bool `json:"-"`
+	// Permission 可选覆盖全局权限档位（PermissionAsk / PermissionSkip），为空时沿用全局设置。
+	Permission string `json:"-"`
+	// ExternalApproval 表示工具权限由外部审批端（如飞书卡片）通过 PreToolUse hook 把关：
+	// Antigravity 挂入独立的飞书 PreToolUse hook 目录并跳过内置二次确认弹窗，避免飞书点允许后终端再卡住。
+	ExternalApproval bool `json:"-"`
 }
 
 // args 是 agent 启动参数里的模型部分。Cursor 没有单独的思考深度参数，只能写进模型名的方括号。
@@ -121,13 +126,13 @@ func (l Launcher) Launch(name string, m Model, prompt string) (Launch, error) {
 	}
 	parts = append(parts, margs...)
 	if name == "antigravity" {
-		args, err := l.antigravityLaunchArgs()
+		args, err := l.antigravityLaunchArgs(m.Permission, m.ExternalApproval)
 		if err != nil {
 			return Launch{}, err
 		}
 		parts = append(parts, args...)
 	} else {
-		parts = append(parts, l.permissionArgs(name)...)
+		parts = append(parts, l.permissionArgsFor(name, m.Permission)...)
 	}
 	if prompt != "" {
 		if name == "antigravity" {
@@ -181,7 +186,7 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 	// codex 的已经加在 resume 子命令前面
 	switch name {
 	case "antigravity":
-		args, err := l.antigravityLaunchArgs()
+		args, err := l.antigravityLaunchArgs("", false)
 		if err != nil {
 			return Launch{}, err
 		}

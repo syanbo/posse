@@ -36,6 +36,7 @@ var settingsTabs = []struct {
 	{"appearance", locales.Messages.SettingsTabAppearance, iconAppearance},
 	{"keys", locales.Messages.SettingsTabKeys, iconKeyboard},
 	{"about", locales.Messages.SettingsTabAbout, iconInfo},
+	{"lark", locales.Messages.SettingsTabLark, iconDiscussion},
 }
 
 // settingsBoard 是设置页：左边分类，右边是这一类的卡片。通用（语言、防休眠、恢复终端、终端选区、通知）、Agent（权限、套餐用量）、
@@ -91,6 +92,8 @@ func (a *app) settingsBoard(c *ui.Context) {
 					case "about":
 						a.updateSettings(c)
 						a.aboutSettings(c)
+					case "lark":
+						a.larkSettings(c)
 					}
 				})
 			})

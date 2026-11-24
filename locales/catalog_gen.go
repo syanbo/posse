@@ -29068,3 +29068,385 @@ func DiscSubagents(count int) string { return In(i18n.Locale()).DiscSubagents(co
 func (msgs Messages) DiscSubagents(count int) string {
 	return Catalog.Format(msgs.locale, "discSubagents", map[string]any{"count": count})
 }
+
+// SettingsTabLark says "Feishu Bots"
+// in the language the app shows.
+//
+// Settings sidebar tab for configuring Feishu / Lark bots.
+func SettingsTabLark() string { return In(i18n.Locale()).SettingsTabLark() }
+
+// SettingsTabLark says "Feishu Bots"
+// in the language of msgs.
+//
+// Settings sidebar tab for configuring Feishu / Lark bots.
+func (msgs Messages) SettingsTabLark() string {
+	return Catalog.Format(msgs.locale, "settingsTabLark", nil)
+}
+
+// LarkTitle says "Feishu Bots"
+// in the language the app shows.
+//
+// Settings card title for Feishu multi-bot gateway.
+func LarkTitle() string { return In(i18n.Locale()).LarkTitle() }
+
+// LarkTitle says "Feishu Bots"
+// in the language of msgs.
+//
+// Settings card title for Feishu multi-bot gateway.
+func (msgs Messages) LarkTitle() string {
+	return Catalog.Format(msgs.locale, "larkTitle", nil)
+}
+
+// LarkNote says "Connect local lark-cli bot profiles to Posse discussions. Messages in Feishu sync with desktop and mobile Posse, with…"
+// in the language the app shows.
+//
+// Settings card note explaining how Feishu bots work.
+func LarkNote() string { return In(i18n.Locale()).LarkNote() }
+
+// LarkNote says "Connect local lark-cli bot profiles to Posse discussions. Messages in Feishu sync with desktop and mobile Posse, with…"
+// in the language of msgs.
+//
+// Settings card note explaining how Feishu bots work.
+func (msgs Messages) LarkNote() string {
+	return Catalog.Format(msgs.locale, "larkNote", nil)
+}
+
+// LarkOwnerLabel says "Owner Open ID"
+// in the language the app shows.
+//
+// Label for the Feishu owner open_id used to authorize approvals and stop
+// buttons.
+func LarkOwnerLabel() string { return In(i18n.Locale()).LarkOwnerLabel() }
+
+// LarkOwnerLabel says "Owner Open ID"
+// in the language of msgs.
+//
+// Label for the Feishu owner open_id used to authorize approvals and stop
+// buttons.
+func (msgs Messages) LarkOwnerLabel() string {
+	return Catalog.Format(msgs.locale, "larkOwnerLabel", nil)
+}
+
+// LarkAddBot says "Add Bot"
+// in the language the app shows.
+//
+// Button to add a new Feishu bot configuration.
+func LarkAddBot() string { return In(i18n.Locale()).LarkAddBot() }
+
+// LarkAddBot says "Add Bot"
+// in the language of msgs.
+//
+// Button to add a new Feishu bot configuration.
+func (msgs Messages) LarkAddBot() string {
+	return Catalog.Format(msgs.locale, "larkAddBot", nil)
+}
+
+// LarkRefresh says "Refresh"
+// in the language the app shows.
+//
+// Button to reload Feishu bot statuses and lark-cli profiles.
+func LarkRefresh() string { return In(i18n.Locale()).LarkRefresh() }
+
+// LarkRefresh says "Refresh"
+// in the language of msgs.
+//
+// Button to reload Feishu bot statuses and lark-cli profiles.
+func (msgs Messages) LarkRefresh() string {
+	return Catalog.Format(msgs.locale, "larkRefresh", nil)
+}
+
+// LarkEmpty says "No Feishu bots configured yet. Add one using a local lark-cli profile."
+// in the language the app shows.
+//
+// Empty state text in Settings -> Feishu Bots.
+func LarkEmpty() string { return In(i18n.Locale()).LarkEmpty() }
+
+// LarkEmpty says "No Feishu bots configured yet. Add one using a local lark-cli profile."
+// in the language of msgs.
+//
+// Empty state text in Settings -> Feishu Bots.
+func (msgs Messages) LarkEmpty() string {
+	return Catalog.Format(msgs.locale, "larkEmpty", nil)
+}
+
+// LarkStateReady says "Connected"
+// in the language the app shows.
+//
+// Feishu bot status when both message and card streams are connected.
+func LarkStateReady() string { return In(i18n.Locale()).LarkStateReady() }
+
+// LarkStateReady says "Connected"
+// in the language of msgs.
+//
+// Feishu bot status when both message and card streams are connected.
+func (msgs Messages) LarkStateReady() string {
+	return Catalog.Format(msgs.locale, "larkStateReady", nil)
+}
+
+// LarkStateConnecting says "Connecting…"
+// in the language the app shows.
+//
+// Feishu bot status while connecting lark-cli event streams.
+func LarkStateConnecting() string { return In(i18n.Locale()).LarkStateConnecting() }
+
+// LarkStateConnecting says "Connecting…"
+// in the language of msgs.
+//
+// Feishu bot status while connecting lark-cli event streams.
+func (msgs Messages) LarkStateConnecting() string {
+	return Catalog.Format(msgs.locale, "larkStateConnecting", nil)
+}
+
+// LarkStateOff says "Disabled"
+// in the language the app shows.
+//
+// Feishu bot status when disabled.
+func LarkStateOff() string { return In(i18n.Locale()).LarkStateOff() }
+
+// LarkStateOff says "Disabled"
+// in the language of msgs.
+//
+// Feishu bot status when disabled.
+func (msgs Messages) LarkStateOff() string {
+	return Catalog.Format(msgs.locale, "larkStateOff", nil)
+}
+
+// LarkEditBot says "Edit Bot"
+// in the language the app shows.
+//
+// Form title and button for editing a Feishu bot.
+func LarkEditBot() string { return In(i18n.Locale()).LarkEditBot() }
+
+// LarkEditBot says "Edit Bot"
+// in the language of msgs.
+//
+// Form title and button for editing a Feishu bot.
+func (msgs Messages) LarkEditBot() string {
+	return Catalog.Format(msgs.locale, "larkEditBot", nil)
+}
+
+// LarkDeleteBot says "Remove"
+// in the language the app shows.
+//
+// Button to remove a Feishu bot configuration.
+func LarkDeleteBot() string { return In(i18n.Locale()).LarkDeleteBot() }
+
+// LarkDeleteBot says "Remove"
+// in the language of msgs.
+//
+// Button to remove a Feishu bot configuration.
+func (msgs Messages) LarkDeleteBot() string {
+	return Catalog.Format(msgs.locale, "larkDeleteBot", nil)
+}
+
+// LarkFieldName says "Display Name"
+// in the language the app shows.
+//
+// Form label for Feishu bot display name.
+func LarkFieldName() string { return In(i18n.Locale()).LarkFieldName() }
+
+// LarkFieldName says "Display Name"
+// in the language of msgs.
+//
+// Form label for Feishu bot display name.
+func (msgs Messages) LarkFieldName() string {
+	return Catalog.Format(msgs.locale, "larkFieldName", nil)
+}
+
+// LarkFieldProfile says "lark-cli Profile"
+// in the language the app shows.
+//
+// Form label for choosing the lark-cli profile.
+func LarkFieldProfile() string { return In(i18n.Locale()).LarkFieldProfile() }
+
+// LarkFieldProfile says "lark-cli Profile"
+// in the language of msgs.
+//
+// Form label for choosing the lark-cli profile.
+func (msgs Messages) LarkFieldProfile() string {
+	return Catalog.Format(msgs.locale, "larkFieldProfile", nil)
+}
+
+// LarkFieldWorkspace says "Default Workspace"
+// in the language the app shows.
+//
+// Form label for choosing the bot's default workspace.
+func LarkFieldWorkspace() string { return In(i18n.Locale()).LarkFieldWorkspace() }
+
+// LarkFieldWorkspace says "Default Workspace"
+// in the language of msgs.
+//
+// Form label for choosing the bot's default workspace.
+func (msgs Messages) LarkFieldWorkspace() string {
+	return Catalog.Format(msgs.locale, "larkFieldWorkspace", nil)
+}
+
+// LarkFieldAgent says "Default Agent"
+// in the language the app shows.
+//
+// Form label for choosing the bot's default agent.
+func LarkFieldAgent() string { return In(i18n.Locale()).LarkFieldAgent() }
+
+// LarkFieldAgent says "Default Agent"
+// in the language of msgs.
+//
+// Form label for choosing the bot's default agent.
+func (msgs Messages) LarkFieldAgent() string {
+	return Catalog.Format(msgs.locale, "larkFieldAgent", nil)
+}
+
+// LarkFieldPermission says "Tool Approval"
+// in the language the app shows.
+//
+// Form label for tool permission mode on a Feishu bot.
+func LarkFieldPermission() string { return In(i18n.Locale()).LarkFieldPermission() }
+
+// LarkFieldPermission says "Tool Approval"
+// in the language of msgs.
+//
+// Form label for tool permission mode on a Feishu bot.
+func (msgs Messages) LarkFieldPermission() string {
+	return Catalog.Format(msgs.locale, "larkFieldPermission", nil)
+}
+
+// LarkFieldSession says "Group Session Mode"
+// in the language the app shows.
+//
+// Form label for group conversation mapping mode.
+func LarkFieldSession() string { return In(i18n.Locale()).LarkFieldSession() }
+
+// LarkFieldSession says "Group Session Mode"
+// in the language of msgs.
+//
+// Form label for group conversation mapping mode.
+func (msgs Messages) LarkFieldSession() string {
+	return Catalog.Format(msgs.locale, "larkFieldSession", nil)
+}
+
+// LarkSessionChat says "Per Group"
+// in the language the app shows.
+//
+// Segmented option: one Feishu group maps to one Posse discussion.
+func LarkSessionChat() string { return In(i18n.Locale()).LarkSessionChat() }
+
+// LarkSessionChat says "Per Group"
+// in the language of msgs.
+//
+// Segmented option: one Feishu group maps to one Posse discussion.
+func (msgs Messages) LarkSessionChat() string {
+	return Catalog.Format(msgs.locale, "larkSessionChat", nil)
+}
+
+// LarkSessionThread says "Per Thread"
+// in the language the app shows.
+//
+// Segmented option: each reply thread in a group maps to its own
+// discussion.
+func LarkSessionThread() string { return In(i18n.Locale()).LarkSessionThread() }
+
+// LarkSessionThread says "Per Thread"
+// in the language of msgs.
+//
+// Segmented option: each reply thread in a group maps to its own
+// discussion.
+func (msgs Messages) LarkSessionThread() string {
+	return Catalog.Format(msgs.locale, "larkSessionThread", nil)
+}
+
+// LarkFieldTrigger says "Who Can Trigger"
+// in the language the app shows.
+//
+// Form label for trigger whitelist policy in group chats.
+func LarkFieldTrigger() string { return In(i18n.Locale()).LarkFieldTrigger() }
+
+// LarkFieldTrigger says "Who Can Trigger"
+// in the language of msgs.
+//
+// Form label for trigger whitelist policy in group chats.
+func (msgs Messages) LarkFieldTrigger() string {
+	return Catalog.Format(msgs.locale, "larkFieldTrigger", nil)
+}
+
+// LarkTriggerSelf says "Owner Only"
+// in the language the app shows.
+//
+// Trigger policy option: only the owner open_id can trigger the bot.
+func LarkTriggerSelf() string { return In(i18n.Locale()).LarkTriggerSelf() }
+
+// LarkTriggerSelf says "Owner Only"
+// in the language of msgs.
+//
+// Trigger policy option: only the owner open_id can trigger the bot.
+func (msgs Messages) LarkTriggerSelf() string {
+	return Catalog.Format(msgs.locale, "larkTriggerSelf", nil)
+}
+
+// LarkTriggerAllowlist says "Allowlist"
+// in the language the app shows.
+//
+// Trigger policy option: owner plus explicitly listed users.
+func LarkTriggerAllowlist() string { return In(i18n.Locale()).LarkTriggerAllowlist() }
+
+// LarkTriggerAllowlist says "Allowlist"
+// in the language of msgs.
+//
+// Trigger policy option: owner plus explicitly listed users.
+func (msgs Messages) LarkTriggerAllowlist() string {
+	return Catalog.Format(msgs.locale, "larkTriggerAllowlist", nil)
+}
+
+// LarkTriggerGroup says "Anyone in Group"
+// in the language the app shows.
+//
+// Trigger policy option: any group member can trigger the bot.
+func LarkTriggerGroup() string { return In(i18n.Locale()).LarkTriggerGroup() }
+
+// LarkTriggerGroup says "Anyone in Group"
+// in the language of msgs.
+//
+// Trigger policy option: any group member can trigger the bot.
+func (msgs Messages) LarkTriggerGroup() string {
+	return Catalog.Format(msgs.locale, "larkTriggerGroup", nil)
+}
+
+// LarkFieldRole says "Role & Instructions"
+// in the language the app shows.
+//
+// Form label for the bot's role prompt.
+func LarkFieldRole() string { return In(i18n.Locale()).LarkFieldRole() }
+
+// LarkFieldRole says "Role & Instructions"
+// in the language of msgs.
+//
+// Form label for the bot's role prompt.
+func (msgs Messages) LarkFieldRole() string {
+	return Catalog.Format(msgs.locale, "larkFieldRole", nil)
+}
+
+// LarkSave says "Save"
+// in the language the app shows.
+//
+// Button to save a Feishu bot configuration.
+func LarkSave() string { return In(i18n.Locale()).LarkSave() }
+
+// LarkSave says "Save"
+// in the language of msgs.
+//
+// Button to save a Feishu bot configuration.
+func (msgs Messages) LarkSave() string {
+	return Catalog.Format(msgs.locale, "larkSave", nil)
+}
+
+// LarkCancel says "Cancel"
+// in the language the app shows.
+//
+// Button to cancel editing a Feishu bot.
+func LarkCancel() string { return In(i18n.Locale()).LarkCancel() }
+
+// LarkCancel says "Cancel"
+// in the language of msgs.
+//
+// Button to cancel editing a Feishu bot.
+func (msgs Messages) LarkCancel() string {
+	return Catalog.Format(msgs.locale, "larkCancel", nil)
+}

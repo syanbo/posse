@@ -10411,5 +10411,113 @@
         "type": "int"
       }
     }
+  },
+  "settingsTabLark": "Feishu Bots",
+  "@settingsTabLark": {
+    "description": "Settings sidebar tab for configuring Feishu / Lark bots."
+  },
+  "larkTitle": "Feishu Bots",
+  "@larkTitle": {
+    "description": "Settings card title for Feishu multi-bot gateway."
+  },
+  "larkNote": "Connect local lark-cli bot profiles to Posse discussions. Messages in Feishu sync with desktop and mobile Posse, with interactive cards for progress, approvals, questions, and stop.",
+  "@larkNote": {
+    "description": "Settings card note explaining how Feishu bots work."
+  },
+  "larkOwnerLabel": "Owner Open ID",
+  "@larkOwnerLabel": {
+    "description": "Label for the Feishu owner open_id used to authorize approvals and stop buttons."
+  },
+  "larkAddBot": "Add Bot",
+  "@larkAddBot": {
+    "description": "Button to add a new Feishu bot configuration."
+  },
+  "larkRefresh": "Refresh",
+  "@larkRefresh": {
+    "description": "Button to reload Feishu bot statuses and lark-cli profiles."
+  },
+  "larkEmpty": "No Feishu bots configured yet. Add one using a local lark-cli profile.",
+  "@larkEmpty": {
+    "description": "Empty state text in Settings -> Feishu Bots."
+  },
+  "larkStateReady": "Connected",
+  "@larkStateReady": {
+    "description": "Feishu bot status when both message and card streams are connected."
+  },
+  "larkStateConnecting": "Connecting…",
+  "@larkStateConnecting": {
+    "description": "Feishu bot status while connecting lark-cli event streams."
+  },
+  "larkStateOff": "Disabled",
+  "@larkStateOff": {
+    "description": "Feishu bot status when disabled."
+  },
+  "larkEditBot": "Edit Bot",
+  "@larkEditBot": {
+    "description": "Form title and button for editing a Feishu bot."
+  },
+  "larkDeleteBot": "Remove",
+  "@larkDeleteBot": {
+    "description": "Button to remove a Feishu bot configuration."
+  },
+  "larkFieldName": "Display Name",
+  "@larkFieldName": {
+    "description": "Form label for Feishu bot display name."
+  },
+  "larkFieldProfile": "lark-cli Profile",
+  "@larkFieldProfile": {
+    "description": "Form label for choosing the lark-cli profile."
+  },
+  "larkFieldWorkspace": "Default Workspace",
+  "@larkFieldWorkspace": {
+    "description": "Form label for choosing the bot's default workspace."
+  },
+  "larkFieldAgent": "Default Agent",
+  "@larkFieldAgent": {
+    "description": "Form label for choosing the bot's default agent."
+  },
+  "larkFieldPermission": "Tool Approval",
+  "@larkFieldPermission": {
+    "description": "Form label for tool permission mode on a Feishu bot."
+  },
+  "larkFieldSession": "Group Session Mode",
+  "@larkFieldSession": {
+    "description": "Form label for group conversation mapping mode."
+  },
+  "larkSessionChat": "Per Group",
+  "@larkSessionChat": {
+    "description": "Segmented option: one Feishu group maps to one Posse discussion."
+  },
+  "larkSessionThread": "Per Thread",
+  "@larkSessionThread": {
+    "description": "Segmented option: each reply thread in a group maps to its own discussion."
+  },
+  "larkFieldTrigger": "Who Can Trigger",
+  "@larkFieldTrigger": {
+    "description": "Form label for trigger whitelist policy in group chats."
+  },
+  "larkTriggerSelf": "Owner Only",
+  "@larkTriggerSelf": {
+    "description": "Trigger policy option: only the owner open_id can trigger the bot."
+  },
+  "larkTriggerAllowlist": "Allowlist",
+  "@larkTriggerAllowlist": {
+    "description": "Trigger policy option: owner plus explicitly listed users."
+  },
+  "larkTriggerGroup": "Anyone in Group",
+  "@larkTriggerGroup": {
+    "description": "Trigger policy option: any group member can trigger the bot."
+  },
+  "larkFieldRole": "Role & Instructions",
+  "@larkFieldRole": {
+    "description": "Form label for the bot's role prompt."
+  },
+  "larkSave": "Save",
+  "@larkSave": {
+    "description": "Button to save a Feishu bot configuration."
+  },
+  "larkCancel": "Cancel",
+  "@larkCancel": {
+    "description": "Button to cancel editing a Feishu bot."
   }
 }

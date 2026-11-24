@@ -283,7 +283,9 @@ func (d *Daemon) startRound(m store.Member, x store.Execution) {
 		d.store.StartFailed(x.ID, "", true)
 		return
 	}
-	s, err := d.discLaunch(w, m.Agent, agent.Model{Name: m.Model, Effort: m.Effort}, t.Spec, "POSSE_TASK_ID="+t.ID, "POSSE_DISCUSSION="+disc.Key)
+	permOverride, externalApproval, larkEnv := d.larkLaunchOptions(disc.Key)
+	envVars := append([]string{"POSSE_TASK_ID=" + t.ID, "POSSE_DISCUSSION=" + disc.Key}, larkEnv...)
+	s, err := d.discLaunch(w, m.Agent, agent.Model{Name: m.Model, Effort: m.Effort, Permission: permOverride, ExternalApproval: externalApproval}, t.Spec, envVars...)
 	var bindErr error
 	if err == nil {
 		t.Worker = s.ID
@@ -1495,6 +1497,9 @@ func (d *Daemon) discPost(ctx context.Context, raw json.RawMessage) (any, error)
 		return nil, discError(err)
 	}
 	d.taskNotify()
+	if !dup {
+		d.larkOnDesktopUserMessage(disc.Key, p.Body)
+	}
 	if len(xs) > 0 {
 		d.discKick()
 	}
@@ -1703,6 +1708,7 @@ func (d *Daemon) discStop(ctx context.Context, raw json.RawMessage) (any, error)
 	d.closeTerminal(x.Worker, 2*time.Second)
 	d.taskNotify()
 	d.discKick()
+	d.larkOnExecFinished(x.Discussion, x.ID, store.ExecStopped, "stopped by the user")
 	return d.store.Execution(x.ID)
 }
 
@@ -1870,6 +1876,7 @@ func (d *Daemon) answerDiscussion(question, body, clientID string) (store.DiscMe
 		return a, discError(err)
 	}
 	d.taskNotify()
+	d.larkOnQuestionAnswered(q.ID, body)
 	go d.deliver(t.Worker)
 	return a, nil
 }
@@ -2386,6 +2393,11 @@ func (d *Daemon) discDone(t store.Task, p taskDoneParams) (any, error) {
 	d.finalizeTraceAsync(p.Execution, t.Worker)
 	d.taskNotify()
 	d.discKick()
+	outcome := store.ExecDone
+	if p.Failed {
+		outcome = store.ExecFailed
+	}
+	d.larkOnExecFinished(t.DiscussionID, p.Execution, outcome, body)
 	t, _ = d.store.Task(t.ID)
 	return d.taskInfo(t, nil, nil), nil
 }
@@ -2403,6 +2415,7 @@ func (d *Daemon) discAsk(t store.Task, p taskAskParams) (store.Message, error) {
 		return q, discError(err)
 	}
 	d.taskNotify()
+	d.larkOnQuestion(t.DiscussionID, p.Execution, q.ID, t.Agent, p.Question, p.Choices)
 	return q, nil
 }
 
