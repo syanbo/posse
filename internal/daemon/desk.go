@@ -125,10 +125,26 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	abort := func() { stopDeskProc(proc) }
 	d.deskClearMissing("screen")
 	relayCfg := d.deskRelay()
-	conn, err := desk.ListenRoutes(relayCfg.Relay, relayCfg.Credential())
+	routeOpts := desk.RouteOptions{Relay: relayCfg.Relay, Cred: relayCfg.Credential()}
+	var tsHost string
+	if d.ts != nil && d.ts.IsRunning() {
+		if ip, ok := d.ts.IPv4(); ok {
+			routeOpts.TSListen = d.ts.ListenPacket
+			routeOpts.TSIsDERP = func(addr net.Addr) bool {
+				qctx, qcancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+				defer qcancel()
+				return d.ts.PeerRouteByAddr(qctx, addr).IsDERP()
+			}
+			tsHost = ip.String()
+		}
+	}
+	conn, err := desk.ListenRoutesWithOptions(routeOpts)
 	if err != nil {
 		abort()
 		return mobile.DeskReady{}, mobile.DeskError("capture_failed", err.Error())
+	}
+	if conn.TSPort() == 0 {
+		tsHost = ""
 	}
 	toMobile, toMac, err := desk.DeriveKeys(req.Secret, req.Nonce)
 	if err != nil {
@@ -214,7 +230,7 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 		log.Printf("desk: %s stopped: %s (%v)", req.Device, reason, serveErr)
 		notify(mobile.DeskEvent{Type: "end", Reason: reason})
 	}()
-	ready := mobile.DeskReady{Port: port, Codec: codec, Relay: relay, RelayToken: relayToken,
+	ready := mobile.DeskReady{Port: port, Codec: codec, TSHost: tsHost, TSPort: conn.TSPort(), Relay: relay, RelayToken: relayToken,
 		Display: func(id uint32) error {
 			return desk.WriteControl(control, desk.Control{Kind: desk.CtrlDisplay, Display: id})
 		},

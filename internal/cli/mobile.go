@@ -104,6 +104,126 @@ func cmdMobileRelay(e *env, args []string) error {
 	})
 }
 
+type tailscaleStatus struct {
+	Enabled              bool     `json:"enabled"`
+	State                string   `json:"state"`
+	IP                   string   `json:"ip"`
+	DNSName              string   `json:"dnsName"`
+	Hostname             string   `json:"hostname"`
+	ControlURL           string   `json:"controlUrl"`
+	AuthURL              string   `json:"authUrl"`
+	DisableBindInterface bool     `json:"disableBindInterface"`
+	Error                string   `json:"error"`
+	Health               []string `json:"health"`
+}
+
+func printTailscale(e *env, st *tailscaleStatus) func() {
+	return func() {
+		fmt.Fprintf(e.out, "tailscale: %s\n", st.State)
+		if st.IP != "" {
+			fmt.Fprintf(e.out, "ip: %s\n", st.IP)
+		}
+		if st.Hostname != "" {
+			fmt.Fprintf(e.out, "hostname: %s\n", st.Hostname)
+		}
+		if st.ControlURL != "" {
+			fmt.Fprintf(e.out, "control: %s\n", st.ControlURL)
+		}
+		if st.AuthURL != "" {
+			fmt.Fprintf(e.out, "login: %s\n", st.AuthURL)
+		}
+		if st.Error != "" {
+			fmt.Fprintf(e.out, "error: %s\n", st.Error)
+		}
+	}
+}
+
+type checkedStringFlag struct {
+	name string
+	val  string
+	set  bool
+}
+
+func (f *checkedStringFlag) String() string { return f.val }
+
+func (f *checkedStringFlag) Set(v string) error {
+	if strings.HasPrefix(v, "-") {
+		return fmt.Errorf("missing value for --%s", f.name)
+	}
+	f.val = v
+	f.set = true
+	return nil
+}
+
+func cmdMobileTailscale(e *env, args []string) error {
+	var st tailscaleStatus
+	if len(args) == 0 {
+		return e.do("tailscale.status", nil, &st, printTailscale(e, &st))
+	}
+	switch args[0] {
+	case "on":
+		fs := flag.NewFlagSet("mobile tailscale on", flag.ContinueOnError)
+		hostname := &checkedStringFlag{name: "hostname"}
+		controlURL := &checkedStringFlag{name: "control-url"}
+		authKey := &checkedStringFlag{name: "auth-key"}
+		fs.Var(hostname, "hostname", "")
+		fs.Var(controlURL, "control-url", "")
+		fs.Var(authKey, "auth-key", "")
+		disableBind := fs.Bool("disable-bind-interface", false, "")
+		rest, err := parse(fs, args[1:])
+		if err != nil {
+			return err
+		}
+		if len(rest) > 0 {
+			return need(nil, 1, "mobile tailscale")
+		}
+		params := map[string]any{"enabled": true}
+		if hostname.set {
+			params["hostname"] = hostname.val
+		}
+		if controlURL.set {
+			params["controlUrl"] = controlURL.val
+		}
+		if authKey.set {
+			params["authKey"] = authKey.val
+		}
+		fs.Visit(func(f *flag.Flag) {
+			if f.Name == "disable-bind-interface" {
+				params["disableBindInterface"] = *disableBind
+			}
+		})
+		return e.do("tailscale.set", params, &st, printTailscale(e, &st))
+	case "off":
+		if len(args) != 1 {
+			return need(nil, 1, "mobile tailscale")
+		}
+		return e.do("tailscale.set", map[string]any{"enabled": false}, &st, printTailscale(e, &st))
+	case "login":
+		if len(args) != 1 {
+			return need(nil, 1, "mobile tailscale")
+		}
+		return e.do("tailscale.login", nil, &st, printTailscale(e, &st))
+	case "reset":
+		if len(args) != 1 {
+			return need(nil, 1, "mobile tailscale")
+		}
+		var out struct {
+			Status       tailscaleStatus `json:"status"`
+			LoggedOut    bool            `json:"loggedOut"`
+			LogoutError  string          `json:"logoutError"`
+			LocalCleared bool            `json:"localCleared"`
+		}
+		return e.do("tailscale.reset", nil, &out, func() {
+			fmt.Fprintln(e.out, "tailscale identity reset")
+			if out.LogoutError != "" {
+				fmt.Fprintf(e.errOut, "note: remote logout failed: %s\n", out.LogoutError)
+			}
+		})
+	default:
+		return need(nil, 1, "mobile tailscale")
+	}
+}
+
 // printQR 用半格字符画二维码，两行模块合成一行字符；显式指定黑底白块，浅色主题的终端里也扫得出。
 func printQR(w io.Writer, text string) error {
 	code, err := qr.Encode(text, qr.L)

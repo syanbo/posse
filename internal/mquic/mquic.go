@@ -96,6 +96,16 @@ func Config() *quic.Config {
 	}
 }
 
+// TSConfig 是经内置 Tailscale（tsnet 用户态 netstack）运行 QUIC 时的参数：
+// Tailscale 默认 MTU 为 1280 字节，gVisor gonet 不会返回 syscall.EMSGSIZE 触发回退，
+// 因此固定 InitialPacketSize=1200 并关闭 Path MTU 探测。
+func TSConfig() *quic.Config {
+	c := Config()
+	c.InitialPacketSize = 1200
+	c.DisablePathMTUDiscovery = true
+	return c
+}
+
 // ServerTLS 每次启动生成一张自签名证书。
 func ServerTLS() (*tls.Config, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

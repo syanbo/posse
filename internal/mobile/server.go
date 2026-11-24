@@ -99,7 +99,7 @@ func (s *Server) listen() error {
 	s.srv = &http.Server{Handler: http.HandlerFunc(s.serveWS), ReadHeaderTimeout: 10 * time.Second}
 	go s.srv.Serve(ln)
 	log.Printf("mobile: listening on %s", ln.Addr())
-	s.startQUIC(ln.Addr().(*net.TCPAddr).Port)
+	s.startQUIC(ln.Addr().(*net.TCPAddr).Port, s.srv)
 	return nil
 }
 
@@ -114,6 +114,8 @@ func (s *Server) Port() int {
 }
 
 func (s *Server) Close() {
+	// 关停伊始立即禁止新 TS 监听，避免关闭握手期间的异步回调再开端口。
+	s.markClosing()
 	s.mu.Lock()
 	srv := s.srv
 	conns := make([]*conn, 0, len(s.conns))
@@ -187,6 +189,8 @@ func (s *Server) Pair(rotate bool, addr string) (PairInfo, error) {
 	if err := s.listen(); err != nil {
 		return PairInfo{}, err
 	}
+	// 若之前内置 TS TCP 监听局部失败或异常退出，重新取配对码时主动补开
+	s.TailscaleChanged()
 	port := s.Port()
 	var primary string
 	if addr != "" {
@@ -199,7 +203,7 @@ func (s *Server) Pair(rotate bool, addr string) (PairInfo, error) {
 	// 选了地址就只写这一个：手机会同时连配对码里的所有地址、谁先连上用谁，
 	// 再带上 Tailscale、局域网的话，选的局域网或自定义地址总被抢先的那个挤掉
 	var extras []string
-	for _, host := range LocalEndpoints() {
+	for _, host := range s.pairEndpoints() {
 		if primary != "" {
 			break
 		}

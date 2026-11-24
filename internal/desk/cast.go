@@ -216,6 +216,7 @@ type caster struct {
 	verbose            bool
 	inputAck           uint64
 	peer               net.Addr
+	peerRelay          bool
 	peerMu             sync.Mutex
 	isRelay            func(net.Addr) bool
 	directAt           time.Time // 最近一次从直连地址收到包，peerMu 保护
@@ -794,7 +795,7 @@ func (c *caster) setPath(direct, first bool) {
 	c.applyFPS(bitrate)
 }
 
-// notePeer 在 hello 或 report 解得开时记下源地址。地址变了（切网络）就改发往新地址。
+// notePeer 在 hello 或 report 解得开时记下源地址。地址变了（切网络）或同一地址的中转/直连属性变了就更新路径。
 func (c *caster) notePeer(addr net.Addr) {
 	if addr == nil {
 		return
@@ -802,7 +803,7 @@ func (c *caster) notePeer(addr net.Addr) {
 	c.peerMu.Lock()
 	changed, first := false, false
 	defer func() {
-		direct := c.peer != nil && (c.isRelay == nil || !c.isRelay(c.peer))
+		direct := c.peer != nil && !c.peerRelay
 		c.peerMu.Unlock()
 		if changed {
 			c.setPath(direct, first)
@@ -813,9 +814,13 @@ func (c *caster) notePeer(addr net.Addr) {
 		c.directAt = time.Now()
 	}
 	if c.peer != nil && sameAddr(c.peer, addr) {
+		if c.peerRelay != relay {
+			c.peerRelay = relay
+			changed = true
+		}
 		return
 	}
-	if relay && c.peer != nil && !c.isRelay(c.peer) && time.Since(c.directAt) < directHold {
+	if relay && c.peer != nil && !c.peerRelay && time.Since(c.directAt) < directHold {
 		return
 	}
 	next := cloneAddr(addr)
@@ -824,6 +829,7 @@ func (c *caster) notePeer(addr net.Addr) {
 		log.Printf("desk: peer %s -> %s", c.peer, next)
 	}
 	c.peer = next
+	c.peerRelay = relay
 	changed = true
 	if first {
 		// 不能在 peerMu 里发：submit 要再取它

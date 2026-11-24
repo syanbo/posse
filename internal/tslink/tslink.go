@@ -503,6 +503,17 @@ func (n *Node) IsRunning() bool {
 	return n.srv != nil && n.status.State == StateRunning && n.status.IP != ""
 }
 
+// Generation 返回当前运行中节点的代次；未运行时返回 0。
+// 即使重启后拿到相同 Tailscale IP，代次也会递增，方便监听方识别旧监听已失效并重建。
+func (n *Node) Generation() uint64 {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.srv == nil || n.status.State != StateRunning {
+		return 0
+	}
+	return n.gen
+}
+
 // IPv4 返回当前节点分配的 Tailscale IPv4 地址（仅在初始化完成且可用时非零）。
 func (n *Node) IPv4() (netip.Addr, bool) {
 	n.mu.Lock()
@@ -821,7 +832,7 @@ func (n *Node) refreshOnce(gen uint64, srv *tsnet.Server, lc *local.Client) {
 	}
 	if st.Self != nil {
 		next.DNSName = strings.TrimSuffix(st.Self.DNSName, ".")
-		if st.Self.HostName != "" {
+		if next.State == StateRunning && st.Self.HostName != "" {
 			next.Hostname = st.Self.HostName
 		}
 	}

@@ -565,6 +565,7 @@ var zh = [][2]string{
 	{"Tailscale state directory is not set", "未设置 Tailscale 状态目录"},
 	{"invalid port", "端口无效"},
 	{"invalid Tailscale target address", "Tailscale 目标地址无效"},
+	{"daemon is still starting; try again in a moment", "常驻进程还在启动，稍后再试"},
 
 	// Git
 	{"this branch has no upstream branch", "这个分支没有跟踪的远端分支"},

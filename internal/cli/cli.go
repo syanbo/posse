@@ -165,6 +165,7 @@ func init() {
 		{"lark disable", "Disable a Feishu bot", "<bot>", cmdLarkToggle(false)},
 		{"lark rm", "Remove a Feishu bot configuration", "<bot>", cmdLarkRemove},
 		{"mobile relay", "Relay for phones outside the LAN: check it, use an invite code, stop using it, or (admin) invite someone", "[set <code> | clear | invite <name>]", cmdMobileRelay},
+		{"mobile tailscale", "Built-in Tailscale node: check status, turn on/off, trigger browser login, or reset identity", "[on [--hostname H] [--control-url URL] [--auth-key KEY] [--disable-bind-interface] | off | login | reset]", cmdMobileTailscale},
 		{"usage", "Show plan usage of Claude, Codex, Grok and Cursor (updated as they run)", "", cmdUsage},
 		{"usage report", "Forward a Claude statusLine input to Posse (for your own statusLine script)", "< statusline.json", cmdUsageReport},
 		{"hook", "Report an agent hook event (used by agent hooks)", "<agent> <event> < payload.json", cmdHook},

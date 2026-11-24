@@ -30,6 +30,9 @@ type DeskRequest struct {
 type DeskReady struct {
 	Port  int    `json:"port"`
 	Codec string `json:"codec"`
+	// TSHost 和 TSPort 是 Mac 内置 Tailscale 节点的地址与 UDP 端口；未启用内置 Tailscale 时为空
+	TSHost string `json:"-"`
+	TSPort int    `json:"-"`
 	// Relay 是 UDP 中转的地址，RelayToken 是这次观看在中转上的令牌；没配中转时为空
 	Relay      string `json:"-"`
 	RelayToken []byte `json:"-"`
@@ -138,6 +141,10 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 			// 认 subscribe 的 fps 和 desk.fps（手选帧率）：手机看到才显示入口
 			"fps":        true,
 			"resolution": true,
+		}
+		if ready.TSHost != "" && ready.TSPort > 0 {
+			frame["tsHost"] = ready.TSHost
+			frame["tsPort"] = ready.TSPort
 		}
 		if ready.Relay != "" {
 			frame["relay"] = ready.Relay

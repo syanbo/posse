@@ -28,6 +28,7 @@ import (
 	"posse/internal/spawn"
 	"posse/internal/store"
 	"posse/internal/term"
+	"posse/internal/tslink"
 	"posse/internal/writecoord"
 )
 
@@ -253,21 +254,25 @@ type Daemon struct {
 	restoreMu sync.Mutex  // 恢复终端一个一个来，同一个终端不会拉起两次
 	noLost    atomic.Bool // 已经没有等着恢复的终端了（lostIn）
 
-	history  historyState
-	media    mediaState
-	mobile   *mobile.Server
-	host     host.Host // 托管终端，测试里为空时用进程内的
-	awake    *awake    // 防休眠，测试里为空
-	desk     deskState // 手机看桌面，同一时间一台
-	usage    usageState
-	gitTrace *gitTrace // 终端里的 git 命令，测试里为空
-	ln       *gateListener
-	handoff  handoffState
-	agents   agentScan     // 本机装了哪些 agent（agents.go）
-	disc     discState     // 讨论的调度（discussion.go）
-	collab   collabState   // 讨论的局域网协作（collab.go、collab_join.go）
-	perms    permissionHub // 手机与飞书共用的权限审批协调（permission.go）
-	lark     larkState     // 飞书多机器人网关（lark.go）
+	history   historyState
+	media     mediaState
+	mobile    *mobile.Server
+	tsMu      sync.Mutex
+	tsAllowed bool
+	tsStopped bool
+	ts        *tslink.Node
+	host      host.Host // 托管终端，测试里为空时用进程内的
+	awake     *awake    // 防休眠，测试里为空
+	desk      deskState // 手机看桌面，同一时间一台
+	usage     usageState
+	gitTrace  *gitTrace // 终端里的 git 命令，测试里为空
+	ln        *gateListener
+	handoff   handoffState
+	agents    agentScan     // 本机装了哪些 agent（agents.go）
+	disc      discState     // 讨论的调度（discussion.go）
+	collab    collabState   // 讨论的局域网协作（collab.go、collab_join.go）
+	perms     permissionHub // 手机与飞书共用的权限审批协调（permission.go）
+	lark      larkState     // 飞书多机器人网关（lark.go）
 
 	// zsh 集成和同名脚本（agent.WriteShellFiles）：写成功一次就不再写
 	shellMu     sync.Mutex
@@ -439,7 +444,8 @@ func Run(ctx context.Context, cfg Config) error {
 	go d.awakeLoop(ctx)
 	d.openUsage()
 	d.openGitTrace(ctx)
-	// 先建好手机服务：两个 loop 里的状态变化会读 d.mobile 发推送
+	// 先建好手机服务和未启动的内置 Tailscale 节点：两个 loop 里的状态变化会读 d.mobile 发推送
+	d.newTailscale()
 	d.newMobile()
 	go d.agentLoop(ctx)
 	go d.detectLoop(ctx)
@@ -463,6 +469,9 @@ func Run(ctx context.Context, cfg Config) error {
 				lockMu.Lock()
 				unlock = u
 				lockMu.Unlock()
+				if ctx.Err() != nil {
+					return
+				}
 				d.desktop.unblock()
 				d.startMobile()
 				d.disc.mu.Lock()
@@ -490,6 +499,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if d.mobile != nil {
 		d.mobile.Close()
 	}
+	d.stopTailscale()
 	d.closeAll()
 	d.closeHistory()
 	return err
@@ -680,6 +690,10 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("relay.set", d.relaySet)
 	srv.Handle("relay.clear", d.relayClear)
 	srv.Handle("relay.invite", d.relayInvite)
+	srv.Handle("tailscale.status", d.tailscaleStatus)
+	srv.Handle("tailscale.set", d.tailscaleSet)
+	srv.Handle("tailscale.login", d.tailscaleLogin)
+	srv.Handle("tailscale.reset", d.tailscaleReset)
 	srv.Handle("discussion.create", d.discCreate)
 	srv.Handle("discussion.list", d.discList)
 	srv.Handle("discussion.show", d.discShow)

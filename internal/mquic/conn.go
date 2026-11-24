@@ -83,15 +83,19 @@ func Dial(ctx context.Context, addr string, relayToken []byte) (*Conn, error) {
 	return dialOver(ctx, pc, raddr)
 }
 
-// dialOver 在 pc 上拨 QUIC、开流。连接结束时关掉 pc，失败时也关。
-func dialOver(ctx context.Context, pc net.PacketConn, raddr *net.UDPAddr) (*Conn, error) {
+// DialOver 在调用方提供的 PacketConn 上拨 QUIC 并开双向流（例如 tsnet 的 ListenPacket）。
+// cfg 为 nil 时使用 Config()；连接结束或拨号失败时都会关闭 pc。
+func DialOver(ctx context.Context, pc net.PacketConn, raddr net.Addr, cfg *quic.Config) (*Conn, error) {
+	if cfg == nil {
+		cfg = Config()
+	}
 	tr := &quic.Transport{Conn: pc}
 	fail := func(err error) (*Conn, error) {
 		tr.Close()
 		pc.Close()
 		return nil, err
 	}
-	qc, err := tr.Dial(ctx, raddr, ClientTLS(), Config())
+	qc, err := tr.Dial(ctx, raddr, ClientTLS(), cfg)
 	if err != nil {
 		return fail(err)
 	}
@@ -107,6 +111,11 @@ func dialOver(ctx context.Context, pc net.PacketConn, raddr *net.UDPAddr) (*Conn
 		c.release()
 	}()
 	return c, nil
+}
+
+// dialOver 在 pc 上拨 QUIC、开流。连接结束时关掉 pc，失败时也关。
+func dialOver(ctx context.Context, pc net.PacketConn, raddr *net.UDPAddr) (*Conn, error) {
+	return DialOver(ctx, pc, raddr, Config())
 }
 
 // Prepared 是手机打洞用的新 socket，已经向中转问出了它在公网上的地址（Public），

@@ -41,11 +41,12 @@ func (d *Daemon) newMobile() {
 		log.Printf("mobile: %v", err)
 		return
 	}
-	m.SetQUIC(mobile.QUICOptions{Relay: d.deskRelay, ListenOut: desk.ListenPhysical})
+	m.SetQUIC(mobile.QUICOptions{Relay: d.deskRelay, ListenOut: desk.ListenPhysical, Tailscale: daemonTSProvider{d}})
 	d.mobile = m
 }
 
 func (d *Daemon) startMobile() {
+	d.startTailscale()
 	if d.mobile == nil {
 		return
 	}
