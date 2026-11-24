@@ -4,8 +4,27 @@ import 'dart:async';
 class CancelToken {
   bool _cancelled = false;
   bool get cancelled => _cancelled;
+  final _listeners = <void Function()>[];
 
-  void cancel() => _cancelled = true;
+  void onCancel(void Function() fn) {
+    if (_cancelled) {
+      fn();
+    } else {
+      _listeners.add(fn);
+    }
+  }
+
+  void removeListener(void Function() fn) => _listeners.remove(fn);
+
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    final copy = List<void Function()>.of(_listeners);
+    _listeners.clear();
+    for (final fn in copy) {
+      fn();
+    }
+  }
 }
 
 class RaceCancelled implements Exception {

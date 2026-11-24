@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:posse_quic/posse_quic.dart';
 
 import 'e2ee.dart';
 import 'latency.dart';
@@ -113,6 +114,9 @@ class PosseLink {
     Stream<String>? networkSignatures,
     this.attemptTimeout = const Duration(seconds: 10),
     this.phone,
+    this.tailscaleRunning,
+    this.tailscalePeerRoute,
+    this.onTailscaleWake,
   }) : networkSignatures = networkSignatures ?? const Stream.empty();
 
   final PairingOffer offer;
@@ -124,6 +128,22 @@ class PosseLink {
 
   /// 每次握手时报给电脑的手机身份，见 [PhoneRpc.declareCapabilities]。
   final Map<String, Object?>? Function()? phone;
+
+  /// 内置 Tailscale 是否已处于 Running 状态：仅在 Running 时派生 `tsquic://` 参与竞速。
+  final bool Function()? tailscaleRunning;
+
+  /// 查询到指定 100.x 对端的实际路径（直连 / PeerRelay / DERP）。
+  final Future<TailscalePeerRoute> Function(String ip)? tailscalePeerRoute;
+
+  /// 回到前台或物理网络变化时通知内置 Tailscale 加速漫游重探。
+  final void Function()? onTailscaleWake;
+
+  /// 当前连接走 `tsquic://` 时的对端路径（直连 vs DERP）；其余传输为空。
+  TailscalePeerRoute? peerRoute;
+  void Function()? onPeerRoute;
+  int _peerRouteSeq = 0;
+  DateTime _peerRouteCheckedAt = DateTime.fromMillisecondsSinceEpoch(0);
+  void Function()? _cancelActiveOpen;
 
   PhoneRpc? rpc;
 
@@ -153,7 +173,7 @@ class PosseLink {
     // 第一次握手完成再听网络。听得太早时，签名一变就会另开一轮，
     // 把这次握手的 epoch 顶掉，调用方只看到 RaceCancelled。
     _network ??= networkSignatures.listen((signature) {
-      if (_gate.shouldReconnect(signature)) unawaited(_reopenNow());
+      if (_gate.shouldReconnect(signature)) unawaited(_onNetworkChange());
     });
     return rpc;
   }
@@ -170,14 +190,91 @@ class PosseLink {
   /// 知道 QUIC 地址时 WebSocket 晚这么久才开始连：两条都通时留下 QUIC，QUIC 不通时最多慢这么多。
   Duration quicHeadStart = const Duration(seconds: 2);
 
+  /// 同时配了自建中转且已知对端走 Tailscale DERP 时，给自建中转让出这么久先连，DERP 留作兜底。
+  Duration tsDerpDelay = const Duration(milliseconds: 800);
+
+  /// 取消当前尚未完成的首轮/重连拨号（如冷启动期间内置 Tailscale 刚变为 Running，立刻中断慢超时重跑竞速）。
+  void cancelPendingOpen() {
+    _epoch++;
+    _cancelActiveOpen?.call();
+  }
+
+  Future<Set<String>> _derpDelayedTsUrls(
+    List<String> tsUrls,
+    bool hasRelay,
+  ) async {
+    final derpDelayed = <String>{};
+    final routeQuery = tailscalePeerRoute;
+    if (!hasRelay || tsUrls.isEmpty || routeQuery == null) return derpDelayed;
+    for (final tsUrl in tsUrls) {
+      final host = Uri.tryParse(tsUrl)?.host ?? '';
+      if (host.isEmpty) continue;
+      try {
+        final r = await routeQuery(
+          host,
+        ).timeout(const Duration(milliseconds: 150));
+        if (r.isDerp) derpDelayed.add(tsUrl);
+      } catch (_) {}
+    }
+    return derpDelayed;
+  }
+
   Future<PhoneRpc> open() async {
     final epoch = ++_epoch;
-    final quic = quicUrls;
+    // 过滤外部配对码可能夹带的 tsquic://，确保 tsquic:// 仅在内置 Tailscale Running 时由本端派生
+    final quic = [
+      for (final u in quicUrls)
+        if (!isTsQuicUrl(u)) u,
+    ];
+    final dialUrls = [
+      for (final u in offer.dialUrls)
+        if (!isTsQuicUrl(u)) u,
+    ];
+    final baseUrls = [...quic, ...dialUrls];
+    final tsUrls = (tailscaleRunning?.call() ?? false)
+        ? deriveTsQuicUrls(baseUrls)
+        : const <String>[];
+
+    // 同时存在自建中转且已知对端当前走 Tailscale DERP 时，延迟 tsquic:// 让自建中转优先胜出
+    final hasRelay = quic.any(isRelayQuicUrl);
+    final derpDelayed = await _derpDelayedTsUrls(tsUrls, hasRelay);
+    if (epoch != _epoch) throw const RaceCancelled();
+
+    final hasQuic = quic.isNotEmpty || tsUrls.isNotEmpty;
+    final candidates = <String>[
+      ...quic,
+      for (final u in tsUrls)
+        if (!derpDelayed.contains(u)) u,
+      ...dialUrls,
+      for (final u in tsUrls)
+        if (derpDelayed.contains(u)) u,
+    ];
+
+    final activeTokens = <CancelToken>[];
+    final abortCompleter = Completer<RaceResult<PhoneRpc>>();
+    void cancelThisOpen() {
+      for (final t in activeTokens) {
+        t.cancel();
+      }
+      if (!abortCompleter.isCompleted) {
+        abortCompleter.completeError(const RaceCancelled());
+      }
+    }
+
+    _cancelActiveOpen = cancelThisOpen;
     try {
-      final won = await raceEndpoints<PhoneRpc>(
-        urls: [...quic, ...offer.dialUrls],
+      final raceFuture = raceEndpoints<PhoneRpc>(
+        urls: candidates,
         attempt: (url, cancel) async {
-          if (quic.isNotEmpty && !isQuicUrl(url)) {
+          activeTokens.add(cancel);
+          if (epoch != _epoch) {
+            cancel.cancel();
+            throw const RaceCancelled();
+          }
+          if (derpDelayed.contains(url)) {
+            await Future<void>.delayed(tsDerpDelay);
+            if (cancel.cancelled) throw const RaceCancelled();
+          } else if (hasQuic && !isAnyQuicUrl(url)) {
             await Future<void>.delayed(quicHeadStart);
             if (cancel.cancelled) throw const RaceCancelled();
           }
@@ -187,12 +284,14 @@ class PosseLink {
         // 同一台电脑的哪个地址都会这么答
         decisive: (error) => error is HostTooOld,
       );
+      raceFuture.ignore();
+      final won = await Future.any([raceFuture, abortCompleter.future]);
       if (epoch != _epoch) {
         await won.value.close();
         throw const RaceCancelled();
       }
       await _adopt(won, epoch);
-      unawaited(_learnQuic(won.value, epoch, upgrade: !isQuicUrl(won.url)));
+      unawaited(_learnQuic(won.value, epoch, upgrade: !isAnyQuicUrl(won.url)));
       return won.value;
     } catch (error) {
       if (epoch == _epoch) {
@@ -200,6 +299,10 @@ class PosseLink {
         onActivity?.call();
       }
       rethrow;
+    } finally {
+      if (identical(_cancelActiveOpen, cancelThisOpen)) {
+        _cancelActiveOpen = null;
+      }
     }
   }
 
@@ -226,6 +329,11 @@ class PosseLink {
     won.value.watchClose(() {
       if (_closed || !identical(rpc, won.value)) return;
       rpc = null;
+      _peerRouteSeq++;
+      if (peerRoute != null) {
+        peerRoute = null;
+        onPeerRoute?.call();
+      }
       meter?.stop();
       meter = null;
       onActivity?.call();
@@ -234,25 +342,63 @@ class PosseLink {
     final previous = rpc;
     rpc = won.value;
     url = won.url;
+    _peerRouteSeq++;
+    if (!isTsQuicUrl(won.url) && peerRoute != null) {
+      peerRoute = null;
+      onPeerRoute?.call();
+    }
     meter?.stop();
     final latest = LatencyMeter(
       won.value,
       interval: latencyInterval,
       timeout: latencyTimeout,
       onChange: () {
-        if (identical(rpc, won.value)) onLatency?.call();
+        if (identical(rpc, won.value)) {
+          onLatency?.call();
+          if (isTsQuicUrl(won.url) &&
+              DateTime.now().difference(_peerRouteCheckedAt) >=
+                  const Duration(seconds: 10)) {
+            unawaited(_refreshPeerRoute(won.value, won.url));
+          }
+        }
       },
     );
     meter = latest..start();
     lastError = null;
     if (!_ready.isClosed) _ready.add(won.value);
     onActivity?.call();
+    if (isTsQuicUrl(won.url)) {
+      unawaited(_refreshPeerRoute(won.value, won.url));
+    }
     if (isRelayQuicUrl(won.url)) unawaited(_punch(won.value, won.url, epoch));
     if (drain) {
       unawaited(previous?.closeWhenIdle());
     } else {
       await previous?.close();
     }
+  }
+
+  Future<void> _refreshPeerRoute(PhoneRpc via, String viaUrl) async {
+    final query = tailscalePeerRoute;
+    if (query == null || !isTsQuicUrl(viaUrl)) return;
+    final host = Uri.tryParse(viaUrl)?.host ?? '';
+    if (host.isEmpty) return;
+    final seq = ++_peerRouteSeq;
+    _peerRouteCheckedAt = DateTime.now();
+    try {
+      final next = await query(host);
+      if (_closed || seq != _peerRouteSeq || !identical(rpc, via) || url != viaUrl) {
+        return;
+      }
+      final prev = peerRoute;
+      if (prev?.kind != next.kind ||
+          prev?.relay != next.relay ||
+          prev?.addr != next.addr ||
+          prev?.peerRelay != next.peerRelay) {
+        peerRoute = next;
+        onPeerRoute?.call();
+      }
+    } catch (_) {}
   }
 
   /// 经中转连着时打洞：手机新开一个 socket 问出公网地址，经 posse.punch 交给电脑、换回电脑的地址，
@@ -320,12 +466,34 @@ class PosseLink {
     if (_closed || epoch != _epoch) return;
     quicUrls = urls;
     onQuicUrls?.call(urls);
-    if (!upgrade || urls.isEmpty) return;
+    if (!upgrade) return;
+    final tsUrls = (tailscaleRunning?.call() ?? false)
+        ? deriveTsQuicUrls(urls)
+        : const <String>[];
+    final derpDelayed = await _derpDelayedTsUrls(
+      tsUrls,
+      urls.any(isRelayQuicUrl),
+    );
+    if (_closed || epoch != _epoch || !identical(rpc, via)) return;
+    final upgradeCandidates = <String>[
+      ...urls,
+      for (final u in tsUrls)
+        if (!derpDelayed.contains(u)) u,
+      for (final u in tsUrls)
+        if (derpDelayed.contains(u)) u,
+    ];
+    if (upgradeCandidates.isEmpty) return;
     final RaceResult<PhoneRpc> won;
     try {
       won = await raceEndpoints<PhoneRpc>(
-        urls: urls,
-        attempt: _timedAttempt,
+        urls: upgradeCandidates,
+        attempt: (url, cancel) async {
+          if (derpDelayed.contains(url)) {
+            await Future<void>.delayed(tsDerpDelay);
+            if (cancel.cancelled) throw const RaceCancelled();
+          }
+          return _timedAttempt(url, cancel);
+        },
         abandon: (value) => value.close(),
       );
     } catch (_) {
@@ -365,13 +533,45 @@ class PosseLink {
   /// 本来就断着的不等退避，马上连。
   Future<void> wake() async {
     if (_closed) return;
+    onTailscaleWake?.call();
     final current = rpc;
     if (current == null) {
       if (!_reopening || _waiting) unawaited(_wakeOpen ??= _openOnWake());
       return;
     }
+    final currentUrl = url;
     final alive = await (meter?.probe(wakeProbe) ?? Future.value(true));
-    if (!alive && !_closed && identical(rpc, current)) current.drop();
+    if (!alive && !_closed && identical(rpc, current)) {
+      current.drop();
+      return;
+    }
+    if (alive &&
+        !_closed &&
+        identical(rpc, current) &&
+        currentUrl != null &&
+        isTsQuicUrl(currentUrl)) {
+      unawaited(_refreshPeerRoute(current, currentUrl));
+    }
+  }
+
+  /// 物理网络签名变化：
+  /// 若当前走 `tsquic://`，先通知 tsnet 漫游并探测原连接是否仍然存活（保留 Tailscale 漫游不断链），
+  /// 只有探测失败才断开重连；其余传输立即重开竞速。
+  Future<void> _onNetworkChange() async {
+    if (_closed) return;
+    final current = rpc;
+    final currentUrl = url;
+    if (current != null && currentUrl != null && isTsQuicUrl(currentUrl)) {
+      onTailscaleWake?.call();
+      final alive = await (meter?.probe(wakeProbe) ?? Future.value(false));
+      if (!alive && !_closed && identical(rpc, current)) {
+        current.drop();
+      } else if (alive && !_closed && identical(rpc, current)) {
+        unawaited(_refreshPeerRoute(current, currentUrl));
+      }
+      return;
+    }
+    await _reopenNow();
   }
 
   /// [wake] 发起、还没结束的那次连接。[_reopen] 等完它再决定要不要自己连，不另开一轮把它顶掉。
@@ -428,6 +628,9 @@ class PosseLink {
   Future<void> close() async {
     _closed = true;
     _epoch++;
+    _cancelActiveOpen?.call();
+    _cancelActiveOpen = null;
+    peerRoute = null;
     meter?.stop();
     meter = null;
     await _network?.cancel();

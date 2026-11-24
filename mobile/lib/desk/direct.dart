@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../protocol/quic_socket.dart';
+
 /// 这条 WebSocket 能不能走桌面 UDP。
 /// 主机本身是局域网、Tailscale（100.64.0.0/10）或回环的 IPv4 地址，
 /// 或者名字能解析成这类地址，才算直连。模拟器的 127.0.0.1 算。
@@ -68,4 +70,94 @@ Future<String?> deskUdpHost(
     if (await deskHostDirect(other, lookup: lookup)) return other;
   }
   return null;
+}
+
+/// 经内置 Tailscale 回环 UDP 桥转发看桌面画面时的目标（Mac 100.64/10 地址 + 端口）。
+class DeskTailscaleTarget {
+  const DeskTailscaleTarget(this.host, this.port);
+
+  final String host;
+  final int port;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DeskTailscaleTarget && host == other.host && port == other.port;
+
+  @override
+  int get hashCode => Object.hash(host, port);
+}
+
+/// 解析看桌面的显式 Tailscale 候选目标（仅在手机内置 Tailscale 处于 Running 时返回）：
+/// 1) 优先取 Mac `desk.ready` 帧里显式给出的 `tsHost` + `tsPort`（Mac 内置 Tailscale 端口）；
+/// 2) 否则若 Mac 走官方 Tailscale（ready 无 tsHost），从当前连接的 `tsquic://` 主机或
+///    同一台电脑已知地址里的 `100.64/10` 地址配 `ready['port']` 构造目标。
+DeskTailscaleTarget? resolveDeskTailscaleTarget({
+  required Map<String, Object?> readyFrame,
+  required String? connectedUrl,
+  required Iterable<String> otherUrls,
+  required bool tailscaleRunning,
+}) {
+  if (!tailscaleRunning) return null;
+  final rawTsHost = readyFrame['tsHost'];
+  final rawTsPort = readyFrame['tsPort'];
+  if (rawTsHost is String &&
+      isTailscaleIp(rawTsHost) &&
+      rawTsPort is int &&
+      rawTsPort > 0 &&
+      rawTsPort < 65536) {
+    return DeskTailscaleTarget(rawTsHost, rawTsPort);
+  }
+  final readyPort = readyFrame['port'];
+  if (readyPort is! int || readyPort <= 0 || readyPort >= 65536) return null;
+  if (connectedUrl != null && connectedUrl.isNotEmpty) {
+    final uri = Uri.tryParse(connectedUrl);
+    if (uri != null && isTailscaleIp(uri.host)) {
+      return DeskTailscaleTarget(uri.host, readyPort);
+    }
+  }
+  for (final raw in otherUrls) {
+    final uri = Uri.tryParse(raw);
+    if (uri != null && isTailscaleIp(uri.host)) {
+      return DeskTailscaleTarget(uri.host, readyPort);
+    }
+  }
+  return null;
+}
+
+bool _isLanNonTailscaleAddress(InternetAddress addr) =>
+    deskAddressDirect(addr) &&
+    !addr.isLoopback &&
+    !isTailscaleIp(addr.address);
+
+/// 选择原生 OS UDP 直连主机：
+/// 若当前控制连接走内置 Tailscale（`tsquic://`），跳过 `100.64/10`（含解析到 100.64/10 的 DNS 名称），
+/// 仅在同电脑其他地址中返回已校验的非 Tailscale 局域网 IPv4 字面量；其余连接沿用 [deskUdpHost]。
+Future<String?> deskDirectHostForUrl(
+  String? connectedUrl,
+  Iterable<String> otherHosts, {
+  Future<List<InternetAddress>> Function(String host)? lookup,
+}) async {
+  if (connectedUrl == null || connectedUrl.isEmpty) return null;
+  final uri = Uri.tryParse(connectedUrl);
+  final host = uri?.host ?? '';
+  if (host.isEmpty) return null;
+  if (isTsQuicUrl(connectedUrl)) {
+    final seen = <String>{};
+    for (final other in otherHosts) {
+      if (other.isEmpty || other == 'localhost' || !seen.add(other)) continue;
+      final parsed = InternetAddress.tryParse(other);
+      if (parsed != null) {
+        if (_isLanNonTailscaleAddress(parsed)) return parsed.address;
+        continue;
+      }
+      try {
+        final found = await (lookup ?? InternetAddress.lookup)(other);
+        for (final addr in found) {
+          if (_isLanNonTailscaleAddress(addr)) return addr.address;
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+  return deskUdpHost(host, otherHosts, lookup: lookup);
 }

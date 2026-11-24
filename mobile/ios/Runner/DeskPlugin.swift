@@ -120,13 +120,15 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
     }
     let host = args["host"] as? String ?? ""
     let port = (args["port"] as? NSNumber)?.intValue ?? 0
+    let tsHost = args["tsHost"] as? String ?? ""
+    let tsPort = (args["tsPort"] as? NSNumber)?.intValue ?? 0
     let relayText = args["relay"] as? String ?? ""
     let relayToken = bytes(args["relayToken"])
     let nack = args["nack"] as? Bool ?? false
     control.async { [weak self] in
       guard let self else { return }
       // 解析域名（getaddrinfo）会阻塞，放在 control 队列上，不卡界面
-      // 直连地址可以没有（经隧道连着、只能走中转），中转也可以没有，但不能都没有
+      // 直连、内置 Tailscale 回环桥与中转均可独立为空，但不能全部为空
       var peers: [sockaddr_in] = []
       if !host.isEmpty {
         guard port > 0, port < 65536, let peer = deskResolve(host: host, port: UInt16(port)) else {
@@ -137,8 +139,19 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
         }
         peers.append(peer)
       }
-      let relay = relayText.isEmpty ? nil : deskResolveHostPort(relayText)
-      guard !peers.isEmpty || relay != nil else {
+      var tailscale: sockaddr_in?
+      if !tsHost.isEmpty {
+        guard tsPort > 0, tsPort < 65536, let ts = deskResolve(host: tsHost, port: UInt16(tsPort)) else {
+          DispatchQueue.main.async {
+            result(FlutterError(code: "bad_address", message: "cannot resolve \(tsHost)", details: nil))
+          }
+          return
+        }
+        tailscale = ts
+      }
+      let validRelayToken = relayToken?.count == deskRelayTokenLen ? relayToken : nil
+      let relay = (relayText.isEmpty || validRelayToken == nil) ? nil : deskResolveHostPort(relayText)
+      guard !peers.isEmpty || tailscale != nil || relay != nil else {
         DispatchQueue.main.async {
           result(FlutterError(code: "bad_address", message: "no address to connect to", details: nil))
         }
@@ -155,7 +168,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
         }
         do {
           let session = try DeskSession(
-            toMobile: toPhone, toMac: toMac, peers: peers, relay: relay, relayToken: relayToken,
+            toMobile: toPhone, toMac: toMac, peers: peers, tailscale: tailscale, relay: relay, relayToken: validRelayToken,
             codec: codec, nack: nack)
           let texture = DeskTexture(registry: self.textures)
           session.onFrame = { [weak texture] image in

@@ -50,8 +50,11 @@ class PairingOffer {
     final endpoint = map['endpoint'];
     final token = map['deviceToken'];
     final publicKey = map['publicKeyB64'];
+    bool isForbiddenScheme(String url) =>
+        Uri.tryParse(url.trim())?.scheme.toLowerCase() == 'tsquic';
     if (endpoint is! String ||
         endpoint.isEmpty ||
+        isForbiddenScheme(endpoint) ||
         token is! String ||
         token.isEmpty ||
         publicKey is! String ||
@@ -62,7 +65,12 @@ class PairingOffer {
     final listed = map['endpoints'];
     if (listed is List) {
       for (final item in listed) {
-        if (item is String && item.isNotEmpty) extras.add(item);
+        if (item is String && item.isNotEmpty) {
+          if (isForbiddenScheme(item)) {
+            throw const FormatException('pairing offer has unsupported scheme');
+          }
+          extras.add(item);
+        }
       }
     }
     return PairingOffer(

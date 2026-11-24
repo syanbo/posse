@@ -50,7 +50,7 @@ class DeskStats {
   /// 画面经中转到达后，中转看到的接收 socket 的公网地址（ip:port），拿去和 Mac 交换、打洞。
   final String? public;
 
-  /// 画面走哪条路：lan、relay、punched（打洞直连），还没有画面时为空。
+  /// 画面走哪条路：lan、tailscale（内置 Tailscale 回环桥）、relay、punched（打洞直连），还没有画面时为空。
   final String? path;
 
   /// 安卓上画面画在平台视图（`posse/desk/view`）而不是纹理上：有的解码器不认纹理的 Surface。
@@ -118,11 +118,14 @@ class DeskReceiver {
   Stream<DeskStats> stats() =>
       _stats ??= _events.receiveBroadcastStream().map(DeskStats.parse);
 
-  /// host 是直连地址，经隧道连着又找不到局域网地址时为空，只走中转（relay 是 host:port）。
+  /// host 是直连地址，经隧道连着又找不到局域网地址时为空；tsHost/tsPort 是内置 Tailscale
+  /// 回环 UDP 桥地址（127.0.0.1:localPort），原生层会将其识别为独立的 tailscale 候选与线路名；
   /// nack 是电脑认缺包点名补发（ready 里的 nack），旧电脑不认，缺包直接要关键帧。
   Future<int> start({
     String? host,
     int? port,
+    String? tsHost,
+    int? tsPort,
     String? relay,
     Uint8List? relayToken,
     required Uint8List keyToPhone,
@@ -133,6 +136,8 @@ class DeskReceiver {
     final id = await _channel.invokeMethod<int>('start', {
       'host': ?host,
       'port': ?port,
+      'tsHost': ?tsHost,
+      'tsPort': ?tsPort,
       'relay': ?relay,
       'relayToken': ?relayToken,
       'keyToPhone': keyToPhone,

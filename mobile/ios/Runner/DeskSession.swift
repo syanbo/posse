@@ -563,8 +563,9 @@ final class DeskSession {
   private var statsCallback: (([String: Any]) -> Void)?
 
   private let keys: DeskKeys
-  /// 直连候选（局域网等）和中转，hello 发给全部；收到 Mac 的包后只回给那条路。
+  /// 直连候选（局域网等）、内置 Tailscale 回环桥和中转，hello 发给全部；收到 Mac 的包后只回给那条路。
   private let candidates: [sockaddr_in]
+  private let tailscale: sockaddr_in?
   private let relay: sockaddr_in?
   private let relayToken: Data
   /// Mac 最近一次发包来的地址，ioLock 保护。Mac 优先直连，手机跟着它走
@@ -636,26 +637,32 @@ final class DeskSession {
 
   /// 两把密钥由 Dart 用会话密钥派生好。这里不再做 HKDF。
   init(
-    toMobile: Data, toMac: Data, peers: [sockaddr_in], relay: sockaddr_in?, relayToken: Data?,
-    codec: DeskCodec, nack: Bool
+    toMobile: Data, toMac: Data, peers: [sockaddr_in], tailscale: sockaddr_in? = nil,
+    relay: sockaddr_in?, relayToken: Data?, codec: DeskCodec, nack: Bool
   ) throws {
     self.nack = nack
     guard toMobile.count == 32, toMac.count == 32 else { throw DeskError.badAddress }
-    guard !peers.isEmpty || relay != nil else { throw DeskError.badAddress }
+    let hasValidRelay = relay != nil && (relayToken?.count == deskRelayTokenLen)
+    guard !peers.isEmpty || tailscale != nil || hasValidRelay else { throw DeskError.badAddress }
     guard let depacketizer = makeDepacketizer(codec) else { throw DeskError.unsupportedCodec }
     keys = DeskKeys(
       toMobile: SymmetricKey(data: toMobile),
       toMac: SymmetricKey(data: toMac)
     )
+    self.tailscale = tailscale
+    var all = peers
+    if let tailscale {
+      all.append(tailscale)
+    }
     if let relay, let relayToken, relayToken.count == deskRelayTokenLen {
       self.relay = relay
       self.relayToken = relayToken
-      candidates = peers + [relay]
+      all.append(relay)
     } else {
       self.relay = nil
       self.relayToken = Data()
-      candidates = peers
     }
+    candidates = all
     self.depacketizer = depacketizer
     decoder.onImage = { [weak self] image, ms in
       self?.noteDecoded(image, ms: ms)
@@ -1102,12 +1109,13 @@ final class DeskSession {
     return peer
   }
 
-  /// 画面现在走哪条路：lan（局域网、Tailscale 等直连地址）、relay、punched（打洞直连），还没收到为空。
+  /// 画面现在走哪条路：lan（局域网等直连地址）、tailscale（内置 Tailscale 回环桥）、relay、punched（打洞直连），还没收到为空。
   private func path() -> String? {
     ioLock.lock()
     defer { ioLock.unlock() }
     guard let active, CFAbsoluteTimeGetCurrent() - activeAt < 2 else { return nil }
     if let relay, deskSameAddr(active, relay) { return "relay" }
+    if let tailscale, deskSameAddr(active, tailscale) { return "tailscale" }
     if let peer = punchPeer, deskSameAddr(active, peer) { return "punched" }
     return "lan"
   }

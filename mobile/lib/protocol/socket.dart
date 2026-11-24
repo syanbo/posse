@@ -159,7 +159,14 @@ class SocketReader {
     if (_done) return Future.error(E2eeException('socket closed'));
     final waiter = Completer<SocketEvent>();
     _waiters.add(waiter);
-    return waiter.future;
+    void onCancel() {
+      if (_waiters.remove(waiter) && !waiter.isCompleted) {
+        waiter.completeError(const RaceCancelled());
+      }
+    }
+
+    cancel.onCancel(onCancel);
+    return waiter.future.whenComplete(() => cancel.removeListener(onCancel));
   }
 
   void _fail(Object error) {

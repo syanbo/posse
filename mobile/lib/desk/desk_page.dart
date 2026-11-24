@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:posse_quic/posse_quic.dart';
 
 import '../app_state.dart';
 import '../l10n/l10n.dart';
@@ -153,6 +154,11 @@ class _DeskPageState extends State<DeskPage>
   /// Mac 给的 UDP 中转（host:port）和这次观看的令牌。
   String? _relay;
   Uint8List? _relayToken;
+  // 内置 Tailscale 回环 UDP 桥：跨暂停/恢复尽量复用，换目标、节点重启、失败、换电脑或退出页面时关闭。
+  TailscaleUdpBridge? _tsBridge;
+  DeskTailscaleTarget? _tsBridgeTarget;
+  int _tsBridgeSessionGen = -1;
+  Map<String, Object?>? _lastReadyFrame;
   // 电脑认缺包点名补发（ready 里带 nack）
   bool _nack = false;
   // 电脑认密码事件（ready 里带 password）：锁屏判断和只投给锁屏都在 Mac 上做
@@ -255,6 +261,7 @@ class _DeskPageState extends State<DeskPage>
     _link.release();
     _retry?.cancel();
     if (_watchClosed case final closed?) unawaited(_closeWatch(closed));
+    _closeTsBridge();
     _inputLine.dispose();
     _keyboard.removeListener(_keyboardChanged);
     _input.removeListener(_onTyped);
@@ -302,11 +309,14 @@ class _DeskPageState extends State<DeskPage>
     return _lanHost ?? _autoHost;
   }
 
-  /// 同一台电脑（主机公钥相同）存着的所有地址的主机名，当前连接的排前面。
-  List<String> _sameComputerHosts() {
+  /// 同一台电脑（主机公钥相同）存着的所有 URL（含 quicUrls 与配对码），当前连接的排前面。
+  List<String> _sameComputerUrls() {
     final offer = widget.model.offer;
     if (offer == null) return const [];
-    final urls = [...offer.dialUrls];
+    final urls = <String>[
+      if (widget.model.link != null) ...widget.model.link!.quicUrls,
+      ...offer.dialUrls,
+    ];
     for (final c in widget.model.computers) {
       try {
         final other = PairingOffer.parse(c.code);
@@ -317,7 +327,80 @@ class _DeskPageState extends State<DeskPage>
         // 存坏的配对码跳过。
       }
     }
-    return [for (final url in urls) ?deskHostOf(url)];
+    return urls;
+  }
+
+  /// 同一台电脑（主机公钥相同）存着的所有地址的主机名，当前连接的排前面。
+  List<String> _sameComputerHosts() => [
+    for (final url in _sameComputerUrls()) ?deskHostOf(url),
+  ];
+
+  void _closeTsBridge() {
+    _tsBridge?.close();
+    _tsBridge = null;
+    _tsBridgeTarget = null;
+    _tsBridgeSessionGen = -1;
+  }
+
+  Future<int?> _openOrReuseTsBridge(DeskTailscaleTarget target, int gen) async {
+    final sessionGen = widget.model.tailscale.sessionGen;
+    final existing = _tsBridge;
+    if (existing != null &&
+        !existing.isClosed &&
+        _tsBridgeTarget == target &&
+        _tsBridgeSessionGen == sessionGen) {
+      return existing.localPort;
+    }
+    _closeTsBridge();
+    try {
+      final opened = await widget.model.tailscale.openUdpBridge(
+        target.host,
+        target.port,
+      );
+      if (!mounted ||
+          gen != _gen ||
+          widget.model.tailscale.sessionGen != sessionGen) {
+        opened.close();
+        return null;
+      }
+      _tsBridge = opened;
+      _tsBridgeTarget = target;
+      _tsBridgeSessionGen = sessionGen;
+      return opened.localPort;
+    } on Object {
+      return null;
+    }
+  }
+
+  /// 按 ready 帧与当前节点状态解析并打开/复用内置 Tailscale 回环桥；
+  /// 同时配了有效自建中转且对端明确走 DERP 时跳过 TS 桥。
+  Future<int?> _prepareTsBridgeForFrame(
+    Map<String, Object?> frame,
+    int gen,
+  ) async {
+    if (_customHost != null) {
+      _closeTsBridge();
+      return null;
+    }
+    final tsTarget = resolveDeskTailscaleTarget(
+      readyFrame: frame,
+      connectedUrl: widget.model.connectedUrl,
+      otherUrls: _sameComputerUrls(),
+      tailscaleRunning: widget.model.tailscale.isRunning,
+    );
+    if (tsTarget == null) {
+      _closeTsBridge();
+      return null;
+    }
+    if (_relay != null && _relayToken != null && _relayToken!.length == 16) {
+      final route = await widget.model.tailscale.peerRoute(tsTarget.host);
+      if (!mounted || gen != _gen) return null;
+      if (route.isDerp) {
+        _closeTsBridge();
+        return null;
+      }
+    }
+    return _openOrReuseTsBridge(tsTarget, gen);
   }
 
   bool get _custom => _customHost != null || _customPort != null;
@@ -648,6 +731,7 @@ class _DeskPageState extends State<DeskPage>
       await _dropDesk(unsubscribe: true, waitForEnd: true);
       await stats.cancel();
       await _stopReceiver();
+      _closeTsBridge();
     } finally {
       if (identical(_lastWatchClosed, closed.future)) _lastWatchClosed = null;
       closed.complete();
@@ -678,6 +762,7 @@ class _DeskPageState extends State<DeskPage>
       await _releaseHeld();
       await _dropDesk(unsubscribe: false);
       await _stopReceiver();
+      _closeTsBridge();
       _keys = null;
       _readyPort = null;
       _rpcNow = null;
@@ -704,6 +789,7 @@ class _DeskPageState extends State<DeskPage>
       return;
     }
     final gen = ++_gen;
+    final switchedComputer = !identical(rpc, _rpcNow) || host != _hostNow;
     _rpcNow = rpc;
     _hostNow = host;
     _stats = const DeskStats();
@@ -724,12 +810,17 @@ class _DeskPageState extends State<DeskPage>
     if (!mounted || gen != _gen) return;
     await _dropDesk(unsubscribe: false);
     await _stopReceiver();
+    if (switchedComputer) _closeTsBridge();
+    _lastReadyFrame = null;
     _keys = null;
     _readyPort = null;
     if (!mounted || gen != _gen) return;
-    final udp = await deskUdpHost(host, _sameComputerHosts());
+    final udp = await deskDirectHostForUrl(
+      widget.model.connectedUrl,
+      _sameComputerHosts(),
+    );
     if (!mounted || gen != _gen) return;
-    // 没有直连地址也先订阅：Mac 配了中转时 ready 里会带上，没有再提示
+    // 没有直连地址也先订阅：Mac 配了中转或内置 Tailscale 时 ready 里会带上，没有再提示
     _noDirect = udp == null;
     _lanHost = udp == null || udp == host ? null : udp;
     final pixels = _screenPixels();
@@ -954,12 +1045,22 @@ class _DeskPageState extends State<DeskPage>
     _relayToken = null;
     if (_relay != null && relayTokenB64 is String) {
       try {
-        _relayToken = base64.decode(relayTokenB64);
+        final decoded = base64.decode(relayTokenB64);
+        if (decoded.length == 16) {
+          _relayToken = decoded;
+        } else {
+          _relay = null;
+        }
       } on Object {
         _relay = null;
       }
+    } else {
+      _relay = null;
     }
-    if ((host == null || host.isEmpty) && _relay == null) {
+    _lastReadyFrame = Map<String, Object?>.of(frame);
+    final tsLocalPort = await _prepareTsBridgeForFrame(frame, gen);
+    if (!mounted || gen != _gen) return;
+    if ((host == null || host.isEmpty) && _relay == null && tsLocalPort == null) {
       await _dropDesk(unsubscribe: true);
       if (mounted && gen == _gen) setState(() => _indirect = true);
       return;
@@ -972,6 +1073,8 @@ class _DeskPageState extends State<DeskPage>
       final id = await _receiver.start(
         host: host,
         port: host == null ? null : udpPort,
+        tsHost: tsLocalPort == null ? null : '127.0.0.1',
+        tsPort: tsLocalPort,
         relay: _relay,
         relayToken: _relayToken,
         keyToPhone: keys.toPhone,
@@ -991,13 +1094,14 @@ class _DeskPageState extends State<DeskPage>
         _fail = null;
         _endNote = null;
       });
-      // 局域网地址是猜的、中转也可能不通：hello 到不了时 Mac 要等 60 秒才放弃，这里早点说
+      // 局域网地址是猜的、中转或 Tailscale 也可能不通：hello 到不了时 Mac 要等 60 秒才放弃，这里早点说
       _lanCheck?.cancel();
       final guessed = _lanHost != null && _customHost == null;
-      if (guessed || _relay != null) {
-        _lanCheck = Timer(Duration(seconds: _relay != null ? 10 : 5), () {
+      if (guessed || _relay != null || tsLocalPort != null) {
+        final hasRemote = _relay != null || tsLocalPort != null;
+        _lanCheck = Timer(Duration(seconds: hasRemote ? 10 : 5), () {
           if (!mounted || gen != _gen || _stats.video) return;
-          final code = _relay != null ? 'route_unreachable' : 'lan_unreachable';
+          final code = hasRemote ? 'route_unreachable' : 'lan_unreachable';
           unawaited(_enqueue(() => _applyFail(code, gen)));
         });
       }
@@ -1020,6 +1124,8 @@ class _DeskPageState extends State<DeskPage>
       await _releaseHeld();
       await _dropDesk(unsubscribe: false);
       await _stopReceiver();
+      _closeTsBridge();
+      _lastReadyFrame = null;
       _keys = null;
       if (!mounted) return;
       setState(() {
@@ -1041,6 +1147,8 @@ class _DeskPageState extends State<DeskPage>
     await _releaseHeld();
     await _dropDesk(unsubscribe: false);
     await _stopReceiver();
+    _closeTsBridge();
+    _lastReadyFrame = null;
     _keys = null;
     _readyPort = null;
     if (!mounted) return;
@@ -1063,6 +1171,8 @@ class _DeskPageState extends State<DeskPage>
     // ready 之后失败时采集已经在跑，要退订才会停。
     await _dropDesk(unsubscribe: true);
     await _stopReceiver();
+    _closeTsBridge();
+    _lastReadyFrame = null;
     _keys = null;
     if (!mounted) return;
     setState(() {
@@ -1166,14 +1276,25 @@ class _DeskPageState extends State<DeskPage>
     final host = _udpHost;
     final port = _customPort ?? _readyPort;
     if (!_up || keys == null || port == null) return;
-    if ((host == null || host.isEmpty) && _relay == null) return;
     final gen = _gen;
+    int? tsLocalPort;
+    if (_customHost != null) {
+      _closeTsBridge();
+    } else if (_lastReadyFrame case final ready?) {
+      tsLocalPort = await _prepareTsBridgeForFrame(ready, gen);
+      if (!mounted || gen != _gen) return;
+    }
+    if ((host == null || host.isEmpty) && _relay == null && tsLocalPort == null) {
+      return;
+    }
     try {
       await _stopReceiver();
       if (!mounted || gen != _gen) return;
       final id = await _receiver.start(
         host: host,
         port: host == null ? null : port,
+        tsHost: tsLocalPort == null ? null : '127.0.0.1',
+        tsPort: tsLocalPort,
         relay: _relay,
         relayToken: _relayToken,
         keyToPhone: keys.toPhone,

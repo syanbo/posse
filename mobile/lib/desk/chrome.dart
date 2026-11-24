@@ -83,6 +83,7 @@ bool deskHapticFor(DeskEvent event) => event is DeskRightClickEvent;
 /// 调试面板里画面走的路，取值见 [DeskStats.path]。
 String deskPathLabel(AppLocalizations l, String? path) => switch (path) {
   'lan' => l.deskPathLan,
+  'tailscale' => 'Tailscale',
   'relay' => l.deskPathRelay,
   'punched' => l.deskPathPunched,
   _ => '—',

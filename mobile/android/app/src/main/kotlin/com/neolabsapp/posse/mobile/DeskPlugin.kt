@@ -135,12 +135,14 @@ class DeskPlugin(
         }
         val host = call.argument<String>("host")
         val port = call.argument<Number>("port")?.toInt() ?: 0
+        val tsHost = call.argument<String>("tsHost")
+        val tsPort = call.argument<Number>("tsPort")?.toInt() ?: 0
         val relayText = call.argument<String>("relay")
         val relayToken = call.argument<ByteArray>("relayToken")
         val nack = call.argument<Boolean>("nack") ?: false
         control.execute {
             val gen = stopSession()
-            // 直连地址可以没有（经隧道连着、只能走中转），中转也可以没有，但不能都没有
+            // 直连、内置 Tailscale 回环桥与中转均可独立为空，但不能全部为空
             val peers = ArrayList<InetSocketAddress>()
             if (!host.isNullOrEmpty()) {
                 val peer = deskResolve(host, port)
@@ -150,13 +152,24 @@ class DeskPlugin(
                 }
                 peers.add(peer)
             }
-            val relay = if (relayText.isNullOrEmpty()) null else deskResolveHostPort(relayText)
-            if (peers.isEmpty() && relay == null) {
+            val tailscale = if (!tsHost.isNullOrEmpty()) {
+                val ts = deskResolve(tsHost, tsPort)
+                if (ts == null) {
+                    main.post { result.error("bad_address", "cannot resolve $tsHost", null) }
+                    return@execute
+                }
+                ts
+            } else {
+                null
+            }
+            val validRelayToken = if (relayToken != null && relayToken.size == DESK_RELAY_TOKEN_LEN) relayToken else null
+            val relay = if (relayText.isNullOrEmpty() || validRelayToken == null) null else deskResolveHostPort(relayText)
+            if (peers.isEmpty() && tailscale == null && relay == null) {
                 main.post { result.error("bad_address", "no address to connect to", null) }
                 return@execute
             }
             val view = decoderName.startsWith("OMX.hisi") || decoderName.startsWith("c2.hisi")
-            main.post { open(gen, toPhone, toMac, peers, relay, relayToken, nack, view, result) }
+            main.post { open(gen, toPhone, toMac, peers, tailscale, relay, validRelayToken, nack, view, result) }
         }
     }
 
@@ -165,6 +178,7 @@ class DeskPlugin(
         toPhone: ByteArray,
         toMac: ByteArray,
         peers: List<InetSocketAddress>,
+        tailscale: InetSocketAddress?,
         relay: InetSocketAddress?,
         relayToken: ByteArray?,
         nack: Boolean,
@@ -176,7 +190,7 @@ class DeskPlugin(
             return
         }
         val created = try {
-            DeskSession(toPhone, toMac, peers, relay, relayToken, nack, view)
+            DeskSession(toPhone, toMac, peers, tailscale, relay, relayToken, nack, view)
         } catch (e: Exception) {
             result.error("desk", "cannot open the receiver", null)
             return

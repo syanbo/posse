@@ -11,7 +11,48 @@ import 'socket.dart';
 /// 只在手机里用：电脑经 posse.quic 告诉手机，不进配对码。
 const quicScheme = 'hquic';
 
+/// 经内置 Tailscale（tsnet 用户态 UDP）拨号的 QUIC 地址：`tsquic://100.x.y.z:端口`。
+/// 仅在手机内置 Tailscale 进入 Running 时由现有地址派生，不落盘、不进配对码。
+const tsQuicScheme = 'tsquic';
+
 bool isQuicUrl(String url) => url.startsWith('$quicScheme://');
+
+bool isTsQuicUrl(String url) => url.startsWith('$tsQuicScheme://');
+
+/// 属于 QUIC 族的传输（含普通 hquic:// 与内置 Tailscale tsquic://）：
+/// 竞速时免 2 秒 quicHeadStart，赢了之后不触发 _learnQuic 升级。
+bool isAnyQuicUrl(String url) => isQuicUrl(url) || isTsQuicUrl(url);
+
+/// 判断主机字符串是否是 Tailscale IPv4 段（100.64.0.0/10）。
+bool isTailscaleIp(String host) {
+  final parts = host.trim().split('.');
+  if (parts.length != 4) return false;
+  final a = int.tryParse(parts[0]);
+  final b = int.tryParse(parts[1]);
+  final c = int.tryParse(parts[2]);
+  final d = int.tryParse(parts[3]);
+  if (a == null || b == null || c == null || d == null) return false;
+  if (a < 0 || a > 255 || b < 0 || b > 255 || c < 0 || c > 255 || d < 0 || d > 255) {
+    return false;
+  }
+  return a == 100 && b >= 64 && b <= 127;
+}
+
+/// 从已有地址（posse.quic 给的 quicUrls 与配对码 offer.dialUrls）中的 100.64/10 地址
+/// 派生出 `tsquic://100.x:port` 候选（去重保序，跳过中转与打洞地址）。
+List<String> deriveTsQuicUrls(Iterable<String> urls) {
+  final out = <String>[];
+  final seen = <String>{};
+  for (final raw in urls) {
+    if (isRelayQuicUrl(raw) || isPunchedQuicUrl(raw)) continue;
+    final uri = Uri.tryParse(raw);
+    if (uri == null || !uri.hasPort || uri.port <= 0) continue;
+    if (!isTailscaleIp(uri.host)) continue;
+    final derived = '$tsQuicScheme://${uri.host}:${uri.port}';
+    if (seen.add(derived)) out.add(derived);
+  }
+  return out;
+}
 
 /// 打洞直连上的地址：电脑中转出口的公网地址。只用来显示，不存、不重连（每次要先经中转重新打洞）。
 String punchedUrl(String peer) => '$quicScheme://$peer?punched=1';
@@ -35,8 +76,15 @@ List<String> quicUrlsOf(Map<String, Object?> info) {
       for (final host in hosts.whereType<String>()) {
         if (host.isEmpty) continue;
         final h = host.contains(':') ? '[$host]' : host;
-        out.add('$quicScheme://$h:$port');
+        final u = '$quicScheme://$h:$port';
+        if (!out.contains(u)) out.add(u);
       }
+    }
+    final tsHost = info['tsHost'];
+    if (tsHost is String && tsHost.isNotEmpty) {
+      final h = tsHost.contains(':') ? '[$tsHost]' : tsHost;
+      final u = '$quicScheme://$h:$port';
+      if (!out.contains(u)) out.add(u);
     }
   }
   final relay = info['relay'];
@@ -59,12 +107,17 @@ class QuicByteSocket implements ByteSocket {
   static Future<QuicByteSocket> connect(String url, CancelToken cancel) async {
     if (cancel.cancelled) throw const RaceCancelled();
     final uri = Uri.parse(url);
-    final relay = uri.queryParameters['relay'];
-    final conn = await QuicConnection.dial(
-      uri.host,
-      uri.port,
-      relayToken: relay == null ? null : base64Url.decode(relay),
-    );
+    final QuicConnection conn;
+    if (isTsQuicUrl(url)) {
+      conn = await QuicConnection.dialTailscale(uri.host, uri.port);
+    } else {
+      final relay = uri.queryParameters['relay'];
+      conn = await QuicConnection.dial(
+        uri.host,
+        uri.port,
+        relayToken: relay == null ? null : base64Url.decode(relay),
+      );
+    }
     if (cancel.cancelled) {
       conn.close();
       throw const RaceCancelled();
@@ -109,6 +162,7 @@ Future<(ByteSocket, String)> punchQuic(
 }
 
 /// 按地址的写法挑传输。
-Future<ByteSocket> connectAny(String url, CancelToken cancel) => isQuicUrl(url)
+Future<ByteSocket> connectAny(String url, CancelToken cancel) =>
+    isAnyQuicUrl(url)
     ? QuicByteSocket.connect(url, cancel)
     : WebSocketByteSocket.connect(url, cancel);

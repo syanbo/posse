@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:posse_quic/posse_quic.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n/l10n.dart';
@@ -12,6 +13,7 @@ import 'protocol/pairing.dart';
 import 'protocol/quic_socket.dart';
 import 'protocol/race.dart';
 import 'protocol/rpc.dart';
+import 'protocol/tailscale_service.dart';
 import 'push/push.dart';
 import 'settings/custom_keys.dart';
 import 'settings/phone_model.dart';
@@ -173,6 +175,10 @@ class AppSettings {
     this.pushDone = true,
     this.pushAsked = false,
     this.backgroundKeep = false,
+    this.tailscaleEnabled = false,
+    this.tailscaleHostname = '',
+    this.tailscaleControlUrl = '',
+    this.tailscaleDisableBind = false,
     Map<String, int>? deskDisplays,
     Map<String, int>? deskFps,
     Map<String, int>? deskResolution,
@@ -257,6 +263,12 @@ class AppSettings {
   /// iOS 切到后台后一直保持连接（播放静音音频不让系统挂起），费电，默认关。关着时也有约 30 秒的宽限。
   bool backgroundKeep;
 
+  /// 内置 Tailscale 节点设置：默认关闭、按需懒启动；一次性 AuthKey 绝不落盘。
+  bool tailscaleEnabled;
+  String tailscaleHostname;
+  String tailscaleControlUrl;
+  bool tailscaleDisableBind;
+
   /// 终端快捷键栏上的键和顺序（键盘开关除外，它固定在最左边），内置的和自己加的混排。
   List<BarKey> barKeys;
 
@@ -293,6 +305,10 @@ class AppSettings {
     'pushDone': pushDone,
     'pushAsked': pushAsked,
     'backgroundKeep': backgroundKeep,
+    'tailscaleEnabled': tailscaleEnabled,
+    'tailscaleHostname': tailscaleHostname,
+    'tailscaleControlUrl': tailscaleControlUrl,
+    'tailscaleDisableBind': tailscaleDisableBind,
     'barKeys': [for (final k in barKeys) k.toJson()],
     'barKeysVersion': barKeysVersion,
   };
@@ -411,6 +427,18 @@ class AppSettings {
       if (map['pushAsked'] is bool) out.pushAsked = map['pushAsked'] as bool;
       if (map['backgroundKeep'] is bool) {
         out.backgroundKeep = map['backgroundKeep'] as bool;
+      }
+      if (map['tailscaleEnabled'] is bool) {
+        out.tailscaleEnabled = map['tailscaleEnabled'] as bool;
+      }
+      if (map['tailscaleHostname'] is String) {
+        out.tailscaleHostname = map['tailscaleHostname'] as String;
+      }
+      if (map['tailscaleControlUrl'] is String) {
+        out.tailscaleControlUrl = map['tailscaleControlUrl'] as String;
+      }
+      if (map['tailscaleDisableBind'] is bool) {
+        out.tailscaleDisableBind = map['tailscaleDisableBind'] as bool;
       }
       final bar = map['barKeys'];
       final custom = map['customKeys'];
@@ -621,6 +649,7 @@ class PosseAppModel extends ChangeNotifier {
     SocketConnector? connect,
     QuicPuncher? punch,
     PushPlatform? push,
+    TailscaleBackend? tailscaleBackend,
     this.networkSignatures,
   }) : store = store ?? PrefsPairingStore(),
        // 只有 iOS 有推送；换了连接器（测试）时不碰原生通道
@@ -632,14 +661,61 @@ class PosseAppModel extends ChangeNotifier {
        settingsStore = settingsStore ?? PrefsSettingsStore(),
        connect = connect ?? connectAny,
        // 换了连接器（测试）时默认不打洞：打洞要真的 UDP
-       punch = punch ?? (connect == null ? punchQuic : null);
+       punch = punch ?? (connect == null ? punchQuic : null),
+       tailscale = TailscaleController(
+         backend:
+             tailscaleBackend ??
+             (connect == null && tailscaleSupported
+                 ? const NativeTailscaleBackend()
+                 : null),
+       ) {
+    tailscale.addListener(_onTailscaleChanged);
+    tailscale.onBecameRunning = _onTailscaleBecameRunning;
+  }
 
   final PairingStore store;
   final SettingsStore settingsStore;
   var settings = AppSettings();
   final SocketConnector connect;
   final QuicPuncher? punch;
+  final TailscaleController tailscale;
   final Stream<String>? networkSignatures;
+
+  PosseLink? _connectingLink;
+  bool _tsReadyDuringConnect = false;
+
+  void _onTailscaleChanged() {
+    if (!_disposed) notifyListeners();
+  }
+
+  /// 内置 Tailscale 刚变为 Running 时：
+  /// 1) 若正在冷启动/连接且尚未连上、且目标电脑存在可派生的 tsquic:// 候选，取消挂起的普通拨号立即重跑；
+  /// 2) 若已停在失败态（无活跃连接），立即重连当前电脑。
+  void _onTailscaleBecameRunning() {
+    if (_disposed || disconnected) return;
+    if (connecting) {
+      final pending = _connectingLink;
+      if (pending != null && pending.rpc == null) {
+        final hasTsCandidates = deriveTsQuicUrls([
+          ...pending.quicUrls,
+          ...pending.offer.dialUrls,
+        ]).isNotEmpty;
+        if (hasTsCandidates) {
+          _tsReadyDuringConnect = true;
+          pending.cancelPendingOpen();
+        }
+      }
+      return;
+    }
+    if (link != null && link!.rpc != null) return;
+    final active = saved.current ?? saved.computers.firstOrNull;
+    if (active != null) {
+      unawaited(connectCode(active.code));
+    }
+  }
+
+  /// 当前连接走 `tsquic://` 时的对端路径（Direct / PeerRelay / DERP）。
+  TailscalePeerRoute? get tailscalePeerRoute => link?.peerRoute;
 
   /// 推送的原生一侧，没有推送的平台为空，见 [registerPush]。
   final PushPlatform? push;
@@ -809,6 +885,18 @@ class PosseAppModel extends ChangeNotifier {
     notifyListeners();
     push?.onOpened = () => unawaited(_openFromPush());
     await registerPush();
+    // 仅在用户已开启内置 Tailscale 时后台懒启动，不阻塞局域网/中转冷启动
+    if (settings.tailscaleEnabled && tailscale.supported) {
+      unawaited(
+        tailscale
+            .start(
+              hostname: settings.tailscaleHostname,
+              controlUrl: settings.tailscaleControlUrl,
+              disableBindInterface: settings.tailscaleDisableBind,
+            )
+            .catchError((Object _) {}),
+      );
+    }
     final active = saved.current ?? saved.computers.firstOrNull;
     // 冷启动是点通知起来的：连上默认那台之后再处理，要的是另一台就切过去；默认那台连不上也照样处理
     try {
@@ -834,6 +922,11 @@ class PosseAppModel extends ChangeNotifier {
         connect: connect,
         networkSignatures: networkSignatures ?? connectivitySignatures(),
         phone: () => _phoneInfo(parsed),
+        tailscaleRunning: () => tailscale.isRunning,
+        tailscalePeerRoute: (ip) => tailscale.peerRoute(ip),
+        onTailscaleWake: () {
+          if (settings.tailscaleEnabled) tailscale.wake();
+        },
       );
       next = created;
       final id = computerId(parsed);
@@ -874,7 +967,31 @@ class PosseAppModel extends ChangeNotifier {
       created.onLatency = () {
         if (gen == _connectGen && identical(link, created)) notifyListeners();
       };
-      await _start(created, gen, first: saved.computers.isEmpty);
+      created.onPeerRoute = () {
+        if (gen == _connectGen && identical(link, created)) notifyListeners();
+      };
+      _connectingLink = created;
+      var tsRetried = false;
+      while (true) {
+        _tsReadyDuringConnect = false;
+        try {
+          // 首次配对即使被 TS 就绪打断重跑，仍须保留首次配对的本地网络权限重试窗口
+          await _start(created, gen, first: saved.computers.isEmpty);
+          break;
+        } catch (caught) {
+          if (tsRetried ||
+              !_tsReadyDuringConnect ||
+              gen != _connectGen ||
+              disconnected ||
+              !tailscale.isRunning ||
+              caught is HostTooOld ||
+              caught is E2eeException) {
+            rethrow;
+          }
+          tsRetried = true;
+        }
+      }
+      if (identical(_connectingLink, created)) _connectingLink = null;
       if (gen != _connectGen) {
         await created.close();
         return false;
@@ -915,6 +1032,7 @@ class PosseAppModel extends ChangeNotifier {
       if (gen == _connectGen) error = caught;
       return false;
     } finally {
+      if (identical(_connectingLink, next)) _connectingLink = null;
       if (gen == _connectGen) {
         connecting = false;
         notifyListeners();
@@ -924,6 +1042,9 @@ class PosseAppModel extends ChangeNotifier {
 
   /// 从后台回到前台，见 [PosseLink.wake]。
   Future<void> wake() async {
+    if (settings.tailscaleEnabled && tailscale.supported) {
+      tailscale.wake();
+    }
     if (disconnected) return;
     await link?.wake();
     // 在后台时轮询停着，列表停在离开时的样子：回来马上拉一次。连接死了的话重连上之后会拉
@@ -1057,15 +1178,18 @@ class PosseAppModel extends ChangeNotifier {
   }
 
   /// 主动断开当前这台电脑，配对留着。
+  /// 先置 disconnected=true 再等旧连接关闭，防止关闭间隙内 Tailscale Running 回调自动重连。
   Future<void> disconnect() async {
-    await _disconnect();
     disconnected = true;
+    await _disconnect();
     notifyListeners();
   }
 
   Future<void> _disconnect() async {
     _connectGen++;
     _poll?.cancel();
+    _connectingLink?.cancelPendingOpen();
+    _connectingLink = null;
     final current = link;
     link = null;
     offer = null;
@@ -1395,6 +1519,9 @@ class PosseAppModel extends ChangeNotifier {
       t.cancel();
     }
     unawaited(link?.close());
+    tailscale.removeListener(_onTailscaleChanged);
+    tailscale.onBecameRunning = null;
+    tailscale.dispose();
     super.dispose();
   }
 }

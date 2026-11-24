@@ -290,6 +290,7 @@ String? hostOf(AppLocalizations l, String? url) {
   if (isRelayQuicUrl(url)) return l.homeAddressRelay;
   if (isPunchedQuicUrl(url)) return l.homeAddressDirect;
   final host = uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
+  if (isTsQuicUrl(url)) return '$host · Tailscale';
   return isQuicUrl(url) ? '$host · QUIC' : host;
 }
 

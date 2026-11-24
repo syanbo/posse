@@ -578,6 +578,7 @@ class DeskSession(
     toMobile: ByteArray,
     toMac: ByteArray,
     peers: List<InetSocketAddress>,
+    private val tailscale: InetSocketAddress?,
     relay: InetSocketAddress?,
     relayToken: ByteArray?,
     private val nack: Boolean,
@@ -663,16 +664,19 @@ class DeskSession(
 
     init {
         require(toMobile.size == 32 && toMac.size == 32)
-        require(peers.isNotEmpty() || relay != null)
+        val hasValidRelay = relay != null && relayToken != null && relayToken.size == DESK_RELAY_TOKEN_LEN
+        require(peers.isNotEmpty() || tailscale != null || hasValidRelay)
+        val all = ArrayList<InetSocketAddress>(peers)
+        if (tailscale != null) all.add(tailscale)
         if (relay != null && relayToken != null && relayToken.size == DESK_RELAY_TOKEN_LEN) {
             this.relay = relay
             this.relayToken = relayToken
-            candidates = peers + relay
+            all.add(relay)
         } else {
             this.relay = null
             this.relayToken = ByteArray(0)
-            candidates = peers
         }
+        candidates = all
     }
 
     /// 纹理的 Surface；画在平台视图上时不用它。
@@ -1160,11 +1164,12 @@ class DeskSession(
         if (peer != null && t < punchUntil) peer else null
     }
 
-    /// 画面现在走哪条路：lan（局域网、Tailscale 等直连地址）、relay、punched（打洞直连），还没收到为空。
+    /// 画面现在走哪条路：lan（局域网等直连地址）、tailscale（内置 Tailscale 回环桥）、relay、punched（打洞直连），还没收到为空。
     private fun path(): String? = synchronized(ioLock) {
         val current = active ?: return null
         if (now() - activeAt >= 2) return null
         if (relay != null && sameAddr(current, relay)) return "relay"
+        if (tailscale != null && sameAddr(current, tailscale)) return "tailscale"
         val peer = punchPeer
         if (peer != null && sameAddr(current, peer)) return "punched"
         "lan"
