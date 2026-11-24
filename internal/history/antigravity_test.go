@@ -225,3 +225,50 @@ func TestAntigravityTrashSymlink(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestAntigravityTitle(t *testing.T) {
+	home := t.TempDir()
+	base := AntigravityBase(home)
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", filepath.Join(base, "conversation_summaries.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE conversation_summaries (conversation_id text PRIMARY KEY, title text NOT NULL DEFAULT "");
+		INSERT INTO conversation_summaries VALUES (?, 'Stale Summary Title')`, antigravitySID); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	// 没有 annotations/<UUID>.pbtxt 时回退读摘要库。
+	if got := AntigravityTitle(home, antigravitySID); got != "Stale Summary Title" {
+		t.Fatalf("summary fallback = %q", got)
+	}
+
+	pbtxt := filepath.Join(base, "annotations", antigravitySID+".pbtxt")
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{"compact", "title:\"1124｜修复｜agy 会话改名 404\"\n", "1124｜修复｜agy 会话改名 404"},
+		{"nested_before_top", "pinned: true\nside_question_titles { key: \"1\" value: \"x\" title: \"nested\" }\n# comment\ntitle: \"Outer \\\"Quoted\\\" \\\\ Title\"\n", `Outer "Quoted" \ Title`},
+		{"octal_utf8", "title: \"\\344\\277\\256\\345\\244\\215\"\n", "修复"},
+		{"concat_and_unicode", "pinned:true title:\"Hello \" \"\\u4e16\\u754c\"", "Hello 世界"},
+		{"no_title_falls_back", "pinned: true\n", "Stale Summary Title"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			writeFile(t, pbtxt, tc.body)
+			if got := AntigravityTitle(home, antigravitySID); got != tc.want {
+				t.Fatalf("AntigravityTitle = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	// 非 UUID 不读取 annotations 目录，避免路径穿越。
+	if got := AntigravityTitle(home, "../"+antigravitySID); got != "" {
+		t.Fatalf("invalid id = %q", got)
+	}
+}

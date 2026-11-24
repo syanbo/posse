@@ -64,6 +64,8 @@ type session struct {
 	agyReportMu    sync.Mutex
 	agyReportPG    int
 	agyReportAt    time.Time
+	agyReportSID   string
+	agyReportTitle string
 	// grok 上次空闲时标题里的会话名：工作中的标题只是状态，手机的标签名用它
 	grokName string
 	name     string    // 用户给标签起的名字（terminal.rename），桌面和手机共用，存在 terminals.title

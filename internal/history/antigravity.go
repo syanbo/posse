@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -11,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	"posse/internal/agent"
 )
@@ -49,10 +52,14 @@ func AntigravityOpenSession(home string, files []string) string {
 	return id
 }
 
-// AntigravityTitle 返回 agy 给会话起的标题（首轮回复后写进 conversation_summaries.db，
-// 摘要缓存要更晚才有），没有时返回空。
+// AntigravityTitle 返回 agy 给会话起的标题：优先读单会话独立的 annotations/<UUID>.pbtxt
+// （多进程共用 conversation_summaries.db 时旧进程可能回写旧摘要），没有时再读摘要库。
 func AntigravityTitle(home, id string) string {
-	db := openAntigravitySummaries(AntigravityBase(home))
+	base := AntigravityBase(home)
+	if title := antigravityAnnotationTitle(base, id); title != "" {
+		return title
+	}
+	db := openAntigravitySummaries(base)
 	if db == nil {
 		return ""
 	}
@@ -64,6 +71,208 @@ func AntigravityTitle(home, id string) string {
 		return ""
 	}
 	return strings.TrimSpace(title)
+}
+
+func antigravityAnnotationTitle(base, id string) string {
+	if !antigravityUUID.MatchString(id) {
+		return ""
+	}
+	f, err := os.Open(filepath.Join(base, "annotations", id+".pbtxt"))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, 1<<20))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(prototextStringField(b, "title"))
+}
+
+// prototextStringField 从 protobuf text format 顶层提取指定字符串字段（跳过嵌套块与其他字段）。
+func prototextStringField(src []byte, name string) string {
+	depth := 0
+	for i := 0; i < len(src); {
+		i = skipPrototextSpace(src, i)
+		if i >= len(src) {
+			break
+		}
+		switch src[i] {
+		case '{', '<':
+			depth++
+			i++
+		case '}', '>':
+			if depth > 0 {
+				depth--
+			}
+			i++
+		case '"', '\'':
+			_, next, ok := parsePrototextString(src, i)
+			if !ok {
+				return ""
+			}
+			i = next
+		default:
+			if depth == 0 && isPrototextIdentStart(src[i]) {
+				start := i
+				for i < len(src) && isPrototextIdent(src[i]) {
+					i++
+				}
+				key := string(src[start:i])
+				i = skipPrototextSpace(src, i)
+				if i < len(src) && src[i] == ':' {
+					i = skipPrototextSpace(src, i+1)
+					if key == name && i < len(src) && (src[i] == '"' || src[i] == '\'') {
+						val, _, ok := parsePrototextString(src, i)
+						if ok {
+							return val
+						}
+						return ""
+					}
+				}
+				continue
+			}
+			i++
+		}
+	}
+	return ""
+}
+
+func skipPrototextSpace(src []byte, i int) int {
+	for i < len(src) {
+		switch src[i] {
+		case ' ', '\t', '\r', '\n', ',', ';':
+			i++
+		case '#':
+			for i < len(src) && src[i] != '\n' {
+				i++
+			}
+		default:
+			return i
+		}
+	}
+	return i
+}
+
+func isPrototextIdentStart(b byte) bool {
+	return b == '_' || 'a' <= b && b <= 'z' || 'A' <= b && b <= 'Z'
+}
+
+func isPrototextIdent(b byte) bool {
+	return isPrototextIdentStart(b) || '0' <= b && b <= '9'
+}
+
+// parsePrototextString 解析一个或多个相邻的 protobuf text format 字符串字面量。
+func parsePrototextString(src []byte, i int) (string, int, bool) {
+	var out []byte
+	parsed := false
+	for {
+		i = skipPrototextSpace(src, i)
+		if i >= len(src) || src[i] != '"' && src[i] != '\'' {
+			return string(out), i, parsed
+		}
+		quote := src[i]
+		i++
+		closed := false
+		for i < len(src) {
+			b := src[i]
+			i++
+			if b == quote {
+				closed = true
+				break
+			}
+			if b == '\n' || b == '\r' {
+				return "", i, false
+			}
+			if b != '\\' {
+				out = append(out, b)
+				continue
+			}
+			if i >= len(src) {
+				return "", i, false
+			}
+			esc := src[i]
+			i++
+			switch esc {
+			case 'a':
+				out = append(out, '\a')
+			case 'b':
+				out = append(out, '\b')
+			case 'f':
+				out = append(out, '\f')
+			case 'n':
+				out = append(out, '\n')
+			case 'r':
+				out = append(out, '\r')
+			case 't':
+				out = append(out, '\t')
+			case 'v':
+				out = append(out, '\v')
+			case '\\', '\'', '"', '?':
+				out = append(out, esc)
+			case '0', '1', '2', '3', '4', '5', '6', '7':
+				v := esc - '0'
+				for n := 0; n < 2 && i < len(src) && '0' <= src[i] && src[i] <= '7'; n++ {
+					v = v*8 + (src[i] - '0')
+					i++
+				}
+				out = append(out, v)
+			case 'x', 'X':
+				v, n := parseHexDigits(src, i, 2)
+				if n == 0 {
+					return "", i, false
+				}
+				i += n
+				out = append(out, byte(v))
+			case 'u', 'U':
+				want := 4
+				if esc == 'U' {
+					want = 8
+				}
+				v, n := parseHexDigits(src, i, want)
+				if n != want {
+					return "", i, false
+				}
+				i += n
+				r := rune(v)
+				if esc == 'u' && utf16.IsSurrogate(r) && i+6 <= len(src) && src[i] == '\\' && src[i+1] == 'u' {
+					if low, ln := parseHexDigits(src, i+2, 4); ln == 4 {
+						r = utf16.DecodeRune(r, rune(low))
+						i += 6
+					}
+				}
+				out = utf8.AppendRune(out, r)
+			default:
+				return "", i, false
+			}
+		}
+		if !closed {
+			return "", i, false
+		}
+		parsed = true
+	}
+}
+
+func parseHexDigits(src []byte, i, limit int) (uint32, int) {
+	var v uint32
+	n := 0
+	for n < limit && i+n < len(src) {
+		c := src[i+n]
+		var d uint32
+		switch {
+		case '0' <= c && c <= '9':
+			d = uint32(c - '0')
+		case 'a' <= c && c <= 'f':
+			d = uint32(c-'a') + 10
+		case 'A' <= c && c <= 'F':
+			d = uint32(c-'A') + 10
+		default:
+			return v, n
+		}
+		v = v*16 + d
+		n++
+	}
+	return v, n
 }
 
 func openAntigravitySummaries(base string) *sql.DB {

@@ -138,6 +138,33 @@ func TestSyncAntigravity(t *testing.T) {
 	if c, ok := history.ReadReportedContext(d.cfg.Home, "antigravity", sid, path); !ok || c.Used != 0 || c.Window != 0 {
 		t.Fatalf("empty report or quota switch affected context: %+v, %v", c, ok)
 	}
+
+	// agy 空闲超过 5 秒后状态栏不再刷新，此时摘要库被其他进程回写旧标题也不应覆盖已上报标题。
+	if _, err := db.Exec(`UPDATE conversation_summaries SET title = 'Stale Summary Title'`); err != nil {
+		t.Fatal(err)
+	}
+	s.agyReportMu.Lock()
+	s.agyReportAt = now.Add(-time.Minute)
+	s.agyReportMu.Unlock()
+	d.syncAntigravity(s)
+	if st := s.Agent(); st.Title != "From status line" || st.NativeTitle != "From status line" {
+		t.Fatalf("stale summary overwrote status line title after idle: %+v", st)
+	}
+
+	// 尚未收到状态栏上报时（如重启/交接后），优先读单会话独立的 annotations/<UUID>.pbtxt。
+	if err := os.MkdirAll(filepath.Join(base, "annotations"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "annotations", sid+".pbtxt"), []byte("title:\"1124｜修复｜原生标注\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s.agyReportMu.Lock()
+	s.agyReportPG, s.agyReportSID, s.agyReportTitle = 0, "", ""
+	s.agyReportMu.Unlock()
+	d.syncAntigravity(s)
+	if st := s.Agent(); st.Title != "1124｜修复｜原生标注" || st.NativeTitle != "1124｜修复｜原生标注" {
+		t.Fatalf("annotation title did not take precedence over stale summary: %+v", st)
+	}
 }
 
 func TestAntigravityMobileInputRejectsAmbiguousLock(t *testing.T) {

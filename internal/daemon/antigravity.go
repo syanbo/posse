@@ -72,10 +72,16 @@ func (d *Daemon) antigravityStatusline(ctx context.Context, raw json.RawMessage)
 	if id == "" {
 		return nil, nil
 	}
+	title := strings.TrimSpace(p.Payload.Title)
 	s.agyReportPG, s.agyReportAt = pg, p.At
+	if title != "" {
+		s.agyReportSID, s.agyReportTitle = id, title
+	} else if s.agyReportSID != id {
+		s.agyReportSID, s.agyReportTitle = id, ""
+	}
 	// agy 1.5.15 的上报路径指向桌面 App 目录，CLI 日志单独存放。
 	path := history.AntigravityTranscriptPath(d.agentDataHome(), id)
-	applyAntigravityIdentity(s, id, strings.TrimSpace(p.Payload.Title), path)
+	applyAntigravityIdentity(s, id, title, path)
 	if w := p.Payload.Context; w != nil {
 		var value history.Context
 		if u := w.Current; u != nil {
@@ -168,18 +174,30 @@ func (d *Daemon) syncAntigravity(s *session) {
 		d.rememberAntigravityDir(s, sid, resolvePath(processDir))
 	}
 	s.agyReportMu.Lock()
-	fresh := s.agyReportPG == pg && s.Agent().SessionID == sid && time.Since(s.agyReportAt) < antigravityReportFresh
+	covered := s.antigravityStatuslineCovers(pg, sid)
 	s.agyReportMu.Unlock()
-	if fresh {
+	if covered {
 		return
 	}
 	title := history.AntigravityTitle(d.agentDataHome(), sid)
 	s.agyReportMu.Lock()
 	defer s.agyReportMu.Unlock()
-	if s.agyReportPG == pg && s.Agent().SessionID == sid && time.Since(s.agyReportAt) < antigravityReportFresh || d.antigravityPresenceSessionID(pg) != sid {
+	if s.antigravityStatuslineCovers(pg, sid) || d.antigravityPresenceSessionID(pg) != sid {
 		return
 	}
 	applyAntigravityIdentity(s, sid, title, "")
+}
+
+// antigravityStatuslineCovers 报告当前 agy 进程与会话是否已有状态栏接管：
+// 5 秒内刚上报过，或已经报过该会话的非空标题（agy 空闲时不再刷新状态栏，不回退查摘要库）。
+func (s *session) antigravityStatuslineCovers(pg int, sid string) bool {
+	if s.agyReportPG != pg || s.Agent().SessionID != sid {
+		return false
+	}
+	if time.Since(s.agyReportAt) < antigravityReportFresh {
+		return true
+	}
+	return s.agyReportSID == sid && s.agyReportTitle != ""
 }
 
 func (d *Daemon) rememberAntigravityDir(s *session, sid, dir string) {
