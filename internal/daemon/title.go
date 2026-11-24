@@ -101,7 +101,10 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 			applies = "shown in Posse. To update the native session name, enter /rename followed by this title in agy"
 			break
 		}
-		err = namer.WriteAntigravity(ctx, p.AntigravityAddress, p.AntigravityToken, sid, title)
+		if writeErr := namer.WriteAntigravity(ctx, p.AntigravityAddress, p.AntigravityToken, sid, title); writeErr != nil {
+			applies = fmt.Sprintf("shown in Posse (Antigravity native rename failed: %v). To update the native session name, enter /rename followed by this title in agy", writeErr)
+			break
+		}
 		applies = "updated in Posse and Antigravity"
 	default:
 		applies = fmt.Sprintf("shown in Posse only; %s keeps its own session name", name)

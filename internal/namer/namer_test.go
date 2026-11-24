@@ -1,11 +1,15 @@
 package namer
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -146,6 +150,56 @@ func TestWriteGrok(t *testing.T) {
 	}
 	if err := WriteGrok(home, "nope", cwd, title); err == nil {
 		t.Fatal("missing session")
+	}
+}
+
+func TestWriteAntigravity(t *testing.T) {
+	const sid = "ce5e30fa-8b92-42ae-8769-e19e80bdc9da"
+	const title = "1124｜修复｜原生标题"
+	newServer := func(allowPath string) (*httptest.Server, *[]string) {
+		var paths []string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			paths = append(paths, r.URL.Path)
+			if r.URL.Path != allowPath {
+				http.NotFound(w, r)
+				return
+			}
+			if r.Header.Get("X-Antigravity-CSRF-Token") != "tok" {
+				http.Error(w, "", http.StatusUnauthorized)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{"id": sid, "annotations": map[string]string{"title": title}})
+		}))
+		t.Cleanup(srv.Close)
+		return srv, &paths
+	}
+	// 新版 agy 1.5.16+：直接命中新路径，不发多余请求。
+	srv, paths := newServer("/product.v1.ConversationService/UpdateConversation")
+	if err := WriteAntigravity(context.Background(), srv.Listener.Addr().String(), "tok", sid, title); err != nil {
+		t.Fatalf("new endpoint: %v", err)
+	}
+	if !slices.Equal(*paths, []string{"/product.v1.ConversationService/UpdateConversation"}) {
+		t.Fatalf("new endpoint paths = %v", *paths)
+	}
+	// 非 404 错误（如 401）不回退旧路径。
+	*paths = nil
+	if err := WriteAntigravity(context.Background(), srv.Listener.Addr().String(), "bad", sid, title); err == nil || !strings.Contains(err.Error(), "HTTP 401") {
+		t.Fatalf("expected HTTP 401, got %v", err)
+	}
+	if !slices.Equal(*paths, []string{"/product.v1.ConversationService/UpdateConversation"}) {
+		t.Fatalf("401 should not fall back, paths = %v", *paths)
+	}
+	// 旧版 agy：新路径 404 时回退到 jetski.product.v1 路径。
+	legacySrv, legacyPaths := newServer("/jetski.product.v1.ConversationService/UpdateConversation")
+	if err := WriteAntigravity(context.Background(), legacySrv.Listener.Addr().String(), "tok", sid, title); err != nil {
+		t.Fatalf("legacy endpoint fallback: %v", err)
+	}
+	if !slices.Equal(*legacyPaths, antigravityUpdatePaths) {
+		t.Fatalf("legacy fallback paths = %v", *legacyPaths)
+	}
+	// 非回环地址拒绝请求。
+	if err := WriteAntigravity(context.Background(), "example.com:8080", "tok", sid, title); err == nil {
+		t.Fatal("non-loopback address accepted")
 	}
 }
 

@@ -129,11 +129,15 @@ func TestSessionTitleAntigravity(t *testing.T) {
 	d.setAgent(s, term.AgentState{Status: agent.StatusIdle, SessionID: "previous"})
 	call(t, d.terminalRename, map[string]any{"terminal": s.ID, "name": "old custom name"})
 	const sid = "ce5e30fa-8b92-42ae-8769-e19e80bdc9da"
+	var acceptPath = "/product.v1.ConversationService/UpdateConversation"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/jetski.product.v1.ConversationService/UpdateConversation" ||
-			r.Header.Get("Connect-Protocol-Version") != "1" || r.Header.Get("Content-Type") != "application/json" {
+		if r.Method != http.MethodPost || r.Header.Get("Connect-Protocol-Version") != "1" || r.Header.Get("Content-Type") != "application/json" {
 			t.Error("wrong Antigravity request")
 			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+		if r.URL.Path != acceptPath {
+			http.NotFound(w, r)
 			return
 		}
 		if r.Header.Get("X-Antigravity-CSRF-Token") != "test-token" {
@@ -158,18 +162,25 @@ func TestSessionTitleAntigravity(t *testing.T) {
 		"antigravityAddress": server.Listener.Addr().String(),
 		"antigravityToken":   "invalid-token",
 	}
-	raw, _ := json.Marshal(params)
-	if _, err := d.sessionTitle(t.Context(), raw); err == nil || !strings.Contains(err.Error(), "HTTP 401") {
-		t.Fatalf("expected native rename failure, got %v", err)
-	}
-	if s.userName() != "old custom name" || s.Agent().SessionID != "previous" {
-		t.Fatal("failed rename changed Posse state")
-	}
-	params["antigravityToken"] = "test-token"
+	// 原生接口失败时仍更新 Posse 标签，并在说明里提示失败原因和手动 /rename。
 	r := call(t, d.sessionTitle, params).(sessionTitleResult)
+	if !strings.Contains(r.Applies, "HTTP 401") || !strings.Contains(r.Applies, "/rename") ||
+		s.userName() != "" || s.Agent().SessionID != sid || s.Agent().Title != r.Title {
+		t.Fatalf("native failure fallback: result %+v, terminal %+v, label %q", r, s.Agent(), s.userName())
+	}
+	// 新路径成功。
+	call(t, d.terminalRename, map[string]any{"terminal": s.ID, "name": "old custom name"})
+	params["antigravityToken"] = "test-token"
+	r = call(t, d.sessionTitle, params).(sessionTitleResult)
 	if r.Applies != "updated in Posse and Antigravity" || s.userName() != "" ||
 		s.Agent().SessionID != sid || s.Agent().Title != r.Title {
 		t.Fatalf("result %+v, terminal %+v", r, s.Agent())
+	}
+	// 旧版 agy 路径 404 回退成功。
+	acceptPath = "/jetski.product.v1.ConversationService/UpdateConversation"
+	r = call(t, d.sessionTitle, params).(sessionTitleResult)
+	if r.Applies != "updated in Posse and Antigravity" {
+		t.Fatalf("legacy fallback result %+v", r)
 	}
 	delete(params, "antigravityAddress")
 	r = call(t, d.sessionTitle, params).(sessionTitleResult)

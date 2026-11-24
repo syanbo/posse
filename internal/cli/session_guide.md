@@ -11,7 +11,7 @@ Format `MMDD｜type｜summary`, three parts separated by the full-width bar `｜
 - summary is {{LANG}}, at most {{MAX}} characters, saying what this session is doing.{{NOTE}} Do not start it with the type word.
 
 What the user gave you:
-- nothing: summarize the user's requests in this session so far, following the main task, not a passing detour;
+- nothing: summarize the user's requests in this session so far, following the main task, not a passing detour; if there is no prior task in this session yet, ask the user for a title instead of probing with unrelated shell commands;
 - a full title: use it as is;
 - only a summary or keywords: use it as the summary and pick the type yourself.
 
