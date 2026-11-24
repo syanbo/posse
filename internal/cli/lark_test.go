@@ -46,6 +46,8 @@ func TestAntigravityPreToolUseHelpers(t *testing.T) {
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"git branch -D old"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"find . -delete"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"sed -i '' 's/a/b/' file.txt"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"env rm -rf /tmp/x"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"sort -o /tmp/out.txt file.txt"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli base +record-update --base-token EHz --table-id tbl --record-id rec_1 --as user"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli im +messages-send --chat-id oc_1 --text hi --as bot"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"mkdir -p /Users/dengbo/Desktop/Works/bad"}}}`,

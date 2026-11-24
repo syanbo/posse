@@ -1000,8 +1000,17 @@ func isSafeReadOnlySegment(tokens []string) bool {
 		}
 		return false
 	case "ls", "pwd", "cat", "head", "tail", "wc", "stat", "file", "which",
-		"basename", "dirname", "realpath", "readlink", "echo", "printf", "nl", "date", "uname", "env", "printenv", "cd",
-		"grep", "egrep", "fgrep", "rg", "jq", "sort", "uniq", "cut", "tr", "diff", "comm", "true", "false":
+		"basename", "dirname", "realpath", "readlink", "echo", "printf", "nl", "date", "uname", "printenv", "cd",
+		"grep", "egrep", "fgrep", "rg", "jq", "uniq", "cut", "tr", "diff", "comm", "true", "false":
+		return true
+	case "env":
+		return len(args) == 0
+	case "sort":
+		for _, a := range args {
+			if a == "-o" || strings.HasPrefix(a, "-o") || a == "--output" || strings.HasPrefix(a, "--output=") {
+				return false
+			}
+		}
 		return true
 	case "mkdir":
 		return isSafeScratchMkdir(args)
