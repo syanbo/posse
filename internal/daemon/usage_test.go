@@ -16,14 +16,14 @@ import (
 
 // 关掉套餐用量后，statusLine 报上来的读数不记、也不给界面；重新打开后照常记。
 func TestUsageOff(t *testing.T) {
-	// 重新打开时也会补查用量。隔离 PATH，免得测试拉起本机安装的 agy 并要求登录。
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("PATH", home)
 	t.Setenv("CLAUDE_CONFIG_DIR", home)
 	t.Setenv("CODEX_HOME", home)
 	t.Setenv("GROK_HOME", home)
-	d := &Daemon{}
+	d := &Daemon{cfg: Config{Home: home}}
+	// 重新打开用量会在后台补查，测试结束后环境会恢复，必须隔离 daemon 自己的搜索路径。
+	d.agents.path = home
 	d.usage.store = usage.Open(home)
 	d.usage.store.SetCursorOff(true)
 	d.usage.store.SetCodexOff(true)
@@ -71,8 +71,8 @@ func TestUsageAgentDisabled(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", home)
 	t.Setenv("CODEX_HOME", home)
 	t.Setenv("GROK_HOME", home)
-	d := &Daemon{}
-	d.cfg.Home = home
+	d := &Daemon{cfg: Config{Home: home}}
+	d.agents.path = home
 	d.usage.store = usage.Open(home)
 	d.usage.store.SetCursorOff(true)
 	d.usage.store.SetCodexOff(true)
