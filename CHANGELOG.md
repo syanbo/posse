@@ -3,6 +3,22 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.46
+
+- 可从桌面任务页或命令行把任务派给 ZCode。首条任务和后续提醒在终端可输入时发送，追加任务沿用同一会话。
+- Antigravity 新会话自动接收当前目录的近期会话摘要，并记录工作区外的写入。历史恢复沿用已确认的工作目录，「逐项确认」会询问更多有副作用的工具操作。
+- 桌面和手机显示 Antigravity 官方状态栏提供的上下文和额度读数，套餐用量可查看 AI 积分余额及消费明细入口。
+- 手机对话页可查看 Antigravity 流式回复，并向它发送原生图片附件。
+- 缩短 `posse web` 打开网页首屏、等待元素和操作元素的时间。
+
+### English
+
+- Dispatch tasks to ZCode from the desktop Tasks page or the CLI. The initial task and reminders wait for the terminal to accept input, and follow-ups stay in the same session.
+- New Antigravity sessions receive recent session summaries for their working directory and track writes outside the workspace. History resumes in the confirmed directory, and Ask Each Time prompts for more tool actions with side effects.
+- Desktop and mobile use context and quota readings from Antigravity's native status line. Plan usage shows the AI credit balance and links to credit activity.
+- Mobile Chat shows Antigravity replies as they stream and sends images as native attachments.
+- `posse web` opens the first view sooner and responds faster when waiting for or interacting with elements.
+
 ## 0.1.45
 
 - 接入智谱 ZCode 独立终端。支持会话历史搜索、恢复和原生改名，启用 Posse 的 ZCode 状态插件后可查看工作状态。
