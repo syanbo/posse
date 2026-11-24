@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.48
+
+- 讨论支持单条消息同时 `@` 多位可用 Agent（最多 8 位，与 `@人` 互斥）并行派发：同目录自动进入待确认并发保护，不同工作区并行执行；引用可用 Agent 消息时自动预选该成员，取消引用自动收回；CLI `posse discussion post` 支持多次传入或逗号分隔 `--to`。
+- 讨论活跃执行卡片显示实时耗时与一行进度（当前工具/命令或终端状态行、后台子代理数），本机活跃和已完成执行支持按需展开可折叠过程时间线（按复用 worker 轮次精确切分，仅本机与已配对手机可见，不同步给局域网他人）。
+- 修复 Antigravity 会话在空闲时被旧摘要库回写覆盖会话标题的问题。
+
+### English
+
+- Discussions now support mentioning up to 8 usable agents in a single message (mutually exclusive with `@person`) for parallel dispatch: members sharing a directory use the existing concurrent confirmation hold while separate workspaces run in parallel. Quoting a usable agent message automatically preselects that member and clears it if the quote is removed; `posse discussion post --to` accepts repeated or comma-separated targets.
+- Active discussion execution cards show live elapsed time and a single-line progress summary (current tool/command or terminal status line, plus background subagent count). Local active and finished executions offer a collapsible activity timeline sliced per worker round and kept strictly local (never synced over LAN).
+- Fix Antigravity session titles being overwritten by stale summary database entries while idle.
+
 ## 0.1.47
 
 - 修复 Antigravity 1.5.16 起调用 `posse session title`（`/posse-rename`）同步原生标题返回 404 的问题，优先使用新接口并兼容旧版回退；原生改名失败时仍更新 Posse 标签并提示在 agy 中手动 `/rename`。
