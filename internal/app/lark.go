@@ -224,7 +224,13 @@ func (a *app) larkSettings(c *ui.Context) {
 						ui.Text(c, wsLabel).FontSize(fsSmall).TextColor(t.TextMuted)
 					}
 					ui.Text(c, agentTitle(bot.Agent)).FontSize(fsSmall).TextColor(t.TextMuted)
+					if bot.GroupContextCount > 0 {
+						ui.Text(c, m.LarkGroupContextCount(bot.GroupContextCount)).FontSize(fsSmall).TextColor(t.TextMuted)
+					}
 				})
+				if strings.TrimSpace(bot.Role) != "" {
+					ui.Text(c, strings.TrimSpace(bot.Role)).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2)
+				}
 				if st.LastError != "" {
 					ui.Text(c, st.LastError).FontSize(fsSmall).TextColor(t.Danger)
 				}
@@ -364,10 +370,33 @@ func (a *app) larkBotEditor(c *ui.Context) {
 				}
 			}
 		})
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, m.LarkFieldRole()).FontSize(fsBody).Shrink(0)
-			ui.Spacer(c)
-			fieldInputSized(c.Key("lark-f-role"), &d.Role, m.LarkFieldRole(), sz(280), sz(120))
+		ctxCounts := []int{0, 10, 20, 30}
+		ctxIdx := 0
+		switch {
+		case d.GroupContextCount >= 25:
+			ctxIdx = 3
+		case d.GroupContextCount >= 15:
+			ctxIdx = 2
+		case d.GroupContextCount > 0:
+			ctxIdx = 1
+		}
+		settingsRow(c, m.LarkFieldGroupContext(), func() {
+			if segmented(c.Key("lark-f-gctx"), &ctxIdx, m.LarkFieldGroupContext(),
+				m.LarkGroupContextOff(), m.LarkGroupContextCount(10), m.LarkGroupContextCount(20), m.LarkGroupContextCount(30)) {
+				d.GroupContextCount = ctxCounts[ctxIdx]
+			}
+		})
+		t := c.Theme()
+		ui.Column(c).Gap(6).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, m.LarkFieldRole()).FontSize(fsBody).Shrink(0)
+				ui.Text(c, m.LarkFieldRoleHint()).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(1)
+				ui.Spacer(c)
+				if strings.TrimSpace(d.Role) != "" && pressable(textButton(c.Key("lark-f-role-clear"), m.LarkClear())).Clicked() {
+					d.Role = ""
+				}
+			})
+			fieldArea(c.Key("lark-f-role"), &d.Role, m.LarkFieldRolePlaceholder(), sz(104))
 		})
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Spacer(c)

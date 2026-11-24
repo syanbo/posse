@@ -4,7 +4,8 @@ Posse 常驻进程原生托管多个本机 `lark-cli` profile 长连接（无需
 
 ## 架构与存储
 
-- **多机器人配置**：存放在 `$POSSE_HOME/lark-bots.json`（`internal/lark/config.go`），可同时启用多个飞书自建应用 profile，每个机器人独立配置默认工作区、默认 Agent、权限审批模式（`ask` / `skip`）、群聊会话粒度（`chat` 按群共享 / `thread` 按话题隔离）、触发白名单（`self` / `allowlist` / `group`）与角色说明。
+- **多机器人配置**：存放在 `$POSSE_HOME/lark-bots.json`（`internal/lark/config.go`），可同时启用多个飞书自建应用 profile，每个机器人独立配置默认工作区、默认 Agent、权限审批模式（`ask` / `skip`）、群聊会话粒度（`chat` 按群共享 / `thread` 按话题隔离）、触发白名单（`self` / `allowlist` / `group`）、群聊近期上下文条数（`groupContextCount`，默认关闭，可选 10/20/30 或 CLI 指定 0~50）与角色说明。
+- **引用展开与群上下文**：回复飞书里的某条消息再 `@机器人` 时，网关自动通过 `im +messages-mget --download-resources` 拉取被引用消息的正文与图片/文件附件一并传给 Agent（即使回复里只打了 `@机器人` 也生效）；配置了 `groupContextCount > 0` 时，群聊 `@` 还会自动附带该群最近 N 条未撤回消息作为背景上下文（自动排除当前消息与已展开的父消息）。
 - **本机私有表**（`internal/store/lark.go`，不进入局域网协作同步）：
   - `lark_bindings`：`(bot_id, chat_id, thread_key) → discussion_key` 与当前活跃成员、工作区、Agent、权限模式；
   - `lark_cards`：执行、提问、权限审批与飞书卡片消息 ID 的映射；

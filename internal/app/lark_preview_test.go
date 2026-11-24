@@ -30,6 +30,8 @@ func TestPreviewLarkSettings(t *testing.T) {
 					ID: "lbot_works", Name: "Works 排查助手", Profile: "cli_a945f8f32b38dcd4",
 					Enabled: true, WorkspaceID: "w7", Agent: "antigravity",
 					PermissionMode: lark.PermAsk, SessionMode: lark.SessionChat, TriggerPolicy: lark.TriggerSelf,
+					GroupContextCount: 20,
+					Role:              "优先按 works-incident-triage 技能排查 Works 线上报障，只读定位代码与日志，给出结论与回复话术。",
 				},
 				{
 					ID: "lbot_docs", Name: "文档整理助手", Profile: "cli_docs_bot",
@@ -46,9 +48,10 @@ func TestPreviewLarkSettings(t *testing.T) {
 				Name: "Works 排查助手", Profile: "cli_a945f8f32b38dcd4",
 				WorkspaceID: "w7", Agent: "antigravity",
 				PermissionMode: lark.PermAsk, SessionMode: lark.SessionChat, TriggerPolicy: lark.TriggerSelf,
-				Role: "负责 Works 报障排查，结合多维表格和日志定位根因并给出话术。",
+				GroupContextCount: 20,
+				Role:              "优先按 works-incident-triage 技能排查 Works 线上报障：\n1. 自动查多维表格与群聊附件\n2. 只读定位 Works 代码与日志根因\n3. 输出「现象判断 / 原因定位 / 解决方式 / 建议的话术」",
 			},
 		}
-		savePNG(t, newPreviewTester(a, dark), "settings-lark-"+suffix+".png")
+		savePNG(t, newPreviewTesterSize(a, dark, 1200, 1060), "settings-lark-"+suffix+".png")
 	}
 }

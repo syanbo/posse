@@ -10508,9 +10508,38 @@
   "@larkTriggerGroup": {
     "description": "Trigger policy option: any group member can trigger the bot."
   },
+  "larkFieldGroupContext": "Group Recent Context",
+  "@larkFieldGroupContext": {
+    "description": "Form label for how many recent group messages to include automatically on @mention."
+  },
+  "larkGroupContextOff": "Off",
+  "@larkGroupContextOff": {
+    "description": "Option to disable auto-including recent group messages."
+  },
+  "larkGroupContextCount": "{count} msgs",
+  "@larkGroupContextCount": {
+    "description": "Option or badge showing how many recent group messages are included automatically.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "larkFieldRole": "Role & Instructions",
   "@larkFieldRole": {
     "description": "Form label for the bot's role prompt."
+  },
+  "larkFieldRolePlaceholder": "Describe this bot's responsibilities, workflow, preferred skills, or output format…",
+  "@larkFieldRolePlaceholder": {
+    "description": "Placeholder text inside the multi-line role & instructions textarea for a Feishu bot."
+  },
+  "larkFieldRoleHint": "Injected into the bot's discussion prompt (supports multiple lines)",
+  "@larkFieldRoleHint": {
+    "description": "Helper hint under the Role & Instructions label."
+  },
+  "larkClear": "Clear",
+  "@larkClear": {
+    "description": "Button to clear the role & instructions textarea."
   },
   "larkSave": "Save",
   "@larkSave": {

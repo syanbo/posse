@@ -29409,6 +29409,52 @@ func (msgs Messages) LarkTriggerGroup() string {
 	return Catalog.Format(msgs.locale, "larkTriggerGroup", nil)
 }
 
+// LarkFieldGroupContext says "Group Recent Context"
+// in the language the app shows.
+//
+// Form label for how many recent group messages to include automatically on
+// @mention.
+func LarkFieldGroupContext() string { return In(i18n.Locale()).LarkFieldGroupContext() }
+
+// LarkFieldGroupContext says "Group Recent Context"
+// in the language of msgs.
+//
+// Form label for how many recent group messages to include automatically on
+// @mention.
+func (msgs Messages) LarkFieldGroupContext() string {
+	return Catalog.Format(msgs.locale, "larkFieldGroupContext", nil)
+}
+
+// LarkGroupContextOff says "Off"
+// in the language the app shows.
+//
+// Option to disable auto-including recent group messages.
+func LarkGroupContextOff() string { return In(i18n.Locale()).LarkGroupContextOff() }
+
+// LarkGroupContextOff says "Off"
+// in the language of msgs.
+//
+// Option to disable auto-including recent group messages.
+func (msgs Messages) LarkGroupContextOff() string {
+	return Catalog.Format(msgs.locale, "larkGroupContextOff", nil)
+}
+
+// LarkGroupContextCount says "{count} msgs"
+// in the language the app shows.
+//
+// Option or badge showing how many recent group messages are included
+// automatically.
+func LarkGroupContextCount(count int) string { return In(i18n.Locale()).LarkGroupContextCount(count) }
+
+// LarkGroupContextCount says "{count} msgs"
+// in the language of msgs.
+//
+// Option or badge showing how many recent group messages are included
+// automatically.
+func (msgs Messages) LarkGroupContextCount(count int) string {
+	return Catalog.Format(msgs.locale, "larkGroupContextCount", map[string]any{"count": count})
+}
+
 // LarkFieldRole says "Role & Instructions"
 // in the language the app shows.
 //
@@ -29421,6 +29467,50 @@ func LarkFieldRole() string { return In(i18n.Locale()).LarkFieldRole() }
 // Form label for the bot's role prompt.
 func (msgs Messages) LarkFieldRole() string {
 	return Catalog.Format(msgs.locale, "larkFieldRole", nil)
+}
+
+// LarkFieldRolePlaceholder says "Describe this bot's responsibilities, workflow, preferred skills, or output format…"
+// in the language the app shows.
+//
+// Placeholder text inside the multi-line role & instructions textarea for a
+// Feishu bot.
+func LarkFieldRolePlaceholder() string { return In(i18n.Locale()).LarkFieldRolePlaceholder() }
+
+// LarkFieldRolePlaceholder says "Describe this bot's responsibilities, workflow, preferred skills, or output format…"
+// in the language of msgs.
+//
+// Placeholder text inside the multi-line role & instructions textarea for a
+// Feishu bot.
+func (msgs Messages) LarkFieldRolePlaceholder() string {
+	return Catalog.Format(msgs.locale, "larkFieldRolePlaceholder", nil)
+}
+
+// LarkFieldRoleHint says "Injected into the bot's discussion prompt (supports multiple lines)"
+// in the language the app shows.
+//
+// Helper hint under the Role & Instructions label.
+func LarkFieldRoleHint() string { return In(i18n.Locale()).LarkFieldRoleHint() }
+
+// LarkFieldRoleHint says "Injected into the bot's discussion prompt (supports multiple lines)"
+// in the language of msgs.
+//
+// Helper hint under the Role & Instructions label.
+func (msgs Messages) LarkFieldRoleHint() string {
+	return Catalog.Format(msgs.locale, "larkFieldRoleHint", nil)
+}
+
+// LarkClear says "Clear"
+// in the language the app shows.
+//
+// Button to clear the role & instructions textarea.
+func LarkClear() string { return In(i18n.Locale()).LarkClear() }
+
+// LarkClear says "Clear"
+// in the language of msgs.
+//
+// Button to clear the role & instructions textarea.
+func (msgs Messages) LarkClear() string {
+	return Catalog.Format(msgs.locale, "larkClear", nil)
 }
 
 // LarkSave says "Save"

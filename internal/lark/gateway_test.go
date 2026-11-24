@@ -3,6 +3,8 @@ package lark
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -12,11 +14,14 @@ import (
 )
 
 type fakeClient struct {
-	mu      sync.Mutex
-	sent    []fakeCardCall
-	patched []fakeCardCall
-	files   []string
-	nextID  int
+	mu          sync.Mutex
+	sent        []fakeCardCall
+	patched     []fakeCardCall
+	files       []string
+	nextID      int
+	fetchedMsgs map[string]FetchedMessage
+	recentMsgs  []FetchedMessage
+	recentCalls int
 }
 
 type fakeCardCall struct {
@@ -76,12 +81,40 @@ func (f *fakeClient) DownloadResource(context.Context, string, string, string, s
 	return "", nil
 }
 
+func (f *fakeClient) GetMessage(_ context.Context, _, messageID, downloadDir string) (FetchedMessage, error) {
+	f.mu.Lock()
+	m, ok := f.fetchedMsgs[messageID]
+	f.mu.Unlock()
+	if !ok {
+		return FetchedMessage{}, store.ErrNotFound
+	}
+	if downloadDir != "" {
+		for i := range m.Resources {
+			if m.Resources[i].LocalPath != "" && !filepath.IsAbs(m.Resources[i].LocalPath) {
+				p := filepath.Join(downloadDir, m.Resources[i].LocalPath)
+				_ = os.MkdirAll(filepath.Dir(p), 0o700)
+				_ = os.WriteFile(p, []byte("fake-image"), 0o600)
+				m.Resources[i].LocalPath = p
+			}
+		}
+	}
+	return m, nil
+}
+
+func (f *fakeClient) ListRecentMessages(_ context.Context, _, _ string, _ int) ([]FetchedMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.recentCalls++
+	return append([]FetchedMessage(nil), f.recentMsgs...), nil
+}
+
 type fakeHost struct {
 	mu          sync.Mutex
 	bindings    map[string]store.LarkBinding
 	cards       map[string]store.LarkCard
 	events      map[string]bool
 	posted      []string
+	postedAtts  [][]string
 	answered    map[string]string
 	stopped     []string
 	decided     map[string]string
@@ -178,10 +211,11 @@ func (h *fakeHost) ResetBinding(botID, chatID, threadKey string) error {
 	return nil
 }
 
-func (h *fakeHost) PostFromLark(b store.LarkBinding, body, metaHeader string, _ []string) (string, error) {
+func (h *fakeHost) PostFromLark(b store.LarkBinding, body, metaHeader string, atts []string) (string, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.posted = append(h.posted, metaHeader+"\n"+body)
+	h.postedAtts = append(h.postedAtts, append([]string(nil), atts...))
 	now := time.Now()
 	id := "x_1"
 	h.execSnaps[id] = ExecSnap{ID: id, Discussion: b.DiscussionKey, Agent: b.Agent, Workspace: "Works/main", State: "running", StartedAt: &now}
@@ -373,5 +407,86 @@ func TestGatewayMessageSecurityCommandsAndReverseSync(t *testing.T) {
 	lastSent := fc.sent[len(fc.sent)-1]
 	if lastSent.target != "om_1" || !strings.Contains(lastSent.cardJSON, "null pointer in login") {
 		t.Fatalf("unexpected final result card: %+v", lastSent)
+	}
+}
+
+func TestGatewayParentExpansionAndGroupContext(t *testing.T) {
+	parentMsg := FetchedMessage{
+		MessageID:  "om_parent_err",
+		MsgType:    "post",
+		CreateTime: "2026-11-24 22:10",
+		Content:    "Android 710 login crash stacktrace",
+	}
+	parentMsg.Sender.Name = "Alice"
+	parentMsg.Resources = append(parentMsg.Resources, struct {
+		Key       string `json:"key"`
+		Type      string `json:"type"`
+		LocalPath string `json:"local_path"`
+		Error     bool   `json:"error"`
+	}{Key: "img_1", Type: "image", LocalPath: "lark-im-resources/crash.png"})
+
+	mOld := FetchedMessage{MessageID: "om_hist_1", CreateTime: "2026-11-24 22:08", Content: "First user report"}
+	mOld.Sender.Name = "Bob"
+	mDel := FetchedMessage{MessageID: "om_hist_del", CreateTime: "2026-11-24 22:09", Content: "recalled", Deleted: true}
+	mMid := FetchedMessage{MessageID: "om_hist_2", CreateTime: "2026-11-24 22:11", Content: "Reproduced on Xiaomi 14"}
+	mMid.Sender.Name = "Carol"
+	mCur := FetchedMessage{MessageID: "om_trigger_ctx", CreateTime: "2026-11-24 22:12", Content: "@Works Triage"}
+	mCur.Sender.Name = "Owner"
+
+	fc := &fakeClient{
+		fetchedMsgs: map[string]FetchedMessage{"om_parent_err": parentMsg},
+		// API returns desc (newest first)
+		recentMsgs: []FetchedMessage{mCur, mMid, parentMsg, mDel, mOld},
+	}
+	fh := newFakeHost()
+
+	// 1. GroupContextCount == 0: expands quoted parent (including bare @bot reply with empty text) without calling ListRecentMessages
+	botOff := NormalizeBot(BotConfig{
+		ID: "lbot_off", Name: "Works Triage", Profile: "bot-a", Enabled: true,
+		WorkspaceID: "w_works", Agent: "antigravity", TriggerPolicy: TriggerSelf, GroupContextCount: 0,
+	})
+	gw := NewGateway(t.TempDir(), fc, fh)
+	gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{botOff}})
+
+	gw.HandleMessage(context.Background(), botOff, MessageEvent{
+		MessageID: "om_bare_reply", ChatID: "oc_grp1", ChatType: "group", ParentID: "om_parent_err",
+		SenderID: "ou_owner", Content: "@Works Triage", Mentions: []MessageMention{{Name: "Works Triage"}},
+	})
+	if fc.recentCalls != 0 {
+		t.Fatalf("expected 0 recent list calls when GroupContextCount=0, got %d", fc.recentCalls)
+	}
+	if len(fh.posted) != 1 || !strings.Contains(fh.posted[0], "[Quoted message om_parent_err · Alice · 2026-11-24 22:10]") ||
+		!strings.Contains(fh.posted[0], "Android 710 login crash stacktrace") {
+		t.Fatalf("expected expanded quoted parent in posted body, got %v", fh.posted)
+	}
+	if len(fh.postedAtts) != 1 || len(fh.postedAtts[0]) != 1 || !strings.HasSuffix(fh.postedAtts[0][0], "crash.png") {
+		t.Fatalf("expected parent image attachment passed to PostFromLark, got %v", fh.postedAtts)
+	}
+
+	// 2. GroupContextCount == 10: attaches chronological recent messages, skipping current msg, deleted msg, and already-expanded parent
+	botOn := NormalizeBot(BotConfig{
+		ID: "lbot_on", Name: "Works Triage", Profile: "bot-a", Enabled: true,
+		WorkspaceID: "w_works", Agent: "antigravity", TriggerPolicy: TriggerSelf, GroupContextCount: 10,
+	})
+	gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{botOn}})
+	gw.HandleMessage(context.Background(), botOn, MessageEvent{
+		MessageID: "om_trigger_ctx", ChatID: "oc_grp1", ChatType: "group", ParentID: "om_parent_err",
+		SenderID: "ou_owner", Content: "@Works Triage check this", Mentions: []MessageMention{{Name: "Works Triage"}},
+	})
+	if fc.recentCalls != 1 {
+		t.Fatalf("expected 1 recent list call when GroupContextCount=10, got %d", fc.recentCalls)
+	}
+	got := fh.posted[1]
+	idxOld := strings.Index(got, "Bob: First user report")
+	idxMid := strings.Index(got, "Carol: Reproduced on Xiaomi 14")
+	idxQuoted := strings.Index(got, "[Quoted message om_parent_err")
+	if idxOld < 0 || idxMid < 0 || idxQuoted < 0 || !(idxOld < idxMid && idxMid < idxQuoted) {
+		t.Fatalf("expected chronological recent messages before quoted block, got:\n%s", got)
+	}
+	if strings.Contains(got, "recalled") {
+		t.Fatalf("deleted message should be excluded: %s", got)
+	}
+	if strings.Count(got, "Android 710 login crash stacktrace") != 1 {
+		t.Fatalf("parent message should not be duplicated in recent group context: %s", got)
 	}
 }

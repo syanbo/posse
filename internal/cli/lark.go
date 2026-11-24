@@ -78,6 +78,9 @@ func cmdLarkList(e *env, args []string) error {
 			}
 			line := fmt.Sprintf("%-14s  %-16s  profile=%-20s  agent=%-11s  perm=%-4s  mode=%-6s  trigger=%-9s  [%s]",
 				b.ID, b.Name, b.Profile, b.Agent, b.PermissionMode, b.SessionMode, b.TriggerPolicy, state)
+			if b.GroupContextCount > 0 {
+				line += fmt.Sprintf("  ctx=%d", b.GroupContextCount)
+			}
 			if st.LastError != "" {
 				line += "  err=" + st.LastError
 			}
@@ -98,6 +101,7 @@ func cmdLarkAdd(e *env, args []string) error {
 	perm := fs.String("permission", lark.PermAsk, "permission mode (ask|skip)")
 	sessionMode := fs.String("session", lark.SessionChat, "group session mode (chat|thread)")
 	trigger := fs.String("trigger", lark.TriggerSelf, "who can trigger in groups (self|allowlist|group)")
+	groupCtx := fs.Int("group-context", 0, "auto-include latest N group messages as context (0=off, max 50)")
 	role := fs.String("role", "", "default role / instructions for this bot")
 	owner := fs.String("owner", "", "override owner Feishu open_id")
 	enable := fs.Bool("enable", true, "enable bot immediately")
@@ -111,20 +115,21 @@ func cmdLarkAdd(e *env, args []string) error {
 		return fmt.Errorf("lark add: --profile is required")
 	}
 	bot := lark.BotConfig{
-		ID:             *id,
-		Name:           *name,
-		Profile:        *profile,
-		Enabled:        *enable,
-		WorkspaceID:    *ws,
-		Agent:          *agentName,
-		Model:          *model,
-		Effort:         *effort,
-		PermissionMode: *perm,
-		Role:           *role,
-		SessionMode:    *sessionMode,
-		TriggerPolicy:  *trigger,
-		AllowedUsers:   []string(allowUsers),
-		AllowedChats:   []string(allowChats),
+		ID:                *id,
+		Name:              *name,
+		Profile:           *profile,
+		Enabled:           *enable,
+		WorkspaceID:       *ws,
+		Agent:             *agentName,
+		Model:             *model,
+		Effort:            *effort,
+		PermissionMode:    *perm,
+		Role:              *role,
+		SessionMode:       *sessionMode,
+		TriggerPolicy:     *trigger,
+		GroupContextCount: *groupCtx,
+		AllowedUsers:      []string(allowUsers),
+		AllowedChats:      []string(allowChats),
 	}
 	var saved lark.BotConfig
 	if err := e.call("lark.bots.save", map[string]any{"ownerOpenId": *owner, "bot": bot}, &saved); err != nil {

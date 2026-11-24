@@ -1989,7 +1989,13 @@
   "larkTriggerSelf": "仅自己",
   "larkTriggerAllowlist": "指定白名单",
   "larkTriggerGroup": "全群可用",
+  "larkFieldGroupContext": "群聊近期上下文",
+  "larkGroupContextOff": "关闭",
+  "larkGroupContextCount": "近 {count} 条",
   "larkFieldRole": "职责与说明",
+  "larkFieldRolePlaceholder": "描述这个机器人的分工、排查流程、优先调用的技能或回复格式要求…",
+  "larkFieldRoleHint": "会自动注入该机器人的讨论提示词（支持多行）",
+  "larkClear": "清空",
   "larkSave": "保存",
   "larkCancel": "取消"
 }

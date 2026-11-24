@@ -377,8 +377,38 @@ func (g *Gateway) HandleMessage(ctx context.Context, bot BotConfig, ev MessageEv
 	}
 
 	// 下载消息携带的图片/文件附件（若有）
-	atts := g.downloadEventAttachments(ctx, bot, ev)
-	if body == "" && len(atts) == 0 {
+	var cleanupDirs []string
+	defer func() {
+		for _, dir := range cleanupDirs {
+			_ = os.RemoveAll(dir)
+		}
+	}()
+	atts, attDir := g.downloadEventAttachments(ctx, bot, ev)
+	if attDir != "" {
+		cleanupDirs = append(cleanupDirs, attDir)
+	}
+	if body == "" && len(atts) == 0 && ev.ParentID == "" {
+		return
+	}
+
+	// 补齐群聊近期上下文（可选）及被引用父消息的正文与附件
+	var contextBlocks []string
+	if ev.ChatType == "group" && bot.GroupContextCount > 0 {
+		if block := g.fetchGroupContext(ctx, bot, ev.ChatID, msgID, ev.ParentID, bot.GroupContextCount); block != "" {
+			contextBlocks = append(contextBlocks, block)
+		}
+	}
+	if ev.ParentID != "" {
+		quotedBlock, parentAtts, parentDir := g.fetchParentContext(ctx, bot, ev.ParentID)
+		if parentDir != "" {
+			cleanupDirs = append(cleanupDirs, parentDir)
+		}
+		if quotedBlock != "" {
+			contextBlocks = append(contextBlocks, quotedBlock)
+		}
+		atts = append(atts, parentAtts...)
+	}
+	if body == "" && len(atts) == 0 && len(contextBlocks) == 0 {
 		return
 	}
 
@@ -407,7 +437,17 @@ func (g *Gateway) HandleMessage(ctx context.Context, bot BotConfig, ev MessageEv
 	metaParts = append(metaParts, "message_id="+msgID)
 	metaHeader := "[Feishu " + strings.Join(metaParts, " ") + "]"
 
-	execID, err := g.host.PostFromLark(binding, body, metaHeader, atts)
+	postBody := body
+	if len(contextBlocks) > 0 {
+		prefix := strings.Join(contextBlocks, "\n\n")
+		if postBody != "" {
+			postBody = prefix + "\n\n" + postBody
+		} else {
+			postBody = prefix
+		}
+	}
+
+	execID, err := g.host.PostFromLark(binding, postBody, metaHeader, atts)
 	if err != nil {
 		g.replyNotice(ctx, bot, msgID, inThread, tr("Error"), "red", err.Error())
 		return
@@ -1069,9 +1109,9 @@ func (g *Gateway) sendLongMarkdownFile(ctx context.Context, bot BotConfig, chatI
 	_ = g.client.SendFile(ctx, bot.Profile, chatID, p)
 }
 
-func (g *Gateway) downloadEventAttachments(ctx context.Context, bot BotConfig, ev MessageEvent) []string {
+func (g *Gateway) downloadEventAttachments(ctx context.Context, bot BotConfig, ev MessageEvent) ([]string, string) {
 	if ev.MessageType != "image" && ev.MessageType != "file" {
-		return nil
+		return nil, ""
 	}
 	var raw map[string]any
 	if len(ev.RawContent) > 0 {
@@ -1087,16 +1127,165 @@ func (g *Gateway) downloadEventAttachments(ctx context.Context, bot BotConfig, e
 		kind = "file"
 	}
 	if key == "" {
-		return nil
+		return nil, ""
 	}
 	dir, err := os.MkdirTemp("", "posse-lark-att-*")
 	if err != nil {
-		return nil
+		return nil, ""
 	}
 	p, err := g.client.DownloadResource(ctx, bot.Profile, ev.MsgID(), key, kind, dir)
 	if err != nil || p == "" {
 		_ = os.RemoveAll(dir)
-		return nil
+		return nil, ""
 	}
-	return []string{p}
+	return []string{p}, dir
+}
+
+func (g *Gateway) fetchParentContext(ctx context.Context, bot BotConfig, parentID string) (block string, atts []string, tempDir string) {
+	fetcher, ok := g.client.(messageContextFetcher)
+	if !ok || parentID == "" {
+		return "", nil, ""
+	}
+	dir, err := os.MkdirTemp("", "posse-lark-parent-*")
+	if err != nil {
+		dir = ""
+	}
+	fctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	msg, err := fetcher.GetMessage(fctx, bot.Profile, parentID, dir)
+	cancel()
+	if err != nil || msg.Deleted {
+		if dir != "" {
+			_ = os.RemoveAll(dir)
+		}
+		return "", nil, ""
+	}
+	for _, r := range msg.Resources {
+		if r.Error || r.LocalPath == "" {
+			continue
+		}
+		if st, err := os.Stat(r.LocalPath); err == nil && !st.IsDir() {
+			atts = append(atts, r.LocalPath)
+		}
+	}
+	content := strings.TrimSpace(msg.Content)
+	if len(content) > 6000 {
+		content = truncateUTF8(content, 6000) + "\n…"
+	}
+	if content == "" && len(atts) == 0 {
+		if dir != "" {
+			_ = os.RemoveAll(dir)
+		}
+		return "", nil, ""
+	}
+	sender := strings.TrimSpace(msg.Sender.Name)
+	if sender == "" {
+		sender = msg.Sender.ID
+	}
+	head := "[Quoted message " + parentID
+	if sender != "" {
+		head += " · " + sender
+	}
+	if msg.CreateTime != "" {
+		head += " · " + msg.CreateTime
+	}
+	head += "]"
+	if content == "" {
+		content = "(attachment)"
+	}
+	return head + "\n" + content, atts, dir
+}
+
+func (g *Gateway) fetchGroupContext(ctx context.Context, bot BotConfig, chatID, currentMsgID, parentID string, count int) string {
+	fetcher, ok := g.client.(messageContextFetcher)
+	if !ok || chatID == "" || count <= 0 {
+		return ""
+	}
+	reqLimit := count + 4
+	if reqLimit > 50 {
+		reqLimit = 50
+	}
+	fctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	msgs, err := fetcher.ListRecentMessages(fctx, bot.Profile, chatID, reqLimit)
+	cancel()
+	if err != nil || len(msgs) == 0 {
+		return ""
+	}
+	// API 返回按时间倒序（最新在前）：先过滤再反转为时间正序
+	var kept []FetchedMessage
+	for _, m := range msgs {
+		if m.Deleted || m.MessageID == currentMsgID || (parentID != "" && m.MessageID == parentID) {
+			continue
+		}
+		if strings.TrimSpace(m.Content) == "" {
+			continue
+		}
+		kept = append(kept, m)
+		if len(kept) >= count {
+			break
+		}
+	}
+	if len(kept) == 0 {
+		return ""
+	}
+	for i, j := 0, len(kept)-1; i < j; i, j = i+1, j-1 {
+		kept[i], kept[j] = kept[j], kept[i]
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "[Recent group messages (%d)]", len(kept))
+	total := 0
+	for _, m := range kept {
+		sender := strings.TrimSpace(m.Sender.Name)
+		if sender == "" {
+			sender = m.Sender.ID
+		}
+		if sender == "" {
+			sender = m.Sender.SenderType
+		}
+		text := strings.TrimSpace(m.Content)
+		if m.MsgType == "interactive" && strings.HasPrefix(text, "{") {
+			text = summarizeInteractiveJSON(text)
+			if text == "" {
+				continue
+			}
+		}
+		if len(text) > 800 {
+			text = truncateUTF8(text, 800) + "…"
+		}
+		line := "\n- "
+		if m.CreateTime != "" {
+			line += "[" + m.CreateTime + "] "
+		}
+		if sender != "" {
+			line += sender + ": "
+		}
+		line += text
+		if total+len(line) > 12000 {
+			break
+		}
+		b.WriteString(line)
+		total += len(line)
+	}
+	return b.String()
+}
+
+func summarizeInteractiveJSON(raw string) string {
+	var card struct {
+		Header struct {
+			Title struct {
+				Content string `json:"content"`
+			} `json:"title"`
+		} `json:"header"`
+		Title string `json:"title"`
+	}
+	if json.Unmarshal([]byte(raw), &card) != nil {
+		return ""
+	}
+	title := strings.TrimSpace(card.Header.Title.Content)
+	if title == "" {
+		title = strings.TrimSpace(card.Title)
+	}
+	if title == "" {
+		return ""
+	}
+	return "[Card] " + title
 }

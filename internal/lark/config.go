@@ -31,20 +31,21 @@ type Config struct {
 
 // BotConfig 对应一个飞书自建应用（一个 lark-cli profile）及其默认工作区、Agent 与权限策略。
 type BotConfig struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	Profile        string   `json:"profile"`
-	Enabled        bool     `json:"enabled"`
-	WorkspaceID    string   `json:"workspaceId,omitempty"`
-	Agent          string   `json:"agent,omitempty"`
-	Model          string   `json:"model,omitempty"`
-	Effort         string   `json:"effort,omitempty"`
-	PermissionMode string   `json:"permissionMode,omitempty"` // ask | skip
-	Role           string   `json:"role,omitempty"`
-	SessionMode    string   `json:"sessionMode,omitempty"`   // chat | thread
-	TriggerPolicy  string   `json:"triggerPolicy,omitempty"` // self | allowlist | group
-	AllowedUsers   []string `json:"allowedUsers,omitempty"`
-	AllowedChats   []string `json:"allowedChats,omitempty"`
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	Profile           string   `json:"profile"`
+	Enabled           bool     `json:"enabled"`
+	WorkspaceID       string   `json:"workspaceId,omitempty"`
+	Agent             string   `json:"agent,omitempty"`
+	Model             string   `json:"model,omitempty"`
+	Effort            string   `json:"effort,omitempty"`
+	PermissionMode    string   `json:"permissionMode,omitempty"` // ask | skip
+	Role              string   `json:"role,omitempty"`
+	SessionMode       string   `json:"sessionMode,omitempty"`       // chat | thread
+	TriggerPolicy     string   `json:"triggerPolicy,omitempty"`     // self | allowlist | group
+	GroupContextCount int      `json:"groupContextCount,omitempty"` // 群聊 @ 触发时自动附带的最近 N 条群消息（0=关闭，最多 50）
+	AllowedUsers      []string `json:"allowedUsers,omitempty"`
+	AllowedChats      []string `json:"allowedChats,omitempty"`
 }
 
 // ProfileInfo 来自 `lark-cli profile list` 的已配置飞书应用概览。
@@ -131,6 +132,11 @@ func NormalizeBot(b BotConfig) BotConfig {
 	case TriggerAllowlist, TriggerGroup:
 	default:
 		b.TriggerPolicy = TriggerSelf
+	}
+	if b.GroupContextCount < 0 {
+		b.GroupContextCount = 0
+	} else if b.GroupContextCount > 50 {
+		b.GroupContextCount = 50
 	}
 	b.AllowedUsers = cleanIDs(b.AllowedUsers)
 	b.AllowedChats = cleanIDs(b.AllowedChats)

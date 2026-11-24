@@ -61,6 +61,31 @@ type botIdentityProvider interface {
 	BotIdentity(ctx context.Context, profile string) (BotIdentity, error)
 }
 
+// FetchedMessage 对应 `lark-cli im +messages-mget` / `+chat-messages-list` 返回的单条消息。
+type FetchedMessage struct {
+	MessageID  string `json:"message_id"`
+	MsgType    string `json:"msg_type"`
+	CreateTime string `json:"create_time"`
+	Content    string `json:"content"`
+	Deleted    bool   `json:"deleted"`
+	Sender     struct {
+		ID         string `json:"id"`
+		Name       string `json:"name"`
+		SenderType string `json:"sender_type"`
+	} `json:"sender"`
+	Resources []struct {
+		Key       string `json:"key"`
+		Type      string `json:"type"`
+		LocalPath string `json:"local_path"`
+		Error     bool   `json:"error"`
+	} `json:"resources"`
+}
+
+type messageContextFetcher interface {
+	GetMessage(ctx context.Context, profile, messageID, downloadDir string) (FetchedMessage, error)
+	ListRecentMessages(ctx context.Context, profile, chatID string, limit int) ([]FetchedMessage, error)
+}
+
 // CardActionEvent 对应 `lark-cli event consume card.action.trigger --as bot` 的扁平输出。
 type CardActionEvent struct {
 	EventID     string `json:"event_id"`
@@ -488,4 +513,77 @@ func (c *CLIClient) DownloadResource(ctx context.Context, profile, messageID, fi
 		return matches[0], nil
 	}
 	return filepath.Join(outDir, name), nil
+}
+
+func (c *CLIClient) GetMessage(ctx context.Context, profile, messageID, downloadDir string) (FetchedMessage, error) {
+	if messageID == "" {
+		return FetchedMessage{}, errors.New("message ID is required")
+	}
+	args := []string{"im", "+messages-mget", "--as", "bot", "--message-ids", messageID, "--no-reactions", "--format", "json"}
+	if downloadDir != "" {
+		if err := os.MkdirAll(downloadDir, 0o700); err != nil {
+			return FetchedMessage{}, err
+		}
+		args = append(args, "--download-resources")
+	}
+	out, err := c.run(ctx, profile, downloadDir, nil, args...)
+	if err != nil {
+		return FetchedMessage{}, err
+	}
+	msgs, err := parseFetchedMessages(out)
+	if err != nil {
+		return FetchedMessage{}, err
+	}
+	if len(msgs) == 0 {
+		return FetchedMessage{}, errors.New("message not found")
+	}
+	msg := msgs[0]
+	if downloadDir != "" {
+		for i := range msg.Resources {
+			if p := strings.TrimSpace(msg.Resources[i].LocalPath); p != "" && !filepath.IsAbs(p) {
+				msg.Resources[i].LocalPath = filepath.Join(downloadDir, p)
+			}
+		}
+	}
+	return msg, nil
+}
+
+func (c *CLIClient) ListRecentMessages(ctx context.Context, profile, chatID string, limit int) ([]FetchedMessage, error) {
+	if chatID == "" || limit <= 0 {
+		return nil, nil
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	out, err := c.run(ctx, profile, "", nil,
+		"im", "+chat-messages-list", "--as", "bot",
+		"--chat-id", chatID, "--order", "desc",
+		"--page-size", fmt.Sprintf("%d", limit),
+		"--no-reactions", "--format", "json")
+	if err != nil {
+		return nil, err
+	}
+	return parseFetchedMessages(out)
+}
+
+func parseFetchedMessages(out []byte) ([]FetchedMessage, error) {
+	var env struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Messages []FetchedMessage `json:"messages"`
+		} `json:"data"`
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(out), &env); err != nil {
+		return nil, fmt.Errorf("parse lark messages response: %w", err)
+	}
+	if !env.OK {
+		if env.Error.Message != "" {
+			return nil, errors.New(env.Error.Message)
+		}
+		return nil, errors.New("lark messages API returned ok=false")
+	}
+	return env.Data.Messages, nil
 }
