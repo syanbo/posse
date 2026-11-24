@@ -288,10 +288,12 @@ const (
 	FeatureDelegate = "delegate"
 	// FeatureGuest：房主能发只读访客的邀请，并挡住访客的写操作
 	FeatureGuest = "guest"
+	// FeatureMultiTarget：单条消息支持同时 @ 多位成员，各自排一轮并行执行
+	FeatureMultiTarget = "multi_target"
 )
 
 // HostFeatures 是这一版房主支持的能力。
-var HostFeatures = []string{FeatureChoices, FeatureSummary, FeatureDelegate, FeatureGuest}
+var HostFeatures = []string{FeatureChoices, FeatureSummary, FeatureDelegate, FeatureGuest, FeatureMultiTarget}
 
 // hostHas 报告加入的讨论的房主（上次连上时）有没有这项能力。
 func hostHas(tx querier, room, feature string) bool {
@@ -392,6 +394,30 @@ func IntentDigest(body, quote, target string, atts []Attachment) string {
 		ids[i] = a.ID
 	}
 	return digest(body, quote, target, strings.Join(ids, ","))
+}
+
+// IntentDigestMulti 是多目标消息的授权意图摘要：单个目标时与 IntentDigest 一致，保证向后兼容。
+func IntentDigestMulti(body, quote string, targets []string, atts []Attachment) string {
+	if len(targets) <= 1 {
+		t := ""
+		if len(targets) == 1 {
+			t = targets[0]
+		}
+		return IntentDigest(body, quote, t, atts)
+	}
+	ids := make([]string, len(atts))
+	for i, a := range atts {
+		ids[i] = a.ID
+	}
+	return digest("multi", body, quote, strings.Join(targets, ","), strings.Join(ids, ","))
+}
+
+// IntentKey 是本机授权意图在 collab_intents 里的键：单目标沿用 clientID，多目标按成员分开存。
+func IntentKey(clientID, member string, multi bool) string {
+	if !multi || clientID == "" {
+		return clientID
+	}
+	return clientID + "#" + member
 }
 
 // RoomDir 是加入者在 $POSSE_HOME/collab 下给这个房间的目录名（房间键的哈希，不直接拼远端输入）。

@@ -695,6 +695,7 @@ type collabPostParams struct {
 	Body     string   `json:"body"`
 	Quote    string   `json:"quote"`
 	Target   string   `json:"target"`
+	Targets  []string `json:"targets,omitempty"`
 	Mention  string   `json:"mention"`
 	Uploads  []string `json:"uploads"`
 	// From 是发起的那一轮执行：这条是发言人的 Agent @ 另一个成员（FeatureDelegate）
@@ -717,6 +718,8 @@ func (h collabHost) post(s *collaboration.Session, room string, gen int64, raw j
 		return nil, collaboration.Errorf(collaboration.CodeBadRequest, "message is not valid UTF-8")
 	case len(p.Uploads) > discMaxAttachments:
 		return nil, collaboration.Errorf(collaboration.CodeBadRequest, "at most %d attachments per message", discMaxAttachments)
+	case len(p.Targets) > store.MaxTargets:
+		return nil, collaboration.Errorf(collaboration.CodeBadRequest, "at most %d agents per message", store.MaxTargets)
 	case p.ClientID == "" || len(p.ClientID) > 100:
 		return nil, collaboration.Errorf(collaboration.CodeBadRequest, "client message id required")
 	}
@@ -727,7 +730,7 @@ func (h collabHost) post(s *collaboration.Session, room string, gen int64, raw j
 	if err != nil {
 		return nil, cerr(store.ErrRevoked)
 	}
-	m, x, dup, err := d.store.PostMessage(store.PostInput{Discussion: room, ClientID: p.ClientID, Body: p.Body, Quote: p.Quote, Target: p.Target,
+	m, xs, dup, err := d.store.PostMessageMulti(store.PostInput{Discussion: room, ClientID: p.ClientID, Body: p.Body, Quote: p.Quote, Target: p.Target, Targets: p.Targets,
 		Mention: p.Mention, Uploads: p.Uploads, At: time.Now(), Author: s.FP, AuthorName: person.Name, Generation: gen, From: p.From})
 	if err != nil {
 		if errors.Is(err, store.ErrChainLimit) {
@@ -751,8 +754,13 @@ func (h collabHost) post(s *collaboration.Session, room string, gen int64, raw j
 	}
 	d.taskNotify()
 	res := map[string]any{"message": m.ID, "seq": m.Seq, "duplicate": dup}
-	if x != nil {
-		res["execution"] = x.ID
+	if len(xs) > 0 {
+		res["execution"] = xs[0].ID
+		ids := make([]string, len(xs))
+		for i, x := range xs {
+			ids[i] = x.ID
+		}
+		res["executions"] = ids
 	}
 	return res, nil
 }

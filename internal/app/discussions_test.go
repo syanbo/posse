@@ -112,7 +112,7 @@ func discTester(t *testing.T, extra ...map[string]rpc.Handler) (*app, *ui.Tester
 	a := previewApp(t)
 	previewDiscussion(a)
 	a.c = c
-	a.disc.target, a.disc.quote, a.disc.panel = "", "", false
+	a.disc.targets, a.disc.quote, a.disc.panel = nil, "", false
 	// 成员现在的名字和历史消息里的 @ 快照不同，菜单项和消息上的标签分得开
 	a.disc.d.members[1].Name = "Codex 复核"
 	// 暂停的成员还有一条排队的请求：输入框上面给「重新启动并继续」
@@ -138,8 +138,8 @@ func TestDiscussionComposerSendsToMember(t *testing.T) {
 		t.Fatalf("recipient menu: %v; texts %v", err, tt.Texts())
 	}
 	tt.Frame()
-	if a.disc.target != "mb2" {
-		t.Fatalf("target %q", a.disc.target)
+	if !slices.Equal(a.disc.targets, []string{"mb2"}) {
+		t.Fatalf("targets %v", a.disc.targets)
 	}
 	if err := tt.Click("给 Codex 复核 的请求（⌘↩ 发送）"); err != nil {
 		t.Fatal(err)
@@ -670,8 +670,8 @@ func TestDiscussionAtSuggestions(t *testing.T) {
 	for range 3 {
 		tt.Frame()
 	}
-	if a.disc.target != "mb2" || a.disc.text != "请 " {
-		t.Fatalf("after pick: target %q text %q", a.disc.target, a.disc.text)
+	if !slices.Equal(a.disc.targets, []string{"mb2"}) || a.disc.text != "请 " {
+		t.Fatalf("after pick: targets %v text %q", a.disc.targets, a.disc.text)
 	}
 	tt.Type("看下")
 	tt.Key(ui.Cmd, ui.KeyEnter)
@@ -719,8 +719,8 @@ func TestDiscussionAtOthersAgent(t *testing.T) {
 	for range 3 {
 		tt.Frame()
 	}
-	if a.disc.target != "mb2" {
-		t.Fatalf("target %q", a.disc.target)
+	if !slices.Equal(a.disc.targets, []string{"mb2"}) {
+		t.Fatalf("targets %v", a.disc.targets)
 	}
 	tt.Type("看下")
 	tt.Key(ui.Cmd, ui.KeyEnter)
@@ -742,8 +742,8 @@ func TestDiscussionAtOthersAgent(t *testing.T) {
 	for range 3 {
 		tt.Frame()
 	}
-	if a.disc.target != "" || a.disc.mention != strings.Repeat("b2", 32) || a.disc.text != "@Codex 复核 " {
-		t.Fatalf("after pick: target %q mention %q text %q", a.disc.target, a.disc.mention, a.disc.text)
+	if len(a.disc.targets) != 0 || a.disc.mention != strings.Repeat("b2", 32) || a.disc.text != "@Codex 复核 " {
+		t.Fatalf("after pick: targets %v mention %q text %q", a.disc.targets, a.disc.mention, a.disc.text)
 	}
 }
 
@@ -789,5 +789,103 @@ func TestDiscussionMemberFormKeepsUnlistedAgent(t *testing.T) {
 	defer mu.Unlock()
 	if got != mem.Agent {
 		t.Fatalf("agent sent %q, want %q", got, mem.Agent)
+	}
+}
+
+// 连续打 @ 追加多个成员，发送时带上 targets；引用成员消息自动预选、取消引用恢复。
+func TestDiscussionMultiTargetAndQuoteAutoSelect(t *testing.T) {
+	a, tt, f := discTester(t)
+	if err := tt.Click("消息（⌘↩ 发送）"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("@Claude")
+	tt.Frame()
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	tt.Type("@Codex")
+	tt.Frame()
+	tt.Key(0, ui.KeyEnter)
+	for range 3 {
+		tt.Frame()
+	}
+	if !slices.Equal(a.disc.targets, []string{"mb1", "mb2"}) {
+		t.Fatalf("expected two targets, got %v", a.disc.targets)
+	}
+	tt.Type("一起评估")
+	tt.Key(ui.Cmd, ui.KeyEnter)
+	p := waitCall(t, tt, f, "discussion.post")
+	gotTargets, _ := p["targets"].([]any)
+	if len(gotTargets) != 2 || gotTargets[0] != "mb1" || gotTargets[1] != "mb2" {
+		t.Fatalf("post targets %+v", p)
+	}
+
+	// 清空接收者后引用成员回复：自动预选该成员；取消引用时自动撤回
+	a.disc.clearRecipients()
+	var replyMsg discMessage
+	for _, msg := range a.disc.d.msgs {
+		if msg.Kind == "reply" && msg.AuthorMember == "mb1" {
+			replyMsg = msg
+			break
+		}
+	}
+	a.quoteDiscMessage(a.disc.d, replyMsg)
+	if !slices.Equal(a.disc.targets, []string{"mb1"}) || a.disc.autoTarget != "mb1" {
+		t.Fatalf("quote auto-select failed: targets=%v auto=%q", a.disc.targets, a.disc.autoTarget)
+	}
+	a.clearDiscQuote()
+	if len(a.disc.targets) != 0 || a.disc.autoTarget != "" {
+		t.Fatalf("clear quote did not clear auto target: targets=%v auto=%q", a.disc.targets, a.disc.autoTarget)
+	}
+
+	// 如果用户手动追加了其他成员，取消引用时保留用户的选择
+	a.quoteDiscMessage(a.disc.d, replyMsg)
+	a.disc.addTarget("mb2", discMaxTargets)
+	a.clearDiscQuote()
+	if !slices.Equal(a.disc.targets, []string{"mb1", "mb2"}) {
+		t.Fatalf("manual target lost after clear quote: %v", a.disc.targets)
+	}
+}
+
+// 执行卡片显示实时进度与可折叠过程按钮，点开后向本机拉取 discussion.execution.trace 并展示步骤。
+func TestDiscussionExecProgressAndTraceToggle(t *testing.T) {
+	a, tt, f := discTester(t, map[string]rpc.Handler{
+		"discussion.execution.trace": func(ctx context.Context, raw json.RawMessage) (any, error) {
+			return map[string]any{
+				"execId":     "x2",
+				"eventCount": 2,
+				"finalized":  false,
+				"summary": map[string]any{
+					"commands": 1,
+					"tools":    1,
+					"events": []map[string]any{
+						{"kind": "tool", "name": "Read", "detail": "internal/app/discussions.go"},
+						{"kind": "cli", "name": "shell", "detail": "go test ./internal/app"},
+					},
+				},
+			}, nil
+		},
+	})
+	now := time.Now().Add(-15 * time.Second)
+	x := a.disc.d.execs["x2"]
+	x.State, x.StartedAt, x.EndedAt = "running", &now, nil
+	a.disc.d.execs["x2"] = x
+	a.disc.d.progress = map[string]discProgress{
+		"x2": {Tool: "Bash", ToolInput: "go test ./internal/app", Subagents: 1},
+	}
+	for range 3 {
+		tt.Frame()
+	}
+	if !tt.HasText("go test ./internal/app") || !tt.HasText("1 个子代理") {
+		t.Fatalf("live progress not rendered: %v", tt.Texts())
+	}
+	if err := tt.Click("过程"); err != nil {
+		t.Fatalf("click trace toggle: %v; texts %v", err, tt.Texts())
+	}
+	waitCall(t, tt, f, "discussion.execution.trace")
+	for range 4 {
+		tt.Frame()
+	}
+	if !tt.HasText("internal/app/discussions.go") {
+		t.Fatalf("trace panel did not render events: %v", tt.Texts())
 	}
 }

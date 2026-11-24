@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -625,6 +626,7 @@ func (rc *roomConn) claimLocked(ctx context.Context) error {
 func (d *Daemon) intentMismatch(x store.Execution) string {
 	key := ""
 	var m store.DiscMessage
+	var targetIDs []string
 	if x.RetryOf != "" {
 		key = "retry:" + x.RetryOf
 	} else {
@@ -638,7 +640,8 @@ func (d *Daemon) intentMismatch(x store.Execution) string {
 		if m.ClientID == "" {
 			return "this request was not sent from this computer"
 		}
-		key = m.ClientID
+		targetIDs = m.TargetIDs()
+		key = store.IntentKey(m.ClientID, x.Member, len(targetIDs) > 1)
 	}
 	in, err := d.store.Intent(x.Discussion, key)
 	if err != nil {
@@ -650,7 +653,7 @@ func (d *Daemon) intentMismatch(x store.Execution) string {
 	if in.Member != x.Member {
 		return "the request targets a different agent than the one you asked"
 	}
-	if x.RetryOf == "" && in.Digest != store.IntentDigest(m.Body, m.Quote, m.Target, m.Attachments) {
+	if x.RetryOf == "" && in.Digest != store.IntentDigestMulti(m.Body, m.Quote, targetIDs, m.Attachments) {
 		return "the request content differs from what you sent"
 	}
 	// 配置按内容核对，不只看房主给的版本号：房主那份执行快照、本机这份成员配置都要和发出时确认的一致
@@ -668,7 +671,7 @@ func (d *Daemon) intentMismatch(x store.Execution) string {
 // 发言人是房主记的：房主能冒充一个被放开的人发请求，访问设置防不了这一点。
 func (d *Daemon) accessMismatch(x store.Execution, m store.DiscMessage) string {
 	mem, err := d.store.Member(x.Member)
-	if err != nil || m.Target != x.Member {
+	if err != nil || !slices.Contains(m.TargetIDs(), x.Member) {
 		return "the request targets a different agent"
 	}
 	if self := d.store.Self(); x.Owner != self || mem.Owner != self {

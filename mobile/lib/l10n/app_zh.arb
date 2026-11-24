@@ -767,5 +767,12 @@
   "discGuest": "只读",
   "discInviteGuest": "邀请只读访客",
   "discGuestNote": "你是以只读身份加入的，不能在这里发言。",
+  "discMessageHintTo": "给 {name} 的请求",
+  "discMessageHintToMany": "给 {first} 和另外 {count} 位成员的请求",
+  "discTrace": "过程",
+  "discTraceCount": "过程 ({count})",
+  "discTraceLoading": "正在读取过程…",
+  "discTraceEmpty": "本轮暂无工具调用记录",
+  "discSubagents": "{count} 个子代理",
   "chatContextTokens": "{used} token"
 }

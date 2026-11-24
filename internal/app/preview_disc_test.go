@@ -69,7 +69,7 @@ func previewDiscussion(a *app) {
 	a.disc.d.msgs[2].KeyAt = &keyAt
 	a.disc.d.info.Summary = "- 登录页去掉验证码弹窗，记住密码写钥匙串。\n- 实现由 **Codex 审查** 在 `feat-login` 上做。\n- 还没定：旧的短信登录入口留不留。"
 	a.disc.d.info.SummaryBy = "Claude 方案"
-	a.disc.target = "mb1"
+	a.disc.targets = []string{"mb1"}
 	a.disc.quote = "m7"
 	a.disc.panel = true
 }
@@ -130,6 +130,46 @@ func renderDiscussionPreviews(t *testing.T, dark bool, suffix string) {
 		tt.Frame()
 	}
 	savePNG(t, tt, "discussions-delegate-"+suffix+".png")
+
+	// 多 @ 并行派发 + 耗时 + 实时进度行 + 展开的过程时间线
+	a = previewApp(t)
+	previewDiscussion(a)
+	a.disc.quote = ""
+	a.disc.targets = []string{"mb1", "mb2"}
+	now := time.Now()
+	s1, e1 := now.Add(-42*time.Second), now.Add(-14*time.Second)
+	s2 := now.Add(-18 * time.Second)
+	a.disc.d.msgs = append(a.disc.d.msgs, discMessage{
+		ID: "m12", Seq: 12, Kind: "user", Target: "mb1", TargetName: "Claude 方案", Execution: "x12a",
+		Targets: []discTargetRef{
+			{ID: "mb1", Name: "Claude 方案", Execution: "x12a"},
+			{ID: "mb2", Name: "Codex 审查", Execution: "x12b"},
+		},
+		Body: "两位分别从交互和安全性评估一下登录态刷新方案。", CreatedAt: now.Add(-45 * time.Second),
+	})
+	a.disc.d.execs["x12a"] = discExec{ID: "x12a", Member: "mb1", Message: "m12", State: "done", Agent: "claude", WorkspaceLabel: "Skill/main", TaskID: "k9", Worker: "t9", Terminal: true, StartedAt: &s1, EndedAt: &e1, TraceCount: 4}
+	a.disc.d.execs["x12b"] = discExec{ID: "x12b", Member: "mb2", Message: "m12", State: "running", Agent: "codex", WorkspaceLabel: "Skill/feat-login", TaskID: "k2", Worker: "t5", Terminal: true, StartedAt: &s2}
+	a.disc.d.progress = map[string]discProgress{
+		"x12b": {Tool: "shell", ToolInput: "go test ./internal/store ./internal/daemon", Subagents: 1},
+	}
+	a.disc.traceOpen = map[string]bool{"x12a": true}
+	a.disc.traceAt = map[string]time.Time{"x12a": now}
+	a.disc.traceData = map[string]discExecTrace{
+		"x12a": {
+			ExecID: "x12a", EventCount: 4, Finalized: true,
+			Summary: discExecTraceSummary{Tools: 2, Commands: 1, Web: 1, Events: []discExecTraceEvent{
+				{Kind: "tool", Name: "Read", Detail: "internal/app/login.go", Count: 2},
+				{Kind: "cli", Name: "shell", Detail: "go test ./internal/app -run TestLogin"},
+				{Kind: "search", Name: "search", Detail: "macOS Keychain kSecAttrAccessible"},
+			}},
+		},
+	}
+	a.disc.reveal = "m12"
+	tt = newPreviewTester(a, dark)
+	for range 3 {
+		tt.Frame()
+	}
+	savePNG(t, tt, "discussions-multi-progress-"+suffix+".png")
 
 	// 长消息
 	a = previewApp(t)
@@ -260,7 +300,7 @@ func previewCollab(a *app, host bool) {
 		}
 	}
 	a.disc.list[0].Mirror, a.disc.list[0].ProjectName, a.disc.list[0].Joined = true, "Hana", "active"
-	a.disc.target = ""
+	a.disc.targets = nil
 }
 
 func renderCollabPreviews(t *testing.T, dark bool, suffix string) {
@@ -270,7 +310,7 @@ func renderCollabPreviews(t *testing.T, dark bool, suffix string) {
 	previewCollab(a, true)
 	a.disc.list[0].Questions, a.disc.list[0].MentionSeq = 0, 10
 	a.state.DiscRead[a.disc.list[0].Key] = 9
-	a.disc.panel, a.disc.target, a.disc.quote = false, "", ""
+	a.disc.panel, a.disc.targets, a.disc.quote = false, nil, ""
 	a.disc.follow, a.disc.scroll.Y = true, math.MaxFloat32
 	tt := newPreviewTester(a, dark)
 	if err := tt.Click("消息（⌘↩ 发送）"); err != nil {

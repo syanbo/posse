@@ -1957,5 +1957,12 @@
   "skillsRemoteHint": "{host} 上的项目级技能；新建、安装和开关请在目标 Mac 上操作。",
   "memoryRemoteDaemon": "常驻进程（{host}）",
   "memoryRemoteNote": "终端进程运行在 {host} 上，不在本机统计进程树内存。",
-  "historyContextTokens": "上下文 {used} token"
+  "historyContextTokens": "上下文 {used} token",
+  "discPlaceholderToMany": "给 {first} 和另外 {count} 位成员的请求（⌘↩ 发送）",
+  "discAddTarget": "添加接收成员",
+  "discTrace": "过程",
+  "discTraceCount": "过程 ({count})",
+  "discTraceLoading": "正在读取过程…",
+  "discTraceEmpty": "这一轮没有记录到工具调用。",
+  "discSubagents": "{count} 个子代理"
 }

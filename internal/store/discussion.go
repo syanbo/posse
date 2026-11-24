@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS disc_messages (
 	mention_name TEXT NOT NULL DEFAULT '',
 	key_by TEXT NOT NULL DEFAULT '',
 	choices TEXT NOT NULL DEFAULT '',
+	targets TEXT NOT NULL DEFAULT '',
 	UNIQUE(discussion, seq)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS disc_messages_client ON disc_messages(discussion, client_id) WHERE client_id != '';
@@ -132,7 +133,7 @@ CREATE TABLE IF NOT EXISTS disc_executions (
 	root TEXT NOT NULL DEFAULT '',
 	depth INTEGER NOT NULL DEFAULT 0
 );
-CREATE UNIQUE INDEX IF NOT EXISTS disc_executions_request ON disc_executions(message) WHERE retry_of = '';
+CREATE UNIQUE INDEX IF NOT EXISTS disc_executions_request2 ON disc_executions(message, member) WHERE retry_of = '';
 CREATE UNIQUE INDEX IF NOT EXISTS disc_executions_retry ON disc_executions(retry_of) WHERE retry_of != '';
 CREATE INDEX IF NOT EXISTS disc_executions_member ON disc_executions(member, state);
 CREATE INDEX IF NOT EXISTS disc_executions_task ON disc_executions(task_id);
@@ -320,6 +321,16 @@ type Attachment struct {
 	SHA  string `json:"sha,omitempty"` // 内容的 SHA-256（跨机下载时校验）
 }
 
+// MaxTargets 是一条消息最多同时 @ 的成员数。
+const MaxTargets = 8
+
+// TargetRef 是消息同时 @ 的一位成员及其对应的初始执行。
+type TargetRef struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Execution string `json:"execution,omitempty"`
+}
+
 type DiscMessage struct {
 	ID           string       `json:"id"`
 	Discussion   string       `json:"discussion"`
@@ -332,6 +343,7 @@ type DiscMessage struct {
 	Quote        string       `json:"quote,omitempty"`
 	Target       string       `json:"target,omitempty"`
 	TargetName   string       `json:"targetName,omitempty"`
+	Targets      []TargetRef  `json:"targets,omitempty"`
 	Execution    string       `json:"execution,omitempty"`
 	Question     string       `json:"question,omitempty"` // 问题和回答对应的任务消息 ID
 	Report       string       `json:"report,omitempty"`
@@ -348,6 +360,30 @@ type DiscMessage struct {
 	KeyBy       string `json:"keyBy,omitempty"` // 标关键的人
 	// Choices 是问题附带的可选答案：界面画成按钮，点了就用这段文字回答；也可以不选、自己写
 	Choices []string `json:"choices,omitempty"`
+}
+
+// TargetList 返回这条消息 @ 的全部成员（兼容只填了旧单值 Target 的历史消息）。
+func (m DiscMessage) TargetList() []TargetRef {
+	if len(m.Targets) > 0 {
+		return m.Targets
+	}
+	if m.Target != "" {
+		return []TargetRef{{ID: m.Target, Name: m.TargetName, Execution: m.Execution}}
+	}
+	return nil
+}
+
+// TargetIDs 返回这条消息 @ 的全部成员 ID（按先后顺序）。
+func (m DiscMessage) TargetIDs() []string {
+	ts := m.TargetList()
+	if len(ts) == 0 {
+		return nil
+	}
+	out := make([]string, len(ts))
+	for i, t := range ts {
+		out[i] = t.ID
+	}
+	return out
 }
 
 type Execution struct {
@@ -420,15 +456,15 @@ func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	return m, err
 }
 
-const dmsgCols = `id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,key_at,rev,created_at,author_id,mention,mention_name,key_by,choices`
+const dmsgCols = `id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,key_at,rev,created_at,author_id,mention,mention_name,key_by,choices,targets`
 
 func scanDiscMessage(row interface{ Scan(...any) error }) (DiscMessage, error) {
 	var m DiscMessage
 	var created int64
 	var key sql.NullInt64
-	var atts, choices string
+	var atts, choices, targets string
 	err := row.Scan(&m.ID, &m.Discussion, &m.Seq, &m.Kind, &m.AuthorMember, &m.AuthorName, &m.AuthorAgent, &m.Body, &m.Quote, &m.Target, &m.TargetName,
-		&m.Execution, &m.Question, &m.Report, &m.Outcome, &atts, &m.ClientID, &key, &m.Rev, &created, &m.AuthorID, &m.Mention, &m.MentionName, &m.KeyBy, &choices)
+		&m.Execution, &m.Question, &m.Report, &m.Outcome, &atts, &m.ClientID, &key, &m.Rev, &created, &m.AuthorID, &m.Mention, &m.MentionName, &m.KeyBy, &choices, &targets)
 	if errors.Is(err, sql.ErrNoRows) {
 		return m, ErrNotFound
 	}
@@ -437,6 +473,9 @@ func scanDiscMessage(row interface{ Scan(...any) error }) (DiscMessage, error) {
 	}
 	if choices != "" {
 		json.Unmarshal([]byte(choices), &m.Choices)
+	}
+	if targets != "" {
+		json.Unmarshal([]byte(targets), &m.Targets)
 	}
 	m.CreatedAt = fromMS(created)
 	m.KeyAt = optTime(key)
@@ -938,13 +977,14 @@ func (s *Store) SetMemberPaused(id, reason string) error {
 
 // --- 消息
 
-// PostInput 是用户发一条消息。Target 不为空时同一事务里为它排一轮执行。
+// PostInput 是用户发一条消息。Target 或 Targets 不为空时同一事务里为每个目标各排一轮执行。
 type PostInput struct {
 	Discussion  string
 	ClientID    string // 客户端请求 ID：重复发送返回第一次的结果
 	Body        string
 	Quote       string
 	Target      string
+	Targets     []string
 	Attachments []Attachment
 	At          time.Time
 	ExecID      string
@@ -954,12 +994,45 @@ type PostInput struct {
 	Generation int64
 	Mention    string
 	Uploads    []string // 成员上传好的附件 ID（房主一侧）
-	// From 不为空时这条是成员 @ 成员：From 是发起的那一轮执行，作者记成它的成员，必须带 Target
+	// From 不为空时这条是成员 @ 成员：From 是发起的那一轮执行，作者记成它的成员，只允许单个 Target
 	From string
 }
 
-// PostMessage 保存消息，Target 不为空时同时建一轮排队的执行。ClientID 重复时返回已有的消息和执行，dup 为 true。
+// NormalizeTargets 把 Target / Targets 合并成去重保序的成员 ID 列表，超过 MaxTargets 时报错。
+func NormalizeTargets(single string, many []string) ([]string, error) {
+	var out []string
+	add := func(id string) {
+		id = strings.TrimSpace(id)
+		if id != "" && !slices.Contains(out, id) {
+			out = append(out, id)
+		}
+	}
+	for _, id := range many {
+		add(id)
+	}
+	if len(out) == 0 {
+		add(single)
+	}
+	if len(out) > MaxTargets {
+		return nil, fmt.Errorf("%w: at most %d agents per message", ErrConflict, MaxTargets)
+	}
+	return out, nil
+}
+
+// PostMessage 保存消息，单个 Target 时同时建一轮排队的执行（兼容旧调用方）。
 func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup bool, err error) {
+	var execs []Execution
+	msg, execs, dup, err = s.PostMessageMulti(in)
+	if len(execs) > 0 {
+		x := execs[0]
+		exec = &x
+	}
+	return
+}
+
+// PostMessageMulti 保存消息，并为所有目标成员在同一事务里各建一轮排队的执行。
+// ClientID 重复时返回已有的消息和所有初始执行，dup 为 true。
+func (s *Store) PostMessageMulti(in PostInput) (msg DiscMessage, execs []Execution, dup bool, err error) {
 	err = s.withTx(func(tx *sql.Tx) error {
 		if in.Author != "" && in.ClientID != "" && !strings.HasPrefix(in.ClientID, in.Author+":") {
 			// 别人的客户端请求 ID 按人分开：两个人用了同一个 ID 也不会拿到对方的消息
@@ -969,10 +1042,8 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 			old, err := scanDiscMessage(tx.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND client_id=?`, in.Discussion, in.ClientID))
 			if err == nil {
 				msg, dup = old, true
-				if old.Execution != "" {
-					if x, err := scanExecution(tx.QueryRow(`SELECT `+execCols+` FROM disc_executions WHERE id=?`, old.Execution)); err == nil {
-						exec = &x
-					}
+				if xs, err := collect(tx, scanExecution, `SELECT `+execCols+` FROM disc_executions WHERE message=? AND retry_of='' ORDER BY created_at, rowid`, old.ID); err == nil {
+					execs = xs
 				}
 				return nil
 			} else if !errors.Is(err, ErrNotFound) {
@@ -997,6 +1068,13 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 			if err := checkPerson(tx, d.Key, author, in.Generation); err != nil {
 				return err
 			}
+		}
+		targetIDs, err := NormalizeTargets(in.Target, in.Targets)
+		if err != nil {
+			return err
+		}
+		if len(targetIDs) > 0 && in.Mention != "" {
+			return fmt.Errorf("%w: choose either agents or a person to mention", ErrConflict)
 		}
 		if len(in.Uploads) > 0 {
 			atts, err := takeUploads(tx, d.Key, author, in.Uploads)
@@ -1036,7 +1114,7 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 			if cmpOr(fromMember.Owner, d.Host) != author {
 				return ErrNotOwner
 			}
-			if in.Target == "" || in.Target == from.Member {
+			if len(targetIDs) != 1 || targetIDs[0] == from.Member {
 				return fmt.Errorf("%w: a member's request needs another member as its target", ErrConflict)
 			}
 			root := cmpOr(from.Root, from.ID)
@@ -1048,10 +1126,9 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 				return ErrChainLimit
 			}
 		}
-		var target Member
-		if in.Target != "" {
-			var err error
-			target, err = scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE id=? AND discussion=?`, in.Target, in.Discussion))
+		targets := make([]Member, 0, len(targetIDs))
+		for _, tid := range targetIDs {
+			target, err := scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE id=? AND discussion=?`, tid, in.Discussion))
 			if err != nil {
 				return err
 			}
@@ -1062,33 +1139,44 @@ func (s *Store) PostMessage(in PostInput) (msg DiscMessage, exec *Execution, dup
 			if !target.Allows(author, d.Host) {
 				return ErrNotOwner
 			}
+			targets = append(targets, target)
 		}
 		rev, err := bump(tx, in.Discussion)
 		if err != nil {
 			return err
 		}
 		msg = DiscMessage{ID: NewID("dm_") + NewID(""), Discussion: in.Discussion, Kind: DiscUser, Body: in.Body, Quote: in.Quote,
-			Target: target.ID, TargetName: target.Name, Attachments: in.Attachments, ClientID: in.ClientID, Rev: rev, CreatedAt: in.At,
+			Attachments: in.Attachments, ClientID: in.ClientID, Rev: rev, CreatedAt: in.At,
 			AuthorID: author, AuthorName: in.AuthorName, Mention: in.Mention, MentionName: mentionName}
 		if from.ID != "" {
 			msg.Kind, msg.AuthorMember, msg.AuthorName, msg.AuthorAgent = DiscDelegate, fromMember.ID, fromMember.Name, fromMember.Agent
 		}
-		if target.ID != "" {
-			x := Execution{ID: in.ExecID, Discussion: in.Discussion, Member: target.ID, Message: msg.ID, State: ExecQueued,
-				Agent: target.Agent, Model: target.Model, Effort: target.Effort, Role: target.Role, WorkspaceID: target.WorkspaceID,
-				WorkspaceLabel: target.WorkspaceLabel, ConfigVersion: target.ConfigVersion, Rev: rev, CreatedAt: in.At,
-				Owner: target.Owner, Generation: target.Generation}
-			if from.ID != "" {
-				x.Root, x.Depth = cmpOr(from.Root, from.ID), from.Depth+1
+		if len(targets) > 0 {
+			refs := make([]TargetRef, 0, len(targets))
+			for i, target := range targets {
+				x := Execution{Discussion: in.Discussion, Member: target.ID, Message: msg.ID, State: ExecQueued,
+					Agent: target.Agent, Model: target.Model, Effort: target.Effort, Role: target.Role, WorkspaceID: target.WorkspaceID,
+					WorkspaceLabel: target.WorkspaceLabel, ConfigVersion: target.ConfigVersion, Rev: rev, CreatedAt: in.At,
+					Owner: target.Owner, Generation: target.Generation}
+				if i == 0 && in.ExecID != "" {
+					x.ID = in.ExecID
+				}
+				if from.ID != "" {
+					x.Root, x.Depth = cmpOr(from.Root, from.ID), from.Depth+1
+				}
+				if x.ID == "" {
+					x.ID = NewID("x_") + NewID("")
+				}
+				if err := insertExecution(tx, x); err != nil {
+					return err
+				}
+				execs = append(execs, x)
+				refs = append(refs, TargetRef{ID: target.ID, Name: target.Name, Execution: x.ID})
 			}
-			if x.ID == "" {
-				x.ID = NewID("x_") + NewID("")
+			msg.Target, msg.TargetName, msg.Execution = refs[0].ID, refs[0].Name, refs[0].Execution
+			if len(refs) > 1 {
+				msg.Targets = refs
 			}
-			if err := insertExecution(tx, x); err != nil {
-				return err
-			}
-			msg.Execution = x.ID
-			exec = &x
 		}
 		return insertDiscMessage(tx, &msg)
 	})
@@ -1133,10 +1221,15 @@ func insertDiscMessageAt(tx querier, m *DiscMessage, source string) error {
 		b, _ := json.Marshal(m.Choices)
 		choices = string(b)
 	}
-	_, err := tx.Exec(`INSERT INTO disc_messages(id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,source,rev,created_at,author_id,mention,mention_name,key_at,key_by,choices)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	var targets string
+	if len(m.Targets) > 0 {
+		b, _ := json.Marshal(m.Targets)
+		targets = string(b)
+	}
+	_, err := tx.Exec(`INSERT INTO disc_messages(id,discussion,seq,kind,author_member,author_name,author_agent,body,quote,target,target_name,execution,question,report,outcome,attachments,client_id,source,rev,created_at,author_id,mention,mention_name,key_at,key_by,choices,targets)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		m.ID, m.Discussion, m.Seq, m.Kind, m.AuthorMember, m.AuthorName, m.AuthorAgent, m.Body, m.Quote, m.Target, m.TargetName, m.Execution, m.Question,
-		m.Report, m.Outcome, atts, m.ClientID, source, m.Rev, ms(m.CreatedAt), m.AuthorID, m.Mention, m.MentionName, key, m.KeyBy, choices)
+		m.Report, m.Outcome, atts, m.ClientID, source, m.Rev, ms(m.CreatedAt), m.AuthorID, m.Mention, m.MentionName, key, m.KeyBy, choices, targets)
 	if isUnique(err) {
 		return fmt.Errorf("%w: duplicate message", ErrConflict)
 	}
@@ -1147,20 +1240,35 @@ func isUnique(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }
 
-// MessageByClientID 找这个客户端请求 ID 已经写下的消息和它的执行。
+// MessageByClientID 找这个客户端请求 ID 已经写下的消息和它的首个执行。
 func (s *Store) MessageByClientID(key, clientID string) (DiscMessage, *Execution, error) {
+	m, xs, err := s.MessageByClientIDMulti(key, clientID)
+	if err != nil {
+		return m, nil, err
+	}
+	if len(xs) == 0 {
+		return m, nil, nil
+	}
+	x := xs[0]
+	return m, &x, nil
+}
+
+// MessageByClientIDMulti 找这个客户端请求 ID 已经写下的消息和它的全部初始执行。
+func (s *Store) MessageByClientIDMulti(key, clientID string) (DiscMessage, []Execution, error) {
 	m, err := scanDiscMessage(s.db.QueryRow(`SELECT `+dmsgCols+` FROM disc_messages WHERE discussion=? AND client_id=?`, key, clientID))
 	if err != nil {
 		return m, nil, err
 	}
-	if m.Execution == "" {
-		return m, nil, nil
-	}
-	x, err := s.Execution(m.Execution)
+	xs, err := s.ExecutionsForMessage(m.ID)
 	if err != nil {
 		return m, nil, nil
 	}
-	return m, &x, nil
+	return m, xs, nil
+}
+
+// ExecutionsForMessage 是某条消息的全部初始执行（按创建顺序）。
+func (s *Store) ExecutionsForMessage(msgID string) ([]Execution, error) {
+	return collect(s.db, scanExecution, `SELECT `+execCols+` FROM disc_executions WHERE message=? AND retry_of='' ORDER BY created_at, rowid`, msgID)
 }
 
 func (s *Store) DiscMessage(id string) (DiscMessage, error) {

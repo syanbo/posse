@@ -194,4 +194,46 @@ void main() {
     expect(discMine({}, 'self'), true);
     expect(discMine({'owner': 'other'}, 'self'), false);
   });
+  test('discTargets reads multi-target array and falls back to legacy fields', () {
+    expect(discTargets({}), isEmpty);
+    expect(
+      discTargets({'target': 'a', 'targetName': 'Alice', 'execution': 'x1'}),
+      [
+        {'id': 'a', 'name': 'Alice', 'execution': 'x1'},
+      ],
+    );
+    expect(
+      discTargets({
+        'target': 'a',
+        'targetName': 'Alice',
+        'targets': [
+          {'id': 'a', 'name': 'Alice', 'execution': 'x1'},
+          {'id': 'b', 'name': 'Bob', 'execution': 'x2'},
+        ],
+      }).map((t) => t['id']),
+      ['a', 'b'],
+    );
+  });
+  test('discFormatDuration formats seconds, minutes, and hours', () {
+    expect(discFormatDuration(const Duration(seconds: -3)), '0s');
+    expect(discFormatDuration(const Duration(seconds: 18)), '18s');
+    expect(discFormatDuration(const Duration(minutes: 2)), '2m');
+    expect(discFormatDuration(const Duration(minutes: 2, seconds: 15)), '2m 15s');
+    expect(discFormatDuration(const Duration(hours: 1, minutes: 4)), '1h 4m');
+  });
+  test('DiscussionState keeps live progress from show responses', () async {
+    final state = DiscussionState(
+      (method, p) async => {
+        ...page(2, [message(1)]),
+        'progress': {
+          'x1': {'tool': 'shell', 'toolInput': 'go test', 'subagents': 1},
+        },
+      },
+      'room',
+    );
+    await state.page();
+    expect(discMap(state.progress['x1'])['tool'], 'shell');
+    expect(discInt(discMap(state.progress['x1']), 'subagents'), 1);
+    state.dispose();
+  });
 }

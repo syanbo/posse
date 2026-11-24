@@ -24,9 +24,17 @@ func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error
 	if p.ClientID == "" {
 		p.ClientID = store.NewID("c_") + store.NewID("")
 	}
-	var target store.Member
-	if p.Target != "" {
-		if target, err = d.memberSel(p.Target); err != nil {
+	targetIDs, err := store.NormalizeTargets(p.Target, p.Targets)
+	if err != nil {
+		return nil, discError(err)
+	}
+	if len(targetIDs) > 1 && !d.store.HostHas(disc.Key, store.FeatureMultiTarget) {
+		return nil, rpc.Errorf(rpc.CodeConflict, "the host of this discussion runs an older Posse that only supports one @ agent per message")
+	}
+	targets := make([]store.Member, 0, len(targetIDs))
+	for _, tid := range targetIDs {
+		target, err := d.memberSel(tid)
+		if err != nil {
 			return nil, err
 		}
 		if target.Discussion != disc.Key || target.RemovedAt != nil {
@@ -42,6 +50,7 @@ func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error
 		} else if target.WorkspaceID == "" {
 			return nil, rpc.Errorf(rpc.CodeConflict, "choose a workspace on this computer for %s first", target.Name)
 		}
+		targets = append(targets, target)
 	}
 	if len(p.Attachments) > discMaxAttachments {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "at most %d attachments per message", discMaxAttachments)
@@ -49,8 +58,8 @@ func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error
 	// 上次发送的响应丢了：先补齐增量，房主已经收下就直接返回，不再传一遍附件
 	if len(p.Attachments) > 0 {
 		rc.syncNow()
-		if m, x, err := d.store.MessageByClientID(disc.Key, p.ClientID); err == nil {
-			return discPostResult{Message: m, Execution: x, Duplicate: true}, nil
+		if m, xs, err := d.store.MessageByClientIDMulti(disc.Key, p.ClientID); err == nil {
+			return makePostResult(m, xs, true), nil
 		}
 	}
 	var uploads []string
@@ -64,18 +73,27 @@ func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error
 		uploads = append(uploads, id)
 		atts = append(atts, store.Attachment{ID: id})
 	}
-	if target.ID != "" && d.mine(target.Owner) {
-		dig := store.IntentDigest(p.Body, p.Quote, target.ID, atts)
-		if err := d.store.SaveIntent(disc.Key, p.ClientID, target.ID, target.ConfigVersion, dig, store.OwnConfigDigest(target), time.Now()); err != nil {
-			return nil, err
+	multi := len(targets) > 1
+	dig := store.IntentDigestMulti(p.Body, p.Quote, targetIDs, atts)
+	for _, target := range targets {
+		if d.mine(target.Owner) {
+			key := store.IntentKey(p.ClientID, target.ID, multi)
+			if err := d.store.SaveIntent(disc.Key, key, target.ID, target.ConfigVersion, dig, store.OwnConfigDigest(target), time.Now()); err != nil {
+				return nil, err
+			}
 		}
 	}
 	var res struct {
-		Message   string `json:"message"`
-		Execution string `json:"execution"`
-		Duplicate bool   `json:"duplicate"`
+		Message    string   `json:"message"`
+		Execution  string   `json:"execution"`
+		Executions []string `json:"executions"`
+		Duplicate  bool     `json:"duplicate"`
 	}
-	if err := rc.call("post", collabPostParams{ClientID: p.ClientID, Body: p.Body, Quote: p.Quote, Target: p.Target, Mention: p.Mention, Uploads: uploads}, &res); err != nil {
+	cp := collabPostParams{ClientID: p.ClientID, Body: p.Body, Quote: p.Quote, Target: p.Target, Mention: p.Mention, Uploads: uploads}
+	if multi {
+		cp.Targets = targetIDs
+	}
+	if err := rc.call("post", cp, &res); err != nil {
 		return nil, err
 	}
 	d.taskNotify()
@@ -83,13 +101,17 @@ func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeConflict, "the host accepted the message but it has not synced yet; it will appear shortly")
 	}
-	out := discPostResult{Message: m, Duplicate: res.Duplicate}
-	if res.Execution != "" {
-		if x, err := d.store.Execution(res.Execution); err == nil {
-			out.Execution = &x
+	execIDs := res.Executions
+	if len(execIDs) == 0 && res.Execution != "" {
+		execIDs = []string{res.Execution}
+	}
+	var xs []store.Execution
+	for _, eid := range execIDs {
+		if x, err := d.store.Execution(eid); err == nil {
+			xs = append(xs, x)
 		}
 	}
-	return out, nil
+	return makePostResult(m, xs, res.Duplicate), nil
 }
 
 // mirrorMention 是加入的讨论里本机的 Agent @ 另一个成员：经房主的 post 带上发起的那一轮（from），

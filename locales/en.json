@@ -10365,5 +10365,51 @@
         "type": "int"
       }
     }
+  },
+  "discPlaceholderToMany": "Request for {first} and {count, plural, one {1 other} other {# others}} (⌘↩ to send)",
+  "@discPlaceholderToMany": {
+    "description": "Discussion composer placeholder when multiple agent members are selected as recipients.",
+    "placeholders": {
+      "first": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discAddTarget": "Add recipient",
+  "@discAddTarget": {
+    "description": "Discussion composer: tooltip for the button that adds another agent recipient."
+  },
+  "discTrace": "Activity",
+  "@discTrace": {
+    "description": "Discussion execution row: button label to expand or collapse recorded steps when count is not yet known."
+  },
+  "discTraceCount": "{count, plural, one {1 step} other {# steps}}",
+  "@discTraceCount": {
+    "description": "Discussion execution row: button label showing how many tool/command steps were recorded in this round.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discTraceLoading": "Loading activity…",
+  "@discTraceLoading": {
+    "description": "Discussion execution trace panel: shown while loading recorded steps."
+  },
+  "discTraceEmpty": "No recorded steps in this round.",
+  "@discTraceEmpty": {
+    "description": "Discussion execution trace panel: shown when a round has no recorded tool or command calls."
+  },
+  "discSubagents": "{count, plural, one {1 subagent} other {# subagents}}",
+  "@discSubagents": {
+    "description": "Discussion live progress badge: number of active background subagents.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

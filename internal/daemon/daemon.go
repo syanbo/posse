@@ -700,6 +700,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("discussion.summarize", d.discSummarize)
 	srv.Handle("discussion.mention", d.discMention)
 	srv.Handle("discussion.summary.clear", d.discSummaryClear)
+	srv.Handle("discussion.execution.trace", d.discExecTrace)
 	srv.Handle("discussion.share", d.collabShare)
 	srv.Handle("discussion.invite", d.collabInvite)
 	srv.Handle("discussion.decide", d.collabDecide)

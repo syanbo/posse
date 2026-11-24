@@ -21,7 +21,7 @@ func scrollTester(t *testing.T, extra ...map[string]rpc.Handler) (*app, *ui.Test
 	}
 	d.info.MsgSeq = 60
 	d.more, d.moreAfter = true, false
-	a.disc.panel, a.disc.quote, a.disc.target = false, "", ""
+	a.disc.panel, a.disc.quote, a.disc.targets = false, "", nil
 	a.disc.stickBottom()
 	tt.SetSize(1200, 800)
 	for range 4 {

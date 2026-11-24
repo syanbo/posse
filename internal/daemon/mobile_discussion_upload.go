@@ -210,9 +210,9 @@ func (d *Daemon) mobileDiscPost(ctx context.Context, device string, raw json.Raw
 	for _, a := range input.Attachments {
 		ids = append(ids, a.Staged)
 	}
-	if m, x, e := d.store.MessageByClientID(disc.Key, p.ClientID); e == nil {
+	if m, xs, e := d.store.MessageByClientIDMulti(disc.Key, p.ClientID); e == nil {
 		d.releaseMobileStages(device, ids, true, false)
-		return finish(discPostResult{Message: m, Execution: x, Duplicate: true})
+		return finish(makePostResult(m, xs, true))
 	}
 	res, err := d.withMobileStages(device, ids, func(atts []discAttachIn) (any, error) {
 		p.Attachments = atts

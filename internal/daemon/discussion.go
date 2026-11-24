@@ -52,6 +52,7 @@ type discState struct {
 	settle time.Duration
 	// launch 拉起成员的 worker；测试里换成普通命令。调用时已持有 handoff.startMu 的读锁，里面要用不加锁的拉起
 	launch func(w store.Workspace, name string, m agent.Model, prompt string, env ...string) (*session, error)
+	trace  discTraceState
 }
 
 func (d *Daemon) discLaunch(w store.Workspace, name string, m agent.Model, prompt string, env ...string) (*session, error) {
@@ -216,6 +217,7 @@ func (d *Daemon) continueRound(m store.Member, x store.Execution) {
 	}
 	claimed = true
 	finish(true)
+	d.recordTraceStart(x.ID, t.Worker, true)
 	d.taskNotify()
 	go d.deliver(t.Worker)
 }
@@ -298,6 +300,7 @@ func (d *Daemon) startRound(m store.Member, x store.Execution) {
 	case bindErr != nil && !errors.Is(bindErr, store.ErrStaleRound):
 		fail(errMessage(bindErr))
 	case bindErr == nil:
+		d.recordTraceStart(x.ID, s.ID, false)
 		d.taskNotify()
 	}
 }
@@ -444,8 +447,12 @@ func (d *Daemon) renderContext(src store.ContextSource) (string, []store.Context
 			author += ", answer"
 		}
 		fmt.Fprintf(&b, "\n--- message #%d · %s · %s", m.Seq, author, m.CreatedAt.Format(time.RFC3339))
-		if m.Target != "" {
-			fmt.Fprintf(&b, " · to @%s", m.TargetName)
+		if ts := m.TargetList(); len(ts) > 0 {
+			var to []string
+			for _, t := range ts {
+				to = append(to, "@"+t.Name)
+			}
+			fmt.Fprintf(&b, " · to %s", strings.Join(to, ", "))
 		}
 		if m.Mention != "" {
 			fmt.Fprintf(&b, " · mentions %s", m.MentionName)
@@ -731,6 +738,8 @@ type discView struct {
 	// Live 是讨论里 worker 终端现在的状态（终端 ID → agent 状态，终端在但没有 agent 为 "shell"，不在为 "gone"），
 	// 每次都带：终端状态不推进讨论版本，增量里没有它
 	Live map[string]string `json:"live"`
+	// Progress 是当前讨论里本机拥有的活跃执行的实时进度（执行 ID → 状态行/当前工具），同样每次都带、不推版本
+	Progress map[string]discProgress `json:"progress,omitempty"`
 	// Collab 是局域网协作的状态（共享的或加入的讨论才有），同样每次都带
 	Collab *discCollabInfo `json:"collab,omitempty"`
 }
@@ -744,7 +753,8 @@ type discMemberInfo struct {
 
 type discExecInfo struct {
 	store.Execution
-	Terminal bool `json:"terminal"` // worker 终端还在
+	Terminal   bool `json:"terminal"`             // worker 终端还在
+	TraceCount int  `json:"traceCount,omitempty"` // 本机已固化的过程事件数（仅拥有者可见）
 }
 
 func (d *Daemon) discShow(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -841,11 +851,27 @@ func (d *Daemon) discShow(ctx context.Context, raw json.RawMessage) (any, error)
 		}
 		v.Members = append(v.Members, info)
 	}
+	var ownIDs []string
+	for _, x := range xs {
+		if d.mine(x.Owner) {
+			ownIDs = append(ownIDs, x.ID)
+		}
+	}
+	traceCounts := d.store.ExecTraceCounts(ownIDs)
 	for _, x := range xs {
 		s := d.liveSession(x.Worker)
-		v.Executions = append(v.Executions, discExecInfo{Execution: x, Terminal: x.Worker != "" && s != nil && s.Running()})
+		v.Executions = append(v.Executions, discExecInfo{Execution: x, Terminal: x.Worker != "" && s != nil && s.Running(), TraceCount: traceCounts[x.ID]})
 	}
 	v.Live = d.discLive(disc.Key)
+	if active, err := d.store.ActiveExecutions(); err == nil {
+		var inDisc []store.Execution
+		for _, ax := range active {
+			if ax.Discussion == disc.Key {
+				inDisc = append(inDisc, ax)
+			}
+		}
+		v.Progress = d.discProgressFor(inDisc)
+	}
 	v.Collab = d.collabInfo(disc)
 	return v, nil
 }
@@ -1359,16 +1385,28 @@ type discPostParams struct {
 	Discussion  string         `json:"discussion"`
 	Body        string         `json:"body"`
 	Quote       string         `json:"quote"`
-	Target      string         `json:"target"`  // @ 的成员 ID，最多一个
+	Target      string         `json:"target"`  // @ 的成员 ID（单目标兼容）
+	Targets     []string       `json:"targets"` // @ 的成员 ID 列表（多目标并行派发）
 	Mention     string         `json:"mention"` // @ 的人（指纹）：只提醒，不触发他的 Agent
 	ClientID    string         `json:"clientId"`
 	Attachments []discAttachIn `json:"attachments"`
 }
 
 type discPostResult struct {
-	Message   store.DiscMessage `json:"message"`
-	Execution *store.Execution  `json:"execution,omitempty"`
-	Duplicate bool              `json:"duplicate,omitempty"`
+	Message    store.DiscMessage `json:"message"`
+	Execution  *store.Execution  `json:"execution,omitempty"`
+	Executions []store.Execution `json:"executions,omitempty"`
+	Duplicate  bool              `json:"duplicate,omitempty"`
+}
+
+func makePostResult(m store.DiscMessage, xs []store.Execution, dup bool) discPostResult {
+	r := discPostResult{Message: m, Duplicate: dup}
+	if len(xs) > 0 {
+		first := xs[0]
+		r.Execution = &first
+		r.Executions = xs
+	}
+	return r
 }
 
 func (d *Daemon) discPost(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -1395,8 +1433,8 @@ func (d *Daemon) discPost(ctx context.Context, raw json.RawMessage) (any, error)
 	}
 	// 重复发送：直接返回第一次的结果，不再复制附件
 	if p.ClientID != "" {
-		if m, x, err := d.store.MessageByClientID(disc.Key, p.ClientID); err == nil {
-			return discPostResult{Message: m, Execution: x, Duplicate: true}, nil
+		if m, xs, err := d.store.MessageByClientIDMulti(disc.Key, p.ClientID); err == nil {
+			return makePostResult(m, xs, true), nil
 		}
 	}
 	if p.Mention != "" {
@@ -1406,19 +1444,41 @@ func (d *Daemon) discPost(ctx context.Context, raw json.RawMessage) (any, error)
 		}
 		p.Mention = fp
 	}
-	if p.Target != "" {
+	rawTargets := p.Targets
+	if len(rawTargets) == 0 && p.Target != "" {
+		rawTargets = []string{p.Target}
+	}
+	var targetIDs []string
+	for _, rawTarget := range rawTargets {
+		if strings.TrimSpace(rawTarget) == "" {
+			continue
+		}
 		// 成员可以写 ID 或名字（CLI 的 --to）
-		t, err := d.findMember(disc, p.Target, "")
+		t, err := d.findMember(disc, rawTarget, "")
 		if err != nil {
 			return nil, err
 		}
-		p.Target = t.ID
+		if !slices.Contains(targetIDs, t.ID) {
+			targetIDs = append(targetIDs, t.ID)
+		}
+	}
+	if len(targetIDs) > store.MaxTargets {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "at most %d agents per message", store.MaxTargets)
+	}
+	if len(targetIDs) > 0 && p.Mention != "" {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "choose either agents or a person to mention")
+	}
+	p.Targets = targetIDs
+	if len(targetIDs) > 0 {
+		p.Target = targetIDs[0]
+	} else {
+		p.Target = ""
 	}
 	if disc.Mirror {
 		return d.mirrorPost(disc, p)
 	}
-	if p.Target != "" {
-		if t, err := d.store.Member(p.Target); err == nil && !t.Allows(d.store.Self(), disc.Host) && !d.mine(t.Owner) {
+	for _, tid := range targetIDs {
+		if t, err := d.store.Member(tid); err == nil && !t.Allows(d.store.Self(), disc.Host) && !d.mine(t.Owner) {
 			return nil, notYours(t.Name)
 		}
 	}
@@ -1426,7 +1486,7 @@ func (d *Daemon) discPost(ctx context.Context, raw json.RawMessage) (any, error)
 	if err != nil {
 		return nil, err
 	}
-	m, x, dup, err := d.store.PostMessage(store.PostInput{Discussion: disc.Key, ClientID: p.ClientID, Body: p.Body, Quote: p.Quote, Target: p.Target,
+	m, xs, dup, err := d.store.PostMessageMulti(store.PostInput{Discussion: disc.Key, ClientID: p.ClientID, Body: p.Body, Quote: p.Quote, Target: p.Target, Targets: targetIDs,
 		Mention: p.Mention, Attachments: atts, At: time.Now()})
 	if err != nil || dup {
 		cleanup()
@@ -1435,10 +1495,10 @@ func (d *Daemon) discPost(ctx context.Context, raw json.RawMessage) (any, error)
 		return nil, discError(err)
 	}
 	d.taskNotify()
-	if x != nil {
+	if len(xs) > 0 {
 		d.discKick()
 	}
-	return discPostResult{Message: m, Execution: x, Duplicate: dup}, nil
+	return makePostResult(m, xs, dup), nil
 }
 
 // copyAttachments 把用户添加的文件复制成快照：项目的 .posse/discussions/<讨论>/attachments/<附件>/<文件名>，
@@ -1638,6 +1698,7 @@ func (d *Daemon) discStop(ctx context.Context, raw json.RawMessage) (any, error)
 	if x.State == store.ExecStarting {
 		return nil, rpc.Errorf(rpc.CodeConflict, "execution %s is still starting; try again in a moment", x.ID)
 	}
+	d.finalizeTraceAsync(x.ID, x.Worker)
 	d.store.EndTask(x.TaskID, store.TaskStopped, nil, store.ExecStopped, "stopped by the user", false, time.Now())
 	d.closeTerminal(x.Worker, 2*time.Second)
 	d.taskNotify()
@@ -2322,6 +2383,7 @@ func (d *Daemon) discDone(t store.Task, p taskDoneParams) (any, error) {
 	case err != nil:
 		return nil, discError(err)
 	}
+	d.finalizeTraceAsync(p.Execution, t.Worker)
 	d.taskNotify()
 	d.discKick()
 	t, _ = d.store.Task(t.ID)

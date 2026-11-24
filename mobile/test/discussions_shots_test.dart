@@ -112,6 +112,35 @@ class _Rpc implements PhoneRpc {
         };
       case 'discussion.attachment.thumb':
         return {'content': base64Encode(_png), 'width': 1600, 'height': 1000};
+      case 'discussion.execution.trace':
+        return {
+          'execId': params['execution'],
+          'eventCount': 4,
+          'finalized': true,
+          'summary': {
+            'tools': 2,
+            'commands': 1,
+            'web': 1,
+            'events': [
+              {
+                'kind': 'tool',
+                'name': 'Read',
+                'detail': 'ios/LoginView.swift',
+                'count': 2,
+              },
+              {
+                'kind': 'cli',
+                'name': 'shell',
+                'detail': 'swift test --filter LoginTests',
+              },
+              {
+                'kind': 'search',
+                'name': 'search',
+                'detail': 'macOS Keychain kSecAttrAccessible',
+              },
+            ],
+          },
+        };
       case 'discussion.show':
         return {
           'discussion': disc,
@@ -229,6 +258,21 @@ class _Rpc implements PhoneRpc {
               'mentionName': 'Mo',
               'createdAt': _at(3).toIso8601String(),
             },
+            {
+              'id': 'm7',
+              'seq': 7,
+              'kind': 'user',
+              'authorId': 'self',
+              'authorName': 'Mo',
+              'body': '两位分别从交互和安全性评估一下登录态刷新方案。',
+              'target': 'plan',
+              'targetName': 'Claude 方案',
+              'targets': [
+                {'id': 'plan', 'name': 'Claude 方案', 'execution': 'x4'},
+                {'id': 'review', 'name': 'Codex 审查', 'execution': 'x5'},
+              ],
+              'createdAt': _at(1).toIso8601String(),
+            },
           ],
           'executions': [
             {
@@ -253,7 +297,42 @@ class _Rpc implements PhoneRpc {
               'state': 'running',
               'owner': 'hana',
             },
+            {
+              'id': 'x4',
+              'message': 'm7',
+              'member': 'plan',
+              'state': 'done',
+              'owner': 'self',
+              'traceCount': 4,
+              'startedAt': DateTime.now()
+                  .subtract(const Duration(seconds: 48))
+                  .toUtc()
+                  .toIso8601String(),
+              'endedAt': DateTime.now()
+                  .subtract(const Duration(seconds: 20))
+                  .toUtc()
+                  .toIso8601String(),
+            },
+            {
+              'id': 'x5',
+              'message': 'm7',
+              'member': 'review',
+              'state': 'running',
+              'owner': 'self',
+              'terminal': true,
+              'startedAt': DateTime.now()
+                  .subtract(const Duration(seconds: 18))
+                  .toUtc()
+                  .toIso8601String(),
+            },
           ],
+          'progress': {
+            'x5': {
+              'tool': 'shell',
+              'toolInput': 'swift test --filter LoginTests',
+              'subagents': 1,
+            },
+          },
           'key': [
             {
               'id': 'm1',
@@ -371,7 +450,19 @@ void main() {
       await _shot(t, key, 'disc-at-$b');
       await t.tap(find.text('Codex 审查').last);
       await _settle(t);
-      expect(find.text('@Codex 审查'), findsOneWidget);
+      expect(find.text('@Codex 审查'), findsWidgets);
+      await t.enterText(find.byType(TextField), '@');
+      await _settle(t);
+      await t.tap(find.text('Claude 方案').last);
+      await _settle(t);
+      // 滚到底部展开过程面板，截多 @ + 实时进度 + 折叠过程
+      await t.drag(find.byType(ListView).first, const Offset(0, -3000));
+      await _settle(t);
+      await t.tap(find.text('过程 (4)'));
+      await _settle(t);
+      await t.drag(find.byType(ListView).first, const Offset(0, -500));
+      await _settle(t);
+      await _shot(t, key, 'disc-multi-progress-$b');
       await t.enterText(find.byType(TextField), '');
       await _settle(t);
 

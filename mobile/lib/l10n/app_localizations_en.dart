@@ -2810,6 +2810,47 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discGuestNote => 'You joined as a viewer and can’t post here.';
 
   @override
+  String discMessageHintTo(String name) {
+    return 'Request for $name';
+  }
+
+  @override
+  String discMessageHintToMany(String first, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count others',
+      one: '1 other',
+    );
+    return 'Request for $first and $_temp0';
+  }
+
+  @override
+  String get discTrace => 'Activity';
+
+  @override
+  String discTraceCount(int count) {
+    return 'Activity ($count)';
+  }
+
+  @override
+  String get discTraceLoading => 'Loading activity…';
+
+  @override
+  String get discTraceEmpty => 'No tool calls recorded in this round';
+
+  @override
+  String discSubagents(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count subagents',
+      one: '1 subagent',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String chatContextTokens(int used) {
     final intl.NumberFormat usedNumberFormat = intl.NumberFormat.decimalPattern(
       localeName,

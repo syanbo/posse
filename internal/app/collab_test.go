@@ -53,8 +53,8 @@ func TestCollabReceiverMenu(t *testing.T) {
 	if err := tt.Click("@Claude 方案 · Hana 的"); err == nil {
 		tt.Frame()
 	}
-	if a.disc.target != "" {
-		t.Fatalf("another person's agent became the target: %q", a.disc.target)
+	if len(a.disc.targets) != 0 {
+		t.Fatalf("another person's agent became the target: %v", a.disc.targets)
 	}
 	tt.Frame()
 	if !strings.Contains(strings.Join(tt.Texts(), "\n"), "提醒 Hana") {
@@ -67,8 +67,8 @@ func TestCollabReceiverMenu(t *testing.T) {
 		t.Fatalf("mention item: %v; texts %v", err, tt.Texts())
 	}
 	tt.Frame()
-	if a.disc.mention != strings.Repeat("a1", 32) || a.disc.target != "" {
-		t.Fatalf("mention %q target %q", a.disc.mention, a.disc.target)
+	if a.disc.mention != strings.Repeat("a1", 32) || len(a.disc.targets) != 0 {
+		t.Fatalf("mention %q targets %v", a.disc.mention, a.disc.targets)
 	}
 	a.disc.text = "看一下"
 	tt.Frame()

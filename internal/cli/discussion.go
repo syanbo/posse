@@ -41,13 +41,28 @@ type discMember struct {
 	RemovedAt                                                                                   *time.Time
 }
 
+type discTargetRef struct {
+	ID, Name, Execution string
+}
+
 type discMsg struct {
 	ID, Kind, AuthorName, AuthorAgent, AuthorID, MentionName, Body, Quote, Target, TargetName, Execution, Question, Outcome string
 	Seq                                                                                                                     int64
+	Targets                                                                                                                 []discTargetRef
 	Attachments                                                                                                             []struct{ Name, Path string }
 	Choices                                                                                                                 []string
 	KeyAt                                                                                                                   *time.Time
 	CreatedAt                                                                                                               time.Time
+}
+
+func (m discMsg) targetList() []discTargetRef {
+	if len(m.Targets) > 0 {
+		return m.Targets
+	}
+	if m.Target != "" || m.TargetName != "" {
+		return []discTargetRef{{ID: m.Target, Name: m.TargetName, Execution: m.Execution}}
+	}
+	return nil
 }
 
 type discExec struct {
@@ -167,14 +182,27 @@ func cmdDiscussionShow(e *env, args []string) error {
 		for _, m := range v.Messages {
 			who := discAuthor(m)
 			line := fmt.Sprintf("  #%d %s %s", m.Seq, m.CreatedAt.Format("15:04"), who)
-			if m.TargetName != "" {
-				line += " → @" + m.TargetName
+			ts := m.targetList()
+			if len(ts) > 0 {
+				var names []string
+				for _, t := range ts {
+					names = append(names, "@"+t.Name)
+				}
+				line += " → " + strings.Join(names, ", ")
 			}
 			if m.KeyAt != nil {
 				line += " [key]"
 			}
-			if x, ok := execs[m.Execution]; ok && (m.Kind == "user" || m.Kind == "delegate") {
-				line += fmt.Sprintf(" [%s %s]", x.ID, x.State)
+			if m.Kind == "user" || m.Kind == "delegate" {
+				for _, t := range ts {
+					if x, ok := execs[t.Execution]; ok {
+						if len(ts) > 1 {
+							line += fmt.Sprintf(" [@%s %s %s]", t.Name, x.ID, x.State)
+						} else {
+							line += fmt.Sprintf(" [%s %s]", x.ID, x.State)
+						}
+					}
+				}
 			}
 			fmt.Fprintf(e.out, "%s (%s)\n%s\n", line, m.ID, indent2(m.Body, "    "))
 			for i, c := range m.Choices {
@@ -333,7 +361,8 @@ func cmdDiscussionRestart(e *env, args []string) error {
 
 func cmdDiscussionPost(e *env, args []string) error {
 	fs := flag.NewFlagSet("discussion post", flag.ContinueOnError)
-	to := fs.String("to", "", "")
+	var to multiFlag
+	fs.Var(&to, "to", "")
 	mention := fs.String("mention", "", "")
 	quote := fs.String("quote", "", "")
 	client := fs.String("client-id", "", "")
@@ -347,6 +376,14 @@ func cmdDiscussionPost(e *env, args []string) error {
 	if err := need(pos, 1, "discussion post"); err != nil || len(pos) < 2 && len(attach) == 0 {
 		return need(pos, 2, "discussion post")
 	}
+	var targets []string
+	for _, raw := range to {
+		for _, part := range strings.Split(raw, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				targets = append(targets, part)
+			}
+		}
+	}
 	var atts []map[string]string
 	for _, a := range attach {
 		abs, err := filepath.Abs(a)
@@ -356,19 +393,34 @@ func cmdDiscussionPost(e *env, args []string) error {
 		atts = append(atts, map[string]string{"path": abs})
 	}
 	var r struct {
-		Message   discMsg
-		Execution *discExec
-		Duplicate bool
+		Message    discMsg
+		Execution  *discExec
+		Executions []discExec
+		Duplicate  bool
 	}
-	params := map[string]any{"discussion": pos[0], "body": strings.Join(pos[1:], " "), "target": *to, "mention": *mention, "quote": *quote, "clientId": *client, "attachments": atts, "caller": caller()}
+	params := map[string]any{"discussion": pos[0], "body": strings.Join(pos[1:], " "), "mention": *mention, "quote": *quote, "clientId": *client, "attachments": atts, "caller": caller()}
+	if len(targets) == 1 {
+		params["target"] = targets[0]
+	} else if len(targets) > 1 {
+		params["targets"] = targets
+	}
 	return e.do("discussion.post", params, &r, func() {
 		if r.Duplicate {
 			fmt.Fprintf(e.out, "already sent as #%d (%s)\n", r.Message.Seq, r.Message.ID)
 		} else {
 			fmt.Fprintf(e.out, "posted #%d (%s)\n", r.Message.Seq, r.Message.ID)
 		}
-		if r.Execution != nil {
-			fmt.Fprintf(e.out, "request %s to @%s is %s\n", r.Execution.ID, r.Message.TargetName, r.Execution.State)
+		names := map[string]string{}
+		for _, t := range r.Message.targetList() {
+			names[t.ID] = t.Name
+		}
+		xs := r.Executions
+		if len(xs) == 0 && r.Execution != nil {
+			xs = []discExec{*r.Execution}
+		}
+		for _, x := range xs {
+			name := cmp.Or(names[x.Member], r.Message.TargetName, x.Member)
+			fmt.Fprintf(e.out, "request %s to @%s is %s\n", x.ID, name, x.State)
 		}
 	})
 }

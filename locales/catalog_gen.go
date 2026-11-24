@@ -28958,3 +28958,113 @@ func HistoryContextTokens(used int) string { return In(i18n.Locale()).HistoryCon
 func (msgs Messages) HistoryContextTokens(used int) string {
 	return Catalog.Format(msgs.locale, "historyContextTokens", map[string]any{"used": used})
 }
+
+// DiscPlaceholderToMany says "Request for {first} and {count, plural, one {1 other} other {# others}} (⌘↩ to send)"
+// in the language the app shows.
+//
+// Discussion composer placeholder when multiple agent members are selected
+// as recipients.
+func DiscPlaceholderToMany(first string, count int) string {
+	return In(i18n.Locale()).DiscPlaceholderToMany(first, count)
+}
+
+// DiscPlaceholderToMany says "Request for {first} and {count, plural, one {1 other} other {# others}} (⌘↩ to send)"
+// in the language of msgs.
+//
+// Discussion composer placeholder when multiple agent members are selected
+// as recipients.
+func (msgs Messages) DiscPlaceholderToMany(first string, count int) string {
+	return Catalog.Format(msgs.locale, "discPlaceholderToMany", map[string]any{"first": first, "count": count})
+}
+
+// DiscAddTarget says "Add recipient"
+// in the language the app shows.
+//
+// Discussion composer: tooltip for the button that adds another agent
+// recipient.
+func DiscAddTarget() string { return In(i18n.Locale()).DiscAddTarget() }
+
+// DiscAddTarget says "Add recipient"
+// in the language of msgs.
+//
+// Discussion composer: tooltip for the button that adds another agent
+// recipient.
+func (msgs Messages) DiscAddTarget() string {
+	return Catalog.Format(msgs.locale, "discAddTarget", nil)
+}
+
+// DiscTrace says "Activity"
+// in the language the app shows.
+//
+// Discussion execution row: button label to expand or collapse recorded
+// steps when count is not yet known.
+func DiscTrace() string { return In(i18n.Locale()).DiscTrace() }
+
+// DiscTrace says "Activity"
+// in the language of msgs.
+//
+// Discussion execution row: button label to expand or collapse recorded
+// steps when count is not yet known.
+func (msgs Messages) DiscTrace() string {
+	return Catalog.Format(msgs.locale, "discTrace", nil)
+}
+
+// DiscTraceCount says "{count, plural, one {1 step} other {# steps}}"
+// in the language the app shows.
+//
+// Discussion execution row: button label showing how many tool/command
+// steps were recorded in this round.
+func DiscTraceCount(count int) string { return In(i18n.Locale()).DiscTraceCount(count) }
+
+// DiscTraceCount says "{count, plural, one {1 step} other {# steps}}"
+// in the language of msgs.
+//
+// Discussion execution row: button label showing how many tool/command
+// steps were recorded in this round.
+func (msgs Messages) DiscTraceCount(count int) string {
+	return Catalog.Format(msgs.locale, "discTraceCount", map[string]any{"count": count})
+}
+
+// DiscTraceLoading says "Loading activity…"
+// in the language the app shows.
+//
+// Discussion execution trace panel: shown while loading recorded steps.
+func DiscTraceLoading() string { return In(i18n.Locale()).DiscTraceLoading() }
+
+// DiscTraceLoading says "Loading activity…"
+// in the language of msgs.
+//
+// Discussion execution trace panel: shown while loading recorded steps.
+func (msgs Messages) DiscTraceLoading() string {
+	return Catalog.Format(msgs.locale, "discTraceLoading", nil)
+}
+
+// DiscTraceEmpty says "No recorded steps in this round."
+// in the language the app shows.
+//
+// Discussion execution trace panel: shown when a round has no recorded tool
+// or command calls.
+func DiscTraceEmpty() string { return In(i18n.Locale()).DiscTraceEmpty() }
+
+// DiscTraceEmpty says "No recorded steps in this round."
+// in the language of msgs.
+//
+// Discussion execution trace panel: shown when a round has no recorded tool
+// or command calls.
+func (msgs Messages) DiscTraceEmpty() string {
+	return Catalog.Format(msgs.locale, "discTraceEmpty", nil)
+}
+
+// DiscSubagents says "{count, plural, one {1 subagent} other {# subagents}}"
+// in the language the app shows.
+//
+// Discussion live progress badge: number of active background subagents.
+func DiscSubagents(count int) string { return In(i18n.Locale()).DiscSubagents(count) }
+
+// DiscSubagents says "{count, plural, one {1 subagent} other {# subagents}}"
+// in the language of msgs.
+//
+// Discussion live progress badge: number of active background subagents.
+func (msgs Messages) DiscSubagents(count int) string {
+	return Catalog.Format(msgs.locale, "discSubagents", map[string]any{"count": count})
+}

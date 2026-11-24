@@ -657,4 +657,252 @@ void main() {
       });
     }
   }
+  testWidgets(
+    'multi-@ appends agents and quote auto-preselects then auto-clears',
+    (t) async {
+      final rpc = DiscRpc();
+      rpc.handler = (method, params) async {
+        if (method == 'discussion.post') return {};
+        if (method == 'discussion.show') {
+          return {
+            'discussion': {
+              'key': 'room',
+              'title': 'Design review',
+              'status': 'active',
+              'rev': 2,
+              'msgSeq': 2,
+            },
+            'members': [
+              {'id': 'a1', 'name': 'Claude', 'agent': 'claude', 'owner': 'self'},
+              {'id': 'a2', 'name': 'Codex', 'agent': 'codex', 'owner': 'self'},
+            ],
+            'messages': [
+              {
+                'id': 'm1',
+                'seq': 1,
+                'kind': 'reply',
+                'authorMember': 'a1',
+                'authorAgent': 'claude',
+                'authorName': 'Claude',
+                'body': 'Initial proposal ready.',
+                'createdAt': '2026-11-24T08:00:00Z',
+              },
+            ],
+            'executions': <DiscJson>[],
+            'more': false,
+            'moreAfter': false,
+          };
+        }
+        return {};
+      };
+      final model = DiscModel(rpc);
+      await t.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.light),
+          home: DiscussionRoom(
+            api: DiscussionApi(model),
+            room: 'room',
+            self: 'self',
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+
+      // 长按 Agent 回复点「引用」：自动预选 Claude；点引用芯片的 × 后自动收回
+      await t.longPress(find.text('Initial proposal ready.'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('引用'));
+      await t.pumpAndSettle();
+      expect(find.text('@Claude'), findsOneWidget);
+      // 取消引用芯片：自动收回预选的 @Claude
+      final quoteChip = find.ancestor(
+        of: find.textContaining('引用 · '),
+        matching: find.byType(Container),
+      ).first;
+      await t.tap(
+        find.descendant(
+          of: quoteChip,
+          matching: find.byIcon(Icons.close_rounded),
+        ),
+      );
+      await t.pumpAndSettle();
+      expect(find.text('@Claude'), findsNothing);
+
+      // 连续通过 @ 选两位 Agent，发出去同时带 target 和 targets 数组
+      await t.enterText(find.byType(TextField), '@');
+      await t.pumpAndSettle();
+      await t.tap(find.text('Claude').last);
+      await t.pumpAndSettle();
+      await t.enterText(find.byType(TextField), '@');
+      await t.pumpAndSettle();
+      await t.tap(find.text('Codex').last);
+      await t.pumpAndSettle();
+      expect(find.text('@Claude'), findsOneWidget);
+      expect(find.text('@Codex'), findsOneWidget);
+
+      await t.enterText(find.byType(TextField), 'Review both');
+      await t.pump();
+      await t.tap(find.byTooltip('发送'));
+      await t.pumpAndSettle();
+
+      final post = rpc.calls.lastWhere((c) => c.method == 'discussion.post');
+      expect(post.params['target'], 'a1');
+      expect(post.params['targets'], ['a1', 'a2']);
+
+      await t.pumpWidget(const SizedBox());
+      await t.pumpAndSettle();
+      model.dispose();
+    },
+  );
+  testWidgets(
+    'execution renders live progress and toggles collapsible activity trace',
+    (t) async {
+      final rpc = DiscRpc();
+      final now = DateTime.now().toUtc();
+      rpc.handler = (method, params) async {
+        if (method == 'discussion.execution.trace') {
+          return {
+            'execId': params['execution'],
+            'eventCount': 3,
+            'finalized': true,
+            'summary': {
+              'tools': 2,
+              'commands': 1,
+              'events': [
+                {
+                  'kind': 'tool',
+                  'name': 'Read',
+                  'detail': 'lib/discussions/room.dart',
+                  'count': 2,
+                },
+                {
+                  'kind': 'cli',
+                  'name': 'shell',
+                  'detail': 'fvm flutter test',
+                },
+              ],
+            },
+          };
+        }
+        if (method == 'discussion.show') {
+          return {
+            'discussion': {
+              'key': 'room',
+              'title': 'Design review',
+              'status': 'active',
+              'rev': 3,
+              'msgSeq': 2,
+            },
+            'members': [
+              {'id': 'a1', 'name': 'Claude', 'agent': 'claude', 'owner': 'self'},
+              {'id': 'a2', 'name': 'Codex', 'agent': 'codex', 'owner': 'self'},
+              {'id': 'a3', 'name': 'Remote', 'agent': 'grok', 'owner': 'other'},
+            ],
+            'messages': [
+              {
+                'id': 'm1',
+                'seq': 1,
+                'kind': 'user',
+                'body': 'Check together',
+                'target': 'a1',
+                'targetName': 'Claude',
+                'targets': [
+                  {'id': 'a1', 'name': 'Claude', 'execution': 'x1'},
+                  {'id': 'a2', 'name': 'Codex', 'execution': 'x2'},
+                  {'id': 'a3', 'name': 'Remote', 'execution': 'x3'},
+                ],
+                'createdAt': now.subtract(const Duration(minutes: 1)).toIso8601String(),
+              },
+            ],
+            'executions': [
+              {
+                'id': 'x1',
+                'message': 'm1',
+                'member': 'a1',
+                'state': 'done',
+                'owner': 'self',
+                'traceCount': 3,
+                'startedAt': now.subtract(const Duration(seconds: 50)).toIso8601String(),
+                'endedAt': now.subtract(const Duration(seconds: 22)).toIso8601String(),
+              },
+              {
+                'id': 'x2',
+                'message': 'm1',
+                'member': 'a2',
+                'state': 'running',
+                'owner': 'self',
+                'startedAt': now.subtract(const Duration(seconds: 18)).toIso8601String(),
+              },
+              {
+                'id': 'x3',
+                'message': 'm1',
+                'member': 'a3',
+                'state': 'running',
+                'owner': 'other',
+                'startedAt': now.subtract(const Duration(seconds: 10)).toIso8601String(),
+              },
+            ],
+            'progress': {
+              'x2': {
+                'tool': 'shell',
+                'toolInput': 'go test ./internal/store',
+                'subagents': 1,
+              },
+            },
+            'more': false,
+            'moreAfter': false,
+          };
+        }
+        return {};
+      };
+      final model = DiscModel(rpc);
+      await t.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.light),
+          home: DiscussionRoom(
+            api: DiscussionApi(model),
+            room: 'room',
+            self: 'self',
+          ),
+        ),
+      );
+      await settle(t);
+
+      // 多 @ 标签和实时进度行（工具名 + 命令 + 子代理角标 + 已完成固定耗时）
+      expect(find.text('@Claude'), findsOneWidget);
+      expect(find.text('@Codex'), findsOneWidget);
+      expect(find.text('@Remote'), findsOneWidget);
+      expect(find.text('28s'), findsOneWidget);
+      expect(find.text('go test ./internal/store'), findsOneWidget);
+      expect(find.text('1 个子代理'), findsOneWidget);
+
+      // 仅本机拥有者显示过程按钮：x1 有「过程 (3)」，x2 有「过程」，他人电脑的 x3 不显示
+      expect(find.text('过程 (3)'), findsOneWidget);
+      expect(find.text('过程'), findsOneWidget);
+
+      // 点击展开 x1 过程面板：触发 discussion.execution.trace 并渲染事件
+      await t.tap(find.text('过程 (3)'));
+      await settle(t);
+      expect(
+        rpc.calls.any(
+          (c) =>
+              c.method == 'discussion.execution.trace' &&
+              c.params['execution'] == 'x1',
+        ),
+        isTrue,
+      );
+      expect(find.text('lib/discussions/room.dart'), findsOneWidget);
+      expect(find.text('x2'), findsOneWidget);
+      expect(find.text('fvm flutter test'), findsOneWidget);
+
+      // 再点收起
+      await t.tap(find.text('过程 (3)'));
+      await settle(t);
+      expect(find.text('lib/discussions/room.dart'), findsNothing);
+
+      await t.pumpWidget(const SizedBox());
+      await settle(t);
+      model.dispose();
+    },
+  );
 }

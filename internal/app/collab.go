@@ -360,7 +360,8 @@ func (a *app) personRow(c *ui.Context, d *discDetail, p discPerson) {
 	}
 	contextMenu(c, row, func(pm *popMenu) {
 		if pm.Item(m.CollabMentionPerson(p.Name)).Icon(iconAt).Chosen() {
-			a.disc.mention, a.disc.target, a.disc.answerQ = p.FP, "", ""
+			a.disc.setMention(p.FP)
+			a.disc.answerQ = ""
 		}
 		if d.hostRole() && !p.Host {
 			pm.Separator()

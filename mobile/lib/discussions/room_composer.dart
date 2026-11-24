@@ -85,22 +85,71 @@ extension _ComposerViews on _DiscussionRoomState {
     return [...can, ...others, ...people];
   }
 
-  /// 选中一项：能用的 Agent、人从正文里去掉 @ 和打的字，换成接收者；
+  void addTarget(String id) {
+    if (id.isEmpty || targets.contains(id) || targets.length >= discMaxTargets) {
+      return;
+    }
+    targets = [...targets, id];
+    mention = '';
+    autoTarget = '';
+  }
+
+  void removeTarget(String id) {
+    targets = targets.where((t) => t != id).toList();
+    autoTarget = '';
+  }
+
+  void setMention(String fp) {
+    mention = fp;
+    targets = [];
+    autoTarget = '';
+  }
+
+  /// 引用消息：若是仍在讨论中且可用的 Agent 消息，且当前未手动选接收者，则自动预选该 Agent。
+  void quoteMessage(DiscJson m) {
+    quote = discText(m, 'id');
+    answering = '';
+    answerTo = '';
+    final kind = discText(m, 'kind');
+    final authorMember = discText(m, 'authorMember');
+    if (authorMember.isNotEmpty &&
+        const {'reply', 'question', 'delegate'}.contains(kind) &&
+        targets.isEmpty &&
+        mention.isEmpty) {
+      final mem = activeMembers
+          .where((x) => x['id'] == authorMember)
+          .firstOrNull;
+      if (mem != null && canUse(mem)) {
+        targets = [authorMember];
+        autoTarget = authorMember;
+      }
+    }
+  }
+
+  /// 取消引用：若接收者仍是引用时自动预选的那一个且用户未改动，一并收回。
+  void clearQuote() {
+    quote = '';
+    if (autoTarget.isNotEmpty &&
+        targets.length == 1 &&
+        targets.first == autoTarget) {
+      targets = [];
+    }
+    autoTarget = '';
+  }
+
+  /// 选中一项：能用的 Agent 追加到接收者列表（最多 8 个），人从正文里去掉 @ 和打的字，换成提醒；
   /// 用不了的别人的 Agent 补全名字留在正文里，提醒它的拥有者。
   void pickAt(int at, String query, _AtCandidate x) {
     final r = input.text.runes.toList();
     final end = (at + 1 + query.runes.length).clamp(0, r.length);
     var insert = '';
     if (x.member != null && x.can) {
-      target = discText(x.member!, 'id');
-      mention = '';
+      addTarget(discText(x.member!, 'id'));
     } else if (x.member != null) {
-      mention = discText(x.member!, 'owner');
-      target = '';
+      setMention(discText(x.member!, 'owner'));
       insert = '@${x.name} ';
     } else {
-      mention = discText(x.person!, 'fp');
-      target = '';
+      setMention(discText(x.person!, 'fp'));
     }
     final before = String.fromCharCodes(r.sublist(0, at)) + insert;
     input.value = TextEditingValue(
@@ -167,6 +216,14 @@ extension _ComposerViews on _DiscussionRoomState {
                         style: TextStyle(fontSize: Fs.body, color: c.text),
                       ),
                     ),
+                    if (x.member != null &&
+                        x.can &&
+                        targets.contains(discText(x.member!, 'id')))
+                      Icon(
+                        Icons.check_rounded,
+                        size: Ic.inline,
+                        color: c.accent,
+                      ),
                     if (x.member != null && !x.can)
                       Text(
                         l.discAtOthersAgent(
@@ -187,6 +244,7 @@ extension _ComposerViews on _DiscussionRoomState {
     String text,
     VoidCallback? onRemove, {
     Color? color,
+    Widget? leading,
     VoidCallback? onTap,
   }) {
     final c = PosseColors.of(context);
@@ -201,6 +259,7 @@ extension _ComposerViews on _DiscussionRoomState {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (leading != null) ...[leading, const SizedBox(width: 4)],
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 200),
               child: Text(
@@ -253,7 +312,11 @@ extension _ComposerViews on _DiscussionRoomState {
         ),
       );
     }
-    final targetRow = activeMembers.where((m) => m['id'] == target).firstOrNull;
+    final targetRows = <DiscJson>[
+      for (final id in targets)
+        if (activeMembers.any((m) => m['id'] == id))
+          activeMembers.firstWhere((m) => m['id'] == id),
+    ];
     final quoteRow = state.messages.where((m) => m['id'] == quote).firstOrNull;
     final chips = [
       if (answering.isNotEmpty)
@@ -270,22 +333,38 @@ extension _ComposerViews on _DiscussionRoomState {
                 },
           color: c.honey,
         ),
-      if (targetRow != null)
+      for (final m in targetRows)
         chip(
-          '@${discText(targetRow, 'name')}',
-          locked ? null : () => update(() => target = ''),
+          '@${discText(m, 'name')}',
+          locked
+              ? null
+              : () {
+                  update(() => removeTarget(discText(m, 'id')));
+                  scheduleSave();
+                },
           color: c.accent,
+          leading: AgentTile(agent: discText(m, 'agent'), size: Ic.inline),
         ),
       if (mention.isNotEmpty)
         chip(
           '@${personName(mention).isEmpty ? mention : personName(mention)}',
-          locked ? null : () => update(() => mention = ''),
+          locked
+              ? null
+              : () {
+                  update(() => mention = '');
+                  scheduleSave();
+                },
           color: c.accent,
         ),
       if (quote.isNotEmpty)
         chip(
           '${l.discQuote} · ${quoteRow == null ? '' : plainSnippet(discText(quoteRow, 'body'))}',
-          locked ? null : () => update(() => quote = ''),
+          locked
+              ? null
+              : () {
+                  update(clearQuote);
+                  scheduleSave();
+                },
           onTap: () => locate(quote),
         ),
       // 回答不带附件：回答模式下先藏起来，回到发言时还在
@@ -293,6 +372,16 @@ extension _ComposerViews on _DiscussionRoomState {
         for (final a in attachments)
           chip(discText(a, 'name'), locked ? null : () => removeAttachment(a)),
     ];
+    final hint = answering.isNotEmpty
+        ? l.discAnswerHint
+        : targetRows.length == 1
+        ? l.discMessageHintTo(discText(targetRows.first, 'name'))
+        : targetRows.length > 1
+        ? l.discMessageHintToMany(
+            discText(targetRows.first, 'name'),
+            targetRows.length - 1,
+          )
+        : l.discMessageHint;
     final ready =
         !sending &&
         !uploading &&
@@ -372,9 +461,8 @@ extension _ComposerViews on _DiscussionRoomState {
                           onTap: () => update(() {}),
                           style: TextStyle(fontSize: Fs.body, color: c.text),
                           decoration: InputDecoration(
-                            hintText: answering.isNotEmpty
-                                ? l.discAnswerHint
-                                : l.discMessageHint,
+                            hintText: hint,
+                            hintMaxLines: 1,
                             filled: false,
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,

@@ -124,7 +124,7 @@ func Open(path string) (*Store, error) {
 	}
 	// 单写者足够，也避免 SQLITE_BUSY
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema + taskSchema + traceSchema + discussionSchema + antigravitySchema); err != nil {
+	if _, err := db.Exec(schema + taskSchema + traceSchema + discussionSchema + discTraceSchema + antigravitySchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
@@ -158,14 +158,17 @@ func Open(path string) (*Store, error) {
 		{"discussions", "summary", "TEXT NOT NULL DEFAULT ''"}, {"discussions", "summary_seq", "INTEGER NOT NULL DEFAULT 0"},
 		{"discussions", "summary_by", "TEXT NOT NULL DEFAULT ''"}, {"discussions", "summary_at", "INTEGER NOT NULL DEFAULT 0"},
 		{"discussions", "client_id", "TEXT NOT NULL DEFAULT ''"},
+		{"disc_messages", "targets", "TEXT NOT NULL DEFAULT ''"},
 	} {
 		if err := addColumn(db, c[0], c[1], c[2]); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("migrate: %w", err)
 		}
 	}
-	// 回答的唯一约束改成讨论内唯一（加入者的问题 ID 来自别的电脑），新索引在 collabSchema 里
-	if _, err := db.Exec(`DROP INDEX IF EXISTS disc_messages_answer;` + collabSchema); err != nil {
+	// 回答的唯一约束改成讨论内唯一（加入者的问题 ID 来自别的电脑），新索引在 collabSchema 里；
+	// 初始执行的唯一约束改成 (message, member)，允许一条消息同时 @ 多位成员各排一轮。
+	if _, err := db.Exec(`DROP INDEX IF EXISTS disc_messages_answer; DROP INDEX IF EXISTS disc_executions_request;
+		CREATE UNIQUE INDEX IF NOT EXISTS disc_executions_request2 ON disc_executions(message, member) WHERE retry_of = '';` + collabSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}

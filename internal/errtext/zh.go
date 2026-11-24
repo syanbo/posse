@@ -638,5 +638,9 @@ var zh = [][2]string{
 	{"directory exceeds the maximum depth of %d", "文件夹层级超过 {1} 层上限"},
 	{"directory exceeds the maximum of %d items", "文件夹条目数超过 {1} 项上限"},
 	{"directory exceeds the maximum size of %d bytes", "文件夹总大小超过上限（{1} 字节）"},
+	{"at most %d agents per message", "一条消息最多同时 @ {1} 位成员"},
+	{"choose either agents or a person to mention", "不能在同一条消息里同时 @ 成员和提醒别人"},
+	{"the host of this discussion runs an older Posse that only supports one @ agent per message", "房主的 Posse 版本较旧，暂不支持在一条消息里同时 @ 多位成员"},
+	{"execution trace is only available on the agent's computer", "执行过程只能在运行这个 Agent 的电脑上查看"},
 	{"not found", "找不到"},
 }

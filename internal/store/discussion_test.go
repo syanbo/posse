@@ -631,3 +631,51 @@ func TestSummaryKeepsShortBacklog(t *testing.T) {
 		t.Fatalf("skipped %d, unreceived %d", src.Skipped, len(src.Unreceived))
 	}
 }
+
+func TestPostMessageMultiAndExecTrace(t *testing.T) {
+	s := openTestStore(t)
+	d, a := newDiscussion(t, s)
+	b := Member{ID: NewID("dmb_"), Discussion: d.Key, Name: "B", Agent: "codex", WorkspaceID: "w2", CreatedAt: time.Now()}
+	if err := s.AddMember(b); err != nil {
+		t.Fatal(err)
+	}
+	// 同时 @ 两位成员（带重复 ID 自动去重）
+	m, xs, dup, err := s.PostMessageMulti(PostInput{
+		Discussion: d.Key, ClientID: "c-multi", Body: "review together", Targets: []string{a.ID, b.ID, a.ID}, At: time.Now(),
+	})
+	if err != nil || dup || len(xs) != 2 {
+		t.Fatalf("multi post: err=%v dup=%v len=%d", err, dup, len(xs))
+	}
+	if m.Target != a.ID || m.Execution != xs[0].ID || len(m.TargetList()) != 2 || m.TargetList()[1].ID != b.ID || m.TargetList()[1].Execution != xs[1].ID {
+		t.Fatalf("targets %+v", m)
+	}
+	// ClientID 去重返回全部执行
+	m2, xs2, dup2, err := s.PostMessageMulti(PostInput{
+		Discussion: d.Key, ClientID: "c-multi", Body: "review together", Targets: []string{a.ID, b.ID}, At: time.Now(),
+	})
+	if err != nil || !dup2 || m2.ID != m.ID || len(xs2) != 2 {
+		t.Fatalf("dedup: err=%v dup=%v len=%d", err, dup2, len(xs2))
+	}
+	// 同时 @ 成员和提醒别人被拒绝
+	if _, _, _, err := s.PostMessageMulti(PostInput{
+		Discussion: d.Key, Body: "both", Targets: []string{a.ID}, Mention: d.Host, At: time.Now(),
+	}); err == nil {
+		t.Fatal("expected conflict when mixing targets and mention")
+	}
+	// 本机过程锚点与固化
+	if err := s.SaveExecTraceAnchor(xs[0].ID, "claude", "s1", "/tmp/s1.jsonl", 128, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	sum := ExecTraceSummary{Tools: 2, Commands: 1, Events: []ExecTraceEvent{{Kind: "cli", Name: "shell", Detail: "go test ./..."}}}
+	if err := s.FinalizeExecTrace(xs[0].ID, "claude", "s1", "/tmp/s1.jsonl", 512, sum, 3, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	tr, err := s.ExecTrace(xs[0].ID)
+	if err != nil || !tr.Finalized || tr.StartOffset != 128 || tr.EndOffset != 512 || tr.EventCount != 3 || len(tr.Summary.Events) != 1 {
+		t.Fatalf("trace %+v err=%v", tr, err)
+	}
+	counts := s.ExecTraceCounts([]string{xs[0].ID, xs[1].ID})
+	if counts[xs[0].ID] != 3 || counts[xs[1].ID] != 0 {
+		t.Fatalf("counts %+v", counts)
+	}
+}

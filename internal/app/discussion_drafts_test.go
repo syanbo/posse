@@ -39,7 +39,7 @@ func TestDiscussionDraftSwitchPreservesContentAndRequest(t *testing.T) {
 	}
 	file.Close()
 	t.Cleanup(func() { os.Remove(file.Name()) })
-	want := discDraftContent{text: "draft", target: "member", quote: "message", atts: []string{file.Name()}, answerQ: "question", mention: "person"}
+	want := discDraftContent{text: "draft", targets: []string{"member"}, quote: "message", atts: []string{file.Name()}, answerQ: "question", mention: "person"}
 	a.disc.discDraftContent = want
 	request := a.disc.beginSend("", "draft", false)
 	switchDraft(a, "b")

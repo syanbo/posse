@@ -33,12 +33,15 @@ extension _MessageViews on _DiscussionRoomState {
         : monthDayTime(l, time, h24: h24);
   }
 
-  Widget message(DiscJson m) {
-    final c = PosseColors.of(context);
-    final mine = own(m);
-    // 一轮执行只在最后一条提到它的消息下面显示一次（请求、提问、回复都带着它）
+  /// 一条消息下应展示的执行列表：过滤已被重试替代的旧轮次与已落到后续回复上的轮次，按消息目标顺序排列。
+  List<DiscJson> execsFor(DiscJson m) {
     final at = state.messages.indexOf(m);
-    final xs = state.executions
+    final superseded = <String>{
+      for (final x in state.executions)
+        if (discText(x, 'retryOf').isNotEmpty) discText(x, 'retryOf'),
+    };
+    final list = state.executions
+        .where((x) => !superseded.contains(discText(x, 'id')))
         .where((x) => x['message'] == m['id'] || x['id'] == m['execution'])
         .where(
           (x) => !state.messages
@@ -46,6 +49,24 @@ extension _MessageViews on _DiscussionRoomState {
               .any((later) => later['execution'] == x['id']),
         )
         .toList();
+    final targets = discTargets(m);
+    if (targets.length > 1 && list.length > 1) {
+      final order = <String, int>{
+        for (var i = 0; i < targets.length; i++) discText(targets[i], 'id'): i,
+      };
+      list.sort(
+        (a, b) => (order[discText(a, 'member')] ?? targets.length).compareTo(
+          order[discText(b, 'member')] ?? targets.length,
+        ),
+      );
+    }
+    return list;
+  }
+
+  Widget message(DiscJson m) {
+    final c = PosseColors.of(context);
+    final mine = own(m);
+    final xs = execsFor(m);
     final canAnswer =
         writable &&
         m['kind'] == 'question' &&
@@ -58,7 +79,8 @@ extension _MessageViews on _DiscussionRoomState {
     final body = discText(m, 'body');
     final align = mine ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final tags = [
-      if (discText(m, 'targetName').isNotEmpty) discText(m, 'targetName'),
+      for (final t in discTargets(m))
+        if (discText(t, 'name').isNotEmpty) discText(t, 'name'),
       if (discText(m, 'mentionName').isNotEmpty) discText(m, 'mentionName'),
     ];
     final header = Row(
@@ -335,11 +357,211 @@ extension _MessageViews on _DiscussionRoomState {
     );
   }
 
-  /// 一轮执行：状态图形、谁、状态，原因跟在后面；自己的执行能做的操作是一排文字按钮。
+  String execDuration(DiscJson x) {
+    final started = DateTime.tryParse(discText(x, 'startedAt'));
+    if (started == null) return '';
+    final st = discText(x, 'state');
+    if (const {'starting', 'running', 'waiting'}.contains(st)) {
+      return discFormatDuration(DateTime.now().difference(started));
+    }
+    final ended = DateTime.tryParse(discText(x, 'endedAt'));
+    if (ended == null || ended.isBefore(started)) return '';
+    return discFormatDuration(ended.difference(started));
+  }
+
+  bool canShowTrace(DiscJson x) {
+    if (!discMine(x, widget.self)) return false;
+    final st = discText(x, 'state');
+    if (const {'starting', 'running', 'waiting'}.contains(st)) return true;
+    final id = discText(x, 'id');
+    return discInt(x, 'traceCount') > 0 ||
+        discInt(traceCache[id] ?? {}, 'eventCount') > 0;
+  }
+
+  /// 进行中本机执行的一行实时进度：优先显示当前工具/命令摘要，其次屏幕状态行，附后台子代理数。
+  Widget execProgressLine(DiscJson x, bool mine) {
+    final c = PosseColors.of(context);
+    final l = context.l10n;
+    final p = discMap(state.progress[discText(x, 'id')]);
+    final tool = discText(p, 'tool');
+    final toolInput = discText(p, 'toolInput');
+    final phase = discText(p, 'phase');
+    final subs = discInt(p, 'subagents');
+    if (tool.isEmpty && phase.isEmpty && subs == 0) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: EdgeInsets.only(left: mine ? 0 : Ic.inline + 6, top: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (tool.isNotEmpty) ...[
+            Icon(
+              tool.toLowerCase() == 'bash' || tool.toLowerCase() == 'shell'
+                  ? Icons.terminal_rounded
+                  : Icons.code_rounded,
+              size: Ic.inline,
+              color: c.muted,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              tool,
+              style: mono(Fs.small, color: c.text).copyWith(fontWeight: Fw.medium),
+            ),
+            if (toolInput.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  toolInput,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: mono(Fs.small, color: c.muted),
+                ),
+              ),
+            ],
+          ] else if (phase.isNotEmpty)
+            Flexible(
+              child: Text(
+                phase,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: Fs.small, color: c.muted),
+              ),
+            ),
+          if (subs > 0) ...[
+            if (tool.isNotEmpty || phase.isNotEmpty) const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: c.soft(c.accent),
+                borderRadius: BorderRadius.circular(Rd.small),
+              ),
+              child: Text(
+                l.discSubagents(subs),
+                style: TextStyle(fontSize: Fs.tiny, color: c.accent),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget execTracePanel(String execId, bool mine) {
+    final c = PosseColors.of(context);
+    final l = context.l10n;
+    final cached = traceCache[execId];
+    final loading = traceLoading.contains(execId);
+    final err = traceError[execId];
+    final events = cached == null
+        ? const <DiscJson>[]
+        : discList(discMap(cached['summary'])['events']);
+
+    Widget content;
+    if (cached == null && loading) {
+      content = Text(
+        l.discTraceLoading,
+        style: TextStyle(fontSize: Fs.small, color: c.faint),
+      );
+    } else if (cached == null && err != null) {
+      content = Text(
+        friendlyError(err, l),
+        style: TextStyle(fontSize: Fs.small, color: c.danger),
+      );
+    } else if (events.isEmpty) {
+      content = Text(
+        l.discTraceEmpty,
+        style: TextStyle(fontSize: Fs.small, color: c.faint),
+      );
+    } else {
+      final rows = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < events.length; i++) ...[
+            if (i > 0) const SizedBox(height: 4),
+            execTraceEventRow(events[i]),
+          ],
+        ],
+      );
+      content = events.length > 8
+          ? ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: SingleChildScrollView(child: rows),
+            )
+          : rows;
+    }
+
+    return Padding(
+      padding: EdgeInsets.only(left: mine ? 0 : Ic.inline + 6, top: 6),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 320),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: c.fill,
+          borderRadius: BorderRadius.circular(Rd.button),
+        ),
+        child: content,
+      ),
+    );
+  }
+
+  Widget execTraceEventRow(DiscJson ev) {
+    final c = PosseColors.of(context);
+    final kind = discText(ev, 'kind');
+    final name = discText(ev, 'name');
+    final detail = discText(ev, 'detail');
+    final count = discInt(ev, 'count');
+    final failed = ev['failed'] == true;
+    final (IconData icon, Color iconColor) = switch (kind) {
+      'cli' => (Icons.terminal_rounded, c.teal),
+      'mcp' => (Icons.extension_rounded, c.sky),
+      'skill' => (Icons.auto_awesome_rounded, c.accent),
+      'web' => (Icons.language_rounded, c.plum),
+      'search' => (Icons.search_rounded, c.plum),
+      _ => (Icons.code_rounded, c.muted),
+    };
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: Ic.inline, color: failed ? c.danger : iconColor),
+        const SizedBox(width: 6),
+        Text(
+          name,
+          style: mono(
+            Fs.small,
+            color: failed ? c.danger : c.text,
+          ).copyWith(fontWeight: Fw.medium),
+        ),
+        if (detail.isNotEmpty) ...[
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              detail,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: mono(Fs.small, color: c.muted),
+            ),
+          ),
+        ],
+        if (count > 1) ...[
+          const SizedBox(width: 4),
+          Text(
+            'x$count',
+            style: TextStyle(fontSize: Fs.small, color: c.faint),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// 一轮执行：状态图形、谁、状态、耗时，原因跟在后面；本机活跃轮次带实时进度，支持展开过程摘要。
   Widget execution(DiscJson x, bool mine) {
     final c = PosseColors.of(context);
     final l = context.l10n;
+    final id = discText(x, 'id');
     final st = discText(x, 'state');
+    final isActive = const {'starting', 'running', 'waiting'}.contains(st);
     final member = state.members
         .where((m) => m['id'] == x['member'])
         .firstOrNull;
@@ -365,6 +587,7 @@ extension _MessageViews on _DiscussionRoomState {
       ),
     };
     final reason = discText(x, 'reasonText');
+    final dur = execDuration(x);
     final line = [
       if (name.isNotEmpty) name,
       status(st),
@@ -379,7 +602,7 @@ extension _MessageViews on _DiscussionRoomState {
           () => action('cancel', {'execution': x['id']}),
         ));
       }
-      if (['starting', 'running', 'waiting'].contains(st)) {
+      if (isActive) {
         actions.add((
           l.discStop,
           () => action('stop', {'execution': x['id']}, title: l.discStop),
@@ -421,6 +644,12 @@ extension _MessageViews on _DiscussionRoomState {
         actions.add((l.discOpenWorker, () => worker(x)));
       }
     }
+    final showTrace = canShowTrace(x);
+    final traceOpen = showTrace && expandedTrace.contains(id);
+    final traceCount = max(
+      discInt(x, 'traceCount'),
+      discInt(traceCache[id] ?? {}, 'eventCount'),
+    );
     return Column(
       crossAxisAlignment: mine
           ? CrossAxisAlignment.end
@@ -443,14 +672,50 @@ extension _MessageViews on _DiscussionRoomState {
                 style: TextStyle(fontSize: Fs.small, color: color),
               ),
             ),
+            if (dur.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Text(dur, style: statusLineStyle(c.faint)),
+            ],
           ],
         ),
-        if (actions.isNotEmpty)
+        if (isActive && discMine(x, widget.self)) execProgressLine(x, mine),
+        if (actions.isNotEmpty || showTrace)
           Padding(
-            padding: const EdgeInsets.only(left: Ic.inline + 6, top: 2),
+            padding: EdgeInsets.only(left: mine ? 0 : Ic.inline + 6, top: 2),
             child: Wrap(
               spacing: 16,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
+                if (showTrace)
+                  GestureDetector(
+                    onTap: () => toggleTrace(id),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            traceCount > 0
+                                ? l.discTraceCount(traceCount)
+                                : l.discTrace,
+                            style: TextStyle(
+                              fontSize: Fs.small,
+                              fontWeight: Fw.medium,
+                              color: c.accent,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(
+                            traceOpen
+                                ? Icons.expand_more_rounded
+                                : Icons.chevron_right_rounded,
+                            size: Ic.inline,
+                            color: c.accent,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 for (final (label, onTap) in actions)
                   GestureDetector(
                     onTap: onTap,
@@ -469,6 +734,7 @@ extension _MessageViews on _DiscussionRoomState {
               ],
             ),
           ),
+        if (traceOpen) execTracePanel(id, mine),
       ],
     );
   }
@@ -517,11 +783,7 @@ extension _MessageViews on _DiscussionRoomState {
     if (!mounted) return;
     switch (picked) {
       case 'quote':
-        update(() {
-          quote = discText(m, 'id');
-          answering = '';
-          answerTo = '';
-        });
+        update(() => quoteMessage(m));
         focus.requestFocus();
         scheduleSave();
       case 'key':

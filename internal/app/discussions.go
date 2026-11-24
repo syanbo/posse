@@ -64,6 +64,7 @@ type discAttachment struct {
 type discMessage struct {
 	ID, Discussion, Kind, AuthorMember, AuthorName, AuthorAgent, Body, Quote, Target, TargetName, Execution, Question, Report, Outcome string
 	Seq, Rev                                                                                                                           int64
+	Targets                                                                                                                            []discTargetRef
 	Attachments                                                                                                                        []discAttachment
 	KeyAt                                                                                                                              *time.Time
 	CreatedAt                                                                                                                          time.Time
@@ -71,11 +72,21 @@ type discMessage struct {
 	Choices                                                                                                                            []string
 }
 
+func (m discMessage) targetList() []discTargetRef {
+	if len(m.Targets) > 0 {
+		return m.Targets
+	}
+	if m.Target != "" || m.TargetName != "" {
+		return []discTargetRef{{ID: m.Target, Name: m.TargetName, Execution: m.Execution}}
+	}
+	return nil
+}
+
 type discExec struct {
 	ID, Discussion, Member, Message, RetryOf, State, Reason, TaskID, Worker, Agent, Model, Effort, Role, WorkspaceID, WorkspaceLabel, Reply string
 	ConfigVersion, Rev                                                                                                                      int64
 	Confirmed, Terminal                                                                                                                     bool
-	ContextLen, Acked                                                                                                                       int
+	ContextLen, Acked, TraceCount                                                                                                           int
 	CreatedAt                                                                                                                               time.Time
 	StartedAt, EndedAt                                                                                                                      *time.Time
 	Owner                                                                                                                                   string
@@ -96,8 +107,9 @@ type discView struct {
 	More       bool
 	MoreAfter  bool
 	Delta      bool
-	Live       map[string]string // worker 终端 ID → agent 状态，"gone" 是终端不在了
-	Collab     *discCollab       // 局域网协作的状态：分享的、加入的讨论才有，每次都带
+	Live       map[string]string       // worker 终端 ID → agent 状态，"gone" 是终端不在了
+	Progress   map[string]discProgress // 活跃执行的实时进度（仅本机拥有）
+	Collab     *discCollab             // 局域网协作的状态：分享的、加入的讨论才有，每次都带
 }
 
 // discPoll 是一次轮询拿到的讨论数据：列表（序号没变时 Items 为空）和打开的讨论（全量或增量）。
@@ -121,9 +133,10 @@ type discDetail struct {
 	// moreAfter 是读进来的不是最新的一段（定位到远处、往前翻丢掉了后面）：新消息不接上来，给「跳到最新」
 	moreAfter bool
 	rev       int64
-	md        map[string][]mdBlock // 消息 ID → 解析好的 Markdown（正文不会改，解析一次），跟着窗口回收
-	live      map[string]string    // worker 终端的实时状态，每次轮询都换
-	collab    *discCollab          // 局域网协作的状态，每次轮询都换
+	md        map[string][]mdBlock    // 消息 ID → 解析好的 Markdown（正文不会改，解析一次），跟着窗口回收
+	live      map[string]string       // worker 终端的实时状态，每次轮询都换
+	progress  map[string]discProgress // 本机活跃执行的实时进度，每次轮询都换
+	collab    *discCollab             // 局域网协作的状态，每次轮询都换
 	// summaryMD 是解析好的摘要，summarySrc 是它对应的原文（摘要换了才重新解析）
 	summaryMD  []mdBlock
 	summarySrc string
@@ -185,16 +198,36 @@ func (d *discDetail) member(id string) *discMember {
 	return nil
 }
 
-// execFor 是这条消息最近的一轮执行（重试过的取最后一轮）。
-func (d *discDetail) execFor(msgID string) *discExec {
-	var found *discExec
+// execsFor 是这条消息上每个目标成员最近的一轮执行（重试过的取最后一轮），按目标先后顺序排好。
+func (d *discDetail) execsFor(msgID string, targets []discTargetRef) []discExec {
+	latest := map[string]discExec{}
 	for _, x := range d.execs {
-		if x.Message == msgID && (found == nil || x.CreatedAt.After(found.CreatedAt)) {
-			x := x
-			found = &x
+		if x.Message != msgID {
+			continue
+		}
+		if cur, ok := latest[x.Member]; !ok || x.CreatedAt.After(cur.CreatedAt) {
+			latest[x.Member] = x
 		}
 	}
-	return found
+	if len(latest) == 0 {
+		return nil
+	}
+	out := make([]discExec, 0, len(latest))
+	seen := map[string]bool{}
+	for _, t := range targets {
+		if x, ok := latest[t.ID]; ok {
+			out = append(out, x)
+			seen[t.ID] = true
+		}
+	}
+	var extra []discExec
+	for mem, x := range latest {
+		if !seen[mem] {
+			extra = append(extra, x)
+		}
+	}
+	slices.SortFunc(extra, func(a, b discExec) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	return append(out, extra...)
 }
 
 // merge 把增量并进来：消息按 ID 替换或按序号插入，执行、成员按 ID 替换，关键消息跟着消息的标记增减。
@@ -235,7 +268,7 @@ func (d *discDetail) merge(v discView) {
 
 func newDiscDetail(v discView) *discDetail {
 	d := &discDetail{key: v.Discussion.Key, info: v.Discussion, msgs: v.Messages, members: v.Members, keyMsgs: v.Key, more: v.More,
-		moreAfter: v.MoreAfter, rev: v.Discussion.Rev, execs: map[string]discExec{}, md: map[string][]mdBlock{}, live: v.Live, collab: v.Collab}
+		moreAfter: v.MoreAfter, rev: v.Discussion.Rev, execs: map[string]discExec{}, md: map[string][]mdBlock{}, live: v.Live, progress: v.Progress, collab: v.Collab}
 	for _, x := range v.Executions {
 		d.execs[x.ID] = x
 	}
@@ -288,6 +321,12 @@ type discBoard struct {
 
 	at   atState // 输入框里打 @ 的候选
 	view ui.Rect // 消息区上一帧的位置：图片只解码看得见的
+
+	// 执行过程折叠状态和按需拉取的缓存（只在内存，不写 ui.json）
+	traceOpen map[string]bool
+	traceData map[string]discExecTrace
+	traceBusy map[string]bool
+	traceAt   map[string]time.Time
 }
 
 type memberForm struct {
@@ -436,6 +475,7 @@ func (a *app) applyDiscussions(p *discPoll) {
 		}
 		if b.d != nil && b.d.key == p.key && v.Live != nil {
 			b.d.live = v.Live
+			b.d.progress = v.Progress
 			b.d.collab = v.Collab
 		}
 		if b.d != nil {
@@ -1082,7 +1122,7 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 				a.discMessageTags(c, d, msg, colors(t).tint)
 				ui.Spacer(c)
 				if hovered {
-					a.discMessageActions(c, msg)
+					a.discMessageActions(c, d, msg)
 				}
 			})
 			a.discMessageBody(c, d, msg)
@@ -1096,21 +1136,26 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 						}
 					}
 					if pressable(textButton(c.Key("answer-"+msg.ID), m.DiscAnswerEllipsis())).Clicked() {
-						b.answerQ, b.quote, b.target = msg.Question, "", ""
+						b.answerQ, b.quote = msg.Question, ""
+						b.clearRecipients()
 					}
 				})
 			}
 			// 请求下面跟它的执行状态：用户发的，和成员 @ 成员的
-			if (msg.Kind == "user" || msg.Kind == "delegate") && msg.Execution != "" {
-				if x := d.execFor(msg.ID); x != nil {
-					a.execCard(c, d, *x)
+			if msg.Kind == "user" || msg.Kind == "delegate" {
+				if xs := d.execsFor(msg.ID, msg.targetList()); len(xs) > 0 {
+					ui.Column(c).Gap(6).Children(func() {
+						for _, x := range xs {
+							a.execCard(c, d, x, len(xs) > 1)
+						}
+					})
 				}
 			}
 		})
 	})
 	contextMenu(c, row, func(pm *popMenu) {
 		if !archived && pm.Item(m.DiscQuote()).Icon(iconQuote).Chosen() {
-			b.quote = msg.ID
+			a.quoteDiscMessage(d, msg)
 		}
 		keyLabel := m.DiscMarkKey()
 		if msg.KeyAt != nil {
@@ -1135,20 +1180,24 @@ func (a *app) discOwnMessage(c *ui.Context, d *discDetail, msg discMessage, hove
 	ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Gap(6).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Start).Justify(ui.End).Children(func() {
 			if hovered {
-				a.discMessageActions(c, msg)
+				a.discMessageActions(c, d, msg)
 			}
 			ui.Column(c).Gap(6).AlignItems(ui.End).MaxWidthPercent(80).Shrink(1).MinWidth(0).Children(func() {
-				ui.Row(c).Gap(8).AlignItems(ui.Center).MinHeight(compactBox()).Children(func() {
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Wrap().Justify(ui.End).MinHeight(compactBox()).Children(func() {
 					a.discMessageTags(c, d, msg, colors(t).tint)
 				})
 				a.discMessageBody(c, d, msg)
 			})
 			a.personAvatar(c, a.selfAvatar(), a.selfName(d), tileMedium())
 		})
-		if msg.Kind == "user" && msg.Execution != "" {
-			if x := d.execFor(msg.ID); x != nil {
+		if msg.Kind == "user" {
+			if xs := d.execsFor(msg.ID, msg.targetList()); len(xs) > 0 {
 				ui.Row(c).Justify(ui.End).Padding(0, tileMedium()+6, 0, 0).Children(func() {
-					ui.Column(c).MaxWidthPercent(80).Shrink(1).MinWidth(0).Children(func() { a.execCard(c, d, *x) })
+					ui.Column(c).Gap(6).AlignItems(ui.End).MaxWidthPercent(80).Shrink(1).MinWidth(0).Children(func() {
+						for _, x := range xs {
+							a.execCard(c, d, x, len(xs) > 1)
+						}
+					})
 				})
 			}
 		}
@@ -1172,8 +1221,11 @@ func (a *app) discMessageTags(c *ui.Context, d *discDetail, msg discMessage, chi
 	case msg.Kind == "answer":
 		ui.Text(c, m.DiscAnswerLabel()).FontSize(fsSmall).TextColor(t.TextMuted)
 	}
-	if msg.TargetName != "" {
-		ui.Text(c, "@"+msg.TargetName).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.Accent).
+	for _, tgt := range msg.targetList() {
+		if tgt.Name == "" {
+			continue
+		}
+		ui.Text(c, "@"+tgt.Name).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.Accent).
 			Padding(2, 6).Radius(rSmall).Background(chip).Shrink(0)
 	}
 	if msg.MentionName != "" {
@@ -1193,11 +1245,11 @@ func (a *app) discMessageTags(c *ui.Context, d *discDetail, msg discMessage, chi
 
 // discMessageActions 是悬停时的引用、标关键两个按钮（不悬停时不生成：看不见又点不动的按钮不留在辅助功能里），
 // 同样的操作在右键菜单里也有。
-func (a *app) discMessageActions(c *ui.Context, msg discMessage) {
+func (a *app) discMessageActions(c *ui.Context, d *discDetail, msg discMessage) {
 	m := L(c)
 	ui.Row(c).Gap(2).Shrink(0).Children(func() {
 		if iconButtonSized(c.Key("quote-"+msg.ID), iconQuote, m.DiscQuote(), compactBox(), smallIcon()).Clicked() {
-			a.disc.quote = msg.ID
+			a.quoteDiscMessage(d, msg)
 		}
 		tip := m.DiscMarkKey()
 		if msg.KeyAt != nil {
@@ -1419,8 +1471,9 @@ func execReason(m locales.Messages, x discExec) string {
 	return errtext.Text(fmt.Errorf("%s", x.Reason))
 }
 
-func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
+func (a *app) execCard(c *ui.Context, d *discDetail, x discExec, showMember bool) {
 	t, m := c.Theme(), L(c)
+	b := &a.disc
 	text, glyph := execStatus(m, x)
 	member := d.member(x.Member)
 	name := x.Member
@@ -1442,12 +1495,23 @@ func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
 	// 不用你处理的（结束了的，别人电脑上正常进行的）收成一行小字，不画卡片；要处理的才是卡片
 	settled := x.State == "done" || x.State == "cancelled" || x.State == "stopped" || x.State == "merged"
 	if !lost && (accept == "" || accept == "accepted") && (settled || !mine && (x.State == "queued" || x.State == "claimed" || x.State == "starting" || x.State == "running")) {
-		a.execLine(c, d, x, text, glyph, mine)
+		a.execLine(c, d, x, name, text, glyph, mine, showMember)
 		return
 	}
+	var cached *discExecTrace
+	if tr, ok := b.traceData[x.ID]; ok {
+		cached = &tr
+	}
+	traceable := canShowTrace(x, mine, cached)
+	traceOpen := traceable && b.traceOpen[x.ID]
+	dur := execDurationText(c, x)
 	box := ui.Column(c.Key("exec-"+x.ID)).Gap(8).Padding(8, 12).Radius(rControl).Background(colors(t).wash)
 	box.Children(func() {
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Wrap().Children(func() {
+			if showMember {
+				agentTile(c, x.Agent, fsSmall)
+				ui.Text(c, name).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.Text).Shrink(0)
+			}
 			switch glyph {
 			case "ended":
 				ui.Icon(c, iconHexOutline).FontSize(fsSmall).TextColor(t.TextMuted)
@@ -1464,6 +1528,9 @@ func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
 				color = t.Danger
 			}
 			ui.Text(c, text).FontSize(fsSmall).FontWeight(fwMedium).TextColor(color).Shrink(0)
+			if dur != "" {
+				ui.Text(c, dur).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+			}
 			if mine && x.WorkspaceLabel != "" {
 				ui.Icon(c, iconBranch).FontSize(fsSmall).TextColor(t.TextMuted)
 				ui.Text(c, x.WorkspaceLabel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
@@ -1471,7 +1538,18 @@ func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
 			if x.RetryOf != "" {
 				ui.Text(c, m.DiscRetried()).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 			}
+			if traceable {
+				a.discTraceToggle(c, x, traceOpen)
+			}
 		})
+		if mine && (x.State == "starting" || x.State == "running" || x.State == "waiting") {
+			if p, ok := d.progress[x.ID]; ok {
+				a.discProgressLine(c, p)
+			}
+		}
+		if traceOpen {
+			a.discTracePanel(c, x)
+		}
 		if x.Reason != "" && x.State != "done" {
 			ui.Text(c, execReason(m, x)).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45).Selectable()
 		}
@@ -1535,29 +1613,51 @@ func (a *app) execCard(c *ui.Context, d *discDetail, x discExec) {
 	})
 }
 
-// execLine 是收成一行的执行状态：状态、成员、在哪，后面跟着能点的打开终端、查看任务（文字链接，不是按钮）。
-func (a *app) execLine(c *ui.Context, d *discDetail, x discExec, text, glyph string, mine bool) {
+// execLine 是收成一行的执行状态：状态、耗时，后面跟着能点的过程、打开终端、查看任务（文字链接，不是按钮）。
+func (a *app) execLine(c *ui.Context, d *discDetail, x discExec, name, text, glyph string, mine, showMember bool) {
 	t, m := c.Theme(), L(c)
-	ui.Row(c.Key("exec-" + x.ID)).Gap(6).AlignItems(ui.Center).Wrap().Children(func() {
-		if glyph == "ended" {
-			ui.Icon(c, iconHexOutline).FontSize(fsSmall).TextColor(t.TextMuted)
-		} else {
-			statusGlyph(c, glyph, fsSmall)
-		}
-		// 发给谁看消息上的 @ 标签，在哪、谁的看右栏的成员：这里只写状态
-		ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
-		if !mine {
-			return
-		}
-		link := func(key, label string) bool {
-			l := ui.Text(c.Key(key+x.ID), label).FontSize(fsSmall).TextColor(t.Accent).Role(ui.RoleButton).Shrink(0)
-			return l.Clicked()
-		}
-		if d.alive(x) && link("open-", m.DiscOpenTerminal()) {
-			a.openTerminal(x.WorkspaceID, x.Worker)
-		}
-		if x.TaskID != "" && a.task(x.TaskID) != nil && link("task-", m.DiscViewTask()) {
-			a.openTask(x.TaskID)
+	b := &a.disc
+	var cached *discExecTrace
+	if tr, ok := b.traceData[x.ID]; ok {
+		cached = &tr
+	}
+	traceable := canShowTrace(x, mine, cached)
+	traceOpen := traceable && b.traceOpen[x.ID]
+	dur := execDurationText(c, x)
+	ui.Column(c.Key("exec-" + x.ID)).Gap(4).MinWidth(0).Children(func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().Children(func() {
+			if showMember {
+				agentTile(c, x.Agent, fsSmall)
+				ui.Text(c, name).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Shrink(0)
+			}
+			if glyph == "ended" {
+				ui.Icon(c, iconHexOutline).FontSize(fsSmall).TextColor(t.TextMuted)
+			} else {
+				statusGlyph(c, glyph, fsSmall)
+			}
+			ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+			if dur != "" {
+				ui.Text(c, dur).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+			}
+			if traceable {
+				a.discTraceToggle(c, x, traceOpen)
+			}
+			if !mine {
+				return
+			}
+			link := func(key, label string) bool {
+				l := ui.Text(c.Key(key+x.ID), label).FontSize(fsSmall).TextColor(t.Accent).Role(ui.RoleButton).Shrink(0)
+				return l.Clicked()
+			}
+			if d.alive(x) && link("open-", m.DiscOpenTerminal()) {
+				a.openTerminal(x.WorkspaceID, x.Worker)
+			}
+			if x.TaskID != "" && a.task(x.TaskID) != nil && link("task-", m.DiscViewTask()) {
+				a.openTask(x.TaskID)
+			}
+		})
+		if traceOpen {
+			a.discTracePanel(c, x)
 		}
 	})
 }
@@ -1634,8 +1734,17 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 	t, m := c.Theme(), L(c)
 	b := &a.disc
 	members := activeMembers(d)
-	if b.target != "" && !slices.ContainsFunc(members, func(x discMember) bool { return x.ID == b.target && d.canUse(x) }) {
-		b.target = ""
+	if len(b.targets) > 0 {
+		var keep []string
+		for _, tid := range b.targets {
+			if slices.ContainsFunc(members, func(x discMember) bool { return x.ID == tid && d.canUse(x) }) {
+				keep = append(keep, tid)
+			}
+		}
+		b.targets = keep
+		if b.autoTarget != "" && !b.hasTarget(b.autoTarget) {
+			b.autoTarget = ""
+		}
 	}
 	if b.mention != "" && d.person(b.mention) == nil {
 		b.mention = ""
@@ -1656,8 +1765,8 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 	var cands []atCandidate
 	sent := false
 	box.Children(func() {
-		// 接收者一直写明：发给所有人（只是发言）或 @ 一位成员（为它排一轮执行）
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		// 接收者一直写明：发给所有人（只是发言）或 @ 一到多位成员（各自并行排一轮执行）
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Wrap().Children(func() {
 			if question != nil {
 				ui.Icon(c, iconReply).FontSize(fsSmall).TextColor(colors(t).honey)
 				ui.Text(c, m.DiscAnsweringTo(question.AuthorName)).FontSize(fsSmall).FontWeight(fwMedium).TextColor(colors(t).honey).Shrink(1)
@@ -1667,23 +1776,40 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 				}
 				return
 			}
-			label := m.DiscEveryone()
-			if mem := d.member(b.target); mem != nil {
-				label = "@" + mem.Name
-			} else if p := d.person(b.mention); p != nil {
-				label = m.CollabMentionLabel(p.Name)
-			}
-			btn := ui.Row(c.Key("target")).Gap(4).Padding(2, 8).Shrink(0).Radius(rSmall).Background(colors(t).fill).AlignItems(ui.Center).Role(ui.RoleButton)
-			btn.Children(func() {
-				if mem := d.member(b.target); mem != nil {
-					agentTile(c, mem.Agent, fsSmall)
+			for _, tid := range b.targets {
+				mem := d.member(tid)
+				if mem == nil {
+					continue
 				}
-				ui.Text(c, label).FontSize(fsSmall).FontWeight(fwMedium).SingleLine()
-				ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted)
-			})
+				ui.Row(c.Key("target-chip-"+tid)).Gap(4).Padding(2, 6).Shrink(0).Radius(rSmall).Background(colors(t).tint).AlignItems(ui.Center).Children(func() {
+					agentTile(c, mem.Agent, fsSmall)
+					ui.Text(c, "@"+mem.Name).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.Accent).SingleLine()
+					if iconButtonSized(c.Key("rm-target-"+tid), iconClose, m.CommonRemove(), miniBox(), fsSmall).Clicked() {
+						b.removeTarget(tid)
+					}
+				})
+			}
+			var btn ui.Element
+			if len(b.targets) == 0 {
+				label := m.DiscEveryone()
+				if p := d.person(b.mention); p != nil {
+					label = m.CollabMentionLabel(p.Name)
+				}
+				btn = ui.Row(c.Key("target")).Gap(4).Padding(2, 8).Shrink(0).Radius(rSmall).Background(colors(t).fill).AlignItems(ui.Center).Role(ui.RoleButton)
+				btn.Children(func() {
+					ui.Text(c, label).FontSize(fsSmall).FontWeight(fwMedium).SingleLine()
+					ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted)
+				})
+			} else {
+				btn = ui.Row(c.Key("target")).Gap(2).Padding(2, 6).Shrink(0).Radius(rSmall).Background(colors(t).fill).AlignItems(ui.Center).Role(ui.RoleButton).Tooltip(m.DiscAddTarget())
+				btn.Children(func() {
+					ui.Icon(c, iconPlus).FontSize(fsSmall).TextColor(t.TextMuted)
+					ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted)
+				})
+			}
 			menuButton(c, btn, func(pm *popMenu) {
-				if pm.Item(m.DiscEveryoneHint()).Checked(b.target == "" && b.mention == "").Chosen() {
-					b.target, b.mention = "", ""
+				if pm.Item(m.DiscEveryoneHint()).Checked(len(b.targets) == 0 && b.mention == "").Chosen() {
+					b.clearRecipients()
 				}
 				if len(members) > 0 {
 					pm.Separator()
@@ -1694,9 +1820,9 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 					if !d.mine(mem.Owner) {
 						label = m.CollabOthersAgent(mem.Name, d.ownerName(mem.Owner))
 					}
-					it := pm.Item(label).Checked(b.target == mem.ID).Lead(func() { agentTile(c, mem.Agent, smallIcon()) }).Disabled(!d.canUse(mem))
+					it := pm.Item(label).Checked(b.hasTarget(mem.ID)).Lead(func() { agentTile(c, mem.Agent, smallIcon()) }).Disabled(!d.canUse(mem))
 					if it.Chosen() {
-						b.target, b.mention = mem.ID, ""
+						b.toggleTarget(mem.ID, discMaxTargets)
 					}
 				}
 				if d.collab != nil {
@@ -1711,7 +1837,7 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 					}
 					for _, p := range people {
 						if pm.Item(m.CollabMentionPerson(p.Name)).Icon(iconAt).Checked(b.mention == p.FP).Chosen() {
-							b.mention, b.target = p.FP, ""
+							b.setMention(p.FP)
 						}
 					}
 				}
@@ -1725,7 +1851,7 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Box(c).Grow(1).Shrink(1).MinWidth(0).Children(func() { a.quoteBlock(c, d, b.quote) })
 				if iconButtonSized(c.Key("cancel-quote"), iconClose, m.CommonCancel(), miniBox(), fsSmall).Clicked() {
-					b.quote = ""
+					a.clearDiscQuote()
 				}
 			})
 		}
@@ -1746,8 +1872,14 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 		placeholder := m.DiscPlaceholder()
 		if question != nil {
 			placeholder = m.DiscAnswerPlaceholder()
-		} else if mem := d.member(b.target); mem != nil {
-			placeholder = m.DiscPlaceholderTo(mem.Name)
+		} else if len(b.targets) == 1 {
+			if mem := d.member(b.targets[0]); mem != nil {
+				placeholder = m.DiscPlaceholderTo(mem.Name)
+			}
+		} else if len(b.targets) > 1 {
+			if mem := d.member(b.targets[0]); mem != nil {
+				placeholder = m.DiscPlaceholderToMany(mem.Name, len(b.targets)-1)
+			}
 		}
 		in = ui.TextAreaBase(c.Key("disc-input"), &b.text).Placeholder(placeholder).Label(placeholder).Height(sz(64)).FontSize(fsBody)
 		sent = a.pressedIn(in, "sendMessage") && !in.Composing()
@@ -1826,7 +1958,14 @@ func (a *app) discComposer(c *ui.Context, d *discDetail) {
 		b.clientID = fmt.Sprintf("c_%x", time.Now().UnixNano())
 	}
 	b.sending = true
-	params := map[string]any{"discussion": d.key, "body": strings.TrimSpace(b.text), "target": b.target, "mention": b.mention, "quote": b.quote, "clientId": b.clientID}
+	firstTarget := ""
+	if len(b.targets) > 0 {
+		firstTarget = b.targets[0]
+	}
+	params := map[string]any{"discussion": d.key, "body": strings.TrimSpace(b.text), "target": firstTarget, "mention": b.mention, "quote": b.quote, "clientId": b.clientID}
+	if len(b.targets) > 1 {
+		params["targets"] = slices.Clone(b.targets)
+	}
 	var atts []map[string]string
 	for _, p := range b.atts {
 		atts = append(atts, map[string]string{"path": p})
@@ -1974,6 +2113,7 @@ func (a *app) loadPage(key, mode string, params map[string]any, jump string) {
 			}
 			if v.Live != nil {
 				d.live = v.Live
+				d.progress = v.Progress
 			}
 			b.follow = false
 			switch mode {
@@ -2304,17 +2444,20 @@ func (a *app) memberRow(c *ui.Context, d *discDetail, mem discMember) {
 		// 别人的 Agent：拥有者放开给你的可以 @ 它，否则只能 @ 它的拥有者请他安排
 		contextMenu(c, row, func(pm *popMenu) {
 			if d.canUse(mem) && pm.Item(m.DiscMention()).Icon(iconAt).Chosen() {
-				a.disc.target, a.disc.mention, a.disc.answerQ = mem.ID, "", ""
+				a.disc.addTarget(mem.ID, discMaxTargets)
+				a.disc.answerQ = ""
 			}
 			if p := d.person(mem.Owner); p != nil && p.State == "active" && pm.Item(m.CollabMentionPerson(p.Name)).Icon(iconAt).Chosen() {
-				a.disc.mention, a.disc.target, a.disc.answerQ = p.FP, "", ""
+				a.disc.setMention(p.FP)
+				a.disc.answerQ = ""
 			}
 		})
 		return
 	}
 	contextMenu(c, row, func(pm *popMenu) {
 		if pm.Item(m.DiscMention()).Icon(iconAt).Chosen() {
-			a.disc.target, a.disc.mention, a.disc.answerQ = mem.ID, "", ""
+			a.disc.addTarget(mem.ID, discMaxTargets)
+			a.disc.answerQ = ""
 		}
 		if mem.Terminal != nil && d.live[mem.Worker] != "gone" && pm.Item(m.DiscOpenTerminal()).Icon(iconTerminal).Chosen() {
 			a.openTerminal(mem.Terminal.WorkspaceID, mem.Worker)

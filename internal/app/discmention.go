@@ -80,7 +80,7 @@ type atState struct {
 	focus   bool // 下一帧把焦点还给输入框（点了候选）
 }
 
-// pickAt 选中一项：能用的 Agent、人从正文里去掉 @ 和打的字，换成接收者；用不了的别人的 Agent 补全名字留在正文里，提醒它的拥有者。
+// pickAt 选中一项：能用的 Agent 追加到接收者列表，人换成提醒接收者；用不了的别人的 Agent 补全名字留在正文里，提醒它的拥有者。
 func (a *app) pickAt(text string, at int, query string, x atCandidate) string {
 	b := &a.disc
 	r := []rune(text)
@@ -88,12 +88,12 @@ func (a *app) pickAt(text string, at int, query string, x atCandidate) string {
 	var insert string
 	switch {
 	case x.member != nil && x.can:
-		b.target, b.mention = x.member.ID, ""
+		b.addTarget(x.member.ID, discMaxTargets)
 	case x.member != nil:
-		b.mention, b.target = x.member.Owner, ""
+		b.setMention(x.member.Owner)
 		insert = "@" + x.member.Name + " "
 	default:
-		b.mention, b.target = x.person.FP, ""
+		b.setMention(x.person.FP)
 	}
 	out := string(r[:at]) + insert + string(r[end:])
 	b.at = atState{caretTo: at + len([]rune(insert)), focus: true}

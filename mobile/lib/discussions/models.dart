@@ -40,6 +40,37 @@ String discAuthorName(DiscJson m, DiscJson collab) {
   return latest.isEmpty ? saved : latest;
 }
 
+const discMaxTargets = 8;
+
+/// 消息里被 @ 的 Agent 列表：优先读 targets 数组，旧消息回退到单个 target/targetName/execution。
+List<DiscJson> discTargets(DiscJson m) {
+  final list = discList(m['targets']);
+  if (list.isNotEmpty) return list;
+  final id = discText(m, 'target');
+  final name = discText(m, 'targetName');
+  final exec = discText(m, 'execution');
+  if (id.isEmpty && name.isEmpty) return const [];
+  return [
+    {
+      'id': id,
+      'name': name,
+      if (exec.isNotEmpty) 'execution': exec,
+    },
+  ];
+}
+
+/// 紧凑的执行耗时（如 18s、2m 15s、1h 4m）。
+String discFormatDuration(Duration d) {
+  final secs = d.isNegative ? 0 : d.inSeconds;
+  if (secs < 60) return '${secs}s';
+  final mins = secs ~/ 60;
+  final rem = secs % 60;
+  if (mins < 60) return rem == 0 ? '${mins}m' : '${mins}m ${rem}s';
+  final hours = mins ~/ 60;
+  final m = mins % 60;
+  return m == 0 ? '${hours}h' : '${hours}h ${m}m';
+}
+
 /// 消息窗口与讨论版本分开：读旧历史时只更新状态，不把新增消息拼到旧页后面。
 class DiscussionState extends ChangeNotifier {
   DiscussionState(this.call, this.room);
@@ -48,6 +79,7 @@ class DiscussionState extends ChangeNotifier {
   DiscJson discussion = {};
   DiscJson collab = {};
   DiscJson live = {};
+  DiscJson progress = {};
   List<DiscJson> messages = [];
   List<DiscJson> members = [];
   List<DiscJson> executions = [];
@@ -135,6 +167,7 @@ class DiscussionState extends ChangeNotifier {
     if (updateRev) rev = discInt(discussion, 'rev');
     collab = discMap(result['collab']);
     live = discMap(result['live']);
+    progress = discMap(result['progress']);
     members = replace
         ? discList(result['members'])
         : merge(members, discList(result['members']));

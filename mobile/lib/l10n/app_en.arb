@@ -3726,6 +3726,57 @@
   "@discGuestNote": {
     "description": "Mobile discussions: shown in place of the input when this computer joined the discussion as a read-only viewer"
   },
+  "discMessageHintTo": "Request for {name}",
+  "@discMessageHintTo": {
+    "description": "Mobile discussions: composer placeholder when addressing one agent member",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discMessageHintToMany": "Request for {first} and {count, plural, one {1 other} other {{count} others}}",
+  "@discMessageHintToMany": {
+    "description": "Mobile discussions: composer placeholder when addressing multiple agent members",
+    "placeholders": {
+      "first": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discTrace": "Activity",
+  "@discTrace": {
+    "description": "Mobile discussions: toggle button to expand or collapse tool activity on a running execution"
+  },
+  "discTraceCount": "Activity ({count})",
+  "@discTraceCount": {
+    "description": "Mobile discussions: toggle button showing how many tool calls an execution recorded",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discTraceLoading": "Loading activity…",
+  "@discTraceLoading": {
+    "description": "Mobile discussions: placeholder while fetching an execution's activity trace"
+  },
+  "discTraceEmpty": "No tool calls recorded in this round",
+  "@discTraceEmpty": {
+    "description": "Mobile discussions: shown when an expanded execution has no recorded tool calls yet"
+  },
+  "discSubagents": "{count, plural, one {1 subagent} other {{count} subagents}}",
+  "@discSubagents": {
+    "description": "Mobile discussions: badge showing how many background subagents are running for an execution",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "chatContextTokens": "{used} tokens",
   "@chatContextTokens": {
     "description": "Context token usage when the model window is unknown.",

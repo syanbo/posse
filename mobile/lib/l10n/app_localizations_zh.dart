@@ -2660,6 +2660,35 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discGuestNote => '你是以只读身份加入的，不能在这里发言。';
 
   @override
+  String discMessageHintTo(String name) {
+    return '给 $name 的请求';
+  }
+
+  @override
+  String discMessageHintToMany(String first, int count) {
+    return '给 $first 和另外 $count 位成员的请求';
+  }
+
+  @override
+  String get discTrace => '过程';
+
+  @override
+  String discTraceCount(int count) {
+    return '过程 ($count)';
+  }
+
+  @override
+  String get discTraceLoading => '正在读取过程…';
+
+  @override
+  String get discTraceEmpty => '本轮暂无工具调用记录';
+
+  @override
+  String discSubagents(int count) {
+    return '$count 个子代理';
+  }
+
+  @override
   String chatContextTokens(int used) {
     final intl.NumberFormat usedNumberFormat = intl.NumberFormat.decimalPattern(
       localeName,

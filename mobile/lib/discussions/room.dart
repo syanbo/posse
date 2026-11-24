@@ -56,10 +56,17 @@ class _DiscussionRoomState extends State<DiscussionRoom>
   final scroll = ScrollController();
   late final observer = ListObserverController(controller: scroll)
     ..cacheJumpIndexOffset = false;
-  Timer? timer, saveTimer;
+  Timer? timer, saveTimer, clockTimer;
   bool foreground = true, sending = false, uploading = false, restored = false;
   double progress = 0;
-  String quote = '', target = '', mention = '', clientId = '';
+  String quote = '', mention = '', clientId = '', autoTarget = '';
+  List<String> targets = [];
+
+  /// 已展开过程面板的执行 ID、缓存的摘要、加载态与报错（仅留内存，不落盘）。
+  final expandedTrace = <String>{};
+  final traceCache = <String, DiscJson>{};
+  final traceLoading = <String>{};
+  final traceError = <String, Object>{};
 
   /// 正在回答的问题（question ID）和提问的 Agent 名字：输入框此时发的是回答。
   String answering = '', answerTo = '';
@@ -126,7 +133,12 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     setState(() {
       input.text = discText(saved, 'body');
       quote = discText(saved, 'quote');
-      target = discText(saved, 'target');
+      final savedTargets = discStrings(saved['targets']);
+      final legacyTarget = discText(saved, 'target');
+      targets = savedTargets.isNotEmpty
+          ? savedTargets.take(discMaxTargets).toList()
+          : (legacyTarget.isNotEmpty ? [legacyTarget] : []);
+      autoTarget = '';
       mention = discText(saved, 'mention');
       answering = discText(saved, 'answering');
       answerTo = discText(saved, 'answerTo');
@@ -156,7 +168,58 @@ class _DiscussionRoomState extends State<DiscussionRoom>
   }
 
   void changed() {
+    syncClock();
     if (mounted) setState(() {});
+  }
+
+  /// 仅当存在带 startedAt 的进行中执行时开启 1 秒耗时刷新，其余时刻不挂定时器。
+  void syncClock() {
+    final need = state.executions.any(
+      (x) =>
+          const {'starting', 'running', 'waiting'}.contains(x['state']) &&
+          DateTime.tryParse(discText(x, 'startedAt')) != null,
+    );
+    if (need) {
+      clockTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted && foreground) setState(() {});
+      });
+    } else {
+      clockTimer?.cancel();
+      clockTimer = null;
+    }
+  }
+
+  void toggleTrace(String execId) {
+    if (execId.isEmpty) return;
+    if (expandedTrace.contains(execId)) {
+      setState(() => expandedTrace.remove(execId));
+      return;
+    }
+    setState(() => expandedTrace.add(execId));
+    unawaited(loadTrace(execId));
+  }
+
+  Future<void> loadTrace(String execId) async {
+    if (execId.isEmpty || traceLoading.contains(execId)) return;
+    setState(() {
+      traceLoading.add(execId);
+      traceError.remove(execId);
+    });
+    try {
+      final r = await widget.api.call('execution.trace', {'execution': execId});
+      if (!mounted) return;
+      setState(() {
+        traceCache[execId] = r;
+        traceError.remove(execId);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (!traceCache.containsKey(execId)) traceError[execId] = e;
+      });
+    } finally {
+      if (mounted) setState(() => traceLoading.remove(execId));
+    }
   }
 
   @override
@@ -173,6 +236,7 @@ class _DiscussionRoomState extends State<DiscussionRoom>
   void dispose() {
     timer?.cancel();
     saveTimer?.cancel();
+    clockTimer?.cancel();
     unawaited(save());
     WidgetsBinding.instance.removeObserver(this);
     input.removeListener(scheduleSave);
@@ -197,7 +261,8 @@ class _DiscussionRoomState extends State<DiscussionRoom>
   Future<void> save() => storage.write({
     'body': input.text,
     'quote': quote,
-    'target': target,
+    'target': targets.isEmpty ? '' : targets.first,
+    'targets': targets,
     'mention': mention,
     'answering': answering,
     'answerTo': answerTo,
@@ -228,6 +293,17 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     final follow = atBottom;
     await state.poll();
     if (!mounted) return;
+    // 已展开的过程面板：进行中或尚未固化时顺手刷新
+    for (final id in expandedTrace.toList()) {
+      final x = state.executions.where((e) => e['id'] == id).firstOrNull;
+      if (x == null || !discMine(x, widget.self)) continue;
+      final active = const {'starting', 'running', 'waiting'}.contains(
+        x['state'],
+      );
+      if (active || traceCache[id]?['finalized'] != true) {
+        unawaited(loadTrace(id));
+      }
+    }
     if (follow && state.latest) await bottom();
   }
 
@@ -297,7 +373,8 @@ class _DiscussionRoomState extends State<DiscussionRoom>
             'discussion': widget.room,
             'body': input.text,
             'quote': quote,
-            'target': target,
+            'target': targets.isEmpty ? '' : targets.first,
+            if (targets.length > 1) 'targets': List<String>.from(targets),
             'mention': mention,
             'clientId': clientId,
             'attachments': attachments
@@ -312,7 +389,8 @@ class _DiscussionRoomState extends State<DiscussionRoom>
       setState(() {
         input.clear();
         quote = '';
-        target = '';
+        targets = [];
+        autoTarget = '';
         mention = '';
         answering = '';
         answerTo = '';
@@ -588,7 +666,8 @@ class _DiscussionRoomState extends State<DiscussionRoom>
       answering = discText(m, 'question');
       answerTo = discAuthorName(m, state.collab);
       quote = '';
-      target = '';
+      targets = [];
+      autoTarget = '';
       mention = '';
     });
     focus.requestFocus();

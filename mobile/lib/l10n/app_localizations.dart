@@ -4700,6 +4700,48 @@ abstract class AppLocalizations {
   /// **'You joined as a viewer and can’t post here.'**
   String get discGuestNote;
 
+  /// Mobile discussions: composer placeholder when addressing one agent member
+  ///
+  /// In en, this message translates to:
+  /// **'Request for {name}'**
+  String discMessageHintTo(String name);
+
+  /// Mobile discussions: composer placeholder when addressing multiple agent members
+  ///
+  /// In en, this message translates to:
+  /// **'Request for {first} and {count, plural, one {1 other} other {{count} others}}'**
+  String discMessageHintToMany(String first, int count);
+
+  /// Mobile discussions: toggle button to expand or collapse tool activity on a running execution
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get discTrace;
+
+  /// Mobile discussions: toggle button showing how many tool calls an execution recorded
+  ///
+  /// In en, this message translates to:
+  /// **'Activity ({count})'**
+  String discTraceCount(int count);
+
+  /// Mobile discussions: placeholder while fetching an execution's activity trace
+  ///
+  /// In en, this message translates to:
+  /// **'Loading activity…'**
+  String get discTraceLoading;
+
+  /// Mobile discussions: shown when an expanded execution has no recorded tool calls yet
+  ///
+  /// In en, this message translates to:
+  /// **'No tool calls recorded in this round'**
+  String get discTraceEmpty;
+
+  /// Mobile discussions: badge showing how many background subagents are running for an execution
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 subagent} other {{count} subagents}}'**
+  String discSubagents(int count);
+
   /// Context token usage when the model window is unknown.
   ///
   /// In en, this message translates to:
