@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,8 @@ type PermRequest struct {
 	Agent      string          `json:"agent"`
 	Tool       string          `json:"tool"`
 	Summary    string          `json:"summary"`
+	RuleKeys   []string        `json:"-"` // 用于「本会话允许同类」精确匹配（复合命令需每段均命中）
+	RuleLabel  string          `json:"ruleLabel,omitempty"`
 	Payload    json.RawMessage `json:"-"`
 	CreatedAt  time.Time       `json:"createdAt"`
 }
@@ -39,10 +42,38 @@ type permOutcome struct {
 
 // permissionHub 在常驻进程内统一协调手机与飞书的权限审批：任意一端先决定即放行，并通知其余端刷新卡片。
 type permissionHub struct {
-	mu      sync.Mutex
-	waits   map[string]*permWaiter
-	watcher PermWatcher
-	timeout time.Duration // 飞书审批挂起时长，默认 3 分钟（测试可覆写）
+	mu           sync.Mutex
+	waits        map[string]*permWaiter
+	sessionRules map[string]map[string]bool // terminalID -> 已在本会话放行的同类规则键集合
+	watcher      PermWatcher
+	timeout      time.Duration // 飞书审批挂起时长，默认 3 分钟（测试可覆写）
+}
+
+func (h *permissionHub) ClearTerminal(terminalID string) {
+	if terminalID == "" {
+		return
+	}
+	h.mu.Lock()
+	delete(h.sessionRules, terminalID)
+	h.mu.Unlock()
+}
+
+func (h *permissionHub) isSessionAllowed(terminalID string, keys []string) bool {
+	if terminalID == "" || len(keys) == 0 {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	rules := h.sessionRules[terminalID]
+	if len(rules) == 0 {
+		return false
+	}
+	for _, k := range keys {
+		if !rules[k] {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *permissionHub) SetWatcher(w PermWatcher) {
@@ -61,19 +92,40 @@ func (h *permissionHub) larkTimeout() time.Duration {
 	return 3 * time.Minute
 }
 
-// Decide 由飞书卡片回调或测试提交审批决策（allow | deny）。
+// Decide 由飞书卡片回调或测试提交审批决策（allow | allow_session | deny）。
 func (h *permissionHub) Decide(reqID, behavior, source string) bool {
-	if behavior != "allow" && behavior != "deny" {
+	if behavior != "allow" && behavior != "allow_session" && behavior != "deny" {
 		return false
 	}
 	h.mu.Lock()
 	w := h.waits[reqID]
+	if w != nil && behavior == "allow_session" && w.req.TerminalID != "" && len(w.req.RuleKeys) > 0 {
+		if h.sessionRules == nil {
+			h.sessionRules = map[string]map[string]bool{}
+		}
+		if h.sessionRules[w.req.TerminalID] == nil {
+			h.sessionRules[w.req.TerminalID] = map[string]bool{}
+		}
+		for _, k := range w.req.RuleKeys {
+			h.sessionRules[w.req.TerminalID][k] = true
+		}
+	}
 	h.mu.Unlock()
 	if w == nil {
 		return false
 	}
+	outBehavior := behavior
+	outSource := source
+	if behavior == "allow_session" {
+		outBehavior = "allow"
+		if outSource != "" {
+			outSource += ":session"
+		} else {
+			outSource = "session"
+		}
+	}
 	select {
-	case w.ch <- permOutcome{behavior: behavior, source: source}:
+	case w.ch <- permOutcome{behavior: outBehavior, source: outSource}:
 		return true
 	default:
 		return false
@@ -81,6 +133,7 @@ func (h *permissionHub) Decide(reqID, behavior, source string) bool {
 }
 
 // Hold 同时协调飞书审批与手机审批。
+// - 若当前终端已经通过「本会话允许同类」记住了该请求的全部规则键，立即返回 allow，不再弹飞书卡片；
 // - 当飞书网关认领该终端时，挂起最多 3 分钟，期间手机、飞书卡片按钮或桌面键入任一触发即结束；
 // - 飞书未认领时，Claude 回退到原有手机 30 秒挂起逻辑；Antigravity 不挂起直接返回空串。
 func (h *permissionHub) Hold(
@@ -90,7 +143,10 @@ func (h *permissionHub) Hold(
 	mobileHold func(context.Context) string,
 	lastInput func() time.Time,
 ) string {
-	tool, summary := parsePermPayload(agentName, payload)
+	tool, summary, ruleKeys, ruleLabel := parsePermPayload(agentName, payload)
+	if h.isSessionAllowed(terminalID, ruleKeys) {
+		return "allow"
+	}
 	var buf [12]byte
 	_, _ = rand.Read(buf[:])
 	req := PermRequest{
@@ -99,6 +155,8 @@ func (h *permissionHub) Hold(
 		Agent:      agentName,
 		Tool:       tool,
 		Summary:    summary,
+		RuleKeys:   ruleKeys,
+		RuleLabel:  ruleLabel,
 		Payload:    payload,
 		CreatedAt:  time.Now(),
 	}
@@ -173,11 +231,12 @@ done:
 	return out.behavior
 }
 
-// parsePermPayload 从 Claude PermissionRequest 或 Antigravity PreToolUse 负载中提取工具名与一行摘要。
-func parsePermPayload(agentName string, payload json.RawMessage) (tool, summary string) {
+// parsePermPayload 从 Claude PermissionRequest 或 Antigravity PreToolUse 负载中提取工具名、摘要与本会话同类规则键。
+func parsePermPayload(agentName string, payload json.RawMessage) (tool, summary string, ruleKeys []string, ruleLabel string) {
 	if len(payload) == 0 {
-		return "", ""
+		return "", "", nil, ""
 	}
+	var args map[string]any
 	if agentName == "antigravity" {
 		var p struct {
 			ToolCall struct {
@@ -186,17 +245,187 @@ func parsePermPayload(agentName string, payload json.RawMessage) (tool, summary 
 			} `json:"toolCall"`
 		}
 		if json.Unmarshal(payload, &p) == nil && p.ToolCall.Name != "" {
-			return p.ToolCall.Name, permArgsSummary(p.ToolCall.Args)
+			tool, args = p.ToolCall.Name, p.ToolCall.Args
 		}
 	}
-	var p struct {
-		ToolName  string         `json:"tool_name"`
-		ToolInput map[string]any `json:"tool_input"`
+	if tool == "" {
+		var p struct {
+			ToolName  string         `json:"tool_name"`
+			ToolInput map[string]any `json:"tool_input"`
+		}
+		if json.Unmarshal(payload, &p) == nil && p.ToolName != "" {
+			tool, args = p.ToolName, p.ToolInput
+		}
 	}
-	if json.Unmarshal(payload, &p) == nil && p.ToolName != "" {
-		return p.ToolName, permArgsSummary(p.ToolInput)
+	if tool == "" {
+		return "", "", nil, ""
 	}
-	return "", ""
+	summary = permArgsSummary(args)
+	ruleKeys, ruleLabel = derivePermRule(tool, args)
+	return tool, summary, ruleKeys, ruleLabel
+}
+
+func derivePermRule(tool string, args map[string]any) ([]string, string) {
+	switch tool {
+	case "run_command", "Bash", "bash":
+		cmdLine := ""
+		for _, k := range []string{"CommandLine", "command", "cmd"} {
+			if v, ok := args[k].(string); ok && strings.TrimSpace(v) != "" {
+				cmdLine = strings.TrimSpace(v)
+				break
+			}
+		}
+		return deriveCommandRuleKeys(cmdLine)
+	case "call_mcp_tool":
+		srv, _ := args["ServerName"].(string)
+		tn, _ := args["ToolName"].(string)
+		if srv != "" && tn != "" {
+			lbl := srv + "/" + tn
+			return []string{"mcp:" + lbl}, lbl
+		}
+		if tn != "" {
+			return []string{"mcp:" + tn}, tn
+		}
+		return []string{"tool:call_mcp_tool"}, "call_mcp_tool"
+	case "write_file", "write_to_file", "Write":
+		return []string{"tool:write"}, "write_file"
+	case "edit_file", "replace_file_content", "multi_replace_file_content", "Edit":
+		return []string{"tool:edit"}, "edit_file"
+	default:
+		return []string{"tool:" + tool}, tool
+	}
+}
+
+func deriveCommandRuleKeys(cmdLine string) ([]string, string) {
+	if cmdLine == "" || strings.ContainsAny(cmdLine, "\n\r\x00`") || strings.Contains(cmdLine, "$(") {
+		return nil, ""
+	}
+	segs := splitCommandSegments(cmdLine)
+	if len(segs) == 0 {
+		return nil, ""
+	}
+	var keys []string
+	var labels []string
+	seen := map[string]bool{}
+	for _, seg := range segs {
+		lbl := commandSegmentLabel(seg)
+		if lbl == "" {
+			return nil, ""
+		}
+		k := "cmd:" + lbl
+		if !seen[k] {
+			seen[k] = true
+			keys = append(keys, k)
+			labels = append(labels, lbl)
+		}
+	}
+	if len(keys) == 0 {
+		return nil, ""
+	}
+	return keys, strings.Join(labels, " + ")
+}
+
+func splitCommandSegments(s string) []string {
+	var out []string
+	var cur strings.Builder
+	var quote byte
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if quote != 0 {
+			if ch == '\\' && quote == '"' && i+1 < len(s) {
+				cur.WriteByte(ch)
+				i++
+				cur.WriteByte(s[i])
+				continue
+			}
+			if ch == quote {
+				quote = 0
+			}
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			quote = ch
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == ';' {
+			if t := strings.TrimSpace(cur.String()); t != "" {
+				out = append(out, t)
+			}
+			cur.Reset()
+			continue
+		}
+		if ch == '|' || ch == '&' {
+			if i+1 < len(s) && s[i+1] == ch {
+				i++
+			}
+			if t := strings.TrimSpace(cur.String()); t != "" {
+				out = append(out, t)
+			}
+			cur.Reset()
+			continue
+		}
+		cur.WriteByte(ch)
+	}
+	if quote != 0 {
+		return nil
+	}
+	if t := strings.TrimSpace(cur.String()); t != "" {
+		out = append(out, t)
+	}
+	return out
+}
+
+func commandSegmentLabel(seg string) string {
+	fields := strings.Fields(seg)
+	if len(fields) == 0 {
+		return ""
+	}
+	// 跳过前置环境变量赋值（如 FOO=bar cmd ...）
+	i := 0
+	for i < len(fields) && strings.Contains(fields[i], "=") && !strings.HasPrefix(fields[i], "-") {
+		i++
+	}
+	if i >= len(fields) {
+		return ""
+	}
+	cmd := filepath.Base(fields[i])
+	rest := fields[i+1:]
+	switch cmd {
+	case "lark-cli":
+		var parts []string
+		for j := 0; j < len(rest) && len(parts) < 2; j++ {
+			a := rest[j]
+			if a == "--profile" || a == "--as" || a == "--format" {
+				j++
+				continue
+			}
+			if strings.HasPrefix(a, "-") {
+				continue
+			}
+			parts = append(parts, a)
+		}
+		if len(parts) > 0 {
+			return "lark-cli " + strings.Join(parts, " ")
+		}
+		return "lark-cli"
+	case "git", "posse", "go", "npm", "pnpm", "yarn", "docker", "kubectl", "adb":
+		for j := 0; j < len(rest); j++ {
+			a := rest[j]
+			if a == "-C" || a == "--git-dir" || a == "--work-tree" || a == "-c" {
+				j++
+				continue
+			}
+			if strings.HasPrefix(a, "-") {
+				continue
+			}
+			return cmd + " " + a
+		}
+		return cmd
+	default:
+		return cmd
+	}
 }
 
 func permArgsSummary(args map[string]any) string {
@@ -212,8 +441,8 @@ func permArgsSummary(args map[string]any) string {
 				}
 			}
 			r := []rune(s)
-			if len(r) > 200 {
-				return string(r[:199]) + "…"
+			if len(r) > 600 {
+				return string(r[:599]) + "…"
 			}
 			return s
 		}
@@ -221,8 +450,8 @@ func permArgsSummary(args map[string]any) string {
 	b, _ := json.Marshal(args)
 	s := strings.TrimSpace(string(b))
 	r := []rune(s)
-	if len(r) > 200 {
-		return string(r[:199]) + "…"
+	if len(r) > 600 {
+		return string(r[:599]) + "…"
 	}
 	return s
 }

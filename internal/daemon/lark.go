@@ -36,6 +36,7 @@ func (a larkPermAdapter) WatchPermission(req PermRequest) bool {
 		Agent:      req.Agent,
 		Tool:       req.Tool,
 		Summary:    req.Summary,
+		RuleLabel:  req.RuleLabel,
 	})
 }
 
@@ -474,6 +475,7 @@ func (h larkHost) SwitchAgent(b store.LarkBinding, agentName, model string) (sto
 		return b, err
 	}
 	if old.Worker != "" {
+		h.d.perms.ClearTerminal(old.Worker)
 		h.d.closeTerminal(old.Worker, 2*time.Second)
 	}
 	b.Agent = agentName
@@ -499,6 +501,7 @@ func (h larkHost) SwitchWorkspace(b store.LarkBinding, query string) (store.Lark
 		return b, err
 	}
 	if old.Worker != "" {
+		h.d.perms.ClearTerminal(old.Worker)
 		h.d.closeTerminal(old.Worker, 2*time.Second)
 	}
 	b.WorkspaceID = w.ID
@@ -512,6 +515,7 @@ func (h larkHost) SwitchWorkspace(b store.LarkBinding, query string) (store.Lark
 func (h larkHost) ResetBinding(botID, chatID, threadKey string) error {
 	if b, err := h.d.store.ActiveLarkBinding(botID, chatID, threadKey); err == nil {
 		if m, err := h.d.store.Member(b.MemberID); err == nil && m.Worker != "" {
+			h.d.perms.ClearTerminal(m.Worker)
 			h.d.closeTerminal(m.Worker, 2*time.Second)
 		}
 		_ = h.d.store.SetArchived(b.DiscussionKey, true, time.Now())

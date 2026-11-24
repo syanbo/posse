@@ -17,7 +17,7 @@ Posse 常驻进程原生托管多个本机 `lark-cli` profile 长连接（无需
 - **进度与结果卡（Card 2.0）**：收到 `@机器人` 后立即回复进度卡片（带耗时、实时工具/状态行与 `[停止]` 按钮），每 2.5 秒节流刷新；完成后先把原进度卡收拢为一行灰色完结回执（移除 `[停止]`），再将完整 Markdown 结论作为一条新卡片发送到对话底部（引用回复原提问消息并触发飞书通知；超长自动截断并附 `.md` 文件附件，失败/停止带 `[重试]`）。
 - **工具权限审批（优先 Antigravity `agy` + 兼容 Claude Code）**：
   - `internal/daemon/permission.go` 的 `permissionHub` 同时协调飞书与手机审批；
-  - 飞书 `permissionMode == "ask"` 的 worker 启动时自动带 `POSSE_LARK_APPROVAL=1`（不改全局设置）。`agy` 挂载独立的飞书专用 hook 目录 `$POSSE_HOME/.posse-antigravity-lark-hooks`（与普通终端的 `.posse-antigravity-hooks` 隔离，普通终端不挂 `PreToolUse`），进程侧跳过内置二次确认弹窗由 `PreToolUse` 独占把关：严格纯只读排查命令、Posse 内部讨论协作命令及 `$POSSE_NOTES/discussions/` 写入自动放行，其余写文件/改代码/MCP/非只读命令挂起等待飞书审批（不因桌面窗口聚焦/滚轮误取消），3 分钟超时显式返回 `deny`（绝不自动放行）；Claude 通过 `PermissionRequest` 挂起最多 3 分钟，超时或桌面键入交回终端 TUI。
+  - 飞书 `permissionMode == "ask"` 的 worker 启动时自动带 `POSSE_LARK_APPROVAL=1`（不改全局设置）。`agy` 挂载独立的飞书专用 hook 目录 `$POSSE_HOME/.posse-antigravity-lark-hooks`（与普通终端的 `.posse-antigravity-hooks` 隔离，普通终端不挂 `PreToolUse`），进程侧跳过内置二次确认弹窗由 `PreToolUse` 独占把关：严格纯只读排查命令（含本地只读命令、`jq` 及 `lark-cli` 只读查询/下载子命令）、Posse 内部讨论协作命令、`/tmp` 临时目录创建及 `$POSSE_NOTES/discussions/` 写入自动放行；其余写文件/改代码/MCP/非只读命令（含 `lark-cli` 写操作与 `rm`）挂起等待飞书审批（卡片提供 `[允许]`、`[本会话允许同类]`、`[拒绝]` 三个按钮，点「本会话允许同类」后当前工位内后续同类操作自动放行；不因桌面窗口聚焦/滚轮误取消），3 分钟超时显式返回 `deny`（绝不自动放行）；Claude 通过 `PermissionRequest` 挂起最多 3 分钟，超时或桌面键入交回终端 TUI。
 - **选项问答**：worker 调用 `posse task ask --choice` 时自动发选项按钮 + 自定义输入表单卡片，点击或提交直接调用 `answerDiscussion` 并同步桌面/手机。
 - **同事工作群安全边界**：
   - `[允许]` / `[拒绝]` 权限审批、`[停止]`、`[重试]` 与切换 Agent/工作区按钮强制校验 `operator_id == ownerOpenId`；

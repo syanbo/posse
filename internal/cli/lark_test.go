@@ -26,6 +26,9 @@ func TestAntigravityPreToolUseHelpers(t *testing.T) {
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"git -C ~/Desktop/Works/app_av4 diff -- android/README.md"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"cat ~/Desktop/Works/app_av4/ic_launcher.xml 2>/dev/null"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"echo \"POSSE_NOTES=${POSSE_NOTES}\" ; posse task check k_57f89c0a --execution x_1"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"mkdir -p /tmp/posse-triage && cd /tmp/posse-triage && lark-cli base +record-list --base-token EHz --table-id tbl --page-size 20 --as user | jq ."}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli base +record-search --base-token EHz --table-id tbl --keyword 20261124-001 --as user"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli im +messages-mget --message-ids om_1 --as bot"}}}`,
 		`{"toolCall":{"name":"write_file","args":{"Path":"` + filepath.Join(notesDir, "discussions", "mb_1", "reply.md") + `"}}}`,
 	}
 	for _, tc := range allowed {
@@ -43,6 +46,9 @@ func TestAntigravityPreToolUseHelpers(t *testing.T) {
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"git branch -D old"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"find . -delete"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"sed -i '' 's/a/b/' file.txt"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli base +record-update --base-token EHz --table-id tbl --record-id rec_1 --as user"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli im +messages-send --chat-id oc_1 --text hi --as bot"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"mkdir -p /Users/dengbo/Desktop/Works/bad"}}}`,
 		`{"toolCall":{"name":"write_file","args":{"Path":"/Users/dengbo/Desktop/Works/app_av4/README.md"}}}`,
 		`{"toolCall":{"name":"write_file","args":{"Path":"` + filepath.Join(notesDir, "discussions", "..", "escape.md") + `"}}}`,
 		`{"toolCall":{"name":"edit_file","args":{"Path":"` + filepath.Join(notesDir, "discussions", "mb_1", "reply.md") + `"}}}`,

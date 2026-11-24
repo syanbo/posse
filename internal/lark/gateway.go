@@ -62,6 +62,7 @@ type PermNotice struct {
 	Agent      string
 	Tool       string
 	Summary    string
+	RuleLabel  string
 }
 
 type activeCard struct {
@@ -84,6 +85,7 @@ type activePerm struct {
 	wsLabel   string
 	tool      string
 	summary   string
+	ruleLabel string
 	cardMsgID string
 }
 
@@ -723,13 +725,16 @@ func (g *Gateway) HandleCardAction(ctx context.Context, bot BotConfig, ev CardAc
 	isOwner := owner != "" && ev.OperatorID == owner
 
 	switch action {
-	case "perm_allow", "perm_deny":
+	case "perm_allow", "perm_allow_session", "perm_deny":
 		// 硬安全边界：审批按钮强制仅限本机主人点击
 		if !isOwner {
 			return
 		}
 		behavior := "allow"
-		if action == "perm_deny" {
+		switch action {
+		case "perm_allow_session":
+			behavior = "allow_session"
+		case "perm_deny":
 			behavior = "deny"
 		}
 		g.host.DecidePermission(val["permId"], behavior, "feishu")
@@ -1046,7 +1051,7 @@ func (g *Gateway) WatchPermission(req PermNotice) bool {
 		return false
 	}
 	wsLabel := g.workspaceLabel(binding.WorkspaceID)
-	cardJSON := BuildPermissionCard(bot.ID, bot.Name, req.Agent, wsLabel, req.ID, req.Tool, req.Summary, "", "")
+	cardJSON := BuildPermissionCard(bot.ID, bot.Name, req.Agent, wsLabel, req.ID, req.Tool, req.Summary, req.RuleLabel, "", "")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cardMsgID, err := g.client.SendCard(ctx, bot.Profile, binding.ChatID, cardJSON)
@@ -1061,7 +1066,7 @@ func (g *Gateway) WatchPermission(req PermNotice) bool {
 	g.mu.Lock()
 	g.activePerms[req.ID] = &activePerm{
 		botID: bot.ID, profile: bot.Profile, botName: bot.Name,
-		agentName: req.Agent, wsLabel: wsLabel, tool: req.Tool, summary: req.Summary, cardMsgID: cardMsgID,
+		agentName: req.Agent, wsLabel: wsLabel, tool: req.Tool, summary: req.Summary, ruleLabel: req.RuleLabel, cardMsgID: cardMsgID,
 	}
 	g.mu.Unlock()
 	return true
@@ -1076,7 +1081,7 @@ func (g *Gateway) PermissionResolved(permID, behavior, source string) {
 	if !ok || ap.cardMsgID == "" {
 		return
 	}
-	cardJSON := BuildPermissionCard(ap.botID, ap.botName, ap.agentName, ap.wsLabel, permID, ap.tool, ap.summary, behavior, source)
+	cardJSON := BuildPermissionCard(ap.botID, ap.botName, ap.agentName, ap.wsLabel, permID, ap.tool, ap.summary, ap.ruleLabel, behavior, source)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = g.client.PatchCard(ctx, ap.profile, ap.cardMsgID, cardJSON)

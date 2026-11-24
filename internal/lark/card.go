@@ -225,8 +225,8 @@ func BuildResultCard(botID, botName, agentName, wsLabel, execID, outcome, elapse
 	return card20(cardTitle(botName, agentName, wsLabel, label), template, elems), truncated
 }
 
-// BuildPermissionCard 生成工具权限审批卡片（支持待审批与已决两种状态）。
-func BuildPermissionCard(botID, botName, agentName, wsLabel, permID, tool, summary, resolvedBehavior, resolvedSource string) string {
+// BuildPermissionCard 生成工具权限审批卡片（支持待审批与已决两种状态，含「本会话允许同类」按钮）。
+func BuildPermissionCard(botID, botName, agentName, wsLabel, permID, tool, summary, ruleLabel, resolvedBehavior, resolvedSource string) string {
 	var lines []string
 	if tool != "" {
 		lines = append(lines, fmt.Sprintf("**%s**: `%s`", tr("Tool"), tool))
@@ -236,29 +236,43 @@ func BuildPermissionCard(botID, botName, agentName, wsLabel, permID, tool, summa
 	}
 	if resolvedBehavior == "" && resolvedSource == "" {
 		lines = append(lines, "<font color='grey'>"+tr("Only the Posse owner can approve or deny. Expires in 3 minutes.")+"</font>")
+		btns := []map[string]any{
+			cbButton(tr("Allow"), "primary_filled", map[string]any{
+				"action": "perm_allow",
+				"botId":  botID,
+				"permId": permID,
+			}),
+		}
+		if ruleLabel != "" {
+			btns = append(btns, cbButton(tr("Allow similar (session)"), "default", map[string]any{
+				"action": "perm_allow_session",
+				"botId":  botID,
+				"permId": permID,
+			}))
+		}
+		btns = append(btns, cbButton(tr("Deny"), "danger", map[string]any{
+			"action": "perm_deny",
+			"botId":  botID,
+			"permId": permID,
+		}))
 		elems := []any{
 			mdElement(strings.Join(lines, "\n")),
-			buttonRow(
-				cbButton(tr("Allow"), "primary_filled", map[string]any{
-					"action": "perm_allow",
-					"botId":  botID,
-					"permId": permID,
-				}),
-				cbButton(tr("Deny"), "danger", map[string]any{
-					"action": "perm_deny",
-					"botId":  botID,
-					"permId": permID,
-				}),
-			),
+			buttonRow(btns...),
 		}
 		return card20(cardTitle(botName, agentName, wsLabel, tr("Permission required")), "orange", elems)
 	}
 	template := "grey"
 	status := tr("Timed out (returned to terminal)")
+	sessionScoped := strings.HasSuffix(resolvedSource, ":session")
+	cleanSource := strings.TrimSuffix(resolvedSource, ":session")
 	switch resolvedBehavior {
 	case "allow":
 		template = "green"
-		status = tr("Allowed")
+		if sessionScoped {
+			status = tr("Allowed for session")
+		} else {
+			status = tr("Allowed")
+		}
 	case "deny":
 		template = "red"
 		status = tr("Denied")
@@ -267,10 +281,14 @@ func BuildPermissionCard(botID, botName, agentName, wsLabel, permID, tool, summa
 			status = tr("Handled in desktop terminal")
 		}
 	}
-	if resolvedSource != "" && (resolvedBehavior == "allow" || resolvedBehavior == "deny") {
-		status += " (" + resolvedSource + ")"
+	if cleanSource != "" && (resolvedBehavior == "allow" || resolvedBehavior == "deny") {
+		status += " (" + cleanSource + ")"
 	}
-	lines = append(lines, "**"+status+"**")
+	if sessionScoped && ruleLabel != "" {
+		lines = append(lines, fmt.Sprintf("**%s** · `%s`", status, ruleLabel))
+	} else {
+		lines = append(lines, "**"+status+"**")
+	}
 	return card20(cardTitle(botName, agentName, wsLabel, status), template, []any{mdElement(strings.Join(lines, "\n"))})
 }
 

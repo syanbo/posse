@@ -1000,9 +1000,13 @@ func isSafeReadOnlySegment(tokens []string) bool {
 		}
 		return false
 	case "ls", "pwd", "cat", "head", "tail", "wc", "stat", "file", "which",
-		"basename", "dirname", "realpath", "readlink", "echo", "printf",
-		"grep", "egrep", "fgrep", "rg", "sort", "uniq", "cut", "tr", "diff", "comm", "true", "false":
+		"basename", "dirname", "realpath", "readlink", "echo", "printf", "nl", "date", "uname", "env", "printenv", "cd",
+		"grep", "egrep", "fgrep", "rg", "jq", "sort", "uniq", "cut", "tr", "diff", "comm", "true", "false":
 		return true
+	case "mkdir":
+		return isSafeScratchMkdir(args)
+	case "lark-cli":
+		return isSafeReadOnlyLarkCLI(args)
 	case "find":
 		for _, a := range args {
 			switch a {
@@ -1062,6 +1066,103 @@ func isSafeReadOnlyGit(args []string) bool {
 			default:
 				return false
 			}
+		}
+	}
+	return false
+}
+
+func isSafeScratchMkdir(args []string) bool {
+	notes := strings.TrimSpace(os.Getenv("POSSE_NOTES"))
+	notesRoot := ""
+	if notes != "" {
+		notesRoot = filepath.Join(filepath.Clean(notes), "discussions") + string(filepath.Separator)
+	}
+	hasPath := false
+	for _, a := range args {
+		if a == "-p" {
+			continue
+		}
+		if strings.HasPrefix(a, "-") || !filepath.IsAbs(a) {
+			return false
+		}
+		clean := filepath.Clean(a)
+		okTmp := clean == "/tmp" || strings.HasPrefix(clean, "/tmp/")
+		okNotes := notesRoot != "" && (clean == strings.TrimSuffix(notesRoot, string(filepath.Separator)) || strings.HasPrefix(clean, notesRoot))
+		if !okTmp && !okNotes {
+			return false
+		}
+		hasPath = true
+	}
+	return hasPath
+}
+
+// isSafeReadOnlyLarkCLI 仅放行 lark-cli 的纯只读查询与下载命令，所有写记录/发消息/改文档/删文件命令均保持审批拦截。
+func isSafeReadOnlyLarkCLI(args []string) bool {
+	var pos []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch a {
+		case "--profile", "--as", "--format", "--jq", "--output", "-o":
+			i++
+			continue
+		}
+		if strings.HasPrefix(a, "-") {
+			continue
+		}
+		pos = append(pos, a)
+		if len(pos) >= 2 {
+			break
+		}
+	}
+	if len(pos) == 0 {
+		return false
+	}
+	if pos[0] == "schema" {
+		return true
+	}
+	if len(pos) < 2 {
+		return false
+	}
+	domain, sub := pos[0], pos[1]
+	switch domain {
+	case "auth":
+		return sub == "status"
+	case "profile":
+		return sub == "list"
+	case "base":
+		switch sub {
+		case "+record-list", "+record-get", "+record-search", "+table-list", "+field-list", "+view-list", "+base-get", "+app-get":
+			return true
+		}
+	case "im":
+		switch sub {
+		case "+chat-messages-list", "+messages-mget", "+messages-search", "+chat-search", "+chat-list", "+chat-members-list", "+threads-messages-list", "+messages-resources-download", "+flag-list":
+			return true
+		}
+	case "drive":
+		switch sub {
+		case "+search", "+download", "+meta", "+list", "+export":
+			return true
+		}
+	case "docs":
+		switch sub {
+		case "+fetch", "+search":
+			return true
+		}
+	case "wiki":
+		switch sub {
+		case "+search", "+node-list", "+space-list", "+node-get":
+			return true
+		}
+	case "contact":
+		switch sub {
+		case "+search-user", "+get-user":
+			return true
+		}
+	case "vc", "minutes", "meeting":
+		switch sub {
+		case "+search", "+get", "+list", "+fetch":
+			return true
 		}
 	}
 	return false
