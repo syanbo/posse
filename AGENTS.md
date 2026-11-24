@@ -11,7 +11,7 @@ go vet ./... && go test ./... && go tool mygo vet && go tool mygo i18n check
 go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm64/Posse.app（Intel 机器用 darwin/amd64）
 ```
 
-- go.mod 要求 Go 1.27.3（MyGo 的要求），本机 Go 1.26 会通过 `GOTOOLCHAIN=auto` 自动下载；终端内核 `libghostty-vt` 首次运行时由 MyGo 下载到 `~/Library/Caches/mygo/natives/`。
+- go.mod 要求 Go 1.27.4（MyGo 与 `tailscale.com` 的要求），本机旧版 Go 会通过 `GOTOOLCHAIN=auto` 自动下载；终端内核 `libghostty-vt` 首次运行时由 MyGo 下载到 `~/Library/Caches/mygo/natives/`。
 - `gofmt` 用 `$(go env GOROOT)/bin/gofmt`：Homebrew 的 gofmt 版本较旧，对齐规则不同。
 - 在 Posse 的终端里跑测试时环境带着日常常驻进程的 `GIT_TRACE2_EVENT`（`internal/daemon` 的 `TestGitTrace` 会失败），用 `env -u GIT_TRACE2_EVENT -u GIT_TRACE2_ENV_VARS go test ./...`。
 - 端到端测试不要碰 `~/.posse`。只测 CLI 和常驻进程、不涉及系统授权时用 `POSSE_HOME=/tmp/posse-e2e/home ./bin/posse ...`；单元测试和离屏预览不起 App。

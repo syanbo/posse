@@ -556,6 +556,16 @@ var zh = [][2]string{
 	{"admin is the name the admin uses", "admin 是管理员自己用的名字"},
 	{"not a valid relay invite code", "不是有效的中转邀请码"},
 
+	// 内置 Tailscale
+	{"invalid Tailscale control URL", "Tailscale 控制服务器地址无效"},
+	{"invalid Tailscale state directory", "Tailscale 状态目录无效"},
+	{"embedded Tailscale is not running", "内置 Tailscale 尚未运行"},
+	{"embedded Tailscale has no IPv4 address", "内置 Tailscale 尚未分配 IPv4 地址"},
+	{"Tailscale state directory is required", "缺少 Tailscale 状态目录"},
+	{"Tailscale state directory is not set", "未设置 Tailscale 状态目录"},
+	{"invalid port", "端口无效"},
+	{"invalid Tailscale target address", "Tailscale 目标地址无效"},
+
 	// Git
 	{"this branch has no upstream branch", "这个分支没有跟踪的远端分支"},
 	{"done, but restoring the local changes ran into conflicts", "已经完成，但取回本地改动时有冲突"},
