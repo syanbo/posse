@@ -450,17 +450,123 @@ func keepInspector() bool { return os.Getenv("MYGO_INSPECTOR") == "1" }
 // productionTags returns the -tags of a build: those GOFLAGS sets, which a
 // -tags flag would override, and the inspector's in a production build
 // unless it keeps it.
+// Posse: parse GOFLAGS with Go's quoted.Split + tagsFlag.Set boundaries so
+// -tags=... embedded inside quoted values (e.g. -ldflags) is never misread,
+// and preserve exact tag boundaries when re-serializing.
 func productionTags(debug bool) []string {
 	if debug || keepInspector() {
 		return nil
 	}
+	tags := parseGOFLAGSTags(os.Getenv("GOFLAGS"))
+	tags = append(tags, inspectorTag)
+	return []string{"-tags", formatGOFLAGSTags(tags)}
+}
+
+// Posse: split s using Go's cmd/internal/quoted.Split rules (only leading
+// single/double quotes delimit an argument; no unescaping inside).
+func splitGOFLAGS(s string) []string {
+	isSpace := func(b byte) bool {
+		return b == ' ' || b == '\t' || b == '\n' || b == '\r'
+	}
+	var out []string
+	for len(s) > 0 {
+		for len(s) > 0 && isSpace(s[0]) {
+			s = s[1:]
+		}
+		if len(s) == 0 {
+			break
+		}
+		if s[0] == '"' || s[0] == '\'' {
+			q := s[0]
+			s = s[1:]
+			i := strings.IndexByte(s, q)
+			if i < 0 {
+				return out
+			}
+			out = append(out, s[:i])
+			s = s[i+1:]
+			continue
+		}
+		i := 0
+		for i < len(s) && !isSpace(s[i]) {
+			i++
+		}
+		out = append(out, s[:i])
+		s = s[i:]
+	}
+	return out
+}
+
+// Posse: extract -tags=/--tags= values from GOFLAGS matching Go's tagsFlag.Set
+// without splitting legacy space-delimited items on commas.
+func parseGOFLAGSTags(raw string) []string {
 	var tags []string
-	for _, f := range strings.Fields(os.Getenv("GOFLAGS")) {
-		if v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "tags="); ok && v != "" {
-			tags = append(tags, v)
+	appendTag := func(t string) {
+		if t != "" {
+			tags = append(tags, t)
 		}
 	}
-	return []string{"-tags", strings.Join(append(tags, inspectorTag), ",")}
+	for _, tok := range splitGOFLAGS(raw) {
+		var val string
+		switch {
+		case strings.HasPrefix(tok, "-tags="):
+			val = tok[len("-tags="):]
+		case strings.HasPrefix(tok, "--tags="):
+			val = tok[len("--tags="):]
+		default:
+			continue
+		}
+		if strings.ContainsAny(val, " '") {
+			for _, part := range splitGOFLAGS(val) {
+				appendTag(part)
+			}
+		} else {
+			for sub := range strings.SplitSeq(val, ",") {
+				appendTag(sub)
+			}
+		}
+	}
+	return tags
+}
+
+// Posse: serialize tags so Go's tagsFlag.Set recovers the exact tag list.
+// When no tag contains whitespace, single quote, or comma, use plain CSV;
+// otherwise use Go quoted.Join space-delimited form so tag boundaries stay intact.
+func formatGOFLAGSTags(tags []string) string {
+	needQuoted := false
+	for _, t := range tags {
+		if strings.ContainsAny(t, " \t\n\r',") {
+			needQuoted = true
+			break
+		}
+	}
+	if !needQuoted {
+		return strings.Join(tags, ",")
+	}
+	var b strings.Builder
+	for i, t := range tags {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		hasSpace := strings.ContainsAny(t, " \t\n\r")
+		hasSQ := strings.ContainsRune(t, '\'')
+		hasDQ := strings.ContainsRune(t, '"')
+		switch {
+		case !hasSpace && !hasSQ && !hasDQ:
+			b.WriteString(t)
+		case !hasSQ:
+			b.WriteByte('\'')
+			b.WriteString(t)
+			b.WriteByte('\'')
+		case !hasDQ:
+			b.WriteByte('"')
+			b.WriteString(t)
+			b.WriteByte('"')
+		default:
+			b.WriteString(t)
+		}
+	}
+	return b.String()
 }
 
 // extraLDFlags returns the -ldflags of MYGO_LDFLAGS, which a build adds

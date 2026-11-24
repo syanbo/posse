@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/netip"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -497,5 +499,204 @@ func TestBuildTagsPreserveRequiredFeatures(t *testing.T) {
 	}
 	if !strings.Contains(BuildTagsDarwin, "ts_omit_androidbin") {
 		t.Error("darwin tags should omit androidbin")
+	}
+}
+
+func TestBuildTagsSyncAcrossMobileAndScripts(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+
+	stripComments := func(text, prefix string) string {
+		var b strings.Builder
+		for _, line := range strings.Split(text, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || strings.HasPrefix(trimmed, prefix) {
+				continue
+			}
+			b.WriteString(trimmed)
+			b.WriteByte('\n')
+		}
+		return b.String()
+	}
+
+	// 1. 核对 mobile/packages/posse_quic/hook/build.dart 里的裁剪标签常量及非注释的实际传参
+	hookPath := filepath.Join(repoRoot, "mobile", "packages", "posse_quic", "hook", "build.dart")
+	hookBytes, err := os.ReadFile(hookPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", hookPath, err)
+	}
+	hookText := string(hookBytes)
+	hookCode := stripComments(hookText, "//")
+	extractDartConst := func(name string) string {
+		re := regexp.MustCompile(`(?s)const\s+` + regexp.QuoteMeta(name) + `\s*=\s*(.*?);`)
+		m := re.FindStringSubmatch(hookCode)
+		if len(m) < 2 {
+			t.Fatalf("const %s not found in %s", name, hookPath)
+		}
+		strRe := regexp.MustCompile(`'([^']*)'`)
+		var b strings.Builder
+		for _, part := range strRe.FindAllStringSubmatch(m[1], -1) {
+			b.WriteString(part[1])
+		}
+		return b.String()
+	}
+	if got := extractDartConst("_tsTagsDarwin"); got != BuildTagsDarwin {
+		t.Fatalf("build.dart _tsTagsDarwin drifted from tslink.BuildTagsDarwin:\ngot:  %s\nwant: %s", got, BuildTagsDarwin)
+	}
+	if got := extractDartConst("_tsTagsAndroid"); got != BuildTagsAndroid {
+		t.Fatalf("build.dart _tsTagsAndroid drifted from tslink.BuildTagsAndroid:\ngot:  %s\nwant: %s", got, BuildTagsAndroid)
+	}
+	if n := strings.Count(hookCode, "'-tags=$_tsTagsDarwin',"); n < 2 {
+		t.Fatalf("build.dart active code should pass '-tags=$_tsTagsDarwin' for both macOS and iOS builds, got %d", n)
+	}
+	if n := strings.Count(hookCode, "'-tags=$_tsTagsAndroid',"); n < 1 {
+		t.Fatalf("build.dart active code should pass '-tags=$_tsTagsAndroid' for Android builds, got %d", n)
+	}
+
+	// 2. 核对 scripts/ts-tags.sh：严格 Go quoted.Split + tagsFlag.Set 两层语法、GOENV 与真实 go list
+	runSh := func(script string, extraEnv ...string) string {
+		t.Helper()
+		cmd := exec.Command("/bin/sh", "-eu", "-c", script)
+		cmd.Dir = repoRoot
+		cmd.Env = append(os.Environ(), extraEnv...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("sh failed: %v\nscript: %s\noutput:\n%s", err, script, out)
+		}
+		return strings.TrimRight(string(out), "\n")
+	}
+
+	gotExtracted := runSh(`. scripts/ts-tags.sh && posse_ts_tags_darwin`)
+	if gotExtracted != BuildTagsDarwin {
+		t.Fatalf("ts-tags.sh extracted %q, want %q", gotExtracted, BuildTagsDarwin)
+	}
+
+	cases := []struct {
+		name     string
+		existing string
+		add      string
+		want     string
+	}{
+		{
+			name:     "simple-csv",
+			existing: `-trimpath -tags=foo,bar`,
+			add:      `a,b`,
+			want:     `-trimpath -tags=foo,bar,a,b`,
+		},
+		{
+			name:     "legacy-single-quoted-tag",
+			existing: `-tags='foo'`,
+			add:      `ts_omit_logtail`,
+			want:     `-tags=foo,ts_omit_logtail`,
+		},
+		{
+			name:     "whole-quoted-space-tags",
+			existing: `'-tags=foo bar'`,
+			add:      `ts_omit_logtail`,
+			want:     `-tags=foo,bar,ts_omit_logtail`,
+		},
+		{
+			name:     "literal-mid-token-quotes-preserved",
+			existing: `-gcflags=all=-Dfoo"bar -tags="foo"`,
+			add:      `ts_omit_logtail`,
+			want:     `-gcflags=all=-Dfoo"bar -tags="foo",ts_omit_logtail`,
+		},
+		{
+			name:     "preserve-double-spaces-and-globs",
+			existing: `'-ldflags=-X "main.sample=two  spaces" -w' '-ldflags=-extldflags scripts/*.sh -w'`,
+			add:      `ts_omit_logtail`,
+			want:     `'-ldflags=-X "main.sample=two  spaces" -w' '-ldflags=-extldflags scripts/*.sh -w' -tags=ts_omit_logtail`,
+		},
+		{
+			name:     "bare-tags-does-not-swallow-next-flag",
+			existing: `-tags -trimpath`,
+			add:      `ts_omit_logtail`,
+			want:     `-tags -trimpath -tags=ts_omit_logtail`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := runSh(`. scripts/ts-tags.sh && posse_merge_goflags_tags "$TEST_EXISTING" "$TEST_ADD"`,
+				"TEST_EXISTING="+tc.existing, "TEST_ADD="+tc.add)
+			if got != tc.want {
+				t.Fatalf("posse_merge_goflags_tags(%q, %q) =\n%q\nwant:\n%q", tc.existing, tc.add, got, tc.want)
+			}
+		})
+	}
+
+	// 不可安全合并为 CSV 的异常标签（含单引号、带引号空格、或旧式空格语法中夹逗号）：
+	// 必须报错并退出非零，绝不静默丢掉 ts_omit_logtail 或引入额外标签。
+	for _, unsafe := range []string{
+		`-tags=foo'bar`,
+		`"-tags='foo bar'"`,
+		`'-tags=prod foo bar,baz'`,
+	} {
+		t.Run("reject-unsafe/"+unsafe, func(t *testing.T) {
+			cmd := exec.Command("/bin/sh", "-eu", "-c", `. scripts/ts-tags.sh && posse_merge_goflags_tags "$TEST_EXISTING" "ts_omit_logtail"`)
+			cmd.Dir = repoRoot
+			cmd.Env = append(os.Environ(), "TEST_EXISTING="+unsafe)
+			if out, err := cmd.CombinedOutput(); err == nil {
+				t.Fatalf("expected error for unsafe GOFLAGS=%q, got output %q", unsafe, string(out))
+			}
+		})
+	}
+
+	// GOENV 中配置的 GOFLAGS 经 posse_apply_ts_tags 后保留原标志并与 BuildTagsDarwin 合并
+	goenvPath := filepath.Join(t.TempDir(), "goenv")
+	if err := os.WriteFile(goenvPath, []byte("GOFLAGS=-trimpath -tags=from_goenv\n"), 0o600); err != nil {
+		t.Fatalf("write goenv: %v", err)
+	}
+	gotGoenv := runSh(`unset GOFLAGS; . scripts/ts-tags.sh && posse_apply_ts_tags && printf '%s' "$GOFLAGS"`,
+		"GOENV="+goenvPath)
+	wantGoenv := "-trimpath -tags=from_goenv," + BuildTagsDarwin
+	if gotGoenv != wantGoenv {
+		t.Fatalf("posse_apply_ts_tags with GOENV =\n%q\nwant:\n%q", gotGoenv, wantGoenv)
+	}
+
+	// 真实 go list 核对：旧式单引号、空格分隔标签、以及引号包裹 ldflags 里伪装的 -tags=ts_omit_netstack
+	for _, goflags := range []string{
+		`-tags='foo'`,
+		`'-tags=foo bar'`,
+		`'-ldflags=-X "main.sample=two -tags=ts_omit_netstack spaces" -w'`,
+	} {
+		gotBuildFeatures := runSh(`. scripts/ts-tags.sh && posse_apply_ts_tags && go list -f '{{.GoFiles}}' tailscale.com/feature/buildfeatures`,
+			"GOFLAGS="+goflags)
+		if strings.Contains(gotBuildFeatures, "feature_logtail_enabled.go") {
+			t.Fatalf("ts_omit_logtail did not take effect under GOFLAGS=%q: %s", goflags, gotBuildFeatures)
+		}
+		for _, wantFile := range []string{
+			"feature_nattraversal_enabled.go",
+			"feature_netstack_enabled.go",
+			"feature_cachenetmap_enabled.go",
+			"feature_useproxy_enabled.go",
+		} {
+			if !strings.Contains(gotBuildFeatures, wantFile) {
+				t.Fatalf("expected %s to remain enabled under GOFLAGS=%q: %s", wantFile, goflags, gotBuildFeatures)
+			}
+		}
+	}
+
+	// 3. 核对打包脚本非注释有效语句实际接入 posse_apply_ts_tags 与两处 internal/tslink 脏检查
+	for _, script := range []string{"scripts/dev-app.sh", "scripts/release.sh"} {
+		data, err := os.ReadFile(filepath.Join(repoRoot, script))
+		if err != nil {
+			t.Fatalf("read %s: %v", script, err)
+		}
+		active := stripComments(string(data), "#")
+		if !strings.Contains(active, "\n. scripts/ts-tags.sh\n") && !strings.HasPrefix(active, ". scripts/ts-tags.sh\n") {
+			t.Errorf("%s active code must source scripts/ts-tags.sh", script)
+		}
+		if !strings.Contains(active, "\nposse_apply_ts_tags\n") {
+			t.Errorf("%s active code must call posse_apply_ts_tags", script)
+		}
+	}
+	for _, script := range []string{"scripts/ios-adhoc.sh", "scripts/android-release.sh"} {
+		data, err := os.ReadFile(filepath.Join(repoRoot, script))
+		if err != nil {
+			t.Fatalf("read %s: %v", script, err)
+		}
+		active := stripComments(string(data), "#")
+		if n := strings.Count(active, "git status --porcelain -- mobile internal/mquic internal/tslink"); n < 2 {
+			t.Errorf("%s active code must guard mobile, internal/mquic, and internal/tslink in both git status checks (got %d)", script, n)
+		}
 	}
 }

@@ -80,6 +80,8 @@ github.com/egoist/mygo v0.7.4 的副本，go.mod 用 replace 指向这里。去�
 
 `updater.go`、`updater_stage.go`：`Update.Install` 把下载和换包放在一步（0.7 起 macOS 上留一个 shell 进程等 app 退出再换，`stageBundle`）。拆出 `stageUpdate`（`Install` 照旧用它，下载经上游的 `get`，走系统代理和 `SetSource`）和 `swapUpdate`（macOS 上用保留下来的 `swapBundle` 当场换：Posse 换包后马上把常驻进程交接到新包，不能等 app 退出），加 `Update.Stage`（下载、校验、解压到 app 旁边的 `.<名字>.app.update-*`，app 不动）、`Staged.Apply`（换包）、`Staged.Discard`、`Updater.CleanStaged`（清掉上次留下的暂存和换包残留）和 `Updater.Configured`（这个包带不带更新地址）。macOS 上包被换掉后，进程还没用过的隐私授权（文稿、桌面等）会失效，常驻进程也从同一个包运行，所以 Posse 后台只暂存，用户重启时才换包。
 
+`cmd/mygo/build.go`：`productionTags` 改按 Go `cmd/internal/quoted.Split` 与 `tagsFlag.Set` 边界解析 `GOFLAGS`，不再用 `strings.Fields` 拆词，避免把引号包裹的 `-ldflags` 等参数值内部出现的 `-tags=...` 误读为构建标签。测试见 `cmd/mygo/build_tags_test.go`。
+
 ## 升级 mygo
 
 用三方合并，不手工对着改：

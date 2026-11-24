@@ -7,6 +7,9 @@
 set -eu
 cd "$(dirname "$0")/.."
 export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
+# 裁剪内置 Tailscale 构建标签（与 release.sh 共用 internal/tslink/tslink.go 的 BuildTagsDarwin，含 GOENV 合并）
+. scripts/ts-tags.sh
+posse_apply_ts_tags
 
 main=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
 # 基础包按本机架构取：Intel Mac 上是 darwin-amd64
@@ -18,7 +21,7 @@ new=$dir/PosseDev.app.new
 old=$dir/PosseDev.app.old
 
 if [ ! -d "$base" ]; then
-	echo "缺 $base（图标、libghostty 从它复制）：先跑 go tool mygo build -platform darwin/$arch -skip-dmg" >&2
+	echo "缺 $base（图标、libghostty 从它复制）：先跑 . scripts/ts-tags.sh && posse_apply_ts_tags && go tool mygo build -platform darwin/$arch -skip-dmg" >&2
 	exit 1
 fi
 identity=$(plutil -extract macos.signingIdentity raw mygo.json)

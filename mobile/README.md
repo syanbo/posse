@@ -10,7 +10,7 @@ fvm flutter analyze
 
 不要用全局 `flutter`。本机 `fvm default` 仍是 3.35.7，给别的工程用。
 
-构建时 `packages/posse_quic` 的构建钩子会调 `go build` 把 Go 库（QUIC 客户端、E2EE 的 secretbox 加解密、Mermaid 排版）编进 App，本机要装 Go（版本照仓库根目录的 go.mod；找不到时设 `GO` 指向 go 可执行文件），安卓还要 NDK。改了 `packages/posse_quic/go`、`internal/mquic`、`internal/mermaid` 后它自己重编。`packages/posse_quic` 自己的测试（起一个 Go 写的回显服务，经 FFI 收发）在那个目录里跑 `fvm dart test`。
+构建时 `packages/posse_quic` 的构建钩子会调 `go build` 把 Go 库（QUIC 客户端、内置 Tailscale `tsnet` 节点、E2EE 的 secretbox 加解密、Mermaid 排版）编进 App，本机要装 Go（版本照仓库根目录的 go.mod；找不到时设 `GO` 指向 go 可执行文件），安卓还要 NDK。改了 `packages/posse_quic/go`、`internal/mquic`、`internal/tslink`、`internal/mermaid` 后它自己重编。`packages/posse_quic` 自己的测试（起一个 Go 写的回显服务，经 FFI 收发）在那个目录里跑 `fvm dart test`。
 
 E2EE 收发一条 JSON 消息的基准在 `benchmark/`：改用 Go 加解密、二进制分帧之前（legacy）和现在对照，300 B 到 1 MiB 四档，每项取中位数。Mac 上 `fvm dart run benchmark/e2ee_bench.dart`（JIT，只看倍数）；真机用 `benchmark/run-device.sh ios <UDID>` 或 `benchmark/run-device.sh android <序列号>`，按 profile 模式编一个临时的小 App（包 ID `com.neolabsapp.possebench`）装上去跑，打印结果后删掉，不碰手机上的 Posse 和它的配对。小米等手机经 USB 装新 App 要在手机上点允许。电脑端的同一组数：`go test ./internal/mobile -run '^$' -bench E2ee`。
 

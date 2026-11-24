@@ -150,8 +150,8 @@ flowchart LR
 
 ```sh
 git clone https://github.com/syanbo/posse.git && cd posse
-go build -o bin/posse ./cmd/posse
-go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # 临时签名打包 Posse.app（Intel 芯片换成 darwin/amd64）
+. scripts/ts-tags.sh && posse_apply_ts_tags && go build -o bin/posse ./cmd/posse
+. scripts/ts-tags.sh && posse_apply_ts_tags && go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # 临时签名打包 Posse.app（Intel 芯片换成 darwin/amd64）
 ```
 
 临时签名的包不检查更新，装进「应用程序」也不会被官方版本换掉。手机端的构建见 [`mobile/README.md`](mobile/README.md)。

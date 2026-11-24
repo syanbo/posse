@@ -6,9 +6,9 @@
 
 ```sh
 export GOPROXY=https://goproxy.cn,direct   # 本机直连 proxy.golang.org / storage.googleapis.com 会超时
-go build -o bin/posse ./cmd/posse
+. scripts/ts-tags.sh && posse_apply_ts_tags && go build -o bin/posse ./cmd/posse   # 注入裁剪后的 Tailscale 构建标签（含 ts_omit_logtail）
 go vet ./... && go test ./... && go tool mygo vet && go tool mygo i18n check
-go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm64/Posse.app（Intel 机器用 darwin/amd64）
+. scripts/ts-tags.sh && posse_apply_ts_tags && go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm64/Posse.app（Intel 机器用 darwin/amd64）
 ```
 
 - go.mod 要求 Go 1.27.4（MyGo 与 `tailscale.com` 的要求），本机旧版 Go 会通过 `GOTOOLCHAIN=auto` 自动下载；终端内核 `libghostty-vt` 首次运行时由 MyGo 下载到 `~/Library/Caches/mygo/natives/`。
@@ -60,6 +60,7 @@ internal/media         会话内粘贴与生成的图片/视频扫描及缩略�
 internal/mermaid       Mermaid 排版（Pele + modernc QuickJS，与 sqlite 共用 modernc libc，升级须保持 libc 版本一致；diagram/ 用 mygo 画）
 internal/mobile        手机服务端：配对、E2EE v2、RPC/二进制流与同端口 UDP QUIC（quic.go）
 internal/mquic         手机与 Mac 共用的 QUIC 消息分帧、关闭帧、中转登记与拨号
+internal/tslink        双端共用的内置 Tailscale（tsnet）节点生命周期、登录、对端路由查询与裁剪构建标签
 internal/deskrelay     看桌面与手机 QUIC 共用的 UDP 中转协议、鉴权邀请、APNs 转发与 desk.json 读写
 tools                  desk 验收与部署工具：desksession、deskshape、deskrelay（改中转协议须重部署）
 scripts                dev-app.sh、release.sh、github-release.sh、ios-adhoc.sh、android-release.sh、pele.sh、memprobe.sh、discmem.sh 等
@@ -76,6 +77,7 @@ third_party/mygo       带改动的 mygo v0.7.4（改动与升级方法见其中
 - `docs/features/remote.md`：SSH 远程工作区、桌面查看/接管租约（`desktop.*`）、跨入口写协调及目标文件/媒体/Git RPC 边界与状态机
 - `docs/features/files.md`、`history.md`、`discussions.md`、`usage.md`、`mobile.md`、`ui.md`、`lark.md`：文件栏与编辑器、会话历史、讨论与局域网协作、套餐用量与防休眠、手机遥控与看桌面、桌面各界面行为、飞书多机器人网关
 - `docs/plans/terminal-host.md`：常驻进程无损交接（`daemon.handoff`）与 APFS 运行副本回收
+- `docs/plans/embedded-tailscale.md`：双端内置 Tailscale（`tsnet`）架构、裁剪构建标签（`scripts/ts-tags.sh`）与传输/生命周期边界
 
 ## 关键约定
 

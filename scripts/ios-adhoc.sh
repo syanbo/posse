@@ -34,8 +34,8 @@ fi
 if [ $# -gt 0 ]; then
 	version=$1
 	# 只允许 CHANGELOG 没提交：它和版本号放在同一个提交里；包外的改动（电脑端）不管
-	if [ -n "$(git status --porcelain -- mobile internal/mquic | grep -v " $changelog\$" || true)" ]; then
-		echo "mobile 或 internal/mquic 除了 CHANGELOG.md 还有未提交的改动，先提交再发布" >&2
+	if [ -n "$(git status --porcelain -- mobile internal/mquic internal/tslink | grep -v " $changelog\$" || true)" ]; then
+		echo "mobile、internal/mquic 或 internal/tslink 除了 CHANGELOG.md 还有未提交的改动，先提交再发布" >&2
 		exit 1
 	fi
 else
@@ -54,8 +54,8 @@ fi
 bundle=$(grep -m1 'PRODUCT_BUNDLE_IDENTIFIER = ' mobile/ios/Runner.xcodeproj/project.pbxproj | sed 's/.*= \(.*\);/\1/')
 # 构建号是提交数加 8：开源前把历史捋直去掉了 8 个合并提交，加回来让构建号接着 670 往上，已装的 App 才认得出新版
 build=$(($(git rev-list --count HEAD) + 8))
-if [ -n "$(git status --porcelain -- mobile internal/mquic)" ]; then
-	echo "注意：mobile 或 internal/mquic 有未提交的改动，会一起打进包里" >&2
+if [ -n "$(git status --porcelain -- mobile internal/mquic internal/tslink)" ]; then
+	echo "注意：mobile、internal/mquic 或 internal/tslink 有未提交的改动，会一起打进包里" >&2
 fi
 # 这一版的更新内容：CHANGELOG 里 "## 版本" 下面的列表，一条一项（续行接到上一条后面）
 # 中文条目在前，英文条目在 "### English" 小节里：notes 只取中文，notes_en 取英文

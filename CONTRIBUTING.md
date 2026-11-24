@@ -6,7 +6,7 @@
 
 ```sh
 export GOPROXY=https://goproxy.cn,direct   # 国内网络
-go build -o bin/posse ./cmd/posse
+. scripts/ts-tags.sh && posse_apply_ts_tags && go build -o bin/posse ./cmd/posse
 go vet ./... && go test ./... && go tool mygo vet && go tool mygo i18n check
 ```
 
@@ -33,7 +33,7 @@ Issues and PRs are welcome. Conventions, architecture and per-module notes live 
 ## Build and test
 
 ```sh
-go build -o bin/posse ./cmd/posse
+. scripts/ts-tags.sh && posse_apply_ts_tags && go build -o bin/posse ./cmd/posse
 go vet ./... && go test ./... && go tool mygo vet && go tool mygo i18n check
 ```
 

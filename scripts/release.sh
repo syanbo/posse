@@ -10,6 +10,9 @@
 set -eu
 cd "$(dirname "$0")/.."
 export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
+# 裁剪内置 Tailscale 构建标签：从 go env GOFLAGS 合并 BuildTagsDarwin，mygo build 再与 mygo_noinspector 合并
+. scripts/ts-tags.sh
+posse_apply_ts_tags
 
 bucket=posse-updates
 # 更新包的签名私钥只在发布时交给 mygo：mygo.json 里不写它，日常打包就不做更新包和增量包（要下载旧版逐个比较，慢）

@@ -22,9 +22,14 @@
   - 必须保持 `ts_omit_logtail`，禁止向 `log.tailscale.com` 上传节点日志；
   - 保持 `ts_omit_ipnbus`，状态读取统一走 `LocalClient.Status(ctx)`，避免额外代码体积；
   - Android 显式空导入 `tailscale.com/feature/androidbin`（绕过 Android 11+ `NETLINK_ROUTE` `EPERM`）并支持 JNI `netns.SetAndroidBindToNetworkFunc`。
-- 探针实测增量（`tailscale.com@v1.106.0`，`go build -trimpath -ldflags="-s -w" -tags=<裁剪标签>`，以含 `net/http` + `crypto/tls` + `encoding/json` 的 4.04 MB 空壳为基线；阶段 7 完成后以完整 Release 包复测替换）：
-  - `darwin/arm64` 探针：原始 `+10.25 MB`，LZMA（对应 MyGo `hdiutil -format ULMO`）`+2.65 MB`；预计 `Posse.app` +9~10 MB、`Posse.dmg` +2.5~2.7 MB（13.5 MB → ~16 MB）；
-  - `ios/arm64`（`c-archive` + `clang -dynamiclib`）纯探针 `16.2 MB`，`android/arm64`（`c-shared`）纯探针 `16.6 MB`；合并进现有 `libposse_quic`（9.6~10 MB）预计未压缩 +12~16 MB，iOS `.ipa` 约 +4.5~5.5 MB。
+- 统一通过 `scripts/ts-tags.sh`（`posse_apply_ts_tags`）从 `internal/tslink/tslink.go` 提取 `BuildTagsDarwin` 并按 Go `GOFLAGS` 引号规则合并进当前生效的 `go env GOFLAGS`（`scripts/dev-app.sh`、`scripts/release.sh` 及 `AGENTS.md` 手动构建命令共用），手机端在 `mobile/packages/posse_quic/hook/build.dart` 使用同源裁剪标签，由 `TestBuildTagsSyncAcrossMobileAndScripts` 守卫同步。
+- 实测体积（`tailscale.com@v1.106.0`，裁剪构建 `-trimpath -ldflags="-s -w"`；完整签名 `.dmg`/`.ipa`/`.apk` 在正式发版时由对应发布脚本产出）：
+  - **macOS (`darwin/arm64`)**（复现命令：`. scripts/ts-tags.sh && go build -trimpath -ldflags="-s -w" -tags="$(posse_ts_tags_darwin),mygo_noinspector" -o /tmp/Posse-trimmed ./cmd/posse`）：
+    - 接入前基线（`build/darwin-arm64/Posse.app/Contents/MacOS/Posse`）：`37,719,328 B`（`35.97 MiB`），`xz -c -6` 为 `11,068,332 B`（`10.56 MiB`）；
+    - 裁剪后单二进制：`44,838,274 B`（`42.76 MiB`，较基线未压缩 `+7,118,946 B` / `+6.79 MiB`），`xz -c -6` 为 `13,080,500 B`（`12.47 MiB`，较基线 `+2,012,168 B` / `+1.92 MiB`，据此估算 `Posse.dmg` 约 `+2 MB`）；
+    - 未裁剪对照（`-tags=mygo_noinspector`）：`49,387,346 B`（`47.10 MiB`），`xz -c -6` 为 `14,406,776 B`（`13.74 MiB`）；裁剪节省 `4,549,072 B`（`4.34 MiB`）未压缩 / `1,326,276 B`（`1.26 MiB`）LZMA。
+  - **iOS (`arm64`)**：第 4 阶段以 `GOOS=ios GOARCH=arm64` + `BuildTagsDarwin` 交叉编译 `mobile/packages/posse_quic/go`（`c-archive` + `clang -dynamiclib`）测得 `libposse_quic.dylib` 约 `20 MB`（接入前旧 IPA 内为 `10,068,736 B`）。
+  - **Android (`arm64`)**：第 4 阶段以 `GOOS=android GOARCH=arm64` + `BuildTagsAndroid` 交叉编译 `mobile/packages/posse_quic/go`（`c-shared`）测得 `libposse_quic.so` 约 `21 MB`（接入前旧 APK 内为 `10,986,376 B`）。
 
 ## 传输与连接架构
 
@@ -71,12 +76,12 @@
   - iOS/macOS 默认由 Tailscale `netns` 绑底层物理网卡（利于 UDP 打洞），提供可关闭开关（`DisableBindInterface` → `netns.SetDisableBindConnToInterface`）以便国内网络让控制面/DERP 走系统代理；
   - Android 通过 JNI 注入 `netns.SetAndroidBindToNetworkFunc`（`Network.bindSocket`）绑定底层网络，同样受开关控制。
 
-## 分阶段实施
+## 分阶段实施（全部完成）
 
-1. `docs/plans/embedded-tailscale.md`、根 `go.mod` 升级与共享核心包 `internal/tslink`
-2. `internal/mquic` 扩展 + Mac 端 `mobile`、`desk`、`daemon` 与 CLI 接入
-3. Mac 桌面手机页「内置 Tailscale」卡片与多语言
-4. 手机 Go FFI（`posse_quic`）接入 `tsnet`、`tsquic://`、回环 UDP 桥与原生平台钩子
-5. 手机端 `PosseLink` 竞速与看桌面显式 Tailscale 线路
-6. 手机端设置页「内置 Tailscale」UI 与线路标注
-7. 打包脚本裁剪 tag、全端构建验证与文档更新
+1. [x] `docs/plans/embedded-tailscale.md`、根 `go.mod` 升级与共享核心包 `internal/tslink`
+2. [x] `internal/mquic` 扩展 + Mac 端 `mobile`、`desk`、`daemon` 与 CLI 接入
+3. [x] Mac 桌面手机页「内置 Tailscale」卡片与多语言
+4. [x] 手机 Go FFI（`posse_quic`）接入 `tsnet`、`tsquic://`、回环 UDP 桥与原生平台钩子
+5. [x] 手机端 `PosseLink` 竞速与看桌面显式 Tailscale 线路
+6. [x] 手机端设置页「内置 Tailscale」UI 与线路标注
+7. [x] 打包脚本裁剪 tag（`scripts/ts-tags.sh` + `dev-app.sh` / `release.sh` + 移动端发版脏检查）、Mac 开发包与裁剪二进制体积实测、Go / Flutter / `posse_quic` 自动化验证与文档更新（完整签名 `.dmg`/`.ipa`/`.apk` 在正式发版时由对应脚本产出）

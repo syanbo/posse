@@ -150,8 +150,8 @@ You need Go (version in `go.mod`, downloaded automatically) and Xcode. In mainla
 
 ```sh
 git clone https://github.com/syanbo/posse.git && cd posse
-go build -o bin/posse ./cmd/posse
-go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # package Posse.app with an ad-hoc signature (darwin/amd64 on Intel)
+. scripts/ts-tags.sh && posse_apply_ts_tags && go build -o bin/posse ./cmd/posse
+. scripts/ts-tags.sh && posse_apply_ts_tags && go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # package Posse.app with an ad-hoc signature (darwin/amd64 on Intel)
 ```
 
 Ad-hoc signed builds don’t check for updates, and the official release won’t replace them in Applications. For the phone app, see [`mobile/README.md`](mobile/README.md).
