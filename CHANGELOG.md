@@ -3,6 +3,16 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.47
+
+- 修复 Antigravity 1.5.16 起调用 `posse session title`（`/posse-rename`）同步原生标题返回 404 的问题，优先使用新接口并兼容旧版回退；原生改名失败时仍更新 Posse 标签并提示在 agy 中手动 `/rename`。
+- 优化会话命名指南，空会话未提供参数时直接询问标题，不再运行无关命令探测上下文。
+
+### English
+
+- Fix `posse session title` (`/posse-rename`) returning HTTP 404 when syncing native titles on Antigravity 1.5.16+, using the updated endpoint with a fallback for older versions; if native renaming still fails, update the Posse label and prompt to run `/rename` in agy.
+- Update the session naming guide so empty sessions without arguments ask for a title instead of probing with unrelated shell commands.
+
 ## 0.1.46
 
 - 可从桌面任务页或命令行把任务派给 ZCode。首条任务和后续提醒在终端可输入时发送，追加任务沿用同一会话。
