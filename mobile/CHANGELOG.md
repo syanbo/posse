@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.33
+
+- 讨论支持单条消息同时 `@` 多位可用 Agent（最多 8 位，与 `@人` 互斥），长按引用可用 Agent 消息时自动预选该成员，取消引用自动收回。
+- 讨论执行行显示实时耗时，本机活跃执行额外显示一行当前工具/状态进度和后台子代理数，点击「过程」可展开折叠该轮工具调用时间线。
+- 以上讨论新功能需要 Posse for Mac 0.1.48 或更新版本。
+
+### English
+
+- Discussions now support mentioning up to 8 usable agents in one message (mutually exclusive with `@person`). Long-pressing to quote a usable agent message automatically preselects that member and clears it if the quote is removed.
+- Discussion executions show live elapsed time, active local rounds show a single-line tool/status progress summary and background subagent count, and tapping Activity expands a collapsible timeline of tool calls for that round.
+- These discussion features require Posse for Mac 0.1.48 or later.
+
 ## 0.1.32
 
 - Antigravity 回复会在手机对话页逐步显示，发送图片时会作为原生附件交给 Antigravity。
