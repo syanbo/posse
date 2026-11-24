@@ -230,6 +230,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatRouteRelay => 'Relay';
 
   @override
+  String get chatRouteTailscale => 'Tailscale';
+
+  @override
+  String get chatRouteTailscaleDerp => 'Tailscale Relay (DERP)';
+
+  @override
+  String get chatRouteTailscaleDirect => 'Tailscale Direct';
+
+  @override
   String get chatSend => 'Send';
 
   @override
@@ -785,6 +794,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deskPathRelay => 'Relay';
+
+  @override
+  String get deskPathTailscale => 'Tailscale';
+
+  @override
+  String get deskPathTailscaleDerp => 'Tailscale Relay (DERP)';
+
+  @override
+  String get deskPathTailscaleDirect => 'Tailscale Direct';
 
   @override
   String get deskPaused => 'Paused (in background)';
@@ -1989,6 +2007,148 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsWorkspaceMeta => 'Show Branch for Workspaces';
+
+  @override
+  String get tailscaleAdvanced => 'Advanced';
+
+  @override
+  String get tailscaleAuthKey => 'Auth Key (optional)';
+
+  @override
+  String get tailscaleAuthKeyNote =>
+      'Used once to sign in and never written to disk. Saving with an auth key turns on Built-in Tailscale if it is off.';
+
+  @override
+  String get tailscaleAuthKeyPlaceholder => 'tskey-auth-…';
+
+  @override
+  String get tailscaleControlUrl => 'Control Server URL (Headscale)';
+
+  @override
+  String get tailscaleControlUrlPlaceholder =>
+      'Leave blank for official Tailscale';
+
+  @override
+  String get tailscaleCopyLoginUrl => 'Copy Login Link';
+
+  @override
+  String tailscaleCurrentRoute(String route) {
+    return 'Current route: $route';
+  }
+
+  @override
+  String get tailscaleDisableBind => 'Follow system proxy / VPN routing';
+
+  @override
+  String get tailscaleDisableBindNote =>
+      'Turn on if this network needs a proxy to reach Tailscale or DERP servers.';
+
+  @override
+  String get tailscaleEnable => 'Enable Built-in Tailscale';
+
+  @override
+  String get tailscaleError => 'Error';
+
+  @override
+  String get tailscaleErrorGeneric =>
+      'Built-in Tailscale operation failed. Try again.';
+
+  @override
+  String get tailscaleErrorNotRunning =>
+      'The built-in Tailscale node is not running.';
+
+  @override
+  String get tailscaleErrorStateDir =>
+      'Couldn’t access the local Tailscale state directory.';
+
+  @override
+  String get tailscaleErrorUnavailable =>
+      'Built-in Tailscale is not available on this device.';
+
+  @override
+  String get tailscaleHostname => 'Node Name';
+
+  @override
+  String get tailscaleHostnamePlaceholder => 'Default: posse-mobile';
+
+  @override
+  String get tailscaleInvalidAuthUrl =>
+      'The login link is not a valid http/https URL.';
+
+  @override
+  String get tailscaleInvalidControlUrl =>
+      'Control Server URL must be a valid http/https address.';
+
+  @override
+  String get tailscaleNeedsApproval => 'Awaiting Approval';
+
+  @override
+  String get tailscaleNeedsApprovalNote =>
+      'Approve this device in the Tailscale admin console to finish connecting.';
+
+  @override
+  String get tailscaleNeedsLogin => 'Sign In Required';
+
+  @override
+  String get tailscaleNeedsLoginNote =>
+      'Sign in to your Tailscale account in the browser to join your tailnet.';
+
+  @override
+  String get tailscaleNote =>
+      'Runs a standalone Tailscale node inside Posse without taking the system VPN slot, so it works alongside proxy apps like Surge, Shadowrocket, or Clash.';
+
+  @override
+  String get tailscaleOff => 'Off';
+
+  @override
+  String get tailscaleOpenLogin => 'Open Login Page';
+
+  @override
+  String get tailscaleOpenLoginFailed =>
+      'Couldn’t open the login link in the browser.';
+
+  @override
+  String get tailscaleRefreshLogin => 'Refresh Link';
+
+  @override
+  String get tailscaleReset => 'Reset Node Identity';
+
+  @override
+  String get tailscaleResetBody =>
+      'This logs out the built-in Tailscale node, clears its local keys and state, and turns it off. You will need to sign in again.';
+
+  @override
+  String get tailscaleResetConfirm => 'Reset Built-in Tailscale Identity?';
+
+  @override
+  String tailscaleResetLocalOnly(String reason) {
+    return 'Local state was cleared, but remote logout failed: $reason';
+  }
+
+  @override
+  String get tailscaleRunning => 'Connected';
+
+  @override
+  String get tailscaleRunningNote =>
+      'Posse automatically uses this built-in node when connecting to your Mac’s Tailscale address.';
+
+  @override
+  String get tailscaleSaved => 'Settings saved';
+
+  @override
+  String get tailscaleStarting => 'Starting';
+
+  @override
+  String get tailscaleStartingNote => 'Starting the built-in Tailscale node…';
+
+  @override
+  String get tailscaleStopped => 'Stopped';
+
+  @override
+  String get tailscaleStoppedNote => 'The built-in Tailscale node is stopped.';
+
+  @override
+  String get tailscaleTitle => 'Built-in Tailscale';
 
   @override
   String terminalCantOpenLink(String url) {

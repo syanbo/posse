@@ -286,6 +286,18 @@
   "@chatRouteRelay": {
     "description": "Status line after the latency reading: the connection goes through the relay."
   },
+  "chatRouteTailscale": "Tailscale",
+  "@chatRouteTailscale": {
+    "description": "Status line after the latency reading: the connection goes through built-in Tailscale with unknown path."
+  },
+  "chatRouteTailscaleDerp": "Tailscale Relay (DERP)",
+  "@chatRouteTailscaleDerp": {
+    "description": "Status line after the latency reading: the connection goes through built-in Tailscale DERP relay."
+  },
+  "chatRouteTailscaleDirect": "Tailscale Direct",
+  "@chatRouteTailscaleDirect": {
+    "description": "Status line after the latency reading: the connection goes directly over built-in Tailscale."
+  },
   "chatSend": "Send",
   "@chatSend": {
     "description": "Chat: tooltip of the send button in the message box."
@@ -1058,6 +1070,18 @@
   "deskPathRelay": "Relay",
   "@deskPathRelay": {
     "description": "Remote Desktop › debug panel: the picture comes through the relay."
+  },
+  "deskPathTailscale": "Tailscale",
+  "@deskPathTailscale": {
+    "description": "Remote Desktop › debug panel: the picture comes over Tailscale."
+  },
+  "deskPathTailscaleDerp": "Tailscale Relay (DERP)",
+  "@deskPathTailscaleDerp": {
+    "description": "Remote Desktop › debug panel: the picture comes over built-in Tailscale DERP relay."
+  },
+  "deskPathTailscaleDirect": "Tailscale Direct",
+  "@deskPathTailscaleDirect": {
+    "description": "Remote Desktop › debug panel: the picture comes directly over built-in Tailscale."
   },
   "deskPaused": "Paused (in background)",
   "@deskPaused": {
@@ -2615,6 +2639,180 @@
   "settingsWorkspaceMeta": "Show Branch for Workspaces",
   "@settingsWorkspaceMeta": {
     "description": "Settings › Home: switch."
+  },
+  "tailscaleAdvanced": "Advanced",
+  "@tailscaleAdvanced": {
+    "description": "Settings › Built-in Tailscale: collapsible section title for optional fields."
+  },
+  "tailscaleAuthKey": "Auth Key (optional)",
+  "@tailscaleAuthKey": {
+    "description": "Settings › Built-in Tailscale: label for the one-time pre-authentication key field."
+  },
+  "tailscaleAuthKeyNote": "Used once to sign in and never written to disk. Saving with an auth key turns on Built-in Tailscale if it is off.",
+  "@tailscaleAuthKeyNote": {
+    "description": "Settings › Built-in Tailscale: helper note under the auth key field."
+  },
+  "tailscaleAuthKeyPlaceholder": "tskey-auth-…",
+  "@tailscaleAuthKeyPlaceholder": {
+    "description": "Settings › Built-in Tailscale: placeholder for the one-time auth key field."
+  },
+  "tailscaleControlUrl": "Control Server URL (Headscale)",
+  "@tailscaleControlUrl": {
+    "description": "Settings › Built-in Tailscale: label for the custom coordination server URL field."
+  },
+  "tailscaleControlUrlPlaceholder": "Leave blank for official Tailscale",
+  "@tailscaleControlUrlPlaceholder": {
+    "description": "Settings › Built-in Tailscale: placeholder for the custom coordination server URL field."
+  },
+  "tailscaleCopyLoginUrl": "Copy Login Link",
+  "@tailscaleCopyLoginUrl": {
+    "description": "Settings › Built-in Tailscale: button to copy the browser sign-in URL."
+  },
+  "tailscaleCurrentRoute": "Current route: {route}",
+  "@tailscaleCurrentRoute": {
+    "description": "Settings › Built-in Tailscale: shows the active peer route when connected via built-in Tailscale.",
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "tailscaleDisableBind": "Follow system proxy / VPN routing",
+  "@tailscaleDisableBind": {
+    "description": "Settings › Built-in Tailscale: switch label to disable binding sockets directly to physical interfaces."
+  },
+  "tailscaleDisableBindNote": "Turn on if this network needs a proxy to reach Tailscale or DERP servers.",
+  "@tailscaleDisableBindNote": {
+    "description": "Settings › Built-in Tailscale: helper note under the proxy routing switch."
+  },
+  "tailscaleEnable": "Enable Built-in Tailscale",
+  "@tailscaleEnable": {
+    "description": "Settings › Built-in Tailscale: main switch label."
+  },
+  "tailscaleError": "Error",
+  "@tailscaleError": {
+    "description": "Settings › Built-in Tailscale: status label when an error occurred."
+  },
+  "tailscaleErrorGeneric": "Built-in Tailscale operation failed. Try again.",
+  "@tailscaleErrorGeneric": {
+    "description": "Settings › Built-in Tailscale: fallback error message for unexpected native failures."
+  },
+  "tailscaleErrorNotRunning": "The built-in Tailscale node is not running.",
+  "@tailscaleErrorNotRunning": {
+    "description": "Settings › Built-in Tailscale: error message when an operation requires a running node."
+  },
+  "tailscaleErrorStateDir": "Couldn’t access the local Tailscale state directory.",
+  "@tailscaleErrorStateDir": {
+    "description": "Settings › Built-in Tailscale: error message when native storage directory lookup fails."
+  },
+  "tailscaleErrorUnavailable": "Built-in Tailscale is not available on this device.",
+  "@tailscaleErrorUnavailable": {
+    "description": "Settings › Built-in Tailscale: error message when built-in Tailscale is unsupported."
+  },
+  "tailscaleHostname": "Node Name",
+  "@tailscaleHostname": {
+    "description": "Settings › Built-in Tailscale: label for the custom Tailscale hostname field."
+  },
+  "tailscaleHostnamePlaceholder": "Default: posse-mobile",
+  "@tailscaleHostnamePlaceholder": {
+    "description": "Settings › Built-in Tailscale: placeholder for the custom Tailscale hostname field."
+  },
+  "tailscaleInvalidAuthUrl": "The login link is not a valid http/https URL.",
+  "@tailscaleInvalidAuthUrl": {
+    "description": "Settings › Built-in Tailscale: error shown when the auth URL fails validation."
+  },
+  "tailscaleInvalidControlUrl": "Control Server URL must be a valid http/https address.",
+  "@tailscaleInvalidControlUrl": {
+    "description": "Settings › Built-in Tailscale: error shown when the custom control server URL is invalid."
+  },
+  "tailscaleNeedsApproval": "Awaiting Approval",
+  "@tailscaleNeedsApproval": {
+    "description": "Settings › Built-in Tailscale: status label when admin machine approval is pending."
+  },
+  "tailscaleNeedsApprovalNote": "Approve this device in the Tailscale admin console to finish connecting.",
+  "@tailscaleNeedsApprovalNote": {
+    "description": "Settings › Built-in Tailscale: helper note when admin machine approval is pending."
+  },
+  "tailscaleNeedsLogin": "Sign In Required",
+  "@tailscaleNeedsLogin": {
+    "description": "Settings › Built-in Tailscale: status label when browser authentication is needed."
+  },
+  "tailscaleNeedsLoginNote": "Sign in to your Tailscale account in the browser to join your tailnet.",
+  "@tailscaleNeedsLoginNote": {
+    "description": "Settings › Built-in Tailscale: helper note when browser authentication is needed."
+  },
+  "tailscaleNote": "Runs a standalone Tailscale node inside Posse without taking the system VPN slot, so it works alongside proxy apps like Surge, Shadowrocket, or Clash.",
+  "@tailscaleNote": {
+    "description": "Settings › Built-in Tailscale: explanation shown when built-in Tailscale is off."
+  },
+  "tailscaleOff": "Off",
+  "@tailscaleOff": {
+    "description": "Settings › Built-in Tailscale: status label when disabled."
+  },
+  "tailscaleOpenLogin": "Open Login Page",
+  "@tailscaleOpenLogin": {
+    "description": "Settings › Built-in Tailscale: button to open the Tailscale sign-in link in the browser."
+  },
+  "tailscaleOpenLoginFailed": "Couldn’t open the login link in the browser.",
+  "@tailscaleOpenLoginFailed": {
+    "description": "Settings › Built-in Tailscale: error shown when launching the external browser fails."
+  },
+  "tailscaleRefreshLogin": "Refresh Link",
+  "@tailscaleRefreshLogin": {
+    "description": "Settings › Built-in Tailscale: button to request a fresh login link."
+  },
+  "tailscaleReset": "Reset Node Identity",
+  "@tailscaleReset": {
+    "description": "Settings › Built-in Tailscale: destructive button to log out and wipe local node state."
+  },
+  "tailscaleResetBody": "This logs out the built-in Tailscale node, clears its local keys and state, and turns it off. You will need to sign in again.",
+  "@tailscaleResetBody": {
+    "description": "Settings › Built-in Tailscale: confirmation dialog body before resetting node identity."
+  },
+  "tailscaleResetConfirm": "Reset Built-in Tailscale Identity?",
+  "@tailscaleResetConfirm": {
+    "description": "Settings › Built-in Tailscale: confirmation dialog title before resetting node identity."
+  },
+  "tailscaleResetLocalOnly": "Local state was cleared, but remote logout failed: {reason}",
+  "@tailscaleResetLocalOnly": {
+    "description": "Settings › Built-in Tailscale: warning when local state was cleared but remote logout failed.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "tailscaleRunning": "Connected",
+  "@tailscaleRunning": {
+    "description": "Settings › Built-in Tailscale: status label when the node is connected."
+  },
+  "tailscaleRunningNote": "Posse automatically uses this built-in node when connecting to your Mac’s Tailscale address.",
+  "@tailscaleRunningNote": {
+    "description": "Settings › Built-in Tailscale: helper note when connected."
+  },
+  "tailscaleSaved": "Settings saved",
+  "@tailscaleSaved": {
+    "description": "Settings › Built-in Tailscale: brief notice after saving advanced settings."
+  },
+  "tailscaleStarting": "Starting",
+  "@tailscaleStarting": {
+    "description": "Settings › Built-in Tailscale: status label while the node is starting."
+  },
+  "tailscaleStartingNote": "Starting the built-in Tailscale node…",
+  "@tailscaleStartingNote": {
+    "description": "Settings › Built-in Tailscale: helper note while starting."
+  },
+  "tailscaleStopped": "Stopped",
+  "@tailscaleStopped": {
+    "description": "Settings › Built-in Tailscale: status label when stopped."
+  },
+  "tailscaleStoppedNote": "The built-in Tailscale node is stopped.",
+  "@tailscaleStoppedNote": {
+    "description": "Settings › Built-in Tailscale: helper note when stopped."
+  },
+  "tailscaleTitle": "Built-in Tailscale",
+  "@tailscaleTitle": {
+    "description": "Settings: section and screen title for the embedded Tailscale node."
   },
   "terminalCantOpenLink": "Can’t open this link: {url}",
   "@terminalCantOpenLink": {

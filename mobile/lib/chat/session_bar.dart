@@ -163,7 +163,12 @@ extension on SessionTitle {
                       unresponsive: model.unresponsive,
                       gap: 12,
                     ),
-                    if (routeLabel(l, model.connectedUrl) case final route?)
+                    if (routeLabel(
+                          l,
+                          model.connectedUrl,
+                          peerRoute: model.tailscalePeerRoute,
+                        )
+                        case final route?)
                       Padding(
                         padding: const EdgeInsets.only(left: 4),
                         child: Text(route, style: statusLineStyle(c.muted)),

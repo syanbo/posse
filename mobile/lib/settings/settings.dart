@@ -14,6 +14,7 @@ import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../update/update.dart';
 import 'custom_keys_screen.dart';
+import 'tailscale_screen.dart';
 
 /// 设置：外观、打开会话的方式、终端字号和快捷键、对话里显示什么，以及配对的电脑。改了立即生效并存在手机上。
 class SettingsScreen extends StatelessWidget {
@@ -224,6 +225,33 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (model.tailscale.supported)
+                  Section(
+                    title: l.tailscaleTitle,
+                    children: [
+                      RowTile(
+                        key: const Key('settings-tailscale-entry'),
+                        leading: Icon(
+                          Icons.hub_rounded,
+                          size: Ic.button,
+                          color: tailscaleStatusColor(
+                            c,
+                            model.tailscale.status,
+                          ),
+                        ),
+                        title: Text(l.tailscaleTitle),
+                        subtitle: Text(
+                          tailscaleSummaryText(l, model.tailscale, s),
+                        ),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                TailscaleSettingsScreen(model: model),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ProfileSection(model: model),
                 if (model.push != null)
                   Section(

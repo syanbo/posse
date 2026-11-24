@@ -142,7 +142,8 @@ class PosseLink {
   TailscalePeerRoute? peerRoute;
   void Function()? onPeerRoute;
   int _peerRouteSeq = 0;
-  DateTime _peerRouteCheckedAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Timer? _peerRouteTimer;
+  static const _peerRoutePollInterval = Duration(seconds: 10);
   void Function()? _cancelActiveOpen;
 
   PhoneRpc? rpc;
@@ -210,9 +211,8 @@ class PosseLink {
       final host = Uri.tryParse(tsUrl)?.host ?? '';
       if (host.isEmpty) continue;
       try {
-        final r = await routeQuery(
-          host,
-        ).timeout(const Duration(milliseconds: 150));
+        final r = await routeQuery(host)
+            .timeout(const Duration(milliseconds: 150));
         if (r.isDerp) derpDelayed.add(tsUrl);
       } catch (_) {}
     }
@@ -330,6 +330,8 @@ class PosseLink {
       if (_closed || !identical(rpc, won.value)) return;
       rpc = null;
       _peerRouteSeq++;
+      _peerRouteTimer?.cancel();
+      _peerRouteTimer = null;
       if (peerRoute != null) {
         peerRoute = null;
         onPeerRoute?.call();
@@ -340,10 +342,14 @@ class PosseLink {
       unawaited(_reopen());
     });
     final previous = rpc;
+    final previousUrl = url;
     rpc = won.value;
     url = won.url;
     _peerRouteSeq++;
-    if (!isTsQuicUrl(won.url) && peerRoute != null) {
+    _peerRouteTimer?.cancel();
+    _peerRouteTimer = null;
+    if ((!isTsQuicUrl(won.url) || previousUrl != won.url) &&
+        peerRoute != null) {
       peerRoute = null;
       onPeerRoute?.call();
     }
@@ -355,11 +361,6 @@ class PosseLink {
       onChange: () {
         if (identical(rpc, won.value)) {
           onLatency?.call();
-          if (isTsQuicUrl(won.url) &&
-              DateTime.now().difference(_peerRouteCheckedAt) >=
-                  const Duration(seconds: 10)) {
-            unawaited(_refreshPeerRoute(won.value, won.url));
-          }
         }
       },
     );
@@ -369,6 +370,10 @@ class PosseLink {
     onActivity?.call();
     if (isTsQuicUrl(won.url)) {
       unawaited(_refreshPeerRoute(won.value, won.url));
+      _peerRouteTimer = Timer.periodic(_peerRoutePollInterval, (_) {
+        if (_closed || !identical(rpc, won.value) || url != won.url) return;
+        unawaited(_refreshPeerRoute(won.value, won.url));
+      });
     }
     if (isRelayQuicUrl(won.url)) unawaited(_punch(won.value, won.url, epoch));
     if (drain) {
@@ -384,10 +389,12 @@ class PosseLink {
     final host = Uri.tryParse(viaUrl)?.host ?? '';
     if (host.isEmpty) return;
     final seq = ++_peerRouteSeq;
-    _peerRouteCheckedAt = DateTime.now();
     try {
       final next = await query(host);
-      if (_closed || seq != _peerRouteSeq || !identical(rpc, via) || url != viaUrl) {
+      if (_closed ||
+          seq != _peerRouteSeq ||
+          !identical(rpc, via) ||
+          url != viaUrl) {
         return;
       }
       final prev = peerRoute;
@@ -630,6 +637,9 @@ class PosseLink {
     _epoch++;
     _cancelActiveOpen?.call();
     _cancelActiveOpen = null;
+    _peerRouteSeq++;
+    _peerRouteTimer?.cancel();
+    _peerRouteTimer = null;
     peerRoute = null;
     meter?.stop();
     meter = null;

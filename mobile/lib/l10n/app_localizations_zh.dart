@@ -222,6 +222,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatRouteRelay => '中转';
 
   @override
+  String get chatRouteTailscale => 'Tailscale';
+
+  @override
+  String get chatRouteTailscaleDerp => 'Tailscale 中继 (DERP)';
+
+  @override
+  String get chatRouteTailscaleDirect => 'Tailscale 直连';
+
+  @override
   String get chatSend => '发送';
 
   @override
@@ -748,6 +757,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get deskPathRelay => '中转';
+
+  @override
+  String get deskPathTailscale => 'Tailscale';
+
+  @override
+  String get deskPathTailscaleDerp => 'Tailscale 中继 (DERP)';
+
+  @override
+  String get deskPathTailscaleDirect => 'Tailscale 直连';
 
   @override
   String get deskPaused => '已暂停（后台）';
@@ -1879,6 +1897,136 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsWorkspaceMeta => '工作区显示分支';
+
+  @override
+  String get tailscaleAdvanced => '高级设置';
+
+  @override
+  String get tailscaleAuthKey => '认证密钥（可选）';
+
+  @override
+  String get tailscaleAuthKeyNote => '仅用于一次性登录，不会写入磁盘；若节点当前关闭，填写后保存会一并开启。';
+
+  @override
+  String get tailscaleAuthKeyPlaceholder => 'tskey-auth-…';
+
+  @override
+  String get tailscaleControlUrl => '控制服务器地址（Headscale）';
+
+  @override
+  String get tailscaleControlUrlPlaceholder => '留空使用官方 Tailscale';
+
+  @override
+  String get tailscaleCopyLoginUrl => '复制登录链接';
+
+  @override
+  String tailscaleCurrentRoute(String route) {
+    return '当前路径：$route';
+  }
+
+  @override
+  String get tailscaleDisableBind => '跟随系统代理或 VPN 路由';
+
+  @override
+  String get tailscaleDisableBindNote =>
+      '当前网络需要经过代理才能访问 Tailscale 或 DERP 服务器时打开。';
+
+  @override
+  String get tailscaleEnable => '开启内置 Tailscale';
+
+  @override
+  String get tailscaleError => '出错';
+
+  @override
+  String get tailscaleErrorGeneric => '内置 Tailscale 操作失败，请重试。';
+
+  @override
+  String get tailscaleErrorNotRunning => '内置 Tailscale 节点尚未运行。';
+
+  @override
+  String get tailscaleErrorStateDir => '无法访问本地 Tailscale 状态目录。';
+
+  @override
+  String get tailscaleErrorUnavailable => '当前设备不支持内置 Tailscale。';
+
+  @override
+  String get tailscaleHostname => '节点名称';
+
+  @override
+  String get tailscaleHostnamePlaceholder => '默认：posse-mobile';
+
+  @override
+  String get tailscaleInvalidAuthUrl => '登录链接不是有效的 http/https 地址。';
+
+  @override
+  String get tailscaleInvalidControlUrl => '控制服务器地址必须是有效的 http/https 地址。';
+
+  @override
+  String get tailscaleNeedsApproval => '等待审批';
+
+  @override
+  String get tailscaleNeedsApprovalNote => '请在 Tailscale 管理后台批准这台设备以完成连接。';
+
+  @override
+  String get tailscaleNeedsLogin => '需要登录';
+
+  @override
+  String get tailscaleNeedsLoginNote => '在浏览器中登录你的 Tailscale 账号以加入网络。';
+
+  @override
+  String get tailscaleNote =>
+      '在 Posse 内置独立的 Tailscale 节点，不占用系统 VPN 槽位，可与 Surge、Shadowrocket、Clash 等代理工具同时使用。';
+
+  @override
+  String get tailscaleOff => '未开启';
+
+  @override
+  String get tailscaleOpenLogin => '打开登录页面';
+
+  @override
+  String get tailscaleOpenLoginFailed => '无法在浏览器中打开登录链接。';
+
+  @override
+  String get tailscaleRefreshLogin => '刷新链接';
+
+  @override
+  String get tailscaleReset => '重置节点身份';
+
+  @override
+  String get tailscaleResetBody =>
+      '将注销内置 Tailscale 节点、清除本地密钥与状态并关闭开关，下次使用需要重新登录。';
+
+  @override
+  String get tailscaleResetConfirm => '重置内置 Tailscale 节点身份？';
+
+  @override
+  String tailscaleResetLocalOnly(String reason) {
+    return '本地状态已清除，但远端注销失败：$reason';
+  }
+
+  @override
+  String get tailscaleRunning => '已连接';
+
+  @override
+  String get tailscaleRunningNote => '连接电脑的 Tailscale 地址时，Posse 会自动通过这个内置节点通信。';
+
+  @override
+  String get tailscaleSaved => '设置已保存';
+
+  @override
+  String get tailscaleStarting => '正在启动';
+
+  @override
+  String get tailscaleStartingNote => '正在启动内置 Tailscale 节点…';
+
+  @override
+  String get tailscaleStopped => '已停止';
+
+  @override
+  String get tailscaleStoppedNote => '内置 Tailscale 节点已停止。';
+
+  @override
+  String get tailscaleTitle => '内置 Tailscale';
 
   @override
   String terminalCantOpenLink(String url) {

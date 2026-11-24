@@ -446,6 +446,24 @@ abstract class AppLocalizations {
   /// **'Relay'**
   String get chatRouteRelay;
 
+  /// Status line after the latency reading: the connection goes through built-in Tailscale with unknown path.
+  ///
+  /// In en, this message translates to:
+  /// **'Tailscale'**
+  String get chatRouteTailscale;
+
+  /// Status line after the latency reading: the connection goes through built-in Tailscale DERP relay.
+  ///
+  /// In en, this message translates to:
+  /// **'Tailscale Relay (DERP)'**
+  String get chatRouteTailscaleDerp;
+
+  /// Status line after the latency reading: the connection goes directly over built-in Tailscale.
+  ///
+  /// In en, this message translates to:
+  /// **'Tailscale Direct'**
+  String get chatRouteTailscaleDirect;
+
   /// Chat: tooltip of the send button in the message box.
   ///
   /// In en, this message translates to:
@@ -1339,6 +1357,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Relay'**
   String get deskPathRelay;
+
+  /// Remote Desktop › debug panel: the picture comes over Tailscale.
+  ///
+  /// In en, this message translates to:
+  /// **'Tailscale'**
+  String get deskPathTailscale;
+
+  /// Remote Desktop › debug panel: the picture comes over built-in Tailscale DERP relay.
+  ///
+  /// In en, this message translates to:
+  /// **'Tailscale Relay (DERP)'**
+  String get deskPathTailscaleDerp;
+
+  /// Remote Desktop › debug panel: the picture comes directly over built-in Tailscale.
+  ///
+  /// In en, this message translates to:
+  /// **'Tailscale Direct'**
+  String get deskPathTailscaleDirect;
 
   /// Remote Desktop: banner while the app is in the background.
   ///
@@ -3373,6 +3409,252 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Show Branch for Workspaces'**
   String get settingsWorkspaceMeta;
+
+  /// Settings › Built-in Tailscale: collapsible section title for optional fields.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get tailscaleAdvanced;
+
+  /// Settings › Built-in Tailscale: label for the one-time pre-authentication key field.
+  ///
+  /// In en, this message translates to:
+  /// **'Auth Key (optional)'**
+  String get tailscaleAuthKey;
+
+  /// Settings › Built-in Tailscale: helper note under the auth key field.
+  ///
+  /// In en, this message translates to:
+  /// **'Used once to sign in and never written to disk. Saving with an auth key turns on Built-in Tailscale if it is off.'**
+  String get tailscaleAuthKeyNote;
+
+  /// Settings › Built-in Tailscale: placeholder for the one-time auth key field.
+  ///
+  /// In en, this message translates to:
+  /// **'tskey-auth-…'**
+  String get tailscaleAuthKeyPlaceholder;
+
+  /// Settings › Built-in Tailscale: label for the custom coordination server URL field.
+  ///
+  /// In en, this message translates to:
+  /// **'Control Server URL (Headscale)'**
+  String get tailscaleControlUrl;
+
+  /// Settings › Built-in Tailscale: placeholder for the custom coordination server URL field.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave blank for official Tailscale'**
+  String get tailscaleControlUrlPlaceholder;
+
+  /// Settings › Built-in Tailscale: button to copy the browser sign-in URL.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy Login Link'**
+  String get tailscaleCopyLoginUrl;
+
+  /// Settings › Built-in Tailscale: shows the active peer route when connected via built-in Tailscale.
+  ///
+  /// In en, this message translates to:
+  /// **'Current route: {route}'**
+  String tailscaleCurrentRoute(String route);
+
+  /// Settings › Built-in Tailscale: switch label to disable binding sockets directly to physical interfaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow system proxy / VPN routing'**
+  String get tailscaleDisableBind;
+
+  /// Settings › Built-in Tailscale: helper note under the proxy routing switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on if this network needs a proxy to reach Tailscale or DERP servers.'**
+  String get tailscaleDisableBindNote;
+
+  /// Settings › Built-in Tailscale: main switch label.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable Built-in Tailscale'**
+  String get tailscaleEnable;
+
+  /// Settings › Built-in Tailscale: status label when an error occurred.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get tailscaleError;
+
+  /// Settings › Built-in Tailscale: fallback error message for unexpected native failures.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in Tailscale operation failed. Try again.'**
+  String get tailscaleErrorGeneric;
+
+  /// Settings › Built-in Tailscale: error message when an operation requires a running node.
+  ///
+  /// In en, this message translates to:
+  /// **'The built-in Tailscale node is not running.'**
+  String get tailscaleErrorNotRunning;
+
+  /// Settings › Built-in Tailscale: error message when native storage directory lookup fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t access the local Tailscale state directory.'**
+  String get tailscaleErrorStateDir;
+
+  /// Settings › Built-in Tailscale: error message when built-in Tailscale is unsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in Tailscale is not available on this device.'**
+  String get tailscaleErrorUnavailable;
+
+  /// Settings › Built-in Tailscale: label for the custom Tailscale hostname field.
+  ///
+  /// In en, this message translates to:
+  /// **'Node Name'**
+  String get tailscaleHostname;
+
+  /// Settings › Built-in Tailscale: placeholder for the custom Tailscale hostname field.
+  ///
+  /// In en, this message translates to:
+  /// **'Default: posse-mobile'**
+  String get tailscaleHostnamePlaceholder;
+
+  /// Settings › Built-in Tailscale: error shown when the auth URL fails validation.
+  ///
+  /// In en, this message translates to:
+  /// **'The login link is not a valid http/https URL.'**
+  String get tailscaleInvalidAuthUrl;
+
+  /// Settings › Built-in Tailscale: error shown when the custom control server URL is invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Control Server URL must be a valid http/https address.'**
+  String get tailscaleInvalidControlUrl;
+
+  /// Settings › Built-in Tailscale: status label when admin machine approval is pending.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting Approval'**
+  String get tailscaleNeedsApproval;
+
+  /// Settings › Built-in Tailscale: helper note when admin machine approval is pending.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve this device in the Tailscale admin console to finish connecting.'**
+  String get tailscaleNeedsApprovalNote;
+
+  /// Settings › Built-in Tailscale: status label when browser authentication is needed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign In Required'**
+  String get tailscaleNeedsLogin;
+
+  /// Settings › Built-in Tailscale: helper note when browser authentication is needed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to your Tailscale account in the browser to join your tailnet.'**
+  String get tailscaleNeedsLoginNote;
+
+  /// Settings › Built-in Tailscale: explanation shown when built-in Tailscale is off.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs a standalone Tailscale node inside Posse without taking the system VPN slot, so it works alongside proxy apps like Surge, Shadowrocket, or Clash.'**
+  String get tailscaleNote;
+
+  /// Settings › Built-in Tailscale: status label when disabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get tailscaleOff;
+
+  /// Settings › Built-in Tailscale: button to open the Tailscale sign-in link in the browser.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Login Page'**
+  String get tailscaleOpenLogin;
+
+  /// Settings › Built-in Tailscale: error shown when launching the external browser fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t open the login link in the browser.'**
+  String get tailscaleOpenLoginFailed;
+
+  /// Settings › Built-in Tailscale: button to request a fresh login link.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh Link'**
+  String get tailscaleRefreshLogin;
+
+  /// Settings › Built-in Tailscale: destructive button to log out and wipe local node state.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Node Identity'**
+  String get tailscaleReset;
+
+  /// Settings › Built-in Tailscale: confirmation dialog body before resetting node identity.
+  ///
+  /// In en, this message translates to:
+  /// **'This logs out the built-in Tailscale node, clears its local keys and state, and turns it off. You will need to sign in again.'**
+  String get tailscaleResetBody;
+
+  /// Settings › Built-in Tailscale: confirmation dialog title before resetting node identity.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Built-in Tailscale Identity?'**
+  String get tailscaleResetConfirm;
+
+  /// Settings › Built-in Tailscale: warning when local state was cleared but remote logout failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Local state was cleared, but remote logout failed: {reason}'**
+  String tailscaleResetLocalOnly(String reason);
+
+  /// Settings › Built-in Tailscale: status label when the node is connected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get tailscaleRunning;
+
+  /// Settings › Built-in Tailscale: helper note when connected.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse automatically uses this built-in node when connecting to your Mac’s Tailscale address.'**
+  String get tailscaleRunningNote;
+
+  /// Settings › Built-in Tailscale: brief notice after saving advanced settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings saved'**
+  String get tailscaleSaved;
+
+  /// Settings › Built-in Tailscale: status label while the node is starting.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting'**
+  String get tailscaleStarting;
+
+  /// Settings › Built-in Tailscale: helper note while starting.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting the built-in Tailscale node…'**
+  String get tailscaleStartingNote;
+
+  /// Settings › Built-in Tailscale: status label when stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get tailscaleStopped;
+
+  /// Settings › Built-in Tailscale: helper note when stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'The built-in Tailscale node is stopped.'**
+  String get tailscaleStoppedNote;
+
+  /// Settings: section and screen title for the embedded Tailscale node.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in Tailscale'**
+  String get tailscaleTitle;
 
   /// Terminal: notice when a tapped link can’t be opened.
   ///

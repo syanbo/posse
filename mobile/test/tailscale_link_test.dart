@@ -106,7 +106,9 @@ class _FakeHost {
           if (!answerPing) continue;
           final reply = session.seal(
             Uint8List.fromList(
-              utf8.encode(jsonEncode({'id': id, 'ok': true, 'result': const {}})),
+              utf8.encode(
+                jsonEncode({'id': id, 'ok': true, 'result': const {}}),
+              ),
             ),
             direction: dirDesktopToMobile,
             kind: kindText,
@@ -218,36 +220,42 @@ class _FakeTailscaleBackend implements TailscaleBackend {
 }
 
 void main() {
-  test('isTailscaleIp and deriveTsQuicUrls filter and deduplicate properly', () {
-    expect(isTailscaleIp('100.64.0.1'), isTrue);
-    expect(isTailscaleIp('100.127.255.254'), isTrue);
-    expect(isTailscaleIp('100.63.255.255'), isFalse);
-    expect(isTailscaleIp('100.128.0.1'), isFalse);
-    expect(isTailscaleIp('192.168.1.5'), isFalse);
-    expect(isTailscaleIp('::1'), isFalse);
+  test(
+    'isTailscaleIp and deriveTsQuicUrls filter and deduplicate properly',
+    () {
+      expect(isTailscaleIp('100.64.0.1'), isTrue);
+      expect(isTailscaleIp('100.127.255.254'), isTrue);
+      expect(isTailscaleIp('100.63.255.255'), isFalse);
+      expect(isTailscaleIp('100.128.0.1'), isFalse);
+      expect(isTailscaleIp('192.168.1.5'), isFalse);
+      expect(isTailscaleIp('::1'), isFalse);
 
-    final urls = deriveTsQuicUrls([
-      'hquic://192.168.1.5:6789',
-      'hquic://100.64.0.9:6789',
-      'hquic://relay.example.com:443?relay=AAAA',
-      'ws://100.64.0.9:6789',
-      'ws://100.100.1.2:6789',
-      'hquic://100.64.0.9:6789?punched=1',
-      'wss://tun.example/posse',
-    ]);
-    expect(urls, ['tsquic://100.64.0.9:6789', 'tsquic://100.100.1.2:6789']);
+      final urls = deriveTsQuicUrls([
+        'hquic://192.168.1.5:6789',
+        'hquic://100.64.0.9:6789',
+        'hquic://relay.example.com:443?relay=AAAA',
+        'ws://100.64.0.9:6789',
+        'ws://100.100.1.2:6789',
+        'hquic://100.64.0.9:6789?punched=1',
+        'wss://tun.example/posse',
+      ]);
+      expect(urls, ['tsquic://100.64.0.9:6789', 'tsquic://100.100.1.2:6789']);
 
-    // quicUrlsOf includes explicit tsHost if not already in hosts
-    final parsed = quicUrlsOf({
-      'port': 6789,
-      'hosts': ['192.168.1.5'],
-      'tsHost': '100.64.0.12',
-    });
-    expect(parsed, ['hquic://192.168.1.5:6789', 'hquic://100.64.0.12:6789']);
+      // quicUrlsOf includes explicit tsHost if not already in hosts
+      final parsed = quicUrlsOf({
+        'port': 6789,
+        'hosts': ['192.168.1.5'],
+        'tsHost': '100.64.0.12',
+      });
+      expect(parsed, ['hquic://192.168.1.5:6789', 'hquic://100.64.0.12:6789']);
 
-    final zh = lookupAppLocalizations(const Locale('zh'));
-    expect(hostOf(zh, 'tsquic://100.64.0.9:6789'), '100.64.0.9:6789 · Tailscale');
-  });
+      final zh = lookupAppLocalizations(const Locale('zh'));
+      expect(
+        hostOf(zh, 'tsquic://100.64.0.9:6789'),
+        '100.64.0.9:6789 · Tailscale',
+      );
+    },
+  );
 
   test('PosseLink derives tsquic:// only when running, skips headStart and learnQuic upgrade', () async {
     final hostKeys = generateKeyPair();
@@ -299,7 +307,10 @@ void main() {
     final started = DateTime.now();
     await linkOn.start();
     expect(linkOn.url, 'tsquic://100.64.0.9:6789');
-    expect(DateTime.now().difference(started), lessThan(const Duration(seconds: 2)));
+    expect(
+      DateTime.now().difference(started),
+      lessThan(const Duration(seconds: 2)),
+    );
     // 等 _learnQuic 跑完，确认它缓存了 quicUrls 但没有把 tsquic:// 换成中转 QUIC
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(linkOn.url, 'tsquic://100.64.0.9:6789');
@@ -311,7 +322,8 @@ void main() {
   test('PosseLink prefers self-hosted relay over DERP tsquic://, and falls back to DERP if relay fails', () async {
     final hostKeys = generateKeyPair();
     final fakeHost = _FakeHost(hostKeys);
-    final relayUrl = 'hquic://1.2.3.4:443?relay=${base64Url.encode(Uint8List(16))}';
+    final relayUrl =
+        'hquic://1.2.3.4:443?relay=${base64Url.encode(Uint8List(16))}';
     final offer = PairingOffer(
       endpoint: 'ws://100.64.0.9:6789',
       endpoints: const ['ws://100.64.0.9:6789'],
@@ -320,39 +332,41 @@ void main() {
     );
 
     // 1) 对端走 DERP 且中转可用 -> 中转先胜出
-    final linkRelay = PosseLink(
-      offer: offer,
-      tailscaleRunning: () => true,
-      tailscalePeerRoute: (_) async =>
-          const TailscalePeerRoute(kind: 'derp', relay: 'hkg'),
-      connect: (url, cancel) async {
-        if (isRelayQuicUrl(url)) {
-          await Future<void>.delayed(const Duration(milliseconds: 20));
-          return fakeHost.accept();
-        }
-        if (isTsQuicUrl(url)) return fakeHost.accept();
-        throw StateError('ws disabled');
-      },
-    )
-      ..quicUrls = [relayUrl]
-      ..tsDerpDelay = const Duration(milliseconds: 200);
+    final linkRelay =
+        PosseLink(
+            offer: offer,
+            tailscaleRunning: () => true,
+            tailscalePeerRoute: (_) async =>
+                const TailscalePeerRoute(kind: 'derp', relay: 'hkg'),
+            connect: (url, cancel) async {
+              if (isRelayQuicUrl(url)) {
+                await Future<void>.delayed(const Duration(milliseconds: 20));
+                return fakeHost.accept();
+              }
+              if (isTsQuicUrl(url)) return fakeHost.accept();
+              throw StateError('ws disabled');
+            },
+          )
+          ..quicUrls = [relayUrl]
+          ..tsDerpDelay = const Duration(milliseconds: 200);
     await linkRelay.start();
     expect(isRelayQuicUrl(linkRelay.url!), isTrue);
     await linkRelay.close();
 
     // 2) 中转失败时 DERP tsquic:// 仍作为兜底连上
-    final linkFallback = PosseLink(
-      offer: offer,
-      tailscaleRunning: () => true,
-      tailscalePeerRoute: (_) async =>
-          const TailscalePeerRoute(kind: 'derp', relay: 'hkg'),
-      connect: (url, cancel) async {
-        if (isTsQuicUrl(url)) return fakeHost.accept();
-        throw StateError('relay down');
-      },
-    )
-      ..quicUrls = [relayUrl]
-      ..tsDerpDelay = const Duration(milliseconds: 40);
+    final linkFallback =
+        PosseLink(
+            offer: offer,
+            tailscaleRunning: () => true,
+            tailscalePeerRoute: (_) async =>
+                const TailscalePeerRoute(kind: 'derp', relay: 'hkg'),
+            connect: (url, cancel) async {
+              if (isTsQuicUrl(url)) return fakeHost.accept();
+              throw StateError('relay down');
+            },
+          )
+          ..quicUrls = [relayUrl]
+          ..tsDerpDelay = const Duration(milliseconds: 40);
     await linkFallback.start();
     expect(linkFallback.url, 'tsquic://100.64.0.9:6789');
     await linkFallback.close();
@@ -409,55 +423,62 @@ void main() {
     await networks.close();
   });
 
-  test('AppSettings and TailscaleController lazy-start and never persist authKey', () async {
-    final s = AppSettings(
-      tailscaleEnabled: true,
-      tailscaleHostname: 'my-iphone',
-      tailscaleControlUrl: 'https://hs.example.com',
-      tailscaleDisableBind: true,
-    );
-    final encoded = jsonEncode(s.toJson());
-    expect(encoded.contains('authKey'), isFalse);
-    final decoded = AppSettings.decode(encoded);
-    expect(decoded.tailscaleEnabled, isTrue);
-    expect(decoded.tailscaleHostname, 'my-iphone');
-    expect(decoded.tailscaleControlUrl, 'https://hs.example.com');
-    expect(decoded.tailscaleDisableBind, isTrue);
+  test(
+    'AppSettings and TailscaleController lazy-start and never persist authKey',
+    () async {
+      final s = AppSettings(
+        tailscaleEnabled: true,
+        tailscaleHostname: 'my-iphone',
+        tailscaleControlUrl: 'https://hs.example.com',
+        tailscaleDisableBind: true,
+      );
+      final encoded = jsonEncode(s.toJson());
+      expect(encoded.contains('authKey'), isFalse);
+      final decoded = AppSettings.decode(encoded);
+      expect(decoded.tailscaleEnabled, isTrue);
+      expect(decoded.tailscaleHostname, 'my-iphone');
+      expect(decoded.tailscaleControlUrl, 'https://hs.example.com');
+      expect(decoded.tailscaleDisableBind, isTrue);
 
-    // 默认关闭时 restore() 不启动内置 Tailscale（零开销）
-    final backend = _FakeTailscaleBackend();
-    final modelOff = PosseAppModel(
-      store: MemoryPairingStore(),
-      settingsStore: MemorySettingsStore(),
-      connect: (_, _) async => throw StateError('unused'),
-      tailscaleBackend: backend,
-    );
-    await modelOff.restore();
-    expect(backend.startCalls, 0);
-    modelOff.dispose();
+      // 默认关闭时 restore() 不启动内置 Tailscale（零开销）
+      final backend = _FakeTailscaleBackend();
+      final modelOff = PosseAppModel(
+        store: MemoryPairingStore(),
+        settingsStore: MemorySettingsStore(),
+        connect: (_, _) async => throw StateError('unused'),
+        tailscaleBackend: backend,
+      );
+      await modelOff.restore();
+      expect(backend.startCalls, 0);
+      modelOff.dispose();
 
-    // 开启时 restore() 后台懒启动
-    final settingsStore = MemorySettingsStore()..data = encoded;
-    final modelOn = PosseAppModel(
-      store: MemoryPairingStore(),
-      settingsStore: settingsStore,
-      connect: (_, _) async => throw StateError('unused'),
-      tailscaleBackend: backend,
-    );
-    await modelOn.restore();
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(backend.startCalls, 1);
-    expect(modelOn.tailscale.isRunning, isTrue);
-    await modelOn.wake();
-    expect(backend.wakeCalls, 1);
-    modelOn.dispose();
-  });
+      // 开启时 restore() 后台懒启动
+      final settingsStore = MemorySettingsStore()..data = encoded;
+      final modelOn = PosseAppModel(
+        store: MemoryPairingStore(),
+        settingsStore: settingsStore,
+        connect: (_, _) async => throw StateError('unused'),
+        tailscaleBackend: backend,
+      );
+      await modelOn.restore();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(backend.startCalls, 1);
+      expect(modelOn.tailscale.isRunning, isTrue);
+      await modelOn.wake();
+      expect(backend.wakeCalls, 1);
+      modelOn.dispose();
+    },
+  );
 
   test('Desk explicit Tailscale target resolution and direct host bypass for tsquic://', () async {
     // 未运行内置 TS 时不返回 TS 目标
     expect(
       resolveDeskTailscaleTarget(
-        readyFrame: const {'port': 40000, 'tsHost': '100.64.0.9', 'tsPort': 40001},
+        readyFrame: const {
+          'port': 40000,
+          'tsHost': '100.64.0.9',
+          'tsPort': 40001,
+        },
         connectedUrl: 'tsquic://100.64.0.9:6789',
         otherUrls: const [],
         tailscaleRunning: false,
@@ -468,7 +489,11 @@ void main() {
     // Mac 内置 TS 在 ready 中给出 tsHost + tsPort 时优先使用
     expect(
       resolveDeskTailscaleTarget(
-        readyFrame: const {'port': 40000, 'tsHost': '100.64.0.9', 'tsPort': 40001},
+        readyFrame: const {
+          'port': 40000,
+          'tsHost': '100.64.0.9',
+          'tsPort': 40001,
+        },
         connectedUrl: 'wss://tun.example/posse',
         otherUrls: const ['ws://100.64.0.88:6789'],
         tailscaleRunning: true,
@@ -489,25 +514,24 @@ void main() {
 
     // deskDirectHostForUrl 对 tsquic:// 跳过 100.x（避免原生 OS UDP 发往不可达的 CGNAT IP），但保留局域网地址
     expect(
-      await deskDirectHostForUrl(
-        'tsquic://100.64.0.9:6789',
-        const ['100.64.0.9', '100.64.0.10'],
-      ),
+      await deskDirectHostForUrl('tsquic://100.64.0.9:6789', const [
+        '100.64.0.9',
+        '100.64.0.10',
+      ]),
       isNull,
     );
     expect(
-      await deskDirectHostForUrl(
-        'tsquic://100.64.0.9:6789',
-        const ['100.64.0.9', '192.168.1.20'],
-      ),
+      await deskDirectHostForUrl('tsquic://100.64.0.9:6789', const [
+        '100.64.0.9',
+        '192.168.1.20',
+      ]),
       '192.168.1.20',
     );
     // 非 tsquic://（如官方 Tailscale hquic://）保持原样直连
     expect(
-      await deskDirectHostForUrl(
-        'hquic://100.64.0.9:6789',
-        const ['192.168.1.20'],
-      ),
+      await deskDirectHostForUrl('hquic://100.64.0.9:6789', const [
+        '192.168.1.20',
+      ]),
       '100.64.0.9',
     );
 
@@ -516,11 +540,9 @@ void main() {
 
     // DNS 名称仅解析到 100.64/10 时必须被跳过；混合解析（100.64 + 局域网）应返回已验证的非 TS IPv4 字面量
     expect(
-      await deskDirectHostForUrl(
-        'tsquic://100.64.0.9:6789',
-        const ['mac.tail.ts.net'],
-        lookup: (_) async => [InternetAddress('100.64.0.10')],
-      ),
+      await deskDirectHostForUrl('tsquic://100.64.0.9:6789', const [
+        'mac.tail.ts.net',
+      ], lookup: (_) async => [InternetAddress('100.64.0.10')]),
       isNull,
     );
     expect(
@@ -546,7 +568,9 @@ void main() {
       'deviceToken': 'tok',
       'publicKeyB64': b64(hostKeys.publicKey),
     };
-    final code = base64Url.encode(utf8.encode(jsonEncode(payload))).replaceAll('=', '');
+    final code = base64Url
+        .encode(utf8.encode(jsonEncode(payload)))
+        .replaceAll('=', '');
 
     final backend = _FakeTailscaleBackend();
     final gate = Completer<String>();
@@ -560,7 +584,8 @@ void main() {
     final dialed = <String>[];
     final model = PosseAppModel(
       store: MemoryPairingStore()..code = saved.encode(),
-      settingsStore: MemorySettingsStore()..data = jsonEncode(settings.toJson()),
+      settingsStore: MemorySettingsStore()
+        ..data = jsonEncode(settings.toJson()),
       tailscaleBackend: backend,
       connect: (url, cancel) async {
         dialed.add(url);
@@ -617,12 +642,16 @@ void main() {
     backend.peerRouteHandler = (_) {
       routeCalls++;
       if (routeCalls == 1) return firstRouteGate.future;
-      return Future.value(const TailscalePeerRoute(kind: 'direct', addr: '1.2.3.4:41641'));
+      return Future.value(
+        const TailscalePeerRoute(kind: 'direct', addr: '1.2.3.4:41641'),
+      );
     };
 
     final staleQuery = ctrl.peerRoute('100.64.0.9');
     ctrl.wake();
-    firstRouteGate.complete(const TailscalePeerRoute(kind: 'derp', relay: 'hkg'));
+    firstRouteGate.complete(
+      const TailscalePeerRoute(kind: 'derp', relay: 'hkg'),
+    );
     // 跨 wake 的旧查询本身也不能把旧 DERP 交回调用方，应自动重查拿到最新的 direct
     final staleResult = await staleQuery;
     expect(staleResult.kind, 'direct');
@@ -644,24 +673,33 @@ void main() {
       'deviceToken': 'tok',
       'publicKeyB64': b64(hostKeys.publicKey),
     };
-    final lanCode = base64Url.encode(utf8.encode(jsonEncode(lanPayload))).replaceAll('=', '');
+    final lanCode = base64Url
+        .encode(utf8.encode(jsonEncode(lanPayload)))
+        .replaceAll('=', '');
     final backend = _FakeTailscaleBackend();
     var lanTries = 0;
-    final firstModel = PosseAppModel(
-      store: MemoryPairingStore(),
-      settingsStore: MemorySettingsStore(),
-      tailscaleBackend: backend,
-      connect: (url, cancel) async {
-        lanTries++;
-        if (lanTries == 1) {
-          backend.emit(const TailscaleStatus(enabled: true, state: 'running', ip: '100.64.0.50'));
-          throw const SocketException('Local network permission pending');
-        }
-        return fakeHost.accept();
-      },
-    )
-      ..firstConnectRetry = const Duration(milliseconds: 20)
-      ..firstConnectWindow = const Duration(seconds: 2);
+    final firstModel =
+        PosseAppModel(
+            store: MemoryPairingStore(),
+            settingsStore: MemorySettingsStore(),
+            tailscaleBackend: backend,
+            connect: (url, cancel) async {
+              lanTries++;
+              if (lanTries == 1) {
+                backend.emit(
+                  const TailscaleStatus(
+                    enabled: true,
+                    state: 'running',
+                    ip: '100.64.0.50',
+                  ),
+                );
+                throw const SocketException('Local network permission pending');
+              }
+              return fakeHost.accept();
+            },
+          )
+          ..firstConnectRetry = const Duration(milliseconds: 20)
+          ..firstConnectWindow = const Duration(seconds: 2);
     expect(await firstModel.connectCode(lanCode), isTrue);
     expect(lanTries, 2);
 
@@ -684,7 +722,9 @@ void main() {
     backend.emit(const TailscaleStatus(enabled: false, state: 'disabled'));
     final disconnecting = slowModel.disconnect();
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    backend.emit(const TailscaleStatus(enabled: true, state: 'running', ip: '100.64.0.50'));
+    backend.emit(
+      const TailscaleStatus(enabled: true, state: 'running', ip: '100.64.0.50'),
+    );
     await Future<void>.delayed(const Duration(milliseconds: 30));
     closeGate.complete();
     await disconnecting;
@@ -721,10 +761,7 @@ void main() {
     final hostKeys = generateKeyPair();
     final fakeHost = _FakeHost(
       hostKeys,
-      quicInfo: {
-        'port': 6789,
-        'tsHost': '100.64.0.77',
-      },
+      quicInfo: {'port': 6789, 'tsHost': '100.64.0.77'},
     );
     final offer = PairingOffer(
       endpoint: 'wss://tun.example/posse',
@@ -736,7 +773,8 @@ void main() {
       offer: offer,
       tailscaleRunning: () => true,
       connect: (url, cancel) async {
-        if (url == 'wss://tun.example/posse' || url == 'tsquic://100.64.0.77:6789') {
+        if (url == 'wss://tun.example/posse' ||
+            url == 'tsquic://100.64.0.77:6789') {
           return fakeHost.accept();
         }
         throw StateError('blocked $url');
@@ -758,7 +796,9 @@ void main() {
       'deviceToken': 'tok',
       'publicKeyB64': b64(hostKeys.publicKey),
     };
-    final badCode = base64Url.encode(utf8.encode(jsonEncode(badPayload))).replaceAll('=', '');
+    final badCode = base64Url
+        .encode(utf8.encode(jsonEncode(badPayload)))
+        .replaceAll('=', '');
     expect(() => PairingOffer.parse(badCode), throwsFormatException);
 
     final badExtraPayload = {
@@ -768,8 +808,61 @@ void main() {
       'deviceToken': 'tok',
       'publicKeyB64': b64(hostKeys.publicKey),
     };
-    final badExtraCode = base64Url.encode(utf8.encode(jsonEncode(badExtraPayload))).replaceAll('=', '');
+    final badExtraCode = base64Url
+        .encode(utf8.encode(jsonEncode(badExtraPayload)))
+        .replaceAll('=', '');
     expect(() => PairingOffer.parse(badExtraCode), throwsFormatException);
+  });
+
+  test('PosseLink clears stale peerRoute immediately when switching from tsquic A to tsquic B', () async {
+    final hostKeys = generateKeyPair();
+    final fakeHost = _FakeHost(hostKeys);
+    final routeBGate = Completer<TailscalePeerRoute>();
+    var activeIp = '100.64.0.10';
+    final offerPayload = {
+      'v': 2,
+      'endpoint': 'ws://100.64.0.10:6789',
+      'endpoints': ['ws://100.64.0.10:6789', 'ws://100.64.0.11:6789'],
+      'deviceToken': 'tok',
+      'publicKeyB64': b64(hostKeys.publicKey),
+    };
+    final offer = PairingOffer.parse(
+      base64Url
+          .encode(utf8.encode(jsonEncode(offerPayload)))
+          .replaceAll('=', ''),
+    );
+    final link = PosseLink(
+      offer: offer,
+      tailscaleRunning: () => true,
+      tailscalePeerRoute: (ip) {
+        if (ip == '100.64.0.10') {
+          return Future.value(
+            const TailscalePeerRoute(kind: 'direct', addr: '1.2.3.4:41641'),
+          );
+        }
+        return routeBGate.future;
+      },
+      connect: (url, _) async {
+        if (url == 'tsquic://$activeIp:6789') return fakeHost.accept();
+        throw StateError('reject $url');
+      },
+    );
+    addTearDown(link.close);
+
+    await link.open();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(link.url, 'tsquic://100.64.0.10:6789');
+    expect(link.peerRoute?.isDirect, isTrue);
+
+    // 切到另一台 100.x（tsquic B）时，在 B 的路由查询完成前不得继续展示 A 的 Direct
+    activeIp = '100.64.0.11';
+    await link.open();
+    expect(link.url, 'tsquic://100.64.0.11:6789');
+    expect(link.peerRoute, isNull);
+
+    routeBGate.complete(const TailscalePeerRoute(kind: 'derp', relay: 'tok'));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(link.peerRoute?.isDerp, isTrue);
   });
 }
 

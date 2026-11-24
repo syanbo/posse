@@ -1,14 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:posse_quic/posse_quic.dart';
 
 import '../app_state.dart';
 import '../l10n/l10n.dart';
 import '../protocol/quic_socket.dart';
 import '../ui/theme.dart';
 
-/// 当前连接是经中转还是直连（局域网、Tailscale、打洞都算直连），没连上时为空。
-/// 会话页状态行在延迟读数后面写它：中转的延迟高，一眼能看出是不是线路的缘故。
-String? routeLabel(AppLocalizations l, String? url) {
+/// 当前连接是经中转、内置 Tailscale 还是直连，没连上时为空。
+/// 会话页状态行在延迟读数后面写它：中转或 DERP 的延迟高，一眼能看出是不是线路的缘故。
+String? routeLabel(
+  AppLocalizations l,
+  String? url, {
+  TailscalePeerRoute? peerRoute,
+}) {
   if (url == null) return null;
+  if (isTsQuicUrl(url)) {
+    if (peerRoute?.isDerp == true) return l.chatRouteTailscaleDerp;
+    if (peerRoute?.isDirect == true || peerRoute?.isPeerRelay == true) {
+      return l.chatRouteTailscaleDirect;
+    }
+    return l.chatRouteTailscale;
+  }
   return isRelayQuicUrl(url) ? l.chatRouteRelay : l.chatRouteDirect;
 }
 

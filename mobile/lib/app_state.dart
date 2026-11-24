@@ -73,8 +73,30 @@ String friendlyError(Object error, AppLocalizations l) {
       text.contains('WebSocketChannelException')) {
     return l.errorCantConnect;
   }
+  if (error is TailscaleException) {
+    return localizeTailscaleError(error.message, l);
+  }
   if (error is FormatException) return l.errorBadPairingCode;
   return text;
+}
+
+/// 将内置 Tailscale 原生层返回的常见英文报错映射到当前界面语言；未知明细保留原文便于排查。
+String localizeTailscaleError(String raw, AppLocalizations l) {
+  final msg = raw.trim();
+  final lower = msg.toLowerCase();
+  if (lower.contains('invalid tailscale control url')) {
+    return l.tailscaleInvalidControlUrl;
+  }
+  if (lower.contains('state directory')) {
+    return l.tailscaleErrorStateDir;
+  }
+  if (lower.contains('not available on this platform')) {
+    return l.tailscaleErrorUnavailable;
+  }
+  if (lower.contains('not running')) {
+    return l.tailscaleErrorNotRunning;
+  }
+  return msg.isEmpty ? l.tailscaleErrorGeneric : msg;
 }
 
 /// 手机自己产生的报错，显示时由 [friendlyError] 按代号取文字。
@@ -885,8 +907,11 @@ class PosseAppModel extends ChangeNotifier {
     notifyListeners();
     push?.onOpened = () => unawaited(_openFromPush());
     await registerPush();
-    // 仅在用户已开启内置 Tailscale 时后台懒启动，不阻塞局域网/中转冷启动
-    if (settings.tailscaleEnabled && tailscale.supported) {
+    // 仅在用户已开启内置 Tailscale 且恢复期间尚未在界面操作过节点时后台懒启动，
+    // 不阻塞局域网/中转冷启动，也不取代用户在设置页刚提交的带 AuthKey 启动。
+    if (settings.tailscaleEnabled &&
+        tailscale.supported &&
+        !tailscale.hasStartedOrQueued) {
       unawaited(
         tailscale
             .start(
@@ -894,7 +919,7 @@ class PosseAppModel extends ChangeNotifier {
               controlUrl: settings.tailscaleControlUrl,
               disableBindInterface: settings.tailscaleDisableBind,
             )
-            .catchError((Object _) {}),
+            .catchError((Object _) => false),
       );
     }
     final active = saved.current ?? saved.computers.firstOrNull;

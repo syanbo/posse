@@ -1061,7 +1061,7 @@ class PosseSwitch extends StatelessWidget {
   const PosseSwitch({super.key, required this.value, required this.onChanged});
 
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) {

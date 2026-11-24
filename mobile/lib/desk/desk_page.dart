@@ -158,6 +158,11 @@ class _DeskPageState extends State<DeskPage>
   TailscaleUdpBridge? _tsBridge;
   DeskTailscaleTarget? _tsBridgeTarget;
   int _tsBridgeSessionGen = -1;
+  TailscalePeerRoute? _tsPeerRoute;
+  int _tsPeerRouteEpoch = 0;
+  bool _preparingTsBridge = false;
+  DateTime _tsPeerRouteCheckedAt = DateTime.fromMillisecondsSinceEpoch(0);
+  static const _tsPeerRouteRefreshInterval = Duration(seconds: 5);
   Map<String, Object?>? _lastReadyFrame;
   // 电脑认缺包点名补发（ready 里带 nack）
   bool _nack = false;
@@ -340,15 +345,67 @@ class _DeskPageState extends State<DeskPage>
     _tsBridge = null;
     _tsBridgeTarget = null;
     _tsBridgeSessionGen = -1;
+    _tsPeerRoute = null;
+    _tsPeerRouteEpoch++;
+    _tsPeerRouteCheckedAt = DateTime.fromMillisecondsSinceEpoch(0);
   }
 
-  Future<int?> _openOrReuseTsBridge(DeskTailscaleTarget target, int gen) async {
+  void _applyTsPeerRoute(TailscalePeerRoute next) {
+    final prev = _tsPeerRoute;
+    _tsPeerRouteCheckedAt = DateTime.now();
+    if (prev?.kind != next.kind ||
+        prev?.relay != next.relay ||
+        prev?.addr != next.addr ||
+        prev?.peerRelay != next.peerRelay) {
+      setState(() => _tsPeerRoute = next);
+    }
+  }
+
+  Future<void> _refreshTsPeerRoute(
+    String host, {
+    required int deskGen,
+    required int tsSessionGen,
+  }) async {
+    final epoch = ++_tsPeerRouteEpoch;
+    _tsPeerRouteCheckedAt = DateTime.now();
+    final next = await widget.model.tailscale.peerRoute(host);
+    if (!mounted ||
+        _background ||
+        epoch != _tsPeerRouteEpoch ||
+        deskGen != _gen ||
+        tsSessionGen != widget.model.tailscale.sessionGen ||
+        _tsBridgeTarget?.host != host) {
+      return;
+    }
+    _applyTsPeerRoute(next);
+  }
+
+  Future<int?> _openOrReuseTsBridge(
+    DeskTailscaleTarget target,
+    int gen, {
+    TailscalePeerRoute? knownRoute,
+    int? knownRouteEpoch,
+  }) async {
     final sessionGen = widget.model.tailscale.sessionGen;
     final existing = _tsBridge;
     if (existing != null &&
         !existing.isClosed &&
         _tsBridgeTarget == target &&
         _tsBridgeSessionGen == sessionGen) {
+      if (knownRoute != null) {
+        if (knownRouteEpoch == null || knownRouteEpoch == _tsPeerRouteEpoch) {
+          _tsPeerRouteEpoch++;
+          _applyTsPeerRoute(knownRoute);
+        }
+      } else {
+        unawaited(
+          _refreshTsPeerRoute(
+            target.host,
+            deskGen: gen,
+            tsSessionGen: sessionGen,
+          ),
+        );
+      }
       return existing.localPort;
     }
     _closeTsBridge();
@@ -358,6 +415,7 @@ class _DeskPageState extends State<DeskPage>
         target.port,
       );
       if (!mounted ||
+          _background ||
           gen != _gen ||
           widget.model.tailscale.sessionGen != sessionGen) {
         opened.close();
@@ -366,6 +424,18 @@ class _DeskPageState extends State<DeskPage>
       _tsBridge = opened;
       _tsBridgeTarget = target;
       _tsBridgeSessionGen = sessionGen;
+      if (knownRoute != null) {
+        _tsPeerRouteEpoch++;
+        _applyTsPeerRoute(knownRoute);
+      } else {
+        unawaited(
+          _refreshTsPeerRoute(
+            target.host,
+            deskGen: gen,
+            tsSessionGen: sessionGen,
+          ),
+        );
+      }
       return opened.localPort;
     } on Object {
       return null;
@@ -392,15 +462,37 @@ class _DeskPageState extends State<DeskPage>
       _closeTsBridge();
       return null;
     }
+    TailscalePeerRoute? knownRoute;
+    int? routeEpoch;
     if (_relay != null && _relayToken != null && _relayToken!.length == 16) {
-      final route = await widget.model.tailscale.peerRoute(tsTarget.host);
-      if (!mounted || gen != _gen) return null;
+      final sessionGen = widget.model.tailscale.sessionGen;
+      routeEpoch = ++_tsPeerRouteEpoch;
+      _preparingTsBridge = true;
+      final TailscalePeerRoute route;
+      try {
+        route = await widget.model.tailscale.peerRoute(tsTarget.host);
+      } finally {
+        _preparingTsBridge = false;
+      }
+      if (!mounted ||
+          _background ||
+          gen != _gen ||
+          routeEpoch != _tsPeerRouteEpoch ||
+          sessionGen != widget.model.tailscale.sessionGen) {
+        return null;
+      }
       if (route.isDerp) {
         _closeTsBridge();
         return null;
       }
+      knownRoute = route;
     }
-    return _openOrReuseTsBridge(tsTarget, gen);
+    return _openOrReuseTsBridge(
+      tsTarget,
+      gen,
+      knownRoute: knownRoute,
+      knownRouteEpoch: routeEpoch,
+    );
   }
 
   bool get _custom => _customHost != null || _customPort != null;
@@ -663,6 +755,7 @@ class _DeskPageState extends State<DeskPage>
 
   Future<void> _pauseBody() async {
     _gen++;
+    _tsPeerRouteEpoch++;
     await _releaseHeld();
     await _dropDesk(unsubscribe: true);
     await _stopReceiver();
@@ -686,6 +779,20 @@ class _DeskPageState extends State<DeskPage>
     _stats = stats;
     _statsTick.value = stats;
     if (relayout) setState(() {});
+    if (!_background &&
+        !_preparingTsBridge &&
+        stats.path == 'tailscale' &&
+        _tsBridgeTarget != null &&
+        DateTime.now().difference(_tsPeerRouteCheckedAt) >=
+            _tsPeerRouteRefreshInterval) {
+      unawaited(
+        _refreshTsPeerRoute(
+          _tsBridgeTarget!.host,
+          deskGen: _gen,
+          tsSessionGen: _tsBridgeSessionGen,
+        ),
+      );
+    }
     final public = stats.public;
     if (public != null && _relay != null && !_punchAsked) {
       _punchAsked = true;
@@ -1060,7 +1167,9 @@ class _DeskPageState extends State<DeskPage>
     _lastReadyFrame = Map<String, Object?>.of(frame);
     final tsLocalPort = await _prepareTsBridgeForFrame(frame, gen);
     if (!mounted || gen != _gen) return;
-    if ((host == null || host.isEmpty) && _relay == null && tsLocalPort == null) {
+    if ((host == null || host.isEmpty) &&
+        _relay == null &&
+        tsLocalPort == null) {
       await _dropDesk(unsubscribe: true);
       if (mounted && gen == _gen) setState(() => _indirect = true);
       return;
@@ -1284,7 +1393,9 @@ class _DeskPageState extends State<DeskPage>
       tsLocalPort = await _prepareTsBridgeForFrame(ready, gen);
       if (!mounted || gen != _gen) return;
     }
-    if ((host == null || host.isEmpty) && _relay == null && tsLocalPort == null) {
+    if ((host == null || host.isEmpty) &&
+        _relay == null &&
+        tsLocalPort == null) {
       return;
     }
     try {
@@ -2182,7 +2293,11 @@ class _DeskPageState extends State<DeskPage>
                 Text(headline),
                 Text(rate),
                 Text(l.deskDebugLoss('${stats.loss}')),
-                Text(l.deskDebugPath(deskPathLabel(l, stats.path))),
+                Text(
+                  l.deskDebugPath(
+                    deskPathLabel(l, stats.path, peerRoute: _tsPeerRoute),
+                  ),
+                ),
                 ValueListenableBuilder<(int, int)>(
                   valueListenable: _inputLine,
                   builder: (context, line, _) =>

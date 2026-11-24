@@ -1,5 +1,6 @@
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
+import 'package:posse_quic/posse_quic.dart';
 
 import '../l10n/l10n.dart';
 import 'events.dart';
@@ -81,13 +82,25 @@ Future<void> restoreDeskOrientation() async {
 bool deskHapticFor(DeskEvent event) => event is DeskRightClickEvent;
 
 /// 调试面板里画面走的路，取值见 [DeskStats.path]。
-String deskPathLabel(AppLocalizations l, String? path) => switch (path) {
-  'lan' => l.deskPathLan,
-  'tailscale' => 'Tailscale',
-  'relay' => l.deskPathRelay,
-  'punched' => l.deskPathPunched,
-  _ => '—',
-};
+String deskPathLabel(
+  AppLocalizations l,
+  String? path, {
+  TailscalePeerRoute? peerRoute,
+}) {
+  if (path == 'tailscale') {
+    if (peerRoute?.isDerp == true) return l.deskPathTailscaleDerp;
+    if (peerRoute?.isDirect == true || peerRoute?.isPeerRelay == true) {
+      return l.deskPathTailscaleDirect;
+    }
+    return l.deskPathTailscale;
+  }
+  return switch (path) {
+    'lan' => l.deskPathLan,
+    'relay' => l.deskPathRelay,
+    'punched' => l.deskPathPunched,
+    _ => '—',
+  };
+}
 
 /// 还没收到视频、还没满 1 秒的读数（fps 为负）时不写 0；画面没动、没有新帧时写「静止」，免得看成卡住了。
 String deskFpsLabel(

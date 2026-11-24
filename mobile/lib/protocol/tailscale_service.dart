@@ -27,9 +27,8 @@ abstract class TailscaleBackend {
 }
 
 class NativeTailscaleBackend implements TailscaleBackend {
-  const NativeTailscaleBackend({
-    MethodChannel? channel,
-  }) : _channel = channel ?? const MethodChannel('posse/tailscale');
+  const NativeTailscaleBackend({MethodChannel? channel})
+    : _channel = channel ?? const MethodChannel('posse/tailscale');
 
   final MethodChannel _channel;
 
@@ -41,11 +40,18 @@ class NativeTailscaleBackend implements TailscaleBackend {
 
   @override
   Future<String> stateDir() async {
-    final dir = await _channel.invokeMethod<String>('stateDir');
-    if (dir == null || dir.isEmpty) {
-      throw TailscaleException('state directory unavailable');
+    try {
+      final dir = await _channel.invokeMethod<String>('stateDir');
+      if (dir == null || dir.isEmpty) {
+        throw TailscaleException('state directory unavailable');
+      }
+      return dir;
+    } on PlatformException catch (e) {
+      final msg = e.message?.trim() ?? '';
+      throw TailscaleException(
+        msg.isNotEmpty ? msg : 'state directory unavailable',
+      );
     }
-    return dir;
   }
 
   @override
@@ -114,6 +120,7 @@ class TailscaleController extends ChangeNotifier {
   TailscaleStatus get status => _status;
   bool get isRunning => _status.isRunning;
   bool get busy => _pendingOps > 0;
+  bool get hasStartedOrQueued => _opSeq > 0;
   String? get error => _error;
 
   /// 每次节点停止、重置或离开 Running 时递增，供看桌面识别底层已关闭的回环 UDP 桥避免误复用。
@@ -186,48 +193,42 @@ class TailscaleController extends ChangeNotifier {
     return completer.future;
   }
 
-  Future<void> start({
+  Future<bool> start({
     String hostname = '',
     String controlUrl = '',
     String authKey = '',
     bool disableBindInterface = false,
   }) {
     final backend = _backend;
-    if (backend == null) return Future<void>.value();
+    if (backend == null) return Future<bool>.value(false);
     _ensureSubscribed();
     final seq = ++_opSeq;
-    return _runSerialized<void>(
-      seq,
-      () async {
-        final dir = await _stateDir();
-        if (_disposed || seq != _opSeq) return;
-        final st = await backend.start(
-          stateDir: dir,
-          hostname: hostname,
-          controlUrl: controlUrl,
-          authKey: authKey,
-          disableBindInterface: disableBindInterface,
-        );
-        _applyStatus(st);
-      },
-      onSuperseded: () {},
-    );
+    return _runSerialized<bool>(seq, () async {
+      final dir = await _stateDir();
+      if (_disposed || seq != _opSeq) return false;
+      final st = await backend.start(
+        stateDir: dir,
+        hostname: hostname,
+        controlUrl: controlUrl,
+        authKey: authKey,
+        disableBindInterface: disableBindInterface,
+      );
+      _applyStatus(st);
+      return true;
+    }, onSuperseded: () => false);
   }
 
-  Future<void> stop() {
+  Future<bool> stop() {
     final backend = _backend;
-    if (backend == null) return Future<void>.value();
+    if (backend == null) return Future<bool>.value(false);
     final seq = ++_opSeq;
-    return _runSerialized<void>(
-      seq,
-      () async {
-        _sessionGen++;
-        _invalidateRouteCache();
-        final st = await backend.stop();
-        _applyStatus(st);
-      },
-      onSuperseded: () {},
-    );
+    return _runSerialized<bool>(seq, () async {
+      _sessionGen++;
+      _invalidateRouteCache();
+      final st = await backend.stop();
+      _applyStatus(st);
+      return true;
+    }, onSuperseded: () => false);
   }
 
   Future<TailscaleResetResult?> reset() {
@@ -235,19 +236,15 @@ class TailscaleController extends ChangeNotifier {
     if (backend == null) return Future<TailscaleResetResult?>.value();
     _ensureSubscribed();
     final seq = ++_opSeq;
-    return _runSerialized<TailscaleResetResult?>(
-      seq,
-      () async {
-        final dir = await _stateDir();
-        if (_disposed || seq != _opSeq) return null;
-        _sessionGen++;
-        _invalidateRouteCache();
-        final res = await backend.reset(stateDir: dir);
-        _applyStatus(res.status);
-        return res;
-      },
-      onSuperseded: () => null,
-    );
+    return _runSerialized<TailscaleResetResult?>(seq, () async {
+      final dir = await _stateDir();
+      if (_disposed || seq != _opSeq) return null;
+      _sessionGen++;
+      _invalidateRouteCache();
+      final res = await backend.reset(stateDir: dir);
+      _applyStatus(res.status);
+      return res;
+    }, onSuperseded: () => null);
   }
 
   Future<void> startLogin() {
@@ -255,14 +252,10 @@ class TailscaleController extends ChangeNotifier {
     if (backend == null) return Future<void>.value();
     _ensureSubscribed();
     final seq = ++_opSeq;
-    return _runSerialized<void>(
-      seq,
-      () async {
-        final st = await backend.startLogin();
-        _applyStatus(st);
-      },
-      onSuperseded: () {},
-    );
+    return _runSerialized<void>(seq, () async {
+      final st = await backend.startLogin();
+      _applyStatus(st);
+    }, onSuperseded: () {});
   }
 
   void wake() {
