@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.32
+
+- Antigravity 回复会在手机对话页逐步显示，发送图片时会作为原生附件交给 Antigravity。
+- 查看 Antigravity 的上下文用量、各额度池余量和重置时间。套餐用量也可查看 AI 积分余额，并打开消费明细。
+- 这些 Antigravity 功能需要 Posse for Mac 0.1.46 或更新版本。
+
+### English
+
+- Antigravity replies appear as they stream in mobile Chat, and images sent from Chat are passed to Antigravity as native attachments.
+- See Antigravity context usage, remaining quota, and reset times. Plan usage also shows the AI credit balance and links to credit activity.
+- These Antigravity features require Posse for Mac 0.1.46 or later.
+
 ## 0.1.31
 
 - 连接安装了 ZCode CLI 的 Mac 后，可以新开 ZCode 终端、搜索会话历史并续接。需要 Posse for Mac 0.1.45 或更新版本。
