@@ -4,6 +4,7 @@ package host
 
 import (
 	"context"
+	"image"
 	"os"
 	"time"
 
@@ -87,6 +88,7 @@ type Terminal interface {
 	Send(data []byte) error
 	SendContext(ctx context.Context, data []byte) error
 	Inject(data []byte) error
+	InjectWhen(ctx context.Context, data []byte, ready func() bool) (bool, error)
 	Resize(cols, rows int)
 	// HoldSize 让终端暂时按 key 的尺寸排版（手机看着时），ReleaseSize 放掉
 	HoldSize(key string, cols, rows int)
@@ -107,6 +109,7 @@ type Terminal interface {
 	Lines() []string
 	ContainsText(sub string) bool
 	Screen() []string
+	ScreenTextColorsDiffer(positions func([]string) (image.Point, image.Point, bool)) bool
 
 	// Attach 接入界面：返回快照和之后的输出，接入期间由接入方应答终端查询。
 	// Watch 是只看不应答的接入（手机）。
@@ -201,7 +204,10 @@ func (l *local) Send(data []byte) error { return l.t.Send(data) }
 func (l *local) SendContext(ctx context.Context, data []byte) error {
 	return l.t.SendContext(ctx, data)
 }
-func (l *local) Inject(data []byte) error      { return l.t.Inject(data) }
+func (l *local) Inject(data []byte) error { return l.t.Inject(data) }
+func (l *local) InjectWhen(ctx context.Context, data []byte, ready func() bool) (bool, error) {
+	return l.t.InjectWhen(ctx, data, ready)
+}
 func (l *local) Resize(cols, rows int)         { l.t.Resize(cols, rows) }
 func (l *local) HoldSize(key string, c, r int) { l.t.HoldSize(key, c, r) }
 func (l *local) ReleaseSize(key string)        { l.t.ReleaseSize(key) }
@@ -219,8 +225,11 @@ func (l *local) SetColors(c Colors)           { l.t.SetColors(c) }
 func (l *local) Lines() []string              { return l.t.Lines() }
 func (l *local) ContainsText(sub string) bool { return l.t.ContainsText(sub) }
 func (l *local) Screen() []string             { return l.t.Screen() }
-func (l *local) Close(grace time.Duration)    { l.t.Close(grace) }
-func (l *local) Resume()                      { l.t.Resume() }
+func (l *local) ScreenTextColorsDiffer(positions func([]string) (image.Point, image.Point, bool)) bool {
+	return l.t.ScreenTextColorsDiffer(positions)
+}
+func (l *local) Close(grace time.Duration) { l.t.Close(grace) }
+func (l *local) Resume()                   { l.t.Resume() }
 
 func (l *local) Pause() (Record, *os.File, error) { return l.t.Pause() }
 

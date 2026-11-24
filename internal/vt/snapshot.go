@@ -2,10 +2,29 @@ package vt
 
 import (
 	"bytes"
+	"image"
 	"strconv"
 	"unicode/utf8"
 	"unsafe"
 )
+
+// DifferentTextColors compares the foreground styles of two viewport cells.
+func (t *Terminal) DifferentTextColors(a, b image.Point) bool {
+	colorAt := func(p image.Point) (styleColor, bool) {
+		ref, found := t.CellAt(p.X, p.Y)
+		if !found {
+			return styleColor{}, false
+		}
+		s := style{size: unsafe.Sizeof(style{})}
+		if !ok(call(fnGridRefStyle, uintptr(unsafe.Pointer(&ref)), uintptr(unsafe.Pointer(&s)))) {
+			return styleColor{}, false
+		}
+		return s.fg, true
+	}
+	first, firstOK := colorAt(a)
+	second, secondOK := colorAt(b)
+	return firstOK && secondOK && first != second
+}
 
 // Snapshot 返回能在同尺寸终端里还原当前状态的 VT 序列。
 //

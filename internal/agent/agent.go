@@ -17,8 +17,8 @@ import (
 // Known 是支持一键启动的 agent。
 var Known = []string{"claude", "codex", "grok", "cursor", "antigravity", "zcode"}
 
-// CanDispatch 要求 agent 能带首条提示进入交互会话，并能留下终端接收后续提醒。
-func CanDispatch(name string) bool { return name != "zcode" }
+// CanJoinDiscussion 要求讨论调度器能判断上一轮何时结束并领取下一轮。
+func CanJoinDiscussion(name string) bool { return name != "zcode" }
 
 // Launcher 生成 agent 的启动命令；Exe 是 hooks 回调的 posse 可执行文件。
 type Launcher struct {

@@ -4,11 +4,90 @@ import (
 	"database/sql"
 	"encoding/json"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"posse/internal/agent"
 )
+
+func TestZCodePromptReady(t *testing.T) {
+	ready := []string{
+		"  ╭─ Build ─────────────────────╮",
+		"  │ Type a prompt              │",
+		"  │                            │",
+		"  │                            │",
+		"  │ glm-5 zai | enabled        │",
+		"  ╰────────────────────────────╯",
+		"                           4 (0%)",
+		"",
+	}
+	for _, tc := range []struct {
+		name string
+		row  int
+		line string
+		want bool
+	}{
+		{"english", 1, ready[1], true},
+		{"chinese", 1, "  │ \u8f93\u5165\u63d0\u793a\u8bcd                 │", true},
+		{"model setup", 4, "  │ - - | -                    │", false},
+		{"busy", 1, "  │ Type to queue input        │", false},
+		{"draft", 1, "  │ Continue this discussion   │", false},
+		{"approval", 0, "  ┌─Approval required: Bash─────┐", false},
+		{"clipped", 5, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			screen := slices.Clone(ready)
+			screen[tc.row] = tc.line
+			if _, _, got := zcodePromptCells(screen); got != tc.want {
+				t.Fatalf("ready = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	withSelection := append([]string{"  └────────────────────────────┘", ""}, ready...)
+	if _, _, ok := zcodePromptCells(withSelection); ok {
+		t.Fatal("plugin selector above the composer can capture Enter")
+	}
+}
+
+func TestZCodeReadyDistinguishesPlaceholderFromDraft(t *testing.T) {
+	d, ws := newTestDaemon(t)
+	for _, tc := range []struct {
+		name, color string
+		want        bool
+	}{
+		{"placeholder", "\x1b[90m", true},
+		{"same text typed by user", "\x1b[97m", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			frame := strings.Join([]string{
+				"\x1b[?2004h\x1b[H ╭─ Build ──────────────╮",
+				" │ " + tc.color + "Type a prompt\x1b[0m        │",
+				" │                      │",
+				" │                      │",
+				" │ \x1b[97mglm zai\x1b[0m | enabled    │",
+				" ╰──────────────────────╯",
+			}, "\n")
+			s, err := d.startTerminal(ws, []string{"/bin/zsh", "-f", "-c",
+				"printf %s " + agent.Quote(frame) + "; exec -a zcode-cli /bin/cat"}, "zcode", 40, 8)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer d.closeSession(s, time.Second)
+			var pg int
+			waitFor(t, "ZCode prompt and foreground process", func() bool {
+				pg = s.Foreground()
+				name, _ := agent.OfProcess(pg)
+				_, _, shaped := zcodePromptCells(s.Screen())
+				return name == "zcode" && shaped && s.BracketedPaste()
+			})
+			if got := s.zcodeReady(pg); got != tc.want {
+				t.Fatalf("ready = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestZCodeStatusBindsForegroundTurn(t *testing.T) {
 	d, ws := newTestDaemon(t)

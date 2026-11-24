@@ -13,7 +13,7 @@ func TestLaunchInjectsNoSkills(t *testing.T) {
 	SetPermissionMode(l.Home, PermissionAsk)
 	for _, name := range Known {
 		prompt := "do it"
-		if !CanDispatch(name) {
+		if name == "zcode" {
 			prompt = ""
 		}
 		r, err := l.Launch(name, Model{}, prompt)

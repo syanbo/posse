@@ -471,8 +471,8 @@ func (a *app) agentChoices() []string {
 	return slices.DeleteFunc(slices.Clone(a.installedAgents()), func(n string) bool { return slices.Contains(a.disabled, n) })
 }
 
-func (a *app) dispatchAgentChoices() []string {
-	return slices.DeleteFunc(a.agentChoices(), func(name string) bool { return !agent.CanDispatch(name) })
+func (a *app) discussionAgentChoices() []string {
+	return slices.DeleteFunc(a.agentChoices(), func(name string) bool { return !agent.CanJoinDiscussion(name) })
 }
 
 // installedAgents 优先用常驻进程的安装检测结果。

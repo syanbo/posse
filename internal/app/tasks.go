@@ -218,7 +218,7 @@ func (a *app) openDispatch() {
 	a.dispatching = true
 	a.dTitle, a.dSpec, a.dMode = "", "", 0
 	a.dBranch = "task-" + randomSuffix()
-	choices := a.dispatchAgentChoices()
+	choices := a.agentChoices()
 	if !slices.ContainsFunc(choices, func(ag string) bool { return a.dAgents[ag] }) && len(choices) > 0 {
 		a.dAgents = map[string]bool{choices[0]: true}
 	}
@@ -928,17 +928,17 @@ func (a *app) dispatchDialog(c *ui.Context) {
 			})
 			fieldInput(c, &a.dTitle, m.TasksTitlePlaceholder()).AutoFocus()
 			fieldArea(c, &a.dSpec, m.TasksSpecPlaceholder(), 136)
-			ui.Row(c).Gap(16).Children(func() {
+			ui.Row(c).Gap(16).Wrap().Children(func() {
 				ui.Text(c, m.TasksAssignTo()).FontSize(fsBody).TextColor(t.TextMuted)
 				if a.dAgents == nil {
 					a.dAgents = map[string]bool{}
 				}
-				for _, name := range a.dispatchAgentChoices() {
+				for _, name := range a.agentChoices() {
 					on := a.dAgents[name]
 					ui.Checkbox(c.Key("agent-"+name), &on, agentTitle(name))
 					a.dAgents[name] = on
 				}
-				if len(a.dispatchAgentChoices()) == 0 {
+				if len(a.agentChoices()) == 0 {
 					ui.Text(c, m.TasksNoAgents()).FontSize(fsBody).TextColor(t.TextMuted)
 				}
 			})
@@ -952,7 +952,7 @@ func (a *app) dispatchDialog(c *ui.Context) {
 				}
 			}
 			var agents []string
-			for _, name := range a.dispatchAgentChoices() {
+			for _, name := range a.agentChoices() {
 				if a.dAgents[name] {
 					agents = append(agents, name)
 				}

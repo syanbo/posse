@@ -22,6 +22,7 @@ var hanAllowed = []struct{ file, sub, why string }{
 	{"internal/cli/cli.go", "MMDD｜类型｜摘要", "posse session title 的用法里的标题格式"},
 	{"internal/cli/session.go", "MMDD｜类型｜摘要", "posse session title 的用法里的标题格式"},
 	{"internal/history/history.go", "", "SQL 里的注释"},
+	{"internal/daemon/zcode.go", "输入提示词", "识别 ZCode 原生交互终端的占位符，不显示给用户"},
 }
 
 // 常驻进程、CLI 和各内部包不产出中文界面文字：报错和说明写英文源文本，界面一侧经本包或 locales 翻译。

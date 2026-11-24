@@ -8,7 +8,9 @@ hooks 注入方式和 hook 的 stdout 规则见根目录 AGENTS.md。这里是 a
 
 运行 `posse agent zcode-plugin` 生成本地状态插件，命令会打印目录。在 `~/.zcode/cli/config.json` 的 `plugins` 中启用插件，并把该目录追加到现有 `dirs` 列表，随后新开 ZCode。Posse 在自己的目录保存插件文件，使用稳定的 `$POSSE_HOME/bin/posse` 回调。插件里有 `SessionStart`、`UserPromptSubmit`、`Stop` 三个钩子，分别绑定会话、标记工作中、标记本轮结束。Posse 核对前台进程、会话与回合再接收状态。关闭或退出 ZCode 后由前台进程检查清理。 [ZCode 插件配置](https://github.com/zai-org/ZCode/blob/v4.0.0/apps/zcode-cli/docs/usage/10-plugins.md)
 
-新会话在 ZCode 终端内输入第一条提示、选择模型和处理审批。实测 CLI 0.18.0 未报告 OSC 7501，普通生成被 Esc 中断时也未发 `Stop`，Posse 状态会等后续 hook 更新。任务和讨论派发需要可判断的交互输入就绪信号。恢复用 `zcode --resume sess_<UUID>`，历史来源见 [会话历史](history.md)。 [ZCode 的 OSC 7501 功能请求](https://github.com/zai-org/feedback/issues/996)
+新会话在 ZCode 终端内输入提示、选择模型和处理审批。恢复用 `zcode --resume sess_<UUID>`，历史来源见 [会话历史](history.md)。实测 CLI 0.18.0 未报告 OSC 7501，普通生成被 Esc 中断时也未发 `Stop`，Posse 状态会等后续 hook 更新。 [ZCode 的 OSC 7501 功能请求](https://github.com/zai-org/feedback/issues/996)
+
+用桌面任务页的「交给」或 `posse task start --agent zcode --spec '任务说明'` 来派发。worker 直接运行 ZCode CLI，模型和思考深度沿用 ZCode 默认设置。Posse 等 0.18 的中英文交互终端出现有可用模型的空输入框，再粘贴并提交首条提示。登录、审批、插件选择、正在生成或有草稿时等待，配置好模型后自动继续。追加任务和给派发方的提醒也等空输入框，可以不装状态插件。若粘贴后用户开始键入，Posse 留下草稿供用户确认和发送。讨论成员和 `terminal create --prompt` 仍需要各自的接入。
 
 技能页可以按 ZCode 筛选。Posse 扫描用户和工作区的 `.zcode/skills`、`.agents/skills` 及 `skills.roots`，向上扫到工作树根。用户目录优先于项目，同级 `.zcode` 优先，关闭上层的同名技能后下层可生效。开关按 `SKILL.md` 的绝对路径写进用户的 `~/.zcode/cli/config.json` 或工作区的 `.zcode/config.json` 的 `skills` 对象。整体关闭技能时，界面显示关闭状态。随 CLI 或插件发放的技能由 ZCode 自己列出。 [ZCode 技能说明](https://github.com/zai-org/ZCode/blob/v4.0.0/apps/zcode-cli/docs/usage/08-skills.md)
 

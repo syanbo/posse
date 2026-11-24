@@ -1069,8 +1069,8 @@ func (d *Daemon) checkMemberAgent(name string) error {
 	if !slices.Contains(agent.Known, name) {
 		return rpc.Errorf(rpc.CodeBadRequest, "unknown agent %s (%s)", name, strings.Join(agent.Known, ", "))
 	}
-	if !agent.CanDispatch(name) {
-		return rpc.Errorf(rpc.CodeBadRequest, "ZCode cannot be used for automated dispatch yet")
+	if !agent.CanJoinDiscussion(name) {
+		return rpc.Errorf(rpc.CodeBadRequest, "ZCode cannot be used as a discussion member yet")
 	}
 	if d.disc.launch == nil && !d.agentInstalled(name) {
 		return rpc.Errorf(rpc.CodeBadRequest, "%s is not installed on this Mac", name)

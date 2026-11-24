@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"posse/internal/agent"
 	"posse/internal/history"
 	"posse/internal/skills"
 )
@@ -25,6 +26,15 @@ func TestPreviewZCode(t *testing.T) {
 		t.Fatal("missing ZCode menu entry")
 	}
 	savePNG(t, tt, "zcode-menu.png")
+
+	a = previewApp(t)
+	a.daemon.Agents = agent.Known
+	a.openDispatch()
+	tt = newPreviewTester(a, false)
+	if _, ok := tt.Find("ZCode"); !ok {
+		t.Fatal("missing ZCode dispatch choice")
+	}
+	savePNG(t, tt, "zcode-dispatch.png")
 
 	a = previewApp(t)
 	a.workspaces[0].Terminals[0].Agent = "zcode"

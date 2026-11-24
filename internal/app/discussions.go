@@ -2557,7 +2557,7 @@ func (a *app) editDiscussionDialog(c *ui.Context) {
 
 func (a *app) openMemberForm(d *discDetail, id string) {
 	f := memberForm{open: true, id: id, ws: a.wsLabel(cmp.Or(d.info.WorkspaceID, a.projectMain(d.info.ProjectID))), client: fmt.Sprintf("c_%x", time.Now().UnixNano())}
-	choices := a.dispatchAgentChoices()
+	choices := a.discussionAgentChoices()
 	if mem := d.member(id); mem != nil {
 		f.name, f.role, f.model, f.effort, f.ws = mem.Name, mem.Role, mem.Model, mem.Effort, mem.WorkspaceLabel
 		f.agent = mem.Agent
@@ -2631,7 +2631,7 @@ func (a *app) memberDialog(c *ui.Context) {
 				title = m.DiscEditMemberTitle()
 			}
 			titleText(c, title, fsTitle)
-			choices := a.dispatchAgentChoices()
+			choices := a.discussionAgentChoices()
 			// 成员现在用的 agent 停用了或没检测到时也列出来：只改职责、名字时不悄悄换掉它
 			if editing != nil && editing.Agent != "" && !slices.Contains(choices, editing.Agent) {
 				choices = append(choices, editing.Agent)

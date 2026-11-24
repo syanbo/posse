@@ -80,7 +80,7 @@ func init() {
 		{"terminal resize", "Resize", "<terminal> --cols N --rows N", cmdTerminalResize},
 		{"terminal close", "Close a terminal", "<terminal> [--grace 2s]", cmdTerminalClose},
 		{"task guide", "How to coordinate worker agents with posse task (--skill for a SKILL.md)", "", cmdTaskGuide},
-		{"task start", "Dispatch a task to a new worker", "--agent claude|codex|grok|cursor|antigravity [--model M] [--effort E] [--title T] (--spec S | --spec-file F|- | SPEC) [--workspace W] [--worktree NAME [--base REF] [--repos A,B]] [-- command args...]", cmdTaskStart},
+		{"task start", "Dispatch a task to a new worker", "--agent claude|codex|grok|cursor|antigravity|zcode [--model M] [--effort E] [--title T] (--spec S | --spec-file F|- | SPEC) [--workspace W] [--worktree NAME [--base REF] [--repos A,B]] [-- command args...]", cmdTaskStart},
 		{"task list", "List the tasks you dispatched", "[--all]", cmdTaskList},
 		{"task show", "Show a task with its messages and the worker's screen", "<task>", cmdTaskShow},
 		{"task wait", "Wait for a worker to finish, ask or exit", "[--timeout 10m]", cmdTaskWait},

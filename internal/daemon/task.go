@@ -145,8 +145,8 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "agent required (%s)", strings.Join(agent.Known, ", "))
 	case p.Agent != "" && len(p.Command) > 0:
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "agent and command are exclusive")
-	case !agent.CanDispatch(p.Agent):
-		return nil, rpc.Errorf(rpc.CodeBadRequest, "ZCode cannot be used for automated dispatch yet")
+	case p.Agent == "zcode" && (p.Model.Name != "" || p.Model.Effort != ""):
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "select the model and effort in the ZCode terminal")
 	case p.Model != (agent.Model{}) && p.Agent == "":
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "model and effort require agent")
 	case p.Agent != "" && d.checkEnabled(p.Agent) != nil:
@@ -176,13 +176,19 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 	if c := d.liveSession(p.Caller); c != nil && c.WorkspaceID == w.ID && d.isChatFolder(c.Dir) {
 		dir = c.Dir
 	}
+	// 首条提示发出前任务必须已登记。交接也要看见完整的 worker 和 pending 状态。
+	d.handoff.startMu.RLock()
+	defer d.handoff.startMu.RUnlock()
 	var s *session
-	if p.Agent != "" {
+	switch p.Agent {
+	case "zcode":
+		s, err = d.startAgentLocked(w, dir, p.Agent, p.Model, "", p.Cols, p.Rows, env...)
+	case "":
+		s, err = d.launchTerminalLocked(w, p.Command, "", p.Cols, p.Rows, store.Terminal{Cwd: dir}, env...)
+	default:
 		m := p.Model
 		m.Worker = true
-		s, err = d.startAgentIn(w, dir, p.Agent, m, workerPrompt(t, w), p.Cols, p.Rows, env...)
-	} else {
-		s, err = d.launchTerminal(w, p.Command, "", p.Cols, p.Rows, store.Terminal{Cwd: dir}, env...)
+		s, err = d.startAgentLocked(w, dir, p.Agent, m, workerPrompt(t, w), p.Cols, p.Rows, env...)
 	}
 	if err != nil {
 		return nil, err
@@ -191,6 +197,11 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 	if err := d.store.AddTask(t); err != nil {
 		d.closeSession(s, 2*time.Second)
 		return nil, err
+	}
+	if p.Agent == "zcode" {
+		s.mu.Lock()
+		s.zcodeStart = t.ID
+		s.mu.Unlock()
 	}
 	d.taskNotify()
 	return d.taskInfo(t, nil, nil), nil
@@ -876,10 +887,15 @@ func (d *Daemon) deliver(terminalID string) {
 		return
 	}
 	s := d.liveSession(terminalID)
-	if s == nil || s.agentName() == "" || !s.Running() || s.Agent().Status != agent.StatusIdle && !agent.Parked(s.Agent()) && !s.discussionDelivery() {
+	if s == nil || !s.Running() {
 		return
 	}
-	if !agent.CanDispatch(s.agentName()) {
+	name := s.agentName()
+	if name == "zcode" {
+		s.queueZCodeNudge()
+		return
+	}
+	if name == "" || s.Agent().Status != agent.StatusIdle && !agent.Parked(s.Agent()) && !s.discussionDelivery() {
 		return
 	}
 	if wait := nudgeQuiet - time.Since(s.LastInput()); wait > 0 {

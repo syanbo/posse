@@ -1,6 +1,6 @@
 # Posse tasks: coordinate other agents
 
-`posse task` dispatches work to other agents (claude, codex, grok, cursor or antigravity), each in its own Posse terminal the user can watch, and brings their results back to you. Workers report through Posse; never scrape their terminals for results.
+`posse task` dispatches work to other agents (claude, codex, grok, cursor, antigravity or zcode), each in its own Posse terminal the user can watch, and brings their results back to you. Workers report through Posse; never scrape their terminals for results.
 
 **Done means:** every task you started has one explicit outcome, and your report to the user names, per task, the outcome, the evidence and anything unresolved.
 
@@ -32,6 +32,7 @@ A spec must stand on its own; the worker cannot see your conversation. Name:
 - codex: an OpenAI model ID such as `gpt-5.5`; effort as in codex's `model_reasoning_effort`, e.g. `low`, `medium`, `high`, `xhigh`.
 - grok: a model from `grok models`; effort as in grok's `--reasoning-effort`.
 - cursor: a model from `cursor-agent models`; `--effort` needs `--model` and becomes `<model>[effort=<level>]`.
+- zcode: use `--agent zcode` with its configured default model and effort. If model setup is still required, the initial prompt waits for the ZCode terminal to be ready.
 
 A wrong name usually makes the worker fail at startup; `posse task show <task>` then shows the agent's error.
 

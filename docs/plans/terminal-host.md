@@ -27,7 +27,7 @@ sequenceDiagram
 - 触发时机：窗口的包比常驻进程新时在轮询里自动触发一次（`internal/app/upgrade.go` 的 `autoUpgrade`，包新旧按构建标识里的时间比，每个常驻进程 pid 只自动试一次；已接受操作未完成返回 `busy` 时延迟重试），设置页「关于」的"更新常驻进程"和 `posse daemon handoff` 手动触发。旧进程用调用方给的可执行文件路径拉起新进程；交接失败时旧进程恢复读 PTY 照常运行、报错给调用方，断终端的重启只留作兜底。
 - 交接不变量（`internal/daemon/handoff.go`）：
   - 协议版本是 `handoffVersion`：改了交接记录或帧格式、新旧两边解析不了时要加一（旧进程只认版本号相等的新进程，加了就要重启一次才能升上来）；新旧双向都能解析的可选字段（如 `handoffTerm.Runtime`）不加。
-  - 新建终端和交接开始经 `handoffState.startMu` 互斥；交接的终端和以它们为 worker 的任务不记为 `lost`。
+  - 新建终端和交接开始经 `handoffState.startMu` 互斥；交接的终端和以它们为 worker 的任务不记为 `lost`。ZCode 尚未粘贴的首条提示以任务 ID 交接，由接手的进程继续等输入区就绪。
   - 旧进程只把 PTY 已交出去的终端的退出留给新进程；交接窗口里退出的终端新进程收不到退出码，记 `-1`。
   - 新进程回话后马上用旧进程交来的 socket 开始服务（hook 只等 2 秒，不能等旧进程退出），先写 pid 文件，在后台一直等 `$POSSE_HOME/possed.lock`，拿到才开手机服务（端口在旧进程手里），等不到也不退出；普通启动拿到锁后若 socket 还有人应答就退出，免得交接空档里被拉起的进程删掉新进程的 socket。
   - 交接期间 `terminal wait --for idle` 不算空闲；手机看着时终端是手机的尺寸，记录里带上界面的尺寸（`DeskCols`、`DeskRows`），新进程换回去。

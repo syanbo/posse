@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -987,6 +988,20 @@ func (t *Terminal) SendContext(ctx context.Context, data []byte) error {
 // Inject 是 posse 自己往终端里打字（如提醒 agent 有新消息），不算作用户输入。
 func (t *Terminal) Inject(data []byte) error { return t.inject(context.Background(), data) }
 
+// InjectWhen 抢到写入次序后复查条件，再连续写入。返回值表示已经开始尝试写入。
+func (t *Terminal) InjectWhen(ctx context.Context, data []byte, ready func() bool) (bool, error) {
+	attempted := false
+	err := t.writeInputWhen(ctx, data, func() bool {
+		if !t.Running() || !ready() {
+			return false
+		}
+		t.mouseLast.Store(false)
+		attempted = true
+		return true
+	})
+	return attempted, err
+}
+
 func (t *Terminal) inject(ctx context.Context, data []byte) error {
 	if !t.Running() {
 		return errors.New("terminal has exited")
@@ -1008,6 +1023,10 @@ func (t *Terminal) inject(ctx context.Context, data []byte) error {
 // 不给共享 PTY 设置写期限，避免取消桌面输入时也打断手机或 CLI 的写入。
 // 描述符本来就是非阻塞的；只有队列写满时短暂等待，期间响应本次输入的取消。
 func (t *Terminal) writeInput(ctx context.Context, data []byte) error {
+	return t.writeInputWhen(ctx, data, nil)
+}
+
+func (t *Terminal) writeInputWhen(ctx context.Context, data []byte, ready func() bool) error {
 	t.inputOnce.Do(func() { t.inputGate = make(chan struct{}, 1) })
 	select {
 	case t.inputGate <- struct{}{}:
@@ -1015,6 +1034,12 @@ func (t *Terminal) writeInput(ctx context.Context, data []byte) error {
 		return ctx.Err()
 	}
 	defer func() { <-t.inputGate }()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if ready != nil && !ready() {
+		return nil
+	}
 	raw, err := t.pty.SyscallConn()
 	if err != nil {
 		return err
@@ -1205,6 +1230,21 @@ func (t *Terminal) ContainsText(sub string) bool {
 func (t *Terminal) Screen() []string {
 	t.smu.Lock()
 	defer t.smu.Unlock()
+	return t.screenLocked()
+}
+
+// ScreenTextColorsDiffer 在同一帧里定位并比较两格文字颜色，避免重画时把不同帧的内容和颜色拼在一起。
+func (t *Terminal) ScreenTextColorsDiffer(positions func([]string) (image.Point, image.Point, bool)) bool {
+	t.smu.Lock()
+	defer t.smu.Unlock()
+	if t.emu == nil {
+		return false
+	}
+	a, b, ok := positions(t.screenLocked())
+	return ok && t.emu.DifferentTextColors(a, b)
+}
+
+func (t *Terminal) screenLocked() []string {
 	if t.emu == nil {
 		return nil
 	}

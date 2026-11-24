@@ -88,6 +88,10 @@ type session struct {
 	zcodePID  int
 	zcodeTurn string
 	zcodeAt   time.Time
+
+	// 首条提示和后续提醒等待 ZCode 的输入区就绪，由 mu 保护。
+	zcodeStart string
+	zcodeNudge bool
 }
 
 func (s *session) userName() string {
