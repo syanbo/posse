@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.34
+
+- 新增「内置 Tailscale」（设置 › 内置 Tailscale）：无需安装官方 Tailscale App，也不占用系统 VPN 槽位，可与 Surge、Shadowrocket、Clash 等代理工具同时使用；支持浏览器交互登录、一次性 AuthKey、自定义 Headscale 控制服务器、「跟随系统代理或 VPN 路由」开关与重置节点身份。
+- 开启并登录后，连接电脑的 Tailscale 地址自动经内置节点以 QUIC 通信（兼容电脑端官方 Tailscale 或内置 Tailscale）；看桌面支持显式 Tailscale 线路，并在配了自建中转且对端走 DERP 时自动优先自建中转。
+- 会话页状态行与看桌面调试面板区分「Tailscale 直连」与「Tailscale 中继 (DERP)」。电脑端内置 Tailscale 需要 Posse for Mac 0.1.49 或更新版本。
+
+### English
+
+- Added Built-in Tailscale (Settings › Built-in Tailscale): runs a standalone node inside Posse without taking the system VPN slot, so it works alongside proxy apps like Surge, Shadowrocket, or Clash. Supports browser sign-in, one-time Auth Keys, custom Headscale control servers, a “Follow system proxy / VPN routing” toggle, and identity reset.
+- Once connected, Posse automatically reaches your Mac’s Tailscale address over QUIC through the built-in node (compatible with both official Tailscale and Built-in Tailscale on Mac). Remote Desktop adds an explicit Tailscale path and prefers your self-hosted relay when the peer is on DERP.
+- Session status lines and the Remote Desktop debug panel now distinguish Tailscale Direct from Tailscale Relay (DERP). Mac-side Built-in Tailscale requires Posse for Mac 0.1.49 or later.
+
 ## 0.1.33
 
 - 讨论支持单条消息同时 `@` 多位可用 Agent（最多 8 位，与 `@人` 互斥），长按引用可用 Agent 消息时自动预选该成员，取消引用自动收回。
