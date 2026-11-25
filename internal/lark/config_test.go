@@ -2,6 +2,7 @@ package lark
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -68,5 +69,60 @@ func TestBotConfigReadOnlyHostsAndTrustedScripts(t *testing.T) {
 	}
 	if len(reloaded.Bots) != 1 || len(reloaded.Bots[0].ReadOnlyHosts) != 2 || len(reloaded.Bots[0].TrustedScripts) != 2 {
 		t.Fatalf("unexpected reloaded bot: %+v", reloaded.Bots)
+	}
+}
+
+func TestValidateBotPolicy(t *testing.T) {
+	validScript := filepath.Join(t.TempDir(), "fetch.sh")
+	validDir := t.TempDir() + "/"
+	if err := ValidateBotPolicy(
+		[]string{"sentry.corp.laoyuegou.com", "gitlab.corp.laoyuegou.com:8443"},
+		[]string{validScript, validDir},
+	); err != nil {
+		t.Fatalf("expected valid policy, got %v", err)
+	}
+
+	badHosts := []string{
+		"",
+		"https://sentry.corp.laoyuegou.com",
+		"sentry.corp.laoyuegou.com/api",
+		"a.com,b.com",
+		"a.com b.com",
+		"sentry.corp.laoyuegou.com:0",
+		"sentry.corp.laoyuegou.com:70000",
+		"sentry.corp.laoyuegou.com:abc",
+		"sentry.corp.laoyuegou.com:",
+	}
+	for _, h := range badHosts {
+		if err := ValidateBotPolicy([]string{h}, nil); err == nil {
+			t.Errorf("expected invalid read-only host error for %q", h)
+		}
+	}
+
+	tmpLink := filepath.Join(t.TempDir(), "to-tmp")
+	if err := os.Symlink("/tmp", tmpLink); err != nil {
+		t.Fatal(err)
+	}
+	badScripts := []string{
+		"",
+		"relative/bad.sh",
+		"./bad.sh",
+		"/Users/dengbo/../etc/a.sh",
+		"/Users/dengbo/a:b.sh",
+		"/Users/dengbo/$HOME/a.sh",
+		"~/a.sh",
+		"/Users/dengbo/with space.sh",
+		"/",
+		"/tmp",
+		"/tmp/a.sh",
+		"/tmp/",
+		"/private/tmp/a.sh",
+		"/private/",
+		filepath.Join(tmpLink, "a.sh"),
+	}
+	for _, s := range badScripts {
+		if err := ValidateBotPolicy(nil, []string{s}); err == nil {
+			t.Errorf("expected invalid trusted script error for %q", s)
+		}
 	}
 }

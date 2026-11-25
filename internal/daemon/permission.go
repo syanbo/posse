@@ -323,14 +323,15 @@ func derivePermRuleWithRoots(tool string, args map[string]any, roots agent.Scrat
 	}
 }
 
-// noSessionRuleCommands 列出通用解释器/包装命令：执行任意代码或子命令，绝不生成「本会话允许同类」规则键。
+// noSessionRuleCommands 列出通用解释器/包装命令与高风险排查工具：未通过只读白名单时绝不生成「本会话允许同类」规则键。
 var noSessionRuleCommands = map[string]bool{
 	"bash": true, "sh": true, "zsh": true, "fish": true,
 	"python": true, "python3": true,
 	"node": true, "deno": true, "bun": true,
 	"ruby": true, "perl": true, "php": true,
 	"osascript": true, "eval": true, "sudo": true, "xargs": true,
-	"npx": true, "uvx": true, "pipx": true, "env": true,
+	"npx": true, "uvx": true, "pipx": true, "env": true, "printenv": true,
+	"curl": true, "glab": true, "aliyun": true, "ossutil": true, "tccli": true,
 }
 
 func deriveCommandRuleKeys(cmdLine string) ([]string, string) {
@@ -363,7 +364,7 @@ func deriveCommandRuleKeysWithRoots(cmdLine string, roots agent.ScratchRoots) ([
 		if strings.Contains(fields[0], "=") || strings.Contains(fields[0], "/") {
 			return nil, ""
 		}
-		if noSessionRuleCommands[fields[0]] {
+		if noSessionRuleCommands[strings.ToLower(fields[0])] {
 			return nil, ""
 		}
 		if agent.HasUnsafeRuleOutputFlag(fields) {

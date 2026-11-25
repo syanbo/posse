@@ -21,6 +21,7 @@ import (
 
 	"posse/internal/agent"
 	"posse/internal/daemon"
+	"posse/internal/lark"
 	"posse/internal/rpc"
 	"posse/internal/spawn"
 )
@@ -794,6 +795,32 @@ func antigravityPermissionDecision(behavior string) string {
 	}
 }
 
+// currentLarkScratchRoots 解析当前飞书 hook 生效的只读策略：
+// 当 POSSE_LARK_BOT_ID 与 POSSE_HOME 均非空时直接读取最新 lark-bots.json，
+// 并显式覆盖启动时环境变量（若机器人不存在或配置已清空则置空切片，确保存活 worker 即时撤销且无分隔符歧义）。
+func currentLarkScratchRoots() agent.ScratchRoots {
+	roots := agent.DefaultScratchRoots()
+	botID := strings.TrimSpace(os.Getenv("POSSE_LARK_BOT_ID"))
+	posseHome := strings.TrimSpace(os.Getenv("POSSE_HOME"))
+	if botID == "" || posseHome == "" {
+		return roots
+	}
+	roots.ReadOnlyHosts = nil
+	roots.TrustedScripts = nil
+	cfg, err := lark.LoadConfig(posseHome)
+	if err != nil {
+		return roots
+	}
+	for _, b := range cfg.Bots {
+		if b.ID == botID {
+			roots.ReadOnlyHosts = b.ReadOnlyHosts
+			roots.TrustedScripts = b.TrustedScripts
+			break
+		}
+	}
+	return roots
+}
+
 // isSafeLarkToolCall 放行飞书审批模式下的安全只读检查、Posse 讨论协作命令以及 $POSSE_NOTES/discussions/ 内的回复草稿写入，
 // 避免一次只读排查在飞书群刷出十几张无意义审批卡片；所有代码改动、非只读命令和 MCP 调用仍必须人工审批。
 func isSafeLarkToolCall(payload []byte) bool {
@@ -809,23 +836,24 @@ func isSafeLarkToolCall(payload []byte) bool {
 	if json.Unmarshal(payload, &p) != nil {
 		return false
 	}
+	roots := currentLarkScratchRoots()
 	switch p.ToolCall.Name {
 	case "write_file", "write_to_file":
-		return isDiscussionNoteWrite(p.ToolCall.Args)
+		return isDiscussionNoteWrite(p.ToolCall.Args, roots)
 	case "run_command":
 		cmdLine, _ := p.ToolCall.Args["CommandLine"].(string)
-		return agent.IsSafeReadOnlyCommandLine(cmdLine)
+		return agent.IsSafeReadOnlyCommandLineWithRoots(cmdLine, roots)
 	default:
 		return false
 	}
 }
 
-func isDiscussionNoteWrite(args map[string]any) bool {
+func isDiscussionNoteWrite(args map[string]any, roots agent.ScratchRoots) bool {
 	target, _ := args["Path"].(string)
 	if target == "" {
 		target, _ = args["TargetFile"].(string)
 	}
-	return agent.IsSafeDiscussionWritePath(target, agent.DefaultScratchRoots())
+	return agent.IsSafeDiscussionWritePath(target, roots)
 }
 
 func cmdVersion(e *env, args []string) error {

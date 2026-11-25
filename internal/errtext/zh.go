@@ -658,6 +658,8 @@ var zh = [][2]string{
 	// 飞书多机器人网关与卡片
 	{"lark bot profile is required", "必须指定飞书机器人的 lark-cli profile"},
 	{"lark bot %s not found", "找不到飞书机器人 {1}"},
+	{"invalid read-only host %q", "只读白名单域名无效：{1}"},
+	{"invalid trusted script path %q", "受信脚本路径无效：{1}"},
 	{"lark-cli not found in PATH", "没有找到 lark-cli，请先安装并登录 lark-cli"},
 	{"subagents", "个子代理"},
 	{"Working in Posse…", "正在 Posse 中执行…"},

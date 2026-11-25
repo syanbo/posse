@@ -6,8 +6,10 @@ package lark
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -195,6 +197,141 @@ func cleanIDs(in []string) []string {
 		out = append(out, v)
 	}
 	return out
+}
+
+// ValidateBotPolicy 校验机器人级的 readOnlyHosts 与 trustedScripts 原始入参（全英文报错，拒绝相对路径、非法字符与临时目录重叠）。
+func ValidateBotPolicy(readOnlyHosts, trustedScripts []string) error {
+	for _, raw := range readOnlyHosts {
+		if !isValidReadOnlyHostEntry(raw) {
+			return fmt.Errorf("invalid read-only host %q", raw)
+		}
+	}
+	for _, raw := range trustedScripts {
+		if !isValidTrustedScriptEntry(raw) {
+			return fmt.Errorf("invalid trusted script path %q", raw)
+		}
+	}
+	return nil
+}
+
+func isValidReadOnlyHostEntry(raw string) bool {
+	v := strings.TrimSpace(raw)
+	if v == "" || strings.Contains(v, "://") || strings.ContainsAny(v, "/\\, \t\r\n") {
+		return false
+	}
+	for i := 0; i < len(v); i++ {
+		if v[i] < 0x20 || v[i] == 0x7f {
+			return false
+		}
+	}
+	host := v
+	if strings.Contains(v, ":") {
+		h, portStr, ok := strings.Cut(v, ":")
+		if !ok || strings.Contains(portStr, ":") || portStr == "" || len(portStr) > 5 || portStr[0] == '0' {
+			return false
+		}
+		for i := 0; i < len(portStr); i++ {
+			if portStr[i] < '0' || portStr[i] > '9' {
+				return false
+			}
+		}
+		port, err := strconv.Atoi(portStr)
+		if err != nil || port < 1 || port > 65535 {
+			return false
+		}
+		host = h
+	}
+	return isValidPolicyHostname(host)
+}
+
+func isValidPolicyHostname(host string) bool {
+	if host == "" || len(host) > 253 || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") ||
+		strings.HasPrefix(host, "-") || strings.HasSuffix(host, "-") || strings.Contains(host, "..") {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
+			return false
+		}
+		for i := 0; i < len(label); i++ {
+			c := label[i]
+			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func isValidTrustedScriptEntry(raw string) bool {
+	v := strings.TrimSpace(raw)
+	if v == "" || !filepath.IsAbs(v) || strings.ContainsAny(v, ":$~") {
+		return false
+	}
+	for i := 0; i < len(v); i++ {
+		if v[i] <= 0x20 || v[i] == 0x7f {
+			return false
+		}
+	}
+	for _, seg := range strings.Split(filepath.ToSlash(v), "/") {
+		if seg == ".." {
+			return false
+		}
+	}
+	isDir := strings.HasSuffix(v, "/")
+	clean := filepath.Clean(v)
+	if isForbiddenScriptLocation(clean, isDir) {
+		return false
+	}
+	resolved, ok := evalPathWithMissingSuffix(clean)
+	if !ok {
+		return false
+	}
+	if isForbiddenScriptLocation(resolved, isDir) {
+		return false
+	}
+	return true
+}
+
+func isForbiddenScriptLocation(clean string, isDir bool) bool {
+	clean = filepath.Clean(clean)
+	if clean == "/" || clean == "/tmp" || strings.HasPrefix(clean, "/tmp/") ||
+		clean == "/private/tmp" || strings.HasPrefix(clean, "/private/tmp/") {
+		return true
+	}
+	if isDir && clean == "/private" {
+		return true
+	}
+	return false
+}
+
+func evalPathWithMissingSuffix(clean string) (string, bool) {
+	cur := clean
+	for {
+		_, err := os.Lstat(cur)
+		if err == nil {
+			resolved, err := filepath.EvalSymlinks(cur)
+			if err != nil {
+				return "", false
+			}
+			rel, err := filepath.Rel(cur, clean)
+			if err != nil {
+				return "", false
+			}
+			if rel == "." {
+				return filepath.Clean(resolved), true
+			}
+			return filepath.Clean(filepath.Join(resolved, rel)), true
+		}
+		if !os.IsNotExist(err) {
+			return "", false
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return "", false
+		}
+		cur = parent
+	}
 }
 
 func (b BotConfig) AllowsTrigger(senderOpenID, ownerOpenID, chatID string) bool {

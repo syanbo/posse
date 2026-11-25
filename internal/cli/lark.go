@@ -119,9 +119,17 @@ func cmdLarkAdd(e *env, args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if fs.NArg() > 0 {
+		return fmt.Errorf("lark add: unexpected arguments: %s", strings.Join(fs.Args(), " "))
+	}
 	if strings.TrimSpace(*profile) == "" {
 		return fmt.Errorf("lark add: --profile is required")
 	}
+	if err := lark.ValidateBotPolicy([]string(readOnlyHosts), []string(trustedScripts)); err != nil {
+		return fmt.Errorf("lark add: %w", err)
+	}
+	visited := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { visited[f.Name] = true })
 	bot := lark.BotConfig{
 		ID:                *id,
 		Name:              *name,
@@ -140,6 +148,31 @@ func cmdLarkAdd(e *env, args []string) error {
 		AllowedChats:      []string(allowChats),
 		TrustedScripts:    []string(trustedScripts),
 		ReadOnlyHosts:     []string(readOnlyHosts),
+	}
+	if existingID := strings.TrimSpace(*id); existingID != "" {
+		var listed struct {
+			Bots []lark.BotConfig `json:"bots"`
+		}
+		if err := e.call("lark.bots.list", nil, &listed); err != nil {
+			return err
+		}
+		for _, b := range listed.Bots {
+			if b.ID == existingID {
+				if !visited["allow-user"] {
+					bot.AllowedUsers = b.AllowedUsers
+				}
+				if !visited["allow-chat"] {
+					bot.AllowedChats = b.AllowedChats
+				}
+				if !visited["trusted-script"] {
+					bot.TrustedScripts = b.TrustedScripts
+				}
+				if !visited["read-only-host"] {
+					bot.ReadOnlyHosts = b.ReadOnlyHosts
+				}
+				break
+			}
+		}
 	}
 	var saved lark.BotConfig
 	if err := e.call("lark.bots.save", map[string]any{"ownerOpenId": *owner, "bot": bot}, &saved); err != nil {
@@ -178,12 +211,27 @@ func cmdLarkEdit(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
+	if len(pos) > 1 || (strings.TrimSpace(*id) != "" && len(pos) > 0) {
+		return fmt.Errorf("lark edit: too many arguments")
+	}
 	target := strings.TrimSpace(*id)
 	if target == "" && len(pos) > 0 {
 		target = strings.TrimSpace(pos[0])
 	}
 	if target == "" {
 		return fmt.Errorf("lark edit: bot ID required")
+	}
+	visited := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { visited[f.Name] = true })
+	var checkHosts, checkScripts []string
+	if !*clearHosts && visited["read-only-host"] {
+		checkHosts = []string(readOnlyHosts)
+	}
+	if !*clearScripts && visited["trusted-script"] {
+		checkScripts = []string(trustedScripts)
+	}
+	if err := lark.ValidateBotPolicy(checkHosts, checkScripts); err != nil {
+		return fmt.Errorf("lark edit: %w", err)
 	}
 	var listed struct {
 		OwnerOpenID string           `json:"ownerOpenId"`
@@ -204,8 +252,6 @@ func cmdLarkEdit(e *env, args []string) error {
 	if !found {
 		return fmt.Errorf("lark edit: bot %q not found", target)
 	}
-	visited := map[string]bool{}
-	fs.Visit(func(f *flag.Flag) { visited[f.Name] = true })
 	if visited["name"] {
 		bot.Name = *name
 	}

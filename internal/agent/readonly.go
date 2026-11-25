@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -319,7 +320,7 @@ func HasUnsafeRuleOutputFlag(args []string) bool {
 			}
 			if isOutFlag {
 				hasOutput = true
-				if !isSafePathInRoots(target, true, true, true, true, roots) {
+				if !isSafePathInRoots(target, true, true, true, true, false, roots) {
 					return true
 				}
 				continue
@@ -363,7 +364,7 @@ func IsSafeReadOnlySegmentWithRoots(seg string, roots ScratchRoots) bool {
 
 // IsSafeDiscussionWritePath 判断 write_file 等工具写入路径是否严格位于讨论笔记目录内（含软链接、硬链接与普通文件校验）。
 func IsSafeDiscussionWritePath(target string, roots ScratchRoots) bool {
-	return isSafePathInRoots(target, false, false, false, false, roots)
+	return isSafePathInRoots(target, false, false, false, false, false, roots)
 }
 
 func parseShellSegment(s string, strictExpansions bool) ([]shellToken, []shellRedir, bool) {
@@ -671,6 +672,9 @@ func pathWithin(clean, root string, allowRoot bool) bool {
 	if allowRoot && clean == root {
 		return true
 	}
+	if root == string(filepath.Separator) {
+		return strings.HasPrefix(clean, root)
+	}
 	return strings.HasPrefix(clean, root+string(filepath.Separator))
 }
 
@@ -705,7 +709,11 @@ func evalWithMissingSuffix(clean string) (string, bool) {
 }
 
 func isSafeScratchToken(tok shellToken, allowRoot, allowExistingDir bool, roots ScratchRoots) bool {
-	return isSafePathInRoots(tok.val, !tok.singleQuoted, allowRoot, true, allowExistingDir, roots)
+	return isSafePathInRoots(tok.val, !tok.singleQuoted, allowRoot, true, allowExistingDir, false, roots)
+}
+
+func isSafeNewScratchToken(tok shellToken, roots ScratchRoots) bool {
+	return isSafePathInRoots(tok.val, !tok.singleQuoted, false, true, false, true, roots)
 }
 
 func isRootNotSymlink(path string) bool {
@@ -736,7 +744,7 @@ func isSafeExistingTarget(fi os.FileInfo, allowExistingDir bool) bool {
 	return true
 }
 
-func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp, allowExistingDir bool, roots ScratchRoots) bool {
+func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp, allowExistingDir, mustNotExist bool, roots ScratchRoots) bool {
 	if p == "" || strings.TrimSpace(p) != p {
 		return false
 	}
@@ -796,19 +804,26 @@ func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp, allowExisti
 		if !lexMatched {
 			continue
 		}
-		// 非配置根本身的目标若已存在：必须非软链接，文件写操作要求普通文件且 nlink==1（目录写操作允许真实目录）
+		// 非配置根本身的目标若已存在：mustNotExist 时必须尚不存在；否则必须非软链接，文件写操作要求普通文件且 nlink==1
 		if clean != root && clean != resolvedRoot {
 			if fi, err := os.Lstat(clean); err == nil {
-				if !isSafeExistingTarget(fi, allowExistingDir) {
+				if mustNotExist || !isSafeExistingTarget(fi, allowExistingDir) {
 					return false
 				}
 			} else if !os.IsNotExist(err) {
 				return false
 			}
+		} else if mustNotExist {
+			return false
 		}
 		resolvedTarget, ok := evalWithMissingSuffix(clean)
 		if !ok {
 			return false
+		}
+		if mustNotExist {
+			if _, err := os.Lstat(resolvedTarget); !os.IsNotExist(err) {
+				return false
+			}
 		}
 		if pathWithin(resolvedTarget, resolvedRoot, allowRoot) {
 			return true
@@ -894,17 +909,70 @@ func isValidHostname(host string) bool {
 	return true
 }
 
+func isValidPort(portStr string) bool {
+	if portStr == "" || len(portStr) > 5 || portStr[0] == '0' {
+		return false
+	}
+	for i := 0; i < len(portStr); i++ {
+		if portStr[i] < '0' || portStr[i] > '9' {
+			return false
+		}
+	}
+	n, err := strconv.Atoi(portStr)
+	return err == nil && n >= 1 && n <= 65535
+}
+
+func isAllowedReadOnlyHostPort(hostname, port string, hosts []string) bool {
+	hostname = strings.ToLower(strings.TrimSpace(hostname))
+	if !isValidHostname(hostname) {
+		return false
+	}
+	if port != "" && !isValidPort(port) {
+		return false
+	}
+	for _, h := range hosts {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if h == "" {
+			continue
+		}
+		if strings.Contains(h, ":") {
+			if port != "" && hostname+":"+port == h {
+				return true
+			}
+		} else {
+			if port == "" && hostname == h {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isAllowedReadOnlyHostToken(raw string, hosts []string) bool {
+	if raw == "" || strings.TrimSpace(raw) != raw || strings.ContainsAny(raw, "/\\ \t\r\n") {
+		return false
+	}
+	if strings.Contains(raw, ":") {
+		host, port, ok := strings.Cut(raw, ":")
+		if !ok || strings.Contains(port, ":") || port == "" {
+			return false
+		}
+		return isAllowedReadOnlyHostPort(host, port, hosts)
+	}
+	return isAllowedReadOnlyHostPort(raw, "", hosts)
+}
+
 func isSafeReadOnlyTokens(tokens []shellToken, roots ScratchRoots) bool {
 	if len(tokens) == 0 {
 		return false
 	}
-	// glab 专属前置环境变量：仅允许 GITLAB_HOST=<合法域名> glab ...
+	// glab 专属前置环境变量：仅允许 GITLAB_HOST=<命中 ReadOnlyHosts 的主机> glab ...
 	if len(tokens) >= 2 && strings.HasPrefix(tokens[0].val, "GITLAB_HOST=") {
 		if anySentryToken(tokens) {
 			return false
 		}
 		host := strings.TrimPrefix(tokens[0].val, "GITLAB_HOST=")
-		if !isValidHostname(host) {
+		if !isAllowedReadOnlyHostToken(host, roots.ReadOnlyHosts) {
 			return false
 		}
 		cmd, ok := resolveTrustedCommand(tokens[1])
@@ -934,7 +1002,7 @@ func isSafeReadOnlyTokens(tokens []shellToken, roots ScratchRoots) bool {
 	case "posse":
 		return isSafeReadOnlyPosse(args)
 	case "ls", "pwd", "cat", "head", "tail", "wc", "stat", "which",
-		"basename", "dirname", "realpath", "readlink", "echo", "printf", "nl", "date", "uname", "printenv", "cd",
+		"basename", "dirname", "realpath", "readlink", "echo", "printf", "nl", "date", "uname", "cd",
 		"grep", "egrep", "fgrep", "jq", "uniq", "cut", "tr", "diff", "comm", "true", "false",
 		"du", "df", "od", "strings", "shasum", "md5", "column":
 		return true
@@ -942,8 +1010,6 @@ func isSafeReadOnlyTokens(tokens []shellToken, roots ScratchRoots) bool {
 		return isSafeReadOnlyFile(args)
 	case "rg":
 		return isSafeReadOnlyRG(args)
-	case "env":
-		return len(args) == 0
 	case "sort":
 		return isSafeReadOnlySort(args)
 	case "tree":
@@ -1726,6 +1792,268 @@ func isExplicitSafeLarkCLI(domain, sub string) bool {
 
 // --- Round 2: glab / aliyun / ossutil / tccli / curl / trustedScripts ---
 
+var glabRepoPathRe = regexp.MustCompile(`^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+$`)
+
+func hasSafeRepoSegments(p string) bool {
+	if !glabRepoPathRe.MatchString(p) {
+		return false
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func isSafeGlabRepoArg(repo string, roots ScratchRoots) bool {
+	if repo == "" || strings.TrimSpace(repo) != repo || strings.ContainsAny(repo, "\\ \t\r\n") {
+		return false
+	}
+	if strings.HasPrefix(repo, "https://") {
+		if strings.Contains(repo, "%") {
+			return false
+		}
+		u, err := url.Parse(repo)
+		if err != nil || u.Scheme != "https" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return false
+		}
+		if strings.Contains(u.Host, ":") && u.Port() == "" {
+			return false
+		}
+		if !isAllowedReadOnlyHostPort(u.Hostname(), u.Port(), roots.ReadOnlyHosts) {
+			return false
+		}
+		p := strings.TrimPrefix(u.Path, "/")
+		return hasSafeRepoSegments(p)
+	}
+	if strings.Contains(repo, ":") {
+		return false
+	}
+	return hasSafeRepoSegments(repo)
+}
+
+func isSafeGlabIssueTarget(arg string, roots ScratchRoots) bool {
+	if arg == "" || strings.TrimSpace(arg) != arg || strings.ContainsAny(arg, "\\ \t\r\n") {
+		return false
+	}
+	if strings.HasPrefix(arg, "https://") {
+		if strings.Contains(arg, "%") || strings.Contains(arg, "..") {
+			return false
+		}
+		u, err := url.Parse(arg)
+		if err != nil || u.Scheme != "https" || u.Opaque != "" || u.User != nil {
+			return false
+		}
+		if strings.Contains(u.Host, ":") && u.Port() == "" {
+			return false
+		}
+		return isAllowedReadOnlyHostPort(u.Hostname(), u.Port(), roots.ReadOnlyHosts)
+	}
+	if strings.Contains(arg, "://") || strings.Contains(arg, ":") {
+		return false
+	}
+	id := strings.TrimPrefix(arg, "#")
+	return isDigits(id)
+}
+
+type glabSubSpec struct {
+	boolFlags  map[string]bool
+	valueFlags map[string]bool
+	minPos     int
+	maxPos     int
+	repoPos    bool
+	issuePos   bool
+}
+
+var glabQuerySpecs = map[string]glabSubSpec{
+	"repo view": {
+		boolFlags: map[string]bool{"-h": true, "--help": true},
+		valueFlags: map[string]bool{
+			"-b": true, "--branch": true,
+			"--jq": true,
+			"-F":   true, "--output": true,
+		},
+		minPos:  0,
+		maxPos:  1,
+		repoPos: true,
+	},
+	"mr view": {
+		boolFlags: map[string]bool{
+			"-c": true, "--comments": true,
+			"-h": true, "--help": true,
+			"--resolved": true,
+			"-s":         true, "--system-logs": true,
+			"--unresolved": true,
+		},
+		valueFlags: map[string]bool{
+			"--jq": true,
+			"-F":   true, "--output": true,
+			"-p": true, "--page": true,
+			"-P": true, "--per-page": true,
+			"-R": true, "--repo": true,
+		},
+		minPos: 0,
+		maxPos: 1,
+	},
+	"mr list": {
+		boolFlags: map[string]bool{
+			"-A": true, "--all": true,
+			"-c": true, "--closed": true,
+			"-d": true, "--draft": true,
+			"-h": true, "--help": true,
+			"-M": true, "--merged": true,
+			"--not-draft": true,
+		},
+		valueFlags: map[string]bool{
+			"-a": true, "--assignee": true,
+			"--author":        true,
+			"--created-after": true, "--created-before": true,
+			"--deployed-after": true, "--deployed-before": true,
+			"--environment": true,
+			"-g":            true, "--group": true,
+			"--jq": true,
+			"-l":   true, "--label": true,
+			"-m": true, "--milestone": true,
+			"--not-label": true,
+			"-o":          true, "--order": true,
+			"-F": true, "--output": true,
+			"-p": true, "--page": true,
+			"-P": true, "--per-page": true,
+			"-R": true, "--repo": true,
+			"-r": true, "--reviewer": true,
+			"--search": true,
+			"-S":       true, "--sort": true,
+			"-s": true, "--source-branch": true,
+			"-t": true, "--target-branch": true,
+		},
+		minPos: 0,
+		maxPos: 0,
+	},
+	"mr diff": {
+		boolFlags: map[string]bool{
+			"-h": true, "--help": true,
+			"--raw": true,
+		},
+		valueFlags: map[string]bool{
+			"--color": true,
+			"-R":      true, "--repo": true,
+		},
+		minPos: 0,
+		maxPos: 1,
+	},
+	"issue view": {
+		boolFlags: map[string]bool{
+			"-c": true, "--comments": true,
+			"-h": true, "--help": true,
+			"-s": true, "--system-logs": true,
+		},
+		valueFlags: map[string]bool{
+			"--jq": true,
+			"-F":   true, "--output": true,
+			"-p": true, "--page": true,
+			"-P": true, "--per-page": true,
+			"-R": true, "--repo": true,
+		},
+		minPos:   1,
+		maxPos:   1,
+		issuePos: true,
+	},
+	"issue list": {
+		boolFlags: map[string]bool{
+			"-A": true, "--all": true,
+			"-c": true, "--closed": true,
+			"-C": true, "--confidential": true,
+			"-h": true, "--help": true,
+		},
+		valueFlags: map[string]bool{
+			"-a": true, "--assignee": true,
+			"--author": true,
+			"-e":       true, "--epic": true,
+			"-g": true, "--group": true,
+			"--in": true,
+			"-t":   true, "--issue-type": true,
+			"-i": true, "--iteration": true,
+			"--jq": true,
+			"-l":   true, "--label": true,
+			"-m": true, "--milestone": true,
+			"--not-assignee": true, "--not-author": true, "--not-label": true,
+			"--order": true,
+			"-O":      true, "--output": true,
+			"-F": true, "--output-format": true,
+			"-p": true, "--page": true,
+			"-P": true, "--per-page": true,
+			"-R": true, "--repo": true,
+			"--search": true,
+			"-s":       true, "--sort": true,
+		},
+		minPos: 0,
+		maxPos: 0,
+	},
+	"release view": {
+		boolFlags: map[string]bool{"-h": true, "--help": true},
+		valueFlags: map[string]bool{
+			"--jq": true,
+			"-F":   true, "--output": true,
+			"-R": true, "--repo": true,
+		},
+		minPos: 0,
+		maxPos: 1,
+	},
+	"release list": {
+		boolFlags: map[string]bool{"-h": true, "--help": true},
+		valueFlags: map[string]bool{
+			"--jq": true,
+			"-F":   true, "--output": true,
+			"-p": true, "--page": true,
+			"-P": true, "--per-page": true,
+			"-R": true, "--repo": true,
+		},
+		minPos: 0,
+		maxPos: 0,
+	},
+	"ci list": {
+		boolFlags: map[string]bool{
+			"-h": true, "--help": true,
+			"-y": true, "--yaml-errors": true,
+		},
+		valueFlags: map[string]bool{
+			"--jq": true,
+			"-n":   true, "--name": true,
+			"-o": true, "--order": true,
+			"-F": true, "--output": true,
+			"-p": true, "--page": true,
+			"-P": true, "--per-page": true,
+			"-r": true, "--ref": true,
+			"-R": true, "--repo": true,
+			"--scope":  true,
+			"--sha":    true,
+			"--sort":   true,
+			"--source": true,
+			"-s":       true, "--status": true,
+			"-a": true, "--updated-after": true,
+			"-b": true, "--updated-before": true,
+			"-u": true, "--username": true,
+		},
+		minPos: 0,
+		maxPos: 0,
+	},
+	"ci status": {
+		boolFlags: map[string]bool{
+			"-c": true, "--compact": true,
+			"-h": true, "--help": true,
+		},
+		valueFlags: map[string]bool{
+			"-b": true, "--branch": true,
+			"--jq": true,
+			"-F":   true, "--output": true,
+			"-R": true, "--repo": true,
+		},
+		minPos: 0,
+		maxPos: 0,
+	},
+}
+
 func isSafeReadOnlyGlab(argToks []shellToken, roots ScratchRoots) bool {
 	if len(argToks) == 0 {
 		return false
@@ -1742,43 +2070,93 @@ func isSafeReadOnlyGlab(argToks []shellToken, roots ScratchRoots) bool {
 	if sub == "repo" && act == "clone" {
 		return isSafeReadOnlyGlabClone(rest, roots)
 	}
-	allowedSub := false
-	switch sub {
-	case "repo":
-		allowedSub = act == "view"
-	case "mr":
-		allowedSub = act == "view" || act == "list" || act == "diff"
-	case "issue", "release":
-		allowedSub = act == "view" || act == "list"
-	case "ci":
-		allowedSub = act == "view" || act == "list" || act == "status"
-	}
-	if !allowedSub {
+	spec, ok := glabQuerySpecs[sub+" "+act]
+	if !ok {
 		return false
 	}
+	var pos []string
+	endFlags := false
 	for i := 0; i < len(rest); i++ {
 		a := rest[i].val
-		if a == "--" {
-			break
-		}
-		if a == "--web" || strings.HasPrefix(a, "--web=") || a == "-w" {
-			return false
-		}
-		switch a {
-		case "-R", "--repo", "-F", "--output-format", "-O", "--output", "-l", "--label", "-a", "--assignee", "-p", "--per-page", "-P", "--page", "-b", "--branch", "-s", "--source-branch", "-t", "--target-branch":
-			i++
+		if !endFlags && a == "--" {
+			endFlags = true
 			continue
 		}
-		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && len(a) > 1 {
-			first := a[1]
-			if first != 'R' && first != 'F' && first != 'O' && first != 'l' && first != 'a' && first != 'p' && first != 'P' && first != 'b' && first != 's' && first != 't' {
-				if strings.ContainsRune(a[1:], 'w') {
+		if !endFlags && strings.HasPrefix(a, "-") && a != "-" {
+			if strings.HasPrefix(a, "--") {
+				name, val, hasEq := strings.Cut(a, "=")
+				if hasEq {
+					if !spec.valueFlags[name] {
+						return false
+					}
+					if name == "--repo" && !isSafeGlabRepoArg(val, roots) {
+						return false
+					}
+					continue
+				}
+				if spec.boolFlags[a] {
+					continue
+				}
+				if spec.valueFlags[a] {
+					if i+1 >= len(rest) {
+						return false
+					}
+					val := rest[i+1].val
+					if a == "--repo" && !isSafeGlabRepoArg(val, roots) {
+						return false
+					}
+					i++
+					continue
+				}
+				return false
+			}
+			// 拒绝任何组合或粘连短选项（如 -cw、-Ap、-Rfoo）
+			if len(a) != 2 {
+				return false
+			}
+			if spec.boolFlags[a] {
+				continue
+			}
+			if spec.valueFlags[a] {
+				if i+1 >= len(rest) {
 					return false
 				}
+				val := rest[i+1].val
+				if a == "-R" && !isSafeGlabRepoArg(val, roots) {
+					return false
+				}
+				i++
+				continue
 			}
+			return false
 		}
+		pos = append(pos, a)
+	}
+	if len(pos) < spec.minPos || len(pos) > spec.maxPos {
+		return false
+	}
+	if spec.repoPos && len(pos) == 1 && !isSafeGlabRepoArg(pos[0], roots) {
+		return false
+	}
+	if spec.issuePos && len(pos) == 1 && !isSafeGlabIssueTarget(pos[0], roots) {
+		return false
 	}
 	return true
+}
+
+func isSafeGlabAPIHeader(hv string) bool {
+	if hv == "" || strings.ContainsAny(hv, "\r\n@") {
+		return false
+	}
+	idx := strings.IndexByte(hv, ':')
+	if idx <= 0 {
+		return false
+	}
+	name := strings.ToLower(strings.TrimSpace(hv[:idx]))
+	if name != "accept" && name != "content-type" {
+		return false
+	}
+	return strings.TrimSpace(hv[idx+1:]) != ""
 }
 
 func isSafeReadOnlyGlabAPI(argToks []shellToken) bool {
@@ -1811,18 +2189,18 @@ func isSafeReadOnlyGlabAPI(argToks []shellToken) bool {
 				}
 				continue
 			case a == "-H" || a == "--header":
-				if i+1 >= len(argToks) || hasMethodOverrideHeader(argToks[i+1].val) {
+				if i+1 >= len(argToks) || !isSafeGlabAPIHeader(argToks[i+1].val) {
 					return false
 				}
 				i++
 				continue
 			case strings.HasPrefix(a, "--header="):
-				if hasMethodOverrideHeader(strings.TrimPrefix(a, "--header=")) {
+				if !isSafeGlabAPIHeader(strings.TrimPrefix(a, "--header=")) {
 					return false
 				}
 				continue
 			default:
-				// 拒绝 -f/-F/--field/--raw-field/--input 及任何未在白名单内的 flag
+				// 拒绝 --hostname、-f/-F/--field/--raw-field/--input/--form/--placeholder 及任何未在白名单内的 flag
 				return false
 			}
 		}
@@ -1831,20 +2209,31 @@ func isSafeReadOnlyGlabAPI(argToks []shellToken) bool {
 	if len(pos) != 1 {
 		return false
 	}
-	p := pos[0]
+	raw := pos[0]
+	if raw == "" || strings.Contains(raw, "://") || strings.HasPrefix(raw, "//") ||
+		strings.Contains(raw, "..") || strings.Contains(raw, "\\") || strings.Contains(raw, "%") ||
+		strings.ContainsAny(raw, " \t\r\n") {
+		return false
+	}
+	for i := 0; i < len(raw); i++ {
+		if raw[i] < 0x20 || raw[i] == 0x7f {
+			return false
+		}
+	}
+	p := raw
 	if idx := strings.IndexAny(p, "?#"); idx >= 0 {
 		p = p[:idx]
 	}
 	p = strings.ToLower(strings.Trim(p, "/"))
-	if p == "" || p == "graphql" || strings.HasPrefix(p, "graphql/") ||
-		strings.HasSuffix(p, "/graphql") || strings.Contains(p, "/graphql/") {
+	if p == "" {
 		return false
 	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "" || seg == "graphql" {
+			return false
+		}
+	}
 	return true
-}
-
-func hasMethodOverrideHeader(h string) bool {
-	return strings.Contains(strings.ToLower(h), "x-http-method-override")
 }
 
 func isSafeReadOnlyGlabClone(argToks []shellToken, roots ScratchRoots) bool {
@@ -1869,7 +2258,10 @@ func isSafeReadOnlyGlabClone(argToks []shellToken, roots ScratchRoots) bool {
 	if strings.HasPrefix(before[0].val, "-") || strings.HasPrefix(before[1].val, "-") {
 		return false
 	}
-	if !isSafeScratchToken(before[1], false, true, roots) {
+	if !isSafeGlabRepoArg(before[0].val, roots) {
+		return false
+	}
+	if !isSafeNewScratchToken(before[1], roots) {
 		return false
 	}
 	for i := 0; i < len(gitFlags); i++ {
@@ -1940,22 +2332,137 @@ func hasPascalActionPrefix(action string, prefixes ...string) bool {
 	return false
 }
 
+func hasSensitiveActionWord(action string, words []string) bool {
+	low := strings.ToLower(action)
+	for _, w := range words {
+		if strings.Contains(low, w) {
+			return true
+		}
+	}
+	return false
+}
+
+func isForbiddenFileRefValue(v string) bool {
+	if strings.HasPrefix(v, "@") {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(v), "file://")
+}
+
+var aliyunSensitiveActionWords = []string{
+	"secret", "token", "password", "credential", "key", "policy", "role",
+}
+
+var aliyunSLSValueFlags = map[string]bool{
+	"--profile": true, "-p": true,
+	"--region": true, "--language": true,
+	"--cli-query": true, "--version": true,
+	"--project": true, "--logstore": true,
+	"--from": true, "--to": true,
+	"--query": true, "--topic": true,
+	"--line": true, "--offset": true,
+	"--body": true, "--type": true,
+	"--shard": true, "--cursor": true,
+	"--count": true, "--page": true, "--size": true,
+}
+
+var aliyunSLSOptBoolFlags = map[string]bool{
+	"--reverse":   true,
+	"--power-sql": true,
+}
+
+var aliyunSLSBoolFlags = map[string]bool{
+	"--quiet":  true,
+	"--secure": true,
+}
+
+func isBoolLiteral(s string) bool {
+	return strings.EqualFold(s, "true") || strings.EqualFold(s, "false")
+}
+
+func isSafeAliyunSLSFlags(argToks []shellToken) bool {
+	for i := 0; i < len(argToks); i++ {
+		a := argToks[i].val
+		if !strings.HasPrefix(a, "-") || a == "-" || a == "--" {
+			return false
+		}
+		name, val, hasEq := strings.Cut(a, "=")
+		if hasEq {
+			if aliyunSLSValueFlags[name] {
+				if isForbiddenFileRefValue(val) {
+					return false
+				}
+				continue
+			}
+			if aliyunSLSOptBoolFlags[name] {
+				if !isBoolLiteral(val) {
+					return false
+				}
+				continue
+			}
+			return false
+		}
+		if aliyunSLSBoolFlags[a] {
+			continue
+		}
+		if aliyunSLSOptBoolFlags[a] {
+			if i+1 < len(argToks) && isBoolLiteral(argToks[i+1].val) {
+				i++
+			}
+			continue
+		}
+		if aliyunSLSValueFlags[a] {
+			if i+1 >= len(argToks) || isForbiddenFileRefValue(argToks[i+1].val) {
+				return false
+			}
+			i++
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 func isSafeReadOnlyAliyun(argToks []shellToken, roots ScratchRoots) bool {
 	i := 0
+	hasCLIQuery := false
 	for i < len(argToks) {
 		a := argToks[i].val
 		if !strings.HasPrefix(a, "-") {
 			break
 		}
-		switch {
-		case a == "--profile" || a == "-p" || a == "--region" || a == "--endpoint" || a == "--mode":
-			if i+1 >= len(argToks) {
+		name, val, hasEq := strings.Cut(a, "=")
+		if hasEq {
+			switch name {
+			case "--profile", "--region", "--language", "--version":
+				if isForbiddenFileRefValue(val) {
+					return false
+				}
+				i++
+			case "--cli-query":
+				if isForbiddenFileRefValue(val) {
+					return false
+				}
+				hasCLIQuery = true
+				i++
+			default:
+				return false
+			}
+			continue
+		}
+		switch a {
+		case "--profile", "-p", "--region", "--language", "--version":
+			if i+1 >= len(argToks) || isForbiddenFileRefValue(argToks[i+1].val) {
 				return false
 			}
 			i += 2
-		case strings.HasPrefix(a, "--profile=") || strings.HasPrefix(a, "--region=") ||
-			strings.HasPrefix(a, "--endpoint=") || strings.HasPrefix(a, "--mode=") ||
-			a == "--secure" || a == "--quiet":
+		case "--cli-query":
+			if i+1 >= len(argToks) || isForbiddenFileRefValue(argToks[i+1].val) {
+				return false
+			}
+			hasCLIQuery = true
+			i += 2
+		case "--secure", "--quiet":
 			i++
 		default:
 			return false
@@ -1972,22 +2479,75 @@ func isSafeReadOnlyAliyun(argToks []shellToken, roots ScratchRoots) bool {
 			return false
 		}
 		action := rest[0].val
-		if !hasPascalActionPrefix(action, "Get", "List", "Describe") {
+		if !hasPascalActionPrefix(action, "Get", "List", "Describe") || hasSensitiveActionWord(action, aliyunSensitiveActionWords) {
 			return false
 		}
-		for _, t := range rest[1:] {
-			a := t.val
-			if a == "--config-path" || strings.HasPrefix(a, "--config-path=") {
-				return false
-			}
-		}
-		return true
+		return isSafeAliyunSLSFlags(rest[1:])
 	case "oss", "ossutil":
+		if hasCLIQuery {
+			return false
+		}
 		return isSafeReadOnlyOSS(rest, roots)
 	default:
 		// configure、ram、sts 等其余服务一律审批
 		return false
 	}
+}
+
+var ossLSBoolFlags = map[string]bool{
+	"-s": true, "--short-format": true,
+	"-d": true, "--directory": true,
+	"-m": true, "--multipart": true,
+	"-a": true, "--all-type": true,
+	"--all-versions": true,
+	"--quiet":        true, "--secure": true,
+	"--cli-ai-mode": true, "--no-cli-ai-mode": true,
+	"--cli-non-interactive": true,
+}
+
+var ossLSValueFlags = map[string]bool{
+	"--profile": true, "-p": true,
+	"--region": true, "--language": true,
+	"--limited-num": true, "--marker": true,
+	"--upload-id-marker": true, "--version-id-marker": true,
+	"--encoding-type": true, "--include": true, "--exclude": true,
+	"--payer": true, "--retry-times": true,
+	"--cli-output": true, "--cli-cursor": true,
+}
+
+var ossStatBoolFlags = map[string]bool{
+	"--quiet": true, "--secure": true,
+	"--cli-ai-mode": true, "--no-cli-ai-mode": true,
+	"--cli-non-interactive": true,
+}
+
+var ossStatValueFlags = map[string]bool{
+	"--profile": true, "-p": true,
+	"--region": true, "--language": true,
+	"--encoding-type": true, "--version-id": true,
+	"--payer": true, "--retry-times": true,
+	"--cli-output": true,
+}
+
+var ossCPBoolFlags = map[string]bool{
+	"-r": true, "--recursive": true,
+	"-f": true, "--force": true,
+	"-u": true, "--update": true,
+	"--only-current-dir":    true,
+	"--disable-all-symlink": true, "--disable-dir-object": true,
+	"--quiet": true, "--secure": true,
+	"--cli-non-interactive": true,
+}
+
+var ossCPValueFlags = map[string]bool{
+	"--profile": true, "-p": true,
+	"--region": true, "--language": true,
+	"-j": true, "--jobs": true, "--parallel": true,
+	"--part-size": true, "--bigfile-threshold": true,
+	"--maxupspeed": true, "--maxdownspeed": true,
+	"--retry-times": true, "--timeout": true,
+	"--include": true, "--exclude": true,
+	"--payer": true, "--encoding-type": true, "--version-id": true,
 }
 
 func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
@@ -1997,13 +2557,26 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 		if !strings.HasPrefix(a, "-") {
 			break
 		}
-		switch {
-		case a == "-e" || a == "--endpoint" || a == "--profile" || a == "--region":
-			if i+1 >= len(argToks) {
+		name, val, hasEq := strings.Cut(a, "=")
+		if hasEq {
+			switch name {
+			case "--profile", "--region", "--language":
+				if isForbiddenFileRefValue(val) {
+					return false
+				}
+				i++
+			default:
+				return false
+			}
+			continue
+		}
+		switch a {
+		case "--profile", "-p", "--region", "--language":
+			if i+1 >= len(argToks) || isForbiddenFileRefValue(argToks[i+1].val) {
 				return false
 			}
 			i += 2
-		case strings.HasPrefix(a, "--endpoint=") || strings.HasPrefix(a, "--profile=") || strings.HasPrefix(a, "--region="):
+		case "--quiet", "--secure":
 			i++
 		default:
 			return false
@@ -2016,21 +2589,10 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 	rest := argToks[i+1:]
 	switch sub {
 	case "ls", "stat":
-		for _, t := range rest {
-			a := t.val
-			if a == "--" {
-				break
-			}
-			if a == "-c" || a == "--config-file" || strings.HasPrefix(a, "--config-file=") ||
-				a == "-o" || a == "--output" || strings.HasPrefix(a, "--output=") ||
-				a == "--output-dir" || strings.HasPrefix(a, "--output-dir=") ||
-				a == "--checkpoint-dir" || strings.HasPrefix(a, "--checkpoint-dir=") ||
-				a == "--snapshot-path" || strings.HasPrefix(a, "--snapshot-path=") {
-				return false
-			}
+		boolFlags, valFlags := ossLSBoolFlags, ossLSValueFlags
+		if sub == "stat" {
+			boolFlags, valFlags = ossStatBoolFlags, ossStatValueFlags
 		}
-		return true
-	case "cp":
 		var pos []shellToken
 		endFlags := false
 		for j := 0; j < len(rest); j++ {
@@ -2039,47 +2601,160 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 				endFlags = true
 				continue
 			}
-			if !endFlags && strings.HasPrefix(a, "-") {
-				switch {
-				case a == "-r" || a == "--recursive" || a == "-f" || a == "--force" ||
-					a == "-u" || a == "--update" || a == "--only-current-dir" ||
-					a == "--disable-all-symlink" || a == "--disable-dir-object":
+			if !endFlags && strings.HasPrefix(a, "-") && a != "-" {
+				name, val, hasEq := strings.Cut(a, "=")
+				if hasEq {
+					if !strings.HasPrefix(name, "--") || !valFlags[name] || isForbiddenFileRefValue(val) {
+						return false
+					}
 					continue
-				case a == "-e" || a == "--endpoint" || a == "--profile" || a == "--region" ||
-					a == "-j" || a == "--jobs" || a == "--parallel" || a == "--part-size" ||
-					a == "--bigfile-threshold" || a == "--maxupspeed" || a == "--maxdownspeed" ||
-					a == "--retry-times" || a == "--timeout" || a == "--include" || a == "--exclude" ||
-					a == "--payer" || a == "--encoding-type" || a == "--version-id":
-					if j+1 >= len(rest) {
+				}
+				if boolFlags[a] {
+					continue
+				}
+				if valFlags[a] {
+					if j+1 >= len(rest) || isForbiddenFileRefValue(rest[j+1].val) {
 						return false
 					}
 					j++
 					continue
-				case strings.HasPrefix(a, "--endpoint=") || strings.HasPrefix(a, "--profile=") ||
-					strings.HasPrefix(a, "--region=") || strings.HasPrefix(a, "--jobs=") ||
-					strings.HasPrefix(a, "--parallel=") || strings.HasPrefix(a, "--part-size=") ||
-					strings.HasPrefix(a, "--retry-times=") || strings.HasPrefix(a, "--timeout=") ||
-					strings.HasPrefix(a, "--include=") || strings.HasPrefix(a, "--exclude=") ||
-					strings.HasPrefix(a, "--payer=") || strings.HasPrefix(a, "--encoding-type=") ||
-					strings.HasPrefix(a, "--version-id="):
-					continue
-				default:
-					return false
 				}
+				return false
 			}
 			pos = append(pos, rest[j])
 		}
-		if len(pos) != 2 {
+		if len(pos) > 1 {
+			return false
+		}
+		for _, p := range pos {
+			if !strings.HasPrefix(p.val, "oss://") {
+				return false
+			}
+		}
+		return true
+	case "cp":
+		var pos []shellToken
+		endFlags := false
+		recursive := false
+		outputDirCount := 0
+		checkpointDirCount := 0
+		for j := 0; j < len(rest); j++ {
+			t := rest[j]
+			a := t.val
+			if !endFlags && a == "--" {
+				endFlags = true
+				continue
+			}
+			if !endFlags && strings.HasPrefix(a, "-") && a != "-" {
+				name, val, hasEq := strings.Cut(a, "=")
+				if hasEq {
+					if !strings.HasPrefix(name, "--") {
+						return false
+					}
+					if name == "--output-dir" {
+						outputDirCount++
+						dirTok := shellToken{val: val, quoted: t.quoted, singleQuoted: t.singleQuoted}
+						if outputDirCount > 1 || !isSafeScratchToken(dirTok, false, false, roots) {
+							return false
+						}
+						continue
+					}
+					if name == "--checkpoint-dir" {
+						checkpointDirCount++
+						dirTok := shellToken{val: val, quoted: t.quoted, singleQuoted: t.singleQuoted}
+						if checkpointDirCount > 1 || !isSafeScratchToken(dirTok, false, false, roots) {
+							return false
+						}
+						continue
+					}
+					if !ossCPValueFlags[name] || isForbiddenFileRefValue(val) {
+						return false
+					}
+					continue
+				}
+				if a == "--output-dir" {
+					if j+1 >= len(rest) {
+						return false
+					}
+					outputDirCount++
+					if outputDirCount > 1 || !isSafeScratchToken(rest[j+1], false, false, roots) {
+						return false
+					}
+					j++
+					continue
+				}
+				if a == "--checkpoint-dir" {
+					if j+1 >= len(rest) {
+						return false
+					}
+					checkpointDirCount++
+					if checkpointDirCount > 1 || !isSafeScratchToken(rest[j+1], false, false, roots) {
+						return false
+					}
+					j++
+					continue
+				}
+				if ossCPBoolFlags[a] {
+					if a == "-r" || a == "--recursive" {
+						recursive = true
+					}
+					continue
+				}
+				if ossCPValueFlags[a] {
+					if j+1 >= len(rest) || isForbiddenFileRefValue(rest[j+1].val) {
+						return false
+					}
+					j++
+					continue
+				}
+				return false
+			}
+			pos = append(pos, t)
+		}
+		if outputDirCount != 1 || checkpointDirCount != 1 || len(pos) != 2 {
 			return false
 		}
 		src, dst := pos[0], pos[1]
 		if !strings.HasPrefix(src.val, "oss://") || strings.HasPrefix(dst.val, "oss://") {
 			return false
 		}
-		return isSafeScratchToken(dst, false, true, roots)
+		if recursive {
+			return isSafeNewScratchToken(dst, roots)
+		}
+		return isSafeScratchToken(dst, false, false, roots)
 	default:
 		return false
 	}
+}
+
+var tccliAllowedServices = map[string]bool{
+	"cls": true, "cvm": true, "lighthouse": true, "vpc": true, "clb": true,
+	"cdb": true, "cynosdb": true, "redis": true, "mongodb": true, "postgres": true,
+	"mariadb": true, "es": true, "ckafka": true, "tdmq": true, "monitor": true,
+	"apm": true, "rum": true, "tke": true, "scf": true, "cdn": true,
+	"teo": true, "waf": true, "dnspod": true, "apigateway": true, "billing": true, "tag": true,
+}
+
+var tccliSensitiveActionWords = []string{
+	"secret", "token", "password", "credential", "key",
+	"auth", "login", "assume", "sign", "url", "policy", "role",
+}
+
+var tccliForbiddenFlagPrefixes = []string{
+	"endpoint", "proxy", "http-proxy", "https-proxy",
+	"secret", "token", "role",
+	"cli-input-json", "cli-unfold-argument", "generate-cli-skeleton",
+	"waiter", "sso",
+}
+
+func isForbiddenTCCLIFlag(flagName string) bool {
+	low := strings.ToLower(strings.TrimPrefix(flagName, "--"))
+	for _, p := range tccliForbiddenFlagPrefixes {
+		if strings.HasPrefix(low, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func isSafeReadOnlyTCCLI(args []string) bool {
@@ -2089,16 +2764,25 @@ func isSafeReadOnlyTCCLI(args []string) bool {
 		if !strings.HasPrefix(a, "-") {
 			break
 		}
-		switch {
-		case a == "--profile" || a == "--region" || a == "--endpoint" || a == "--output" || a == "--version" || a == "--timeout":
-			if i+1 >= len(args) {
+		name, val, hasEq := strings.Cut(a, "=")
+		if hasEq {
+			switch name {
+			case "--profile", "--region", "--output", "--version", "--timeout":
+				if isForbiddenFileRefValue(val) {
+					return false
+				}
+				i++
+			default:
+				return false
+			}
+			continue
+		}
+		switch a {
+		case "--profile", "--region", "--output", "--version", "--timeout":
+			if i+1 >= len(args) || isForbiddenFileRefValue(args[i+1]) {
 				return false
 			}
 			i += 2
-		case strings.HasPrefix(a, "--profile=") || strings.HasPrefix(a, "--region=") ||
-			strings.HasPrefix(a, "--endpoint=") || strings.HasPrefix(a, "--output=") ||
-			strings.HasPrefix(a, "--version=") || strings.HasPrefix(a, "--timeout="):
-			i++
 		default:
 			return false
 		}
@@ -2108,14 +2792,115 @@ func isSafeReadOnlyTCCLI(args []string) bool {
 	}
 	service := strings.ToLower(args[i])
 	action := args[i+1]
-	if strings.HasPrefix(action, "-") {
+	if !tccliAllowedServices[service] || strings.HasPrefix(action, "-") {
 		return false
 	}
-	switch service {
-	case "auth", "configure", "sts", "cam":
+	if !hasPascalActionPrefix(action, "Describe", "Search", "Get", "List") || hasSensitiveActionWord(action, tccliSensitiveActionWords) {
 		return false
 	}
-	return hasPascalActionPrefix(action, "Describe", "Search", "Get", "List")
+	expectVal := false
+	for _, a := range args[i+2:] {
+		if strings.HasPrefix(a, "-") {
+			if !strings.HasPrefix(a, "--") || len(a) <= 2 {
+				return false
+			}
+			name, val, hasEq := strings.Cut(a, "=")
+			if isForbiddenTCCLIFlag(name) {
+				return false
+			}
+			if hasEq {
+				if isForbiddenFileRefValue(val) {
+					return false
+				}
+				expectVal = false
+			} else {
+				expectVal = true
+			}
+			continue
+		}
+		if !expectVal || isForbiddenFileRefValue(a) {
+			return false
+		}
+		expectVal = false
+	}
+	return true
+}
+
+var curlAllowedWriteOutVars = []string{
+	"%{http_code}",
+	"%{response_code}",
+	"%{content_type}",
+	"%{size_download}",
+	"%{time_total}",
+}
+
+func isSafeCurlWriteOut(s string) bool {
+	if s == "" || strings.Contains(s, "@") {
+		return false
+	}
+	for i := 0; i < len(s); {
+		ch := s[i]
+		if ch == '%' {
+			matched := false
+			for _, v := range curlAllowedWriteOutVars {
+				if strings.HasPrefix(s[i:], v) {
+					i += len(v)
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return false
+			}
+			continue
+		}
+		if ch == '\\' {
+			if i+1 >= len(s) || (s[i+1] != 'n' && s[i+1] != 't') {
+				return false
+			}
+			i += 2
+			continue
+		}
+		if ch == '\t' || (ch >= 0x20 && ch <= 0x7e) {
+			i++
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isExactSentryAuthHeader(hv string) bool {
+	const prefix = "authorization: bearer "
+	if len(hv) < len(prefix) || !strings.EqualFold(hv[:len(prefix)], prefix) {
+		return false
+	}
+	rest := hv[len(prefix):]
+	return rest == "$SENTRY_AUTH_TOKEN" || rest == "${SENTRY_AUTH_TOKEN}"
+}
+
+func isSafeCurlHeader(tok shellToken) bool {
+	hv := tok.val
+	if hv == "" || strings.HasPrefix(strings.TrimSpace(hv), "@") || strings.ContainsAny(hv, "\r\n") {
+		return false
+	}
+	var name string
+	if idx := strings.IndexByte(hv, ':'); idx >= 0 {
+		name = strings.ToLower(strings.TrimSpace(hv[:idx]))
+	} else {
+		name = strings.ToLower(strings.TrimSpace(strings.TrimSuffix(hv, ";")))
+	}
+	switch name {
+	case "host", "cookie", "x-http-method-override":
+		return false
+	}
+	if strings.Contains(strings.ToLower(hv), "x-http-method-override") {
+		return false
+	}
+	if tok.hasSentryTokenVar {
+		return isExactSentryAuthHeader(hv)
+	}
+	return true
 }
 
 func isSafeReadOnlyCurl(argToks []shellToken, roots ScratchRoots) bool {
@@ -2124,6 +2909,8 @@ func isSafeReadOnlyCurl(argToks []shellToken, roots ScratchRoots) bool {
 	}
 	var urls []shellToken
 	endFlags := false
+	outputCount := 0
+	sentryHeaderCount := 0
 	for i := 0; i < len(argToks); i++ {
 		t := argToks[i]
 		a := t.val
@@ -2132,65 +2919,52 @@ func isSafeReadOnlyCurl(argToks []shellToken, roots ScratchRoots) bool {
 			continue
 		}
 		if !endFlags && strings.HasPrefix(a, "-") && a != "-" {
-			switch {
-			case a == "--silent" || a == "--show-error" || a == "--location" ||
-				a == "--get" || a == "--compressed" || a == "--fail":
+			switch a {
+			case "--silent", "--show-error", "--get", "--compressed", "--fail", "--globoff":
 				if t.hasSentryTokenVar {
 					return false
 				}
 				continue
-			case a == "-X" || a == "--request":
-				if i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar || !strings.EqualFold(argToks[i+1].val, "GET") {
+			case "-X", "--request":
+				if t.hasSentryTokenVar || i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar || !strings.EqualFold(argToks[i+1].val, "GET") {
 					return false
 				}
 				i++
 				continue
-			case strings.HasPrefix(a, "--request="):
-				if t.hasSentryTokenVar || !strings.EqualFold(strings.TrimPrefix(a, "--request="), "GET") {
+			case "-H", "--header":
+				if t.hasSentryTokenVar || i+1 >= len(argToks) {
 					return false
 				}
+				ht := argToks[i+1]
+				if !isSafeCurlHeader(ht) {
+					return false
+				}
+				if ht.hasSentryTokenVar {
+					sentryHeaderCount++
+					if sentryHeaderCount > 1 {
+						return false
+					}
+				}
+				i++
 				continue
-			case a == "-H" || a == "--header":
-				if i+1 >= len(argToks) {
-					return false
-				}
-				hv := argToks[i+1].val
-				// 仅 curl 的 -H/--header 值允许 $SENTRY_AUTH_TOKEN，拒绝 @file 读盘与方法覆盖头
-				if strings.HasPrefix(hv, "@") || hasMethodOverrideHeader(hv) {
+			case "-m", "--max-time":
+				if t.hasSentryTokenVar || i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar || !isPositiveNumber(argToks[i+1].val) {
 					return false
 				}
 				i++
 				continue
-			case strings.HasPrefix(a, "--header="):
-				hv := strings.TrimPrefix(a, "--header=")
-				if strings.HasPrefix(hv, "@") || hasMethodOverrideHeader(hv) {
-					return false
-				}
-				continue
-			case a == "-m" || a == "--max-time":
-				if i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar || !isPositiveNumber(argToks[i+1].val) {
+			case "-w", "--write-out":
+				if t.hasSentryTokenVar || i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar || !isSafeCurlWriteOut(argToks[i+1].val) {
 					return false
 				}
 				i++
 				continue
-			case strings.HasPrefix(a, "--max-time="):
-				if t.hasSentryTokenVar || !isPositiveNumber(strings.TrimPrefix(a, "--max-time=")) {
+			case "-o", "--output":
+				if t.hasSentryTokenVar || i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar {
 					return false
 				}
-				continue
-			case a == "-w" || a == "--write-out":
-				if i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar || strings.HasPrefix(argToks[i+1].val, "@") {
-					return false
-				}
-				i++
-				continue
-			case strings.HasPrefix(a, "--write-out="):
-				if t.hasSentryTokenVar || strings.HasPrefix(strings.TrimPrefix(a, "--write-out="), "@") {
-					return false
-				}
-				continue
-			case a == "-o" || a == "--output":
-				if i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar {
+				outputCount++
+				if outputCount > 1 || strings.Contains(argToks[i+1].val, "#") {
 					return false
 				}
 				if !isSafeScratchToken(argToks[i+1], false, false, roots) {
@@ -2198,27 +2972,14 @@ func isSafeReadOnlyCurl(argToks []shellToken, roots ScratchRoots) bool {
 				}
 				i++
 				continue
-			case strings.HasPrefix(a, "--output="):
-				if t.hasSentryTokenVar {
-					return false
-				}
-				outTok := shellToken{
-					val:          strings.TrimPrefix(a, "--output="),
-					quoted:       t.quoted,
-					singleQuoted: t.singleQuoted,
-				}
-				if !isSafeScratchToken(outTok, false, false, roots) {
-					return false
-				}
-				continue
 			default:
 				if strings.HasPrefix(a, "--") || t.hasSentryTokenVar {
 					return false
 				}
-				// 仅允许纯短布尔组合：s / S / L / G / f
+				// 仅允许纯短布尔组合：s / S / G / f / g（移除 L 拒绝重定向）
 				for _, ch := range a[1:] {
 					switch ch {
-					case 's', 'S', 'L', 'G', 'f':
+					case 's', 'S', 'G', 'f', 'g':
 					default:
 						return false
 					}
@@ -2238,31 +2999,101 @@ func isSafeReadOnlyCurl(argToks []shellToken, roots ScratchRoots) bool {
 }
 
 func isAllowedReadOnlyURL(rawURL string, hosts []string) bool {
-	u, err := url.Parse(rawURL)
-	if err != nil || u.Opaque != "" || u.User != nil {
+	if rawURL == "" || strings.ContainsAny(rawURL, "{}[]\\ \t\r\n") {
 		return false
 	}
-	if u.Scheme != "https" && u.Scheme != "http" {
-		return false
-	}
-	if !strings.HasPrefix(u.Path, "/api/0/") || hasDotDotSegment(u.Path) || strings.Contains(strings.ToLower(u.EscapedPath()), "%2e") {
-		return false
-	}
-	hostname := strings.ToLower(u.Hostname())
-	hostPort := strings.ToLower(u.Host)
-	if hostname == "" {
-		return false
-	}
-	for _, h := range hosts {
-		h = strings.ToLower(strings.TrimSpace(h))
-		if h == "" {
-			continue
+	for i := 0; i < len(rawURL); i++ {
+		if rawURL[i] < 0x20 || rawURL[i] == 0x7f {
+			return false
 		}
-		if strings.Contains(h, ":") {
-			if hostPort == h {
-				return true
-			}
-		} else if hostname == h {
+	}
+	if !strings.HasPrefix(strings.ToLower(rawURL), "https://") {
+		return false
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "https" || u.Opaque != "" || u.User != nil {
+		return false
+	}
+	// 从原始 URL 提取 authority 与 path 部分做额外核对，防止空 userinfo、歧义路径与百分号编码绕过
+	afterScheme := rawURL[len("https://"):]
+	slashIdx := strings.IndexByte(afterScheme, '/')
+	if slashIdx <= 0 {
+		return false
+	}
+	authority := afterScheme[:slashIdx]
+	if strings.Contains(authority, "@") || strings.ContainsAny(authority, "?#") {
+		return false
+	}
+	rawPath := afterScheme[slashIdx:]
+	if qIdx := strings.IndexAny(rawPath, "?#"); qIdx >= 0 {
+		rawPath = rawPath[:qIdx]
+	}
+	if !strings.HasPrefix(u.Path, "/api/0/") || !strings.HasPrefix(rawPath, "/api/0/") {
+		return false
+	}
+	if hasDotDotSegment(u.Path) || hasDotDotSegment(rawPath) {
+		return false
+	}
+	lowerRawPath := strings.ToLower(rawPath)
+	lowerEscaped := strings.ToLower(u.EscapedPath())
+	for _, bad := range []string{"%2e", "%2f", "%5c", `\`} {
+		if strings.Contains(lowerRawPath, bad) || strings.Contains(lowerEscaped, bad) {
+			return false
+		}
+	}
+	if strings.Contains(u.Host, ":") && u.Port() == "" {
+		return false
+	}
+	return isAllowedReadOnlyHostPort(u.Hostname(), u.Port(), hosts)
+}
+
+func autoWritableRoots(roots ScratchRoots) []string {
+	var raw []string
+	raw = append(raw, "/tmp", "/private/tmp")
+	if tmp := strings.TrimSpace(roots.TmpDir); tmp != "" && filepath.IsAbs(tmp) {
+		raw = append(raw, tmp)
+	}
+	notes := strings.TrimSpace(roots.NotesDir)
+	if notes != "" && filepath.IsAbs(notes) {
+		raw = append(raw, notes)
+		if strings.TrimSpace(roots.DiscussionsDir) == "" {
+			raw = append(raw, filepath.Join(notes, "discussions"))
+		}
+	}
+	if disc := strings.TrimSpace(roots.DiscussionsDir); disc != "" && filepath.IsAbs(disc) {
+		raw = append(raw, disc)
+	}
+	seen := map[string]bool{}
+	var out []string
+	add := func(p string) {
+		c := filepath.Clean(p)
+		if c == "" || seen[c] {
+			return
+		}
+		seen[c] = true
+		out = append(out, c)
+	}
+	for _, r := range raw {
+		add(r)
+		if resolved, ok := evalWithMissingSuffix(filepath.Clean(r)); ok {
+			add(resolved)
+		}
+	}
+	return out
+}
+
+func pathsOverlap(a, b string) bool {
+	a = filepath.Clean(a)
+	b = filepath.Clean(b)
+	if a == "/" || b == "/" {
+		return true
+	}
+	return pathWithin(a, b, true) || pathWithin(b, a, true)
+}
+
+func overlapsWritableRoots(p string, writableRoots []string) bool {
+	for _, wr := range writableRoots {
+		if pathsOverlap(p, wr) {
 			return true
 		}
 	}
@@ -2286,10 +3117,10 @@ func isTrustedScriptCall(tokens []shellToken, roots ScratchRoots) bool {
 		}
 		scriptPath = tokens[1].val
 	}
-	return isPathTrustedScript(scriptPath, roots.TrustedScripts)
+	return isPathTrustedScript(scriptPath, roots)
 }
 
-func isPathTrustedScript(targetPath string, trustedEntries []string) bool {
+func isPathTrustedScript(targetPath string, roots ScratchRoots) bool {
 	if targetPath == "" || strings.TrimSpace(targetPath) != targetPath ||
 		!filepath.IsAbs(targetPath) || hasDotDotSegment(targetPath) || strings.ContainsAny(targetPath, "$~") {
 		return false
@@ -2303,7 +3134,11 @@ func isPathTrustedScript(targetPath string, trustedEntries []string) bool {
 	if err != nil || !fi.Mode().IsRegular() {
 		return false
 	}
-	for _, entry := range trustedEntries {
+	writableRoots := autoWritableRoots(roots)
+	if overlapsWritableRoots(resolvedTarget, writableRoots) {
+		return false
+	}
+	for _, entry := range roots.TrustedScripts {
 		entry = strings.TrimSpace(entry)
 		if entry == "" || !filepath.IsAbs(entry) || hasDotDotSegment(entry) {
 			continue
@@ -2315,11 +3150,14 @@ func isPathTrustedScript(targetPath string, trustedEntries []string) bool {
 				continue
 			}
 			resolvedDir = filepath.Clean(resolvedDir)
+			if overlapsWritableRoots(resolvedDir, writableRoots) {
+				continue
+			}
 			dfi, err := os.Stat(resolvedDir)
 			if err != nil || !dfi.IsDir() {
 				continue
 			}
-			if strings.HasPrefix(resolvedTarget, resolvedDir+string(filepath.Separator)) {
+			if pathWithin(resolvedTarget, resolvedDir, false) {
 				return true
 			}
 		} else {
@@ -2327,7 +3165,11 @@ func isPathTrustedScript(targetPath string, trustedEntries []string) bool {
 			if err != nil {
 				continue
 			}
-			if resolvedTarget == filepath.Clean(resolvedEntry) {
+			resolvedEntry = filepath.Clean(resolvedEntry)
+			if overlapsWritableRoots(resolvedEntry, writableRoots) {
+				continue
+			}
+			if resolvedTarget == resolvedEntry {
 				return true
 			}
 		}

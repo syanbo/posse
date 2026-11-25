@@ -75,7 +75,6 @@ func (d *Daemon) larkStart(ctx context.Context) {
 
 func (d *Daemon) larkStop() {
 	d.perms.SetWatcher(nil)
-	d.perms.SetRootsResolver(nil)
 	d.lark.mu.Lock()
 	gw := d.lark.gw
 	d.lark.gw = nil
@@ -103,6 +102,8 @@ func (d *Daemon) larkBotByID(botID string) (lark.BotConfig, bool) {
 
 func (d *Daemon) larkReadOnlyRoots(terminalID string) agent.ScratchRoots {
 	roots := agent.DefaultScratchRoots()
+	roots.ReadOnlyHosts = nil
+	roots.TrustedScripts = nil
 	if d.store == nil || terminalID == "" {
 		return roots
 	}
@@ -128,15 +129,19 @@ func (d *Daemon) larkLaunchOptions(discKey string) (permOverride string, externa
 	if b.PermissionMode == lark.PermSkip {
 		return agent.PermissionSkip, false, nil
 	}
-	extraEnv = []string{"POSSE_LARK_APPROVAL=1"}
-	if bot, ok := d.larkBotByID(b.BotID); ok {
-		if len(bot.TrustedScripts) > 0 {
-			extraEnv = append(extraEnv, "POSSE_LARK_TRUSTED_SCRIPTS="+strings.Join(bot.TrustedScripts, ":"))
-		}
-		if len(bot.ReadOnlyHosts) > 0 {
-			extraEnv = append(extraEnv, "POSSE_LARK_READONLY_HOSTS="+strings.Join(bot.ReadOnlyHosts, ","))
-		}
+	extraEnv = []string{
+		"POSSE_LARK_APPROVAL=1",
+		"POSSE_LARK_BOT_ID=" + b.BotID,
 	}
+	var scripts, hosts string
+	if bot, ok := d.larkBotByID(b.BotID); ok {
+		scripts = strings.Join(bot.TrustedScripts, ":")
+		hosts = strings.Join(bot.ReadOnlyHosts, ",")
+	}
+	extraEnv = append(extraEnv,
+		"POSSE_LARK_TRUSTED_SCRIPTS="+scripts,
+		"POSSE_LARK_READONLY_HOSTS="+hosts,
+	)
 	return agent.PermissionAsk, true, extraEnv
 }
 
@@ -218,6 +223,9 @@ func (d *Daemon) larkBotSave(_ context.Context, raw json.RawMessage) (any, error
 	}
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
+	}
+	if err := lark.ValidateBotPolicy(p.Bot.ReadOnlyHosts, p.Bot.TrustedScripts); err != nil {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s", err.Error())
 	}
 	bot := lark.NormalizeBot(p.Bot)
 	if bot.Profile == "" {
