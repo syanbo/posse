@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.35
+
+- 远程桌面的返回、连接状态/FPS 和工具条三个按钮均支持自由拖动，拖动范围可延伸至屏幕安全区，横竖屏位置分别记住并自动避开重叠。
+- 连接状态/FPS 按钮优化为与返回按钮同尺寸的紧凑布局，常驻展示当前 FPS 数值（或「静止」「—」）。
+- 修复设置页向上滑动时偶尔发生画面跳动的问题。
+
+### English
+
+- All three Remote Desktop floating controls (Back, Status/FPS, and Toolbar) can now be dragged freely—including into the safe area—with per-orientation position memory and automatic overlap avoidance.
+- Compacted the Status/FPS button to match the Back button size while showing the live FPS value (or Still / —).
+- Fixed occasional scroll jumps when scrolling the Settings screen.
+
 ## 0.1.34
 
 - 新增「内置 Tailscale」（设置 › 内置 Tailscale）：无需安装官方 Tailscale App，也不占用系统 VPN 槽位，可与 Surge、Shadowrocket、Clash 等代理工具同时使用；支持浏览器交互登录、一次性 AuthKey、自定义 Headscale 控制服务器、「跟随系统代理或 VPN 路由」开关与重置节点身份。
