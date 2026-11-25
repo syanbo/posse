@@ -348,9 +348,20 @@ func commandSegmentLabelArgs(fields []string) string {
 	if len(fields) == 0 {
 		return ""
 	}
-	cmd := filepath.Base(fields[0])
+	rawCmd := fields[0]
+	cmdName := rawCmd
+	cmdBase := rawCmd
+	if strings.Contains(rawCmd, "/") {
+		clean := filepath.Clean(rawCmd)
+		// 相对路径（如 ./python3）Clean 后会脱掉前缀 ./，需保留区分免与裸命令名碰撞
+		if !filepath.IsAbs(rawCmd) && !strings.Contains(clean, "/") {
+			clean = "./" + clean
+		}
+		cmdName = clean
+		cmdBase = filepath.Base(clean)
+	}
 	rest := fields[1:]
-	switch cmd {
+	switch cmdBase {
 	case "lark-cli":
 		var parts []string
 		for j := 0; j < len(rest) && len(parts) < 2; j++ {
@@ -368,9 +379,9 @@ func commandSegmentLabelArgs(fields []string) string {
 			parts = append(parts, a)
 		}
 		if len(parts) > 0 {
-			return "lark-cli " + strings.Join(parts, " ")
+			return cmdName + " " + strings.Join(parts, " ")
 		}
-		return "lark-cli"
+		return cmdName
 	case "posse":
 		var parts []string
 		for j := 0; j < len(rest) && len(parts) < 2; j++ {
@@ -384,9 +395,9 @@ func commandSegmentLabelArgs(fields []string) string {
 			parts = append(parts, a)
 		}
 		if len(parts) > 0 {
-			return "posse " + strings.Join(parts, " ")
+			return cmdName + " " + strings.Join(parts, " ")
 		}
-		return "posse"
+		return cmdName
 	case "git", "go", "npm", "pnpm", "yarn", "docker", "kubectl", "adb":
 		for j := 0; j < len(rest); j++ {
 			a := rest[j]
@@ -400,11 +411,11 @@ func commandSegmentLabelArgs(fields []string) string {
 			if strings.HasPrefix(a, "-") {
 				continue
 			}
-			return cmd + " " + a
+			return cmdName + " " + a
 		}
-		return cmd
+		return cmdName
 	default:
-		return cmd
+		return cmdName
 	}
 }
 

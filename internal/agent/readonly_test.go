@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
 
@@ -54,7 +55,7 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`echo "POSSE_NOTES=${POSSE_NOTES}"`,
 		`echo "$POSSE_NOTES" "$HOME" "${HOME}"`,
 		`ls -la ~/Desktop/Works`,
-		`ls /tmp/*.log`,
+		`file -b --mime-type /tmp/a.bin`,
 
 		// C. 白名单绝对路径程序
 		`/bin/ls -la /tmp`,
@@ -75,8 +76,6 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`lark-cli drive +download --file-token f1 --output-dir $POSSE_NOTES/discussions/mb_1`,
 		`lark-cli drive +export --token doc1 --doc-type docx --file-extension pdf --output-dir /tmp/posse-triage`,
 		`lark-cli im +messages-mget --message-ids om_1 --download-resources=false --as bot`,
-		`lark-cli im +chat-info --chat-id oc_1 --as bot`,
-		`lark-cli calendar +event-query --start 1 --end 2`,
 
 		// posse 只读子命令与帮助
 		`posse version`,
@@ -176,7 +175,7 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`echo hi # comment`,
 		`ls /tmp # ; rm -rf /`,
 
-		// B. 变量展开、修饰符、glob 写目标、波浪号、裸赋值段、未引号括号
+		// B. 变量展开、修饰符、任何 token 内的未引号 glob/花括号、波浪号、裸赋值段、未引号括号
 		`echo $PATH`,
 		`echo "$USER"`,
 		`echo ${HOME:-/etc}`,
@@ -184,6 +183,12 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`echo $HOME_EXTRA`,
 		`echo $POSSE_NOTES_EXTRA`,
 		`echo $'rm'`,
+		`ls /tmp/*.log`,
+		`ls /tmp/a?`,
+		`ls /tmp/[ab]`,
+		`echo {a,b}`,
+		`echo {1..3}`,
+		`xxd /tmp/{a,b}`,
 		`echo hi > /tmp/out*.txt`,
 		`echo hi > /tmp/out?.txt`,
 		`echo hi > /tmp/out[1].txt`,
@@ -207,7 +212,7 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`/bin/../tmp/ls`,
 		`/bin/sub/ls`,
 
-		// E. lark-cli 写操作、被消费的 --help/--dry-run、等号布尔、隐式写盘、错误旗标
+		// E. lark-cli 写操作、取消动词推断后的未列名快捷命令、help/dry-run 重复与赋值、等号布尔、隐式写盘、错误旗标
 		`lark-cli base +record-update --base-token EHz --table-id tbl --record-id r1 --as user`,
 		`lark-cli im +messages-send --chat-id oc_1 --text hi --as bot`,
 		`lark-cli im +messages-send --chat-id oc_1 --text --help --as bot`,
@@ -215,6 +220,20 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`lark-cli im +messages-send --chat-id oc_1 -q --help --as bot`,
 		`lark-cli im +messages-send --chat-id oc_1 --text --dry-run --as bot`,
 		`lark-cli im +messages-send --chat-id oc_1 --markdown --dry-run --as bot`,
+		`lark-cli schema --help --help=false`,
+		`lark-cli schema --help=false --help`,
+		`lark-cli base +record-update --help=true`,
+		`lark-cli base +record-update --help --help`,
+		`lark-cli base +record-update -h --help`,
+		`lark-cli base +record-update --dry-run --dry-run=false`,
+		`lark-cli base +record-update --dry-run=false --dry-run`,
+		`lark-cli base +record-update --dry-run=true`,
+		`lark-cli base +record-update --dry-run --dry-run`,
+		`lark-cli drive +resolve-comment --token doc1 --comment-id c1 --as user`,
+		`lark-cli drive +version-get --token doc1 --version-id v1 --as user`,
+		`lark-cli drive +preview --token doc1 --as user`,
+		`lark-cli im +chat-info --chat-id oc_1 --as bot`,
+		`lark-cli calendar +event-query --start 1 --end 2`,
 		`lark-cli base +record-batch-update --base-token EHz --table-id tbl`,
 		`lark-cli base +record-get-and-delete --base-token EHz`,
 		`lark-cli base +mystery-op --base-token EHz`,
@@ -265,6 +284,12 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`tee`,
 
 		// F. 收紧后的工具负例
+		`file -C`,
+		`file --compile`,
+		`file --compile=/tmp/magic`,
+		`file -m /tmp/magic /tmp/a.bin`,
+		`file --magic-file=/tmp/magic /tmp/a.bin`,
+		`file -bC /tmp/magic`,
 		`rg --pre sh foo /tmp`,
 		`rg --pre=sh foo /tmp`,
 		`rg --pre-glob '*.pdf' foo /tmp`,
@@ -360,15 +385,40 @@ func TestScratchPathSymlinkAndTraversal(t *testing.T) {
 	if err := os.Symlink(outsideDir, discOutLink); err != nil {
 		t.Fatal(err)
 	}
+	// 5. 指向根外文件的硬链接（nlink > 1）
+	outsideFile := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(outsideFile, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	hardLink := filepath.Join(tmpRoot, "hardlink.txt")
+	if err := os.Link(outsideFile, hardLink); err != nil {
+		t.Fatal(err)
+	}
+	discHardLink := filepath.Join(discDir, "hardlink.md")
+	if err := os.Link(outsideFile, discHardLink); err != nil {
+		t.Fatal(err)
+	}
+	// 6. 非普通文件：已有目录与 FIFO 命名管道
+	existingSubDir := filepath.Join(tmpRoot, "existing_dir")
+	if err := os.MkdirAll(existingSubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fifoPath := filepath.Join(tmpRoot, "pipe.fifo")
+	if err := syscall.Mkfifo(fifoPath, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	roots := ScratchRoots{TmpDir: tmpRoot, NotesDir: notesDir}
 
-	// 正常落盘（包含尚不存在的子目录）应放行
+	// 正常落盘（包含尚不存在的子目录、普通单链接文件及目录写目标）应放行
 	safeCmds := []string{
 		`echo hi > ` + filepath.Join(tmpRoot, "newdir", "out.txt"),
+		`echo hi > ` + realFile,
 		`echo hi | tee ` + filepath.Join(tmpRoot, "sub", "out.txt"),
 		`mkdir -p ` + filepath.Join(tmpRoot, "newdir", "child"),
+		`mkdir -p ` + existingSubDir,
 		`lark-cli base +record-download-attachment --base-token EHz --table-id tbl --record-id r1 --output ` + filepath.Join(tmpRoot, "dl") + ` --as user`,
+		`lark-cli base +record-download-attachment --base-token EHz --table-id tbl --record-id r1 --output ` + existingSubDir + ` --as user`,
 		`echo hi > ` + filepath.Join(discDir, "mb_1", "reply.md"),
 	}
 	for _, cmd := range safeCmds {
@@ -380,7 +430,7 @@ func TestScratchPathSymlinkAndTraversal(t *testing.T) {
 		t.Fatal("expected safe discussion write path")
 	}
 
-	// 根外父链接、末级链接、悬空链接、.. 越界、symlink/.. 均必须拒绝
+	// 根外父链接、末级链接、悬空链接、硬链接、目录/FIFO 非普通文件、.. 越界、symlink/.. 均必须拒绝
 	unsafeCmds := []string{
 		`echo hi > ` + filepath.Join(outLink, "new.txt"),
 		`echo hi | tee ` + filepath.Join(outLink, "new.txt"),
@@ -390,6 +440,15 @@ func TestScratchPathSymlinkAndTraversal(t *testing.T) {
 		`echo hi | tee ` + leafLink,
 		`echo hi > ` + danglingLink,
 		`mkdir -p ` + outLink,
+		`echo hi > ` + hardLink,
+		`echo hi | tee ` + hardLink,
+		`lark-cli base +record-download-attachment --base-token EHz --table-id tbl --record-id r1 --output ` + hardLink + ` --as user`,
+		`echo hi > ` + existingSubDir,
+		`echo hi | tee ` + existingSubDir,
+		`echo hi > ` + fifoPath,
+		`echo hi | tee ` + fifoPath,
+		`mkdir -p ` + fifoPath,
+		`lark-cli base +record-download-attachment --base-token EHz --table-id tbl --record-id r1 --output ` + fifoPath + ` --as user`,
 		`echo hi > ` + tmpRoot + `/../outside.txt`,
 		`echo hi > ` + outLink + `/../safe_looking.txt`,
 		`echo hi > ` + filepath.Join(discOutLink, "evil.md"),
@@ -402,7 +461,37 @@ func TestScratchPathSymlinkAndTraversal(t *testing.T) {
 	if IsSafeDiscussionWritePath(filepath.Join(discOutLink, "evil.md"), roots) {
 		t.Fatal("expected discussion symlink escape to be rejected")
 	}
+	if IsSafeDiscussionWritePath(discHardLink, roots) {
+		t.Fatal("expected discussion hardlink to be rejected")
+	}
 	if IsSafeDiscussionWritePath(filepath.Join(discDir, "..", "escape.md"), roots) {
 		t.Fatal("expected discussion .. escape to be rejected")
+	}
+
+	// 7. $POSSE_NOTES/discussions 根本身或 $POSSE_NOTES 本身为软链接时，不视为安全根
+	symDiscParent := t.TempDir()
+	symDisc := filepath.Join(symDiscParent, "discussions")
+	if err := os.Symlink(outsideDir, symDisc); err != nil {
+		t.Fatal(err)
+	}
+	rootsSymDisc := ScratchRoots{TmpDir: tmpRoot, NotesDir: symDiscParent}
+	if IsSafeReadOnlyCommandLineWithRoots(`echo hi > `+filepath.Join(symDisc, "a.md"), rootsSymDisc) {
+		t.Fatal("symlinked discussions root should not be trusted")
+	}
+	if IsSafeDiscussionWritePath(filepath.Join(symDisc, "a.md"), rootsSymDisc) {
+		t.Fatal("symlinked discussions root should reject write_file")
+	}
+
+	symNotesBase := t.TempDir()
+	symNotes := filepath.Join(symNotesBase, "notes_link")
+	if err := os.Symlink(outsideDir, symNotes); err != nil {
+		t.Fatal(err)
+	}
+	rootsSymNotes := ScratchRoots{TmpDir: tmpRoot, NotesDir: symNotes}
+	if IsSafeReadOnlyCommandLineWithRoots(`echo hi > `+filepath.Join(symNotes, "discussions", "a.md"), rootsSymNotes) {
+		t.Fatal("symlinked POSSE_NOTES root should not be trusted")
+	}
+	if IsSafeDiscussionWritePath(filepath.Join(symNotes, "discussions", "a.md"), rootsSymNotes) {
+		t.Fatal("symlinked POSSE_NOTES root should reject write_file")
 	}
 }

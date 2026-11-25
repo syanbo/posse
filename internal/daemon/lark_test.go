@@ -118,23 +118,45 @@ func TestDeriveCommandRuleKeysSkipsReadOnly(t *testing.T) {
 		t.Fatalf("unexpected posse close rule keys=%v label=%q", posseCloseKeys, posseCloseLabel)
 	}
 
+	// 不同路径但同 basename 必须产出不同规则键，避免非可信路径命中裸命令或另一路径的同类放行
+	gitLocalKeys, gitLocalLabel := deriveCommandRuleKeys("/tmp/x/git status")
+	if len(gitLocalKeys) != 1 || gitLocalKeys[0] != "cmd:/tmp/x/git status" || gitLocalLabel != "/tmp/x/git status" {
+		t.Fatalf("unexpected path-qualified git rule keys=%v label=%q", gitLocalKeys, gitLocalLabel)
+	}
+	gitBareKeys, _ := deriveCommandRuleKeys("git commit -m test")
+	gitOtherKeys, _ := deriveCommandRuleKeys("/tmp/x/git commit -m test")
+	if len(gitBareKeys) != 1 || len(gitOtherKeys) != 1 || gitBareKeys[0] == gitOtherKeys[0] {
+		t.Fatalf("same basename at different paths must have distinct keys: bare=%v path=%v", gitBareKeys, gitOtherKeys)
+	}
+	relPyKeys, _ := deriveCommandRuleKeys("./python3 /tmp/a.py")
+	if len(relPyKeys) != 1 || relPyKeys[0] != "cmd:./python3" {
+		t.Fatalf("relative path must stay distinct from bare command, got %v", relPyKeys)
+	}
+
 	// 全部段均安全时返回空规则键
 	keys3, label3 := deriveCommandRuleKeys("cd /tmp/x && ls -la | head -n 10")
 	if len(keys3) != 0 || label3 != "" {
 		t.Fatalf("all-safe command should produce no rule keys, got keys=%v label=%q", keys3, label3)
 	}
 
-	// 需审批段带任何重定向、无法可靠解析、前置环境变量或指向非安全输出目的地时，整条命令不生成同类规则键
+	// 需审批段带任何重定向、无法可靠解析（含 glob/花括号/未允许变量）、前置环境变量或指向非安全/隐式输出目的地时，整条命令不生成同类规则键
 	noRuleCases := []string{
 		"echo hi > /Users/x/a",
 		"python3 /tmp/a.py > /Users/x/out.txt",
 		"cd /tmp/x && lark-cli base +foo-update --as user 2>&1",
 		"echo hi | tee /etc/hosts",
 		"lark-cli base +record-download-attachment --base-token EHz --table-id tbl --record-id r1 --output /Users/x/a --as user",
+		"lark-cli base +record-download-attachment --base-token EHz --table-id tbl --record-id r1 --as user",
+		"lark-cli drive +export --token doc1 --doc-type docx --file-extension pdf",
+		"lark-cli im +messages-mget --message-ids om_1 --download-resources=true --as bot",
 		"FOO=bar python3 /tmp/a.py",
 		"python3 /tmp/a.py # comment",
 		"python3 '/tmp/unclosed",
 		"python3 /tmp/a.py \\\r\n  --flag",
+		"python3 /tmp/*.py",
+		"python3 /tmp/{a,b}.py",
+		"lark-cli base +foo-update --record-id {1..3} --as user",
+		"python3 $SECRET_SCRIPT",
 	}
 	for _, cmd := range noRuleCases {
 		if ks, lbl := deriveCommandRuleKeys(cmd); len(ks) != 0 || lbl != "" {
@@ -170,6 +192,22 @@ func TestDeriveCommandRuleKeysSkipsReadOnly(t *testing.T) {
 	if got := hub.Hold(context.Background(), "t_rule", "antigravity", p2, nil, nil); got != "allow" {
 		t.Fatalf("expected session-allowed rule to match regardless of safe prefix/suffix, got %q", got)
 	}
+
+	// 不同路径同名程序不能命中裸命令的本会话同类规则
+	pDiffPath := json.RawMessage(`{"toolCall":{"id":"call_11b","name":"run_command","args":{"CommandLine":"/tmp/evil/lark-cli base +foo-update --record-id r2 --as user"}}}`)
+	doneDiff := make(chan string, 1)
+	go func() {
+		doneDiff <- hub.Hold(context.Background(), "t_rule", "antigravity", pDiffPath, nil, nil)
+	}()
+	reqDiff := <-w.reqCh
+	if len(reqDiff.RuleKeys) != 1 || reqDiff.RuleKeys[0] != "cmd:/tmp/evil/lark-cli base +foo-update" {
+		t.Fatalf("unexpected diff-path rule keys: %+v", reqDiff.RuleKeys)
+	}
+	hub.Decide(reqDiff.ID, "deny", "feishu")
+	if got := <-doneDiff; got != "deny" {
+		t.Fatalf("expected deny for different-path same-basename command, got %q", got)
+	}
+	<-w.resolvedCh
 
 	// 同程序带输出重定向到不同目的地：必须重新审批且无同类规则键
 	pRedir := json.RawMessage(`{"toolCall":{"id":"call_12","name":"run_command","args":{"CommandLine":"lark-cli base +foo-update --record-id r2 --as user > /Users/x/leak.txt"}}}`)

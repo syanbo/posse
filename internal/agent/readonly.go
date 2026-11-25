@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 )
 
 // ScratchRoots 定义自动放行允许写入的临时目录与讨论目录根（测试可注入临时目录）。
@@ -203,10 +204,9 @@ func SplitShellSegments(s string) ([]string, bool) {
 }
 
 type shellToken struct {
-	val             string
-	quoted          bool
-	singleQuoted    bool
-	hasUnquotedGlob bool
+	val          string
+	quoted       bool
+	singleQuoted bool
 }
 
 type shellRedir struct {
@@ -215,9 +215,10 @@ type shellRedir struct {
 	isDup  bool
 }
 
-// ParseSegmentForRuleKey 解析需审批命令段的参数及是否存在重定向；无法可靠解析时返回 ok=false。
+// ParseSegmentForRuleKey 使用与 CLI 相同的严格展开规则解析需审批命令段的参数及是否存在重定向；
+// 无法可靠解析（含未加引号 glob/花括号/未允许变量等）时返回 ok=false。
 func ParseSegmentForRuleKey(seg string) (args []string, hasRedir bool, ok bool) {
-	toks, redirs, parsed := parseShellSegment(seg, false)
+	toks, redirs, parsed := parseShellSegment(seg, true)
 	if !parsed || len(toks) == 0 {
 		return nil, false, false
 	}
@@ -228,7 +229,7 @@ func ParseSegmentForRuleKey(seg string) (args []string, hasRedir bool, ok bool) 
 	return out, len(redirs) > 0, true
 }
 
-// HasUnsafeRuleOutputFlag 检查 lark-cli / tee 等命令是否携带指向安全临时目录之外的输出目标参数。
+// HasUnsafeRuleOutputFlag 检查 lark-cli / tee 等命令是否可能向安全临时目录之外写文件（含显式越界与默认写当前目录）。
 func HasUnsafeRuleOutputFlag(args []string) bool {
 	if len(args) == 0 {
 		return false
@@ -239,12 +240,28 @@ func HasUnsafeRuleOutputFlag(args []string) bool {
 	case "tee":
 		return true
 	case "lark-cli":
+		var pos []string
+		hasOutput := false
+		hasDownloadResources := false
 		for i := 1; i < len(args); i++ {
 			a := args[i]
 			if a == "--" {
 				break
 			}
+			if a == "--download-resources" || a == "--download" {
+				hasDownloadResources = true
+				continue
+			}
+			if strings.HasPrefix(a, "--download-resources=") && isTruthyBoolFlagValue(strings.TrimPrefix(a, "--download-resources=")) {
+				hasDownloadResources = true
+				continue
+			}
+			if strings.HasPrefix(a, "--download=") && isTruthyBoolFlagValue(strings.TrimPrefix(a, "--download=")) {
+				hasDownloadResources = true
+				continue
+			}
 			var target string
+			isOutFlag := false
 			switch {
 			case a == "--output" || a == "--output-dir" || a == "-o":
 				if i+1 >= len(args) {
@@ -252,18 +269,41 @@ func HasUnsafeRuleOutputFlag(args []string) bool {
 				}
 				i++
 				target = args[i]
+				isOutFlag = true
 			case strings.HasPrefix(a, "--output="):
 				target = strings.TrimPrefix(a, "--output=")
+				isOutFlag = true
 			case strings.HasPrefix(a, "--output-dir="):
 				target = strings.TrimPrefix(a, "--output-dir=")
+				isOutFlag = true
 			case strings.HasPrefix(a, "-o="):
 				target = strings.TrimPrefix(a, "-o=")
+				isOutFlag = true
 			case strings.HasPrefix(a, "-o") && len(a) > 2:
 				target = a[2:]
-			default:
+				isOutFlag = true
+			case a == "--profile" || a == "--as" || a == "--format" || a == "--jq" || a == "-q":
+				i++
 				continue
 			}
-			if !isSafePathInRoots(target, true, true, true, roots) {
+			if isOutFlag {
+				hasOutput = true
+				if !isSafePathInRoots(target, true, true, true, true, roots) {
+					return true
+				}
+				continue
+			}
+			if !strings.HasPrefix(a, "-") && len(pos) < 2 {
+				pos = append(pos, a)
+			}
+		}
+		if hasDownloadResources {
+			return true
+		}
+		if len(pos) >= 2 {
+			lowerSub := strings.ToLower(pos[1])
+			if (strings.Contains(lowerSub, "download") || strings.Contains(lowerSub, "export") ||
+				(pos[0] == "drive" && (pos[1] == "+version-get" || pos[1] == "+preview"))) && !hasOutput {
 				return true
 			}
 		}
@@ -290,9 +330,9 @@ func IsSafeReadOnlySegmentWithRoots(seg string, roots ScratchRoots) bool {
 	return isSafeReadOnlyTokens(toks, roots)
 }
 
-// IsSafeDiscussionWritePath 判断 write_file 等工具写入路径是否严格位于讨论笔记目录内（含软链接校验）。
+// IsSafeDiscussionWritePath 判断 write_file 等工具写入路径是否严格位于讨论笔记目录内（含软链接、硬链接与普通文件校验）。
 func IsSafeDiscussionWritePath(target string, roots ScratchRoots) bool {
-	return isSafePathInRoots(target, false, false, false, roots)
+	return isSafePathInRoots(target, false, false, false, false, roots)
 }
 
 func parseShellSegment(s string, strictExpansions bool) ([]shellToken, []shellRedir, bool) {
@@ -435,7 +475,6 @@ func readShellToken(s string, i int, strictExpansions bool) (shellToken, int, bo
 	hasToken := false
 	quoted := false
 	singleQuoted := false
-	hasUnquotedGlob := false
 	for i < len(s) {
 		ch := s[i]
 		if quote != 0 {
@@ -507,8 +546,8 @@ func readShellToken(s string, i int, strictExpansions bool) (shellToken, int, bo
 			continue
 		}
 		if strictExpansions {
-			if ch == '(' || ch == ')' {
-				// 拒绝未加引号的括号（子 shell 与 zsh glob 限定符 *(e:...:))
+			if ch == '(' || ch == ')' || ch == '*' || ch == '?' || ch == '[' || ch == '{' || ch == '}' {
+				// 拒绝任何未加引号的 glob 元字符、花括号展开及括号（防文件名展开成选项、子 shell 及 zsh glob 限定符）
 				return shellToken{}, i, false, false
 			}
 			if ch == '$' {
@@ -533,9 +572,6 @@ func readShellToken(s string, i int, strictExpansions bool) (shellToken, int, bo
 					}
 				}
 			}
-			if ch == '*' || ch == '?' || ch == '[' || ch == '{' {
-				hasUnquotedGlob = true
-			}
 		}
 		cur.WriteByte(ch)
 		hasToken = true
@@ -545,10 +581,9 @@ func readShellToken(s string, i int, strictExpansions bool) (shellToken, int, bo
 		return shellToken{}, i, false, false
 	}
 	return shellToken{
-		val:             cur.String(),
-		quoted:          quoted,
-		singleQuoted:    singleQuoted,
-		hasUnquotedGlob: hasUnquotedGlob,
+		val:          cur.String(),
+		quoted:       quoted,
+		singleQuoted: singleQuoted,
 	}, i, hasToken, true
 }
 
@@ -568,15 +603,12 @@ func isSafeRedir(r shellRedir, roots ScratchRoots) bool {
 	}
 	switch r.op {
 	case "<", "0<":
-		return r.target.val != "" && !r.target.hasUnquotedGlob
+		return r.target.val != ""
 	case ">", ">>", "1>", "1>>", "2>", "2>>", "&>", "&>>":
-		if r.target.hasUnquotedGlob {
-			return false
-		}
 		if r.target.val == "/dev/null" {
 			return true
 		}
-		return isSafeScratchToken(r.target, false, roots)
+		return isSafeScratchToken(r.target, false, false, roots)
 	default:
 		return false
 	}
@@ -631,14 +663,39 @@ func evalWithMissingSuffix(clean string) (string, bool) {
 	}
 }
 
-func isSafeScratchToken(tok shellToken, allowRoot bool, roots ScratchRoots) bool {
-	if tok.hasUnquotedGlob {
-		return false
-	}
-	return isSafePathInRoots(tok.val, !tok.singleQuoted, allowRoot, true, roots)
+func isSafeScratchToken(tok shellToken, allowRoot, allowExistingDir bool, roots ScratchRoots) bool {
+	return isSafePathInRoots(tok.val, !tok.singleQuoted, allowRoot, true, allowExistingDir, roots)
 }
 
-func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp bool, roots ScratchRoots) bool {
+func isRootNotSymlink(path string) bool {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return os.IsNotExist(err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	return fi.IsDir()
+}
+
+func isSafeExistingTarget(fi os.FileInfo, allowExistingDir bool) bool {
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	if fi.IsDir() {
+		return allowExistingDir
+	}
+	if !fi.Mode().IsRegular() {
+		return false
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok || st.Nlink != 1 {
+		return false
+	}
+	return true
+}
+
+func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp, allowExistingDir bool, roots ScratchRoots) bool {
 	if p == "" || strings.TrimSpace(p) != p {
 		return false
 	}
@@ -664,15 +721,29 @@ func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp bool, roots 
 			tmpRoot = "/tmp"
 		}
 		if filepath.IsAbs(tmpRoot) {
-			candidates = append(candidates, filepath.Clean(tmpRoot))
+			cleanTmp := filepath.Clean(tmpRoot)
+			// 保留 macOS /tmp -> /private/tmp 系统别名；其他自定义根本身若为软链接则不作为安全根
+			if cleanTmp == "/tmp" || isRootNotSymlink(cleanTmp) {
+				candidates = append(candidates, cleanTmp)
+			}
 		}
 	}
 	discRoot := strings.TrimSpace(roots.DiscussionsDir)
-	if discRoot == "" && notes != "" && filepath.IsAbs(notes) {
-		discRoot = filepath.Join(filepath.Clean(notes), "discussions")
+	notesValid := true
+	if notes != "" && filepath.IsAbs(notes) {
+		cleanNotes := filepath.Clean(notes)
+		if !isRootNotSymlink(cleanNotes) {
+			notesValid = false
+		}
+		if discRoot == "" {
+			discRoot = filepath.Join(cleanNotes, "discussions")
+		}
 	}
-	if discRoot != "" && filepath.IsAbs(discRoot) {
-		candidates = append(candidates, filepath.Clean(discRoot))
+	if notesValid && discRoot != "" && filepath.IsAbs(discRoot) {
+		cleanDisc := filepath.Clean(discRoot)
+		if isRootNotSymlink(cleanDisc) {
+			candidates = append(candidates, cleanDisc)
+		}
 	}
 
 	for _, root := range candidates {
@@ -684,10 +755,10 @@ func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp bool, roots 
 		if !lexMatched {
 			continue
 		}
-		// 目标本身若已存在且为软链接（且不是配置根本身，例如 macOS 的 /tmp -> /private/tmp），直接拒绝
+		// 非配置根本身的目标若已存在：必须非软链接，文件写操作要求普通文件且 nlink==1（目录写操作允许真实目录）
 		if clean != root && clean != resolvedRoot {
 			if fi, err := os.Lstat(clean); err == nil {
-				if fi.Mode()&os.ModeSymlink != 0 {
+				if !isSafeExistingTarget(fi, allowExistingDir) {
 					return false
 				}
 			} else if !os.IsNotExist(err) {
@@ -707,7 +778,7 @@ func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp bool, roots 
 
 func resolveTrustedCommand(tok shellToken) (string, bool) {
 	raw := tok.val
-	if raw == "" || tok.hasUnquotedGlob || strings.Contains(raw, "=") {
+	if raw == "" || strings.Contains(raw, "=") {
 		return "", false
 	}
 	if !strings.Contains(raw, "/") {
@@ -775,11 +846,13 @@ func isSafeReadOnlyTokens(tokens []shellToken, roots ScratchRoots) bool {
 	switch cmd {
 	case "posse":
 		return isSafeReadOnlyPosse(args)
-	case "ls", "pwd", "cat", "head", "tail", "wc", "stat", "file", "which",
+	case "ls", "pwd", "cat", "head", "tail", "wc", "stat", "which",
 		"basename", "dirname", "realpath", "readlink", "echo", "printf", "nl", "date", "uname", "printenv", "cd",
 		"grep", "egrep", "fgrep", "jq", "uniq", "cut", "tr", "diff", "comm", "true", "false",
 		"du", "df", "od", "strings", "shasum", "md5", "column":
 		return true
+	case "file":
+		return isSafeReadOnlyFile(args)
 	case "rg":
 		return isSafeReadOnlyRG(args)
 	case "env":
@@ -851,6 +924,35 @@ func isSafeReadOnlyPosse(args []string) bool {
 		return true
 	}
 	return false
+}
+
+func isSafeReadOnlyFile(args []string) bool {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			break
+		}
+		if a == "-C" || a == "--compile" || strings.HasPrefix(a, "--compile=") ||
+			a == "-m" || strings.HasPrefix(a, "-m") ||
+			a == "--magic-file" || strings.HasPrefix(a, "--magic-file=") {
+			return false
+		}
+		switch a {
+		case "-e", "-f", "-F", "-P", "--exclude", "--exclude-quiet", "--files-from", "--separator", "--parameter":
+			i++
+			continue
+		}
+		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && len(a) > 1 {
+			first := a[1]
+			if first == 'e' || first == 'f' || first == 'F' || first == 'P' {
+				continue
+			}
+			if strings.ContainsAny(a[1:], "Cm") {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func isSafeReadOnlyRG(args []string) bool {
@@ -1160,7 +1262,7 @@ func isSafeScratchTee(args []shellToken, roots ScratchRoots) bool {
 				return false
 			}
 		}
-		if !isSafeScratchToken(t, false, roots) {
+		if !isSafeScratchToken(t, false, false, roots) {
 			return false
 		}
 		hasPath = true
@@ -1257,42 +1359,12 @@ func isSafeScratchMkdir(args []shellToken, roots ScratchRoots) bool {
 		if strings.HasPrefix(a, "-") {
 			return false
 		}
-		if !isSafeScratchToken(t, true, roots) {
+		if !isSafeScratchToken(t, true, true, roots) {
 			return false
 		}
 		hasPath = true
 	}
 	return hasPath
-}
-
-var larkReadVerbs = map[string]bool{
-	"list": true, "get": true, "mget": true, "search": true, "resolve": true,
-	"fetch": true, "meta": true, "export": true, "query": true, "info": true,
-	"status": true, "read": true, "show": true, "describe": true, "stat": true,
-	"stats": true, "count": true, "lookup": true, "detail": true, "details": true,
-	"find": true, "inspect": true, "diff": true, "preview": true, "download": true,
-}
-
-var larkWriteVerbs = map[string]bool{
-	"create": true, "update": true, "delete": true, "del": true, "rm": true,
-	"remove": true, "send": true, "upload": true, "patch": true, "set": true,
-	"unset": true, "add": true, "move": true, "mv": true, "copy": true,
-	"cp": true, "reply": true, "forward": true, "import": true, "recall": true,
-	"edit": true, "write": true, "clear": true, "clean": true, "grant": true,
-	"revoke": true, "transfer": true, "put": true, "post": true, "append": true,
-	"insert": true, "replace": true, "rename": true, "archive": true, "unarchive": true,
-	"restore": true, "close": true, "reopen": true, "complete": true, "uncomplete": true,
-	"cancel": true, "approve": true, "reject": true, "submit": true, "start": true,
-	"stop": true, "enable": true, "disable": true, "bind": true, "unbind": true,
-	"pin": true, "unpin": true, "join": true, "leave": true, "kick": true,
-	"invite": true, "subscribe": true, "unsubscribe": true, "register": true, "unregister": true,
-	"sync": true, "merge": true, "reset": true, "rollback": true, "mark": true,
-	"unmark": true, "react": true, "unreact": true, "urgent": true, "publish": true,
-	"unpublish": true, "deploy": true, "trigger": true, "run": true, "exec": true,
-	"modify": true, "change": true, "drop": true, "truncate": true, "save": true,
-	"share": true, "unshare": true, "lock": true, "unlock": true, "clone": true,
-	"fork": true, "book": true, "reserve": true, "checkin": true, "checkout": true,
-	"punch": true, "login": true, "logout": true, "init": true, "config": true,
 }
 
 type larkOutputArg struct {
@@ -1313,13 +1385,15 @@ func isTruthyBoolFlagValue(v string) bool {
 	return v != "false" && v != "0"
 }
 
-// isSafeReadOnlyLarkCLI 放行 lark-cli 的帮助、schema、--dry-run、显式白名单与按动词判定的只读子命令；
-// 所有写本地文件的子命令/标志（download、export、--download-resources）必须明确证明落盘在安全临时目录内。
+// isSafeReadOnlyLarkCLI 仅放行 lark-cli 的单次无歧义帮助/dry-run、schema 与显式白名单子命令；
+// 取消按动词推断，未列入显式白名单的快捷命令一律交人工审批。
 func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 	var pos []string
 	var outputs []larkOutputArg
-	hasHelp := false
-	hasDryRun := false
+	helpCount := 0
+	helpInvalid := false
+	dryRunCount := 0
+	dryRunInvalid := false
 	hasInvalidOutput := false
 	hasDownloadResources := false
 
@@ -1328,12 +1402,28 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 		if a == "--" {
 			break
 		}
-		if (a == "--help" || a == "-h") && !prevMayConsumeValue(args, i) {
-			hasHelp = true
+		if a == "--help" || a == "-h" {
+			if prevMayConsumeValue(args, i) {
+				helpInvalid = true
+				continue
+			}
+			helpCount++
 			continue
 		}
-		if (a == "--dry-run" || a == "--dry-run=true" || a == "--dry-run=1") && !prevMayConsumeValue(args, i) {
-			hasDryRun = true
+		if strings.HasPrefix(a, "--help=") || strings.HasPrefix(a, "-h=") {
+			helpInvalid = true
+			continue
+		}
+		if a == "--dry-run" {
+			if prevMayConsumeValue(args, i) {
+				dryRunInvalid = true
+				continue
+			}
+			dryRunCount++
+			continue
+		}
+		if strings.HasPrefix(a, "--dry-run=") {
+			dryRunInvalid = true
 			continue
 		}
 		if a == "--download-resources" || a == "--download" {
@@ -1365,10 +1455,9 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 			outputs = append(outputs, larkOutputArg{
 				flag: "--output-dir",
 				tok: shellToken{
-					val:             strings.TrimPrefix(a, "--output-dir="),
-					quoted:          args[i].quoted,
-					singleQuoted:    args[i].singleQuoted,
-					hasUnquotedGlob: args[i].hasUnquotedGlob,
+					val:          strings.TrimPrefix(a, "--output-dir="),
+					quoted:       args[i].quoted,
+					singleQuoted: args[i].singleQuoted,
 				},
 			})
 			continue
@@ -1376,10 +1465,9 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 			outputs = append(outputs, larkOutputArg{
 				flag: "--output",
 				tok: shellToken{
-					val:             strings.TrimPrefix(a, "--output="),
-					quoted:          args[i].quoted,
-					singleQuoted:    args[i].singleQuoted,
-					hasUnquotedGlob: args[i].hasUnquotedGlob,
+					val:          strings.TrimPrefix(a, "--output="),
+					quoted:       args[i].quoted,
+					singleQuoted: args[i].singleQuoted,
 				},
 			})
 			continue
@@ -1387,10 +1475,9 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 			outputs = append(outputs, larkOutputArg{
 				flag: "-o",
 				tok: shellToken{
-					val:             strings.TrimPrefix(a, "-o="),
-					quoted:          args[i].quoted,
-					singleQuoted:    args[i].singleQuoted,
-					hasUnquotedGlob: args[i].hasUnquotedGlob,
+					val:          strings.TrimPrefix(a, "-o="),
+					quoted:       args[i].quoted,
+					singleQuoted: args[i].singleQuoted,
 				},
 			})
 			continue
@@ -1398,10 +1485,9 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 			outputs = append(outputs, larkOutputArg{
 				flag: "-o",
 				tok: shellToken{
-					val:             a[2:],
-					quoted:          args[i].quoted,
-					singleQuoted:    args[i].singleQuoted,
-					hasUnquotedGlob: args[i].hasUnquotedGlob,
+					val:          a[2:],
+					quoted:       args[i].quoted,
+					singleQuoted: args[i].singleQuoted,
 				},
 			})
 			continue
@@ -1417,18 +1503,22 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 		}
 	}
 
-	if hasHelp {
+	// --help/-h/--dry-run 出现一次以上、带 = 赋值或与可能消费值的前一 flag 相邻时，整条命令一律走审批
+	if helpInvalid || helpCount > 1 || dryRunInvalid || dryRunCount > 1 {
+		return false
+	}
+	if helpCount == 1 {
 		return true
 	}
 	if hasInvalidOutput {
 		return false
 	}
 	for _, out := range outputs {
-		if !isSafeScratchToken(out.tok, true, roots) {
+		if !isSafeScratchToken(out.tok, true, true, roots) {
 			return false
 		}
 	}
-	if hasDryRun {
+	if dryRunCount == 1 {
 		return true
 	}
 	if len(pos) == 0 {
@@ -1481,15 +1571,12 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 		}
 	}
 
-	// 其余含 download 或 export 的命令必须显式给出安全输出目标
+	// 其余含 download 或 export 的显式白名单命令必须显式给出安全输出目标
 	if (strings.Contains(lowerSub, "download") || strings.Contains(lowerSub, "export")) && len(outputs) == 0 {
 		return false
 	}
 
-	if isExplicitSafeLarkCLI(domain, sub) {
-		return true
-	}
-	return isSafeReadOnlyLarkVerbSubcommand(sub)
+	return isExplicitSafeLarkCLI(domain, sub)
 }
 
 func isExplicitSafeLarkCLI(domain, sub string) bool {
@@ -1500,7 +1587,7 @@ func isExplicitSafeLarkCLI(domain, sub string) bool {
 		return sub == "list"
 	case "base":
 		switch sub {
-		case "+record-list", "+record-get", "+record-search", "+table-list", "+field-list", "+view-list", "+base-get", "+app-get":
+		case "+record-list", "+record-get", "+record-search", "+table-list", "+field-list", "+view-list", "+base-get", "+app-get", "+url-resolve", "+record-download-attachment":
 			return true
 		}
 	case "im":
@@ -1535,23 +1622,4 @@ func isExplicitSafeLarkCLI(domain, sub string) bool {
 		}
 	}
 	return false
-}
-
-func isSafeReadOnlyLarkVerbSubcommand(sub string) bool {
-	if !strings.HasPrefix(sub, "+") || len(sub) < 2 {
-		return false
-	}
-	parts := strings.FieldsFunc(strings.ToLower(sub[1:]), func(r rune) bool {
-		return r == '-' || r == '_'
-	})
-	hasRead := false
-	for _, p := range parts {
-		if larkWriteVerbs[p] {
-			return false
-		}
-		if larkReadVerbs[p] {
-			hasRead = true
-		}
-	}
-	return hasRead
 }
