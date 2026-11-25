@@ -3,6 +3,7 @@ package lark
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,11 +18,16 @@ type fakeClient struct {
 	mu          sync.Mutex
 	sent        []fakeCardCall
 	patched     []fakeCardCall
+	patchErr    error
+	patchHook   func(ctx context.Context, cardMsgID, cardJSON string) error
+	replyHook   func(ctx context.Context, msgID string, inThread bool, cardJSON string) error
 	files       []string
 	nextID      int
 	fetchedMsgs map[string]FetchedMessage
 	recentMsgs  []FetchedMessage
+	threadMsgs  []FetchedMessage
 	recentCalls int
+	threadCalls int
 }
 
 type fakeCardCall struct {
@@ -55,7 +61,15 @@ func (f *fakeClient) SendCard(_ context.Context, profile, chatID, cardJSON strin
 	return "om_card_" + string(rune('0'+f.nextID)), nil
 }
 
-func (f *fakeClient) ReplyCard(_ context.Context, profile, msgID string, inThread bool, cardJSON string) (string, error) {
+func (f *fakeClient) ReplyCard(ctx context.Context, profile, msgID string, inThread bool, cardJSON string) (string, error) {
+	f.mu.Lock()
+	hook := f.replyHook
+	f.mu.Unlock()
+	if hook != nil {
+		if err := hook(ctx, msgID, inThread, cardJSON); err != nil {
+			return "", err
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.nextID++
@@ -63,7 +77,18 @@ func (f *fakeClient) ReplyCard(_ context.Context, profile, msgID string, inThrea
 	return "om_reply_" + string(rune('0'+f.nextID)), nil
 }
 
-func (f *fakeClient) PatchCard(_ context.Context, profile, cardMsgID, cardJSON string) error {
+func (f *fakeClient) PatchCard(ctx context.Context, profile, cardMsgID, cardJSON string) error {
+	f.mu.Lock()
+	hook := f.patchHook
+	patchErr := f.patchErr
+	f.mu.Unlock()
+	if hook != nil {
+		if err := hook(ctx, cardMsgID, cardJSON); err != nil {
+			return err
+		}
+	} else if patchErr != nil {
+		return patchErr
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.patched = append(f.patched, fakeCardCall{profile: profile, target: cardMsgID, cardJSON: cardJSON})
@@ -106,6 +131,13 @@ func (f *fakeClient) ListRecentMessages(_ context.Context, _, _ string, _ int) (
 	defer f.mu.Unlock()
 	f.recentCalls++
 	return append([]FetchedMessage(nil), f.recentMsgs...), nil
+}
+
+func (f *fakeClient) ListRecentThreadMessages(_ context.Context, _, _ string, _ int) ([]FetchedMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.threadCalls++
+	return append([]FetchedMessage(nil), f.threadMsgs...), nil
 }
 
 type fakeHost struct {
@@ -489,4 +521,242 @@ func TestGatewayParentExpansionAndGroupContext(t *testing.T) {
 	if strings.Count(got, "Android 710 login crash stacktrace") != 1 {
 		t.Fatalf("parent message should not be duplicated in recent group context: %s", got)
 	}
+}
+
+func TestGatewayOnExecFinishedInPlaceVsInterleaved(t *testing.T) {
+	bot := NormalizeBot(BotConfig{
+		ID: "lbot_1", Name: "Works Triage", Profile: "bot-a", Enabled: true,
+		WorkspaceID: "w_works", Agent: "antigravity", PermissionMode: PermAsk,
+		SessionMode: SessionChat, TriggerPolicy: TriggerSelf,
+	})
+
+	// 1. 中间没有任何新消息：直接原地更新到进度卡，不新开结果卡
+	t.Run("in place when no interleaved message", func(t *testing.T) {
+		fc := &fakeClient{}
+		fh := newFakeHost()
+		gw := NewGateway(t.TempDir(), fc, fh)
+		gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_q1", ChatID: "oc_p2p", ChatType: "p2p",
+			SenderID: "ou_owner", Content: "这些改动的作者是谁",
+		})
+		if len(fc.sent) != 1 {
+			t.Fatalf("expected 1 progress card, got %d", len(fc.sent))
+		}
+		gw.OnExecFinished("self/d_oc_p2p", "x_1", "done", "作者是 xukai")
+		if len(fc.sent) != 1 {
+			t.Fatalf("expected NO new result card when no interleaved message, got %d sent", len(fc.sent))
+		}
+		if len(fc.patched) != 1 || fc.patched[0].target != "om_reply_1" || !strings.Contains(fc.patched[0].cardJSON, "作者是 xukai") {
+			t.Fatalf("expected progress card patched in place with result body, got %+v", fc.patched)
+		}
+	})
+
+	// 2. 群聊中间收到同事未 @ 机器人的普通消息：视为插队，收拢旧卡 + 底部发新卡
+	t.Run("new card when group message interleaved", func(t *testing.T) {
+		fc := &fakeClient{}
+		fh := newFakeHost()
+		gw := NewGateway(t.TempDir(), fc, fh)
+		gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_q2", ChatID: "oc_grp", ChatType: "group",
+			SenderID: "ou_owner", Content: "@Works Triage 查一下", Mentions: []MessageMention{{Name: "Works Triage"}},
+		})
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_chatter", ChatID: "oc_grp", ChatType: "group",
+			SenderID: "ou_colleague", Content: "顺便问下下午开会吗",
+		})
+		gw.OnExecFinished("self/d_oc_grp", "x_1", "done", "已查明原因")
+		if len(fc.patched) != 1 || strings.Contains(fc.patched[0].cardJSON, "已查明原因") {
+			t.Fatalf("expected compact closed progress card patch, got %+v", fc.patched)
+		}
+		if len(fc.sent) != 2 || !strings.Contains(fc.sent[1].cardJSON, "已查明原因") {
+			t.Fatalf("expected new result card at bottom, got %+v", fc.sent)
+		}
+	})
+
+	// 3. 本地未收到插队事件，但远端最新消息已不是进度卡：兜底识别插队并发送新卡
+	t.Run("new card when remote latest message differs", func(t *testing.T) {
+		fc := &fakeClient{
+			recentMsgs: []FetchedMessage{{MessageID: "om_newer_msg"}},
+		}
+		fh := newFakeHost()
+		gw := NewGateway(t.TempDir(), fc, fh)
+		gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_q3", ChatID: "oc_grp2", ChatType: "group",
+			SenderID: "ou_owner", Content: "@Works Triage 查一下", Mentions: []MessageMention{{Name: "Works Triage"}},
+		})
+		gw.OnExecFinished("self/d_oc_grp2", "x_1", "done", "远端检测到插队")
+		if len(fc.sent) != 2 || !strings.Contains(fc.sent[1].cardJSON, "远端检测到插队") {
+			t.Fatalf("expected fallback to new card when remote latest message differs, got %+v", fc.sent)
+		}
+	})
+
+	// 4. 远端最新消息仍是进度卡（且跳过已撤回消息）：原地更新
+	t.Run("in place when remote latest non-deleted message matches progress card", func(t *testing.T) {
+		fc := &fakeClient{
+			recentMsgs: []FetchedMessage{
+				{MessageID: "om_recalled", Deleted: true},
+				{MessageID: "om_reply_1"},
+			},
+		}
+		fh := newFakeHost()
+		gw := NewGateway(t.TempDir(), fc, fh)
+		gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_q4", ChatID: "oc_p2p2", ChatType: "p2p",
+			SenderID: "ou_owner", Content: "查一下",
+		})
+		gw.OnExecFinished("self/d_oc_p2p2", "x_1", "done", "直接更新")
+		if len(fc.sent) != 1 || len(fc.patched) != 1 || !strings.Contains(fc.patched[0].cardJSON, "直接更新") {
+			t.Fatalf("expected in-place patch when latest non-deleted message matches progress card, sent=%d patched=%+v", len(fc.sent), fc.patched)
+		}
+	})
+
+	// 5. 原地 PatchCard 失败时自动降级发送新结果卡
+	t.Run("fallback to new card when in-place patch fails", func(t *testing.T) {
+		fc := &fakeClient{patchErr: errors.New("patch failed")}
+		fh := newFakeHost()
+		gw := NewGateway(t.TempDir(), fc, fh)
+		gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_q5", ChatID: "oc_p2p3", ChatType: "p2p",
+			SenderID: "ou_owner", Content: "查一下",
+		})
+		gw.OnExecFinished("self/d_oc_p2p3", "x_1", "done", "降级发送结果")
+		if len(fc.sent) != 2 || !strings.Contains(fc.sent[1].cardJSON, "降级发送结果") {
+			t.Fatalf("expected fallback new result card on patch error, got %+v", fc.sent)
+		}
+	})
+
+	// 6. 在途 tickProgress 补丁不得覆写 OnExecFinished 的最终结果卡
+	t.Run("in-flight progress patch cannot overwrite final result", func(t *testing.T) {
+		tickStarted := make(chan struct{})
+		releaseTick := make(chan struct{})
+		fc := &fakeClient{
+			patchHook: func(_ context.Context, _, cardJSON string) error {
+				if strings.Contains(cardJSON, "exec_stop") {
+					select {
+					case <-tickStarted:
+					default:
+						close(tickStarted)
+					}
+					<-releaseTick
+				}
+				return nil
+			},
+		}
+		fh := newFakeHost()
+		gw := NewGateway(t.TempDir(), fc, fh)
+		gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_q6", ChatID: "oc_p2p4", ChatType: "p2p",
+			SenderID: "ou_owner", Content: "查一下并发",
+		})
+		// 修改 snapshot 触发 tickProgress 真正发出 PatchCard
+		fh.mu.Lock()
+		snap := fh.execSnaps["x_1"]
+		snap.Tool = "grep"
+		fh.execSnaps["x_1"] = snap
+		fh.mu.Unlock()
+
+		tickDone := make(chan struct{})
+		go func() {
+			defer close(tickDone)
+			gw.tickProgress(context.Background())
+		}()
+		<-tickStarted
+
+		finishDone := make(chan struct{})
+		go func() {
+			defer close(finishDone)
+			gw.OnExecFinished("self/d_oc_p2p4", "x_1", "done", "最终唯一结果")
+		}()
+		time.Sleep(30 * time.Millisecond)
+		close(releaseTick)
+		<-tickDone
+		<-finishDone
+
+		fc.mu.Lock()
+		defer fc.mu.Unlock()
+		if len(fc.patched) < 2 {
+			t.Fatalf("expected both tick and final patches, got %d", len(fc.patched))
+		}
+		last := fc.patched[len(fc.patched)-1]
+		if !strings.Contains(last.cardJSON, "最终唯一结果") {
+			t.Fatalf("final patch must be the result card, got: %s", last.cardJSON)
+		}
+	})
+
+	// 7. 原地补丁超时后，降级发送新结果卡仍拥有独立未过期上下文
+	t.Run("fallback reply keeps fresh context after in-place patch timeout", func(t *testing.T) {
+		var replyCtxErr error
+		fc := &fakeClient{
+			patchHook: func(_ context.Context, _, _ string) error {
+				return context.DeadlineExceeded
+			},
+			replyHook: func(ctx context.Context, _ string, _ bool, _ string) error {
+				replyCtxErr = ctx.Err()
+				return nil
+			},
+		}
+		fh := newFakeHost()
+		gw := NewGateway(t.TempDir(), fc, fh)
+		gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_q7", ChatID: "oc_p2p5", ChatType: "p2p",
+			SenderID: "ou_owner", Content: "查一下超时降级",
+		})
+		gw.OnExecFinished("self/d_oc_p2p5", "x_1", "done", "超时降级结果")
+		if replyCtxErr != nil {
+			t.Fatalf("expected fresh context for fallback reply, got %v", replyCtxErr)
+		}
+		if len(fc.sent) != 2 || !strings.Contains(fc.sent[1].cardJSON, "超时降级结果") {
+			t.Fatalf("expected fallback result card sent, got %+v", fc.sent)
+		}
+	})
+
+	// 8. 话题模式重试保留 inThread / threadKey，且按话题列表检查最新消息
+	t.Run("thread retry preserves thread scope", func(t *testing.T) {
+		threadBot := NormalizeBot(BotConfig{
+			ID: "lbot_t", Name: "Works Triage", Profile: "bot-a", Enabled: true,
+			WorkspaceID: "w_works", Agent: "antigravity", PermissionMode: PermAsk,
+			SessionMode: SessionThread, TriggerPolicy: TriggerSelf,
+		})
+		fc := &fakeClient{
+			threadMsgs: []FetchedMessage{{MessageID: "om_reply_1"}},
+		}
+		fh := newFakeHost()
+		gw := NewGateway(t.TempDir(), fc, fh)
+		gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{threadBot}})
+
+		gw.HandleMessage(context.Background(), threadBot, MessageEvent{
+			MessageID: "om_t1", ChatID: "oc_grp_t", ChatType: "group", ThreadID: "omt_1",
+			SenderID: "ou_owner", Content: "@Works Triage 查话题", Mentions: []MessageMention{{Name: "Works Triage"}},
+		})
+		now := time.Now()
+		fh.mu.Lock()
+		fh.execSnaps["x_retry"] = ExecSnap{ID: "x_retry", Discussion: "self/d_oc_grp_t", Agent: "antigravity", Workspace: "Works/main", State: "running", StartedAt: &now}
+		fh.mu.Unlock()
+
+		retryVal, _ := json.Marshal(map[string]string{"action": "exec_retry", "botId": threadBot.ID, "execId": "x_1"})
+		gw.HandleCardAction(context.Background(), threadBot, CardActionEvent{
+			EventID: "ev_retry_1", OperatorID: "ou_owner", ChatID: "oc_grp_t", MessageID: "om_reply_1", ActionValue: string(retryVal),
+		})
+		gw.OnExecFinished("self/d_oc_grp_t", "x_retry", "done", "话题重试完成")
+		if fc.threadCalls == 0 {
+			t.Fatalf("expected thread fetcher to be consulted for thread retry")
+		}
+		if len(fc.sent) != 1 || !strings.Contains(fc.patched[len(fc.patched)-1].cardJSON, "话题重试完成") {
+			t.Fatalf("expected in-place thread result update, sent=%d patched=%+v", len(fc.sent), fc.patched)
+		}
+	})
 }

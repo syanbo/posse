@@ -66,15 +66,26 @@ type PermNotice struct {
 }
 
 type activeCard struct {
-	botID     string
-	profile   string
-	botName   string
-	execID    string
-	chatID    string
-	replyTo   string
-	inThread  bool
-	cardMsgID string
-	lastJSON  string
+	botID       string
+	profile     string
+	botName     string
+	execID      string
+	chatID      string
+	threadKey   string
+	replyTo     string
+	inThread    bool
+	cardMsgID   string
+	lastJSON    string
+	interleaved bool
+	doneSeenAt  time.Time
+
+	// patchMu 串行化同一张飞书卡片的进度刷新与最终结果/收拢补丁，防止在途进度覆盖最终结果。
+	patchMu sync.Mutex
+	closed  bool
+}
+
+type threadMessageFetcher interface {
+	ListRecentThreadMessages(ctx context.Context, profile, threadID string, limit int) ([]FetchedMessage, error)
 }
 
 type activePerm struct {
@@ -357,6 +368,8 @@ func (g *Gateway) HandleMessage(ctx context.Context, bot BotConfig, ev MessageEv
 	if ok, err := g.host.MarkEvent(bot.ID, "msg:"+msgID); err != nil || !ok {
 		return
 	}
+	// 同会话/话题在执行期间收到任何新消息（含未 @ 机器人的群聊发言），都视为已有插队消息
+	g.markChatInterleaved(ev.ChatID, ev.ThreadID, ev.RootID, "")
 	owner := g.Config().OwnerOpenID
 	if !bot.AllowsTrigger(ev.SenderID, owner, ev.ChatID) {
 		return
@@ -473,12 +486,14 @@ func (g *Gateway) HandleMessage(ctx context.Context, bot BotConfig, ev MessageEv
 		Status:        "active",
 	})
 	g.mu.Lock()
+	g.markChatInterleavedLocked(ev.ChatID, threadKey, ev.RootID, execID)
 	g.activeCards[execID] = &activeCard{
 		botID:     bot.ID,
 		profile:   bot.Profile,
 		botName:   bot.Name,
 		execID:    execID,
 		chatID:    ev.ChatID,
+		threadKey: threadKey,
 		replyTo:   msgID,
 		inThread:  inThread,
 		cardMsgID: cardMsgID,
@@ -755,16 +770,42 @@ func (g *Gateway) HandleCardAction(ctx context.Context, bot BotConfig, ev CardAc
 		}
 		if newID, err := g.host.RetryExecution(val["execId"]); err == nil && newID != "" && ev.MessageID != "" {
 			if snap, ok := g.host.ExecutionSnapshot(newID); ok {
+				var threadKey string
+				var inThread bool
+				if binding, berr := g.host.BindingByDiscussion(snap.Discussion); berr == nil {
+					threadKey = binding.ThreadKey
+					inThread = threadKey != ""
+				}
 				cardJSON := BuildProgressCard(bot.ID, bot.Name, snap.Agent, snap.Workspace, newID, tr("Queued"), "0s", "", "", "", 0)
-				_ = g.client.PatchCard(ctx, bot.Profile, ev.MessageID, cardJSON)
+				cardMsgID := ev.MessageID
+				if err := g.client.PatchCard(ctx, bot.Profile, ev.MessageID, cardJSON); err != nil {
+					log.Printf("lark bot %s: patch retry progress card (fallback to new card): %v", bot.Name, err)
+					var sentID string
+					var sendErr error
+					if origReplyTo != "" {
+						sentID, sendErr = g.client.ReplyCard(ctx, bot.Profile, origReplyTo, inThread, cardJSON)
+					}
+					if sendErr != nil || sentID == "" {
+						sentID, sendErr = g.client.SendCard(ctx, bot.Profile, ev.ChatID, cardJSON)
+						if sendErr == nil && sentID != "" {
+							inThread = false
+							threadKey = ""
+						}
+					}
+					if sendErr == nil && sentID != "" {
+						cardMsgID = sentID
+						g.markChatInterleaved(ev.ChatID, threadKey, "", newID)
+					}
+				}
 				_ = g.host.SaveCard(store.LarkCard{
 					Kind: "exec", RefID: newID, BotID: bot.ID, ChatID: ev.ChatID,
-					ReplyTo: origReplyTo, CardMsgID: ev.MessageID, DiscussionKey: snap.Discussion, Status: "active",
+					ReplyTo: origReplyTo, CardMsgID: cardMsgID, DiscussionKey: snap.Discussion, Status: "active",
 				})
 				g.mu.Lock()
 				g.activeCards[newID] = &activeCard{
 					botID: bot.ID, profile: bot.Profile, botName: bot.Name,
-					execID: newID, chatID: ev.ChatID, replyTo: origReplyTo, cardMsgID: ev.MessageID, lastJSON: cardJSON,
+					execID: newID, chatID: ev.ChatID, threadKey: threadKey,
+					replyTo: origReplyTo, inThread: inThread, cardMsgID: cardMsgID, lastJSON: cardJSON,
 				}
 				g.mu.Unlock()
 			}
@@ -845,8 +886,14 @@ func (g *Gateway) tickProgress(ctx context.Context) {
 			continue
 		}
 		if !isActiveExecState(snap.State) {
+			// 不立即删除 activeCards，保留本地 interleaved 状态供 OnExecFinished 决策；
+			// 仅对超过 2 分钟仍未触发 OnExecFinished 的孤儿项做兜底清理。
 			g.mu.Lock()
-			delete(g.activeCards, c.execID)
+			if c.doneSeenAt.IsZero() {
+				c.doneSeenAt = time.Now()
+			} else if time.Since(c.doneSeenAt) > 2*time.Minute {
+				delete(g.activeCards, c.execID)
+			}
 			g.mu.Unlock()
 			continue
 		}
@@ -855,17 +902,18 @@ func (g *Gateway) tickProgress(ctx context.Context) {
 			elapsed = FormatDuration(time.Since(*snap.StartedAt))
 		}
 		cardJSON := BuildProgressCard(c.botID, c.botName, snap.Agent, snap.Workspace, c.execID, snap.State, elapsed, snap.Tool, snap.ToolInput, snap.Phase, snap.Subagents)
-		if cardJSON == c.lastJSON {
+		c.patchMu.Lock()
+		if c.closed || cardJSON == c.lastJSON {
+			c.patchMu.Unlock()
 			continue
 		}
 		pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := g.client.PatchCard(pctx, c.profile, c.cardMsgID, cardJSON)
 		cancel()
 		if err == nil {
-			g.mu.Lock()
 			c.lastJSON = cardJSON
-			g.mu.Unlock()
 		}
+		c.patchMu.Unlock()
 	}
 }
 
@@ -907,62 +955,122 @@ func (g *Gateway) OnExecFinished(discKey, execID, outcome, body string) {
 
 	g.mu.Lock()
 	ac := g.activeCards[execID]
-	delete(g.activeCards, execID)
 	g.mu.Unlock()
+	// 决策结束前保留 activeCards 以便并发收到的插队消息仍能写到 ac.interleaved；函数返回前统一清理。
+	defer func() {
+		g.mu.Lock()
+		if g.activeCards[execID] == ac {
+			delete(g.activeCards, execID)
+		}
+		g.mu.Unlock()
+	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	var progressMsgID, replyTo string
+	var progressMsgID, replyTo, threadKey string
 	inThread := binding.ThreadKey != ""
+	threadKey = binding.ThreadKey
 	if ac != nil {
 		progressMsgID = ac.cardMsgID
 		replyTo = ac.replyTo
 		inThread = ac.inThread
+		threadKey = ac.threadKey
 	} else if stored, err := g.host.GetCard("exec", execID); err == nil {
 		progressMsgID = stored.CardMsgID
 		replyTo = stored.ReplyTo
 	}
 
+	// patchProgress 在单卡锁下先关闭后续进度轮询并等待在途进度补丁结束，再执行最终 PatchCard。
+	patchProgress := func(payload string, timeout time.Duration) error {
+		if ac != nil {
+			ac.patchMu.Lock()
+			ac.closed = true
+			defer ac.patchMu.Unlock()
+		}
+		pctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		return g.client.PatchCard(pctx, bot.Profile, progressMsgID, payload)
+	}
+
 	// 手动停止且没有正文结论时，直接把原进度卡改成「已停止」，不再多发一条空卡片
 	trimmedBody := strings.TrimSpace(body)
 	if progressMsgID != "" && (outcome == "stopped" || outcome == "cancelled") && (trimmedBody == "" || trimmedBody == "stopped by the user") {
-		if err := g.client.PatchCard(ctx, bot.Profile, progressMsgID, cardJSON); err != nil {
+		if err := patchProgress(cardJSON, 10*time.Second); err != nil {
 			log.Printf("lark bot %s: patch stopped card: %v", bot.Name, err)
 		}
 		return
 	}
 
-	// 有最终结论或失败详情时：先收拢最初的进度卡（移除停止按钮），再把结果作为新卡片发到对话底部，
-	// 既符合时间顺序，也能触发飞书新消息提醒（不会被中间的审批卡或群聊消息埋在上面）。
+	// 中间没有插入其他消息时，直接把结果原地更新到原进度卡，避免紧挨着出现两张重复标题的卡片；
+	// 历史查询、原地补丁与降级发新卡各自使用独立超时预算，避免前一阶段超时耗尽后续降级发送。
+	inPlaceFailed := false
+	if g.canUpdateProgressInPlace(bot, binding, ac, progressMsgID, inThread, threadKey) {
+		if err := patchProgress(cardJSON, 10*time.Second); err == nil {
+			if err := g.host.SaveCard(store.LarkCard{
+				Kind: "result", RefID: execID, BotID: bot.ID, ChatID: binding.ChatID,
+				ReplyTo: replyTo, CardMsgID: progressMsgID, DiscussionKey: discKey, Status: outcome,
+			}); err != nil {
+				log.Printf("lark bot %s: save in-place result card: %v", bot.Name, err)
+			}
+			if truncated && strings.TrimSpace(body) != "" {
+				fctx, fcancel := context.WithTimeout(context.Background(), 15*time.Second)
+				g.sendLongMarkdownFile(fctx, bot, binding.ChatID, execID, body)
+				fcancel()
+			}
+			return
+		} else {
+			inPlaceFailed = true
+			log.Printf("lark bot %s: patch result card in place (fallback to new card): %v", bot.Name, err)
+		}
+	}
+
+	// 中间有其他消息插队（审批卡、提问卡或新发言）或原地更新失败时：
+	// 先尽力收拢最初的进度卡（移除停止按钮），再使用独立超时把结果作为新卡片发到对话底部。
 	if progressMsgID != "" {
+		closedTimeout := 10 * time.Second
+		if inPlaceFailed {
+			closedTimeout = 5 * time.Second
+		}
 		closedCard := BuildProgressClosedCard(bot.Name, agentName, wsLabel, outcome, elapsed, snap.TraceCount)
-		if err := g.client.PatchCard(ctx, bot.Profile, progressMsgID, closedCard); err != nil {
+		if err := patchProgress(closedCard, closedTimeout); err != nil {
 			log.Printf("lark bot %s: patch progress closed card: %v", bot.Name, err)
 		}
 	}
 
 	var resultMsgID string
 	var sendErr error
+	sentThreadKey := ""
 	if replyTo != "" {
-		resultMsgID, sendErr = g.client.ReplyCard(ctx, bot.Profile, replyTo, inThread, cardJSON)
+		rctx, rcancel := context.WithTimeout(context.Background(), 15*time.Second)
+		resultMsgID, sendErr = g.client.ReplyCard(rctx, bot.Profile, replyTo, inThread, cardJSON)
+		rcancel()
+		if sendErr == nil && inThread {
+			sentThreadKey = threadKey
+		}
 		if sendErr != nil {
-			resultMsgID, sendErr = g.client.SendCard(ctx, bot.Profile, binding.ChatID, cardJSON)
+			sctx, scancel := context.WithTimeout(context.Background(), 15*time.Second)
+			resultMsgID, sendErr = g.client.SendCard(sctx, bot.Profile, binding.ChatID, cardJSON)
+			scancel()
 		}
 	} else {
-		resultMsgID, sendErr = g.client.SendCard(ctx, bot.Profile, binding.ChatID, cardJSON)
+		sctx, scancel := context.WithTimeout(context.Background(), 15*time.Second)
+		resultMsgID, sendErr = g.client.SendCard(sctx, bot.Profile, binding.ChatID, cardJSON)
+		scancel()
 	}
 	if sendErr != nil {
 		log.Printf("lark bot %s: send result card: %v", bot.Name, sendErr)
 	} else if resultMsgID != "" {
-		_ = g.host.SaveCard(store.LarkCard{
+		g.markChatInterleaved(binding.ChatID, sentThreadKey, "", execID)
+		if err := g.host.SaveCard(store.LarkCard{
 			Kind: "result", RefID: execID, BotID: bot.ID, ChatID: binding.ChatID,
 			ReplyTo: replyTo, CardMsgID: resultMsgID, DiscussionKey: discKey, Status: outcome,
-		})
+		}); err != nil {
+			log.Printf("lark bot %s: save result card: %v", bot.Name, err)
+		}
 	}
 
 	if truncated && strings.TrimSpace(body) != "" {
-		g.sendLongMarkdownFile(ctx, bot, binding.ChatID, execID, body)
+		fctx, fcancel := context.WithTimeout(context.Background(), 15*time.Second)
+		g.sendLongMarkdownFile(fctx, bot, binding.ChatID, execID, body)
+		fcancel()
 	}
 }
 
@@ -984,7 +1092,9 @@ func (g *Gateway) OnDesktopUserMessage(discKey, body string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	card := BuildNoticeCard(bot.Name+" — "+tr("Sent from Posse"), "grey", body)
-	_, _ = g.client.SendCard(ctx, bot.Profile, binding.ChatID, card)
+	if msgID, err := g.client.SendCard(ctx, bot.Profile, binding.ChatID, card); err == nil && msgID != "" {
+		g.markChatInterleaved(binding.ChatID, "", "", "")
+	}
 }
 
 // OnQuestion 当讨论里的 worker 发起 `posse task ask` 提问时，在飞书发送选项/表单卡片。
@@ -1002,8 +1112,13 @@ func (g *Gateway) OnQuestion(discKey, execID, questionID, agentName, question st
 	defer cancel()
 
 	var cardMsgID string
+	sentThreadKey := ""
 	if ec, err := g.host.GetCard("exec", execID); err == nil && ec.ReplyTo != "" {
-		cardMsgID, err = g.client.ReplyCard(ctx, bot.Profile, ec.ReplyTo, binding.ThreadKey != "", cardJSON)
+		inThread := binding.ThreadKey != ""
+		cardMsgID, err = g.client.ReplyCard(ctx, bot.Profile, ec.ReplyTo, inThread, cardJSON)
+		if err == nil && inThread {
+			sentThreadKey = binding.ThreadKey
+		}
 		if err != nil {
 			cardMsgID, _ = g.client.SendCard(ctx, bot.Profile, binding.ChatID, cardJSON)
 		}
@@ -1013,6 +1128,7 @@ func (g *Gateway) OnQuestion(discKey, execID, questionID, agentName, question st
 	if cardMsgID == "" {
 		return
 	}
+	g.markChatInterleaved(binding.ChatID, sentThreadKey, "", "")
 	_ = g.host.SaveCard(store.LarkCard{
 		Kind: "question", RefID: questionID, BotID: bot.ID, ChatID: binding.ChatID,
 		CardMsgID: cardMsgID, DiscussionKey: discKey, Status: "waiting",
@@ -1059,6 +1175,8 @@ func (g *Gateway) WatchPermission(req PermNotice) bool {
 		log.Printf("lark bot %s: send permission card: %v", bot.Name, err)
 		return false
 	}
+	// 审批卡通过 SendCard 发在会话主流中，按实际落点标记主流
+	g.markChatInterleaved(binding.ChatID, "", "", "")
 	_ = g.host.SaveCard(store.LarkCard{
 		Kind: "perm", RefID: req.ID, BotID: bot.ID, ChatID: binding.ChatID,
 		CardMsgID: cardMsgID, DiscussionKey: binding.DiscussionKey, Status: "waiting",
@@ -1090,6 +1208,80 @@ func (g *Gateway) PermissionResolved(permID, behavior, source string) {
 func (g *Gateway) replyNotice(ctx context.Context, bot BotConfig, msgID string, inThread bool, title, template, body string) {
 	card := BuildNoticeCard(title, template, body)
 	_, _ = g.client.ReplyCard(ctx, bot.Profile, msgID, inThread, card)
+}
+
+func (g *Gateway) markChatInterleaved(chatID, threadKey, rootID, excludeExecID string) {
+	if chatID == "" {
+		return
+	}
+	g.mu.Lock()
+	g.markChatInterleavedLocked(chatID, threadKey, rootID, excludeExecID)
+	g.mu.Unlock()
+}
+
+func (g *Gateway) markChatInterleavedLocked(chatID, threadKey, rootID, excludeExecID string) {
+	for id, ac := range g.activeCards {
+		if id == excludeExecID || ac.chatID != chatID {
+			continue
+		}
+		if ac.inThread {
+			if ac.threadKey != "" && (threadKey == ac.threadKey || (rootID != "" && rootID == ac.threadKey)) {
+				ac.interleaved = true
+			}
+			continue
+		}
+		if threadKey == "" {
+			ac.interleaved = true
+		}
+	}
+}
+
+func (g *Gateway) canUpdateProgressInPlace(bot BotConfig, binding store.LarkBinding, ac *activeCard, progressMsgID string, inThread bool, threadKey string) bool {
+	if progressMsgID == "" {
+		return false
+	}
+	g.mu.Lock()
+	interleaved := ac != nil && ac.interleaved
+	g.mu.Unlock()
+	if interleaved {
+		return false
+	}
+	// 兜底向飞书查最新未撤回消息，覆盖未开全群消息权限的群聊普通发言及 daemon 重启场景
+	qctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var msgs []FetchedMessage
+	var err error
+	checked := false
+	if inThread {
+		if tf, ok := g.client.(threadMessageFetcher); ok && threadKey != "" {
+			msgs, err = tf.ListRecentThreadMessages(qctx, bot.Profile, threadKey, 5)
+			checked = err == nil
+		}
+	} else if mf, ok := g.client.(messageContextFetcher); ok && binding.ChatID != "" {
+		msgs, err = mf.ListRecentMessages(qctx, bot.Profile, binding.ChatID, 5)
+		checked = err == nil
+	}
+	// 远端查询期间可能并发收到了本地插队消息，再次在锁内复核
+	g.mu.Lock()
+	interleaved = ac != nil && ac.interleaved
+	g.mu.Unlock()
+	if interleaved {
+		return false
+	}
+	if checked {
+		for _, m := range msgs {
+			if m.Deleted || m.MessageID == "" {
+				continue
+			}
+			return m.MessageID == progressMsgID
+		}
+	}
+	// 群聊若远端查询明确报错（如无历史消息权限），可能漏看同事未 @ 的发言，保守发新卡；
+	// 单聊机器人必收全部消息，本地未插队即可原地更新。
+	if err != nil && binding.ChatType == "group" {
+		return false
+	}
+	return ac != nil
 }
 
 func (g *Gateway) workspaceLabel(wsID string) string {

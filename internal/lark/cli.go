@@ -323,42 +323,43 @@ func (c *CLIClient) Consume(ctx context.Context, profile, eventKey string, onRea
 		}
 	}()
 
-	var lastErrMu sync.Mutex
-	var lastErr string
+	var stderrMu sync.Mutex
+	var stderrLines []string
+	var stderrBytes int
 	readyOnce := sync.Once{}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		sc := bufio.NewScanner(stderrPipe)
-		sc.Buffer(make([]byte, 0, 16*1024), 512*1024)
-		for sc.Scan() {
-			line := strings.TrimSpace(sc.Text())
-			if strings.Contains(line, "[event] ready") {
-				readyOnce.Do(func() {
-					if onReady != nil {
-						onReady()
+		rd := bufio.NewReaderSize(stderrPipe, 16*1024)
+		for {
+			line, eof := readCappedLine(rd, 16*1024)
+			if line != "" {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "[event] ready") {
+					readyOnce.Do(func() {
+						stderrMu.Lock()
+						stderrLines = nil
+						stderrBytes = 0
+						stderrMu.Unlock()
+						if onReady != nil {
+							onReady()
+						}
+					})
+				} else if line != "" && !strings.HasPrefix(line, "[event] ") {
+					stderrMu.Lock()
+					stderrLines = append(stderrLines, line)
+					stderrBytes += len(line) + 1
+					for len(stderrLines) > 200 || (stderrBytes > 64*1024 && len(stderrLines) > 1) {
+						stderrBytes -= len(stderrLines[0]) + 1
+						stderrLines = stderrLines[1:]
 					}
-				})
-				continue
+					stderrMu.Unlock()
+				}
 			}
-			if strings.HasPrefix(line, "{") {
-				var env struct {
-					OK    bool `json:"ok"`
-					Error struct {
-						Message string `json:"message"`
-						Hint    string `json:"hint"`
-					} `json:"error"`
-				}
-				if json.Unmarshal([]byte(line), &env) == nil && !env.OK && env.Error.Message != "" {
-					lastErrMu.Lock()
-					lastErr = env.Error.Message
-					if env.Error.Hint != "" {
-						lastErr += " (" + env.Error.Hint + ")"
-					}
-					lastErrMu.Unlock()
-				}
+			if eof {
+				return
 			}
 		}
 	}()
@@ -381,9 +382,9 @@ func (c *CLIClient) Consume(ctx context.Context, profile, eventKey string, onRea
 	if ctx.Err() != nil {
 		return nil
 	}
-	lastErrMu.Lock()
-	msg := lastErr
-	lastErrMu.Unlock()
+	stderrMu.Lock()
+	msg := parseConsumeStderr(stderrLines)
+	stderrMu.Unlock()
 	if waitErr != nil {
 		if msg != "" {
 			return errors.New(msg)
@@ -394,6 +395,86 @@ func (c *CLIClient) Consume(ctx context.Context, profile, eventKey string, onRea
 		return errors.New(msg)
 	}
 	return io.EOF
+}
+
+// readCappedLine 读取一行文本，超长部分截断但持续排空至换行符，避免 stderr 超长行堵死子进程管道。
+func readCappedLine(rd *bufio.Reader, maxBytes int) (string, bool) {
+	var buf []byte
+	for {
+		frag, err := rd.ReadSlice('\n')
+		if len(frag) > 0 && len(buf) < maxBytes {
+			remain := maxBytes - len(buf)
+			if len(frag) > remain {
+				buf = append(buf, frag[:remain]...)
+			} else {
+				buf = append(buf, frag...)
+			}
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		return string(buf), err != nil
+	}
+}
+
+// parseConsumeStderr 从 lark-cli event consume 的 stderr 输出中提取错误原因，
+// 兼容单行与多行缩进 JSON 错误信封；若无 JSON 信封则退回非告警文本行。
+func parseConsumeStderr(lines []string) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	var filtered []string
+	for _, l := range lines {
+		if strings.HasPrefix(l, "[lark-cli] [WARN]") || strings.HasPrefix(l, "[event] ") {
+			continue
+		}
+		filtered = append(filtered, l)
+	}
+	if len(filtered) == 0 {
+		return ""
+	}
+	joined := strings.Join(filtered, "\n")
+	var lastJSONErr string
+	for off := 0; off < len(joined); {
+		idx := strings.IndexByte(joined[off:], '{')
+		if idx < 0 {
+			break
+		}
+		off += idx
+		var env struct {
+			OK    *bool `json:"ok"`
+			Error struct {
+				Message string `json:"message"`
+				Hint    string `json:"hint"`
+			} `json:"error"`
+		}
+		dec := json.NewDecoder(strings.NewReader(joined[off:]))
+		if err := dec.Decode(&env); err == nil {
+			if env.OK != nil && !*env.OK && strings.TrimSpace(env.Error.Message) != "" {
+				msg := strings.TrimSpace(env.Error.Message)
+				if hint := strings.TrimSpace(env.Error.Hint); hint != "" {
+					msg += " (" + hint + ")"
+				}
+				lastJSONErr = msg
+			}
+			consumed := int(dec.InputOffset())
+			if consumed <= 0 {
+				off++
+			} else {
+				off += consumed
+			}
+			continue
+		}
+		off++
+	}
+	if lastJSONErr != "" {
+		return lastJSONErr
+	}
+	msg := strings.Join(filtered, "; ")
+	if len(msg) > 300 {
+		msg = truncateUTF8(msg, 300) + "..."
+	}
+	return msg
 }
 
 func parseLarkMessageID(out []byte) (string, error) {
@@ -449,14 +530,24 @@ func (c *CLIClient) PatchCard(ctx context.Context, profile, cardMsgID, cardJSON 
 	if err != nil {
 		return err
 	}
+	trimmed := bytes.TrimSpace(out)
+	if len(trimmed) == 0 {
+		return nil
+	}
 	var env struct {
-		OK    bool `json:"ok"`
+		OK    *bool `json:"ok"`
 		Error struct {
 			Message string `json:"message"`
 		} `json:"error"`
 	}
-	if json.Unmarshal(bytes.TrimSpace(out), &env) == nil && !env.OK && env.Error.Message != "" {
-		return errors.New(env.Error.Message)
+	if err := json.Unmarshal(trimmed, &env); err != nil {
+		return fmt.Errorf("parse lark patch card response: %w", err)
+	}
+	if env.OK != nil && !*env.OK {
+		if msg := strings.TrimSpace(env.Error.Message); msg != "" {
+			return errors.New(msg)
+		}
+		return errors.New("lark patch card API returned ok=false")
 	}
 	return nil
 }
@@ -558,6 +649,24 @@ func (c *CLIClient) ListRecentMessages(ctx context.Context, profile, chatID stri
 	out, err := c.run(ctx, profile, "", nil,
 		"im", "+chat-messages-list", "--as", "bot",
 		"--chat-id", chatID, "--order", "desc",
+		"--page-size", fmt.Sprintf("%d", limit),
+		"--no-reactions", "--format", "json")
+	if err != nil {
+		return nil, err
+	}
+	return parseFetchedMessages(out)
+}
+
+func (c *CLIClient) ListRecentThreadMessages(ctx context.Context, profile, threadID string, limit int) ([]FetchedMessage, error) {
+	if threadID == "" || limit <= 0 {
+		return nil, nil
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	out, err := c.run(ctx, profile, "", nil,
+		"im", "+threads-messages-list", "--as", "bot",
+		"--thread", threadID, "--order", "desc",
 		"--page-size", fmt.Sprintf("%d", limit),
 		"--no-reactions", "--format", "json")
 	if err != nil {
