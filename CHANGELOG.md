@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.51
+
+- 飞书网关支持**单机器人按群分身**：在「设置 › 飞书机器人」中可直接拉取机器人已加入的飞书群一键点选，按群独立覆写显示名、工作区、Agent、权限模式、会话粒度、触发权限、角色说明（继承 / 自定义 / 无角色）与免 `@` 直接触发；群内支持 `/mention on|off`、`/role <text|clear|inherit>`（所有变更会话、执行或配置的命令统一仅限主人执行），修改工作区/Agent/角色/权限/会话粒度后自动退役旧绑定与旧排队轮次。
+- 优化飞书消息输入与排队体验：单聊与免 `@` 群直接发纯文件/图片时先暂存（15 分钟有效、保留原始文件名、连发原地更新不刷屏），待后续文字或引用回复一次合并提交且不重复下载，也支持点击「立即发送」或「取消」；同一发送者 1.5 秒静默窗内连发多条纯文本自动合为一轮；排队进度卡新增「中止前序并执行」按钮（仅主人可点）。
+- 修复任务提醒在用户移动鼠标或切换窗口焦点时被安静窗不断推迟的问题，并在提醒回车注入失败时回滚已提醒标记。
+
+### English
+
+- Added **per-group personas** for a single Feishu/Lark bot: pick from the bot's joined groups directly in Settings › Feishu Bots to override display name, workspace, agent, approval mode, session scope, trigger policy, role prompt (inherit / custom / none), and Direct Mode (no `@mention` required). Group chats also support `/mention on|off` and `/role <text|clear|inherit>` (all state-changing slash commands are owner-only), automatically retiring stale bindings and queued rounds when runtime settings change.
+- Improved Feishu message staging, debouncing, and queue control: standalone files and images in DMs or Direct Mode groups are staged (15-minute TTL, preserving original filenames and patching one card in place) and merged with the next instruction or quote without duplicate downloads, with one-click Send Now / Cancel actions; rapid text messages within a 1.5s quiet window coalesce into a single turn; queued progress cards include an owner-only "Interrupt previous & run" button.
+- Fixed task completion reminders being postponed indefinitely by mouse movement or window focus reports updating terminal input timestamps, and rolled back the nudged flag if submitting the trailing carriage return fails.
+
 ## 0.1.50
 
 - 优化飞书机器人卡片体验与报错展示：执行期间若会话或话题中间没有其他新消息，直接原地更新进度卡为完整结果卡（仅在有审批卡、提问卡或新发言插队时收拢旧卡并在底部发送新卡）；修复 `lark-cli` 长连接吞掉多行 JSON 报错的问题，连接失败时直接显示真实错误与排查提示。
