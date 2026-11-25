@@ -51,18 +51,21 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`grep "#define" /tmp/a.h`,
 		`echo "a\"b" 'c#d'`,
 
-		// B. 允许的变量与 ~ 开头
+		// B. 双引号内允许的变量与 ~ 开头
 		`echo "POSSE_NOTES=${POSSE_NOTES}"`,
 		`echo "$POSSE_NOTES" "$HOME" "${HOME}"`,
 		`ls -la ~/Desktop/Works`,
-		`file -b --mime-type /tmp/a.bin`,
+		`file /tmp/a.bin`,
+		`file -b /tmp/a.bin`,
+		`file -bi /tmp/a.bin`,
+		`file -b -i -L -z /tmp/a.bin`,
 
 		// C. 白名单绝对路径程序
 		`/bin/ls -la /tmp`,
 		`/usr/bin/git status`,
 		`/opt/homebrew/bin/rg foo /tmp`,
 		filepath.Join(homeDir, ".local", "bin", "rg") + ` foo /tmp`,
-		`$HOME/.local/bin/rg foo /tmp`,
+		`"$HOME/.local/bin/rg" foo /tmp`,
 		filepath.Join(posseHome, "bin", "posse") + ` history list`,
 
 		// E. lark-cli 规则
@@ -73,7 +76,7 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`lark-cli base +record-download-attachment --base-token EHz --table-id tbl --record-id r1 --output /tmp/posse-triage/att --as user`,
 		`lark-cli base +record-download-attachment --base-token EHz --table-id tbl --record-id r1 --output=` + discFile + ` --as user`,
 		`lark-cli drive +download --file-token f1 --output ` + discFile,
-		`lark-cli drive +download --file-token f1 --output-dir $POSSE_NOTES/discussions/mb_1`,
+		`lark-cli drive +download --file-token f1 --output-dir "$POSSE_NOTES/discussions/mb_1"`,
 		`lark-cli drive +export --token doc1 --doc-type docx --file-extension pdf --output-dir /tmp/posse-triage`,
 		`lark-cli im +messages-mget --message-ids om_1 --download-resources=false --as bot`,
 
@@ -175,7 +178,14 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`echo hi # comment`,
 		`ls /tmp # ; rm -rf /`,
 
-		// B. 变量展开、修饰符、任何 token 内的未引号 glob/花括号、波浪号、裸赋值段、未引号括号
+		// B. 变量展开（引号外一律拒绝）、修饰符、任何 token 内的未引号 glob/花括号、波浪号、裸赋值段、未引号括号
+		`echo $HOME`,
+		`echo ${HOME}`,
+		`echo $POSSE_NOTES`,
+		`echo ${POSSE_NOTES}`,
+		`$HOME/.local/bin/rg foo /tmp`,
+		`xxd $HOME`,
+		`lark-cli drive +download --file-token f1 --output-dir $POSSE_NOTES/discussions/mb_1`,
 		`echo $PATH`,
 		`echo "$USER"`,
 		`echo ${HOME:-/etc}`,
@@ -222,6 +232,10 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`lark-cli im +messages-send --chat-id oc_1 --markdown --dry-run --as bot`,
 		`lark-cli schema --help --help=false`,
 		`lark-cli schema --help=false --help`,
+		`lark-cli schema --help -hh=false`,
+		`lark-cli base +record-update --help -hv`,
+		`lark-cli base +record-update --help -hh`,
+		`lark-cli base +record-update --dry-run -x`,
 		`lark-cli base +record-update --help=true`,
 		`lark-cli base +record-update --help --help`,
 		`lark-cli base +record-update -h --help`,
@@ -290,6 +304,9 @@ func TestIsSafeReadOnlyCommandLine(t *testing.T) {
 		`file -m /tmp/magic /tmp/a.bin`,
 		`file --magic-file=/tmp/magic /tmp/a.bin`,
 		`file -bC /tmp/magic`,
+		`file --vers`,
+		`file --mime-t /dev/null`,
+		`file -b --mime-type /tmp/a.bin`,
 		`rg --pre sh foo /tmp`,
 		`rg --pre=sh foo /tmp`,
 		`rg --pre-glob '*.pdf' foo /tmp`,

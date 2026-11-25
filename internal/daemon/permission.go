@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -315,13 +314,13 @@ func deriveCommandRuleKeys(cmdLine string) ([]string, string) {
 		if agent.IsSafeReadOnlySegment(seg) {
 			continue
 		}
-		// 需审批的段若无法可靠解析、带有任意重定向、包含前置环境变量赋值或指向非临时输出目的地，
-		// 整条命令不生成同类规则键，只能单次审批。
+		// 需审批的段若无法可靠解析、带有任意重定向、包含前置环境变量赋值、程序以带 / 的路径给出，
+		// 或指向非临时输出目的地，整条命令不生成同类规则键，只能单次审批。
 		fields, hasRedir, ok := agent.ParseSegmentForRuleKey(seg)
 		if !ok || len(fields) == 0 || hasRedir {
 			return nil, ""
 		}
-		if strings.Contains(fields[0], "=") {
+		if strings.Contains(fields[0], "=") || strings.Contains(fields[0], "/") {
 			return nil, ""
 		}
 		if agent.HasUnsafeRuleOutputFlag(fields) {
@@ -345,23 +344,12 @@ func deriveCommandRuleKeys(cmdLine string) ([]string, string) {
 }
 
 func commandSegmentLabelArgs(fields []string) string {
-	if len(fields) == 0 {
+	if len(fields) == 0 || strings.Contains(fields[0], "/") {
 		return ""
 	}
-	rawCmd := fields[0]
-	cmdName := rawCmd
-	cmdBase := rawCmd
-	if strings.Contains(rawCmd, "/") {
-		clean := filepath.Clean(rawCmd)
-		// 相对路径（如 ./python3）Clean 后会脱掉前缀 ./，需保留区分免与裸命令名碰撞
-		if !filepath.IsAbs(rawCmd) && !strings.Contains(clean, "/") {
-			clean = "./" + clean
-		}
-		cmdName = clean
-		cmdBase = filepath.Base(clean)
-	}
+	cmd := fields[0]
 	rest := fields[1:]
-	switch cmdBase {
+	switch cmd {
 	case "lark-cli":
 		var parts []string
 		for j := 0; j < len(rest) && len(parts) < 2; j++ {
@@ -379,9 +367,9 @@ func commandSegmentLabelArgs(fields []string) string {
 			parts = append(parts, a)
 		}
 		if len(parts) > 0 {
-			return cmdName + " " + strings.Join(parts, " ")
+			return cmd + " " + strings.Join(parts, " ")
 		}
-		return cmdName
+		return cmd
 	case "posse":
 		var parts []string
 		for j := 0; j < len(rest) && len(parts) < 2; j++ {
@@ -395,9 +383,9 @@ func commandSegmentLabelArgs(fields []string) string {
 			parts = append(parts, a)
 		}
 		if len(parts) > 0 {
-			return cmdName + " " + strings.Join(parts, " ")
+			return cmd + " " + strings.Join(parts, " ")
 		}
-		return cmdName
+		return cmd
 	case "git", "go", "npm", "pnpm", "yarn", "docker", "kubectl", "adb":
 		for j := 0; j < len(rest); j++ {
 			a := rest[j]
@@ -411,11 +399,11 @@ func commandSegmentLabelArgs(fields []string) string {
 			if strings.HasPrefix(a, "-") {
 				continue
 			}
-			return cmdName + " " + a
+			return cmd + " " + a
 		}
-		return cmdName
+		return cmd
 	default:
-		return cmdName
+		return cmd
 	}
 }
 

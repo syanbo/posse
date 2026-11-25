@@ -551,14 +551,8 @@ func readShellToken(s string, i int, strictExpansions bool) (shellToken, int, bo
 				return shellToken{}, i, false, false
 			}
 			if ch == '$' {
-				n, ok := matchAllowedDollar(s, i)
-				if !ok {
-					return shellToken{}, i, false, false
-				}
-				cur.WriteString(s[i : i+n])
-				hasToken = true
-				i += n
-				continue
+				// 引号外变量展开可能触发字段分割，一律拒绝（仅双引号内允许 $HOME / $POSSE_NOTES）
+				return shellToken{}, i, false, false
 			}
 			if ch == '~' {
 				// ~ 只允许出现在未加引号的 token 开头作为 HOME（~ 或 ~/...）
@@ -927,28 +921,22 @@ func isSafeReadOnlyPosse(args []string) bool {
 }
 
 func isSafeReadOnlyFile(args []string) bool {
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		if a == "--" {
-			break
-		}
-		if a == "-C" || a == "--compile" || strings.HasPrefix(a, "--compile=") ||
-			a == "-m" || strings.HasPrefix(a, "-m") ||
-			a == "--magic-file" || strings.HasPrefix(a, "--magic-file=") {
-			return false
-		}
-		switch a {
-		case "-e", "-f", "-F", "-P", "--exclude", "--exclude-quiet", "--files-from", "--separator", "--parameter":
-			i++
+	endFlags := false
+	for _, a := range args {
+		if !endFlags && a == "--" {
+			endFlags = true
 			continue
 		}
-		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && len(a) > 1 {
-			first := a[1]
-			if first == 'e' || first == 'f' || first == 'F' || first == 'P' {
-				continue
-			}
-			if strings.ContainsAny(a[1:], "Cm") {
+		if !endFlags && strings.HasPrefix(a, "-") && a != "-" {
+			if strings.HasPrefix(a, "--") {
 				return false
+			}
+			for _, ch := range a[1:] {
+				switch ch {
+				case 'b', 'i', 'L', 'z':
+				default:
+					return false
+				}
 			}
 		}
 	}
@@ -1394,6 +1382,7 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 	helpInvalid := false
 	dryRunCount := 0
 	dryRunInvalid := false
+	hasUnknownShortFlag := false
 	hasInvalidOutput := false
 	hasDownloadResources := false
 
@@ -1496,6 +1485,10 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 			continue
 		}
 		if strings.HasPrefix(a, "-") {
+			// 短选项组（如 -hh、-hv、-hh=false）或未识别的短选项使 help/dry-run 特殊放行失效
+			if !strings.HasPrefix(a, "--") && len(a) > 1 {
+				hasUnknownShortFlag = true
+			}
 			continue
 		}
 		if len(pos) < 2 {
@@ -1503,8 +1496,12 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 		}
 	}
 
-	// --help/-h/--dry-run 出现一次以上、带 = 赋值或与可能消费值的前一 flag 相邻时，整条命令一律走审批
+	// --help/-h/--dry-run 出现一次以上、带 = 赋值、与可能消费值的前一 flag 相邻，
+	// 或同时出现组合/未知短选项时，整条命令一律走审批
 	if helpInvalid || helpCount > 1 || dryRunInvalid || dryRunCount > 1 {
+		return false
+	}
+	if (helpCount > 0 || dryRunCount > 0) && hasUnknownShortFlag {
 		return false
 	}
 	if helpCount == 1 {
