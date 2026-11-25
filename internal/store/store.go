@@ -66,18 +66,20 @@ type WorkspaceRepo struct {
 }
 
 type Terminal struct {
-	ID          string     `json:"id"`
-	WorkspaceID string     `json:"workspaceId"`
-	Title       string     `json:"title,omitempty"` // 用户给标签起的名字，空是默认（会话标题或终端标题）
-	Command     []string   `json:"command"`
-	Agent       string     `json:"agent,omitempty"`
-	SessionID   string     `json:"sessionId,omitempty"` // agent 的会话，重启后按它续接
-	Cwd         string     `json:"cwd,omitempty"`       // 前台程序最后所在的目录，重启后在这里恢复
-	Label       string     `json:"label,omitempty"`     // 最后显示的会话名或终端标题，重启后还没恢复时照它显示
-	State       string     `json:"state"`               // running | exited | lost（上一个常驻进程留下、等着恢复）
-	ExitCode    *int       `json:"exitCode,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	EndedAt     *time.Time `json:"endedAt,omitempty"`
+	ID            string     `json:"id"`
+	WorkspaceID   string     `json:"workspaceId"`
+	Title         string     `json:"title,omitempty"` // 用户给标签起的名字，空是默认（会话标题或终端标题）
+	Command       []string   `json:"command"`
+	Agent         string     `json:"agent,omitempty"`
+	SessionID     string     `json:"sessionId,omitempty"`     // agent 的会话，重启后按它续接
+	Cwd           string     `json:"cwd,omitempty"`           // 前台程序最后所在的目录，重启后在这里恢复
+	Label         string     `json:"label,omitempty"`         // 旧版可读的显示名（显式会话标题优先，否则兜底标题）
+	SessionTitle  string     `json:"sessionTitle,omitempty"`  // 显式会话标题，优先级高于任务标题
+	FallbackTitle string     `json:"fallbackTitle,omitempty"` // 原始兜底标题（OSC / Grok / 退出兜底），优先级低于任务标题
+	State         string     `json:"state"`                   // running | exited | lost（上一个常驻进程留下、等着恢复）
+	ExitCode      *int       `json:"exitCode,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	EndedAt       *time.Time `json:"endedAt,omitempty"`
 }
 
 // terminals 的 exit_code、ended_at 不再写也不读，列留着：交接失败时旧进程接着用新进程打开过的库、降级到旧版时，
@@ -136,7 +138,7 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	for _, c := range [][2]string{{"tasks", "model"}, {"tasks", "effort"}, {"tasks", "discussion_id"}, {"terminals", "session_id"}, {"terminals", "cwd"}, {"terminals", "label"}, {"messages", "outcome"}} {
+	for _, c := range [][2]string{{"tasks", "model"}, {"tasks", "effort"}, {"tasks", "discussion_id"}, {"terminals", "session_id"}, {"terminals", "cwd"}, {"terminals", "label"}, {"terminals", "session_title"}, {"terminals", "fallback_title"}, {"terminals", "session_title_key"}, {"messages", "outcome"}} {
 		if err := addColumn(db, c[0], c[1], "TEXT NOT NULL DEFAULT ''"); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("migrate: %w", err)
@@ -379,17 +381,40 @@ func (s *Store) AddTerminal(t Terminal) error {
 	return err
 }
 
-// SetTerminalResume 记下重启后恢复要用的 agent、会话和目录，以及恢复前显示的名字。
-func (s *Store) SetTerminalResume(id, agent, sessionID, cwd, label string) error {
-	_, err := s.db.Exec(`UPDATE terminals SET agent=?, session_id=?, cwd=?, label=? WHERE id=?`, agent, sessionID, cwd, label, id)
+func resumeTitleKey(agent, sessionID, label string) string {
+	return agent + "\x00" + sessionID + "\x00" + label
+}
+
+// SetTerminalResume 记下重启后恢复要用的 agent、会话和目录，以及恢复前显示的会话标题与兜底名称。
+// label 保留旧版显示名语义（显式会话标题优先，其次兜底标题），session_title 与 fallback_title 独立存储，
+// 并经 session_title_key 绑定当前 agent/session_id/label，旧版覆盖恢复记录后新版读出会自动失效旧元数据。
+func (s *Store) SetTerminalResume(id, agent, sessionID, cwd, fallback, sessionTitle string) error {
+	displayLabel := sessionTitle
+	if displayLabel == "" {
+		displayLabel = fallback
+	}
+	var key string
+	if sessionTitle != "" || fallback != "" {
+		key = resumeTitleKey(agent, sessionID, displayLabel)
+	}
+	_, err := s.db.Exec(`UPDATE terminals SET agent=?, session_id=?, cwd=?, label=?, session_title=?, fallback_title=?, session_title_key=? WHERE id=?`,
+		agent, sessionID, cwd, displayLabel, sessionTitle, fallback, key, id)
 	return err
 }
 
-// ReviveTerminal 把恢复了的终端改回运行中，名字和创建时间不变。
-func (s *Store) ReviveTerminal(id string, command []string, agent, sessionID string) error {
+// ReviveTerminal 把恢复了的终端改回运行中，并同步更新目录、标题与校验键；名字和创建时间不变。
+func (s *Store) ReviveTerminal(id string, command []string, agent, sessionID, cwd, fallback, sessionTitle string) error {
 	cmd, _ := json.Marshal(command)
-	_, err := s.db.Exec(`UPDATE terminals SET command=?, agent=?, session_id=?, state='running' WHERE id=? AND state='lost'`,
-		string(cmd), agent, sessionID, id)
+	displayLabel := sessionTitle
+	if displayLabel == "" {
+		displayLabel = fallback
+	}
+	var key string
+	if sessionTitle != "" || fallback != "" {
+		key = resumeTitleKey(agent, sessionID, displayLabel)
+	}
+	_, err := s.db.Exec(`UPDATE terminals SET command=?, agent=?, session_id=?, cwd=?, label=?, session_title=?, fallback_title=?, session_title_key=?, state='running' WHERE id=? AND state='lost'`,
+		string(cmd), agent, sessionID, cwd, displayLabel, sessionTitle, fallback, key, id)
 	return err
 }
 
@@ -413,7 +438,7 @@ func (s *Store) LostTerminal(id string) (Terminal, error) {
 }
 
 func (s *Store) lostTerminals(cond string, args ...any) ([]Terminal, error) {
-	rows, err := s.db.Query(`SELECT t.id,t.workspace_id,t.title,t.command,t.agent,t.session_id,t.cwd,t.label,t.created_at FROM terminals t
+	rows, err := s.db.Query(`SELECT t.id,t.workspace_id,t.title,t.command,t.agent,t.session_id,t.cwd,t.label,t.session_title,t.fallback_title,t.session_title_key,t.created_at FROM terminals t
 		JOIN workspaces w ON w.id=t.workspace_id WHERE t.state='lost'`+cond+` ORDER BY t.created_at`, args...)
 	if err != nil {
 		return nil, err
@@ -422,10 +447,13 @@ func (s *Store) lostTerminals(cond string, args ...any) ([]Terminal, error) {
 	var out []Terminal
 	for rows.Next() {
 		var t Terminal
-		var cmd string
+		var cmd, titleKey string
 		var at int64
-		if err := rows.Scan(&t.ID, &t.WorkspaceID, &t.Title, &cmd, &t.Agent, &t.SessionID, &t.Cwd, &t.Label, &at); err != nil {
+		if err := rows.Scan(&t.ID, &t.WorkspaceID, &t.Title, &cmd, &t.Agent, &t.SessionID, &t.Cwd, &t.Label, &t.SessionTitle, &t.FallbackTitle, &titleKey, &at); err != nil {
 			return nil, err
+		}
+		if (t.SessionTitle != "" || t.FallbackTitle != "") && titleKey != resumeTitleKey(t.Agent, t.SessionID, t.Label) {
+			t.SessionTitle, t.FallbackTitle = "", ""
 		}
 		json.Unmarshal([]byte(cmd), &t.Command)
 		t.State, t.CreatedAt = "lost", fromMS(at)
@@ -447,9 +475,13 @@ func (s *Store) SetTerminalTitle(id, title string) error {
 // TerminalResume 读终端的名字和恢复信息（交接过来的终端用，两边共用一个数据库）。
 func (s *Store) TerminalResume(id string) (Terminal, error) {
 	t := Terminal{ID: id}
-	err := s.db.QueryRow(`SELECT title,agent,session_id,cwd,label FROM terminals WHERE id=?`, id).Scan(&t.Title, &t.Agent, &t.SessionID, &t.Cwd, &t.Label)
+	var titleKey string
+	err := s.db.QueryRow(`SELECT title,agent,session_id,cwd,label,session_title,fallback_title,session_title_key FROM terminals WHERE id=?`, id).Scan(&t.Title, &t.Agent, &t.SessionID, &t.Cwd, &t.Label, &t.SessionTitle, &t.FallbackTitle, &titleKey)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, ErrNotFound
+	}
+	if err == nil && (t.SessionTitle != "" || t.FallbackTitle != "") && titleKey != resumeTitleKey(t.Agent, t.SessionID, t.Label) {
+		t.SessionTitle, t.FallbackTitle = "", ""
 	}
 	return t, err
 }

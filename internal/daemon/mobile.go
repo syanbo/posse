@@ -73,6 +73,20 @@ func (h mobileHost) State() mobile.State {
 	}
 	byWS := d.sessionsByWorkspace()
 	lost := d.lostByWorkspace()
+	var termIDs []string
+	for _, ss := range byWS {
+		for _, s := range ss {
+			if s.Running() {
+				termIDs = append(termIDs, s.ID)
+			}
+		}
+	}
+	for _, ts := range lost {
+		for _, t := range ts {
+			termIDs = append(termIDs, t.ID)
+		}
+	}
+	workerTitles, _ := d.store.WorkerTitles(termIDs)
 	// 和桌面侧栏一样：有进行中的任务、又阻塞在 posse task wait 上或停着，是在等派出去的任务
 	coordinating := map[string]bool{}
 	if ts, err := d.store.Tasks(store.TaskFilter{Running: true}); err == nil {
@@ -105,43 +119,21 @@ func (h mobileHost) State() mobile.State {
 			if !s.Running() {
 				continue
 			}
-			a := s.Agent()
-			// 用户起的名字优先，其次起过名的会话用会话名当标签名，和桌面一样
-			title := s.Title()
-			switch name := s.agentName(); {
-			case s.userName() != "":
-				title = s.userName()
-			case a.Title != "" && name != "":
-				title = a.Title
-			case name == "grok":
-				s.mu.Lock()
-				title = s.grokName
-				s.mu.Unlock()
-				if n, ok := agent.GrokName(s.Title()); ok {
-					title = n
-				}
-				if title == "" {
-					title = "grok"
-				}
-			}
+			v := s.snapshotView()
+			a := v.state
+			title := mobileTerminalTitle(v, workerTitles[s.ID])
 			mw.Terminals = append(mw.Terminals, mobile.Terminal{
-				ID: s.ID, Title: title, Agent: s.agentName(), Status: a.Status, StatusAt: a.At, Message: a.Message,
+				ID: s.ID, Title: title, Agent: v.agent, Status: a.Status, StatusAt: a.At, Message: a.Message,
 				SessionID: a.SessionID, TranscriptPath: a.TranscriptPath,
 				ToolName: a.ToolName, ToolInput: a.ToolInput, Prompt: a.Prompt,
 				Running: true, CreatedAt: s.CreatedAt, LastOutput: s.LastOutput(),
 				Tasks:  coordinating[s.ID] && (d.waitingTasks(s.ID) || a.Status == agent.StatusIdle),
-				Unread: a.Status == agent.StatusIdle && s.agentName() != "" && s.isUnread(),
+				Unread: a.Status == agent.StatusIdle && v.agent != "" && v.unread,
 			})
 		}
-		// 还没恢复的终端也列出来，手机点开时才拉起（mobileHost.Restore）
+		// 还没恢复的终端也列出来，手机点开时才拉起（mobileHost.Restore）；优先级与运行/退出路径保持一致。
 		for _, t := range lost[w.ID] {
-			title := t.Title
-			if title == "" {
-				title = t.Label
-			}
-			if title == "" {
-				title = cmp.Or(t.Agent, "shell")
-			}
+			title := cmp.Or(t.Title, t.SessionTitle, workerTitles[t.ID], lostFallback(t), t.Agent, "shell")
 			mw.Terminals = append(mw.Terminals, mobile.Terminal{ID: t.ID, Title: title, Agent: t.Agent, CreatedAt: t.CreatedAt, Lost: true})
 		}
 		if len(lost[w.ID]) > 0 {
@@ -150,6 +142,39 @@ func (h mobileHost) State() mobile.State {
 		st.Workspaces = append(st.Workspaces, mw)
 	}
 	return st
+}
+
+// mobileTerminalTitle 算出手机上显示的终端标签名：用户改的名优先，其次会话标题、任务标题，
+// agent 退出回 shell 后保留退出前的名称而不突然退回 "shell"。入参 v 已在同一临界区内采集，不出现跨代际撕裂。
+func mobileTerminalTitle(v sessionView, workerTitle string) string {
+	if v.name != "" {
+		return v.name
+	}
+	if v.agent != "" {
+		switch {
+		case v.state.Title != "":
+			return v.state.Title
+		case workerTitle != "":
+			return workerTitle
+		}
+		if v.agent == "grok" {
+			if v.confirmedTitle != "" {
+				return v.confirmedTitle
+			}
+			return "grok"
+		}
+		return v.confirmedTitle
+	}
+	if v.exitedSessionTitle != "" {
+		return v.exitedSessionTitle
+	}
+	if workerTitle != "" {
+		return workerTitle
+	}
+	if v.exitedTitle != "" {
+		return v.exitedTitle
+	}
+	return v.ptyTitle
 }
 
 // Terminal 只给托管着的终端：手机的会话流每 500ms 按会话 ID 找一次终端，经 d.session 会把还没恢复的拉起来。

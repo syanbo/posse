@@ -50,7 +50,7 @@ func (d *Daemon) onProgramStatus(id string, ps host.ProgramStatus) {
 	if s == nil {
 		return
 	}
-	name := d.foreground(s)
+	name, gen := d.foregroundGen(s)
 	if name == "" || oscAgent(ps.App) != name {
 		return
 	}
@@ -69,7 +69,7 @@ func (d *Daemon) onProgramStatus(id string, ps host.ProgramStatus) {
 		return
 	}
 	at := time.Now()
-	prev, next, ok := s.UpdateAgent(func(cur host.AgentState) (host.AgentState, bool) {
+	prev, next, ok := s.updateAgentIfGen(gen, func(cur host.AgentState) (host.AgentState, bool) {
 		if cur.Status == status {
 			return cur, false
 		}
@@ -92,19 +92,19 @@ func (d *Daemon) onProgramStatus(id string, ps host.ProgramStatus) {
 		return keepWorking(st, cur), true
 	})
 	if ok {
-		d.afterAgent(s, prev.Status, next)
+		d.afterAgent(s, prev, next)
 	}
 }
 
 // titleWaiting 是报过 7501 之后对标题仅剩的用处：Codex、Grok 等批准时标题含 Action Required，
 // 万一它们的 7501 这时不报 blocked，等待也不丢。只往等待升；标题不再这样写时退回 7501 报的状态。
-func (d *Daemon) titleWaiting(s *session, name, title string) {
+func (d *Daemon) titleWaiting(s *session, name string, gen uint64, title string) {
 	waiting := agent.TitleWaiting(name, title)
 	s.mu.Lock()
 	osc := s.oscStatus
 	s.mu.Unlock()
 	at := time.Now()
-	prev, next, ok := s.UpdateAgent(func(cur host.AgentState) (host.AgentState, bool) {
+	prev, next, ok := s.updateAgentIfGen(gen, func(cur host.AgentState) (host.AgentState, bool) {
 		switch {
 		case waiting && cur.Status != agent.StatusWaiting:
 			// 沿用当前的：空闲时 Stop 带来的最后一条回复留着，手机的会话行不变空
@@ -122,7 +122,7 @@ func (d *Daemon) titleWaiting(s *session, name, title string) {
 		return cur, false
 	})
 	if ok {
-		d.afterAgent(s, prev.Status, next)
+		d.afterAgent(s, prev, next)
 	}
 }
 

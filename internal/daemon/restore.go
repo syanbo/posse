@@ -19,9 +19,9 @@ import (
 // 第一次接入或操作时按记下的 agent、会话和目录重新拉起，ID、名字、标签顺序不变。设置里打开
 // "重启后恢复全部终端"（agent.RestoreAll）时常驻进程一启动就全部拉起。
 
-// resumeRec 是恢复一个终端要用的信息，存在 terminals 的 agent、session_id、cwd。
-// label 是这时显示的名字（会话标题，没有时是终端标题），重启后还没恢复时有 agent 的照它显示。
-type resumeRec struct{ agent, sid, cwd, label string }
+// resumeRec 是恢复一个终端要用的信息，存在 terminals 的 agent、session_id、cwd、label、session_title。
+// sessionTitle 是显式会话标题（优先级高于任务标题），label 是退出前或终端的兜底标题，重启后还没恢复时照它们显示。
+type resumeRec struct{ agent, sid, cwd, label, sessionTitle string }
 
 // resumeSettle 是 agent 退出后等多久才把它从记录上摘掉：关机时 agent 和常驻进程差不多同时收到
 // SIGTERM，agent 先退出的话不能把要续接的会话清掉，等这一会儿常驻进程已经在退出了（exiting）。
@@ -30,54 +30,142 @@ var resumeSettle = 5 * time.Second
 // saveResume 记下 s 现在的 agent、会话和前台程序所在的目录，和库里的不同才写。
 // settled 为真是 resumeSettle 之后的复查，这时 agent 不在了才摘。
 func (d *Daemon) saveResume(s *session, settled bool) {
-	if d.exiting.Load() || !s.Running() {
-		return
-	}
-	rec := resumeRec{agent: s.agentName()}
-	if rec.agent != "" {
+	d.saveResumeFor(s, settled, 0)
+}
+
+func (d *Daemon) saveResumeSettled(s *session, timerGen uint64) {
+	d.saveResumeFor(s, true, timerGen)
+}
+
+func (d *Daemon) saveResumeFor(s *session, settled bool, timerGen uint64) {
+	s.resumeMu.Lock()
+	defer s.resumeMu.Unlock()
+	for attempt := 0; attempt < 4; attempt++ {
+		if d.exiting.Load() || !s.Running() {
+			if timerGen != 0 {
+				s.mu.Lock()
+				if s.settleGen == timerGen {
+					s.settleGen = 0
+				}
+				s.mu.Unlock()
+			}
+			return
+		}
+		// 在同一 session.mu 临界区内采集 agent、代际、会话态与标题（session.mu → Terminal.mu），
+		// 避免把旧 agent 的会话 ID 或标题拼到刚启动的新 agent 上。
+		s.mu.Lock()
+		gen := s.agentGen
+		if timerGen != 0 {
+			if s.settleGen == timerGen {
+				s.settleGen = 0
+			}
+			if gen != timerGen {
+				s.mu.Unlock()
+				return
+			}
+		}
+		agentName := s.agent
+		confirmed := s.confirmedAgentTitleLocked()
+		exitedSession, exitedTitle := s.exitedSessionTitle, s.exitedTitle
 		st := s.Agent()
-		rec.sid, rec.label = st.SessionID, st.Title
-	}
-	if rec.label == "" {
-		rec.label = agent.BareTitle(s.Title())
-	}
-	pid := s.Foreground()
-	if pid <= 0 {
-		pid = s.Pid()
-	}
-	rec.cwd = procmem.Cwd(pid)
-	s.mu.Lock()
-	if rec.cwd == "" {
-		rec.cwd = s.saved.cwd
-	}
-	if rec.label == "" {
-		// 刚恢复、agent 还没设标题时先沿用之前的名字
-		rec.label = s.saved.label
-	}
-	if rec.sid == "" && rec.agent == s.saved.agent {
-		// 会话 ID 要等第一个 hook 才有，中间被标题、进程检查重置成空时不丢掉已经记下的
-		rec.sid = s.saved.sid
-	}
-	if rec == s.saved {
+		curTitle := s.Title()
 		s.mu.Unlock()
-		return
-	}
-	if rec.agent == "" && s.saved.agent != "" && !settled {
-		if !s.settling {
-			s.settling = true
-			time.AfterFunc(resumeSettle, func() { d.saveResume(s, true) })
+
+		pid := s.Foreground()
+		if pid <= 0 {
+			pid = s.Pid()
+		}
+		cwd := procmem.Cwd(pid)
+
+		s.mu.Lock()
+		if s.agentGen != gen {
+			// 探测前台目录期间 agent 已切换，重试重新采集同一代际的快照。
+			if timerGen != 0 {
+				if s.settleGen == timerGen {
+					s.settleGen = 0
+				}
+				s.mu.Unlock()
+				return
+			}
+			s.mu.Unlock()
+			continue
+		}
+		rec := resumeRec{agent: agentName, cwd: cwd}
+		if rec.agent != "" {
+			rec.sid, rec.sessionTitle = st.SessionID, st.Title
+			if confirmed != "" && confirmed != rec.agent {
+				rec.label = confirmed
+			}
+			s.settleGen = 0
+		} else {
+			rec.sessionTitle = exitedSession
+			if exitedTitle != "" {
+				rec.label = exitedTitle
+			} else {
+				rec.label = agent.BareTitle(curTitle)
+			}
+		}
+		if rec.cwd == "" {
+			rec.cwd = s.saved.cwd
+		}
+		sameInstance := s.savedGen == gen && rec.agent == s.saved.agent && (rec.sid == "" || s.saved.sid == "" || rec.sid == s.saved.sid)
+		if sameInstance {
+			if rec.sessionTitle == "" {
+				rec.sessionTitle = s.saved.sessionTitle
+			}
+			if rec.label == "" {
+				// 刚恢复、agent 还没设标题时先沿用同一实例之前的名字
+				rec.label = s.saved.label
+			}
+			if rec.sid == "" {
+				// 会话 ID 要等第一个 hook 才有，中间被标题、进程检查重置成空时不丢掉同一实例已经记下的
+				rec.sid = s.saved.sid
+			}
+		}
+		if s.savedSet && rec == s.saved && s.savedGen == gen {
+			if settled && timerGen == 0 && s.settleGen == gen {
+				s.settleGen = 0
+			}
+			s.mu.Unlock()
+			return
+		}
+		if rec.agent == "" && s.saved.agent != "" && !settled {
+			if s.settleGen != gen {
+				s.settleGen = gen
+				time.AfterFunc(resumeSettle, func() { d.saveResumeSettled(s, gen) })
+			}
+			s.mu.Unlock()
+			return
+		}
+		if settled && s.settleGen == gen {
+			s.settleGen = 0
 		}
 		s.mu.Unlock()
-		return
+
+		if err := d.store.SetTerminalResume(s.ID, rec.agent, rec.sid, rec.cwd, rec.label, rec.sessionTitle); err != nil {
+			log.Printf("terminal %s: record resume: %v", s.ID, err)
+			return
+		}
+		s.mu.Lock()
+		// s.saved 反映数据库里当前实际落盘的值；写库期间若发生代际切换，继续补写最新一代。
+		s.saved, s.savedGen, s.savedSet = rec, gen, true
+		changed := s.agentGen != gen
+		s.mu.Unlock()
+		if !changed || timerGen != 0 {
+			return
+		}
 	}
-	if settled {
-		s.settling = false
+}
+
+// lostFallback 取出恢复记录里的兜底标题（不包含显式会话标题，旧版记录只有 label 时照旧回退）。
+func lostFallback(t store.Terminal) string {
+	if t.FallbackTitle != "" {
+		return t.FallbackTitle
 	}
-	s.saved = rec
-	s.mu.Unlock()
-	if err := d.store.SetTerminalResume(s.ID, rec.agent, rec.sid, rec.cwd, rec.label); err != nil {
-		log.Printf("terminal %s: record resume: %v", s.ID, err)
+	if t.SessionTitle == "" {
+		return t.Label
 	}
+	return ""
 }
 
 // lostIn 是工作区里还没恢复的终端，workspaceID 为空时是全部。lost 只在启动时产生，
@@ -93,12 +181,6 @@ func (d *Daemon) lostIn(workspaceID string) []store.Terminal {
 	}
 	if len(ts) == 0 && workspaceID == "" {
 		d.noLost.Store(true)
-	}
-	for i := range ts {
-		// 没有 agent 的恢复出来是新开的 shell，记下的终端标题多半是之前退出的 agent 留下的，照默认名字显示
-		if ts[i].Agent == "" {
-			ts[i].Label = ""
-		}
 	}
 	return ts
 }
@@ -133,7 +215,7 @@ func (d *Daemon) terminalInfos(sessions []*session, lost []store.Terminal) []ter
 }
 
 func (d *Daemon) lostInfo(t store.Terminal) terminalInfo {
-	return terminalInfo{ID: t.ID, WorkspaceID: t.WorkspaceID, Title: t.Label, Name: t.Title, Command: t.Command, Dir: t.Cwd,
+	return terminalInfo{ID: t.ID, WorkspaceID: t.WorkspaceID, Title: lostFallback(t), SessionTitle: t.SessionTitle, Name: t.Title, Command: t.Command, Dir: t.Cwd,
 		Agent: t.Agent, CreatedAt: t.CreatedAt, Lost: true}
 }
 
@@ -187,7 +269,16 @@ func (d *Daemon) restoreTerminal(id string, cols, rows int) (*session, error) {
 		return nil, err
 	}
 	if st != nil {
-		s.SetAgent(*st)
+		s.mu.Lock()
+		if s.agent == name && s.agentGen == 1 {
+			cur := s.Agent()
+			if cur.Status == "" && cur.SessionID == "" && cur.Title == "" && cur.Event == "" {
+				s.SetAgent(*st)
+			} else if st.Title != "" && cur.Title == "" && (cur.SessionID == "" || cur.SessionID == st.SessionID) {
+				s.SetTitle(st.Title, st.SessionID, false)
+			}
+		}
+		s.mu.Unlock()
 	}
 	log.Printf("terminal %s: restored (agent %q, session %q)", id, name, t.SessionID)
 	return s, nil
@@ -213,6 +304,7 @@ func (d *Daemon) restoreCommand(t *store.Terminal) (string, []string, *host.Agen
 			l, err = d.launcher.Launch(name, agent.Model{}, "")
 		}
 		if err == nil && len(l.Argv) > 0 {
+			resumed := t.SessionID != ""
 			sid := t.SessionID
 			if sid == "" {
 				sid = l.SessionID
@@ -225,8 +317,14 @@ func (d *Daemon) restoreCommand(t *store.Terminal) (string, []string, *host.Agen
 			if name == "codex" || name == "cursor" || name == "antigravity" || name == "zcode" {
 				st.Status = ""
 			}
-			if name == "zcode" && sid != "" {
-				st.Title = t.Label
+			if resumed {
+				// 续接原会话时恢复显式会话标题；新开会话从自己的标题开始。
+				st.Title = t.SessionTitle
+				if st.Title == "" && name == "zcode" {
+					st.Title = t.Label
+				}
+			} else {
+				t.Label, t.FallbackTitle, t.SessionTitle = "", "", ""
 			}
 			return name, argv, st
 		}

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -54,8 +55,10 @@ type session struct {
 	CreatedAt   time.Time
 
 	nameMu         sync.Mutex // 改名写库单独串行，不能让数据库等待占住 PTY 回调用的 mu
+	resumeMu       sync.Mutex // 恢复记录写库单独串行，避免并发覆盖或持 mu 等 SQLite
 	mu             sync.Mutex
 	agent          string // 终端里的 agent：启动时指定的，或之后在前台认出来的
+	agentGen       uint64 // agent 实例代际，启动、切换或退出递增，用来挡住过期的退出和标题事件
 	hooked         bool   // agent 是 posse 启动的那个，带着注入的 hooks
 	agentPg        int    // agent 的进程组（组长就是 agent 进程），在前台认出它或收到 hook 时记下，0 是还不知道
 	fg             int    // 上次检查时的前台进程组
@@ -69,12 +72,20 @@ type session struct {
 	agyReportTitle string
 	// grok 上次空闲时标题里的会话名：工作中的标题只是状态，手机的标签名用它
 	grokName string
-	name     string    // 用户给标签起的名字（terminal.rename），桌面和手机共用，存在 terminals.title
-	saved    resumeRec // 库里记着的恢复信息（saveResume）
-	settling bool      // agent 不在了，已经约好 resumeSettle 之后复查
-	unread   bool      // 本轮完成了还没看（unread.go）
-	viewers  int       // 正看着它的手机页面数
-	runtime  string    // 拉起这个终端的常驻进程所在的副本目录，不在副本里运行时为空；它活着副本就不能删
+	// agentTitle 是当前 agent 运行期间看到过的最后一个非空终端标题，agent 退出回 shell 时用来留住手机标签名。
+	agentTitle string
+	// exitedSessionTitle、exitedTitle 是上次退出的 agent 留给手机和恢复记录的会话名和兜底标签名，
+	// 退出回 shell 后标签不突然变回 "shell" / 「终端」；再次启动新 agent 时清空。
+	exitedSessionTitle string
+	exitedTitle        string
+	name               string    // 用户给标签起的名字（terminal.rename），桌面和手机共用，存在 terminals.title
+	saved              resumeRec // 库里记着的恢复信息（saveResume）
+	savedGen           uint64    // saved 对应的 agentGen；不同实例不借用旧记录的会话 ID 或标题
+	savedSet           bool      // saved 已成功同步到数据库；写库失败时不误认为数据库已一致
+	settleGen          uint64    // 已排好 resumeSettle 复查的退出代际，0 表示没有待复查的退出
+	unread             bool      // 本轮完成了还没看（unread.go）
+	viewers            int       // 正看着它的手机页面数
+	runtime            string    // 拉起这个终端的常驻进程所在的副本目录，不在副本里运行时为空；它活着副本就不能删
 	// osc 是经 OSC 7501 报过状态的 agent（不是当前 agent 时不算），oscStatus 是它最近报的、折成 posse 的状态（progstatus.go）
 	osc       string
 	oscStatus string
@@ -104,8 +115,8 @@ func (s *session) userName() string {
 }
 
 // markHooked 在收到 hook 事件时调用：用户在 shell 里经 posse 的同名脚本手动启动的 agent 也带着 hooks，
-// 状态以 hooks 为准，不再只看标题。
-func (s *session) markHooked(name string) {
+// 状态以 hooks 为准，不再只看标题。切换新实例时在同一临界区重置终端会话态（写入新会话 ID），返回实例代际。
+func (s *session) markHooked(name, sessionID string) uint64 {
 	pg := s.Foreground()
 	// hook 可能在 agent 让出前台（开着编辑器）时到达，这时的前台不是 agent，不能记成它的进程组
 	isAgent := false
@@ -115,10 +126,29 @@ func (s *session) markHooked(name string) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if name != s.agent {
+	if name != s.agent || (isAgent && s.agentPg != 0 && s.agentPg != pg) {
+		s.agentGen++
 		s.agentPg, s.osc = 0, ""
+		s.agentTitle, s.grokName = "", ""
+		s.exitedSessionTitle, s.exitedTitle = "", ""
+		s.settleGen = 0
+		s.unread = false
 		s.agyDir, s.agyDirs = "", nil
 		s.discussionTurn = discussionTurn{}
+		// 切到新 agent 实例时清空上个实例残留的退出态、会话 ID 与标题（session.mu → Terminal.mu）。
+		s.ResetAgent(host.AgentState{SessionID: sessionID, At: time.Now()})
+	} else if sessionID != "" {
+		// 同一实例补记会话归属（如 Cursor 先到工具事件、后到 sessionStart 带 ID），保留当前状态、事件、消息与时间。
+		s.UpdateAgent(func(cur host.AgentState) (host.AgentState, bool) {
+			if cur.SessionID != "" {
+				return cur, false
+			}
+			cur.SessionID = sessionID
+			if cur.At.IsZero() {
+				cur.At = time.Now()
+			}
+			return cur, true
+		})
 	}
 	s.agent, s.hooked = name, true
 	if isAgent {
@@ -127,40 +157,187 @@ func (s *session) markHooked(name string) {
 	if pg > 0 {
 		s.fg = pg
 	}
+	return s.agentGen
 }
 
-// clearAgent 在 agent 退出后摘掉它，终端退回普通 shell；之后在前台认出新的 agent 再挂上。
-// pg 不为 0 时只在记下的还是这个进程组时才摘，免得检查期间换上的新 agent 被摘掉。
-func (s *session) clearAgent(pg int) bool {
+// clearAgentWithState 在同一 session.mu 临界区内校验代际/进程组/会话 ID、保留退出前标题、摘掉 agent 并写入退出态，
+// 遵循 session.mu → Terminal.mu 锁序，避免与新启动 agent 或同进程换会话交错覆盖。
+func (s *session) clearAgentWithState(pg int, wantGen uint64, wantSessionID string, st host.AgentState, trustCurTitle bool) (host.AgentState, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.agent == "" || pg != 0 && pg != s.agentPg {
-		return false
+	if s.agent == "" || pg != 0 && pg != s.agentPg || wantGen != 0 && s.agentGen != wantGen {
+		return host.AgentState{}, false
 	}
+	prev := s.Agent()
+	if wantSessionID != "" && prev.SessionID != "" && prev.SessionID != wantSessionID {
+		return host.AgentState{}, false
+	}
+	s.exitedSessionTitle = prev.Title
+	s.exitedTitle = exitedAgentTitle(s.agent, s.grokName, s.agentTitle)
+	s.agentGen++
 	s.agent, s.hooked, s.agentPg, s.osc = "", false, 0, ""
+	s.agentTitle, s.grokName = "", ""
 	s.agyDir, s.agyDirs = "", nil
 	s.discussionTurn = discussionTurn{}
-	return true
+	s.SetAgent(st)
+	return prev, true
 }
 
-// goneAgentPg 返回已经不在了的 agent 进程组，agent 还在或不知道时返回 0。崩溃、被杀、
+// setAgentIfGen 在同一 session.mu 临界区内校验代际并写入非退出态，防止旧实例覆盖新实例的状态。
+func (s *session) setAgentIfGen(st host.AgentState, wantGen uint64) (prev, next host.AgentState, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if wantGen != 0 && s.agentGen != wantGen {
+		return host.AgentState{}, host.AgentState{}, false
+	}
+	prev = s.Agent()
+	next = keepWorking(st, prev)
+	s.SetAgent(next)
+	return prev, next, true
+}
+
+// updateAgentIfGen 在同一 session.mu 临界区内校验代际并按 fn 更新终端状态。
+func (s *session) updateAgentIfGen(wantGen uint64, fn func(cur host.AgentState) (host.AgentState, bool)) (prev, next host.AgentState, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if wantGen != 0 && s.agentGen != wantGen {
+		return host.AgentState{}, host.AgentState{}, false
+	}
+	return s.UpdateAgent(fn)
+}
+
+// confirmedAgentTitleLocked 返回当前运行中 agent 在本代际下确认过的兜底标题：
+// 只消费本实例经 onTitle（前台确认为该 agent）、同会话续接或旧版交接初始化的标题，
+// 不直接读取可能残留自上一代 agent 或 shell 的 PTY OSC 标题。调用方须持有 s.mu。
+func (s *session) confirmedAgentTitleLocked() string {
+	if s.agent == "" {
+		return ""
+	}
+	if s.agent == "grok" {
+		return s.grokName
+	}
+	return agent.BareTitle(s.agentTitle)
+}
+
+type sessionView struct {
+	agent              string
+	state              host.AgentState
+	name               string
+	confirmedTitle     string
+	exitedSessionTitle string
+	exitedTitle        string
+	ptyTitle           string
+	unread             bool
+	agyDir             string
+	agyDirs            []string
+}
+
+// snapshotView 在同一 session.mu → Terminal.mu 临界区内采集同一代际的 agent、会话态、名称与标题，
+// 避免桌面或手机在 agent 切换瞬间拼出新 agent 搭配旧标题/旧会话 ID 的撕裂快照。
+func (s *session) snapshotView() sessionView {
+	s.mu.Lock()
+	v := sessionView{
+		agent:              s.agent,
+		state:              s.Agent(),
+		name:               s.name,
+		confirmedTitle:     s.confirmedAgentTitleLocked(),
+		exitedSessionTitle: s.exitedSessionTitle,
+		exitedTitle:        s.exitedTitle,
+		unread:             s.unread,
+		agyDir:             s.agyDir,
+		agyDirs:            slices.Clone(s.agyDirs),
+	}
+	if v.agent == "" {
+		v.ptyTitle = s.Title()
+	}
+	s.mu.Unlock()
+	return v
+}
+
+func exitedAgentTitle(agentName, grokName, agentTitle string) string {
+	if agentName == "grok" {
+		if grokName != "" {
+			return grokName
+		}
+		if t := agent.BareTitle(agentTitle); t != "" {
+			if n, ok := agent.GrokName(t); ok && n != "" {
+				return n
+			}
+			return t
+		}
+		return "grok"
+	}
+	if t := agent.BareTitle(agentTitle); t != "" {
+		return t
+	}
+	return agentName
+}
+
+// goneAgent 返回已经不在了的 agent 进程组、实例代际与名字，agent 还在或不知道时 pg 为 0。崩溃、被杀、
 // 没有 hooks 的 agent 退出都不发 SessionEnd，只能这样发现；只看前台不行，agent 临时打开编辑器
 // 也会让出前台。看组长而不是整个组：agent 退出后它拉起的 MCP 服务等可能还留在组里。
-func (s *session) goneAgentPg() int {
+func (s *session) goneAgent() (int, uint64, string) {
 	s.mu.Lock()
-	name, pg := s.agent, s.agentPg
+	name, pg, gen := s.agent, s.agentPg, s.agentGen
 	s.mu.Unlock()
 	if name == "" || pg <= 0 {
-		return 0
+		return 0, 0, ""
 	}
 	if err := syscall.Kill(pg, 0); errors.Is(err, syscall.ESRCH) {
-		return pg
+		return pg, gen, name
 	}
 	// 进程还在但 exec 成了别的程序（如 agent 退出后 exec 回 shell）；读不到 argv 时当作还在
 	if found, args := agent.OfProcess(pg); args != nil && found != name {
-		return pg
+		return pg, gen, name
 	}
-	return 0
+	return 0, 0, ""
+}
+
+func (s *session) goneAgentPg() int {
+	pg, _, _ := s.goneAgent()
+	return pg
+}
+
+// matchesSenderPg 判断已确认来源的 OSC 标题（senderPg / name）是否仍属于当前绑定实例。
+// 已有 agentPg 时严格比对进程组（保留同一实例让出前台开编辑器的行为）；尚未记下 agentPg 时确认该进程组仍在且未换成同家新进程组。
+func (s *session) matchesSenderPg(name string, gen uint64, senderPg int) bool {
+	if senderPg <= 0 {
+		return false
+	}
+	s.mu.Lock()
+	if s.agent != name || s.agentGen != gen {
+		s.mu.Unlock()
+		return false
+	}
+	boundPg := s.agentPg
+	s.mu.Unlock()
+	if boundPg > 0 {
+		return boundPg == senderPg
+	}
+	if curPg := s.Foreground(); curPg > 0 && curPg != senderPg {
+		if found, _ := agent.OfProcess(curPg); found == name {
+			return false
+		}
+	}
+	if err := syscall.Kill(senderPg, 0); errors.Is(err, syscall.ESRCH) {
+		return false
+	}
+	if found, args := agent.OfProcess(senderPg); args != nil && found != name {
+		return false
+	}
+	return true
+}
+
+func (s *session) agentIdentity() (string, uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.agent, s.agentGen
+}
+
+func (s *session) currentGen() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.agentGen
 }
 
 // agentStillRuns 报告终端里的 agent 进程 name 还在：前台还是它，或者记着的进程组还活着
@@ -201,12 +378,12 @@ func (s *session) agentName() string {
 // 再手动启动一次）时换成它，这时没有 hooks。前台回到 shell 或别的程序时不改：
 // agent 临时打开编辑器、跑 ! 命令也会让出前台，不能当成退出。
 // 换了 agent 时 sid 是从它的参数里读到的会话 ID（SessionFromArgs），读不到为空。
-func (s *session) detectAgent() (name string, hooked, changed bool, sid string) {
+func (s *session) detectAgent() (name string, hooked, changed bool, sid string, gen uint64) {
 	pg := s.Foreground()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if pg <= 0 || pg == s.fg {
-		return s.agent, s.hooked, false, ""
+		return s.agent, s.hooked, false, "", s.agentGen
 	}
 	s.fg = pg
 	found, args := agent.OfProcess(pg)
@@ -214,15 +391,26 @@ func (s *session) detectAgent() (name string, hooked, changed bool, sid string) 
 	case found == "":
 	case s.hooked && found == s.agent && (s.agentPg == 0 || s.agentPg == pg):
 		s.agentPg = pg
-	case found != s.agent || s.hooked:
+	case found != s.agent || s.hooked || (s.agentPg != 0 && s.agentPg != pg):
+		s.agentGen++
 		s.agent, s.hooked, s.agentPg, s.osc, changed = found, false, pg, "", true
+		s.agentTitle, s.grokName = "", ""
+		s.exitedSessionTitle, s.exitedTitle = "", ""
+		s.settleGen = 0
+		s.unread = false
 		s.agyDir, s.agyDirs = "", nil
 		s.discussionTurn = discussionTurn{}
 		sid = agent.SessionFromArgs(found, args)
+		status := agent.StatusIdle
+		if found == "zcode" {
+			status = ""
+		}
+		// 切换 agent 与重置终端状态放进同一临界区，避免旧退出在两者之间覆盖新实例状态。
+		s.ResetAgent(host.AgentState{Status: status, Event: "process", SessionID: sid, At: time.Now()})
 	default:
 		s.agentPg = pg
 	}
-	return s.agent, s.hooked, changed, sid
+	return s.agent, s.hooked, changed, sid, s.agentGen
 }
 
 type Daemon struct {

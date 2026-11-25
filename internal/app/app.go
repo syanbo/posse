@@ -51,6 +51,8 @@ type agentState struct {
 
 type terminalInfo struct {
 	ID, WorkspaceID, Title, Agent string
+	SessionTitle                  string // 退出或未恢复时保留的显式会话标题，优先级高于任务标题
+	FallbackTitle                 string // 退出或恢复 shell 时保留的兜底标题，优先级低于任务标题
 	Dir                           string // 终端启动时的目录
 	AgentState                    *agentState
 	AntigravityDir                string

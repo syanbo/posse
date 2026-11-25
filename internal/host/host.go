@@ -44,6 +44,8 @@ type StartOptions struct {
 	CreatedAt   time.Time // 空是现在
 	Colors      *Colors   // 起始配色，nil 时按系统外观选
 	OnTitle     func(id, title string)
+	// OnTitleMeta 可选：在 OnTitle 之前同步回调，带上回调瞬间的前台进程组 ID，供调用方核对发出者。
+	OnTitleMeta func(id, title string, fg int)
 	OnExit      func(id string, code int)
 	// OnProgramStatus 收到程序经 OSC 7501 报告的状态
 	OnProgramStatus func(id string, st ProgramStatus)
@@ -158,8 +160,15 @@ func termOptions(o StartOptions) term.Options {
 		ID: o.ID, WorkspaceID: o.WorkspaceID, Dir: o.Dir, Command: o.Command, Env: o.Env,
 		Cols: o.Cols, Rows: o.Rows, Scrollback: o.Scrollback, CreatedAt: o.CreatedAt, Colors: o.Colors,
 	}
-	if o.OnTitle != nil {
-		opts.OnTitle = func(t *term.Terminal, title string) { o.OnTitle(t.ID, title) }
+	if o.OnTitle != nil || o.OnTitleMeta != nil {
+		opts.OnTitle = func(t *term.Terminal, title string) {
+			if o.OnTitleMeta != nil {
+				o.OnTitleMeta(t.ID, title, t.Foreground())
+			}
+			if o.OnTitle != nil {
+				o.OnTitle(t.ID, title)
+			}
+		}
 	}
 	if o.OnExit != nil {
 		opts.OnExit = func(t *term.Terminal, code int) { o.OnExit(t.ID, code) }

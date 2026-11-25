@@ -68,6 +68,29 @@ func SessionOf(payload json.RawMessage) string {
 	return p.SessionID
 }
 
+// IsSubagentEvent 报告 hook 负载是否来自子 agent（不代表终端主会话）。
+func IsSubagentEvent(payload json.RawMessage) bool {
+	if len(payload) == 0 {
+		return false
+	}
+	var p hookPayload
+	if json.Unmarshal(payload, &p) != nil {
+		return false
+	}
+	return p.AgentID != "" || p.ParentToolCall != ""
+}
+
+// IsExitEvent 报告原生的 hook 事件名是否为会话退出事件（含 Cursor 小写 sessionEnd）。
+func IsExitEvent(agentName, event string) bool {
+	switch agentName {
+	case "claude", "codex":
+		return event == "SessionEnd"
+	case "cursor":
+		return event == "sessionEnd"
+	}
+	return false
+}
+
 // MapEvent 把 hooks 事件映射成 agent 状态；不影响状态的事件返回 false。
 func MapEvent(agentName, event string, payload json.RawMessage) (term.AgentState, bool) {
 	var p hookPayload

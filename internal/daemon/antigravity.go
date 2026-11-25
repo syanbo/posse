@@ -217,6 +217,11 @@ func (d *Daemon) rememberAntigravityDir(s *session, sid, dir string) {
 }
 
 func applyAntigravityIdentity(s *session, sid, title, path string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.agent != "antigravity" {
+		return
+	}
 	if s.Agent().SessionID != sid {
 		s.SetTitle("", sid, false)
 	}

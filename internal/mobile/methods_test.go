@@ -80,3 +80,22 @@ func TestWorktreeRowCountsLost(t *testing.T) {
 		t.Fatalf("live = %v, posse = %v", row["liveTerminalCount"], row["posseTerminalCount"])
 	}
 }
+
+// agent 退出回 shell 时标题保持不变，快照版本仍应递增以便手机去掉 launchAgent 并更新图标。
+func TestSessionTabsVersionChangesWhenAgentExitsWithSameTitle(t *testing.T) {
+	srv := &Server{tabs: map[string]*tabState{}}
+	w := Workspace{ID: "w1", ProjectID: "p1", Terminals: []Terminal{
+		{ID: "t1", Title: "Step 1 审查", Agent: "codex", Running: true},
+	}}
+	v1 := srv.sessionTabs(State{}, w)["snapshotVersion"].(int)
+	w.Terminals[0].Agent = ""
+	res := srv.sessionTabs(State{}, w)
+	v2 := res["snapshotVersion"].(int)
+	if v2 == v1 {
+		t.Fatalf("snapshotVersion did not change on agent exit: v1=%d v2=%d", v1, v2)
+	}
+	tabs := res["tabs"].([]map[string]any)
+	if tabs[0]["title"] != "Step 1 审查" || tabs[0]["launchAgent"] != nil {
+		t.Fatalf("tab after exit = %+v", tabs[0])
+	}
+}

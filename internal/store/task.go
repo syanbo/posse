@@ -150,7 +150,7 @@ func (s *Store) Tasks(f TaskFilter) ([]Task, error) {
 	if len(where) > 0 {
 		q += " WHERE " + strings.Join(where, " AND ")
 	}
-	rows, err := s.db.Query(q+" ORDER BY created_at", args...)
+	rows, err := s.db.Query(q+" ORDER BY created_at, rowid", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +164,44 @@ func (s *Store) Tasks(f TaskFilter) ([]Task, error) {
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+// WorkerTitles 返回指定终端各自最新一条任务的非空标题（按创建时间排序，后创建的覆盖先创建的）。
+func (s *Store) WorkerTitles(workers []string) (map[string]string, error) {
+	if len(workers) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(workers))
+	for start := 0; start < len(workers); start += 500 {
+		batch := workers[start:min(start+500, len(workers))]
+		args := make([]any, len(batch))
+		for i, id := range batch {
+			args[i] = id
+		}
+		rows, err := s.db.Query(
+			`SELECT worker, title FROM tasks WHERE worker IN (?`+strings.Repeat(",?", len(batch)-1)+`) ORDER BY created_at, rowid`,
+			args...,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var worker, title string
+			if err := rows.Scan(&worker, &title); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			if title != "" {
+				out[worker] = title
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+	}
+	return out, nil
 }
 
 // FinishTask 只结束仍在运行的任务，返回是否真的改了状态；重复汇报因此不会覆盖第一次的结果。

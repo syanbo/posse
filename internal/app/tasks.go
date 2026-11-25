@@ -94,7 +94,9 @@ func (a *app) indexTasks() {
 	a.runningFor = map[string]int{}
 	for _, t := range a.tasks {
 		if t.Worker != "" {
-			a.workerTitle[t.Worker] = t.Title
+			if t.Title != "" {
+				a.workerTitle[t.Worker] = t.Title
+			}
 			if t.Coordinator != "" {
 				a.coordOf[t.Worker] = t.Coordinator
 			} else {

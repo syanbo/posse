@@ -1015,11 +1015,8 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 			a.navCur = len(a.navOrder) - 1
 		}
 	}
-	// 和标签一样：任务 worker 用任务标题
-	name, detail := fullLabel(L(c), term)
-	if title := a.defaultTaskTitle(term); title != "" {
-		detail = title
-	}
+	// 和标签一样：统一按「手动名 > 会话标题 > 任务标题 > 终端兜底」取显示名
+	name, detail := a.terminalDisplay(L(c), term)
 	if detail == "" {
 		detail = name
 	}
@@ -2229,10 +2226,8 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 	if term.AgentState != nil && term.Running || term.Lost {
 		status = a.sessionStatus(term)
 	}
-	name, detail := tabLabel(L(c), term)
-	if title := a.defaultTaskTitle(term); title != "" && term.Running {
-		detail = truncate(title, 22)
-	}
+	name, detail := a.terminalDisplay(L(c), term)
+	name, detail = truncate(name, 24), truncate(detail, 22)
 	renaming := a.renaming == term.ID
 	if renaming && !active {
 		// 用快捷键切走了：按现在输入的保存
@@ -2347,7 +2342,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 	if row.MiddleClicked() {
 		a.askClose(L(c), term)
 	}
-	row.Tooltip(tabTooltip(L(c), term))
+	row.Tooltip(tabTooltipWith(L(c), term, a.defaultTaskTitle(term)))
 	contextMenu(c, row, func(m *popMenu) { a.tabMenu(L(c), m, w, term) })
 }
 
@@ -2368,8 +2363,21 @@ func (a *app) tabClose(c *ui.Context, term terminalInfo) {
 
 // tabTooltip 是终端标签的悬停提示：完整的名字和标题，标签上只有图标或标题被截断时看得到全文。
 func tabTooltip(m locales.Messages, t terminalInfo) string {
+	return tabTooltipWith(m, t, "")
+}
+
+func tabTooltipWith(m locales.Messages, t terminalInfo, fallback string) string {
 	name := agentTitle(t.Agent)
-	title := termTitle(t)
+	title := t.Name
+	if title == "" {
+		title = sessionTitleOf(t)
+	}
+	if title == "" {
+		title = fallback
+	}
+	if title == "" {
+		title = termFallbackTitle(t)
+	}
 	switch {
 	case name == "" && title == "":
 		return m.TermName()
@@ -2534,13 +2542,28 @@ func fullLabel(m locales.Messages, t terminalInfo) (string, string) {
 	return name, detail
 }
 
-// termTitle 是终端的标题：用户改的名字优先，其次会话标题，最后是终端标题。
+// sessionTitleOf 返回终端的显式会话标题：运行中取 AgentState.Title，退出或未恢复时取保留的 SessionTitle。
+func sessionTitleOf(t terminalInfo) string {
+	if t.AgentState != nil && t.AgentState.Title != "" {
+		return t.AgentState.Title
+	}
+	return t.SessionTitle
+}
+
+// termTitle 是终端的标题：用户改的名字优先，其次会话标题，最后是退出兜底标题或终端标题。
 func termTitle(t terminalInfo) string {
 	if t.Name != "" {
 		return t.Name
 	}
-	if t.AgentState != nil && t.AgentState.Title != "" {
-		return t.AgentState.Title
+	if title := sessionTitleOf(t); title != "" {
+		return title
+	}
+	return termFallbackTitle(t)
+}
+
+func termFallbackTitle(t terminalInfo) string {
+	if t.FallbackTitle != "" {
+		return t.FallbackTitle
 	}
 	return bareTitle(t)
 }

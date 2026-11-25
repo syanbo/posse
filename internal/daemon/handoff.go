@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"posse/internal/agent"
 	"posse/internal/host"
 	"posse/internal/rpc"
 	"posse/internal/spawn"
@@ -53,6 +54,13 @@ type handoffTerm struct {
 	// 旧版本的旧进程只认版本号相等的新进程，加了就没法从旧版本不断终端地升级上来；旧版本交来的为空，
 	// 表示原包或不知道，不参与回收，新版本交给旧版本时它被忽略，副本留到下次回收
 	Runtime string `json:"runtime,omitempty"`
+	// 可选的手机标签兜底字段，兼容旧版交接协议，不升 handoffVersion。
+	// TitleState 为 true 表示发送方支持确认态标题，哪怕 grokName/agentTitle 为空也表示「确认无标题」，不得回填 PTY 旧 OSC。
+	TitleState         bool   `json:"titleState,omitempty"`
+	GrokName           string `json:"grokName,omitempty"`
+	AgentTitle         string `json:"agentTitle,omitempty"`
+	ExitedSessionTitle string `json:"exitedSessionTitle,omitempty"`
+	ExitedTitle        string `json:"exitedTitle,omitempty"`
 }
 
 // handoffBatch 之后依次跟着监听描述符和每个没结束的终端的 PTY 描述符。
@@ -336,7 +344,7 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 	}()
 	batch := handoffBatch{Version: handoffVersion}
 	for _, s := range ss {
-		rec, f, err := s.Pause()
+		ht, f, err := pauseForHandoff(s)
 		if err != nil {
 			return 0, 0, fmt.Errorf("terminal %s: %w", s.ID, err)
 		}
@@ -345,10 +353,7 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 			files = append(files, f)
 			d.handoff.export(s.ID)
 		}
-		s.mu.Lock()
-		batch.Terms = append(batch.Terms, handoffTerm{Term: rec, Agent: s.agent, Hooked: s.hooked, HookedPg: s.agentPg, Fg: s.fg, Unread: s.unread, Runtime: s.runtime, DiscussionTurn: s.discussionTurn,
-			ZCodeStart: s.zcodeStart})
-		s.mu.Unlock()
+		batch.Terms = append(batch.Terms, ht)
 	}
 	if err := writeFrame(conn, batch); err != nil {
 		return 0, 0, err
@@ -371,6 +376,25 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 	ok = true
 	d.ln.release(true)
 	return len(batch.Terms), proc.Pid, nil
+}
+
+// pauseForHandoff 先在锁外暂停 PTY 读取（避免与 PTY 回调死锁），之后在同一 session.mu → Terminal.mu 临界区内
+// 重新采集 agent 元数据与 AgentState 覆写 rec.Agent，避免在途 RPC 切换 agent 导致交接记录撕裂。
+func pauseForHandoff(s *session) (handoffTerm, *os.File, error) {
+	rec, f, err := s.Pause()
+	if err != nil {
+		return handoffTerm{}, nil, err
+	}
+	s.mu.Lock()
+	rec.Agent = s.Agent()
+	ht := handoffTerm{
+		Term: rec, Agent: s.agent, Hooked: s.hooked, HookedPg: s.agentPg, Fg: s.fg, Unread: s.unread,
+		Runtime: s.runtime, DiscussionTurn: s.discussionTurn, ZCodeStart: s.zcodeStart,
+		TitleState: true, GrokName: s.grokName, AgentTitle: s.agentTitle,
+		ExitedSessionTitle: s.exitedSessionTitle, ExitedTitle: s.exitedTitle,
+	}
+	s.mu.Unlock()
+	return ht, f, nil
 }
 
 // incoming 是新进程这边收到的交接：PTY 描述符和 batch.Terms 一一对应，已结束的为 nil。
@@ -474,12 +498,43 @@ func (d *Daemon) adopt(in *incoming) error {
 		}
 		in.ptys[i] = nil
 		info := t.Info()
+		agentTitle := ht.AgentTitle
+		grokName := ht.GrokName
+		if !ht.TitleState {
+			if ht.Agent == "grok" && grokName == "" {
+				if n, ok := agent.GrokName(t.Title()); ok && n != "" {
+					grokName = n
+				}
+			} else if ht.Agent != "" && ht.Agent != "grok" && agentTitle == "" && agent.BareTitle(t.Title()) != "" {
+				agentTitle = t.Title()
+			}
+		}
+		var agentGen uint64
+		if ht.Agent != "" {
+			agentGen = 1
+		}
 		s := &session{Terminal: t, ID: info.ID, WorkspaceID: info.WorkspaceID, Dir: info.Dir, Command: info.Command, CreatedAt: info.CreatedAt,
-			agent: ht.Agent, hooked: ht.Hooked, agentPg: ht.HookedPg, fg: ht.Fg, unread: ht.Unread, runtime: ht.Runtime, discussionTurn: ht.DiscussionTurn,
-			zcodeStart: ht.ZCodeStart, zcodeNudge: ht.Agent == "zcode"}
+			agent: ht.Agent, agentGen: agentGen, hooked: ht.Hooked, agentPg: ht.HookedPg, fg: ht.Fg, unread: ht.Unread, runtime: ht.Runtime, discussionTurn: ht.DiscussionTurn,
+			zcodeStart: ht.ZCodeStart, zcodeNudge: ht.Agent == "zcode",
+			grokName: grokName, agentTitle: agentTitle, exitedSessionTitle: ht.ExitedSessionTitle, exitedTitle: ht.ExitedTitle}
 		// 标签名和恢复信息不在交接记录里：两边共用一个数据库
 		if r, err := d.store.TerminalResume(s.ID); err == nil {
-			s.name, s.saved = r.Title, resumeRec{agent: r.Agent, sid: r.SessionID, cwd: r.Cwd, label: r.Label}
+			fb := lostFallback(r)
+			s.name = r.Title
+			s.saved = resumeRec{agent: r.Agent, sid: r.SessionID, cwd: r.Cwd, label: fb, sessionTitle: r.SessionTitle}
+			s.savedSet = true
+			liveSID := t.Agent().SessionID
+			sameSaved := r.Agent == ht.Agent && (r.SessionID == "" || liveSID == "" || r.SessionID == liveSID)
+			if sameSaved {
+				s.savedGen = agentGen
+				if !ht.TitleState {
+					if ht.Agent == "grok" && s.grokName == "" && fb != "" && fb != "grok" {
+						s.grokName = fb
+					} else if ht.Agent != "" && ht.Agent != "grok" && s.agentTitle == "" && fb != "" && fb != ht.Agent {
+						s.agentTitle = fb
+					}
+				}
+			}
 		}
 		d.mu.Lock()
 		d.terms[s.ID] = s

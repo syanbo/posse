@@ -386,7 +386,7 @@ func tabsKey(w Workspace) []string {
 		if t.Running {
 			state = agentState(t)
 		}
-		out = append(out, t.ID+"\x00"+tabTitle(t)+"\x00"+state+"\x00"+posseStatus(t)+"\x00"+t.SessionID+"\x00"+t.ToolName+"\x00"+t.Prompt)
+		out = append(out, t.ID+"\x00"+t.Agent+"\x00"+tabTitle(t)+"\x00"+state+"\x00"+posseStatus(t)+"\x00"+t.SessionID+"\x00"+t.ToolName+"\x00"+t.Prompt)
 	}
 	return out
 }
@@ -781,7 +781,7 @@ func (c *conn) eventsStream(ctx contextDone, id string) {
 				if t.Running {
 					st = agentState(t)
 				}
-				b.WriteString("|" + t.ID + ":" + st + ":" + tabTitle(t) + ":" + t.SessionID + ":" + t.Prompt)
+				b.WriteString("|" + t.ID + ":" + t.Agent + ":" + st + ":" + tabTitle(t) + ":" + t.SessionID + ":" + t.Prompt)
 			}
 			b.WriteByte('\n')
 		}

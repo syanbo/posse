@@ -27,12 +27,27 @@ func termNameOrigin(t terminalInfo) termNameBase {
 	return base
 }
 
-// defaultTaskTitle 只在终端尚未被显式命名时用任务标题兜底。
+// defaultTaskTitle 只在终端尚未被显式命名（手动名或会话标题）时用任务标题兜底。
 func (a *app) defaultTaskTitle(term terminalInfo) string {
-	if term.Name != "" || term.AgentState != nil && term.AgentState.Title != "" {
+	if term.Name != "" || sessionTitleOf(term) != "" {
 		return ""
 	}
 	return a.workerTitle[term.ID]
+}
+
+// terminalDisplay 统一算出侧栏、标签栏和改名框共用的名称与副标题：
+// 优先级与手机一致：手动名 > 会话标题 > 任务标题 > 终端标题 / agent 名 / 默认「终端」。
+func (a *app) terminalDisplay(m locales.Messages, term terminalInfo) (string, string) {
+	name, detail := fullLabel(m, term)
+	exited := !term.Running && !term.Lost
+	if title := a.defaultTaskTitle(term); title != "" {
+		if term.Agent == "" {
+			name = title
+		} else if !exited {
+			detail = title
+		}
+	}
+	return name, detail
 }
 
 // startRename 让终端标签原地变成输入框，填上现在显示的名字。
@@ -42,16 +57,13 @@ func (a *app) startRename(m locales.Messages, term terminalInfo) {
 		return
 	}
 	a.renameRequest = r
-	name, detail := fullLabel(m, term)
+	name, detail := a.terminalDisplay(m, term)
 	// 退出的终端 detail 是"已退出"，不是标题，不拿来当名字
 	exited := !term.Running && !term.Lost
-	if title := a.defaultTaskTitle(term); title != "" {
-		detail, exited = title, false
-	}
 	switch {
 	case term.Name != "":
 		name = term.Name
-	case term.Agent != "" && detail != "" && !exited:
+	case detail != "" && !exited:
 		name = detail
 	}
 	a.renaming, a.renameText = term.ID, name
@@ -77,7 +89,7 @@ func (a *app) finishRename(m locales.Messages, term terminalInfo) {
 	a.renaming = ""
 	name := strings.TrimSpace(a.renameText)
 	// 和默认显示的一样就不记，之后会话标题变了还能跟着变
-	if def, detail := fullLabel(m, terminalInfo{ID: term.ID, Title: term.Title, Agent: term.Agent, AgentState: term.AgentState, Running: true}); term.Name == "" && (name == def || name == detail || name == a.defaultTaskTitle(term)) {
+	if def, detail := fullLabel(m, terminalInfo{ID: term.ID, Title: term.Title, SessionTitle: term.SessionTitle, FallbackTitle: term.FallbackTitle, Agent: term.Agent, AgentState: term.AgentState, Running: true}); term.Name == "" && (name == def || name == detail || name == a.defaultTaskTitle(term)) {
 		return
 	}
 	r := a.renameRequest

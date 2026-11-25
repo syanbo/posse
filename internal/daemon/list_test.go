@@ -133,7 +133,11 @@ func TestDetectForegroundAgent(t *testing.T) {
 // 经同名脚本手动启动的 agent 带着 hooks：收到 hook 就按它记 agent，状态以 hooks 为准。
 func TestHookMarksManualAgent(t *testing.T) {
 	d, ws := newTestDaemon(t)
-	s, err := d.startTerminal(ws, []string{"/bin/cat"}, "grok", 80, 24)
+	fake := filepath.Join(t.TempDir(), "claude")
+	if err := os.Symlink("/bin/cat", fake); err != nil {
+		t.Fatal(err)
+	}
+	s, err := d.startTerminal(ws, []string{fake}, "grok", 80, 24)
 	if err != nil {
 		t.Fatal(err)
 	}

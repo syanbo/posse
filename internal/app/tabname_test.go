@@ -227,3 +227,79 @@ func TestFailedRenameYieldsToNewSessionTitle(t *testing.T) {
 		t.Fatalf("new manual name ignored: %+v", fresh)
 	}
 }
+
+func TestLostWorkerTabKeepsTaskTitle(t *testing.T) {
+	a := previewApp(t)
+	a.workspaces = []workspace{{
+		ID: "w1", Project: "posse", Label: "posse", Kind: "main",
+		Terminals: []terminalInfo{{ID: "t1", Lost: true}},
+	}}
+	a.tasks = []taskInfo{{ID: "k1", Worker: "t1", Title: "Step 1 审查"}}
+	a.indexWorkspaces()
+	a.indexTasks()
+	a.selected = "w1"
+	a.openTerminal("w1", "t1")
+
+	m := locales.In("zh-Hans")
+	if got := tabTooltipWith(m, a.workspaces[0].Terminals[0], a.defaultTaskTitle(a.workspaces[0].Terminals[0])); got != "Step 1 审查" {
+		t.Fatalf("tooltip = %q", got)
+	}
+	a.startRename(m, a.workspaces[0].Terminals[0])
+	if a.renameText != "Step 1 审查" {
+		t.Fatalf("renameText = %q", a.renameText)
+	}
+	a.renaming = ""
+
+	tt := newPreviewTester(a, false)
+	if _, ok := tt.Find("Step 1 审查"); !ok {
+		t.Fatal("lost worker tab did not show its task title")
+	}
+
+	// 同一个 Lost worker 同时有显式 SessionTitle 与任务标题时，侧栏/标签/悬停/改名一致取 SessionTitle；
+	// 仅有兜底 Title（如退出的 codex）与任务标题时，四处一致取任务标题。
+	named := terminalInfo{ID: "t2", Lost: true, SessionTitle: "Named session", Title: "codex"}
+	fallback := terminalInfo{ID: "t3", Lost: true, Title: "codex"}
+	a.tasks = append(a.tasks,
+		taskInfo{ID: "k2", Worker: "t2", Title: "Worker task"},
+		taskInfo{ID: "k3", Worker: "t3", Title: "Worker task"},
+		taskInfo{ID: "k4", Worker: "t3", Title: ""}, // 空标题不覆盖旧任务标题
+	)
+	a.indexTasks()
+	if name, detail := a.terminalDisplay(m, named); name != "Named session" || detail != "" {
+		t.Fatalf("named lost display = %q %q", name, detail)
+	}
+	if got := tabTooltipWith(m, named, a.defaultTaskTitle(named)); got != "Named session" {
+		t.Fatalf("named lost tooltip = %q", got)
+	}
+	a.startRename(m, named)
+	if a.renameText != "Named session" {
+		t.Fatalf("named lost rename = %q", a.renameText)
+	}
+	a.renaming = ""
+
+	if name, detail := a.terminalDisplay(m, fallback); name != "Worker task" || detail != "" {
+		t.Fatalf("fallback lost display = %q %q", name, detail)
+	}
+	if got := tabTooltipWith(m, fallback, a.defaultTaskTitle(fallback)); got != "Worker task" {
+		t.Fatalf("fallback lost tooltip = %q", got)
+	}
+	a.startRename(m, fallback)
+	if a.renameText != "Worker task" {
+		t.Fatalf("fallback lost rename = %q", a.renameText)
+	}
+	a.renaming = ""
+
+	// 无任务名、无显式会话标题的普通 agent 退出回 shell（OSC 已变成 shell）后，桌面四处一致保留退出前兜底标题。
+	exitedPlain := terminalInfo{ID: "t4", Running: true, Title: "shell", FallbackTitle: "Prior conversation"}
+	if name, detail := a.terminalDisplay(m, exitedPlain); name != "Prior conversation" || detail != "" {
+		t.Fatalf("exited plain display = %q %q", name, detail)
+	}
+	if got := tabTooltipWith(m, exitedPlain, a.defaultTaskTitle(exitedPlain)); got != "Prior conversation" {
+		t.Fatalf("exited plain tooltip = %q", got)
+	}
+	a.startRename(m, exitedPlain)
+	if a.renameText != "Prior conversation" {
+		t.Fatalf("exited plain rename = %q", a.renameText)
+	}
+	a.renaming = ""
+}

@@ -537,6 +537,7 @@ var zh = [][2]string{
 	{"invalid ZCode session ID", "ZCode 会话 ID 无效"},
 	{"ZCode session was not found", "找不到 ZCode 会话"},
 	{"ZCode session changed; run the command in the current session", "ZCode 会话已切换，请在当前会话中重新运行命令"},
+	{"agent session changed; run the command in the current session", "当前终端里的会话已切换，请在当前会话中重新运行命令"},
 	{"Unknown method: %s", "电脑上的 Posse 是旧版，不支持这个功能（{1}）：在电脑上更新 Posse"},
 
 	// 看桌面（常驻进程按用户选的语言写的默认人名、恢复终端时打的一行也在这里）

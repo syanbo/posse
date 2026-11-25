@@ -49,7 +49,7 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 	if err != nil {
 		return nil, err
 	}
-	name := s.agentName()
+	name, gen := s.agentIdentity()
 	if name == "" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "no agent session is running in this terminal")
 	}
@@ -61,9 +61,10 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 		s.zcodeMu.Lock()
 		defer s.zcodeMu.Unlock()
 	}
+	origSID := s.Agent().SessionID
 	sid := p.SessionIDs[name]
 	if sid == "" {
-		sid = s.Agent().SessionID
+		sid = origSID
 	}
 	if sid == "" && name != "cursor" && name != "antigravity" && name != "zcode" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "the ID of this %s session is not known yet; send a message and try again", name)
@@ -112,15 +113,55 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeInternal, "write the title: %v", err)
 	}
-	// 显式给会话改名也恢复标签跟随会话，不能让旧的自定义名字遮住成功的结果。
-	if err := d.setTerminalName(s, ""); err != nil {
+	// 显式给会话改名也恢复标签跟随会话，不能让旧的自定义名字遮住成功的结果；
+	// 提交前校验原 agent 实例与会话归属，避免改名与 agent 切换重叠时误清或污染新实例。
+	if err := d.applySessionTitle(s, name, gen, origSID, sid, title, name == "claude"); err != nil {
 		return nil, err
 	}
-	s.SetTitle(title, sid, name == "claude")
-	if name == "zcode" {
-		d.saveResume(s, false)
-	}
+	d.saveResumeFor(s, false, gen)
 	return sessionTitleResult{Title: title, Agent: name, Applies: applies}, nil
+}
+
+func (d *Daemon) applySessionTitle(s *session, wantAgent string, wantGen uint64, origSID, sid, title string, pending bool) error {
+	matches := func() bool {
+		if s.agent != wantAgent || s.agentGen != wantGen {
+			return false
+		}
+		if sid != "" {
+			if cur := s.Agent().SessionID; cur != "" && cur != origSID && cur != sid {
+				return false
+			}
+		}
+		return true
+	}
+	s.nameMu.Lock()
+	defer s.nameMu.Unlock()
+	s.mu.Lock()
+	if !matches() {
+		s.mu.Unlock()
+		return rpc.Errorf(rpc.CodeConflict, "agent session changed; run the command in the current session")
+	}
+	prevName := s.name
+	if prevName == "" {
+		s.SetTitle(title, sid, pending)
+		s.mu.Unlock()
+		return nil
+	}
+	s.mu.Unlock()
+
+	if err := d.store.SetTerminalTitle(s.ID, ""); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if !matches() {
+		s.mu.Unlock()
+		_ = d.store.SetTerminalTitle(s.ID, prevName)
+		return rpc.Errorf(rpc.CodeConflict, "agent session changed; run the command in the current session")
+	}
+	s.name = ""
+	s.SetTitle(title, sid, pending)
+	s.mu.Unlock()
+	return nil
 }
 
 // agentHome 是 agent 的数据目录：环境变量优先，否则在家目录下。

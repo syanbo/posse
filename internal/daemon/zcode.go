@@ -283,11 +283,17 @@ func (d *Daemon) zcodeRuntime(ctx context.Context, s *session, path string) (pid
 	if sid == "" {
 		return 0, ""
 	}
+	s.mu.Lock()
+	if s.agent != "zcode" {
+		s.mu.Unlock()
+		return 0, ""
+	}
 	if s.Agent().SessionID != sid {
 		s.zcodeTurn = ""
+		s.unread = false
 		s.ResetAgent(host.AgentState{SessionID: sid, Title: title, Event: "process", At: time.Now()})
-		s.markRead()
 	}
+	s.mu.Unlock()
 	return pid, sid
 }
 
@@ -345,7 +351,7 @@ func (d *Daemon) zcodeHook(s *session, p hookEventParams) {
 		return
 	}
 	s.zcodeAt = h.Timestamp
-	s.markHooked("zcode")
-	d.setAgent(s, st)
-	d.saveResume(s, false)
+	gen := s.markHooked("zcode", h.SessionID)
+	d.setAgentFor(s, st, gen)
+	d.saveResumeFor(s, false, gen)
 }

@@ -1,12 +1,14 @@
 package daemon
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"posse/internal/agent"
@@ -19,7 +21,9 @@ type terminalInfo struct {
 	ID              string           `json:"id"`
 	WorkspaceID     string           `json:"workspaceId"`
 	Title           string           `json:"title,omitempty"`
-	Name            string           `json:"name,omitempty"` // 用户给标签起的名字
+	SessionTitle    string           `json:"sessionTitle,omitempty"`  // 退出或未恢复时保留的显式会话标题，优先级高于任务标题
+	FallbackTitle   string           `json:"fallbackTitle,omitempty"` // 退出或恢复 shell 时保留的兜底标题，优先级低于任务标题
+	Name            string           `json:"name,omitempty"`          // 用户给标签起的名字
 	Command         []string         `json:"command"`
 	Dir             string           `json:"dir"`
 	Agent           string           `json:"agent,omitempty"`
@@ -44,22 +48,29 @@ type terminalInfo struct {
 
 func (d *Daemon) terminalInfo(s *session) terminalInfo {
 	cols, rows := s.Size()
+	v := s.snapshotView()
 	info := terminalInfo{
-		ID: s.ID, WorkspaceID: s.WorkspaceID, Title: s.Title(), Name: s.userName(), Command: s.Command, Dir: s.Dir,
-		Agent: s.agentName(), Running: s.Running(), Pid: s.Pid(), Cols: cols, Rows: rows,
+		ID: s.ID, WorkspaceID: s.WorkspaceID, Title: v.ptyTitle, Name: v.name, Command: s.Command, Dir: s.Dir,
+		Agent: v.agent, Running: s.Running(), Pid: s.Pid(), Cols: cols, Rows: rows,
 		CreatedAt: s.CreatedAt, LastOutputAt: s.LastOutput(), IdleMs: time.Since(s.LastOutput()).Milliseconds(),
 		WaitingTasks: d.waitingTasks(s.ID), PhoneSized: s.SizeHeld(),
 	}
 	// agent 退出后终端退回普通 shell，最后的状态和会话信息不再给出去，界面、手机都按 shell 显示。
 	// 续接的 codex、cursor 第一轮对话前只有会话 ID、没有状态，也要给出去：技能与工具等面板凭它找会话文件
-	if st := s.Agent(); (st.Status != "" || st.SessionID != "") && info.Agent != "" {
+	if (v.state.Status != "" || v.state.SessionID != "") && info.Agent != "" {
+		st := v.state
 		info.AgentState = &st
-		info.Unread = st.Status == agent.StatusIdle && s.isUnread()
+		info.Unread = st.Status == agent.StatusIdle && v.unread
+	}
+	if info.Agent == "" {
+		info.SessionTitle = v.exitedSessionTitle
+		info.FallbackTitle = v.exitedTitle
+	} else {
+		info.Title = v.confirmedTitle
+		info.FallbackTitle = v.confirmedTitle
 	}
 	if info.Agent == "antigravity" {
-		s.mu.Lock()
-		info.AntigravityDir, info.AntigravityDirs = s.agyDir, s.agyDirs
-		s.mu.Unlock()
+		info.AntigravityDir, info.AntigravityDirs = v.agyDir, v.agyDirs
 	}
 	if !info.Running {
 		code := s.ExitCode()
@@ -150,33 +161,127 @@ func (d *Daemon) launchTerminalLocked(w store.Workspace, argv []string, agentNam
 	if err := d.shellFiles(); err == nil {
 		env = append(env, agent.ShellEnv(d.cfg.Home, argv[0], d.userZdotdir)...)
 	}
+	// 本地终端在 Start 返回前就可能开始读 PTY 并触发 OnTitle；在回调到达瞬间记录前台进程身份，
+	// 登记前暂存到 earlyTitles，等 d.terms[id] 注册完毕后按到达顺序校验发出者再应用，
+	// 既不丢真实 agent 的首条启动 OSC，也不把登录 shell exec 之前的标题误归给随后启动的 agent。
+	type earlyTitle struct {
+		title  string
+		sender titleSender
+	}
+	var earlyMu sync.Mutex
+	var earlyTitles []earlyTitle
+	var metaQ []titleSender
+	var titleReady bool
+	onTitleMeta := func(_ string, _ string, fg int) {
+		found := ""
+		if fg > 0 {
+			found, _ = agent.OfProcess(fg)
+		}
+		earlyMu.Lock()
+		metaQ = append(metaQ, titleSender{known: true, pg: fg, agent: found})
+		earlyMu.Unlock()
+	}
+	onStartTitle := func(tid, title string) {
+		earlyMu.Lock()
+		var sender titleSender
+		if len(metaQ) > 0 {
+			sender = metaQ[0]
+			metaQ = metaQ[1:]
+		}
+		if !titleReady {
+			if !sender.known {
+				// 无法在到达瞬间确认来源的早期标题不冒充为 agent 标题。
+				sender = titleSender{known: true}
+			}
+			earlyTitles = append(earlyTitles, earlyTitle{title: title, sender: sender})
+			earlyMu.Unlock()
+			return
+		}
+		earlyMu.Unlock()
+		d.onTitleWithSender(tid, title, sender)
+	}
 	t, err := d.terminalHost().Start(host.StartOptions{
 		ID: id, WorkspaceID: w.ID, Dir: dir, Command: argv, Env: env,
 		Cols: cols, Rows: rows, Scrollback: d.cfg.Scrollback, CreatedAt: revive.CreatedAt,
-		OnTitle: d.onTitle, OnExit: d.onExit, OnProgramStatus: d.onProgramStatus, Colors: d.window.current(),
+		OnTitle: onStartTitle, OnTitleMeta: onTitleMeta, OnExit: d.onExit, OnProgramStatus: d.onProgramStatus, Colors: d.window.current(),
 	})
 	if err != nil {
 		return nil, err
 	}
 	info := t.Info()
+	var agentGen uint64
+	if agentName != "" {
+		agentGen = 1
+	}
+	var grokName, agentTitle, exitedSessionTitle, exitedTitle string
+	var savedFallback, savedSessionTitle string
+	fallback := lostFallback(revive)
+	if revive.ID != "" {
+		if agentName == "" {
+			exitedSessionTitle, exitedTitle = revive.SessionTitle, fallback
+			savedFallback, savedSessionTitle = fallback, revive.SessionTitle
+		} else if revive.SessionID != "" {
+			savedFallback, savedSessionTitle = fallback, revive.SessionTitle
+			if fallback != "" && fallback != agentName {
+				if agentName == "grok" {
+					grokName = fallback
+				} else {
+					agentTitle = fallback
+				}
+			}
+		}
+	}
 	s := &session{Terminal: t, ID: info.ID, WorkspaceID: info.WorkspaceID, Dir: info.Dir, Command: info.Command, CreatedAt: info.CreatedAt,
-		agent: agentName, hooked: agentName != "" && agentName != "zcode", name: revive.Title, saved: resumeRec{agent: agentName, sid: revive.SessionID, cwd: dir, label: revive.Label},
+		agent: agentName, agentGen: agentGen, hooked: agentName != "" && agentName != "zcode", name: revive.Title,
+		grokName: grokName, agentTitle: agentTitle, exitedSessionTitle: exitedSessionTitle, exitedTitle: exitedTitle,
 		runtime: d.runtime}
+	s.resumeMu.Lock()
 	d.mu.Lock()
 	d.terms[id] = s
 	d.mu.Unlock()
 	if revive.ID != "" {
-		err = d.store.ReviveTerminal(id, argv, agentName, revive.SessionID)
+		err = d.store.ReviveTerminal(id, argv, agentName, revive.SessionID, dir, savedFallback, savedSessionTitle)
 	} else {
 		err = d.store.AddTerminal(store.Terminal{ID: id, WorkspaceID: w.ID, Command: argv, Agent: agentName, Cwd: dir, State: "running", CreatedAt: info.CreatedAt})
 	}
 	if err != nil {
 		log.Printf("terminal %s: record: %v", id, err)
+	} else {
+		s.mu.Lock()
+		s.saved = resumeRec{agent: agentName, sid: revive.SessionID, cwd: dir, label: savedFallback, sessionTitle: savedSessionTitle}
+		s.savedGen = agentGen
+		s.savedSet = true
+		s.mu.Unlock()
+	}
+	s.resumeMu.Unlock()
+	for {
+		earlyMu.Lock()
+		if len(earlyTitles) == 0 {
+			titleReady = true
+			earlyMu.Unlock()
+			break
+		}
+		batch := earlyTitles
+		earlyTitles = nil
+		earlyMu.Unlock()
+		for _, item := range batch {
+			d.onTitleWithSender(id, item.title, item.sender)
+		}
 	}
 	return s, nil
 }
 
+type titleSender struct {
+	known bool
+	pg    int
+	agent string
+}
+
 func (d *Daemon) onTitle(id, title string) {
+	d.onTitleWithSender(id, title, titleSender{})
+}
+
+func (d *Daemon) onTitleWithSender(id, title string, sender titleSender) {
 	d.mu.Lock()
 	s := d.terms[id]
 	d.mu.Unlock()
@@ -185,21 +290,41 @@ func (d *Daemon) onTitle(id, title string) {
 	}
 	d.checkAgentGone(s)
 	// agent 启动时会设标题，在这里顺便看前台换没换成别的 agent
-	name := d.foreground(s)
+	name, gen := d.foregroundGen(s)
 	if name == "" {
 		return
 	}
+	fgIsAgent := false
+	if sender.known {
+		fgIsAgent = sender.agent != "" && sender.agent == name && s.matchesSenderPg(name, gen, sender.pg)
+	} else if pg := s.Foreground(); pg > 0 {
+		found, _ := agent.OfProcess(pg)
+		fgIsAgent = found == name
+	}
 	if name == "grok" {
 		go d.grokUsage(false)
-		if n, ok := agent.GrokName(title); ok {
-			s.mu.Lock()
-			s.grokName = n
-			s.mu.Unlock()
+		if fgIsAgent {
+			if n, ok := agent.GrokName(title); ok && (n != "" || strings.TrimSpace(title) != "") {
+				s.mu.Lock()
+				if s.agent == name && s.agentGen == gen && (!sender.known || s.agentPg == 0 || s.agentPg == sender.pg) {
+					s.grokName = n
+				}
+				s.mu.Unlock()
+			}
 		}
+	} else if fgIsAgent && agent.BareTitle(title) != "" {
+		s.mu.Lock()
+		if s.agent == name && s.agentGen == gen && (!sender.known || s.agentPg == 0 || s.agentPg == sender.pg) {
+			s.agentTitle = title
+		}
+		s.mu.Unlock()
+	}
+	if sender.known && !fgIsAgent {
+		return
 	}
 	// 报过 7501 的 agent 只从标题里看等待（Claude 这时也不往标题里写状态了）
 	if s.oscActive() {
-		d.titleWaiting(s, name, title)
+		d.titleWaiting(s, name, gen, title)
 		return
 	}
 	status := agent.TitleStatus
@@ -207,22 +332,19 @@ func (d *Daemon) onTitle(id, title string) {
 		status = agent.TitleOnlyStatus
 	}
 	if st, ok := status(name, title, s.Agent().Status); ok {
-		d.setAgent(s, host.AgentState{Status: st, Event: "title", At: time.Now()})
+		d.setAgentFor(s, host.AgentState{Status: st, Event: "title", At: time.Now()}, gen)
 	}
 }
 
 // foreground 看前台换没换成别的 agent，换了就重置 agent 状态，返回终端里的 agent。
 func (d *Daemon) foreground(s *session) string {
-	name, _, changed, sid := s.detectAgent()
-	if changed {
-		status := agent.StatusIdle
-		if name == "zcode" {
-			status = ""
-		}
-		s.ResetAgent(host.AgentState{Status: status, Event: "process", SessionID: sid, At: time.Now()})
-		s.markRead()
-	}
+	name, _ := d.foregroundGen(s)
 	return name
+}
+
+func (d *Daemon) foregroundGen(s *session) (string, uint64) {
+	name, _, _, _, gen := s.detectAgent()
+	return name, gen
 }
 
 func (d *Daemon) onExit(id string, code int) {
@@ -698,16 +820,65 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	if p.Agent == "antigravity" {
 		return d.antigravityHook(ctx, s, p), nil
 	}
-	// Codex 的子 agent、agent 跑的命令里嵌套启动的 agent 都带着这个终端的 ID，它们结束时报的 SessionEnd
-	// 不是终端里正在跑的会话退出，当成退出会把主会话摘掉，直到它下一个 hook 才挂回来
-	if p.Event == "SessionEnd" {
-		if sid, cur := agent.SessionOf(p.Payload), s.Agent().SessionID; sid != "" && cur != "" && sid != cur {
-			log.Printf("terminal %s: ignored %s SessionEnd of session %s (terminal is on %s)", s.ID, p.Agent, sid, cur)
+	// 1. 子 agent 结束事件只交给当前匹配的主 agent 处理；其余子 agent 事件（含带 agent_id 的 SessionEnd）直接忽略，绝不认领终端。
+	if id, ok := agent.SubagentStopped(p.Agent, p.Event, p.Payload); ok {
+		if s.agentName() == p.Agent {
+			d.subagentStopped(s, id)
+		}
+		return map[string]bool{"ignored": true}, nil
+	}
+	if agent.IsSubagentEvent(p.Payload) {
+		return map[string]bool{"ignored": true}, nil
+	}
+	// 2. 原生退出事件（含 Cursor 小写 sessionEnd）统一校验当前 agent 与会话归属，绝不调用 markHooked 认领或重挂终端。
+	isExit := agent.IsExitEvent(p.Agent, p.Event)
+	st, ok := agent.MapEvent(p.Agent, p.Event, p.Payload)
+	var gen uint64
+	var allowClaim bool
+	if isExit {
+		var curAgent string
+		curAgent, gen = s.agentIdentity()
+		if curAgent == "" || curAgent != p.Agent {
+			log.Printf("terminal %s: ignored %s %s (terminal is on %q)", s.ID, p.Agent, p.Event, curAgent)
 			return map[string]bool{"ignored": true}, nil
 		}
-	}
-	if s.agentName() != p.Agent || !s.isHooked() {
-		s.markHooked(p.Agent)
+		if sid, cur := agent.SessionOf(p.Payload), s.Agent().SessionID; sid != "" && cur != "" && sid != cur {
+			log.Printf("terminal %s: ignored %s %s of session %s (terminal is on %s)", s.ID, p.Agent, p.Event, sid, cur)
+			return map[string]bool{"ignored": true}, nil
+		}
+	} else {
+		curAgent, curGen := s.agentIdentity()
+		if curAgent != "" && curAgent != p.Agent {
+			d.checkAgentGone(s)
+			curAgent, curGen = s.agentIdentity()
+		}
+		gen = curGen
+		// 状态事件与实例认领分开：
+		// - 已绑定同家 agent 时直接放行（支持让出前台打开编辑器或跑子命令期间上报）；
+		// - 当前无 agent（shell）时允许有状态映射的事件或 Cursor sessionStart 认领；
+		// - 当前已有其他 agent 时只有前台进程确认为上报方才允许切换，拒绝迟到或嵌套的异家 hook。
+		isCursorStart := p.Agent == "cursor" && p.Event == "sessionStart"
+		switch {
+		case curAgent != "" && curAgent != p.Agent:
+			found := ""
+			if pg := s.Foreground(); pg > 0 {
+				found, _ = agent.OfProcess(pg)
+			}
+			if found != p.Agent || (!ok && !isCursorStart) {
+				log.Printf("terminal %s: ignored %s %s (terminal is on %q)", s.ID, p.Agent, p.Event, curAgent)
+				return map[string]bool{"ignored": true}, nil
+			}
+			gen = s.markHooked(p.Agent, agent.SessionOf(p.Payload))
+			allowClaim = true
+		case curAgent == "":
+			if ok || isCursorStart {
+				gen = s.markHooked(p.Agent, agent.SessionOf(p.Payload))
+				allowClaim = true
+			}
+		case (ok || isCursorStart) && (!s.isHooked() || isCursorStart):
+			gen = s.markHooked(p.Agent, agent.SessionOf(p.Payload))
+			allowClaim = true
+		}
 	}
 	s.mu.Lock()
 	s.hookSeq++
@@ -715,12 +886,10 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	s.mu.Unlock()
 	d.usageHook(p.Agent, p.Event, p.Payload)
 	d.noteToolWrites(s, p.Agent, p.Event, p.Payload)
-	if id, ok := agent.SubagentStopped(p.Agent, p.Event, p.Payload); ok {
-		d.subagentStopped(s, id)
-		return map[string]bool{"ignored": true}, nil
-	}
-	st, ok := agent.MapEvent(p.Agent, p.Event, p.Payload)
 	if !ok {
+		if allowClaim && p.Agent == "cursor" && p.Event == "sessionStart" {
+			d.saveResumeFor(s, false, gen)
+		}
 		return map[string]bool{"ignored": true}, nil
 	}
 	st.At = time.Now()
@@ -728,8 +897,8 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	// Codex 结束别的会话时也报 SessionEnd，进程照样在跑：实测有它自己去结束几天前的旧会话的，还没发过消息
 	// （终端还没记下会话）时也分不清是不是自己的。hook 在 Codex 退出前同步调用，等一会儿看进程还在不在再定
 	if st.Status == agent.StatusExited && p.Agent == "codex" {
-		sid := st.SessionID
-		time.AfterFunc(codexEndGrace, func() { d.codexSessionEnded(s, sid) })
+		sid, wantSID := st.SessionID, cmp.Or(st.SessionID, s.Agent().SessionID)
+		time.AfterFunc(codexEndGrace, func() { d.codexSessionEnded(s, sid, wantSID, gen) })
 		return map[string]bool{"ignored": true}, nil
 	}
 	// 摘掉 agent 的原因只记在这里：之后终端列表不再给 agentState，用户反馈"agent 不见了"时靠 daemon.log 查
@@ -746,7 +915,7 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 		}
 	}
 	s.discussionHook(p.Agent, p.Event, p.Payload, res.Deliver != "")
-	d.setAgent(s, st)
+	d.setAgentFor(s, st, gen)
 	if p.Agent == "codex" && (p.Event == "Stop" || p.Event == "Interrupt") {
 		d.discKick()
 	}
@@ -765,17 +934,24 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 var codexEndGrace = 3 * time.Second
 
 // codexSessionEnded 在 Codex 报 SessionEnd 之后复查：进程还在就不是它退出了，不摘。
-func (d *Daemon) codexSessionEnded(s *session, sid string) {
+func (d *Daemon) codexSessionEnded(s *session, sid, curSID string, gen uint64) {
 	// 常驻进程开始退出后不动：关机时 Codex 跟着退出，记录要留着下次启动恢复；交接后终端归新进程管
-	if d.exiting.Load() || !s.Running() || s.agentName() != "codex" {
+	curAgent, curGen := s.agentIdentity()
+	if d.exiting.Load() || !s.Running() || curAgent != "codex" || curGen != gen {
 		return
+	}
+	if curSID != "" {
+		if nowSID := s.Agent().SessionID; nowSID != "" && nowSID != curSID {
+			return
+		}
 	}
 	if s.agentStillRuns("codex") {
 		log.Printf("terminal %s: codex still running after SessionEnd of session %s (terminal is on %s), keeping it", s.ID, sid, s.Agent().SessionID)
 		return
 	}
 	log.Printf("terminal %s: codex SessionEnd ends session %s (terminal was on %s)", s.ID, sid, s.Agent().SessionID)
-	d.setAgent(s, host.AgentState{Status: agent.StatusExited, Event: "SessionEnd", SessionID: sid, At: time.Now()})
+	// 延迟复查确认进程已经消失，shell 可能已写入自己的 OSC 标题，不再信任当前 OSC 标题。
+	d.exitAgentFor(s, host.AgentState{Status: agent.StatusExited, Event: "SessionEnd", SessionID: sid, At: time.Now()}, gen, curSID, false)
 	d.saveResume(s, false)
 }
 
@@ -827,10 +1003,32 @@ func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, 
 
 // setAgent 记录 agent 状态，并处理与任务相关的后续：空闲时投递未读消息，agent 退出时结束它的任务。
 func (d *Daemon) setAgent(s *session, st host.AgentState) {
-	cur := s.Agent()
-	st = keepWorking(st, cur)
-	s.SetAgent(st)
-	d.afterAgent(s, cur.Status, st)
+	_, gen := s.agentIdentity()
+	d.setAgentFor(s, st, gen)
+}
+
+// setAgentFor 校验实例代际后再记下 agent 状态，防止上一轮 agent 的事件串扰新启动的 agent。
+func (d *Daemon) setAgentFor(s *session, st host.AgentState, wantGen uint64) {
+	if st.Status == agent.StatusExited {
+		d.exitAgentFor(s, st, wantGen, st.SessionID, true)
+		return
+	}
+	prev, next, ok := s.setAgentIfGen(st, wantGen)
+	if !ok {
+		return
+	}
+	d.afterAgent(s, prev, next)
+}
+
+func (d *Daemon) exitAgentFor(s *session, st host.AgentState, wantGen uint64, wantSID string, trustCurTitle bool) {
+	prev, ok := s.clearAgentWithState(0, wantGen, wantSID, st, trustCurTitle)
+	if !ok {
+		return
+	}
+	s.noteStatus(prev.Status, st.Status)
+	d.schedulePush(s, prev.Status, st.Status)
+	d.refreshAwake()
+	go d.workerGone(s.ID, "worker agent exited before reporting")
 }
 
 // keepWorking：主线程停下时后台子 agent 还在跑，不算本轮完成（防休眠、terminal wait、界面和手机都按工作中）。
@@ -847,25 +1045,21 @@ func keepWorking(st, cur host.AgentState) host.AgentState {
 	return st
 }
 
-// afterAgent 是状态记下之后的后续：未读、推送、防休眠、投递提醒、agent 退出。
-func (d *Daemon) afterAgent(s *session, prev string, st host.AgentState) {
-	s.noteStatus(prev, st.Status)
-	d.schedulePush(s, prev, st.Status)
+// afterAgent 是非退出状态记下之后的后续：未读、推送、防休眠、投递提醒。
+func (d *Daemon) afterAgent(s *session, prev host.AgentState, st host.AgentState) {
+	s.noteStatus(prev.Status, st.Status)
+	d.schedulePush(s, prev.Status, st.Status)
 	d.refreshAwake()
 	if agent.Parked(s.Agent()) {
 		go d.deliver(s.ID)
 	}
-	switch st.Status {
-	case agent.StatusIdle:
-		if prev == agent.StatusWorking && s.agentName() == "antigravity" {
+	if st.Status == agent.StatusIdle {
+		if prev.Status == agent.StatusWorking && s.agentName() == "antigravity" {
 			go d.antigravityAsk(context.Background(), false)
 		}
 		go d.deliver(s.ID)
 		// 讨论 worker 汇报后停到输入框，下一轮这时才能派
 		d.discKick()
-	case agent.StatusExited:
-		s.clearAgent(0)
-		go d.workerGone(s.ID, "worker agent exited before reporting")
 	}
 }
 
@@ -899,14 +1093,16 @@ var subagentGrace = 20 * time.Second
 
 // checkAgentGone 发现 agent 进程已经不在时按退出处理。
 func (d *Daemon) checkAgentGone(s *session) {
-	pg := s.goneAgentPg()
-	name := s.agentName()
-	if pg == 0 || !s.Running() || !s.clearAgent(pg) {
+	pg, gen, name := s.goneAgent()
+	if pg == 0 || !s.Running() {
+		return
+	}
+	st := host.AgentState{Status: agent.StatusExited, Event: "process", At: time.Now()}
+	if _, ok := s.clearAgentWithState(pg, gen, "", st, false); !ok {
 		return
 	}
 	_, args := agent.OfProcess(pg)
 	log.Printf("terminal %s: %s gone, process group %d is now %q", s.ID, name, pg, args)
-	s.SetAgent(host.AgentState{Status: agent.StatusExited, Event: "process", At: time.Now()})
 	s.markRead()
 	d.refreshAwake()
 	go d.workerGone(s.ID, "worker agent exited before reporting")
