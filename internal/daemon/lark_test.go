@@ -95,6 +95,49 @@ func TestPermissionHubAntigravityPreToolUse(t *testing.T) {
 	<-w.resolvedCh
 }
 
+// 验证规则键生成会跳过已被只读白名单放行的命令段，且支持反斜杠续行。
+func TestDeriveCommandRuleKeysSkipsReadOnly(t *testing.T) {
+	keys, label := deriveCommandRuleKeys("cd /tmp/x && lark-cli base +foo-update --base-token EHz --as user ; ls")
+	if len(keys) != 1 || keys[0] != "cmd:lark-cli base +foo-update" || label != "lark-cli base +foo-update" {
+		t.Fatalf("unexpected rule keys=%v label=%q", keys, label)
+	}
+
+	keys2, label2 := deriveCommandRuleKeys("mkdir -p /tmp/x && cd /tmp/x && \\\nlark-cli base +foo-update \\\n  --base-token EHz --as user 2>&1 | jq .")
+	if len(keys2) != 1 || keys2[0] != "cmd:lark-cli base +foo-update" || label2 != "lark-cli base +foo-update" {
+		t.Fatalf("unexpected multiline rule keys=%v label=%q", keys2, label2)
+	}
+
+	keys3, label3 := deriveCommandRuleKeys("cd /tmp/x && ls -la | head -n 10")
+	if len(keys3) != 0 || label3 != "" {
+		t.Fatalf("all-safe command should produce no rule keys, got keys=%v label=%q", keys3, label3)
+	}
+
+	// 验证「本会话允许同类」配合前缀只读命令变化时仍能命中
+	var hub permissionHub
+	hub.timeout = 5 * time.Second
+	w := &stubPermWatcher{reqCh: make(chan PermRequest, 1), resolvedCh: make(chan string, 1)}
+	hub.SetWatcher(w)
+	p1 := json.RawMessage(`{"toolCall":{"id":"call_10","name":"run_command","args":{"CommandLine":"cd /tmp/a && lark-cli base +foo-update --record-id r1 --as user"}}}`)
+	done := make(chan string, 1)
+	go func() {
+		done <- hub.Hold(context.Background(), "t_rule", "antigravity", p1, nil, nil)
+	}()
+	req := <-w.reqCh
+	if len(req.RuleKeys) != 1 || req.RuleKeys[0] != "cmd:lark-cli base +foo-update" {
+		t.Fatalf("unexpected req rule keys: %+v", req.RuleKeys)
+	}
+	hub.Decide(req.ID, "allow_session", "feishu")
+	if got := <-done; got != "allow" {
+		t.Fatalf("expected allow, got %q", got)
+	}
+	<-w.resolvedCh
+
+	p2 := json.RawMessage(`{"toolCall":{"id":"call_11","name":"run_command","args":{"CommandLine":"mkdir -p /tmp/b && cd /tmp/b && lark-cli base +foo-update --record-id r2 --as user | jq ."}}}`)
+	if got := hub.Hold(context.Background(), "t_rule", "antigravity", p2, nil, nil); got != "allow" {
+		t.Fatalf("expected session-allowed rule to match regardless of safe prefix/suffix, got %q", got)
+	}
+}
+
 // 验证 lark.bots.save / list / toggle / delete RPC 与持久化配置。
 func TestDaemonLarkBotRPC(t *testing.T) {
 	d, w, _ := newDiscDaemon(t)

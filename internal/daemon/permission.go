@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"posse/internal/agent"
 )
 
 // PermRequest 是一条挂起等待用户决策的工具权限请求（兼容 Antigravity PreToolUse 与 Claude PermissionRequest）。
@@ -297,17 +299,22 @@ func derivePermRule(tool string, args map[string]any) ([]string, string) {
 }
 
 func deriveCommandRuleKeys(cmdLine string) ([]string, string) {
-	if cmdLine == "" || strings.ContainsAny(cmdLine, "\n\r\x00`") || strings.Contains(cmdLine, "$(") {
+	normalized := agent.NormalizeShellLine(cmdLine)
+	if agent.HasUnsafeShellSyntax(normalized) {
 		return nil, ""
 	}
-	segs := splitCommandSegments(cmdLine)
-	if len(segs) == 0 {
+	segs, ok := agent.SplitShellSegments(normalized)
+	if !ok || len(segs) == 0 {
 		return nil, ""
 	}
 	var keys []string
 	var labels []string
 	seen := map[string]bool{}
 	for _, seg := range segs {
+		// 跳过本身已由只读安全白名单放行的段（如 cd/echo/ls/mkdir /tmp 等），仅记录需要审批的段
+		if agent.IsSafeReadOnlySegment(seg) {
+			continue
+		}
 		lbl := commandSegmentLabel(seg)
 		if lbl == "" {
 			return nil, ""
@@ -325,60 +332,11 @@ func deriveCommandRuleKeys(cmdLine string) ([]string, string) {
 	return keys, strings.Join(labels, " + ")
 }
 
-func splitCommandSegments(s string) []string {
-	var out []string
-	var cur strings.Builder
-	var quote byte
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if quote != 0 {
-			if ch == '\\' && quote == '"' && i+1 < len(s) {
-				cur.WriteByte(ch)
-				i++
-				cur.WriteByte(s[i])
-				continue
-			}
-			if ch == quote {
-				quote = 0
-			}
-			cur.WriteByte(ch)
-			continue
-		}
-		if ch == '\'' || ch == '"' {
-			quote = ch
-			cur.WriteByte(ch)
-			continue
-		}
-		if ch == ';' {
-			if t := strings.TrimSpace(cur.String()); t != "" {
-				out = append(out, t)
-			}
-			cur.Reset()
-			continue
-		}
-		if ch == '|' || ch == '&' {
-			if i+1 < len(s) && s[i+1] == ch {
-				i++
-			}
-			if t := strings.TrimSpace(cur.String()); t != "" {
-				out = append(out, t)
-			}
-			cur.Reset()
-			continue
-		}
-		cur.WriteByte(ch)
-	}
-	if quote != 0 {
-		return nil
-	}
-	if t := strings.TrimSpace(cur.String()); t != "" {
-		out = append(out, t)
-	}
-	return out
-}
-
 func commandSegmentLabel(seg string) string {
-	fields := strings.Fields(seg)
+	fields, ok := agent.SegmentArgs(seg)
+	if !ok || len(fields) == 0 {
+		fields = strings.Fields(seg)
+	}
 	if len(fields) == 0 {
 		return ""
 	}
@@ -397,7 +355,7 @@ func commandSegmentLabel(seg string) string {
 		var parts []string
 		for j := 0; j < len(rest) && len(parts) < 2; j++ {
 			a := rest[j]
-			if a == "--profile" || a == "--as" || a == "--format" {
+			if a == "--profile" || a == "--as" || a == "--format" || a == "--jq" || a == "--output" || a == "--output-dir" || a == "-o" {
 				j++
 				continue
 			}
