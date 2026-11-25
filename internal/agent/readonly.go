@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -105,30 +106,91 @@ func IsSafeReadOnlyCommandLine(cmdLine string) bool {
 	return IsSafeReadOnlyCommandLineWithRoots(cmdLine, DefaultScratchRoots())
 }
 
+type shellSegmentOp struct {
+	text   string
+	nextOp string // 紧随本段之后的连接符："&&"、"||"、";"、"|"、"|&" 或 ""
+}
+
 // IsSafeReadOnlyCommandLineWithRoots 使用指定 ScratchRoots 判断 shell 命令行是否安全只读。
 func IsSafeReadOnlyCommandLineWithRoots(cmdLine string, roots ScratchRoots) bool {
+	unapproved, ok := NonReadOnlySegmentsWithRoots(cmdLine, roots)
+	return ok && len(unapproved) == 0
+}
+
+// NonReadOnlySegmentsWithRoots 切分命令行并结合前序 `cd <安全目录> &&` 上下文过滤已证明安全的只读段，
+// 返回仍需人工审批的原始命令段切片；语法不安全或切分失败时返回 ok=false。
+func NonReadOnlySegmentsWithRoots(cmdLine string, roots ScratchRoots) ([]string, bool) {
 	normalized := NormalizeShellLine(cmdLine)
 	if HasUnsafeShellSyntax(normalized) {
-		return false
+		return nil, false
 	}
-	segs, ok := SplitShellSegments(normalized)
+	segs, ok := splitShellSegmentsWithOps(normalized)
 	if !ok || len(segs) == 0 {
-		return false
+		return nil, false
 	}
+	var unapproved []string
+	cwdInScratch := false
+	inPipeline := false
 	for _, seg := range segs {
-		if !IsSafeReadOnlySegmentWithRoots(seg, roots) {
-			return false
+		isPipeNext := seg.nextOp == "|" || seg.nextOp == "|&"
+		segCwdSafe := cwdInScratch
+		if !isSafeReadOnlySegmentInContext(seg.text, roots, segCwdSafe) {
+			unapproved = append(unapproved, seg.text)
+			if !inPipeline && !isPipeNext {
+				cwdInScratch = false
+			}
+		} else if !inPipeline && !isPipeNext {
+			if cdSafe, isCD := classifyScratchCD(seg.text, roots); isCD {
+				cwdInScratch = cdSafe && seg.nextOp == "&&"
+			}
 		}
+		inPipeline = isPipeNext
 	}
-	return true
+	return unapproved, true
+}
+
+func classifyScratchCD(seg string, roots ScratchRoots) (safeDir bool, isCD bool) {
+	toks, redirs, ok := parseShellSegment(seg, true)
+	if !ok || len(toks) == 0 {
+		return false, false
+	}
+	cmd, ok := resolveTrustedCommand(toks[0])
+	if !ok || cmd != "cd" {
+		return false, false
+	}
+	if len(redirs) > 0 || len(toks) != 2 || strings.HasPrefix(toks[1].val, "-") {
+		return false, true
+	}
+	return isSafeScratchDirToken(toks[1], true, roots), true
 }
 
 // SplitShellSegments 在引号外按 |、|&、;、&&、|| 切分命令段；
 // 保留 2>&1 / &>/... 等重定向中的 &；遇到未加引号的 # 注释、后台执行 & 或未闭合引号返回 false。
 func SplitShellSegments(s string) ([]string, bool) {
-	var segs []string
+	ops, ok := splitShellSegmentsWithOps(s)
+	if !ok {
+		return nil, false
+	}
+	out := make([]string, len(ops))
+	for i, item := range ops {
+		out[i] = item.text
+	}
+	return out, true
+}
+
+func splitShellSegmentsWithOps(s string) ([]shellSegmentOp, bool) {
+	var segs []shellSegmentOp
 	var cur strings.Builder
 	var quote byte
+	emit := func(op string) bool {
+		t := strings.TrimSpace(cur.String())
+		cur.Reset()
+		if t == "" {
+			return false
+		}
+		segs = append(segs, shellSegmentOp{text: t, nextOp: op})
+		return true
+	}
 	for i := 0; i < len(s); i++ {
 		ch := s[i]
 		if quote != 0 {
@@ -163,20 +225,22 @@ func SplitShellSegments(s string) ([]string, bool) {
 			continue
 		}
 		if ch == ';' {
-			if t := strings.TrimSpace(cur.String()); t != "" {
-				segs = append(segs, t)
-			}
-			cur.Reset()
+			_ = emit(";")
 			continue
 		}
 		if ch == '|' {
+			op := "|"
 			if i+1 < len(s) && (s[i+1] == '|' || s[i+1] == '&') {
+				if s[i+1] == '|' {
+					op = "||"
+				} else {
+					op = "|&"
+				}
 				i++
 			}
-			if t := strings.TrimSpace(cur.String()); t != "" {
-				segs = append(segs, t)
+			if !emit(op) {
+				return nil, false
 			}
-			cur.Reset()
 			continue
 		}
 		if ch == '>' {
@@ -198,10 +262,9 @@ func SplitShellSegments(s string) ([]string, bool) {
 		if ch == '&' {
 			if i+1 < len(s) && s[i+1] == '&' {
 				i++
-				if t := strings.TrimSpace(cur.String()); t != "" {
-					segs = append(segs, t)
+				if !emit("&&") {
+					return nil, false
 				}
-				cur.Reset()
 				continue
 			}
 			if i+1 < len(s) && s[i+1] == '>' {
@@ -219,7 +282,9 @@ func SplitShellSegments(s string) ([]string, bool) {
 		return nil, false
 	}
 	if t := strings.TrimSpace(cur.String()); t != "" {
-		segs = append(segs, t)
+		segs = append(segs, shellSegmentOp{text: t})
+	} else if len(segs) > 0 && segs[len(segs)-1].nextOp != ";" {
+		return nil, false
 	}
 	return segs, true
 }
@@ -320,7 +385,7 @@ func HasUnsafeRuleOutputFlag(args []string) bool {
 			}
 			if isOutFlag {
 				hasOutput = true
-				if !isSafePathInRoots(target, true, true, true, true, false, roots) {
+				if !isSafePathInRoots(target, true, true, true, targetFileOrDir, roots) {
 					return true
 				}
 				continue
@@ -338,9 +403,47 @@ func HasUnsafeRuleOutputFlag(args []string) bool {
 				(pos[0] == "drive" && (pos[1] == "+version-get" || pos[1] == "+preview"))) && !hasOutput {
 				return true
 			}
+			if pos[0] == "base" && (pos[1] == "+record-list" || pos[1] == "+record-search") && !hasOutput && !isLarkBaseInlineJSONArgs(pos[1], args[1:]) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func isLarkBaseInlineJSONArgs(sub string, rest []string) bool {
+	format := ""
+	hasJSONFlag := false
+	for i := 0; i < len(rest); i++ {
+		a := rest[i]
+		if a == "--" {
+			break
+		}
+		switch {
+		case a == "--format":
+			if i+1 >= len(rest) {
+				return false
+			}
+			format = strings.ToLower(strings.TrimSpace(rest[i+1]))
+			i++
+		case strings.HasPrefix(a, "--format="):
+			format = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(a, "--format=")))
+		case a == "--json" && sub == "+record-list":
+			hasJSONFlag = true
+		case strings.HasPrefix(a, "--json=") && sub == "+record-list":
+			if isTruthyBoolFlagValue(strings.TrimPrefix(a, "--json=")) {
+				hasJSONFlag = true
+			} else {
+				return false
+			}
+		case a == "--overwrite" || strings.HasPrefix(a, "--overwrite="):
+			return false
+		}
+	}
+	if format != "" {
+		return format == "json"
+	}
+	return hasJSONFlag
 }
 
 // IsSafeReadOnlySegment 使用默认根目录判断单个命令段（含其重定向）是否安全只读。
@@ -350,6 +453,10 @@ func IsSafeReadOnlySegment(seg string) bool {
 
 // IsSafeReadOnlySegmentWithRoots 使用指定根目录判断单个命令段（含其重定向）是否安全只读。
 func IsSafeReadOnlySegmentWithRoots(seg string, roots ScratchRoots) bool {
+	return isSafeReadOnlySegmentInContext(seg, roots, false)
+}
+
+func isSafeReadOnlySegmentInContext(seg string, roots ScratchRoots, cwdInScratch bool) bool {
 	toks, redirs, ok := parseShellSegment(seg, true)
 	if !ok || len(toks) == 0 {
 		return false
@@ -359,12 +466,12 @@ func IsSafeReadOnlySegmentWithRoots(seg string, roots ScratchRoots) bool {
 			return false
 		}
 	}
-	return isSafeReadOnlyTokens(toks, roots)
+	return isSafeReadOnlyTokensInContext(toks, roots, cwdInScratch)
 }
 
 // IsSafeDiscussionWritePath 判断 write_file 等工具写入路径是否严格位于讨论笔记目录内（含软链接、硬链接与普通文件校验）。
 func IsSafeDiscussionWritePath(target string, roots ScratchRoots) bool {
-	return isSafePathInRoots(target, false, false, false, false, false, roots)
+	return isSafePathInRoots(target, false, false, false, targetFileOnly, roots)
 }
 
 func parseShellSegment(s string, strictExpansions bool) ([]shellToken, []shellRedir, bool) {
@@ -708,12 +815,29 @@ func evalWithMissingSuffix(clean string) (string, bool) {
 	}
 }
 
+type scratchTargetKind int
+
+const (
+	targetFileOnly scratchTargetKind = iota
+	targetFileOrDir
+	targetDirOnly
+	targetMustNotExist
+)
+
 func isSafeScratchToken(tok shellToken, allowRoot, allowExistingDir bool, roots ScratchRoots) bool {
-	return isSafePathInRoots(tok.val, !tok.singleQuoted, allowRoot, true, allowExistingDir, false, roots)
+	kind := targetFileOnly
+	if allowExistingDir {
+		kind = targetFileOrDir
+	}
+	return isSafePathInRoots(tok.val, !tok.singleQuoted, allowRoot, true, kind, roots)
+}
+
+func isSafeScratchDirToken(tok shellToken, allowRoot bool, roots ScratchRoots) bool {
+	return isSafePathInRoots(tok.val, !tok.singleQuoted, allowRoot, true, targetDirOnly, roots)
 }
 
 func isSafeNewScratchToken(tok shellToken, roots ScratchRoots) bool {
-	return isSafePathInRoots(tok.val, !tok.singleQuoted, false, true, false, true, roots)
+	return isSafePathInRoots(tok.val, !tok.singleQuoted, false, true, targetMustNotExist, roots)
 }
 
 func isRootNotSymlink(path string) bool {
@@ -727,14 +851,14 @@ func isRootNotSymlink(path string) bool {
 	return fi.IsDir()
 }
 
-func isSafeExistingTarget(fi os.FileInfo, allowExistingDir bool) bool {
-	if fi.Mode()&os.ModeSymlink != 0 {
+func isSafeExistingTarget(fi os.FileInfo, kind scratchTargetKind) bool {
+	if fi.Mode()&os.ModeSymlink != 0 || kind == targetMustNotExist {
 		return false
 	}
 	if fi.IsDir() {
-		return allowExistingDir
+		return kind == targetFileOrDir || kind == targetDirOnly
 	}
-	if !fi.Mode().IsRegular() {
+	if kind == targetDirOnly || !fi.Mode().IsRegular() {
 		return false
 	}
 	st, ok := fi.Sys().(*syscall.Stat_t)
@@ -744,7 +868,7 @@ func isSafeExistingTarget(fi os.FileInfo, allowExistingDir bool) bool {
 	return true
 }
 
-func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp, allowExistingDir, mustNotExist bool, roots ScratchRoots) bool {
+func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp bool, kind scratchTargetKind, roots ScratchRoots) bool {
 	if p == "" || strings.TrimSpace(p) != p {
 		return false
 	}
@@ -795,6 +919,7 @@ func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp, allowExisti
 		}
 	}
 
+	mustNotExist := kind == targetMustNotExist
 	for _, root := range candidates {
 		resolvedRoot, ok := evalWithMissingSuffix(root)
 		if !ok {
@@ -804,16 +929,16 @@ func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp, allowExisti
 		if !lexMatched {
 			continue
 		}
-		// 非配置根本身的目标若已存在：mustNotExist 时必须尚不存在；否则必须非软链接，文件写操作要求普通文件且 nlink==1
+		// 非配置根本身的目标若已存在：按目标类型分别要求不存在、仅目录、仅单链接普通文件或二者之一
 		if clean != root && clean != resolvedRoot {
 			if fi, err := os.Lstat(clean); err == nil {
-				if mustNotExist || !isSafeExistingTarget(fi, allowExistingDir) {
+				if !isSafeExistingTarget(fi, kind) {
 					return false
 				}
 			} else if !os.IsNotExist(err) {
 				return false
 			}
-		} else if mustNotExist {
+		} else if mustNotExist || kind == targetFileOnly {
 			return false
 		}
 		resolvedTarget, ok := evalWithMissingSuffix(clean)
@@ -822,6 +947,14 @@ func isSafePathInRoots(p string, allowNotesEnv, allowRoot, allowTmp, allowExisti
 		}
 		if mustNotExist {
 			if _, err := os.Lstat(resolvedTarget); !os.IsNotExist(err) {
+				return false
+			}
+		} else if resolvedTarget != resolvedRoot {
+			if fi, err := os.Lstat(resolvedTarget); err == nil {
+				if !isSafeExistingTarget(fi, kind) {
+					return false
+				}
+			} else if !os.IsNotExist(err) {
 				return false
 			}
 		}
@@ -963,6 +1096,10 @@ func isAllowedReadOnlyHostToken(raw string, hosts []string) bool {
 }
 
 func isSafeReadOnlyTokens(tokens []shellToken, roots ScratchRoots) bool {
+	return isSafeReadOnlyTokensInContext(tokens, roots, false)
+}
+
+func isSafeReadOnlyTokensInContext(tokens []shellToken, roots ScratchRoots, cwdInScratch bool) bool {
 	if len(tokens) == 0 {
 		return false
 	}
@@ -1027,7 +1164,7 @@ func isSafeReadOnlyTokens(tokens []shellToken, roots ScratchRoots) bool {
 	case "mkdir":
 		return isSafeScratchMkdir(argToks, roots)
 	case "lark-cli":
-		return isSafeReadOnlyLarkCLI(argToks, roots)
+		return isSafeReadOnlyLarkCLI(argToks, roots, cwdInScratch)
 	case "glab":
 		return isSafeReadOnlyGlab(argToks, roots)
 	case "aliyun":
@@ -1544,9 +1681,13 @@ func isTruthyBoolFlagValue(v string) bool {
 
 // isSafeReadOnlyLarkCLI 仅放行 lark-cli 的单次无歧义帮助/dry-run、schema 与显式白名单子命令；
 // 取消按动词推断，未列入显式白名单的快捷命令一律交人工审批。
-func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
+func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots, cwdInScratch bool) bool {
 	var pos []string
 	var outputs []larkOutputArg
+	rawVals := make([]string, len(args))
+	for i, t := range args {
+		rawVals[i] = t.val
+	}
 	helpCount := 0
 	helpInvalid := false
 	dryRunCount := 0
@@ -1554,11 +1695,15 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 	hasUnknownShortFlag := false
 	hasInvalidOutput := false
 	hasDownloadResources := false
+	hasOverwrite := false
 
 	for i := 0; i < len(args); i++ {
 		a := args[i].val
 		if a == "--" {
 			break
+		}
+		if a == "--overwrite" || strings.HasPrefix(a, "--overwrite=") {
+			hasOverwrite = true
 		}
 		if a == "--help" || a == "-h" {
 			if prevMayConsumeValue(args, i) {
@@ -1652,6 +1797,12 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 		case a == "--profile" || a == "--as" || a == "--format" || a == "--jq" || a == "-q":
 			i++
 			continue
+		case a == "--json":
+			// base +record-search 的 --json 带请求体参数；+record-list 的 --json 是布尔简写
+			if len(pos) >= 2 && pos[0] == "base" && pos[1] == "+record-search" {
+				i++
+			}
+			continue
 		}
 		if strings.HasPrefix(a, "-") {
 			// 短选项组（如 -hh、-hv、-hh=false）或未识别的短选项使 help/dry-run 特殊放行失效
@@ -1705,6 +1856,29 @@ func isSafeReadOnlyLarkCLI(args []shellToken, roots ScratchRoots) bool {
 			return false
 		}
 		if len(outputs) == 0 {
+			return false
+		}
+	}
+
+	// base +record-list 与 +record-search 在 lark-cli 1.0.100 缺省为 ndjson（自动在当前目录生成 .ndjson 与 manifest）：
+	// 必须满足以下之一才可证明不向工作区任意目录落盘：(1) 显式内联 JSON 且未带 --output/--overwrite；
+	// (2) 前序已通过 `cd <安全目录> &&` 锁定当前目录且未带越界 --output；(3) 显式指定安全单文件 --output（且无 --overwrite）。
+	if domain == "base" && (sub == "+record-list" || sub == "+record-search") {
+		if hasOverwrite {
+			return false
+		}
+		inlineJSON := isLarkBaseInlineJSONArgs(sub, rawVals)
+		if inlineJSON {
+			if len(outputs) > 0 {
+				return false
+			}
+		} else if len(outputs) > 0 {
+			for _, out := range outputs {
+				if out.flag != "--output" || !isSafeNewScratchToken(out.tok, roots) {
+					return false
+				}
+			}
+		} else if !cwdInScratch {
 			return false
 		}
 	}
@@ -2323,25 +2497,6 @@ func isPositiveNumber(s string) bool {
 	return hasDigit
 }
 
-func hasPascalActionPrefix(action string, prefixes ...string) bool {
-	for _, p := range prefixes {
-		if strings.HasPrefix(action, p) && len(action) > len(p) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasSensitiveActionWord(action string, words []string) bool {
-	low := strings.ToLower(action)
-	for _, w := range words {
-		if strings.Contains(low, w) {
-			return true
-		}
-	}
-	return false
-}
-
 func isForbiddenFileRefValue(v string) bool {
 	if strings.HasPrefix(v, "@") {
 		return true
@@ -2349,8 +2504,38 @@ func isForbiddenFileRefValue(v string) bool {
 	return strings.HasPrefix(strings.ToLower(v), "file://")
 }
 
-var aliyunSensitiveActionWords = []string{
-	"secret", "token", "password", "credential", "key", "policy", "role",
+func isSafeProfileName(s string) bool {
+	if s == "" || len(s) > 64 || strings.HasPrefix(s, ".") || strings.HasPrefix(s, "-") || strings.Contains(s, "..") {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+var aliyunSLSAllowedActions = map[string]bool{
+	"GetLogs":          true,
+	"GetHistograms":    true,
+	"GetContextLogs":   true,
+	"GetCursor":        true,
+	"GetCursorTime":    true,
+	"GetProject":       true,
+	"GetProjectLogs":   true,
+	"GetLogStore":      true,
+	"GetIndex":         true,
+	"GetCheckPoint":    true,
+	"ListProject":      true,
+	"ListLogStores":    true,
+	"ListShards":       true,
+	"ListTopics":       true,
+	"ListSavedSearch":  true,
+	"ListDashboard":    true,
+	"DescribeLogstore": true,
+	"DescribeIndex":    true,
 }
 
 var aliyunSLSValueFlags = map[string]bool{
@@ -2392,6 +2577,9 @@ func isSafeAliyunSLSFlags(argToks []shellToken) bool {
 				if isForbiddenFileRefValue(val) {
 					return false
 				}
+				if (name == "--profile" || name == "-p") && !isSafeProfileName(val) {
+					return false
+				}
 				continue
 			}
 			if aliyunSLSOptBoolFlags[name] {
@@ -2415,6 +2603,9 @@ func isSafeAliyunSLSFlags(argToks []shellToken) bool {
 			if i+1 >= len(argToks) || isForbiddenFileRefValue(argToks[i+1].val) {
 				return false
 			}
+			if (a == "--profile" || a == "-p") && !isSafeProfileName(argToks[i+1].val) {
+				return false
+			}
 			i++
 			continue
 		}
@@ -2434,7 +2625,12 @@ func isSafeReadOnlyAliyun(argToks []shellToken, roots ScratchRoots) bool {
 		name, val, hasEq := strings.Cut(a, "=")
 		if hasEq {
 			switch name {
-			case "--profile", "--region", "--language", "--version":
+			case "--profile":
+				if !isSafeProfileName(val) {
+					return false
+				}
+				i++
+			case "--region", "--language", "--version":
 				if isForbiddenFileRefValue(val) {
 					return false
 				}
@@ -2451,7 +2647,12 @@ func isSafeReadOnlyAliyun(argToks []shellToken, roots ScratchRoots) bool {
 			continue
 		}
 		switch a {
-		case "--profile", "-p", "--region", "--language", "--version":
+		case "--profile", "-p":
+			if i+1 >= len(argToks) || !isSafeProfileName(argToks[i+1].val) {
+				return false
+			}
+			i += 2
+		case "--region", "--language", "--version":
 			if i+1 >= len(argToks) || isForbiddenFileRefValue(argToks[i+1].val) {
 				return false
 			}
@@ -2478,8 +2679,7 @@ func isSafeReadOnlyAliyun(argToks []shellToken, roots ScratchRoots) bool {
 		if len(rest) == 0 || strings.HasPrefix(rest[0].val, "-") {
 			return false
 		}
-		action := rest[0].val
-		if !hasPascalActionPrefix(action, "Get", "List", "Describe") || hasSensitiveActionWord(action, aliyunSensitiveActionWords) {
+		if !aliyunSLSAllowedActions[rest[0].val] {
 			return false
 		}
 		return isSafeAliyunSLSFlags(rest[1:])
@@ -2539,6 +2739,7 @@ var ossCPBoolFlags = map[string]bool{
 	"--cli-non-interactive": true,
 }
 
+// ossCPValueFlags 移除 --encoding-type（阿里云 CLI 3.5.1 下载时会对本地目标执行 url.QueryUnescape，造成校验与落盘路径漂移）。
 var ossCPValueFlags = map[string]bool{
 	"--profile": true, "-p": true,
 	"--region": true, "--language": true,
@@ -2547,7 +2748,7 @@ var ossCPValueFlags = map[string]bool{
 	"--maxupspeed": true, "--maxdownspeed": true,
 	"--retry-times": true, "--timeout": true,
 	"--include": true, "--exclude": true,
-	"--payer": true, "--encoding-type": true, "--version-id": true,
+	"--payer": true, "--version-id": true,
 }
 
 func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
@@ -2560,7 +2761,12 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 		name, val, hasEq := strings.Cut(a, "=")
 		if hasEq {
 			switch name {
-			case "--profile", "--region", "--language":
+			case "--profile":
+				if !isSafeProfileName(val) {
+					return false
+				}
+				i++
+			case "--region", "--language":
 				if isForbiddenFileRefValue(val) {
 					return false
 				}
@@ -2571,7 +2777,12 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 			continue
 		}
 		switch a {
-		case "--profile", "-p", "--region", "--language":
+		case "--profile", "-p":
+			if i+1 >= len(argToks) || !isSafeProfileName(argToks[i+1].val) {
+				return false
+			}
+			i += 2
+		case "--region", "--language":
 			if i+1 >= len(argToks) || isForbiddenFileRefValue(argToks[i+1].val) {
 				return false
 			}
@@ -2607,6 +2818,9 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 					if !strings.HasPrefix(name, "--") || !valFlags[name] || isForbiddenFileRefValue(val) {
 						return false
 					}
+					if name == "--profile" && !isSafeProfileName(val) {
+						return false
+					}
 					continue
 				}
 				if boolFlags[a] {
@@ -2614,6 +2828,9 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 				}
 				if valFlags[a] {
 					if j+1 >= len(rest) || isForbiddenFileRefValue(rest[j+1].val) {
+						return false
+					}
+					if (a == "--profile" || a == "-p") && !isSafeProfileName(rest[j+1].val) {
 						return false
 					}
 					j++
@@ -2654,7 +2871,7 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 					if name == "--output-dir" {
 						outputDirCount++
 						dirTok := shellToken{val: val, quoted: t.quoted, singleQuoted: t.singleQuoted}
-						if outputDirCount > 1 || !isSafeScratchToken(dirTok, false, false, roots) {
+						if outputDirCount > 1 || !isSafeScratchDirToken(dirTok, false, roots) {
 							return false
 						}
 						continue
@@ -2662,12 +2879,15 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 					if name == "--checkpoint-dir" {
 						checkpointDirCount++
 						dirTok := shellToken{val: val, quoted: t.quoted, singleQuoted: t.singleQuoted}
-						if checkpointDirCount > 1 || !isSafeScratchToken(dirTok, false, false, roots) {
+						if checkpointDirCount > 1 || !isSafeScratchDirToken(dirTok, false, roots) {
 							return false
 						}
 						continue
 					}
 					if !ossCPValueFlags[name] || isForbiddenFileRefValue(val) {
+						return false
+					}
+					if name == "--profile" && !isSafeProfileName(val) {
 						return false
 					}
 					continue
@@ -2677,7 +2897,7 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 						return false
 					}
 					outputDirCount++
-					if outputDirCount > 1 || !isSafeScratchToken(rest[j+1], false, false, roots) {
+					if outputDirCount > 1 || !isSafeScratchDirToken(rest[j+1], false, roots) {
 						return false
 					}
 					j++
@@ -2688,7 +2908,7 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 						return false
 					}
 					checkpointDirCount++
-					if checkpointDirCount > 1 || !isSafeScratchToken(rest[j+1], false, false, roots) {
+					if checkpointDirCount > 1 || !isSafeScratchDirToken(rest[j+1], false, roots) {
 						return false
 					}
 					j++
@@ -2702,6 +2922,9 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 				}
 				if ossCPValueFlags[a] {
 					if j+1 >= len(rest) || isForbiddenFileRefValue(rest[j+1].val) {
+						return false
+					}
+					if (a == "--profile" || a == "-p") && !isSafeProfileName(rest[j+1].val) {
 						return false
 					}
 					j++
@@ -2727,34 +2950,93 @@ func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
 	}
 }
 
-var tccliAllowedServices = map[string]bool{
-	"cls": true, "cvm": true, "lighthouse": true, "vpc": true, "clb": true,
-	"cdb": true, "cynosdb": true, "redis": true, "mongodb": true, "postgres": true,
-	"mariadb": true, "es": true, "ckafka": true, "tdmq": true, "monitor": true,
-	"apm": true, "rum": true, "tke": true, "scf": true, "cdn": true,
-	"teo": true, "waf": true, "dnspod": true, "apigateway": true, "billing": true, "tag": true,
+// tccliAllowedServiceActions 显式白名单：避免动词前缀误放行潜在副作用 API。
+var tccliAllowedServiceActions = map[string]bool{
+	"cls SearchLog":              true,
+	"cls DescribeTopics":         true,
+	"cls DescribeLogsets":        true,
+	"cls DescribeLogContext":     true,
+	"cls DescribeLogHistogram":   true,
+	"cls DescribeIndex":          true,
+	"cls DescribePartitions":     true,
+	"cls DescribeShippers":       true,
+	"cls DescribeAlarms":         true,
+	"cls DescribeAlarmNotices":   true,
+	"cvm DescribeInstances":      true,
+	"cvm DescribeRegions":        true,
+	"cvm DescribeZones":          true,
+	"cvm GetRegions":             true,
+	"cvm ListInstances":          true,
+	"vpc DescribeVpcs":           true,
+	"vpc DescribeSubnets":        true,
+	"vpc DescribeSecurityGroups": true,
+	"clb DescribeLoadBalancers":  true,
+	"clb DescribeListeners":      true,
+	"clb DescribeTargetHealth":   true,
+	"cdb DescribeDBInstances":    true,
+	"redis DescribeInstances":    true,
+	"monitor GetMonitorData":     true,
+	"tke DescribeClusters":       true,
+	"cdn DescribeDomains":        true,
+	"dnspod DescribeRecordList":  true,
 }
 
-var tccliSensitiveActionWords = []string{
-	"secret", "token", "password", "credential", "key",
-	"auth", "login", "assume", "sign", "url", "policy", "role",
+var tccliGlobalValueFlags = map[string]bool{
+	"--profile": true,
+	"--region":  true,
+	"--output":  true,
+	"--version": true,
+	"--timeout": true,
 }
 
-var tccliForbiddenFlagPrefixes = []string{
-	"endpoint", "proxy", "http-proxy", "https-proxy",
-	"secret", "token", "role",
-	"cli-input-json", "cli-unfold-argument", "generate-cli-skeleton",
-	"waiter", "sso",
+// tccliQueryValueFlags 精确长选项名白名单，彻底拦截 Python argparse 唯一前缀缩写（如 --endp、--sec、--cli-in）。
+var tccliQueryValueFlags = map[string]bool{
+	"--TopicId":         true,
+	"--TopicIds":        true,
+	"--LogsetId":        true,
+	"--LogsetIds":       true,
+	"--LogsetName":      true,
+	"--From":            true,
+	"--To":              true,
+	"--QueryString":     true,
+	"--Query":           true,
+	"--Limit":           true,
+	"--Offset":          true,
+	"--Context":         true,
+	"--Sort":            true,
+	"--SyntaxRule":      true,
+	"--UseNewAnalysis":  true,
+	"--SamplingRate":    true,
+	"--HighLight":       true,
+	"--Interval":        true,
+	"--Filters":         true,
+	"--InstanceIds":     true,
+	"--VpcIds":          true,
+	"--SubnetIds":       true,
+	"--LoadBalancerIds": true,
+	"--ListenerIds":     true,
+	"--ClusterIds":      true,
+	"--Namespace":       true,
+	"--MetricName":      true,
+	"--Period":          true,
+	"--StartTime":       true,
+	"--EndTime":         true,
+	"--Domain":          true,
 }
 
-func isForbiddenTCCLIFlag(flagName string) bool {
-	low := strings.ToLower(strings.TrimPrefix(flagName, "--"))
-	for _, p := range tccliForbiddenFlagPrefixes {
-		if strings.HasPrefix(low, p) {
-			return true
-		}
+func isValidTCCLIFlagValue(name, val string) bool {
+	if val == "" || isForbiddenFileRefValue(val) {
+		return false
 	}
-	return false
+	switch name {
+	case "--profile":
+		return isSafeProfileName(val)
+	case "--output":
+		return val == "json" || val == "text" || val == "table"
+	case "--timeout":
+		return isDigits(val)
+	}
+	return true
 }
 
 func isSafeReadOnlyTCCLI(args []string) bool {
@@ -2765,63 +3047,48 @@ func isSafeReadOnlyTCCLI(args []string) bool {
 			break
 		}
 		name, val, hasEq := strings.Cut(a, "=")
-		if hasEq {
-			switch name {
-			case "--profile", "--region", "--output", "--version", "--timeout":
-				if isForbiddenFileRefValue(val) {
-					return false
-				}
-				i++
-			default:
-				return false
-			}
-			continue
-		}
-		switch a {
-		case "--profile", "--region", "--output", "--version", "--timeout":
-			if i+1 >= len(args) || isForbiddenFileRefValue(args[i+1]) {
-				return false
-			}
-			i += 2
-		default:
+		if !tccliGlobalValueFlags[name] {
 			return false
 		}
+		if hasEq {
+			if !isValidTCCLIFlagValue(name, val) {
+				return false
+			}
+			i++
+			continue
+		}
+		if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") || !isValidTCCLIFlagValue(a, args[i+1]) {
+			return false
+		}
+		i += 2
 	}
 	if i+1 >= len(args) {
 		return false
 	}
 	service := strings.ToLower(args[i])
 	action := args[i+1]
-	if !tccliAllowedServices[service] || strings.HasPrefix(action, "-") {
+	if !tccliAllowedServiceActions[service+" "+action] {
 		return false
 	}
-	if !hasPascalActionPrefix(action, "Describe", "Search", "Get", "List") || hasSensitiveActionWord(action, tccliSensitiveActionWords) {
-		return false
-	}
-	expectVal := false
-	for _, a := range args[i+2:] {
-		if strings.HasPrefix(a, "-") {
-			if !strings.HasPrefix(a, "--") || len(a) <= 2 {
+	for j := i + 2; j < len(args); j++ {
+		a := args[j]
+		if !strings.HasPrefix(a, "--") || len(a) <= 2 {
+			return false
+		}
+		name, val, hasEq := strings.Cut(a, "=")
+		if !tccliGlobalValueFlags[name] && !tccliQueryValueFlags[name] {
+			return false
+		}
+		if hasEq {
+			if !isValidTCCLIFlagValue(name, val) {
 				return false
-			}
-			name, val, hasEq := strings.Cut(a, "=")
-			if isForbiddenTCCLIFlag(name) {
-				return false
-			}
-			if hasEq {
-				if isForbiddenFileRefValue(val) {
-					return false
-				}
-				expectVal = false
-			} else {
-				expectVal = true
 			}
 			continue
 		}
-		if !expectVal || isForbiddenFileRefValue(a) {
+		if j+1 >= len(args) || !isValidTCCLIFlagValue(name, args[j+1]) {
 			return false
 		}
-		expectVal = false
+		j++
 	}
 	return true
 }
@@ -2879,28 +3146,30 @@ func isExactSentryAuthHeader(hv string) bool {
 	return rest == "$SENTRY_AUTH_TOKEN" || rest == "${SENTRY_AUTH_TOKEN}"
 }
 
-func isSafeCurlHeader(tok shellToken) bool {
+func isSafeCurlHeader(tok shellToken) (isAuth bool, ok bool) {
 	hv := tok.val
 	if hv == "" || strings.HasPrefix(strings.TrimSpace(hv), "@") || strings.ContainsAny(hv, "\r\n") {
-		return false
+		return false, false
 	}
-	var name string
-	if idx := strings.IndexByte(hv, ':'); idx >= 0 {
-		name = strings.ToLower(strings.TrimSpace(hv[:idx]))
-	} else {
-		name = strings.ToLower(strings.TrimSpace(strings.TrimSuffix(hv, ";")))
+	idx := strings.IndexByte(hv, ':')
+	if idx <= 0 || strings.TrimSpace(hv[idx+1:]) == "" {
+		return false, false
 	}
+	name := strings.ToLower(strings.TrimSpace(hv[:idx]))
 	switch name {
-	case "host", "cookie", "x-http-method-override":
-		return false
+	case "authorization":
+		if tok.hasSentryTokenVar && !isExactSentryAuthHeader(hv) {
+			return false, false
+		}
+		return true, true
+	case "accept", "user-agent":
+		if tok.hasSentryTokenVar {
+			return false, false
+		}
+		return false, true
+	default:
+		return false, false
 	}
-	if strings.Contains(strings.ToLower(hv), "x-http-method-override") {
-		return false
-	}
-	if tok.hasSentryTokenVar {
-		return isExactSentryAuthHeader(hv)
-	}
-	return true
 }
 
 func isSafeReadOnlyCurl(argToks []shellToken, roots ScratchRoots) bool {
@@ -2910,7 +3179,7 @@ func isSafeReadOnlyCurl(argToks []shellToken, roots ScratchRoots) bool {
 	var urls []shellToken
 	endFlags := false
 	outputCount := 0
-	sentryHeaderCount := 0
+	authHeaderCount := 0
 	for i := 0; i < len(argToks); i++ {
 		t := argToks[i]
 		a := t.val
@@ -2936,12 +3205,13 @@ func isSafeReadOnlyCurl(argToks []shellToken, roots ScratchRoots) bool {
 					return false
 				}
 				ht := argToks[i+1]
-				if !isSafeCurlHeader(ht) {
+				isAuth, ok := isSafeCurlHeader(ht)
+				if !ok {
 					return false
 				}
-				if ht.hasSentryTokenVar {
-					sentryHeaderCount++
-					if sentryHeaderCount > 1 {
+				if isAuth {
+					authHeaderCount++
+					if authHeaderCount > 1 {
 						return false
 					}
 				}
@@ -3082,13 +3352,88 @@ func autoWritableRoots(roots ScratchRoots) []string {
 	return out
 }
 
+func segEqualPlatform(a, b string) bool {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+func splitExistingStatAncestor(p string) (fi os.FileInfo, missing []string, ok bool) {
+	cur := filepath.Clean(p)
+	var rev []string
+	for {
+		st, err := os.Stat(cur)
+		if err == nil {
+			for l, r := 0, len(rev)-1; l < r; l, r = l+1, r-1 {
+				rev[l], rev[r] = rev[r], rev[l]
+			}
+			return st, rev, true
+		}
+		if !os.IsNotExist(err) {
+			return nil, nil, false
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return nil, nil, false
+		}
+		rev = append(rev, filepath.Base(cur))
+		cur = parent
+	}
+}
+
+// isSameOrWithinReal 结合 inode 身份（os.SameFile）与平台大小写折叠判断 child 是否等于或位于 parent 之内，
+// 防止 macOS APFS 大小写变体（如 /PRIVATE/TMP）或目录别名绕过互斥判断。
+func isSameOrWithinReal(child, parent string) bool {
+	child = filepath.Clean(child)
+	parent = filepath.Clean(parent)
+	if parent == "/" {
+		return true
+	}
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		if pathWithin(strings.ToLower(child), strings.ToLower(parent), true) {
+			return true
+		}
+	} else if pathWithin(child, parent, true) {
+		return true
+	}
+	pFI, pMissing, ok := splitExistingStatAncestor(parent)
+	if !ok {
+		return false
+	}
+	cur := child
+	var cTail []string
+	for {
+		if st, err := os.Stat(cur); err == nil && os.SameFile(st, pFI) {
+			if len(cTail) < len(pMissing) {
+				return false
+			}
+			// cTail 逆序存着从 child 到 cur 的路径段
+			for idx, seg := range pMissing {
+				cSeg := cTail[len(cTail)-1-idx]
+				if !segEqualPlatform(cSeg, seg) {
+					return false
+				}
+			}
+			return true
+		}
+		next := filepath.Dir(cur)
+		if next == cur {
+			break
+		}
+		cTail = append(cTail, filepath.Base(cur))
+		cur = next
+	}
+	return false
+}
+
 func pathsOverlap(a, b string) bool {
 	a = filepath.Clean(a)
 	b = filepath.Clean(b)
 	if a == "/" || b == "/" {
 		return true
 	}
-	return pathWithin(a, b, true) || pathWithin(b, a, true)
+	return isSameOrWithinReal(a, b) || isSameOrWithinReal(b, a)
 }
 
 func overlapsWritableRoots(p string, writableRoots []string) bool {
@@ -3157,7 +3502,7 @@ func isPathTrustedScript(targetPath string, roots ScratchRoots) bool {
 			if err != nil || !dfi.IsDir() {
 				continue
 			}
-			if pathWithin(resolvedTarget, resolvedDir, false) {
+			if !os.SameFile(fi, dfi) && isSameOrWithinReal(resolvedTarget, resolvedDir) {
 				return true
 			}
 		} else {
@@ -3169,7 +3514,11 @@ func isPathTrustedScript(targetPath string, roots ScratchRoots) bool {
 			if overlapsWritableRoots(resolvedEntry, writableRoots) {
 				continue
 			}
-			if resolvedTarget == resolvedEntry {
+			efi, err := os.Stat(resolvedEntry)
+			if err != nil {
+				continue
+			}
+			if os.SameFile(fi, efi) {
 				return true
 			}
 		}

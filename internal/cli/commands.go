@@ -796,17 +796,17 @@ func antigravityPermissionDecision(behavior string) string {
 }
 
 // currentLarkScratchRoots 解析当前飞书 hook 生效的只读策略：
-// 当 POSSE_LARK_BOT_ID 与 POSSE_HOME 均非空时直接读取最新 lark-bots.json，
-// 并显式覆盖启动时环境变量（若机器人不存在或配置已清空则置空切片，确保存活 worker 即时撤销且无分隔符歧义）。
+// 生产 hook 一律失效关闭，不信任启动环境变量回退；仅当 POSSE_LARK_BOT_ID 与 POSSE_HOME 均非空时
+// 实时读取最新 lark-bots.json（缺失标识、机器人不存在或配置已清空均置空切片，确保即时撤销无盲区）。
 func currentLarkScratchRoots() agent.ScratchRoots {
 	roots := agent.DefaultScratchRoots()
+	roots.ReadOnlyHosts = nil
+	roots.TrustedScripts = nil
 	botID := strings.TrimSpace(os.Getenv("POSSE_LARK_BOT_ID"))
 	posseHome := strings.TrimSpace(os.Getenv("POSSE_HOME"))
 	if botID == "" || posseHome == "" {
 		return roots
 	}
-	roots.ReadOnlyHosts = nil
-	roots.TrustedScripts = nil
 	cfg, err := lark.LoadConfig(posseHome)
 	if err != nil {
 		return roots

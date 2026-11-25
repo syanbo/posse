@@ -339,11 +339,8 @@ func deriveCommandRuleKeys(cmdLine string) ([]string, string) {
 }
 
 func deriveCommandRuleKeysWithRoots(cmdLine string, roots agent.ScratchRoots) ([]string, string) {
-	normalized := agent.NormalizeShellLine(cmdLine)
-	if agent.HasUnsafeShellSyntax(normalized) {
-		return nil, ""
-	}
-	segs, ok := agent.SplitShellSegments(normalized)
+	// 与 CLI 共用前序 `cd <安全目录> &&` 上下文过滤已证明安全的只读段，仅对需审批段生成规则键
+	segs, ok := agent.NonReadOnlySegmentsWithRoots(cmdLine, roots)
 	if !ok || len(segs) == 0 {
 		return nil, ""
 	}
@@ -351,10 +348,6 @@ func deriveCommandRuleKeysWithRoots(cmdLine string, roots agent.ScratchRoots) ([
 	var labels []string
 	seen := map[string]bool{}
 	for _, seg := range segs {
-		// 跳过本身已由只读安全白名单（含当前机器人配置的 readOnlyHosts/trustedScripts）放行的段，仅记录需要审批的段
-		if agent.IsSafeReadOnlySegmentWithRoots(seg, roots) {
-			continue
-		}
 		// 需审批的段若无法可靠解析、带有任意重定向、包含前置环境变量赋值、程序以带 / 的路径给出、
 		// 属于通用解释器/包装命令，或指向非临时输出目的地，整条命令不生成同类规则键，只能单次审批。
 		fields, hasRedir, ok := agent.ParseSegmentForRuleKey(seg)

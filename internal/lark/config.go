@@ -295,12 +295,44 @@ func isValidTrustedScriptEntry(raw string) bool {
 
 func isForbiddenScriptLocation(clean string, isDir bool) bool {
 	clean = filepath.Clean(clean)
-	if clean == "/" || clean == "/tmp" || strings.HasPrefix(clean, "/tmp/") ||
-		clean == "/private/tmp" || strings.HasPrefix(clean, "/private/tmp/") {
+	low := strings.ToLower(clean)
+	if low == "/" || low == "/tmp" || strings.HasPrefix(low, "/tmp/") ||
+		low == "/private/tmp" || strings.HasPrefix(low, "/private/tmp/") {
 		return true
 	}
-	if isDir && clean == "/private" {
+	if isDir && low == "/private" {
 		return true
+	}
+	tmpInfo, err := os.Stat("/tmp")
+	if err == nil {
+		// 1) clean 是否等于或位于 /tmp（即 /private/tmp）之内
+		cur := clean
+		for {
+			if st, sErr := os.Stat(cur); sErr == nil && os.SameFile(st, tmpInfo) {
+				return true
+			}
+			next := filepath.Dir(cur)
+			if next == cur {
+				break
+			}
+			cur = next
+		}
+		// 2) 若配置为目录，clean 本身不得是 /private/tmp 的真实祖先（如 / 或 /PRIVATE）
+		if isDir {
+			if stClean, cErr := os.Stat(clean); cErr == nil {
+				p := "/private/tmp"
+				for {
+					if pst, pErr := os.Stat(p); pErr == nil && os.SameFile(stClean, pst) {
+						return true
+					}
+					nextP := filepath.Dir(p)
+					if nextP == p {
+						break
+					}
+					p = nextP
+				}
+			}
+		}
 	}
 	return false
 }

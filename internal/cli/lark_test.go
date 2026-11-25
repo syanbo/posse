@@ -36,7 +36,7 @@ func TestAntigravityPreToolUseHelpers(t *testing.T) {
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"cat ~/Desktop/Works/app_av4/ic_launcher.xml 2>/dev/null"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"echo \"POSSE_NOTES=${POSSE_NOTES}\" ; posse task check k_57f89c0a --execution x_1"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"mkdir -p /tmp/posse-triage && cd /tmp/posse-triage && lark-cli base +record-list --base-token EHz --table-id tbl --page-size 20 --as user | jq ."}}}`,
-		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli base +record-search --base-token EHz --table-id tbl --keyword 20261124-001 --as user"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli base +record-search --base-token EHz --table-id tbl --keyword 20261124-001 --search-field 编号 --format json --as user"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli im +messages-mget --message-ids om_1 --as bot"}}}`,
 		// 四条真实排查命令（第 3 条按本机 lark-cli 1.0.100 实际支持旗标改为 --output）
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"mkdir -p /tmp/posse-triage && cd /tmp/posse-triage && lark-cli base --help && echo \"---\" && lark-cli base +record-list --base-token EHz --table-id tbl --page-size 10 --as user"}}}`,
@@ -130,7 +130,7 @@ func TestAntigravityPreToolUseHelpers(t *testing.T) {
 		}
 	}
 
-	// 验证通过环境变量注入 POSSE_LARK_READONLY_HOSTS 与 POSSE_LARK_TRUSTED_SCRIPTS 后放行受信脚本与 Sentry 只读 curl
+	// 验证生产 hook 失效关闭：缺少 POSSE_LARK_BOT_ID 时绝不信任启动环境变量 POSSE_LARK_READONLY_HOSTS / POSSE_LARK_TRUSTED_SCRIPTS
 	scriptDir := t.TempDir()
 	scriptPath := filepath.Join(scriptDir, "download-log.sh")
 	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\necho ok\n"), 0o755); err != nil {
@@ -138,15 +138,13 @@ func TestAntigravityPreToolUseHelpers(t *testing.T) {
 	}
 	t.Setenv("POSSE_LARK_READONLY_HOSTS", "sentry.corp.laoyuegou.com,gitlab.corp.laoyuegou.com")
 	t.Setenv("POSSE_LARK_TRUSTED_SCRIPTS", scriptPath)
-	envAllowed := []string{
+	for _, tc := range []string{
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"curl -s -H \"Authorization: Bearer $SENTRY_AUTH_TOKEN\" \"https://sentry.corp.laoyuegou.com/api/0/projects/sentry/duoduotu-app/events/?query=user.id:80356859&per_page=1&full=true\" | jq '.[0].user.data.userId'"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"GITLAB_HOST=gitlab.corp.laoyuegou.com glab api projects/1/issues"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"bash ` + scriptPath + ` --uid 123"}}}`,
-		`{"toolCall":{"name":"run_command","args":{"CommandLine":"` + scriptPath + ` --uid 123"}}}`,
-	}
-	for _, tc := range envAllowed {
-		if !isSafeLarkToolCall([]byte(tc)) {
-			t.Fatalf("expected env-configured auto-allow for %s", tc)
+	} {
+		if isSafeLarkToolCall([]byte(tc)) {
+			t.Fatalf("missing POSSE_LARK_BOT_ID must fail closed for %s", tc)
 		}
 	}
 

@@ -115,9 +115,12 @@ func TestValidateBotPolicy(t *testing.T) {
 		"/",
 		"/tmp",
 		"/tmp/a.sh",
+		"/TMP/a.sh",
 		"/tmp/",
 		"/private/tmp/a.sh",
+		"/PRIVATE/TMP/a.sh",
 		"/private/",
+		"/PRIVATE/",
 		filepath.Join(tmpLink, "a.sh"),
 	}
 	for _, s := range badScripts {

