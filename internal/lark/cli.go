@@ -86,6 +86,10 @@ type messageContextFetcher interface {
 	ListRecentMessages(ctx context.Context, profile, chatID string, limit int) ([]FetchedMessage, error)
 }
 
+type botChatLister interface {
+	ListBotChats(ctx context.Context, profile string) (ChatListResult, error)
+}
+
 // CardActionEvent 对应 `lark-cli event consume card.action.trigger --as bot` 的扁平输出。
 type CardActionEvent struct {
 	EventID     string `json:"event_id"`
@@ -695,4 +699,61 @@ func parseFetchedMessages(out []byte) ([]FetchedMessage, error) {
 		return nil, errors.New("lark messages API returned ok=false")
 	}
 	return env.Data.Messages, nil
+}
+
+// ListBotChats 拉取该机器人 profile 真实已加入的飞书群列表（按活跃时间倒序，最多自动翻 5 页共 500 个群）。
+func (c *CLIClient) ListBotChats(ctx context.Context, profile string) (ChatListResult, error) {
+	out, err := c.run(ctx, profile, "", nil,
+		"im", "+chat-list", "--as", "bot",
+		"--page-all", "--page-size", "100", "--page-limit", "5", "--page-delay", "0",
+		"--sort", "active_time", "--format", "json")
+	if err != nil {
+		return ChatListResult{}, err
+	}
+	return parseBotChats(out)
+}
+
+func parseBotChats(out []byte) (ChatListResult, error) {
+	var env struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Chats []struct {
+				ChatID      string `json:"chat_id"`
+				Name        string `json:"name"`
+				Description string `json:"description"`
+			} `json:"chats"`
+			HasMore bool `json:"has_more"`
+		} `json:"data"`
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(out), &env); err != nil {
+		return ChatListResult{}, fmt.Errorf("parse lark chats response: %w", err)
+	}
+	if !env.OK {
+		if env.Error.Message != "" {
+			return ChatListResult{}, errors.New(env.Error.Message)
+		}
+		return ChatListResult{}, errors.New("lark chats API returned ok=false")
+	}
+	chats := make([]ChatInfo, 0, len(env.Data.Chats))
+	seen := map[string]bool{}
+	for _, c := range env.Data.Chats {
+		id := strings.TrimSpace(c.ChatID)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		name := strings.TrimSpace(c.Name)
+		if name == "" {
+			name = id
+		}
+		chats = append(chats, ChatInfo{
+			ChatID:      id,
+			Name:        name,
+			Description: strings.TrimSpace(c.Description),
+		})
+	}
+	return ChatListResult{Chats: chats, HasMore: env.Data.HasMore}, nil
 }

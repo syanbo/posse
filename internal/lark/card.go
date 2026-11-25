@@ -125,8 +125,8 @@ func cardTitle(botName, agentName, wsLabel, state string) string {
 	return head
 }
 
-// BuildProgressCard 生成执行中的实时进度卡片（带耗时、当前工具/状态行与停止按钮）。
-func BuildProgressCard(botID, botName, agentName, wsLabel, execID, stateLabel, elapsed, tool, toolInput, phase string, subagents int) string {
+// BuildProgressCard 生成执行中的实时进度卡片（带耗时、当前工具/状态行与停止按钮；排队等待前序轮次时附加「中止前序并执行」按钮）。
+func BuildProgressCard(botID, botName, agentName, wsLabel, execID, stateLabel, elapsed, tool, toolInput, phase string, subagents int, interruptPrevID string) string {
 	var lines []string
 	meta := stateLabel
 	if elapsed != "" {
@@ -146,13 +146,23 @@ func BuildProgressCard(botID, botName, agentName, wsLabel, execID, stateLabel, e
 	default:
 		lines = append(lines, tr("Working in Posse…"))
 	}
+	var btns []map[string]any
+	if interruptPrevID != "" {
+		btns = append(btns, cbButton(tr("Interrupt previous & run"), "primary_filled", map[string]any{
+			"action":     "exec_interrupt_prev",
+			"botId":      botID,
+			"execId":     execID,
+			"prevExecId": interruptPrevID,
+		}))
+	}
+	btns = append(btns, cbButton(tr("Stop"), "danger", map[string]any{
+		"action": "exec_stop",
+		"botId":  botID,
+		"execId": execID,
+	}))
 	elems := []any{
 		mdElement(strings.Join(lines, "\n")),
-		buttonRow(cbButton(tr("Stop"), "danger", map[string]any{
-			"action": "exec_stop",
-			"botId":  botID,
-			"execId": execID,
-		})),
+		buttonRow(btns...),
 	}
 	return card20(cardTitle(botName, agentName, wsLabel, tr("Running")), "blue", elems)
 }
@@ -403,6 +413,56 @@ func BuildWorkspacePickerCard(botID, botName, chatID, threadKey, currentID strin
 		elems = append(elems, buttonRow(btns...))
 	}
 	return card20(cardTitle(botName, "", "", tr("Switch Workspace")), "blue", elems)
+}
+
+// BuildStagedAttachmentsCard 生成单聊纯附件暂存提示卡，等待用户补充指令或点击立即发送。
+func BuildStagedAttachmentsCard(botID, botName, batchID string, labels []string) string {
+	lines := []string{
+		fmt.Sprintf("**%d %s**", len(labels), tr("attachment(s) staged")),
+	}
+	const maxShown = 5
+	for i, name := range labels {
+		if i >= maxShown {
+			lines = append(lines, "- …")
+			break
+		}
+		safe := strings.ReplaceAll(oneLine(name, 80), "`", "'")
+		lines = append(lines, fmt.Sprintf("- `%s`", safe))
+	}
+	lines = append(lines, tr("Send your instruction next (or reply to the file) to run together."))
+	elems := []any{
+		mdElement(strings.Join(lines, "\n")),
+		buttonRow(
+			cbButton(tr("Send now"), "primary_filled", map[string]any{
+				"action":  "staged_send",
+				"botId":   botID,
+				"batchId": batchID,
+			}),
+			cbButton(tr("Cancel"), "default", map[string]any{
+				"action":  "staged_cancel",
+				"botId":   botID,
+				"batchId": batchID,
+			}),
+		),
+	}
+	return card20(cardTitle(botName, "", "", tr("Attachments staged")), "wathet", elems)
+}
+
+// BuildStagedAttachmentsClosedCard 将暂存提示卡收拢为已提交/已取消/已过期的灰色状态卡。
+func BuildStagedAttachmentsClosedCard(botName, status string, count int) string {
+	label := tr("Submitted")
+	body := fmt.Sprintf("%d %s", count, tr("attachment(s) submitted with your message."))
+	switch status {
+	case "cancelled":
+		label = tr("Cancelled")
+		body = tr("Staged attachments cleared.")
+	case "expired":
+		label = tr("Expired")
+		body = tr("Staged attachments expired.")
+	}
+	return card20(cardTitle(botName, "", "", label), "grey", []any{
+		mdElement(body),
+	})
 }
 
 func oneLine(s string, maxRunes int) string {

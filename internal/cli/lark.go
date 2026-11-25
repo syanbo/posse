@@ -175,7 +175,7 @@ func cmdLarkAdd(e *env, args []string) error {
 		}
 	}
 	var saved lark.BotConfig
-	if err := e.call("lark.bots.save", map[string]any{"ownerOpenId": *owner, "bot": bot}, &saved); err != nil {
+	if err := e.call("lark.bots.save", map[string]any{"ownerOpenId": *owner, "bot": bot, "preserveChats": true}, &saved); err != nil {
 		return err
 	}
 	return e.emit(saved, func() {
@@ -305,7 +305,7 @@ func cmdLarkEdit(e *env, args []string) error {
 		bot.ReadOnlyHosts = []string(readOnlyHosts)
 	}
 	var saved lark.BotConfig
-	if err := e.call("lark.bots.save", map[string]any{"ownerOpenId": *owner, "bot": bot}, &saved); err != nil {
+	if err := e.call("lark.bots.save", map[string]any{"ownerOpenId": *owner, "bot": bot, "preserveChats": true}, &saved); err != nil {
 		return err
 	}
 	return e.emit(saved, func() {

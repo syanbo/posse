@@ -19,6 +19,8 @@ func TestPreviewLarkSettings(t *testing.T) {
 		a := previewApp(t)
 		a.selected = settingsBoardID
 		a.settingsTab = "lark"
+		customRole := "专注 Posse 仓库开发与代码审查"
+		emptyRole := ""
 		a.lark = larkUIState{
 			loaded: true,
 			owner:  "ou_bd37ce5c61504b94bbb6499cd7b1b6bf",
@@ -32,24 +34,29 @@ func TestPreviewLarkSettings(t *testing.T) {
 					PermissionMode: lark.PermAsk, SessionMode: lark.SessionChat, TriggerPolicy: lark.TriggerSelf,
 					GroupContextCount: 20,
 					Role:              "优先按 works-incident-triage 技能排查 Works 线上报障，只读定位代码与日志，给出结论与回复话术。",
-				},
-				{
-					ID: "lbot_docs", Name: "文档整理助手", Profile: "cli_docs_bot",
-					Enabled: false, WorkspaceID: "w1", Agent: "claude",
-					PermissionMode: lark.PermSkip, SessionMode: lark.SessionThread, TriggerPolicy: lark.TriggerAllowlist,
+					Chats: []lark.ChatOverride{
+						{ChatID: "oc_posse_dev_1234", Name: "Posse 开发助手", WorkspaceID: "w1", Agent: "codex", Role: &customRole, NoMention: true},
+						{ChatID: "oc_daily_5678", Name: "日报机器人", Role: &emptyRole, NoMention: true},
+					},
 				},
 			},
 			statuses: map[string]lark.BotStatus{
 				"lbot_works": {ID: "lbot_works", Running: true, MsgReady: true, CardReady: true},
-				"lbot_docs":  {ID: "lbot_docs", Running: false},
 			},
-			editing: true,
-			draft: lark.BotConfig{
-				Name: "Works 排查助手", Profile: "cli_a945f8f32b38dcd4",
-				WorkspaceID: "w7", Agent: "antigravity",
-				PermissionMode: lark.PermAsk, SessionMode: lark.SessionChat, TriggerPolicy: lark.TriggerSelf,
-				GroupContextCount: 20,
-				Role:              "优先按 works-incident-triage 技能排查 Works 线上报障：\n1. 自动查多维表格与群聊附件\n2. 只读定位 Works 代码与日志根因\n3. 输出「现象判断 / 原因定位 / 解决方式 / 建议的话术」",
+			chatEditing:    true,
+			chatEditIsNew:  true,
+			chatBotID:      "lbot_works",
+			chatRoleMode:   1,
+			chatRoleText:   customRole,
+			chatListBotID:  "lbot_works",
+			chatListLoaded: true,
+			chatList: []lark.ChatInfo{
+				{ChatID: "oc_posse_dev_1234", Name: "Posse 开发助手"},
+				{ChatID: "oc_daily_5678", Name: "日报机器人"},
+				{ChatID: "oc_reverse_9999", Name: "外挂逆向分析"},
+			},
+			chatDraft: lark.ChatOverride{
+				ChatID: "oc_reverse_9999", Name: "外挂逆向分析", WorkspaceID: "w7", Agent: "antigravity", NoMention: true,
 			},
 		}
 		savePNG(t, newPreviewTesterSize(a, dark, 1200, 1060), "settings-lark-"+suffix+".png")

@@ -27,29 +27,59 @@ const (
 
 // Config 存在 $POSSE_HOME/lark-bots.json，描述所有已配置的飞书机器人与全局主人身份。
 type Config struct {
+	Revision    int64       `json:"revision,omitempty"`
 	OwnerOpenID string      `json:"ownerOpenId,omitempty"`
 	Bots        []BotConfig `json:"bots,omitempty"`
 }
 
+// ChatOverride 允许单个飞书机器人按 chat_id（不同飞书群）覆写工作区、Agent、角色、权限与免 @ 设置。
+// 未填写或为 nil 的字段自动继承所属机器人的默认配置。
+type ChatOverride struct {
+	ChatID            string  `json:"chatId"`
+	Name              string  `json:"name,omitempty"`              // 群分身显示名（卡片与讨论标题；空=继承 bot.Name）
+	WorkspaceID       string  `json:"workspaceId,omitempty"`       // 覆写默认工作区（空=继承）
+	Agent             string  `json:"agent,omitempty"`             // 覆写默认 Agent（空=继承）
+	PermissionMode    string  `json:"permissionMode,omitempty"`    // ""=继承 | "ask" | "skip"
+	Role              *string `json:"role,omitempty"`              // nil=继承 | ""=显式无角色 | 非空=覆写
+	SessionMode       string  `json:"sessionMode,omitempty"`       // ""=继承 | "chat" | "thread"
+	TriggerPolicy     string  `json:"triggerPolicy,omitempty"`     // ""=继承 | "self" | "allowlist" | "group"
+	GroupContextCount *int    `json:"groupContextCount,omitempty"` // nil=继承 | 0~50=覆写
+	NoMention         bool    `json:"noMention,omitempty"`         // true=该群免 @ 直接触发（需应用开通全群消息权限）
+}
+
+// ChatInfo 描述机器人已加入的一个飞书群，用于设置页一键选择群分身。
+type ChatInfo struct {
+	ChatID      string `json:"chatId"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+// ChatListResult 是拉取机器人已加入群列表的返回结果。
+type ChatListResult struct {
+	Chats   []ChatInfo `json:"chats"`
+	HasMore bool       `json:"hasMore,omitempty"`
+}
+
 // BotConfig 对应一个飞书自建应用（一个 lark-cli profile）及其默认工作区、Agent 与权限策略。
 type BotConfig struct {
-	ID                string   `json:"id"`
-	Name              string   `json:"name"`
-	Profile           string   `json:"profile"`
-	Enabled           bool     `json:"enabled"`
-	WorkspaceID       string   `json:"workspaceId,omitempty"`
-	Agent             string   `json:"agent,omitempty"`
-	Model             string   `json:"model,omitempty"`
-	Effort            string   `json:"effort,omitempty"`
-	PermissionMode    string   `json:"permissionMode,omitempty"` // ask | skip
-	Role              string   `json:"role,omitempty"`
-	SessionMode       string   `json:"sessionMode,omitempty"`       // chat | thread
-	TriggerPolicy     string   `json:"triggerPolicy,omitempty"`     // self | allowlist | group
-	GroupContextCount int      `json:"groupContextCount,omitempty"` // 群聊 @ 触发时自动附带的最近 N 条群消息（0=关闭，最多 50）
-	AllowedUsers      []string `json:"allowedUsers,omitempty"`
-	AllowedChats      []string `json:"allowedChats,omitempty"`
-	ReadOnlyHosts     []string `json:"readOnlyHosts,omitempty"`  // 允许 curl /api/0/ 只读查询的域名白名单（默认空 = 不放行任何 curl）
-	TrustedScripts    []string `json:"trustedScripts,omitempty"` // 主人显式信任的脚本绝对路径或目录（目录以 / 结尾）
+	ID                string         `json:"id"`
+	Name              string         `json:"name"`
+	Profile           string         `json:"profile"`
+	Enabled           bool           `json:"enabled"`
+	WorkspaceID       string         `json:"workspaceId,omitempty"`
+	Agent             string         `json:"agent,omitempty"`
+	Model             string         `json:"model,omitempty"`
+	Effort            string         `json:"effort,omitempty"`
+	PermissionMode    string         `json:"permissionMode,omitempty"` // ask | skip
+	Role              string         `json:"role,omitempty"`
+	SessionMode       string         `json:"sessionMode,omitempty"`       // chat | thread
+	TriggerPolicy     string         `json:"triggerPolicy,omitempty"`     // self | allowlist | group
+	GroupContextCount int            `json:"groupContextCount,omitempty"` // 群聊 @ 触发时自动附带的最近 N 条群消息（0=关闭，最多 50）
+	AllowedUsers      []string       `json:"allowedUsers,omitempty"`
+	AllowedChats      []string       `json:"allowedChats,omitempty"`
+	ReadOnlyHosts     []string       `json:"readOnlyHosts,omitempty"`  // 允许 curl /api/0/ 只读查询的域名白名单（默认空 = 不放行任何 curl）
+	TrustedScripts    []string       `json:"trustedScripts,omitempty"` // 主人显式信任的脚本绝对路径或目录（目录以 / 结尾）
+	Chats             []ChatOverride `json:"chats,omitempty"`          // 按群覆写配置（单机器人分身）
 }
 
 // ProfileInfo 来自 `lark-cli profile list` 的已配置飞书应用概览。
@@ -104,14 +134,34 @@ func SaveConfig(home string, cfg Config) error {
 		return err
 	}
 	path := ConfigPath(home)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	f, err := os.CreateTemp(dir, "lark-bots-*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmp := f.Name()
+	if err := f.Chmod(0o600); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if _, err := f.Write(b); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 func NormalizeBot(b BotConfig) BotConfig {
@@ -146,7 +196,142 @@ func NormalizeBot(b BotConfig) BotConfig {
 	b.AllowedChats = cleanIDs(b.AllowedChats)
 	b.ReadOnlyHosts = cleanHosts(b.ReadOnlyHosts)
 	b.TrustedScripts = cleanScriptPaths(b.TrustedScripts)
+	b.Chats = normalizeChatOverrides(b.Chats)
 	return b
+}
+
+// CloneBot 返回深拷贝，避免草稿编辑与已发布配置共享切片或指针。
+func CloneBot(b BotConfig) BotConfig {
+	return NormalizeBot(b)
+}
+
+func NormalizeChatOverride(c ChatOverride) ChatOverride {
+	c.ChatID = strings.TrimSpace(c.ChatID)
+	c.Name = strings.TrimSpace(c.Name)
+	c.WorkspaceID = strings.TrimSpace(c.WorkspaceID)
+	c.Agent = strings.ToLower(strings.TrimSpace(c.Agent))
+	if c.Agent == "agy" {
+		c.Agent = "antigravity"
+	}
+	switch c.PermissionMode {
+	case PermAsk, PermSkip:
+	default:
+		c.PermissionMode = ""
+	}
+	switch c.SessionMode {
+	case SessionChat, SessionThread:
+	default:
+		c.SessionMode = ""
+	}
+	switch c.TriggerPolicy {
+	case TriggerSelf, TriggerAllowlist, TriggerGroup:
+	default:
+		c.TriggerPolicy = ""
+	}
+	if c.Role != nil {
+		v := strings.TrimSpace(*c.Role)
+		c.Role = &v
+	}
+	if c.GroupContextCount != nil {
+		n := *c.GroupContextCount
+		if n < 0 {
+			n = 0
+		} else if n > 50 {
+			n = 50
+		}
+		c.GroupContextCount = &n
+	}
+	return c
+}
+
+func normalizeChatOverrides(in []ChatOverride) []ChatOverride {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]ChatOverride, 0, len(in))
+	idx := map[string]int{}
+	for _, raw := range in {
+		c := NormalizeChatOverride(raw)
+		if c.ChatID == "" {
+			continue
+		}
+		if pos, exists := idx[c.ChatID]; exists {
+			out[pos] = c
+			continue
+		}
+		idx[c.ChatID] = len(out)
+		out = append(out, c)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// ValidateChatOverride 校验按群分身的基础合法性（非空合法 chat_id）。
+func ValidateChatOverride(c ChatOverride) error {
+	id := strings.TrimSpace(c.ChatID)
+	if id == "" {
+		return errors.New("chat ID is required")
+	}
+	if strings.ContainsAny(id, " \t\r\n/\\") {
+		return fmt.Errorf("invalid chat ID %q", id)
+	}
+	return nil
+}
+
+// ChatOverrideOf 查找指定 chat_id 的群分身覆写配置。
+func (b BotConfig) ChatOverrideOf(chatID string) (ChatOverride, bool) {
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" {
+		return ChatOverride{}, false
+	}
+	for _, c := range b.Chats {
+		if c.ChatID == chatID {
+			return NormalizeChatOverride(c), true
+		}
+	}
+	return ChatOverride{}, false
+}
+
+// EffectiveForChat 将该群的覆写字段合并到机器人配置，并返回是否免 @（noMention）。
+// 注意：ReadOnlyHosts / TrustedScripts / AllowedChats / AllowedUsers 保持机器人级硬边界。
+func (b BotConfig) EffectiveForChat(chatID string) (eff BotConfig, noMention bool) {
+	eff = NormalizeBot(b)
+	ov, ok := eff.ChatOverrideOf(chatID)
+	if !ok {
+		return eff, false
+	}
+	if ov.Name != "" {
+		eff.Name = ov.Name
+	}
+	if ov.WorkspaceID != "" {
+		eff.WorkspaceID = ov.WorkspaceID
+	}
+	if ov.Agent != "" {
+		if ov.Agent != eff.Agent {
+			// 切换 Agent 时清空旧 Agent 专属的模型与思考深度，避免不兼容参数串扰
+			eff.Model = ""
+			eff.Effort = ""
+		}
+		eff.Agent = ov.Agent
+	}
+	if ov.PermissionMode != "" {
+		eff.PermissionMode = ov.PermissionMode
+	}
+	if ov.Role != nil {
+		eff.Role = *ov.Role
+	}
+	if ov.SessionMode != "" {
+		eff.SessionMode = ov.SessionMode
+	}
+	if ov.TriggerPolicy != "" {
+		eff.TriggerPolicy = ov.TriggerPolicy
+	}
+	if ov.GroupContextCount != nil {
+		eff.GroupContextCount = *ov.GroupContextCount
+	}
+	return eff, ov.NoMention
 }
 
 func cleanHosts(in []string) []string {

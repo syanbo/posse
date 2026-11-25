@@ -4,8 +4,8 @@ Posse 常驻进程原生托管多个本机 `lark-cli` profile 长连接（无需
 
 ## 架构与存储
 
-- **多机器人配置**：存放在 `$POSSE_HOME/lark-bots.json`（`internal/lark/config.go`），可同时启用多个飞书自建应用 profile，每个机器人独立配置默认工作区、默认 Agent、权限审批模式（`ask` / `skip`）、群聊会话粒度（`chat` 按群共享 / `thread` 按话题隔离）、触发白名单（`self` / `allowlist` / `group`）、群聊近期上下文条数（`groupContextCount`，默认关闭，可选 10/20/30 或 CLI 指定 0~50）与角色说明。
-- **引用展开与群上下文**：回复飞书里的某条消息再 `@机器人` 时，网关自动通过 `im +messages-mget --download-resources` 拉取被引用消息的正文与图片/文件附件一并传给 Agent（即使回复里只打了 `@机器人` 也生效）；配置了 `groupContextCount > 0` 时，群聊 `@` 还会自动附带该群最近 N 条未撤回消息作为背景上下文（自动排除当前消息与已展开的父消息）。
+- **多机器人与单机器人按群分身配置**：存放在 `$POSSE_HOME/lark-bots.json`（`internal/lark/config.go`，由常驻进程 `cfgMu` 统一串行持久化与热加载），可同时启用多个飞书自建应用 profile，每个机器人独立配置默认工作区、默认 Agent、权限审批模式（`ask` / `skip`）、群聊会话粒度（`chat` 按群共享 / `thread` 按话题隔离）、触发白名单（`self` / `allowlist` / `group`）、群聊近期上下文条数（`groupContextCount`，默认关闭，可选 10/20/30 或 CLI 指定 0~50）与角色说明；同时支持在单个机器人下按 `chatId` 配置多个**群分身**（`chats[]`），独立覆写显示名、工作区、Agent、权限模式、会话粒度、触发权限、角色说明（支持继承/自定义/清空）以及免 `@` 直接触发（`noMention`，开启后无需 `@` 即可直发消息和暂存纯附件，但显式 `@` 他人时仍不插嘴；需飞书应用已开通全群消息权限）。修改群分身或上级默认配置中的工作区/Agent/角色/权限/会话粒度时，常驻进程自动退役该群旧活跃绑定并清理旧 worker 审批缓存，下一条消息按新配置开启新会话。
+- **引用展开、单聊附件暂存、短文本防抖与群上下文**：回复飞书里的某条消息再 `@机器人` 时，网关自动通过 `im +messages-mget --download-resources` 拉取被引用消息的正文与图片/文件附件一并传给 Agent（即使回复里只打了 `@机器人` 也生效）；单聊（`p2p`）直接发送纯文件或纯图片时，网关不立即启动无指令执行，而是暂存附件（15 分钟有效，连续发多个附件自动合并到同一张暂存提示卡）并保留原始文件名，待用户紧接着发文字说明（或引用该文件回复）时一次合并提交且不重复下载，也可点击暂存卡的 `[立即发送]` / `[取消]` 按钮直接触发或清空；同一发送者在 1.5 秒静默窗内连发多条纯文本消息（最长合并 6 秒）会自动拼成一次 Agent 回合（快捷命令 `/...` 绕过防抖）；配置了 `groupContextCount > 0` 时，群聊 `@` 还会自动附带该群最近 N 条未撤回消息作为背景上下文（自动排除当前消息与已展开的父消息）。
 - **本机私有表**（`internal/store/lark.go`，不进入局域网协作同步）：
   - `lark_bindings`：`(bot_id, chat_id, thread_key) → discussion_key` 与当前活跃成员、工作区、Agent、权限模式；
   - `lark_cards`：执行、提问、权限审批与飞书卡片消息 ID 的映射；
@@ -14,7 +14,7 @@ Posse 常驻进程原生托管多个本机 `lark-cli` profile 长连接（无需
 
 ## 卡片交互与权限审批
 
-- **进度与结果卡（Card 2.0）**：收到 `@机器人` 后立即回复进度卡片（带耗时、实时工具/状态行与 `[停止]` 按钮），每 2.5 秒节流刷新；完成后若期间该会话/话题没有插入其他新消息（结合本地事件与最新消息兜底检查），直接原地将进度卡更新为完整结果卡（原地更新失败时自动降级为新卡片）；若中间插入了审批卡、提问卡或新发言，则先把原进度卡收拢为一行灰色完结回执（移除 `[停止]`），再将完整 Markdown 结论作为新卡片发送到对话底部（引用回复原提问消息；超长自动截断并附 `.md` 文件附件，失败/停止带 `[重试]`）。
+- **进度与结果卡（Card 2.0）**：收到 `@机器人` 后立即回复进度卡片（带耗时、实时工具/状态行与 `[停止]` 按钮；若当前讨论已有前序轮次在运行、本条处于排队态，额外提供仅主人可点的 `[中止前序并执行]` 按钮一键中止前序并拉起当前轮次），每 2.5 秒节流刷新；完成后若期间该会话/话题没有插入其他新消息（结合本地事件与最新消息兜底检查），直接原地将进度卡更新为完整结果卡（原地更新失败时自动降级为新卡片）；若中间插入了审批卡、提问卡或新发言，则先把原进度卡收拢为一行灰色完结回执（移除 `[停止]`），再将完整 Markdown 结论作为新卡片发送到对话底部（引用回复原提问消息；超长自动截断并附 `.md` 文件附件，失败/停止带 `[重试]`）。
 - **工具权限审批（优先 Antigravity `agy` + 兼容 Claude Code）**：
   - `internal/daemon/permission.go` 的 `permissionHub` 同时协调飞书与手机审批；
   - 飞书 `permissionMode == "ask"` 的 worker 启动时自动带 `POSSE_LARK_APPROVAL=1`（不改全局设置）。`agy` 挂载独立的飞书专用 hook 目录 `$POSSE_HOME/.posse-antigravity-lark-hooks`（与普通终端的 `.posse-antigravity-hooks` 隔离，普通终端不挂 `PreToolUse`），进程侧跳过内置二次确认弹窗由 `PreToolUse` 独占把关；CLI hook 与常驻进程共用 `internal/agent/readonly.go` 的安全只读判定：
@@ -35,6 +35,6 @@ Posse 常驻进程原生托管多个本机 `lark-cli` profile 长连接（无需
 
 ## 飞书快捷命令与 CLI
 
-- 飞书内支持 `/agent [name]`、`/ws [name]`、`/new`、`/status`、`/stop`、`/help`。
+- 飞书内支持 `/agent [name]`、`/ws [name]`、`/new`、`/status`、`/stop`、`/mention on|off`、`/role <text|clear|inherit>`、`/help`（所有修改会话、执行或配置的命令均强制仅限 Posse 主人执行）。
 - CLI 管理：`posse lark profiles`、`posse lark list`、`posse lark add --profile <p> [--trusted-script PATH]... [--read-only-host HOST]...`、`posse lark edit <bot> [--trusted-script PATH]... [--read-only-host HOST]...`、`posse lark enable/disable <id>`、`posse lark rm <id>`。
-- 桌面管理：「设置 › 飞书机器人」。
+- 桌面管理：「设置 › 飞书机器人」（支持自动通过 `im +chat-list --as bot` 拉取机器人已加入的飞书群一键点选配置群分身）。

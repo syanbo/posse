@@ -88,6 +88,11 @@ type threadMessageFetcher interface {
 	ListRecentThreadMessages(ctx context.Context, profile, threadID string, limit int) ([]FetchedMessage, error)
 }
 
+// chatOverrideUpdater 由 Daemon 实现，在统一配置锁下按群增量更新覆写并同步活跃绑定。
+type chatOverrideUpdater interface {
+	MutateChatOverride(botID, chatID string, mutate func(*ChatOverride)) (BotConfig, error)
+}
+
 type activePerm struct {
 	botID     string
 	profile   string
@@ -111,24 +116,92 @@ type botRunner struct {
 	ident     BotIdentity
 }
 
+const (
+	pendingAttachTTL       = 15 * time.Minute
+	maxStagedAttachments   = 20
+	defaultInboundDebounce = 1500 * time.Millisecond
+	maxInboundDebounce     = 6 * time.Second
+)
+
+type stagedKey struct {
+	botID     string
+	chatID    string
+	threadKey string
+	senderID  string
+}
+
+type debounceBatch struct {
+	bot       BotConfig
+	ev        MessageEvent
+	threadKey string
+	inThread  bool
+	bodies    []string
+	firstAt   time.Time
+	seq       uint64
+	timer     *time.Timer
+}
+
+type stagedAttachment struct {
+	msgID    string
+	fileKey  string
+	kind     string // "image" | "file"
+	fileName string // 原始文件名（可选）
+	rootID   string
+}
+
+func (a stagedAttachment) displayLabel() string {
+	if a.fileName != "" {
+		return a.fileName
+	}
+	if a.kind == "image" {
+		return tr("Image")
+	}
+	return tr("File")
+}
+
+type stagedBatch struct {
+	id        string
+	botID     string
+	profile   string
+	botName   string
+	chatID    string
+	chatType  string
+	threadKey string
+	inThread  bool
+	senderID  string
+	updatedAt time.Time
+	items     []stagedAttachment
+
+	// cardMu 串行化同一暂存批次的发卡、更新与收拢，防止并发事件刷出多张卡或留下孤儿卡。
+	cardMu       sync.Mutex
+	cardMsgID    string
+	closedStatus string
+}
+
 // Gateway 管理全部已启用的飞书机器人长连接、事件路由、卡片节流更新和三端同步。
 type Gateway struct {
-	client Client
-	host   Host
-	home   string
+	client         Client
+	host           Host
+	home           string
+	nowFn          func() time.Time // 单测可注入时钟
+	debounceWindow time.Duration    // 连续短文本入站防抖静默窗；Start 默认开启 1.5s，单测默认 0 保持同步
+	debounceMax    time.Duration    // 单次防抖最大等待上限
 
 	mu          sync.Mutex
 	parentCtx   context.Context
 	cfg         Config
 	runners     map[string]*botRunner
-	activeCards map[string]*activeCard // execID -> 正在轮询更新的进度卡
-	activePerms map[string]*activePerm // permID -> 正在等待审批的权限卡
-	qCards      map[string]questionMem // questionID -> 提问卡片上下文
+	activeCards map[string]*activeCard       // execID -> 正在轮询更新的进度卡
+	activePerms map[string]*activePerm       // permID -> 正在等待审批的权限卡
+	qCards      map[string]questionMem       // questionID -> 提问卡片上下文
+	staged      map[stagedKey]*stagedBatch   // 单聊纯附件暂存，等待后续指令一并提交
+	debounced   map[stagedKey]*debounceBatch // 连续短文本入站防抖缓存
 	loopCancel  context.CancelFunc
 }
 
 type questionMem struct {
 	botID     string
+	chatID    string
 	profile   string
 	botName   string
 	agentName string
@@ -142,17 +215,30 @@ func NewGateway(home string, client Client, host Host) *Gateway {
 		client:      client,
 		host:        host,
 		home:        home,
+		debounceMax: maxInboundDebounce,
 		runners:     map[string]*botRunner{},
 		activeCards: map[string]*activeCard{},
 		activePerms: map[string]*activePerm{},
 		qCards:      map[string]questionMem{},
+		staged:      map[stagedKey]*stagedBatch{},
+		debounced:   map[stagedKey]*debounceBatch{},
 	}
+}
+
+func (g *Gateway) now() time.Time {
+	if g.nowFn != nil {
+		return g.nowFn()
+	}
+	return time.Now()
 }
 
 // Start 启动配置中的已启用机器人并开启 2.5 秒进度卡节流刷新循环。
 func (g *Gateway) Start(ctx context.Context, cfg Config) {
 	g.mu.Lock()
 	g.parentCtx = ctx
+	if g.debounceWindow == 0 {
+		g.debounceWindow = defaultInboundDebounce
+	}
 	g.mu.Unlock()
 	g.Reload(cfg)
 	loopCtx, cancel := context.WithCancel(ctx)
@@ -167,7 +253,7 @@ func (g *Gateway) Start(ctx context.Context, cfg Config) {
 
 // Reload 热加载机器人配置：停掉已删除/禁用的机器人，启动新增或变更的机器人。
 func (g *Gateway) Reload(cfg Config) {
-	// 若尚未配置主人 open_id，尝试从本机 lark-cli 自动探测
+	// 若尚未配置主人 open_id，尝试从本机 lark-cli 自动探测（仅更新内存，不绕过 daemon 配置锁写盘）
 	if cfg.OwnerOpenID == "" && g.client != nil {
 		profile := ""
 		if len(cfg.Bots) > 0 {
@@ -176,7 +262,6 @@ func (g *Gateway) Reload(cfg Config) {
 		pctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if id, err := g.client.OwnerOpenID(pctx, profile); err == nil && id != "" {
 			cfg.OwnerOpenID = id
-			_ = SaveConfig(g.home, cfg)
 		}
 		cancel()
 	}
@@ -224,7 +309,14 @@ func (g *Gateway) Stop() {
 	}
 	runners := g.runners
 	g.runners = map[string]*botRunner{}
+	debounced := g.debounced
+	g.debounced = map[stagedKey]*debounceBatch{}
 	g.mu.Unlock()
+	for _, b := range debounced {
+		if b.timer != nil {
+			b.timer.Stop()
+		}
+	}
 	for _, r := range runners {
 		r.cancel()
 	}
@@ -371,27 +463,75 @@ func (g *Gateway) HandleMessage(ctx context.Context, bot BotConfig, ev MessageEv
 	// 同会话/话题在执行期间收到任何新消息（含未 @ 机器人的群聊发言），都视为已有插队消息
 	g.markChatInterleaved(ev.ChatID, ev.ThreadID, ev.RootID, "")
 	owner := g.Config().OwnerOpenID
-	if !bot.AllowsTrigger(ev.SenderID, owner, ev.ChatID) {
+	effBot, noMention := bot.EffectiveForChat(ev.ChatID)
+	if !effBot.AllowsTrigger(ev.SenderID, owner, ev.ChatID) {
 		return
 	}
-	// 群聊只响应真正 @ 了本机器人的消息（开通全群消息权限时，不能误抢 @ 同事的发言）
+	// 群聊 @ 判定始终按机器人真实身份（不以分身别名匹配，避免与同名同事冲突）；
+	// 开启免 @ 的群仍忽略显式 @ 其他同事的发言，防止群内有第三人时误抢话。
 	ident := g.botIdentity(bot.ID)
-	if ev.ChatType == "group" && !isMentioningBot(bot, ident, ev) {
-		return
-	}
-
-	threadKey := computeThreadKey(bot.SessionMode, ev)
-	inThread := ev.ChatType == "group" && bot.SessionMode == SessionThread
-	body := stripLeadingMentions(ev.Content, ev.Mentions, bot.Name, ident.BotAppName)
-
-	// 快捷命令：/agent、/ws、/new、/status、/stop、/help
-	if strings.HasPrefix(body, "/") {
-		if g.handleCommand(ctx, bot, ev, threadKey, inThread, body) {
+	if ev.ChatType == "group" {
+		if !noMention && !isMentioningBot(bot, ident, ev) {
+			return
+		}
+		if noMention && isMentioningOthersOnly(bot, ident, ev) {
 			return
 		}
 	}
 
-	// 下载消息携带的图片/文件附件（若有）
+	threadKey := computeThreadKey(effBot.SessionMode, ev)
+	inThread := ev.ChatType == "group" && effBot.SessionMode == SessionThread
+	body := stripLeadingMentions(ev.Content, ev.Mentions, bot.Name, ident.BotAppName)
+	isOwner := owner != "" && ev.SenderID == owner
+
+	// 快捷命令：/agent、/ws、/new、/status、/stop、/mention、/role、/help
+	if strings.HasPrefix(body, "/") {
+		if g.handleCommand(ctx, bot, effBot, noMention, ev, threadKey, inThread, body, isOwner) {
+			return
+		}
+	}
+
+	// 单聊或免 @ 群收到纯文件/图片消息时，不立即触发无指令执行，先暂存等待补充指令或点击「立即发送」
+	if (ev.ChatType != "group" || noMention) && ev.ParentID == "" {
+		if meta, ok := parseAttachmentMeta(ev); ok {
+			g.stageAttachment(ctx, effBot, ev, threadKey, inThread, meta)
+			return
+		}
+	}
+
+	// 连续短文本入站防抖：将静默窗内同一发送者的多条纯文本合并为一次 Agent 回合
+	if g.getDebounceWindow() > 0 && isDebounceableTextEvent(ev, body) {
+		g.enqueueTextDebounce(effBot, ev, threadKey, inThread, body)
+		return
+	}
+
+	// 若同发送者有尚未触发的防抖文本，前置合并以保持消息严格有序
+	if prev := g.takeDebounced(stagedKey{
+		botID:     effBot.ID,
+		chatID:    ev.ChatID,
+		threadKey: threadKey,
+		senderID:  ev.SenderID,
+	}); prev != nil {
+		prevBody := strings.Join(prev.bodies, "\n")
+		if prevBody != "" {
+			if body != "" {
+				body = prevBody + "\n" + body
+			} else {
+				body = prevBody
+			}
+		}
+		if ev.ParentID == "" && prev.ev.ParentID != "" {
+			ev.ParentID = prev.ev.ParentID
+		}
+	}
+
+	g.dispatchMessage(ctx, effBot, ev, threadKey, inThread, body)
+}
+
+func (g *Gateway) dispatchMessage(ctx context.Context, bot BotConfig, ev MessageEvent, threadKey string, inThread bool, body string) {
+	msgID := ev.MsgID()
+
+	// 下载消息携带的图片/文件附件（若有），并合并此前暂存的同会话附件
 	var cleanupDirs []string
 	defer func() {
 		for _, dir := range cleanupDirs {
@@ -402,18 +542,35 @@ func (g *Gateway) HandleMessage(ctx context.Context, bot BotConfig, ev MessageEv
 	if attDir != "" {
 		cleanupDirs = append(cleanupDirs, attDir)
 	}
+	stagedBatch := g.takeStaged(ctx, stagedKey{
+		botID:     bot.ID,
+		chatID:    ev.ChatID,
+		threadKey: threadKey,
+		senderID:  ev.SenderID,
+	})
+	parentCoveredByStaged := false
+	if stagedBatch != nil {
+		stagedAtts, stagedDir, downloadedMsgIDs := g.downloadAttachmentsList(ctx, bot, stagedBatch.items)
+		if stagedDir != "" {
+			cleanupDirs = append(cleanupDirs, stagedDir)
+		}
+		atts = append(stagedAtts, atts...)
+		if ev.ParentID != "" && downloadedMsgIDs[ev.ParentID] {
+			parentCoveredByStaged = true
+		}
+	}
 	if body == "" && len(atts) == 0 && ev.ParentID == "" {
 		return
 	}
 
-	// 补齐群聊近期上下文（可选）及被引用父消息的正文与附件
+	// 补齐群聊近期上下文（可选）及被引用父消息的正文与附件（已由暂存覆盖的纯附件父消息不再重复拉取）
 	var contextBlocks []string
 	if ev.ChatType == "group" && bot.GroupContextCount > 0 {
 		if block := g.fetchGroupContext(ctx, bot, ev.ChatID, msgID, ev.ParentID, bot.GroupContextCount); block != "" {
 			contextBlocks = append(contextBlocks, block)
 		}
 	}
-	if ev.ParentID != "" {
+	if ev.ParentID != "" && !parentCoveredByStaged {
 		quotedBlock, parentAtts, parentDir := g.fetchParentContext(ctx, bot, ev.ParentID)
 		if parentDir != "" {
 			cleanupDirs = append(cleanupDirs, parentDir)
@@ -433,6 +590,9 @@ func (g *Gateway) HandleMessage(ctx context.Context, bot BotConfig, ev MessageEv
 	}
 	binding, err := g.host.EnsureDiscussion(bot, ev.ChatID, ev.ChatType, threadKey, titleHint)
 	if err != nil {
+		if stagedBatch != nil {
+			g.closeStagedCard(ctx, stagedBatch, "cancelled")
+		}
 		g.replyNotice(ctx, bot, msgID, inThread, tr("Error"), "red", err.Error())
 		return
 	}
@@ -464,12 +624,19 @@ func (g *Gateway) HandleMessage(ctx context.Context, bot BotConfig, ev MessageEv
 
 	execID, err := g.host.PostFromLark(binding, postBody, metaHeader, atts)
 	if err != nil {
+		if stagedBatch != nil {
+			g.closeStagedCard(ctx, stagedBatch, "cancelled")
+		}
 		g.replyNotice(ctx, bot, msgID, inThread, tr("Error"), "red", err.Error())
 		return
 	}
+	if stagedBatch != nil {
+		g.closeStagedCard(ctx, stagedBatch, "submitted")
+	}
 
 	wsLabel := g.workspaceLabel(binding.WorkspaceID)
-	cardJSON := BuildProgressCard(bot.ID, bot.Name, binding.Agent, wsLabel, execID, tr("Queued"), "0s", "", "", "", 0)
+	prevExecID := g.queuedBehindExecID(binding.DiscussionKey, execID)
+	cardJSON := BuildProgressCard(bot.ID, bot.Name, binding.Agent, wsLabel, execID, tr("Queued"), "0s", "", "", "", 0, prevExecID)
 	cardMsgID, err := g.client.ReplyCard(ctx, bot.Profile, msgID, inThread, cardJSON)
 	if err != nil {
 		log.Printf("lark bot %s: reply progress card: %v", bot.Name, err)
@@ -532,10 +699,20 @@ func (g *Gateway) botIdentity(botID string) BotIdentity {
 
 func isMentioningBot(bot BotConfig, ident BotIdentity, ev MessageEvent) bool {
 	if len(ev.Mentions) > 0 {
+		hasStructuredID := false
 		for _, m := range ev.Mentions {
+			if m.ID != "" || m.OpenID != "" {
+				hasStructuredID = true
+			}
 			if ident.BotOpenID != "" && (m.ID == ident.BotOpenID || m.OpenID == ident.BotOpenID) {
 				return true
 			}
+		}
+		// 已知机器人真实 OpenID 且事件带有结构化 mention ID 时，严格以 ID 判定，避免撞名同事误触发
+		if ident.BotOpenID != "" && hasStructuredID {
+			return false
+		}
+		for _, m := range ev.Mentions {
 			if ident.BotAppName != "" && strings.EqualFold(strings.TrimSpace(m.Name), ident.BotAppName) {
 				return true
 			}
@@ -551,7 +728,71 @@ func isMentioningBot(bot BotConfig, ident BotIdentity, ev MessageEvent) bool {
 		if name == "" {
 			continue
 		}
-		if strings.Contains(content, "@"+name) || strings.Contains(content, "\uff20"+name) {
+		if containsMentionToken(content, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// isMentioningOthersOnly 判断消息是否显式 @ 了其他同事而没有 @ 本机器人（用于免 @ 群避免误抢同事对话）。
+func isMentioningOthersOnly(bot BotConfig, ident BotIdentity, ev MessageEvent) bool {
+	if len(ev.Mentions) > 0 {
+		return !isMentioningBot(bot, ident, ev)
+	}
+	if hasAnyTextMention(ev.Content) && !isMentioningBot(bot, ident, ev) {
+		return true
+	}
+	return false
+}
+
+func isMentionWordByte(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_' || b == '-'
+}
+
+// containsMentionToken 匹配独立的 @name / ＠name（避免 @Ops 误命中 @OpsSupport，也排除邮箱前缀）。
+func containsMentionToken(content, name string) bool {
+	if name == "" || content == "" {
+		return false
+	}
+	for _, prefix := range []string{"@", "\uff20"} {
+		needle := prefix + name
+		off := 0
+		for {
+			idx := strings.Index(content[off:], needle)
+			if idx < 0 {
+				break
+			}
+			pos := off + idx
+			end := pos + len(needle)
+			prevOK := pos == 0 || !isMentionWordByte(content[pos-1])
+			nextOK := end == len(content) || !isMentionWordByte(content[end])
+			if prevOK && nextOK {
+				return true
+			}
+			off = pos + len(prefix)
+		}
+	}
+	return false
+}
+
+// hasAnyTextMention 判断纯文本中是否包含任意位置的 @某人 / ＠某人（排除 a@b.com 邮箱）。
+func hasAnyTextMention(content string) bool {
+	for i := 0; i < len(content); i++ {
+		prefixLen := 0
+		if content[i] == '@' {
+			prefixLen = 1
+		} else if strings.HasPrefix(content[i:], "\uff20") {
+			prefixLen = len("\uff20")
+		}
+		if prefixLen == 0 {
+			continue
+		}
+		if i > 0 && isMentionWordByte(content[i-1]) {
+			continue
+		}
+		after := i + prefixLen
+		if after < len(content) && content[after] != ' ' && content[after] != '\t' && content[after] != '\n' && content[after] != '\r' {
 			return true
 		}
 	}
@@ -587,7 +828,7 @@ func stripLeadingMentions(content string, mentions []MessageMention, extraNames 
 	return strings.TrimSpace(s)
 }
 
-func (g *Gateway) handleCommand(ctx context.Context, bot BotConfig, ev MessageEvent, threadKey string, inThread bool, body string) bool {
+func (g *Gateway) handleCommand(ctx context.Context, rawBot, bot BotConfig, noMention bool, ev MessageEvent, threadKey string, inThread bool, body string, isOwner bool) bool {
 	fields := strings.Fields(body)
 	if len(fields) == 0 {
 		return false
@@ -604,11 +845,16 @@ func (g *Gateway) handleCommand(ctx context.Context, bot BotConfig, ev MessageEv
 			"`/new` — " + tr("Start a fresh conversation"),
 			"`/status` — " + tr("Show current binding and active round"),
 			"`/stop` — " + tr("Stop the active round"),
+			"`/mention on|off` — " + tr("Require @mention or allow direct messages in this group"),
+			"`/role <text|clear|inherit>` — " + tr("Set, clear, or inherit this group's role prompt"),
 		}, "\n")
 		g.replyNotice(ctx, bot, msgID, inThread, bot.Name+" — "+tr("Commands"), "blue", help)
 		return true
 
 	case "/agent":
+		if !isOwner {
+			return true
+		}
 		binding, err := g.host.EnsureDiscussion(bot, ev.ChatID, ev.ChatType, threadKey, bot.Name)
 		if err != nil {
 			g.replyNotice(ctx, bot, msgID, inThread, tr("Error"), "red", err.Error())
@@ -633,6 +879,9 @@ func (g *Gateway) handleCommand(ctx context.Context, bot BotConfig, ev MessageEv
 		return true
 
 	case "/ws", "/workspace":
+		if !isOwner {
+			return true
+		}
 		binding, err := g.host.EnsureDiscussion(bot, ev.ChatID, ev.ChatType, threadKey, bot.Name)
 		if err != nil {
 			g.replyNotice(ctx, bot, msgID, inThread, tr("Error"), "red", err.Error())
@@ -652,6 +901,19 @@ func (g *Gateway) handleCommand(ctx context.Context, bot BotConfig, ev MessageEv
 		return true
 
 	case "/new":
+		if !isOwner {
+			return true
+		}
+		skey := stagedKey{
+			botID:     bot.ID,
+			chatID:    ev.ChatID,
+			threadKey: threadKey,
+			senderID:  ev.SenderID,
+		}
+		g.cancelDebounced(skey)
+		if batch := g.takeStaged(ctx, skey); batch != nil {
+			g.closeStagedCard(ctx, batch, "cancelled")
+		}
 		if err := g.host.ResetBinding(bot.ID, ev.ChatID, threadKey); err != nil {
 			g.replyNotice(ctx, bot, msgID, inThread, tr("Error"), "red", err.Error())
 			return true
@@ -660,6 +922,9 @@ func (g *Gateway) handleCommand(ctx context.Context, bot BotConfig, ev MessageEv
 		return true
 
 	case "/stop":
+		if !isOwner {
+			return true
+		}
 		binding, err := g.host.ActiveBinding(bot.ID, ev.ChatID, threadKey)
 		if err != nil {
 			g.replyNotice(ctx, bot, msgID, inThread, bot.Name, "grey", tr("No active round to stop."))
@@ -677,21 +942,123 @@ func (g *Gateway) handleCommand(ctx context.Context, bot BotConfig, ev MessageEv
 		g.replyNotice(ctx, bot, msgID, inThread, bot.Name, "grey", tr("Stopped."))
 		return true
 
+	case "/mention":
+		if !isOwner {
+			return true
+		}
+		if ev.ChatType != "group" {
+			g.replyNotice(ctx, bot, msgID, inThread, bot.Name, "grey", tr("This command only applies to group chats."))
+			return true
+		}
+		arg := strings.ToLower(strings.TrimSpace(rest))
+		if arg != "on" && arg != "off" {
+			g.replyNotice(ctx, bot, msgID, inThread, bot.Name, "grey", tr("Usage: `/mention on` or `/mention off`"))
+			return true
+		}
+		updater, ok := g.host.(chatOverrideUpdater)
+		if !ok {
+			g.replyNotice(ctx, bot, msgID, inThread, tr("Error"), "red", tr("Group overrides are not supported."))
+			return true
+		}
+		wantNoMention := arg == "off"
+		if _, err := updater.MutateChatOverride(rawBot.ID, ev.ChatID, func(c *ChatOverride) {
+			c.NoMention = wantNoMention
+		}); err != nil {
+			g.replyNotice(ctx, bot, msgID, inThread, tr("Error"), "red", err.Error())
+			return true
+		}
+		if wantNoMention {
+			g.replyNotice(ctx, bot, msgID, inThread, bot.Name, "green", tr("Direct mode enabled for this group (no @mention needed)."))
+		} else {
+			g.replyNotice(ctx, bot, msgID, inThread, bot.Name, "green", tr("This group now requires @mention to trigger."))
+		}
+		return true
+
+	case "/role":
+		if !isOwner {
+			return true
+		}
+		if ev.ChatType != "group" {
+			g.replyNotice(ctx, bot, msgID, inThread, bot.Name, "grey", tr("This command only applies to group chats."))
+			return true
+		}
+		if rest == "" {
+			g.replyNotice(ctx, bot, msgID, inThread, bot.Name, "grey", tr("Usage: `/role <prompt>`, `/role clear`, or `/role inherit`"))
+			return true
+		}
+		updater, ok := g.host.(chatOverrideUpdater)
+		if !ok {
+			g.replyNotice(ctx, bot, msgID, inThread, tr("Error"), "red", tr("Group overrides are not supported."))
+			return true
+		}
+		low := strings.ToLower(rest)
+		if _, err := updater.MutateChatOverride(rawBot.ID, ev.ChatID, func(c *ChatOverride) {
+			switch low {
+			case "inherit":
+				c.Role = nil
+			case "clear":
+				empty := ""
+				c.Role = &empty
+			default:
+				v := rest
+				c.Role = &v
+			}
+		}); err != nil {
+			g.replyNotice(ctx, bot, msgID, inThread, tr("Error"), "red", err.Error())
+			return true
+		}
+		switch low {
+		case "inherit":
+			g.replyNotice(ctx, bot, msgID, inThread, bot.Name, "green", tr("Group role reset to inherit bot default; takes effect on next message."))
+		case "clear":
+			g.replyNotice(ctx, bot, msgID, inThread, bot.Name, "green", tr("Group role cleared; takes effect on next message."))
+		default:
+			g.replyNotice(ctx, bot, msgID, inThread, bot.Name, "green", tr("Group role updated; takes effect on next message."))
+		}
+		return true
+
 	case "/status":
+		mentionMode := tr("Required")
+		if ev.ChatType != "group" || noMention {
+			mentionMode = tr("Direct (no @)")
+		}
+		roleState := tr("Inherited")
+		if ov, ok := rawBot.ChatOverrideOf(ev.ChatID); ok && ov.Role != nil {
+			if *ov.Role == "" {
+				roleState = tr("None")
+			} else {
+				roleState = tr("Custom")
+			}
+		}
 		binding, err := g.host.ActiveBinding(bot.ID, ev.ChatID, threadKey)
 		if err != nil {
-			body := fmt.Sprintf("**%s**: `%s`\n**%s**: `%s`\n**%s**: `%s`",
-				tr("Agent"), bot.Agent,
-				tr("Workspace"), g.workspaceLabel(bot.WorkspaceID),
-				tr("Permission"), bot.PermissionMode)
-			g.replyNotice(ctx, bot, msgID, inThread, bot.Name+" — "+tr("Status"), "blue", body)
+			lines := []string{
+				fmt.Sprintf("**%s**: `%s`", tr("Chat ID"), ev.ChatID),
+				fmt.Sprintf("**%s**: `%s`", tr("Agent"), bot.Agent),
+				fmt.Sprintf("**%s**: `%s`", tr("Workspace"), g.workspaceLabel(bot.WorkspaceID)),
+				fmt.Sprintf("**%s**: `%s`", tr("Permission"), bot.PermissionMode),
+			}
+			if ev.ChatType == "group" {
+				lines = append(lines,
+					fmt.Sprintf("**%s**: `%s`", tr("Mention"), mentionMode),
+					fmt.Sprintf("**%s**: `%s`", tr("Role"), roleState),
+				)
+			}
+			g.replyNotice(ctx, bot, msgID, inThread, bot.Name+" — "+tr("Status"), "blue", strings.Join(lines, "\n"))
 			return true
 		}
 		lines := []string{
+			fmt.Sprintf("**%s**: `%s`", tr("Chat ID"), ev.ChatID),
 			fmt.Sprintf("**%s**: `%s`", tr("Agent"), binding.Agent),
 			fmt.Sprintf("**%s**: `%s`", tr("Workspace"), g.workspaceLabel(binding.WorkspaceID)),
 			fmt.Sprintf("**%s**: `%s`", tr("Permission"), binding.PermissionMode),
 			fmt.Sprintf("**%s**: `%s`", tr("Discussion"), binding.DiscussionKey),
+		}
+		if ev.ChatType == "group" {
+			lines = append(lines,
+				fmt.Sprintf("**%s**: `%s`", tr("Mention"), mentionMode),
+				fmt.Sprintf("**%s**: `%s`", tr("Role"), roleState),
+			)
 		}
 		if snap, ok := g.host.ActiveExecutionFor(binding.DiscussionKey); ok {
 			lines = append(lines, fmt.Sprintf("**%s**: `%s`", tr("Active round"), snap.State))
@@ -760,6 +1127,22 @@ func (g *Gateway) HandleCardAction(ctx context.Context, bot BotConfig, ev CardAc
 		}
 		_ = g.host.StopExecution(val["execId"])
 
+	case "exec_interrupt_prev":
+		if !isOwner {
+			return
+		}
+		snap, ok := g.host.ExecutionSnapshot(val["execId"])
+		if !ok || snap.State != "queued" || snap.Discussion == "" {
+			return
+		}
+		wantPrev := strings.TrimSpace(val["prevExecId"])
+		if prev, ok := g.host.ActiveExecutionFor(snap.Discussion); ok && prev.ID != "" && prev.ID != snap.ID {
+			if wantPrev != "" && prev.ID != wantPrev {
+				return
+			}
+			_ = g.host.StopExecution(prev.ID)
+		}
+
 	case "exec_retry":
 		if !isOwner {
 			return
@@ -772,11 +1155,14 @@ func (g *Gateway) HandleCardAction(ctx context.Context, bot BotConfig, ev CardAc
 			if snap, ok := g.host.ExecutionSnapshot(newID); ok {
 				var threadKey string
 				var inThread bool
+				effBot := bot
 				if binding, berr := g.host.BindingByDiscussion(snap.Discussion); berr == nil {
 					threadKey = binding.ThreadKey
 					inThread = threadKey != ""
+					effBot, _ = bot.EffectiveForChat(binding.ChatID)
 				}
-				cardJSON := BuildProgressCard(bot.ID, bot.Name, snap.Agent, snap.Workspace, newID, tr("Queued"), "0s", "", "", "", 0)
+				prevExecID := g.queuedBehindExecID(snap.Discussion, newID)
+				cardJSON := BuildProgressCard(effBot.ID, effBot.Name, snap.Agent, snap.Workspace, newID, tr("Queued"), "0s", "", "", "", 0, prevExecID)
 				cardMsgID := ev.MessageID
 				if err := g.client.PatchCard(ctx, bot.Profile, ev.MessageID, cardJSON); err != nil {
 					log.Printf("lark bot %s: patch retry progress card (fallback to new card): %v", bot.Name, err)
@@ -812,12 +1198,24 @@ func (g *Gateway) HandleCardAction(ctx context.Context, bot BotConfig, ev CardAc
 		}
 
 	case "answer_choice", "answer_form":
-		if !bot.AllowsTrigger(ev.OperatorID, owner, ev.ChatID) {
-			return
-		}
 		qid := val["questionId"]
 		ans := strings.TrimSpace(val["choice"])
 		if qid == "" || ans == "" {
+			return
+		}
+		chatID := ev.ChatID
+		g.mu.Lock()
+		if qm, ok := g.qCards[qid]; ok && qm.chatID != "" {
+			chatID = qm.chatID
+		}
+		g.mu.Unlock()
+		if chatID == "" {
+			if card, err := g.host.GetCard("question", qid); err == nil && card.ChatID != "" {
+				chatID = card.ChatID
+			}
+		}
+		effBot, _ := bot.EffectiveForChat(chatID)
+		if !effBot.AllowsTrigger(ev.OperatorID, owner, chatID) {
 			return
 		}
 		if err := g.host.AnswerQuestion(qid, ans); err == nil {
@@ -828,33 +1226,86 @@ func (g *Gateway) HandleCardAction(ctx context.Context, bot BotConfig, ev CardAc
 		if !isOwner {
 			return
 		}
-		binding, err := g.host.ActiveBinding(bot.ID, val["chatId"], val["threadKey"])
+		chatID := val["chatId"]
+		effBot, _ := bot.EffectiveForChat(chatID)
+		binding, err := g.host.ActiveBinding(bot.ID, chatID, val["threadKey"])
 		if err != nil {
-			binding, err = g.host.EnsureDiscussion(bot, val["chatId"], "group", val["threadKey"], bot.Name)
-		}
-		if err != nil {
+			if ev.MessageID != "" {
+				card := BuildNoticeCard(effBot.Name, "grey", tr("This picker has expired; run the command again."))
+				_ = g.client.PatchCard(ctx, effBot.Profile, ev.MessageID, card)
+			}
 			return
 		}
 		if updated, err := g.host.SwitchAgent(binding, val["agent"], ""); err == nil && ev.MessageID != "" {
-			card := BuildNoticeCard(bot.Name, "green", fmt.Sprintf("%s: `%s`", tr("Switched agent to"), updated.Agent))
-			_ = g.client.PatchCard(ctx, bot.Profile, ev.MessageID, card)
+			card := BuildNoticeCard(effBot.Name, "green", fmt.Sprintf("%s: `%s`", tr("Switched agent to"), updated.Agent))
+			_ = g.client.PatchCard(ctx, effBot.Profile, ev.MessageID, card)
 		}
 
 	case "switch_ws":
 		if !isOwner {
 			return
 		}
-		binding, err := g.host.ActiveBinding(bot.ID, val["chatId"], val["threadKey"])
+		chatID := val["chatId"]
+		effBot, _ := bot.EffectiveForChat(chatID)
+		binding, err := g.host.ActiveBinding(bot.ID, chatID, val["threadKey"])
 		if err != nil {
-			binding, err = g.host.EnsureDiscussion(bot, val["chatId"], "group", val["threadKey"], bot.Name)
-		}
-		if err != nil {
+			if ev.MessageID != "" {
+				card := BuildNoticeCard(effBot.Name, "grey", tr("This picker has expired; run the command again."))
+				_ = g.client.PatchCard(ctx, effBot.Profile, ev.MessageID, card)
+			}
 			return
 		}
 		if updated, err := g.host.SwitchWorkspace(binding, val["workspaceId"]); err == nil && ev.MessageID != "" {
-			card := BuildNoticeCard(bot.Name, "green", fmt.Sprintf("%s: `%s`", tr("Switched workspace to"), g.workspaceLabel(updated.WorkspaceID)))
-			_ = g.client.PatchCard(ctx, bot.Profile, ev.MessageID, card)
+			card := BuildNoticeCard(effBot.Name, "green", fmt.Sprintf("%s: `%s`", tr("Switched workspace to"), g.workspaceLabel(updated.WorkspaceID)))
+			_ = g.client.PatchCard(ctx, effBot.Profile, ev.MessageID, card)
 		}
+
+	case "staged_send":
+		batch, denied := g.findAndRemoveStaged(bot.ID, val["batchId"], ev.OperatorID, isOwner)
+		if denied {
+			return
+		}
+		if batch == nil {
+			if ev.MessageID != "" {
+				card := BuildStagedAttachmentsClosedCard(bot.Name, "expired", 0)
+				_ = g.client.PatchCard(ctx, bot.Profile, ev.MessageID, card)
+			}
+			return
+		}
+		// 消费前按服务端最新机器人与群配置严格复查：机器人须仍存在且启用、发送者与点击者均被允许、且会话粒度未变更
+		latestBot, ok := g.botByID(bot.ID)
+		if !ok || !latestBot.Enabled {
+			g.closeStagedCardWithFallback(ctx, batch, "cancelled", ev.MessageID)
+			return
+		}
+		effBot, noMention := latestBot.EffectiveForChat(batch.chatID)
+		sessionMismatch := batch.chatType == "group" && ((effBot.SessionMode == SessionThread) != batch.inThread)
+		if sessionMismatch ||
+			!effBot.AllowsTrigger(ev.OperatorID, owner, batch.chatID) ||
+			(batch.senderID != "" && !effBot.AllowsTrigger(batch.senderID, owner, batch.chatID)) ||
+			(batch.chatType == "group" && !noMention) {
+			g.closeStagedCardWithFallback(ctx, batch, "cancelled", ev.MessageID)
+			return
+		}
+		g.submitStagedBatch(ctx, effBot, batch, ev.MessageID)
+
+	case "staged_cancel":
+		batch, denied := g.findAndRemoveStaged(bot.ID, val["batchId"], ev.OperatorID, isOwner)
+		if denied {
+			return
+		}
+		if batch == nil {
+			if ev.MessageID != "" {
+				card := BuildStagedAttachmentsClosedCard(bot.Name, "cancelled", 0)
+				_ = g.client.PatchCard(ctx, bot.Profile, ev.MessageID, card)
+			}
+			return
+		}
+		effBot, _ := bot.EffectiveForChat(batch.chatID)
+		if !effBot.AllowsTrigger(ev.OperatorID, owner, batch.chatID) {
+			return
+		}
+		g.closeStagedCardWithFallback(ctx, batch, "cancelled", ev.MessageID)
 	}
 }
 
@@ -901,7 +1352,11 @@ func (g *Gateway) tickProgress(ctx context.Context) {
 		if snap.StartedAt != nil {
 			elapsed = FormatDuration(time.Since(*snap.StartedAt))
 		}
-		cardJSON := BuildProgressCard(c.botID, c.botName, snap.Agent, snap.Workspace, c.execID, snap.State, elapsed, snap.Tool, snap.ToolInput, snap.Phase, snap.Subagents)
+		prevExecID := ""
+		if snap.State == "queued" {
+			prevExecID = g.queuedBehindExecID(snap.Discussion, c.execID)
+		}
+		cardJSON := BuildProgressCard(c.botID, c.botName, snap.Agent, snap.Workspace, c.execID, snap.State, elapsed, snap.Tool, snap.ToolInput, snap.Phase, snap.Subagents, prevExecID)
 		c.patchMu.Lock()
 		if c.closed || cardJSON == c.lastJSON {
 			c.patchMu.Unlock()
@@ -935,6 +1390,7 @@ func (g *Gateway) OnExecFinished(discKey, execID, outcome, body string) {
 	if !ok || !bot.Enabled {
 		return
 	}
+	effBot, _ := bot.EffectiveForChat(binding.ChatID)
 	snap, _ := g.host.ExecutionSnapshot(execID)
 	elapsed := ""
 	if snap.StartedAt != nil && snap.EndedAt != nil {
@@ -951,7 +1407,7 @@ func (g *Gateway) OnExecFinished(discKey, execID, outcome, body string) {
 		agentName = binding.Agent
 	}
 
-	cardJSON, truncated := BuildResultCard(bot.ID, bot.Name, agentName, wsLabel, execID, outcome, elapsed, snap.TraceCount, body)
+	cardJSON, truncated := BuildResultCard(effBot.ID, effBot.Name, agentName, wsLabel, execID, outcome, elapsed, snap.TraceCount, body)
 
 	g.mu.Lock()
 	ac := g.activeCards[execID]
@@ -1029,7 +1485,7 @@ func (g *Gateway) OnExecFinished(discKey, execID, outcome, body string) {
 		if inPlaceFailed {
 			closedTimeout = 5 * time.Second
 		}
-		closedCard := BuildProgressClosedCard(bot.Name, agentName, wsLabel, outcome, elapsed, snap.TraceCount)
+		closedCard := BuildProgressClosedCard(effBot.Name, agentName, wsLabel, outcome, elapsed, snap.TraceCount)
 		if err := patchProgress(closedCard, closedTimeout); err != nil {
 			log.Printf("lark bot %s: patch progress closed card: %v", bot.Name, err)
 		}
@@ -1107,7 +1563,8 @@ func (g *Gateway) OnQuestion(discKey, execID, questionID, agentName, question st
 	if !ok || !bot.Enabled {
 		return
 	}
-	cardJSON := BuildQuestionCard(bot.ID, bot.Name, agentName, questionID, question, choices, "")
+	effBot, _ := bot.EffectiveForChat(binding.ChatID)
+	cardJSON := BuildQuestionCard(effBot.ID, effBot.Name, agentName, questionID, question, choices, "")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -1115,27 +1572,27 @@ func (g *Gateway) OnQuestion(discKey, execID, questionID, agentName, question st
 	sentThreadKey := ""
 	if ec, err := g.host.GetCard("exec", execID); err == nil && ec.ReplyTo != "" {
 		inThread := binding.ThreadKey != ""
-		cardMsgID, err = g.client.ReplyCard(ctx, bot.Profile, ec.ReplyTo, inThread, cardJSON)
+		cardMsgID, err = g.client.ReplyCard(ctx, effBot.Profile, ec.ReplyTo, inThread, cardJSON)
 		if err == nil && inThread {
 			sentThreadKey = binding.ThreadKey
 		}
 		if err != nil {
-			cardMsgID, _ = g.client.SendCard(ctx, bot.Profile, binding.ChatID, cardJSON)
+			cardMsgID, _ = g.client.SendCard(ctx, effBot.Profile, binding.ChatID, cardJSON)
 		}
 	} else {
-		cardMsgID, _ = g.client.SendCard(ctx, bot.Profile, binding.ChatID, cardJSON)
+		cardMsgID, _ = g.client.SendCard(ctx, effBot.Profile, binding.ChatID, cardJSON)
 	}
 	if cardMsgID == "" {
 		return
 	}
 	g.markChatInterleaved(binding.ChatID, sentThreadKey, "", "")
 	_ = g.host.SaveCard(store.LarkCard{
-		Kind: "question", RefID: questionID, BotID: bot.ID, ChatID: binding.ChatID,
+		Kind: "question", RefID: questionID, BotID: effBot.ID, ChatID: binding.ChatID,
 		CardMsgID: cardMsgID, DiscussionKey: discKey, Status: "waiting",
 	})
 	g.mu.Lock()
 	g.qCards[questionID] = questionMem{
-		botID: bot.ID, profile: bot.Profile, botName: bot.Name,
+		botID: effBot.ID, chatID: binding.ChatID, profile: effBot.Profile, botName: effBot.Name,
 		agentName: agentName, question: question, choices: choices, cardMsgID: cardMsgID,
 	}
 	g.mu.Unlock()
@@ -1166,24 +1623,25 @@ func (g *Gateway) WatchPermission(req PermNotice) bool {
 	if !ok || !bot.Enabled {
 		return false
 	}
+	effBot, _ := bot.EffectiveForChat(binding.ChatID)
 	wsLabel := g.workspaceLabel(binding.WorkspaceID)
-	cardJSON := BuildPermissionCard(bot.ID, bot.Name, req.Agent, wsLabel, req.ID, req.Tool, req.Summary, req.RuleLabel, "", "")
+	cardJSON := BuildPermissionCard(effBot.ID, effBot.Name, req.Agent, wsLabel, req.ID, req.Tool, req.Summary, req.RuleLabel, "", "")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cardMsgID, err := g.client.SendCard(ctx, bot.Profile, binding.ChatID, cardJSON)
+	cardMsgID, err := g.client.SendCard(ctx, effBot.Profile, binding.ChatID, cardJSON)
 	if err != nil || cardMsgID == "" {
-		log.Printf("lark bot %s: send permission card: %v", bot.Name, err)
+		log.Printf("lark bot %s: send permission card: %v", effBot.Name, err)
 		return false
 	}
 	// 审批卡通过 SendCard 发在会话主流中，按实际落点标记主流
 	g.markChatInterleaved(binding.ChatID, "", "", "")
 	_ = g.host.SaveCard(store.LarkCard{
-		Kind: "perm", RefID: req.ID, BotID: bot.ID, ChatID: binding.ChatID,
+		Kind: "perm", RefID: req.ID, BotID: effBot.ID, ChatID: binding.ChatID,
 		CardMsgID: cardMsgID, DiscussionKey: binding.DiscussionKey, Status: "waiting",
 	})
 	g.mu.Lock()
 	g.activePerms[req.ID] = &activePerm{
-		botID: bot.ID, profile: bot.Profile, botName: bot.Name,
+		botID: effBot.ID, profile: effBot.Profile, botName: effBot.Name,
 		agentName: req.Agent, wsLabel: wsLabel, tool: req.Tool, summary: req.Summary, ruleLabel: req.RuleLabel, cardMsgID: cardMsgID,
 	}
 	g.mu.Unlock()
@@ -1306,36 +1764,529 @@ func (g *Gateway) sendLongMarkdownFile(ctx context.Context, bot BotConfig, chatI
 	_ = g.client.SendFile(ctx, bot.Profile, chatID, p)
 }
 
-func (g *Gateway) downloadEventAttachments(ctx context.Context, bot BotConfig, ev MessageEvent) ([]string, string) {
+func (g *Gateway) queuedBehindExecID(discKey, execID string) string {
+	if discKey == "" || execID == "" {
+		return ""
+	}
+	active, ok := g.host.ActiveExecutionFor(discKey)
+	if !ok || active.ID == "" || active.ID == execID {
+		return ""
+	}
+	return active.ID
+}
+
+func (g *Gateway) getDebounceWindow() time.Duration {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.debounceWindow
+}
+
+func isDebounceableTextEvent(ev MessageEvent, body string) bool {
+	if body == "" {
+		return false
+	}
+	return ev.MessageType == "" || ev.MessageType == "text"
+}
+
+func (g *Gateway) enqueueTextDebounce(bot BotConfig, ev MessageEvent, threadKey string, inThread bool, body string) {
+	key := stagedKey{
+		botID:     bot.ID,
+		chatID:    ev.ChatID,
+		threadKey: threadKey,
+		senderID:  ev.SenderID,
+	}
+	now := g.now()
+
+	g.mu.Lock()
+	window := g.debounceWindow
+	maxWait := g.debounceMax
+	if maxWait <= 0 {
+		maxWait = maxInboundDebounce
+	}
+	b := g.debounced[key]
+	if b == nil {
+		b = &debounceBatch{
+			bot:       bot,
+			ev:        ev,
+			threadKey: threadKey,
+			inThread:  inThread,
+			bodies:    []string{body},
+			firstAt:   now,
+		}
+		g.debounced[key] = b
+	} else {
+		if b.timer != nil {
+			b.timer.Stop()
+		}
+		firstParent := b.ev.ParentID
+		b.bot = bot
+		b.ev = ev
+		if b.ev.ParentID == "" && firstParent != "" {
+			b.ev.ParentID = firstParent
+		}
+		b.threadKey = threadKey
+		b.inThread = inThread
+		b.bodies = append(b.bodies, body)
+	}
+	b.seq++
+	seq := b.seq
+	wait := window
+	if elapsed := now.Sub(b.firstAt); elapsed+wait > maxWait {
+		wait = maxWait - elapsed
+		if wait < 0 {
+			wait = 0
+		}
+	}
+	target := b
+	b.timer = time.AfterFunc(wait, func() {
+		g.flushDebounced(key, target, seq)
+	})
+	g.mu.Unlock()
+}
+
+func (g *Gateway) flushDebounced(key stagedKey, target *debounceBatch, seq uint64) {
+	g.mu.Lock()
+	if g.debounced[key] != target || target.seq != seq {
+		g.mu.Unlock()
+		return
+	}
+	delete(g.debounced, key)
+	ctx := g.parentCtx
+	bot := target.bot
+	ev := target.ev
+	threadKey := target.threadKey
+	inThread := target.inThread
+	body := strings.Join(target.bodies, "\n")
+	g.mu.Unlock()
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	// 派发前严格复查最新机器人与群策略：机器人被删除、禁用、换 profile、关闭免 @、收紧白名单或切换会话粒度时，丢弃旧批次
+	latest, ok := g.botByID(bot.ID)
+	if !ok || !latest.Enabled || latest.Profile != bot.Profile {
+		return
+	}
+	effBot, noMention := latest.EffectiveForChat(ev.ChatID)
+	owner := g.Config().OwnerOpenID
+	if !effBot.AllowsTrigger(ev.SenderID, owner, ev.ChatID) {
+		return
+	}
+	if ev.ChatType == "group" {
+		if !noMention && !isMentioningBot(latest, g.botIdentity(latest.ID), ev) {
+			return
+		}
+		if (effBot.SessionMode == SessionThread) != inThread {
+			return
+		}
+	}
+	bot = effBot
+	g.dispatchMessage(ctx, bot, ev, threadKey, inThread, body)
+}
+
+func (g *Gateway) takeDebounced(key stagedKey) *debounceBatch {
+	g.mu.Lock()
+	b := g.debounced[key]
+	if b != nil {
+		delete(g.debounced, key)
+	}
+	g.mu.Unlock()
+	if b != nil && b.timer != nil {
+		b.timer.Stop()
+	}
+	return b
+}
+
+func (g *Gateway) cancelDebounced(key stagedKey) {
+	_ = g.takeDebounced(key)
+}
+
+func sanitizeAttachmentName(name string) string {
+	s := strings.TrimSpace(name)
+	if s == "" {
+		return ""
+	}
+	s = strings.ReplaceAll(s, "\\", "/")
+	s = filepath.Base(s)
+	if s == "" || s == "." || s == ".." || s == "/" {
+		return ""
+	}
+	return s
+}
+
+func parseRawJSONMap(raw json.RawMessage, content string) map[string]any {
+	tryParse := func(s string) map[string]any {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return nil
+		}
+		var m map[string]any
+		if json.Unmarshal([]byte(s), &m) == nil && m != nil {
+			return m
+		}
+		// 兼容双重 JSON 编码字符串（飞书事件 content 本身常为 JSON 字符串）
+		var inner string
+		if json.Unmarshal([]byte(s), &inner) == nil {
+			inner = strings.TrimSpace(inner)
+			if json.Unmarshal([]byte(inner), &m) == nil && m != nil {
+				return m
+			}
+		}
+		return nil
+	}
+	if m := tryParse(string(raw)); m != nil {
+		return m
+	}
+	return tryParse(content)
+}
+
+func parseAttachmentMeta(ev MessageEvent) (stagedAttachment, bool) {
 	if ev.MessageType != "image" && ev.MessageType != "file" {
-		return nil, ""
+		return stagedAttachment{}, false
 	}
-	var raw map[string]any
-	if len(ev.RawContent) > 0 {
-		_ = json.Unmarshal(ev.RawContent, &raw)
+	raw := parseRawJSONMap(ev.RawContent, ev.Content)
+	key := ""
+	kind := ev.MessageType
+	fileName := ""
+	if raw != nil {
+		if k, _ := raw["image_key"].(string); k != "" {
+			key = k
+			kind = "image"
+		} else if k, _ := raw["file_key"].(string); k != "" {
+			key = k
+			kind = "file"
+		}
+		fileName, _ = raw["file_name"].(string)
 	}
-	if raw == nil {
-		_ = json.Unmarshal([]byte(ev.Content), &raw)
+	if key == "" && ev.MsgID() == "" {
+		return stagedAttachment{}, false
 	}
-	key, _ := raw["image_key"].(string)
-	kind := "image"
-	if key == "" {
-		key, _ = raw["file_key"].(string)
-		kind = "file"
+	return stagedAttachment{
+		msgID:    ev.MsgID(),
+		fileKey:  key,
+		kind:     kind,
+		fileName: sanitizeAttachmentName(fileName),
+		rootID:   ev.RootID,
+	}, true
+}
+
+func stagedLabels(items []stagedAttachment) []string {
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		out = append(out, it.displayLabel())
 	}
-	if key == "" {
-		return nil, ""
+	return out
+}
+
+func (g *Gateway) stageAttachment(ctx context.Context, bot BotConfig, ev MessageEvent, threadKey string, inThread bool, item stagedAttachment) {
+	key := stagedKey{
+		botID:     bot.ID,
+		chatID:    ev.ChatID,
+		threadKey: threadKey,
+		senderID:  ev.SenderID,
+	}
+	now := g.now()
+
+	var expiredOld *stagedBatch
+	var b *stagedBatch
+	var batchID string
+
+	g.mu.Lock()
+	b = g.staged[key]
+	if b != nil && now.Sub(b.updatedAt) > pendingAttachTTL {
+		expiredOld = b
+		delete(g.staged, key)
+		b = nil
+	}
+	if b == nil {
+		b = &stagedBatch{
+			id:        fmt.Sprintf("sb_%d", now.UnixNano()),
+			botID:     bot.ID,
+			profile:   bot.Profile,
+			botName:   bot.Name,
+			chatID:    ev.ChatID,
+			chatType:  ev.ChatType,
+			threadKey: threadKey,
+			inThread:  inThread,
+			senderID:  ev.SenderID,
+			updatedAt: now,
+			items:     []stagedAttachment{item},
+		}
+		g.staged[key] = b
+	} else {
+		if len(b.items) < maxStagedAttachments {
+			b.items = append(b.items, item)
+		}
+		b.updatedAt = now
+	}
+	batchID = b.id
+	g.mu.Unlock()
+
+	if expiredOld != nil {
+		g.closeStagedCard(ctx, expiredOld, "expired")
+	}
+
+	b.cardMu.Lock()
+	defer b.cardMu.Unlock()
+	if b.closedStatus != "" {
+		return
+	}
+	g.mu.Lock()
+	labels := stagedLabels(b.items)
+	g.mu.Unlock()
+
+	cardJSON := BuildStagedAttachmentsCard(bot.ID, bot.Name, batchID, labels)
+	if b.cardMsgID != "" {
+		if err := g.client.PatchCard(ctx, bot.Profile, b.cardMsgID, cardJSON); err == nil {
+			return
+		}
+	}
+	cardMsgID, err := g.client.ReplyCard(ctx, bot.Profile, ev.MsgID(), inThread, cardJSON)
+	if err != nil || cardMsgID == "" {
+		return
+	}
+	b.cardMsgID = cardMsgID
+}
+
+func (g *Gateway) takeStaged(ctx context.Context, key stagedKey) *stagedBatch {
+	now := g.now()
+	g.mu.Lock()
+	b := g.staged[key]
+	if b != nil {
+		delete(g.staged, key)
+	}
+	g.mu.Unlock()
+	if b == nil {
+		return nil
+	}
+	if now.Sub(b.updatedAt) > pendingAttachTTL {
+		g.closeStagedCard(ctx, b, "expired")
+		return nil
+	}
+	return b
+}
+
+func (g *Gateway) findAndRemoveStaged(botID, batchID, operatorID string, isOwner bool) (batch *stagedBatch, denied bool) {
+	if batchID == "" {
+		return nil, false
+	}
+	now := g.now()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for k, b := range g.staged {
+		if b.botID != botID || b.id != batchID {
+			continue
+		}
+		if !isOwner && operatorID != "" && b.senderID != "" && b.senderID != operatorID {
+			return nil, true
+		}
+		delete(g.staged, k)
+		if now.Sub(b.updatedAt) > pendingAttachTTL {
+			return nil, false
+		}
+		return b, false
+	}
+	return nil, false
+}
+
+func (g *Gateway) closeStagedCard(ctx context.Context, b *stagedBatch, status string) {
+	g.closeStagedCardWithFallback(ctx, b, status, "")
+}
+
+func (g *Gateway) closeStagedCardWithFallback(ctx context.Context, b *stagedBatch, status, fallbackCardID string) {
+	if b == nil {
+		return
+	}
+	b.cardMu.Lock()
+	defer b.cardMu.Unlock()
+	b.closedStatus = status
+	cardID := b.cardMsgID
+	if cardID == "" {
+		cardID = fallbackCardID
+	}
+	if cardID == "" {
+		return
+	}
+	g.mu.Lock()
+	count := len(b.items)
+	g.mu.Unlock()
+	card := BuildStagedAttachmentsClosedCard(b.botName, status, count)
+	_ = g.client.PatchCard(ctx, b.profile, cardID, card)
+}
+
+func (g *Gateway) submitStagedBatch(ctx context.Context, bot BotConfig, b *stagedBatch, actionMsgID string) {
+	if b == nil {
+		return
+	}
+	b.cardMu.Lock()
+	b.closedStatus = "submitted"
+	cardID := b.cardMsgID
+	b.cardMu.Unlock()
+	if cardID == "" {
+		cardID = actionMsgID
+	}
+
+	g.mu.Lock()
+	items := append([]stagedAttachment(nil), b.items...)
+	g.mu.Unlock()
+	if len(items) == 0 {
+		return
+	}
+	atts, attDir, _ := g.downloadAttachmentsList(ctx, bot, items)
+	if attDir != "" {
+		defer os.RemoveAll(attDir)
+	}
+	if len(atts) == 0 {
+		g.closeStagedCardWithFallback(ctx, b, "cancelled", cardID)
+		return
+	}
+	lastItem := items[len(items)-1]
+	titleHint := oneLine(lastItem.displayLabel(), 36)
+	if titleHint == "" {
+		titleHint = bot.Name
+	}
+	binding, err := g.host.EnsureDiscussion(bot, b.chatID, b.chatType, b.threadKey, titleHint)
+	if err != nil {
+		if cardID != "" {
+			_ = g.client.PatchCard(ctx, bot.Profile, cardID, BuildNoticeCard(tr("Error"), "red", err.Error()))
+		}
+		return
+	}
+	var metaParts []string
+	metaParts = append(metaParts, "chat_id="+b.chatID)
+	if b.chatType != "" {
+		metaParts = append(metaParts, "chat_type="+b.chatType)
+	}
+	if lastItem.rootID != "" {
+		metaParts = append(metaParts, "root_id="+lastItem.rootID)
+	}
+	if lastItem.msgID != "" {
+		metaParts = append(metaParts, "message_id="+lastItem.msgID)
+	}
+	metaHeader := "[Feishu " + strings.Join(metaParts, " ") + "]"
+
+	execID, err := g.host.PostFromLark(binding, "", metaHeader, atts)
+	if err != nil {
+		if cardID != "" {
+			_ = g.client.PatchCard(ctx, bot.Profile, cardID, BuildNoticeCard(tr("Error"), "red", err.Error()))
+		}
+		return
+	}
+
+	wsLabel := g.workspaceLabel(binding.WorkspaceID)
+	prevExecID := g.queuedBehindExecID(binding.DiscussionKey, execID)
+	cardJSON := BuildProgressCard(bot.ID, bot.Name, binding.Agent, wsLabel, execID, tr("Queued"), "0s", "", "", "", 0, prevExecID)
+	finalCardID := cardID
+	if finalCardID == "" || g.client.PatchCard(ctx, bot.Profile, finalCardID, cardJSON) != nil {
+		sentID, serr := g.client.ReplyCard(ctx, bot.Profile, lastItem.msgID, b.inThread, cardJSON)
+		if serr != nil || sentID == "" {
+			sentID, serr = g.client.SendCard(ctx, bot.Profile, b.chatID, cardJSON)
+		}
+		if serr != nil || sentID == "" {
+			return
+		}
+		finalCardID = sentID
+	}
+	_ = g.host.SaveCard(store.LarkCard{
+		Kind:          "exec",
+		RefID:         execID,
+		BotID:         bot.ID,
+		ChatID:        b.chatID,
+		ReplyTo:       lastItem.msgID,
+		CardMsgID:     finalCardID,
+		DiscussionKey: binding.DiscussionKey,
+		Status:        "active",
+	})
+	g.mu.Lock()
+	g.markChatInterleavedLocked(b.chatID, b.threadKey, lastItem.rootID, execID)
+	g.activeCards[execID] = &activeCard{
+		botID:     bot.ID,
+		profile:   bot.Profile,
+		botName:   bot.Name,
+		execID:    execID,
+		chatID:    b.chatID,
+		threadKey: b.threadKey,
+		replyTo:   lastItem.msgID,
+		inThread:  b.inThread,
+		cardMsgID: finalCardID,
+		lastJSON:  cardJSON,
+	}
+	g.mu.Unlock()
+}
+
+func (g *Gateway) downloadAttachmentsList(ctx context.Context, bot BotConfig, items []stagedAttachment) ([]string, string, map[string]bool) {
+	if len(items) == 0 {
+		return nil, "", nil
 	}
 	dir, err := os.MkdirTemp("", "posse-lark-att-*")
 	if err != nil {
-		return nil, ""
+		return nil, "", nil
 	}
-	p, err := g.client.DownloadResource(ctx, bot.Profile, ev.MsgID(), key, kind, dir)
-	if err != nil || p == "" {
+	var out []string
+	downloadedMsgIDs := map[string]bool{}
+	for i, it := range items {
+		subDir := filepath.Join(dir, fmt.Sprintf("%d", i))
+		dctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		if it.fileKey != "" {
+			p, err := g.client.DownloadResource(dctx, bot.Profile, it.msgID, it.fileKey, it.kind, subDir)
+			cancel()
+			if err != nil || p == "" {
+				continue
+			}
+			if it.fileName != "" && filepath.Base(p) != it.fileName {
+				target := filepath.Join(filepath.Dir(p), it.fileName)
+				if err := os.Rename(p, target); err == nil {
+					p = target
+				}
+			}
+			out = append(out, p)
+			if it.msgID != "" {
+				downloadedMsgIDs[it.msgID] = true
+			}
+			continue
+		}
+		// 无 file_key 时回退通过 messages-mget 拉取附件，兼容仅含渲染文本的事件格式
+		fetcher, ok := g.client.(messageContextFetcher)
+		if !ok || it.msgID == "" {
+			cancel()
+			continue
+		}
+		msg, err := fetcher.GetMessage(dctx, bot.Profile, it.msgID, subDir)
+		cancel()
+		if err != nil || msg.Deleted {
+			continue
+		}
+		got := false
+		for _, r := range msg.Resources {
+			if r.Error || r.LocalPath == "" {
+				continue
+			}
+			if st, err := os.Stat(r.LocalPath); err == nil && !st.IsDir() {
+				out = append(out, r.LocalPath)
+				got = true
+			}
+		}
+		if got {
+			downloadedMsgIDs[it.msgID] = true
+		}
+	}
+	if len(out) == 0 {
 		_ = os.RemoveAll(dir)
+		return nil, "", nil
+	}
+	return out, dir, downloadedMsgIDs
+}
+
+func (g *Gateway) downloadEventAttachments(ctx context.Context, bot BotConfig, ev MessageEvent) ([]string, string) {
+	meta, ok := parseAttachmentMeta(ev)
+	if !ok {
 		return nil, ""
 	}
-	return []string{p}, dir
+	atts, dir, _ := g.downloadAttachmentsList(ctx, bot, []stagedAttachment{meta})
+	return atts, dir
 }
 
 func (g *Gateway) fetchParentContext(ctx context.Context, bot BotConfig, parentID string) (block string, atts []string, tempDir string) {

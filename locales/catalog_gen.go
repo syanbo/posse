@@ -30100,3 +30100,283 @@ func LarkCancel() string { return In(i18n.Locale()).LarkCancel() }
 func (msgs Messages) LarkCancel() string {
 	return Catalog.Format(msgs.locale, "larkCancel", nil)
 }
+
+// LarkChatsTitle says "Group Personas"
+// in the language the app shows.
+//
+// Section title for per-group overrides under a Feishu bot.
+func LarkChatsTitle() string { return In(i18n.Locale()).LarkChatsTitle() }
+
+// LarkChatsTitle says "Group Personas"
+// in the language of msgs.
+//
+// Section title for per-group overrides under a Feishu bot.
+func (msgs Messages) LarkChatsTitle() string {
+	return Catalog.Format(msgs.locale, "larkChatsTitle", nil)
+}
+
+// LarkChatsHint says "Bind separate Feishu groups to different workspaces, agents, and roles using this bot."
+// in the language the app shows.
+//
+// Short explanation of per-group overrides under a Feishu bot.
+func LarkChatsHint() string { return In(i18n.Locale()).LarkChatsHint() }
+
+// LarkChatsHint says "Bind separate Feishu groups to different workspaces, agents, and roles using this bot."
+// in the language of msgs.
+//
+// Short explanation of per-group overrides under a Feishu bot.
+func (msgs Messages) LarkChatsHint() string {
+	return Catalog.Format(msgs.locale, "larkChatsHint", nil)
+}
+
+// LarkChatsEmpty says "No group personas yet. Add one here, or run /mention off in a Feishu group."
+// in the language the app shows.
+//
+// Empty state text when a bot has no per-group overrides.
+func LarkChatsEmpty() string { return In(i18n.Locale()).LarkChatsEmpty() }
+
+// LarkChatsEmpty says "No group personas yet. Add one here, or run /mention off in a Feishu group."
+// in the language of msgs.
+//
+// Empty state text when a bot has no per-group overrides.
+func (msgs Messages) LarkChatsEmpty() string {
+	return Catalog.Format(msgs.locale, "larkChatsEmpty", nil)
+}
+
+// LarkAddChat says "Add Group Persona"
+// in the language the app shows.
+//
+// Button to add a new per-group persona override.
+func LarkAddChat() string { return In(i18n.Locale()).LarkAddChat() }
+
+// LarkAddChat says "Add Group Persona"
+// in the language of msgs.
+//
+// Button to add a new per-group persona override.
+func (msgs Messages) LarkAddChat() string {
+	return Catalog.Format(msgs.locale, "larkAddChat", nil)
+}
+
+// LarkEditChat says "Edit Group Persona"
+// in the language the app shows.
+//
+// Title when editing an existing per-group persona override.
+func LarkEditChat() string { return In(i18n.Locale()).LarkEditChat() }
+
+// LarkEditChat says "Edit Group Persona"
+// in the language of msgs.
+//
+// Title when editing an existing per-group persona override.
+func (msgs Messages) LarkEditChat() string {
+	return Catalog.Format(msgs.locale, "larkEditChat", nil)
+}
+
+// LarkChatNoMentionBadge says "No @"
+// in the language the app shows.
+//
+// Compact badge indicating a group responds without @mention.
+func LarkChatNoMentionBadge() string { return In(i18n.Locale()).LarkChatNoMentionBadge() }
+
+// LarkChatNoMentionBadge says "No @"
+// in the language of msgs.
+//
+// Compact badge indicating a group responds without @mention.
+func (msgs Messages) LarkChatNoMentionBadge() string {
+	return Catalog.Format(msgs.locale, "larkChatNoMentionBadge", nil)
+}
+
+// LarkChatPickLabel says "Joined Feishu Groups"
+// in the language the app shows.
+//
+// Label above the list of Feishu groups the bot has joined.
+func LarkChatPickLabel() string { return In(i18n.Locale()).LarkChatPickLabel() }
+
+// LarkChatPickLabel says "Joined Feishu Groups"
+// in the language of msgs.
+//
+// Label above the list of Feishu groups the bot has joined.
+func (msgs Messages) LarkChatPickLabel() string {
+	return Catalog.Format(msgs.locale, "larkChatPickLabel", nil)
+}
+
+// LarkChatSearchPlaceholder says "Filter groups by name or ID…"
+// in the language the app shows.
+//
+// Placeholder for the group picker search input.
+func LarkChatSearchPlaceholder() string { return In(i18n.Locale()).LarkChatSearchPlaceholder() }
+
+// LarkChatSearchPlaceholder says "Filter groups by name or ID…"
+// in the language of msgs.
+//
+// Placeholder for the group picker search input.
+func (msgs Messages) LarkChatSearchPlaceholder() string {
+	return Catalog.Format(msgs.locale, "larkChatSearchPlaceholder", nil)
+}
+
+// LarkChatLoading says "Loading joined groups…"
+// in the language the app shows.
+//
+// Loading message while fetching groups the bot has joined.
+func LarkChatLoading() string { return In(i18n.Locale()).LarkChatLoading() }
+
+// LarkChatLoading says "Loading joined groups…"
+// in the language of msgs.
+//
+// Loading message while fetching groups the bot has joined.
+func (msgs Messages) LarkChatLoading() string {
+	return Catalog.Format(msgs.locale, "larkChatLoading", nil)
+}
+
+// LarkChatNoneJoined says "No joined groups found. Add this bot to a Feishu group and refresh, or enter a Chat ID manually."
+// in the language the app shows.
+//
+// Empty state when the bot has not joined any Feishu groups.
+func LarkChatNoneJoined() string { return In(i18n.Locale()).LarkChatNoneJoined() }
+
+// LarkChatNoneJoined says "No joined groups found. Add this bot to a Feishu group and refresh, or enter a Chat ID manually."
+// in the language of msgs.
+//
+// Empty state when the bot has not joined any Feishu groups.
+func (msgs Messages) LarkChatNoneJoined() string {
+	return Catalog.Format(msgs.locale, "larkChatNoneJoined", nil)
+}
+
+// LarkChatHasMore says "Showing the most recently active groups; enter a Chat ID manually if yours is not listed."
+// in the language the app shows.
+//
+// Notice when the joined group list is paginated.
+func LarkChatHasMore() string { return In(i18n.Locale()).LarkChatHasMore() }
+
+// LarkChatHasMore says "Showing the most recently active groups; enter a Chat ID manually if yours is not listed."
+// in the language of msgs.
+//
+// Notice when the joined group list is paginated.
+func (msgs Messages) LarkChatHasMore() string {
+	return Catalog.Format(msgs.locale, "larkChatHasMore", nil)
+}
+
+// LarkChatManualToggle says "Enter Chat ID manually"
+// in the language the app shows.
+//
+// Toggle button to reveal manual Chat ID input.
+func LarkChatManualToggle() string { return In(i18n.Locale()).LarkChatManualToggle() }
+
+// LarkChatManualToggle says "Enter Chat ID manually"
+// in the language of msgs.
+//
+// Toggle button to reveal manual Chat ID input.
+func (msgs Messages) LarkChatManualToggle() string {
+	return Catalog.Format(msgs.locale, "larkChatManualToggle", nil)
+}
+
+// LarkChatIDLabel says "Chat ID"
+// in the language the app shows.
+//
+// Label for the Feishu group Chat ID field.
+func LarkChatIDLabel() string { return In(i18n.Locale()).LarkChatIDLabel() }
+
+// LarkChatIDLabel says "Chat ID"
+// in the language of msgs.
+//
+// Label for the Feishu group Chat ID field.
+func (msgs Messages) LarkChatIDLabel() string {
+	return Catalog.Format(msgs.locale, "larkChatIDLabel", nil)
+}
+
+// LarkChatNamePlaceholder says "Leave blank to inherit bot name"
+// in the language the app shows.
+//
+// Placeholder for optional group persona display name.
+func LarkChatNamePlaceholder() string { return In(i18n.Locale()).LarkChatNamePlaceholder() }
+
+// LarkChatNamePlaceholder says "Leave blank to inherit bot name"
+// in the language of msgs.
+//
+// Placeholder for optional group persona display name.
+func (msgs Messages) LarkChatNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "larkChatNamePlaceholder", nil)
+}
+
+// LarkInherit says "Inherit"
+// in the language the app shows.
+//
+// Option label meaning inherit from parent bot default.
+func LarkInherit() string { return In(i18n.Locale()).LarkInherit() }
+
+// LarkInherit says "Inherit"
+// in the language of msgs.
+//
+// Option label meaning inherit from parent bot default.
+func (msgs Messages) LarkInherit() string {
+	return Catalog.Format(msgs.locale, "larkInherit", nil)
+}
+
+// LarkChatNoMention says "Direct Mode (No @ Required)"
+// in the language the app shows.
+//
+// Switch label for allowing unmentioned messages in a group.
+func LarkChatNoMention() string { return In(i18n.Locale()).LarkChatNoMention() }
+
+// LarkChatNoMention says "Direct Mode (No @ Required)"
+// in the language of msgs.
+//
+// Switch label for allowing unmentioned messages in a group.
+func (msgs Messages) LarkChatNoMention() string {
+	return Catalog.Format(msgs.locale, "larkChatNoMention", nil)
+}
+
+// LarkChatNoMentionHint says "Respond to messages and stage files without @mention (still ignores messages @mentioning others; requires group all-m…"
+// in the language the app shows.
+//
+// Helper text under the Direct Mode switch.
+func LarkChatNoMentionHint() string { return In(i18n.Locale()).LarkChatNoMentionHint() }
+
+// LarkChatNoMentionHint says "Respond to messages and stage files without @mention (still ignores messages @mentioning others; requires group all-m…"
+// in the language of msgs.
+//
+// Helper text under the Direct Mode switch.
+func (msgs Messages) LarkChatNoMentionHint() string {
+	return Catalog.Format(msgs.locale, "larkChatNoMentionHint", nil)
+}
+
+// LarkRoleCustom says "Custom"
+// in the language the app shows.
+//
+// Segmented option for a custom group role prompt.
+func LarkRoleCustom() string { return In(i18n.Locale()).LarkRoleCustom() }
+
+// LarkRoleCustom says "Custom"
+// in the language of msgs.
+//
+// Segmented option for a custom group role prompt.
+func (msgs Messages) LarkRoleCustom() string {
+	return Catalog.Format(msgs.locale, "larkRoleCustom", nil)
+}
+
+// LarkRoleNone says "No Role"
+// in the language the app shows.
+//
+// Segmented option to clear the inherited bot role for this group.
+func LarkRoleNone() string { return In(i18n.Locale()).LarkRoleNone() }
+
+// LarkRoleNone says "No Role"
+// in the language of msgs.
+//
+// Segmented option to clear the inherited bot role for this group.
+func (msgs Messages) LarkRoleNone() string {
+	return Catalog.Format(msgs.locale, "larkRoleNone", nil)
+}
+
+// LarkChatEffectHint says "Changes to workspace, agent, role, or approval mode take effect on the next message in a fresh session."
+// in the language the app shows.
+//
+// Note explaining when group persona changes take effect.
+func LarkChatEffectHint() string { return In(i18n.Locale()).LarkChatEffectHint() }
+
+// LarkChatEffectHint says "Changes to workspace, agent, role, or approval mode take effect on the next message in a fresh session."
+// in the language of msgs.
+//
+// Note explaining when group persona changes take effect.
+func (msgs Messages) LarkChatEffectHint() string {
+	return Catalog.Format(msgs.locale, "larkChatEffectHint", nil)
+}

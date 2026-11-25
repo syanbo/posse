@@ -10698,5 +10698,85 @@
   "larkCancel": "Cancel",
   "@larkCancel": {
     "description": "Button to cancel editing a Feishu bot."
+  },
+  "larkChatsTitle": "Group Personas",
+  "@larkChatsTitle": {
+    "description": "Section title for per-group overrides under a Feishu bot."
+  },
+  "larkChatsHint": "Bind separate Feishu groups to different workspaces, agents, and roles using this bot.",
+  "@larkChatsHint": {
+    "description": "Short explanation of per-group overrides under a Feishu bot."
+  },
+  "larkChatsEmpty": "No group personas yet. Add one here, or run /mention off in a Feishu group.",
+  "@larkChatsEmpty": {
+    "description": "Empty state text when a bot has no per-group overrides."
+  },
+  "larkAddChat": "Add Group Persona",
+  "@larkAddChat": {
+    "description": "Button to add a new per-group persona override."
+  },
+  "larkEditChat": "Edit Group Persona",
+  "@larkEditChat": {
+    "description": "Title when editing an existing per-group persona override."
+  },
+  "larkChatNoMentionBadge": "No @",
+  "@larkChatNoMentionBadge": {
+    "description": "Compact badge indicating a group responds without @mention."
+  },
+  "larkChatPickLabel": "Joined Feishu Groups",
+  "@larkChatPickLabel": {
+    "description": "Label above the list of Feishu groups the bot has joined."
+  },
+  "larkChatSearchPlaceholder": "Filter groups by name or ID…",
+  "@larkChatSearchPlaceholder": {
+    "description": "Placeholder for the group picker search input."
+  },
+  "larkChatLoading": "Loading joined groups…",
+  "@larkChatLoading": {
+    "description": "Loading message while fetching groups the bot has joined."
+  },
+  "larkChatNoneJoined": "No joined groups found. Add this bot to a Feishu group and refresh, or enter a Chat ID manually.",
+  "@larkChatNoneJoined": {
+    "description": "Empty state when the bot has not joined any Feishu groups."
+  },
+  "larkChatHasMore": "Showing the most recently active groups; enter a Chat ID manually if yours is not listed.",
+  "@larkChatHasMore": {
+    "description": "Notice when the joined group list is paginated."
+  },
+  "larkChatManualToggle": "Enter Chat ID manually",
+  "@larkChatManualToggle": {
+    "description": "Toggle button to reveal manual Chat ID input."
+  },
+  "larkChatIDLabel": "Chat ID",
+  "@larkChatIDLabel": {
+    "description": "Label for the Feishu group Chat ID field."
+  },
+  "larkChatNamePlaceholder": "Leave blank to inherit bot name",
+  "@larkChatNamePlaceholder": {
+    "description": "Placeholder for optional group persona display name."
+  },
+  "larkInherit": "Inherit",
+  "@larkInherit": {
+    "description": "Option label meaning inherit from parent bot default."
+  },
+  "larkChatNoMention": "Direct Mode (No @ Required)",
+  "@larkChatNoMention": {
+    "description": "Switch label for allowing unmentioned messages in a group."
+  },
+  "larkChatNoMentionHint": "Respond to messages and stage files without @mention (still ignores messages @mentioning others; requires group all-messages scope).",
+  "@larkChatNoMentionHint": {
+    "description": "Helper text under the Direct Mode switch."
+  },
+  "larkRoleCustom": "Custom",
+  "@larkRoleCustom": {
+    "description": "Segmented option for a custom group role prompt."
+  },
+  "larkRoleNone": "No Role",
+  "@larkRoleNone": {
+    "description": "Segmented option to clear the inherited bot role for this group."
+  },
+  "larkChatEffectHint": "Changes to workspace, agent, role, or approval mode take effect on the next message in a fresh session.",
+  "@larkChatEffectHint": {
+    "description": "Note explaining when group persona changes take effect."
   }
 }

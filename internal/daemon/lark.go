@@ -19,6 +19,7 @@ import (
 
 type larkState struct {
 	mu     sync.Mutex
+	cfgMu  sync.Mutex // 串行化 lark-bots.json 读改写与 Reload，防止并发写丢更新
 	gw     *lark.Gateway
 	client lark.Client
 }
@@ -201,6 +202,7 @@ func (d *Daemon) larkBotsList(_ context.Context, _ json.RawMessage) (any, error)
 		statuses = gw.Status()
 	}
 	return map[string]any{
+		"revision":    cfg.Revision,
 		"ownerOpenId": cfg.OwnerOpenID,
 		"bots":        cfg.Bots,
 		"statuses":    statuses,
@@ -213,19 +215,26 @@ func (d *Daemon) larkStatus(_ context.Context, _ json.RawMessage) (any, error) {
 	if gw := d.larkGateway(); gw != nil {
 		statuses = gw.Status()
 	}
-	return map[string]any{"ownerOpenId": cfg.OwnerOpenID, "statuses": statuses}, nil
+	return map[string]any{"revision": cfg.Revision, "ownerOpenId": cfg.OwnerOpenID, "statuses": statuses}, nil
 }
 
 func (d *Daemon) larkBotSave(_ context.Context, raw json.RawMessage) (any, error) {
 	var p struct {
-		OwnerOpenID string         `json:"ownerOpenId,omitempty"`
-		Bot         lark.BotConfig `json:"bot"`
+		OwnerOpenID   string         `json:"ownerOpenId,omitempty"`
+		Bot           lark.BotConfig `json:"bot"`
+		PreserveChats bool           `json:"preserveChats,omitempty"`
+		ExpectedRev   int64          `json:"expectedRev,omitempty"`
 	}
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
 	if err := lark.ValidateBotPolicy(p.Bot.ReadOnlyHosts, p.Bot.TrustedScripts); err != nil {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s", err.Error())
+	}
+	for _, ch := range p.Bot.Chats {
+		if err := lark.ValidateChatOverride(ch); err != nil {
+			return nil, rpc.Errorf(rpc.CodeBadRequest, "%s", err.Error())
+		}
 	}
 	bot := lark.NormalizeBot(p.Bot)
 	if bot.Profile == "" {
@@ -234,26 +243,41 @@ func (d *Daemon) larkBotSave(_ context.Context, raw json.RawMessage) (any, error
 	if bot.ID == "" {
 		bot.ID = store.NewID("lbot_")
 	}
+
+	d.lark.cfgMu.Lock()
+	defer d.lark.cfgMu.Unlock()
 	cfg, err := lark.LoadConfig(d.cfg.Home)
 	if err != nil {
 		return nil, err
 	}
+	if p.ExpectedRev > 0 && cfg.Revision != p.ExpectedRev {
+		return nil, rpc.Errorf(rpc.CodeConflict, "configuration was modified elsewhere; please refresh and try again")
+	}
 	if strings.TrimSpace(p.OwnerOpenID) != "" {
 		cfg.OwnerOpenID = strings.TrimSpace(p.OwnerOpenID)
 	}
-	replaced := false
+	var prevBot lark.BotConfig
+	hasPrev := false
 	for i := range cfg.Bots {
 		if cfg.Bots[i].ID == bot.ID {
+			prevBot = lark.CloneBot(cfg.Bots[i])
+			hasPrev = true
+			if p.PreserveChats {
+				bot.Chats = prevBot.Chats
+			}
 			cfg.Bots[i] = bot
-			replaced = true
 			break
 		}
 	}
-	if !replaced {
+	if !hasPrev {
 		cfg.Bots = append(cfg.Bots, bot)
 	}
+	cfg.Revision++
 	if err := lark.SaveConfig(d.cfg.Home, cfg); err != nil {
 		return nil, err
+	}
+	if hasPrev {
+		d.reconcileLarkBotChanges(prevBot, bot)
 	}
 	if gw := d.larkGateway(); gw != nil {
 		gw.Reload(cfg)
@@ -268,6 +292,8 @@ func (d *Daemon) larkBotDelete(_ context.Context, raw json.RawMessage) (any, err
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
+	d.lark.cfgMu.Lock()
+	defer d.lark.cfgMu.Unlock()
 	cfg, err := lark.LoadConfig(d.cfg.Home)
 	if err != nil {
 		return nil, err
@@ -285,6 +311,7 @@ func (d *Daemon) larkBotDelete(_ context.Context, raw json.RawMessage) (any, err
 		return nil, rpc.Errorf(rpc.CodeNotFound, "lark bot %s not found", p.ID)
 	}
 	cfg.Bots = out
+	cfg.Revision++
 	if err := lark.SaveConfig(d.cfg.Home, cfg); err != nil {
 		return nil, err
 	}
@@ -302,6 +329,8 @@ func (d *Daemon) larkBotToggle(_ context.Context, raw json.RawMessage) (any, err
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
+	d.lark.cfgMu.Lock()
+	defer d.lark.cfgMu.Unlock()
 	cfg, err := lark.LoadConfig(d.cfg.Home)
 	if err != nil {
 		return nil, err
@@ -319,6 +348,7 @@ func (d *Daemon) larkBotToggle(_ context.Context, raw json.RawMessage) (any, err
 	if !found {
 		return nil, rpc.Errorf(rpc.CodeNotFound, "lark bot %s not found", p.ID)
 	}
+	cfg.Revision++
 	if err := lark.SaveConfig(d.cfg.Home, cfg); err != nil {
 		return nil, err
 	}
@@ -326,6 +356,247 @@ func (d *Daemon) larkBotToggle(_ context.Context, raw json.RawMessage) (any, err
 		gw.Reload(cfg)
 	}
 	return updated, nil
+}
+
+func (d *Daemon) larkBotChats(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p struct {
+		BotID string `json:"botId"`
+	}
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	bot, ok := d.larkBotByID(strings.TrimSpace(p.BotID))
+	if !ok {
+		return nil, rpc.Errorf(rpc.CodeNotFound, "lark bot %s not found", p.BotID)
+	}
+	type chatLister interface {
+		ListBotChats(ctx context.Context, profile string) (lark.ChatListResult, error)
+	}
+	lister, ok := d.larkClient().(chatLister)
+	if !ok {
+		return lark.ChatListResult{}, nil
+	}
+	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	res, err := lister.ListBotChats(cctx, bot.Profile)
+	if err != nil {
+		return nil, rpc.Errorf(rpc.CodeInternal, "lark bot chats: %v", err)
+	}
+	return res, nil
+}
+
+func (d *Daemon) larkBotChatSave(_ context.Context, raw json.RawMessage) (any, error) {
+	var p struct {
+		BotID       string            `json:"botId"`
+		Chat        lark.ChatOverride `json:"chat"`
+		CreateOnly  bool              `json:"createOnly,omitempty"`
+		ExpectedRev int64             `json:"expectedRev,omitempty"`
+	}
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if err := lark.ValidateChatOverride(p.Chat); err != nil {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s", err.Error())
+	}
+	ov := lark.NormalizeChatOverride(p.Chat)
+	return d.mutateLarkChatOverrideOpts(strings.TrimSpace(p.BotID), ov.ChatID, p.CreateOnly, p.ExpectedRev, func(cur *lark.ChatOverride) {
+		*cur = ov
+	})
+}
+
+func (d *Daemon) larkBotChatDelete(_ context.Context, raw json.RawMessage) (any, error) {
+	var p struct {
+		BotID       string `json:"botId"`
+		ChatID      string `json:"chatId"`
+		ExpectedRev int64  `json:"expectedRev,omitempty"`
+	}
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	chatID := strings.TrimSpace(p.ChatID)
+	if chatID == "" {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "chat ID is required")
+	}
+	return d.deleteLarkChatOverride(strings.TrimSpace(p.BotID), chatID, p.ExpectedRev)
+}
+
+func (d *Daemon) mutateLarkChatOverride(botID, chatID string, mutate func(*lark.ChatOverride)) (lark.BotConfig, error) {
+	return d.mutateLarkChatOverrideOpts(botID, chatID, false, 0, mutate)
+}
+
+func (d *Daemon) mutateLarkChatOverrideOpts(botID, chatID string, createOnly bool, expectedRev int64, mutate func(*lark.ChatOverride)) (lark.BotConfig, error) {
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" {
+		return lark.BotConfig{}, rpc.Errorf(rpc.CodeBadRequest, "chat ID is required")
+	}
+	d.lark.cfgMu.Lock()
+	defer d.lark.cfgMu.Unlock()
+	cfg, err := lark.LoadConfig(d.cfg.Home)
+	if err != nil {
+		return lark.BotConfig{}, err
+	}
+	if expectedRev > 0 && cfg.Revision != expectedRev {
+		return lark.BotConfig{}, rpc.Errorf(rpc.CodeConflict, "configuration was modified elsewhere; please refresh and try again")
+	}
+	idx := -1
+	for i := range cfg.Bots {
+		if cfg.Bots[i].ID == botID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return lark.BotConfig{}, rpc.Errorf(rpc.CodeNotFound, "lark bot %s not found", botID)
+	}
+	prevBot := lark.CloneBot(cfg.Bots[idx])
+	nextBot := lark.CloneBot(cfg.Bots[idx])
+	cur, found := nextBot.ChatOverrideOf(chatID)
+	if found && createOnly {
+		return lark.BotConfig{}, rpc.Errorf(rpc.CodeConflict, "group persona for %s already exists", chatID)
+	}
+	if !found {
+		cur = lark.ChatOverride{ChatID: chatID}
+	}
+	mutate(&cur)
+	cur.ChatID = chatID
+	cur = lark.NormalizeChatOverride(cur)
+	if err := lark.ValidateChatOverride(cur); err != nil {
+		return lark.BotConfig{}, rpc.Errorf(rpc.CodeBadRequest, "%s", err.Error())
+	}
+	replaced := false
+	for i := range nextBot.Chats {
+		if nextBot.Chats[i].ChatID == chatID {
+			nextBot.Chats[i] = cur
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		nextBot.Chats = append(nextBot.Chats, cur)
+	}
+	nextBot = lark.NormalizeBot(nextBot)
+	cfg.Bots[idx] = nextBot
+	cfg.Revision++
+	if err := lark.SaveConfig(d.cfg.Home, cfg); err != nil {
+		return lark.BotConfig{}, err
+	}
+	d.reconcileLarkChatBindings(prevBot, nextBot, chatID)
+	if gw := d.larkGateway(); gw != nil {
+		gw.Reload(cfg)
+	}
+	return nextBot, nil
+}
+
+func (d *Daemon) deleteLarkChatOverride(botID, chatID string, expectedRev int64) (lark.BotConfig, error) {
+	d.lark.cfgMu.Lock()
+	defer d.lark.cfgMu.Unlock()
+	cfg, err := lark.LoadConfig(d.cfg.Home)
+	if err != nil {
+		return lark.BotConfig{}, err
+	}
+	if expectedRev > 0 && cfg.Revision != expectedRev {
+		return lark.BotConfig{}, rpc.Errorf(rpc.CodeConflict, "configuration was modified elsewhere; please refresh and try again")
+	}
+	idx := -1
+	for i := range cfg.Bots {
+		if cfg.Bots[i].ID == botID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return lark.BotConfig{}, rpc.Errorf(rpc.CodeNotFound, "lark bot %s not found", botID)
+	}
+	prevBot := lark.CloneBot(cfg.Bots[idx])
+	nextBot := lark.CloneBot(cfg.Bots[idx])
+	out := make([]lark.ChatOverride, 0, len(nextBot.Chats))
+	for _, c := range nextBot.Chats {
+		if c.ChatID != chatID {
+			out = append(out, c)
+		}
+	}
+	nextBot.Chats = out
+	nextBot = lark.NormalizeBot(nextBot)
+	cfg.Bots[idx] = nextBot
+	cfg.Revision++
+	if err := lark.SaveConfig(d.cfg.Home, cfg); err != nil {
+		return lark.BotConfig{}, err
+	}
+	d.reconcileLarkChatBindings(prevBot, nextBot, chatID)
+	if gw := d.larkGateway(); gw != nil {
+		gw.Reload(cfg)
+	}
+	return nextBot, nil
+}
+
+func larkEffectiveRuntimeChanged(a, b lark.BotConfig) bool {
+	return a.Profile != b.Profile ||
+		a.WorkspaceID != b.WorkspaceID ||
+		a.Agent != b.Agent ||
+		a.Model != b.Model ||
+		a.Effort != b.Effort ||
+		a.PermissionMode != b.PermissionMode ||
+		a.Role != b.Role ||
+		a.SessionMode != b.SessionMode
+}
+
+func (d *Daemon) reconcileLarkBotChanges(prevBot, nextBot lark.BotConfig) {
+	bindings, err := d.store.ListLarkBindings(nextBot.ID)
+	if err != nil || len(bindings) == 0 {
+		return
+	}
+	seen := map[string]bool{}
+	for _, b := range bindings {
+		if seen[b.ChatID] {
+			continue
+		}
+		seen[b.ChatID] = true
+		d.reconcileLarkChatBindings(prevBot, nextBot, b.ChatID)
+	}
+}
+
+// reconcileLarkChatBindings 在群分身或上级默认配置发生实质变更（profile、工作区、Agent、角色、权限、会话粒度）时，
+// 先取消该群旧讨论中尚未启动的排队轮次（防止旧队列在绑定退役后退回全局默认权限启动），
+// 再退役旧活跃绑定并清理旧 worker 审批缓存，使下一条消息按新配置与新启动参数生效。
+func (d *Daemon) reconcileLarkChatBindings(prevBot, nextBot lark.BotConfig, chatID string) {
+	prevEff, _ := prevBot.EffectiveForChat(chatID)
+	nextEff, _ := nextBot.EffectiveForChat(chatID)
+	if !larkEffectiveRuntimeChanged(prevEff, nextEff) {
+		return
+	}
+	bindings, err := d.store.ListLarkBindings(nextBot.ID)
+	if err != nil {
+		return
+	}
+	activeExecs, _ := d.store.ActiveExecutions()
+	for _, b := range bindings {
+		if b.ChatID != chatID {
+			continue
+		}
+		hasRunning := false
+		for _, x := range activeExecs {
+			if x.Discussion != b.DiscussionKey {
+				continue
+			}
+			if x.State == store.ExecQueued {
+				_, _ = d.store.CancelExecution(x.ID)
+				d.larkOnExecFinished(x.Discussion, x.ID, store.ExecStopped, "group configuration changed")
+				continue
+			}
+			hasRunning = true
+		}
+		if m, err := d.store.Member(b.MemberID); err == nil && m.Worker != "" {
+			d.perms.ClearTerminal(m.Worker)
+			if !hasRunning {
+				d.closeTerminal(m.Worker, 2*time.Second)
+			}
+		}
+		if !hasRunning {
+			_ = d.store.SetArchived(b.DiscussionKey, true, time.Now())
+		}
+		_ = d.store.DeactivateLarkBinding(b.BotID, b.ChatID, b.ThreadKey)
+	}
+	d.taskNotify()
 }
 
 // --- lark.Host 适配 ---
@@ -713,4 +984,8 @@ func (h larkHost) CardByMessageID(cardMsgID string) (store.LarkCard, error) {
 }
 func (h larkHost) MarkEvent(botID, eventKey string) (bool, error) {
 	return h.d.store.MarkLarkEvent(botID, eventKey, time.Now())
+}
+
+func (h larkHost) MutateChatOverride(botID, chatID string, mutate func(*lark.ChatOverride)) (lark.BotConfig, error) {
+	return h.d.mutateLarkChatOverride(botID, chatID, mutate)
 }
