@@ -380,6 +380,47 @@ func TestIsMouseReport(t *testing.T) {
 	}
 }
 
+func TestNonTypingInputDoesNotUpdateLastInput(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want bool
+	}{
+		{"", true},
+		{"\x1b[I", true},
+		{"\x1b[O", true},
+		{"\x1b[I\x1b[<35;10;20M", true},
+		{"\x1b[O\x1b[M`!!", true},
+		{"\x1b[Ia", false},
+		{"hello", false},
+		{"\r", false},
+	} {
+		if got := isNonTypingInput([]byte(c.in)); got != c.want {
+			t.Errorf("isNonTypingInput(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+	tm, err := Start(Options{ID: "t_lastinput", Dir: t.TempDir(), Command: []string{"/bin/cat"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+
+	if err := tm.Send([]byte("\x1b[I")); err != nil {
+		t.Fatal(err)
+	}
+	if err := tm.Send([]byte("\x1b[<35;10;20M")); err != nil {
+		t.Fatal(err)
+	}
+	if !tm.LastInput().IsZero() {
+		t.Fatalf("mouse/focus reports must not update LastInput, got %v", tm.LastInput())
+	}
+	if err := tm.Send([]byte("a")); err != nil {
+		t.Fatal(err)
+	}
+	if tm.LastInput().IsZero() {
+		t.Fatal("typing input must update LastInput")
+	}
+}
+
 // 程序退出前不再读输入、鼠标跟踪还开着时，鼠标移动的报告堆在 PTY 里；程序关掉鼠标跟踪时丢掉它们，
 // 后面的 shell 读不到一串"35;12;8M"。最后写进去的是键盘输入时不丢。
 func TestMouseReportsDroppedWhenTrackingEnds(t *testing.T) {

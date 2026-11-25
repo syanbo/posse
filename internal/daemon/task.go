@@ -903,16 +903,19 @@ func (d *Daemon) deliver(terminalID string) {
 		return
 	}
 	// 取提醒和记已提醒在锁里，hook 就不会再交同一条；打字在锁外，免得别的终端的 hook 跟着等
-	text, _ := d.takeNudge(terminalID)
+	text, ids := d.takeNudge(terminalID)
 	if text == "" {
 		return
 	}
 	if err := s.Inject([]byte(text)); err != nil {
+		d.store.UnmarkNudged(ids)
 		return
 	}
-	// 和 terminal send 一样：回车与文本分开到达，TUI 才会当作提交
+	// 和 terminal send 一样：回车与文本分开到达，TUI 才会当作提交；回车写入失败同样回滚已提醒标记
 	time.Sleep(150 * time.Millisecond)
-	s.Inject([]byte("\r"))
+	if err := s.Inject([]byte("\r")); err != nil {
+		d.store.UnmarkNudged(ids)
+	}
 }
 
 // nudgeText 是给这个终端里的 agent 的一行提醒和它涵盖的消息；没有未提醒过的消息时为空。调用方持有 nudgeMu。

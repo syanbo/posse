@@ -981,7 +981,10 @@ func (t *Terminal) setPTYSize(cols, rows int) {
 func (t *Terminal) Send(data []byte) error { return t.SendContext(context.Background(), data) }
 
 func (t *Terminal) SendContext(ctx context.Context, data []byte) error {
-	t.lastInput.Store(time.Now().UnixNano())
+	// 鼠标移动/滚轮与窗口焦点报告不是用户键入，不刷新 lastInput，免得看终端或晃鼠标一直推迟任务提醒（nudgeQuiet）
+	if !isNonTypingInput(data) {
+		t.lastInput.Store(time.Now().UnixNano())
+	}
 	return t.inject(ctx, data)
 }
 
@@ -1133,6 +1136,30 @@ func (t *Terminal) inputQueued() int {
 		})
 	}
 	return n
+}
+
+// isNonTypingInput 报告整段输入是否只含非键入控制报告（鼠标报告、窗口焦点报告 ESC[I / ESC[O），
+// 这类流量不应刷新 lastInput，以免影响任务提醒的安静窗口或误判为新一轮用户输入。
+func isNonTypingInput(data []byte) bool {
+	if len(data) == 0 {
+		return true
+	}
+	for len(data) > 0 {
+		if m := sgrReport.Find(data); m != nil {
+			data = data[len(m):]
+			continue
+		}
+		if len(data) >= 6 && data[0] == 0x1b && data[1] == '[' && data[2] == 'M' && data[3] >= 0x20 && data[4] >= 0x20 && data[5] >= 0x20 {
+			data = data[6:]
+			continue
+		}
+		if len(data) >= 3 && data[0] == 0x1b && data[1] == '[' && (data[2] == 'I' || data[2] == 'O') {
+			data = data[3:]
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // isMouseReport 报告整段输入都是鼠标报告（SGR 和 X10 两种编码）。X10 的三个字节是原始字节（32 加按键、列、行），
