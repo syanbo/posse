@@ -3,6 +3,16 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.49
+
+- 新增双端内置 Tailscale（`tsnet`）：在桌面「手机」页或 `posse mobile tailscale` 开启后，无需另装官方 Tailscale 客户端或自建中转服务器即可与手机互通，同时兼容任一端使用官方 Tailscale；支持浏览器交互登录、一次性 AuthKey、自定义 Headscale 控制服务器、「跟随系统代理或 VPN 路由」开关与重置节点身份；看桌面经内置节点收到画面时按直连与 DERP 自动切换码率上限。
+- 接入飞书多机器人原生网关（「设置 › 飞书机器人」与 `posse lark`）：常驻进程直接托管多 profile 长连接，把飞书单聊与工作群映射为 Posse 讨论，实现飞书、桌面与手机三端互通；支持 Card 2.0 进度与结果卡片、Antigravity 与 Claude Code 工具权限审批（含「本会话允许同类」与只读排查白名单）、选项问答、引用消息及附件展开、可配置群聊近期上下文，以及 `/agent`、`/ws`、`/new`、`/status`、`/stop` 快捷命令。
+
+### English
+
+- Added dual-side Built-in Tailscale (`tsnet`): enable it from the Mac Mobile page or `posse mobile tailscale` to connect directly with the phone without installing the official Tailscale app or self-hosting a relay, while staying compatible with official Tailscale on either side. Supports browser sign-in, one-time Auth Keys, custom Headscale control servers, a “Follow system proxy / VPN routing” toggle, identity reset, and automatic direct vs. DERP bitrate limits for Remote Desktop.
+- Added a native Lark multi-bot gateway (Settings › Lark Bots and `posse lark`): the daemon manages long-lived `lark-cli` connections across multiple profiles, mapping DMs and group chats to Posse discussions synced across Lark, desktop, and mobile. Includes Card 2.0 progress/result cards, tool permission approval for Antigravity and Claude Code (with “Allow similar in session” and a read-only triage allowlist), choice prompts, quoted message and attachment expansion, configurable recent group context, and slash commands (`/agent`, `/ws`, `/new`, `/status`, `/stop`).
+
 ## 0.1.48
 
 - 讨论支持单条消息同时 `@` 多位可用 Agent（最多 8 位，与 `@人` 互斥）并行派发：同目录自动进入待确认并发保护，不同工作区并行执行；引用可用 Agent 消息时自动预选该成员，取消引用自动收回；CLI `posse discussion post` 支持多次传入或逗号分隔 `--to`。
