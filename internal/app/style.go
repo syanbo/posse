@@ -121,9 +121,18 @@ const (
 )
 
 const (
-	usageSummaryInset = 4
-	usageSummaryGap   = 6
+	usageSummaryInset   = 4
+	usageSummaryGap     = 6
+	usageGroupGap       = 4
+	usageGroupTopMargin = 4
+	usageLinkGap        = 4
+	usageLinkPadV       = 2
+	usageLinkPadH       = 6
+	usagePanelPadH      = 8
 )
+
+// planScrollMaxHeight 是套餐用量浮层列表区的最大高度，避免在最小窗口下把标题栏挤出视口。
+func planScrollMaxHeight() float32 { return 360 }
 
 // 圆角按角色分五档，嵌套时外圆角 = 内圆角 + 内边距（规则见 docs/design.md）。
 const (

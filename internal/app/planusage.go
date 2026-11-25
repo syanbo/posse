@@ -368,7 +368,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 		a.refreshPlanQuery(L(c), map[string]any{"agent": "codex", "force": false})
 	}
 	// 浮窗至少和底下整排一样宽，面板跟着撑满
-	ui.Column(c).MinWidth(420).Grow(1).AlignSelf(ui.Stretch).Gap(12).Padding(8, 8, 6, 8).Children(func() {
+	ui.Column(c).MinWidth(420).Grow(1).AlignSelf(ui.Stretch).Gap(12).Padding(8, usagePanelPadH, 6, usagePanelPadH).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			titleText(c, L(c).UsageTitle(), fsTitle).Grow(1)
 			// 查询进行中按钮换成转圈
@@ -391,69 +391,122 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 		pctText := func(pct float64) string { return L(c).UsageShownPercent(a.shownWord(L(c)), percentText(pct)) }
 		pctW, _ := c.MeasureText(0, ui.Span{Text: pctText(100), Size: fsSmall})
 		pctW = max(sz(64), pctW+2)
-		for i, u := range us {
-			if i > 0 {
-				hline(c)
-			}
-			ui.Column(c.Key(u.Agent)).Gap(8).Children(func() {
-				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					agentTile(c, u.Agent, smallIcon())
-					ui.Text(c, agentTitle(u.Agent)).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
-					if u.Plan != "" {
-						ui.Text(c, strings.Replace(u.Plan, "/mo", L(c).UsagePerMonth(), 1)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		// 滚动区向两边扩到浮窗的内边距里，内容再缩回来：滚动条落在右边留白上，最小窗口多厂商时也不裁掉标题栏。
+		ui.Scroll(c).MaxHeight(planScrollMaxHeight()).Margin(0, -usagePanelPadH).Children(func() {
+			ui.Column(c).Gap(12).Padding(0, usagePanelPadH).Children(func() {
+				for i, u := range us {
+					if i > 0 {
+						hline(c)
 					}
-					ui.Spacer(c)
-					// 刷新状态占用读数时间的位置，避免临时加行使底部浮层上下跳动。
-					if u.Agent == "codex" && a.daemon.Usage != nil && a.daemon.Usage.CodexReading {
-						ui.Text(c, L(c).UsageRefreshing()).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
-					} else if u.UpdatedAt > 0 {
-						ui.Text(c, planReadingAge(L(c), u, now)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).
-							Tooltip(L(c).UsageReadAt(L(c).AppDateTime(time.UnixMilli(u.UpdatedAt).Local())))
-					}
-				})
-				if u.Agent == "codex" {
-					if st := a.daemon.Usage; st != nil {
-						switch {
-						case st.CodexError != "":
-							ui.Text(c, L(c).UsageQueryFailed(errtext.Message(st.CodexError))).FontSize(fsSmall).TextColor(t.Danger)
-						case st.CodexOff:
-							ui.Text(c, L(c).UsageQueryDisabled()).FontSize(fsSmall).TextColor(t.TextMuted)
+					ui.Column(c.Key(u.Agent)).Gap(8).Children(func() {
+						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+							agentTile(c, u.Agent, smallIcon())
+							ui.Text(c, agentTitle(u.Agent)).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
+							if u.Plan != "" {
+								ui.Text(c, strings.Replace(u.Plan, "/mo", L(c).UsagePerMonth(), 1)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+							}
+							ui.Spacer(c)
+							// 刷新状态占用读数时间的位置，避免临时加行使底部浮层上下跳动。
+							if u.Agent == "codex" && a.daemon.Usage != nil && a.daemon.Usage.CodexReading {
+								ui.Text(c, L(c).UsageRefreshing()).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+							} else if u.UpdatedAt > 0 {
+								ui.Text(c, planReadingAge(L(c), u, now)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).
+									Tooltip(L(c).UsageReadAt(L(c).AppDateTime(time.UnixMilli(u.UpdatedAt).Local())))
+							}
+						})
+						if u.Agent == "codex" {
+							if st := a.daemon.Usage; st != nil {
+								switch {
+								case st.CodexError != "":
+									ui.Text(c, L(c).UsageQueryFailed(errtext.Message(st.CodexError))).FontSize(fsSmall).TextColor(t.Danger)
+								case st.CodexOff:
+									ui.Text(c, L(c).UsageQueryDisabled()).FontSize(fsSmall).TextColor(t.TextMuted)
+								}
+							}
 						}
-					}
-				}
-				for j, w := range planWindows(u) {
-					color := t.Text
-					if !w.Unknown && w.Percent >= planUrgent {
-						color = t.Danger
-					}
-					// 一个窗口一行：名称、进度条、百分比、重置时间
-					ui.Row(c.Key(fmt.Sprint(j))).Gap(8).AlignItems(ui.Center).Children(func() {
-						name := windowName(L(c), w)
-						ui.Text(c, name).FontSize(fsSmall).Width(planNameWidth()).Shrink(0).SingleLine().Tooltip(name)
-						a.planBar(c, w)
-						ui.Text(c, planWindowPercent(L(c), a, w)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).
-							Width(pctW).Shrink(0).TextAlign(ui.End).SingleLine()
-						ui.Text(c, planResetText(L(c), w, now)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
-							Width(sz(138)).Shrink(0).TextAlign(ui.End).SingleLine()
-					})
-					// 分池和总额度不是同一份读数（Claude 的 Fable 只在用户看 /usage 时更新）
-					if w.At > 0 && u.UpdatedAt-w.At > int64(10*time.Minute/time.Millisecond) {
-						ui.Text(c.Key(fmt.Sprint(j, "-at")), L(c).UsageReadingAge(agoInline(L(c), time.UnixMilli(w.At)))).
-							FontSize(fsSmall).TextColor(t.TextMuted).Margin(-4, 0, 0, planNameWidth()+8) // 和上一行的名称列之后对齐
-					}
-				}
-				for _, f := range planFacts(L(c), u) {
-					ui.Text(c, f).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
-				}
-				if u.Agent == "antigravity" {
-					ui.Row(c.Key("credit-activity")).Children(func() {
-						if pressable(textButton(c, L(c).UsageAICreditActivity())).Clicked() {
-							c.OpenURL("https://one.google.com/ai/activity")
+						renderWindow := func(key string, w usage.Window, name string) {
+							color := t.Text
+							if !w.Unknown && w.Percent >= planUrgent {
+								color = t.Danger
+							}
+							// 一个窗口一行：名称、进度条、百分比、重置时间
+							ui.Row(c.Key(key)).Gap(8).AlignItems(ui.Center).Children(func() {
+								ui.Text(c, name).FontSize(fsSmall).Width(planNameWidth()).Shrink(0).SingleLine().Tooltip(name)
+								a.planBar(c, w)
+								ui.Text(c, planWindowPercent(L(c), a, w)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).
+									Width(pctW).Shrink(0).TextAlign(ui.End).SingleLine()
+								ui.Text(c, planResetText(L(c), w, now)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
+									Width(sz(138)).Shrink(0).TextAlign(ui.End).SingleLine()
+							})
+							// 分池和总额度不是同一份读数（Claude 的 Fable 只在用户看 /usage 时更新）
+							if w.At > 0 && u.UpdatedAt-w.At > int64(10*time.Minute/time.Millisecond) {
+								ui.Text(c.Key(key+"-at"), L(c).UsageReadingAge(agoInline(L(c), time.UnixMilli(w.At)))).
+									FontSize(fsSmall).TextColor(t.TextMuted).Margin(-4, 0, 0, planNameWidth()+8) // 和上一行的名称列之后对齐
+							}
+						}
+						ws := planWindows(u)
+						if u.Agent == "antigravity" {
+							// Antigravity 的池名较长且同一模型组含每周、5 小时等多个窗口，按组单列小标题，窗口行对齐到公共名称列。
+							for gi, g := range groupAntigravityWindows(ws) {
+								col := ui.Column(c.Key(fmt.Sprint("group-", gi))).Gap(usageGroupGap)
+								if gi > 0 {
+									col.Margin(usageGroupTopMargin, 0, 0, 0)
+								}
+								col.Children(func() {
+									if g.name != "" {
+										ui.Text(c, g.name).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).SingleLine().Tooltip(g.name)
+									}
+									for j, w := range g.windows {
+										renderWindow(fmt.Sprint(gi, "-", j), w, windowLabel(L(c), w.Minutes))
+									}
+								})
+							}
+						} else {
+							for j, w := range ws {
+								renderWindow(fmt.Sprint(j), w, windowName(L(c), w))
+							}
+						}
+						facts := planFacts(L(c), u)
+						if u.Agent == "antigravity" {
+							if len(facts) > 1 {
+								for _, f := range facts[:len(facts)-1] {
+									ui.Text(c, f).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+								}
+							}
+							ui.Row(c.Key("credit-activity")).Gap(8).AlignItems(ui.Center).Children(func() {
+								if len(facts) > 0 {
+									ui.Text(c, facts[len(facts)-1]).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1)
+									ui.Spacer(c)
+								}
+								link := ui.ButtonBase(c.Key("credit-activity-link")).Gap(usageLinkGap).Padding(usageLinkPadV, usageLinkPadH).Radius(rSmall).AlignItems(ui.Center).Shrink(0).
+									Label(L(c).UsageAICreditActivity())
+								if len(facts) > 0 {
+									link.Margin(0, -usageLinkPadH, 0, 0)
+								} else {
+									link.Margin(0, 0, 0, -usageLinkPadH)
+								}
+								bg := ui.Transparent
+								if link.Hovered() {
+									bg = colors(t).wash
+								}
+								link.Background(link.AnimateColor("bg", bg, hover))
+								link.Children(func() {
+									ui.Text(c, L(c).UsageAICreditActivity()).FontSize(fsSmall).TextColor(t.Accent).SingleLine()
+									ui.Icon(c, iconOpen).FontSize(fsSmall).TextColor(t.Accent)
+								})
+								if pressable(link).Clicked() {
+									c.OpenURL("https://one.google.com/ai/activity")
+								}
+							})
+						} else {
+							for _, f := range facts {
+								ui.Text(c, f).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+							}
 						}
 					})
 				}
 			})
-		}
+		})
 		ui.Text(c, L(c).UsageRefreshNote()).
 			FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
 	})
@@ -541,6 +594,28 @@ func (a *app) setUsageQuery(key string, on bool) {
 			a.refresh()
 		}
 	}()
+}
+
+// planWindowGroup 是 Antigravity 详情里按模型池合并的一组窗口。
+type planWindowGroup struct {
+	name    string
+	windows []usage.Window
+}
+
+func groupAntigravityWindows(ws []usage.Window) []planWindowGroup {
+	var groups []planWindowGroup
+	index := map[string]int{}
+	for _, w := range ws {
+		if w.Name != "" {
+			if i, ok := index[w.Name]; ok {
+				groups[i].windows = append(groups[i].windows, w)
+				continue
+			}
+			index[w.Name] = len(groups)
+		}
+		groups = append(groups, planWindowGroup{name: w.Name, windows: []usage.Window{w}})
+	}
+	return groups
 }
 
 // planNameWidth 是用量窗口一行里名称列的宽度。

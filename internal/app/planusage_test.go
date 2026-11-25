@@ -2,9 +2,12 @@ package app
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
 
 	"posse/internal/usage"
 	"posse/locales"
@@ -64,6 +67,72 @@ func TestCodexExpiredWindow(t *testing.T) {
 	}
 }
 
+func TestGroupAntigravityWindows(t *testing.T) {
+	ws := []usage.Window{
+		{Name: "Gemini Models", Minutes: 10080, Percent: 26},
+		{Name: "Claude and GPT models", Minutes: 10080, Percent: 0},
+		{Name: "Gemini Models", Minutes: 300, Percent: 6},
+		{Name: "Claude and GPT models", Minutes: 300, Percent: 0},
+	}
+	gs := groupAntigravityWindows(ws)
+	if len(gs) != 2 || gs[0].name != "Gemini Models" || len(gs[0].windows) != 2 || gs[0].windows[1].Minutes != 300 ||
+		gs[1].name != "Claude and GPT models" || len(gs[1].windows) != 2 || gs[1].windows[1].Minutes != 300 {
+		t.Fatalf("groups = %+v", gs)
+	}
+}
+
+func TestPlanCreditActivityLinkKeyboardAndOverflow(t *testing.T) {
+	a := previewApp(t)
+	now := time.Now()
+	a.daemon.Usage = &planStatus{Usages: []usage.Usage{
+		{Agent: "claude", Plan: "Max 5x", UpdatedAt: now.UnixMilli(), Windows: []usage.Window{{Minutes: 300, Percent: 20}, {Minutes: 10080, Percent: 40}}},
+		{Agent: "codex", Plan: "Prolite", UpdatedAt: now.UnixMilli(), Windows: []usage.Window{{Minutes: 10080, Percent: 2}}},
+		{Agent: "grok", UpdatedAt: now.UnixMilli(), Windows: []usage.Window{{Minutes: 10080, Percent: 15}}},
+		{Agent: "cursor", Plan: "Ultra $200/mo", UpdatedAt: now.UnixMilli(), Windows: []usage.Window{{Name: "Auto", Minutes: 44640, Percent: 32}, {Name: "API", Minutes: 44640, Percent: 100}}},
+		{Agent: "antigravity", UpdatedAt: now.UnixMilli(), AICredits: &usage.AICredits{Remaining: 0, At: now.UnixMilli()}, Windows: []usage.Window{
+			{Name: "Gemini Models", Minutes: 10080, Percent: 26, ResetsAt: now.Add(6 * 24 * time.Hour).UnixMilli()},
+			{Name: "Gemini Models", Minutes: 300, Percent: 6, ResetsAt: now.Add(4 * time.Hour).UnixMilli()},
+			{Name: "Claude and GPT models", Minutes: 10080, Percent: 0, ResetsAt: now.Add(7 * 24 * time.Hour).UnixMilli()},
+			{Name: "Claude and GPT models", Minutes: 300, Percent: 0, ResetsAt: now.Add(5 * time.Hour).UnixMilli()},
+		}},
+	}}
+	// 最小窗口 900x560 + 最大字号下，五家读数滚动且顶栏不被裁出视口。
+	defer setUIType(0, 0, 0)
+	setUIType(maxUIFontSize, 0, 0)
+	a.planOpen = true
+	tt := newTester(a.build, 900, 560)
+	tt.Frame()
+	if r, ok := tt.Find("套餐用量"); !ok || r.Y < 0 || r.W <= 0 || r.H <= 0 {
+		t.Fatalf("usage header clipped in 900x560 max font: ok=%v rect=%+v", ok, r)
+	}
+	if r, ok := tt.Find("剩余"); !ok || r.Y < 0 || r.W <= 0 || r.H <= 0 {
+		t.Fatalf("usage toggle clipped in 900x560 max font: ok=%v rect=%+v", ok, r)
+	}
+	// 单独测试积分活动链接的 Tab 聚焦与回车触发。
+	setUIType(0, 0, 0)
+	a2 := previewApp(t)
+	a2.daemon.Usage = &planStatus{Usages: []usage.Usage{
+		{Agent: "antigravity", UpdatedAt: now.UnixMilli(), AICredits: &usage.AICredits{Remaining: 0, At: now.UnixMilli()}, Windows: []usage.Window{
+			{Name: "Gemini Models", Minutes: 10080, Percent: 26},
+		}},
+	}}
+	a2.planOpen = true
+	kt := newTester(func(c *ui.Context) { a2.planPanel(c, a2.daemon.Usage.Usages) }, 900, 560)
+	kt.Frame()
+	opened := false
+	for range 20 {
+		kt.Key(0, ui.KeyTab)
+		kt.Key(0, ui.KeyEnter)
+		if slices.Contains(kt.OpenedURLs(), "https://one.google.com/ai/activity") {
+			opened = true
+			break
+		}
+	}
+	if !opened {
+		t.Fatalf("Tab+Enter did not open credit activity URL; opened=%v", kt.OpenedURLs())
+	}
+}
+
 func TestPlanRefreshKeepsLayout(t *testing.T) {
 	a := previewApp(t)
 	a.daemon.Usage = &planStatus{Usages: []usage.Usage{{Agent: "codex", Plan: "Plus", UpdatedAt: time.Now().UnixMilli(),
@@ -104,7 +173,10 @@ func TestPreviewPlanFreshness(t *testing.T) {
 				{Minutes: 10080, Percent: 85, ResetsAt: now.Add(42 * time.Minute).UnixMilli()},
 			}},
 			{Agent: "antigravity", UpdatedAt: now.UnixMilli(), AICredits: &usage.AICredits{Remaining: 2500, At: now.UnixMilli()}, Windows: []usage.Window{
-				{Name: "Gemini", Minutes: 10080, Percent: 25, ResetsAt: now.Add(time.Hour).UnixMilli()},
+				{Name: "Gemini Models", Minutes: 10080, Percent: 26, ResetsAt: now.Add(6 * 24 * time.Hour).UnixMilli()},
+				{Name: "Gemini Models", Minutes: 300, Percent: 6, ResetsAt: now.Add(4*time.Hour + 9*time.Minute).UnixMilli()},
+				{Name: "Claude and GPT models", Minutes: 10080, Percent: 0, ResetsAt: now.Add(7 * 24 * time.Hour).UnixMilli()},
+				{Name: "Claude and GPT models", Minutes: 300, Percent: 0, ResetsAt: now.Add(4*time.Hour + 59*time.Minute).UnixMilli()},
 			}},
 		}}
 		a.state.UsageRemaining = true
