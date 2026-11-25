@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.50
+
+- 优化飞书机器人卡片体验与报错展示：执行期间若会话或话题中间没有其他新消息，直接原地更新进度卡为完整结果卡（仅在有审批卡、提问卡或新发言插队时收拢旧卡并在底部发送新卡）；修复 `lark-cli` 长连接吞掉多行 JSON 报错的问题，连接失败时直接显示真实错误与排查提示。
+- 扩展飞书只读排查白名单与审批策略：放行 `glab`、`aliyun` / `ossutil`、`tccli` 及指定主机的 Sentry 只读 `curl` 查询，支持机器人级受信脚本（`trustedScripts`）与只读主机（`readOnlyHosts`）实时生效配置，并收紧软链接/硬链接校验与通用解释器的同类审批规则键。
+- 统一桌面与手机端退出及未恢复终端的名称保留逻辑；优化套餐用量浮层中 Antigravity 分组与积分底栏样式。
+
+### English
+
+- Improved Lark bot cards and diagnostics: when no other messages are interleaved in the chat or thread during a run, update the existing progress card in place with the final result instead of posting a duplicate card (falling back to a compact receipt plus a bottom result card only when interrupted); fixed `lark-cli` event consumers swallowing multiline JSON error envelopes so real error messages and hints surface directly in the UI and logs.
+- Expanded Lark read-only triage allowlists and approval policies: added safe read-only rules for `glab`, `aliyun` / `ossutil`, `tccli`, and allowlisted Sentry `curl` queries, added live per-bot `trustedScripts` and `readOnlyHosts` policies, and tightened symlink/hardlink checks and session-wide approval rule keys for interpreters.
+- Unified terminal name preservation across desktop and mobile for exited and unrestored terminals, and refined the Antigravity grouping and credit footer layout in the plan usage popover.
+
 ## 0.1.49
 
 - 新增双端内置 Tailscale（`tsnet`）：在桌面「手机」页或 `posse mobile tailscale` 开启后，无需另装官方 Tailscale 客户端或自建中转服务器即可与手机互通，同时兼容任一端使用官方 Tailscale；支持浏览器交互登录、一次性 AuthKey、自定义 Headscale 控制服务器、「跟随系统代理或 VPN 路由」开关与重置节点身份；看桌面经内置节点收到画面时按直连与 DERP 自动切换码率上限。
