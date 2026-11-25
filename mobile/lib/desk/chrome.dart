@@ -114,6 +114,18 @@ String deskFpsLabel(
   return '${fps.toStringAsFixed(0)} fps';
 }
 
+/// 状态按钮里的紧凑帧率文字：只写数字（或「静止」「—」），让按钮保持和返回键一样大。
+String deskFpsValue(
+  AppLocalizations l,
+  double fps, {
+  required bool video,
+  bool still = false,
+}) {
+  if (!video || fps < 0) return '—';
+  if (still) return l.deskFpsStill;
+  return fps.toStringAsFixed(0);
+}
+
 /// 键盘弹出时画面上移多少：当前操作位置露在被盖住的部分上面，
 /// 留一行字的余量。位置已在视口外或本来就露着时不动，最多移被盖住的那么高。
 double deskLift({

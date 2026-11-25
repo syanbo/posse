@@ -59,27 +59,39 @@ void main() {
     expect(deskAppOrientations, isEmpty);
   });
 
-  test(
-    'toolbar positions round-trip separately and invalid values fall back',
-    () {
-      final settings = AppSettings(
-        deskToolbarPortrait: const Offset(0.3, 0.7),
-        deskToolbarLandscape: const Offset(0.8, 0.4),
-      );
-      final back = AppSettings.decode(jsonEncode(settings.toJson()));
-      expect(back.deskToolbarPortrait, const Offset(0.3, 0.7));
-      expect(back.deskToolbarLandscape, const Offset(0.8, 0.4));
-      final invalid = AppSettings.decode(
-        jsonEncode({
-          'deskToolbarPortrait': [-2, 3],
-          'deskToolbarLandscape': ['bad', 0],
-        }),
-      );
-      expect(invalid.deskToolbarPortrait, const Offset(0, 1));
-      expect(invalid.deskToolbarLandscape, const Offset(1, 0));
-      expect(AppSettings.decode('{}').deskToolbarPortrait, const Offset(1, 0));
-    },
-  );
+  test('floating control positions round-trip separately and invalid values fall back', () {
+    final settings = AppSettings(
+      deskToolbarPortrait: const Offset(0.3, 0.7),
+      deskToolbarLandscape: const Offset(0.8, 0.4),
+      deskBackPortrait: const Offset(0.1, 0.2),
+      deskBackLandscape: const Offset(0.2, 0.5),
+      deskStatusPortrait: const Offset(0.9, 0.1),
+      deskStatusLandscape: const Offset(0.7, 0.8),
+    );
+    final back = AppSettings.decode(jsonEncode(settings.toJson()));
+    expect(back.deskToolbarPortrait, const Offset(0.3, 0.7));
+    expect(back.deskToolbarLandscape, const Offset(0.8, 0.4));
+    expect(back.deskBackPortrait, const Offset(0.1, 0.2));
+    expect(back.deskBackLandscape, const Offset(0.2, 0.5));
+    expect(back.deskStatusPortrait, const Offset(0.9, 0.1));
+    expect(back.deskStatusLandscape, const Offset(0.7, 0.8));
+    final invalid = AppSettings.decode(
+      jsonEncode({
+        'deskToolbarPortrait': [-2, 3],
+        'deskToolbarLandscape': ['bad', 0],
+        'deskBackPortrait': [-1, 2],
+        'deskStatusPortrait': ['bad', 0],
+      }),
+    );
+    expect(invalid.deskToolbarPortrait, const Offset(0, 1));
+    expect(invalid.deskToolbarLandscape, isNull);
+    expect(invalid.deskBackPortrait, const Offset(0, 1));
+    expect(invalid.deskStatusPortrait, isNull);
+    final empty = AppSettings.decode('{}');
+    expect(empty.deskToolbarPortrait, isNull);
+    expect(empty.deskBackPortrait, isNull);
+    expect(empty.deskStatusPortrait, isNull);
+  });
 
   test('the shortcut bar stays up for an explicit open or the keyboard', () {
     final chrome = DeskChrome();
@@ -112,6 +124,10 @@ void main() {
     expect(deskFpsLabel(zh, 0, video: false), '— fps');
     expect(deskFpsLabel(zh, -1, video: true), '— fps');
     expect(deskFpsLabel(zh, 0, video: true, still: true), '静止');
+    expect(deskFpsValue(zh, 59.6, video: true), '60');
+    expect(deskFpsValue(zh, 0, video: false), '—');
+    expect(deskFpsValue(zh, -1, video: true), '—');
+    expect(deskFpsValue(zh, 0, video: true, still: true), '静止');
     expect(
       deskHapticFor(const DeskRightClickEvent(DeskPoint(0.2, 0.3))),
       isTrue,
@@ -195,13 +211,16 @@ void main() {
     expect(find.text('右键'), findsNothing);
   });
 
-  testWidgets('connection status shows text only when attention is needed', (
+  testWidgets('connection status shows compact fps and expands only on alert', (
     tester,
   ) async {
     Future<void> pump(
       int? latency, {
       bool unresponsive = false,
       bool reconnecting = false,
+      double fps = 59.6,
+      bool video = true,
+      bool still = false,
     }) => tester.pumpWidget(
       MaterialApp(
         theme: posseTheme(Brightness.dark),
@@ -211,6 +230,9 @@ void main() {
             unresponsive: unresponsive,
             reconnecting: reconnecting,
             detailsOpen: false,
+            fps: fps,
+            video: video,
+            still: still,
             onTap: () {},
           ),
         ),
@@ -218,12 +240,17 @@ void main() {
     );
     final status = find.byKey(const Key('desk-status'));
     await pump(299);
-    expect(tester.getSize(status).width, deskControlExtent);
-    expect(
-      find.descendant(of: status, matching: find.byType(Text)),
-      findsNothing,
-    );
+    expect(tester.getSize(status), const Size.square(deskControlExtent));
+    expect(find.text('60'), findsOneWidget);
+    expect(find.text(zh.deskHighLatency), findsNothing);
+    await pump(299, fps: 0, still: true);
+    expect(tester.getSize(status), const Size.square(deskControlExtent));
+    expect(find.text(zh.deskFpsStill), findsOneWidget);
+    await pump(299, fps: 0, video: false);
+    expect(tester.getSize(status), const Size.square(deskControlExtent));
+    expect(find.text('—'), findsOneWidget);
     await pump(300);
+    expect(find.text('60'), findsOneWidget);
     expect(find.text(zh.deskHighLatency), findsOneWidget);
     await pump(300, unresponsive: true);
     expect(find.text(zh.chatLatencyUnresponsive), findsOneWidget);
@@ -327,7 +354,7 @@ void main() {
                 right: 0,
                 bottom: 0,
                 child: DeskBarSlot(
-                  anchor: ValueNotifier<Offset>(const Offset(0.5, 0)),
+                  anchor: ValueNotifier<Offset?>(const Offset(0.5, 0)),
                   onDragEnd: () {},
                   child: const SizedBox(
                     key: Key('desk-pill'),
@@ -434,7 +461,7 @@ void main() {
   testWidgets('a drag after the bar finishes opening uses the opened width', (
     tester,
   ) async {
-    final anchor = ValueNotifier<Offset>(const Offset(0.5, 0));
+    final anchor = ValueNotifier<Offset?>(const Offset(0.5, 0));
     addTearDown(anchor.dispose);
     var expanded = false;
     await tester.pumpWidget(
@@ -486,15 +513,15 @@ void main() {
     // 先过拖动的起步距离，再量这一段移动
     await finger.moveBy(const Offset(30, 0));
     await tester.pump();
-    final start = anchor.value.dx;
+    final start = anchor.value!.dx;
     await finger.moveBy(const Offset(24, 0));
     await tester.pump();
-    expect(anchor.value.dx - start, closeTo(24 / (300 - 200), 0.05));
-    final beforeBatch = anchor.value.dx;
+    expect(anchor.value!.dx - start, closeTo(24 / (300 - 200), 0.05));
+    final beforeBatch = anchor.value!.dx;
     await finger.moveBy(const Offset(-5, 0));
     await finger.moveBy(const Offset(-5, 0));
     await tester.pump();
-    expect(anchor.value.dx - beforeBatch, closeTo(-10 / (300 - 200), 0.001));
+    expect(anchor.value!.dx - beforeBatch, closeTo(-10 / (300 - 200), 0.001));
     final released = anchor.value;
     await finger.up();
     await tester.pump();
@@ -676,7 +703,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       final side = bar();
-      expect(model.settings.deskToolbarLandscape, isNot(const Offset(1, 0)));
+      expect(model.settings.deskToolbarLandscape, isNotNull);
       await checkTogglePosition();
 
       _surface(
@@ -721,7 +748,7 @@ void main() {
     testWidgets(
       'dragging a toolbar button after ${hold.inMilliseconds}ms never taps it or the desktop',
       (tester) async {
-        final anchor = ValueNotifier(const Offset(0.7, 0.2));
+        final anchor = ValueNotifier<Offset?>(const Offset(0.7, 0.2));
         addTearDown(anchor.dispose);
         var help = 0;
         var desktop = 0;
@@ -775,7 +802,7 @@ void main() {
   testWidgets('dragging a full-width toolbar preserves its horizontal anchor', (
     tester,
   ) async {
-    final anchor = ValueNotifier(const Offset(1, 0));
+    final anchor = ValueNotifier<Offset?>(const Offset(1, 0));
     addTearDown(anchor.dispose);
     Future<void> pump(double width) => tester.pumpWidget(
       MaterialApp(
@@ -800,8 +827,8 @@ void main() {
       const Offset(-30, 24),
     );
     await tester.pumpAndSettle();
-    expect(anchor.value.dx, 1);
-    expect(anchor.value.dy, greaterThan(0));
+    expect(anchor.value!.dx, 1);
+    expect(anchor.value!.dy, greaterThan(0));
     await pump(500);
     await tester.pumpAndSettle();
     expect(tester.getRect(find.byKey(const Key('desk-toolbar'))).right, 500);
@@ -853,12 +880,263 @@ void main() {
       tester.view.viewInsets = FakeViewPadding.zero;
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('desk-toolbar-toggle')), findsOneWidget);
-      expect(model.settings.deskToolbarPortrait, const Offset(1, 0));
-      expect(model.settings.deskToolbarLandscape, const Offset(1, 0));
+      expect(model.settings.deskToolbarPortrait, isNull);
+      expect(model.settings.deskToolbarLandscape, isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
     });
   }
+
+  testWidgets(
+    'back, status, and toolbar drag into safe area and persist positions',
+    (tester) async {
+      addTearDown(tester.view.reset);
+      _mockDeskChannels(tester);
+      final store = MemorySettingsStore();
+      final model = PosseAppModel(
+        store: MemoryPairingStore(),
+        settingsStore: store,
+      );
+      addTearDown(model.dispose);
+      model.updateSettings((s) => s.deskGesturesSeen = true);
+      _surface(
+        tester,
+        const Size(400, 800),
+        const FakeViewPadding(top: 47, bottom: 34, left: 24, right: 24),
+      );
+      Future<void> open() => tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.dark),
+          home: DeskPage(model: model),
+        ),
+      );
+      await open();
+      await tester.pumpAndSettle();
+
+      Rect rect(String key) => tester.getRect(find.byKey(Key(key)));
+      // 默认位置保持在安全区内，返回和 FPS 按钮大小一致
+      expect(rect('desk-toolbar-back').topLeft, const Offset(32, 47));
+      expect(rect('desk-status').topRight, const Offset(368, 47));
+      expect(rect('desk-status').size, rect('desk-toolbar-back').size);
+      expect(
+        rect('desk-toolbar').topRight,
+        const Offset(368, 47 + deskControlExtent + 8),
+      );
+
+      // 三个按钮都可以拖进安全区（顶部、左/右侧、底部）
+      await tester.drag(
+        find.byKey(const Key('desk-toolbar-back')),
+        const Offset(-80, -80),
+      );
+      await tester.pumpAndSettle();
+      final backMoved = rect('desk-toolbar-back');
+      expect(backMoved.left, 0);
+      expect(backMoved.top, 0);
+
+      await tester.drag(
+        find.byKey(const Key('desk-status')),
+        const Offset(80, -80),
+      );
+      await tester.pumpAndSettle();
+      final statusMoved = rect('desk-status');
+      expect(statusMoved.right, 400);
+      expect(statusMoved.top, 0);
+
+      await tester.drag(
+        find.byKey(const Key('desk-toolbar-toggle')),
+        const Offset(40, 800),
+      );
+      await tester.pumpAndSettle();
+      final barMoved = rect('desk-toolbar');
+      expect(barMoved.right, 400);
+      expect(barMoved.bottom, 800);
+
+      // 位置持久化并在重新进入页面后恢复
+      final decoded = AppSettings.decode(store.data);
+      expect(decoded.deskBackPortrait, model.settings.deskBackPortrait);
+      expect(decoded.deskStatusPortrait, model.settings.deskStatusPortrait);
+      expect(decoded.deskToolbarPortrait, model.settings.deskToolbarPortrait);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await open();
+      await tester.pumpAndSettle();
+      expect(rect('desk-toolbar-back'), backMoved);
+      expect(rect('desk-status'), statusMoved);
+      expect(rect('desk-toolbar'), barMoved);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'legacy default toolbar [1,0] migrates below status and stays clickable',
+    (tester) async {
+      addTearDown(tester.view.reset);
+      _mockDeskChannels(tester);
+      final store = MemorySettingsStore()
+        ..data = jsonEncode({
+          'deskGesturesSeen': true,
+          'deskToolbarPortrait': [1, 0],
+          'deskToolbarLandscape': [0.4, 0.5],
+        });
+      final model = PosseAppModel(
+        store: MemoryPairingStore(),
+        settingsStore: store,
+      );
+      addTearDown(model.dispose);
+      await model.restore();
+      expect(model.settings.deskToolbarPortrait, isNull);
+      expect(model.settings.deskToolbarLandscape, const Offset(0.4, 0.5));
+
+      _surface(tester, const Size(400, 800), FakeViewPadding.zero);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.dark),
+          home: DeskPage(model: model),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final status = tester.getRect(find.byKey(const Key('desk-status')));
+      final bar = tester.getRect(find.byKey(const Key('desk-toolbar')));
+      expect(bar.overlaps(status), isFalse);
+      expect(bar.top, greaterThanOrEqualTo(status.bottom));
+      await tester.tap(find.byKey(const Key('desk-toolbar-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('desk-toolbar-settings')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'controls dragged to the same corner do not overlap and stay clickable',
+    (tester) async {
+      addTearDown(tester.view.reset);
+      _mockDeskChannels(tester);
+      final model = PosseAppModel(
+        store: MemoryPairingStore(),
+        settingsStore: MemorySettingsStore(),
+      );
+      addTearDown(model.dispose);
+      model.updateSettings((s) => s.deskGesturesSeen = true);
+      _surface(tester, const Size(400, 800), FakeViewPadding.zero);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.dark),
+          home: DeskPage(model: model),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.drag(
+        find.byKey(const Key('desk-toolbar-toggle')),
+        const Offset(400, 800),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byKey(const Key('desk-status')),
+        const Offset(400, 800),
+      );
+      await tester.pumpAndSettle();
+
+      final status = tester.getRect(find.byKey(const Key('desk-status')));
+      final bar = tester.getRect(find.byKey(const Key('desk-toolbar')));
+      expect(status.overlaps(bar), isFalse);
+
+      await tester.tap(find.byKey(const Key('desk-toolbar-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('desk-toolbar-settings')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('desk-status')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('desk-debug-panel')), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('status pill handles 3x text scaling without overflow', (
+    tester,
+  ) async {
+    for (final locale in const [Locale('zh'), Locale('en')]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: posseTheme(Brightness.dark),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(3.0)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: DeskStatusPill(
+              latency: const Duration(milliseconds: 20),
+              unresponsive: false,
+              reconnecting: false,
+              detailsOpen: false,
+              fps: 0,
+              video: true,
+              still: true,
+              onTap: () {},
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(find.byKey(const Key('desk-status'))),
+        const Size.square(deskControlExtent),
+      );
+    }
+  });
+
+  testWidgets('rotation mid-drag still persists the moved position', (
+    tester,
+  ) async {
+    addTearDown(tester.view.reset);
+    _mockDeskChannels(tester);
+    final store = MemorySettingsStore();
+    final model = PosseAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: store,
+    );
+    addTearDown(model.dispose);
+    model.updateSettings((s) => s.deskGesturesSeen = true);
+    _surface(tester, const Size(400, 800), FakeViewPadding.zero);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.dark),
+        home: DeskPage(model: model),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const Key('desk-toolbar-back'))),
+    );
+    await tester.pump();
+    // 先越过拖动起步距离，再移动一段，此时不松手直接旋转。
+    await gesture.moveBy(const Offset(30, 30));
+    await tester.pump();
+    await gesture.moveBy(const Offset(60, 100));
+    await tester.pump();
+    // 未松手直接切横屏：应把刚才拖动的位置落盘，不与内存分离。
+    _surface(tester, const Size(800, 400), FakeViewPadding.zero);
+    await tester.pumpAndSettle();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(model.settings.deskBackPortrait, isNotNull);
+    expect(
+      AppSettings.decode(store.data).deskBackPortrait,
+      model.settings.deskBackPortrait,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
 
   testWidgets('connection details open from the signal and tuck away tools', (
     tester,

@@ -430,6 +430,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+/// 按连接对象缓存个人资料与请求序号：同一连接下再次进入设置页时首帧即可渲染，
+/// 避免先按 0 高度占位再撑开；跨页面实例的迟到响应按连接级序号忽略，连接断开被回收时随 key 自动释放。
+final _profileCache = Expando<DiscJson>('posse.profile');
+final _profileGen = Expando<int>('posse.profile.gen');
+
 /// 设置页里的「名字和头像」：连着的电脑认得 profile.get 才显示，旧电脑不显示。
 class ProfileSection extends StatefulWidget {
   const ProfileSection({super.key, required this.model});
@@ -442,19 +447,68 @@ class _ProfileSectionState extends State<ProfileSection> {
   DiscussionApi? api;
   DiscJson profile = {};
   Object? rpc;
-  int gen = 0;
 
-  Future<void> load() async {
+  void _applyProfile(DiscJson next) {
+    final box = context.findRenderObject();
+    final scrollable = Scrollable.maybeOf(context);
+    final scrollBox = scrollable?.context.findRenderObject();
+    double? oldHeight;
+    if (box is RenderBox &&
+        box.hasSize &&
+        scrollBox is RenderBox &&
+        scrollBox.hasSize &&
+        scrollable != null &&
+        scrollable.position.hasPixels &&
+        scrollable.position.pixels > 0) {
+      final topInViewport = box
+          .localToGlobal(Offset.zero, ancestor: scrollBox)
+          .dy;
+      // 资料区位于当前视口上方或视口内时，高度变化会把下方内容推走，需同步补偿滚动偏移。
+      if (topInViewport < scrollBox.size.height) {
+        oldHeight = box.size.height;
+      }
+    }
+    setState(() => profile = next);
+    if (oldHeight == null) return;
+    final beforeHeight = oldHeight;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final after = context.findRenderObject();
+      final pos = Scrollable.maybeOf(context)?.position;
+      if (after is! RenderBox ||
+          !after.hasSize ||
+          pos == null ||
+          !pos.hasPixels) {
+        return;
+      }
+      final delta = after.size.height - beforeHeight;
+      if (delta == 0) return;
+      final target = (pos.pixels + delta).clamp(
+        pos.minScrollExtent,
+        pos.maxScrollExtent,
+      );
+      if (target != pos.pixels) pos.jumpTo(target);
+    });
+  }
+
+  Future<void> load(Object target) async {
     final current = DiscussionApi(widget.model);
-    final mine = ++gen;
+    final mine = (_profileGen[target] ?? 0) + 1;
+    _profileGen[target] = mine;
     api = current;
-    profile = {};
     try {
       final r = await current.call('profile.get', {});
-      if (mounted && mine == gen) setState(() => profile = r);
-    } catch (_) {
-      // 旧电脑没有这个接口、断线：不显示这一节
-      if (mounted && mine == gen) setState(() => profile = {});
+      if (_profileGen[target] != mine) return;
+      _profileCache[target] = r;
+      if (mounted && identical(rpc, target)) _applyProfile(r);
+    } catch (e) {
+      if (_profileGen[target] != mine) return;
+      // 已有缓存且只是瞬时刷新失败时保留最近资料；旧电脑明确不支持或尚无缓存时隐藏这一节。
+      final unsupported = e is RpcException && e.code == 'method_not_found';
+      if (unsupported || profile.isEmpty) {
+        _profileCache[target] = null;
+        if (mounted && identical(rpc, target)) _applyProfile(const {});
+      }
     }
   }
 
@@ -465,9 +519,11 @@ class _ProfileSectionState extends State<ProfileSection> {
     if (!identical(model.rpc, rpc)) {
       rpc = model.rpc;
       if (rpc != null) {
-        unawaited(load());
+        api = DiscussionApi(model);
+        profile = _profileCache[rpc!] ?? {};
+        unawaited(load(rpc!));
       } else {
-        gen++;
+        api = null;
         profile = {};
       }
     }
@@ -490,7 +546,9 @@ class _ProfileSectionState extends State<ProfileSection> {
           title: Text(discText(profile, 'name')),
           subtitle: Text(l.profileRowNote(model.labelOf(model.current, l))),
           onTap: () async {
-            if (await openProfile(context, a) && mounted) await load();
+            if (await openProfile(context, a) && mounted && rpc != null) {
+              await load(rpc!);
+            }
           },
         ),
       ],

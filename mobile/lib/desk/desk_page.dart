@@ -85,11 +85,23 @@ class _DeskPageState extends State<DeskPage>
   final _chrome = DeskChrome();
   final _edges = DeskEdges();
   final _lease = Object();
-  late final _anchorTop = ValueNotifier(
+  late final _anchorTop = ValueNotifier<Offset?>(
     widget.model.settings.deskToolbarPortrait,
   );
-  late final _anchorSide = ValueNotifier(
+  late final _anchorSide = ValueNotifier<Offset?>(
     widget.model.settings.deskToolbarLandscape,
+  );
+  late final _backTop = ValueNotifier<Offset?>(
+    widget.model.settings.deskBackPortrait,
+  );
+  late final _backSide = ValueNotifier<Offset?>(
+    widget.model.settings.deskBackLandscape,
+  );
+  late final _statusTop = ValueNotifier<Offset?>(
+    widget.model.settings.deskStatusPortrait,
+  );
+  late final _statusSide = ValueNotifier<Offset?>(
+    widget.model.settings.deskStatusLandscape,
   );
 
   // 记桌面坐标，键盘打开前后缩放和转屏都能定位到同一处。
@@ -257,6 +269,10 @@ class _DeskPageState extends State<DeskPage>
     _statsTick.dispose();
     _anchorTop.dispose();
     _anchorSide.dispose();
+    _backTop.dispose();
+    _backSide.dispose();
+    _statusTop.dispose();
+    _statusSide.dispose();
     _retry?.cancel();
     _lockRetry?.cancel();
     _lanCheck?.cancel();
@@ -647,6 +663,26 @@ class _DeskPageState extends State<DeskPage>
     });
   }
 
+  void _saveBackPosition(bool landscape) {
+    widget.model.updateSettings((s) {
+      if (landscape) {
+        s.deskBackLandscape = _backSide.value;
+      } else {
+        s.deskBackPortrait = _backTop.value;
+      }
+    });
+  }
+
+  void _saveStatusPosition(bool landscape) {
+    widget.model.updateSettings((s) {
+      if (landscape) {
+        s.deskStatusLandscape = _statusSide.value;
+      } else {
+        s.deskStatusPortrait = _statusTop.value;
+      }
+    });
+  }
+
   void _toggleOrientation() {
     final landscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
@@ -680,7 +716,8 @@ class _DeskPageState extends State<DeskPage>
     setState(() {
       _toolbarOpen = !_toolbarOpen;
       if (!_toolbarOpen) return;
-      final anchor = (landscape ? _anchorSide : _anchorTop).value;
+      final anchor =
+          (landscape ? _anchorSide : _anchorTop).value ?? const Offset(1, 0);
       _toolbarToggleAlignment = Alignment(
         anchor.dx > 0.5 ? 1 : -1,
         anchor.dy > 0.5 ? 1 : -1,
@@ -1916,22 +1953,7 @@ class _DeskPageState extends State<DeskPage>
               },
             ),
           ),
-          if (!compactToolbar)
-            Positioned(
-              top: controlsTop,
-              left: pad.left + 8,
-              right: pad.right + 8,
-              bottom: bottom,
-              child: DeskBarSlot(
-                key: ValueKey(landscape),
-                anchor: landscape ? _anchorSide : _anchorTop,
-                bottomInset: math.max(0, covered + 8 - bottom),
-                toggleAlignment: _toolbarOpen ? _toolbarToggleAlignment : null,
-                onDragEnd: () => _saveBarPosition(landscape),
-                child: _toolbar(landscape),
-              ),
-            ),
-          // 临时面板避开默认的横排工具条；拖到面板后面的工具条不抢面板的点击。
+          // 临时面板避开默认的横排工具条。
           if (locked || _debugOpen)
             Positioned(
               top: panelTop,
@@ -1970,35 +1992,63 @@ class _DeskPageState extends State<DeskPage>
                 ),
               ),
             ),
-          Positioned(
-            top: top,
-            left: pad.left + 8,
-            right: pad.right + 8,
-            child: Row(
-              children: [
-                DeskBackButton(onBack: () => Navigator.maybePop(context)),
-                if (compactToolbar)
+          if (compactToolbar)
+            Positioned(
+              top: top,
+              left: pad.left + 8,
+              right: pad.right + 8,
+              child: Row(
+                children: [
+                  DeskBackButton(onBack: () => Navigator.maybePop(context)),
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Align(child: _toolbar(landscape, compact: true)),
                     ),
-                  )
-                else
-                  const Spacer(),
-                ListenableBuilder(
-                  listenable: widget.model,
-                  builder: (context, _) => DeskStatusPill(
-                    latency: widget.model.latency,
-                    unresponsive: widget.model.unresponsive,
-                    reconnecting: _reconnecting,
-                    detailsOpen: _debugOpen,
-                    onTap: _toggleDebug,
                   ),
-                ),
-              ],
+                  _statusPill(),
+                ],
+              ),
+            )
+          else
+            Positioned.fill(
+              child: DeskFloatingLayer(
+                key: ValueKey(landscape),
+                bottomInset: covered > 0 ? covered + 8 : 0,
+                items: [
+                  DeskFloatingItem(
+                    id: 'back',
+                    anchor: landscape ? _backSide : _backTop,
+                    defaultPosition: (_, _) => Offset(pad.left + 8, top),
+                    onDragEnd: () => _saveBackPosition(landscape),
+                    child: DeskBackButton(
+                      onBack: () => Navigator.maybePop(context),
+                    ),
+                  ),
+                  DeskFloatingItem(
+                    id: 'status',
+                    anchor: landscape ? _statusSide : _statusTop,
+                    defaultPosition: (size, child) =>
+                        Offset(size.width - pad.right - 8 - child.width, top),
+                    onDragEnd: () => _saveStatusPosition(landscape),
+                    child: _statusPill(),
+                  ),
+                  DeskFloatingItem(
+                    id: 'toolbar',
+                    anchor: landscape ? _anchorSide : _anchorTop,
+                    defaultPosition: (size, child) => Offset(
+                      size.width - pad.right - 8 - child.width,
+                      controlsTop,
+                    ),
+                    toggleAlignment: _toolbarOpen
+                        ? _toolbarToggleAlignment
+                        : null,
+                    onDragEnd: () => _saveBarPosition(landscape),
+                    child: _toolbar(landscape),
+                  ),
+                ],
+              ),
             ),
-          ),
           Positioned(
             left: -200,
             top: 0,
@@ -2027,6 +2077,23 @@ class _DeskPageState extends State<DeskPage>
       ),
     );
   }
+
+  Widget _statusPill() => ListenableBuilder(
+    listenable: widget.model,
+    builder: (context, _) => ValueListenableBuilder<DeskStats>(
+      valueListenable: _statsTick,
+      builder: (context, stats, _) => DeskStatusPill(
+        latency: widget.model.latency,
+        unresponsive: widget.model.unresponsive,
+        reconnecting: _reconnecting,
+        detailsOpen: _debugOpen,
+        fps: stats.fps,
+        video: stats.video,
+        still: stats.still,
+        onTap: _toggleDebug,
+      ),
+    ),
+  );
 
   Widget _toolbar(bool landscape, {bool compact = false}) => DeskToolbar(
     landscape: landscape,

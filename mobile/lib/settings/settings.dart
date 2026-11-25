@@ -40,370 +40,376 @@ class SettingsScreen extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(title: Text(l.settingsTitle)),
           body: SideSafe(
-            child: ListView(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.only(top: 8, bottom: 32),
-              children: [
-                Section(
-                  title: l.settingsAppearance,
-                  children: [
-                    _Choice(
-                      labels: [
-                        l.settingsThemeDark,
-                        l.settingsThemeLight,
-                        l.settingsThemeSystem,
-                      ],
-                      values: const ['dark', 'light', 'system'],
-                      value: s.theme,
-                      onChanged: (v) =>
-                          model.updateSettings((s) => s.theme = v),
-                    ),
-                  ],
-                ),
-                Section(
-                  title: l.settingsLanguageTitle,
-                  children: [
-                    _Choice(
-                      labels: [
-                        l.settingsLanguageSystem,
-                        ...languageNames.values,
-                      ],
-                      values: ['', ...languageNames.keys],
-                      value: s.language,
-                      onChanged: (v) =>
-                          model.updateSettings((s) => s.language = v),
-                    ),
-                  ],
-                ),
-                Section(
-                  title: l.settingsHome,
-                  children: [
-                    _Toggle(
-                      title: l.settingsProjectMeta,
-                      value: !s.projectMetaHidden,
-                      onChanged: (v) =>
-                          model.updateSettings((s) => s.projectMetaHidden = !v),
-                    ),
-                    _Toggle(
-                      title: l.settingsWorkspaceMeta,
-                      value: !s.workspaceMetaHidden,
-                      onChanged: (v) => model.updateSettings(
-                        (s) => s.workspaceMetaHidden = !v,
-                      ),
-                    ),
-                  ],
-                ),
-                Section(
-                  title: l.settingsOpenFirst,
-                  children: [
-                    _Choice(
-                      labels: [l.settingsOpenChat, l.settingsOpenTerminal],
-                      values: const ['chat', 'terminal'],
-                      value: s.openMode,
-                      onChanged: (v) =>
-                          model.updateSettings((s) => s.openMode = v),
-                    ),
-                    _Note(
-                      s.openMode == 'chat'
-                          ? l.settingsOpenChatNote
-                          : l.settingsOpenTerminalNote,
-                    ),
-                  ],
-                ),
-                Section(
-                  title: l.settingsTerminal,
-                  children: [
-                    // 标题、滑块和示例是一件事，放在同一块里，中间不画分隔线
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                l.settingsFontSize,
-                                style: TextStyle(
-                                  fontSize: Fs.body,
-                                  color: c.text,
-                                ),
-                              ),
-                              const Spacer(),
-                              Text(
-                                s.terminalFontSize.toStringAsFixed(1),
-                                style: mono(Fs.small, color: c.muted),
-                              ),
-                            ],
-                          ),
-                          SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              overlayShape: SliderComponentShape.noOverlay,
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              child: Slider(
-                                value: s.terminalFontSize,
-                                min: 10,
-                                max: 16,
-                                divisions: 12,
-                                activeColor: c.accent,
-                                inactiveColor: c.fill,
-                                onChanged: (v) => model.updateSettings(
-                                  (s) => s.terminalFontSize = v,
-                                ),
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: c.code,
-                              borderRadius: BorderRadius.circular(Rd.button),
-                            ),
-                            child: Text(
-                              l.settingsFontSample,
-                              style: mono(s.terminalFontSize, color: c.text),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _Note(l.settingsFontNote),
-                    RowTile(
-                      title: Text(l.settingsKeys),
-                      subtitle: Text(
-                        s.customKeys.isEmpty
-                            ? l.settingsKeysNote
-                            : l.settingsKeysCustom(s.customKeys.length),
-                      ),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => CustomKeysScreen(model: model),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                Section(
-                  title: l.settingsChat,
-                  children: [
-                    _Toggle(
-                      title: l.settingsShowReasoning,
-                      value: s.showReasoning,
-                      onChanged: (v) =>
-                          model.updateSettings((s) => s.showReasoning = v),
-                    ),
-                    _Toggle(
-                      title: l.settingsExpandTools,
-                      value: s.expandTools,
-                      onChanged: (v) =>
-                          model.updateSettings((s) => s.expandTools = v),
-                    ),
-                  ],
-                ),
-                Section(
-                  title: l.settingsComputer,
-                  inset: 50,
-                  children: [
-                    RowTile(
-                      leading: Icon(
-                        Icons.laptop_mac_rounded,
-                        size: Ic.button,
-                        color: c.accent,
-                      ),
-                      title: Text(
-                        model.current == null
-                            ? l.settingsNotConnected
-                            : model.labelOf(model.current, l),
-                      ),
-                      subtitle: Text(
-                        l.settingsPairedCount(model.computers.length),
-                      ),
-                      onTap: onComputers,
-                    ),
-                  ],
-                ),
-                if (model.tailscale.supported)
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                   Section(
-                    title: l.tailscaleTitle,
+                    title: l.settingsAppearance,
                     children: [
-                      RowTile(
-                        key: const Key('settings-tailscale-entry'),
-                        leading: Icon(
-                          Icons.hub_rounded,
-                          size: Ic.button,
-                          color: tailscaleStatusColor(
-                            c,
-                            model.tailscale.status,
-                          ),
+                      _Choice(
+                        labels: [
+                          l.settingsThemeDark,
+                          l.settingsThemeLight,
+                          l.settingsThemeSystem,
+                        ],
+                        values: const ['dark', 'light', 'system'],
+                        value: s.theme,
+                        onChanged: (v) =>
+                            model.updateSettings((s) => s.theme = v),
+                      ),
+                    ],
+                  ),
+                  Section(
+                    title: l.settingsLanguageTitle,
+                    children: [
+                      _Choice(
+                        labels: [
+                          l.settingsLanguageSystem,
+                          ...languageNames.values,
+                        ],
+                        values: ['', ...languageNames.keys],
+                        value: s.language,
+                        onChanged: (v) =>
+                            model.updateSettings((s) => s.language = v),
+                      ),
+                    ],
+                  ),
+                  Section(
+                    title: l.settingsHome,
+                    children: [
+                      _Toggle(
+                        title: l.settingsProjectMeta,
+                        value: !s.projectMetaHidden,
+                        onChanged: (v) => model.updateSettings(
+                          (s) => s.projectMetaHidden = !v,
                         ),
-                        title: Text(l.tailscaleTitle),
+                      ),
+                      _Toggle(
+                        title: l.settingsWorkspaceMeta,
+                        value: !s.workspaceMetaHidden,
+                        onChanged: (v) => model.updateSettings(
+                          (s) => s.workspaceMetaHidden = !v,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Section(
+                    title: l.settingsOpenFirst,
+                    children: [
+                      _Choice(
+                        labels: [l.settingsOpenChat, l.settingsOpenTerminal],
+                        values: const ['chat', 'terminal'],
+                        value: s.openMode,
+                        onChanged: (v) =>
+                            model.updateSettings((s) => s.openMode = v),
+                      ),
+                      _Note(
+                        s.openMode == 'chat'
+                            ? l.settingsOpenChatNote
+                            : l.settingsOpenTerminalNote,
+                      ),
+                    ],
+                  ),
+                  Section(
+                    title: l.settingsTerminal,
+                    children: [
+                      // 标题、滑块和示例是一件事，放在同一块里，中间不画分隔线
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  l.settingsFontSize,
+                                  style: TextStyle(
+                                    fontSize: Fs.body,
+                                    color: c.text,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  s.terminalFontSize.toStringAsFixed(1),
+                                  style: mono(Fs.small, color: c.muted),
+                                ),
+                              ],
+                            ),
+                            SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                overlayShape: SliderComponentShape.noOverlay,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                child: Slider(
+                                  value: s.terminalFontSize,
+                                  min: 10,
+                                  max: 16,
+                                  divisions: 12,
+                                  activeColor: c.accent,
+                                  inactiveColor: c.fill,
+                                  onChanged: (v) => model.updateSettings(
+                                    (s) => s.terminalFontSize = v,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: c.code,
+                                borderRadius: BorderRadius.circular(Rd.button),
+                              ),
+                              child: Text(
+                                l.settingsFontSample,
+                                style: mono(s.terminalFontSize, color: c.text),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _Note(l.settingsFontNote),
+                      RowTile(
+                        title: Text(l.settingsKeys),
                         subtitle: Text(
-                          tailscaleSummaryText(l, model.tailscale, s),
+                          s.customKeys.isEmpty
+                              ? l.settingsKeysNote
+                              : l.settingsKeysCustom(s.customKeys.length),
                         ),
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) =>
-                                TailscaleSettingsScreen(model: model),
+                            builder: (_) => CustomKeysScreen(model: model),
                           ),
                         ),
                       ),
                     ],
                   ),
-                ProfileSection(model: model),
-                if (model.push != null)
                   Section(
-                    title: l.settingsPushTitle,
+                    title: l.settingsChat,
                     children: [
                       _Toggle(
-                        title: l.settingsPushTitle,
-                        value: s.pushEnabled,
-                        onChanged: (v) {
-                          model.updateSettings((s) => s.pushEnabled = v);
-                          unawaited(model.registerPush());
-                        },
-                      ),
-                      _Toggle(
-                        title: l.settingsPushBadge,
-                        value: s.badgeEnabled,
-                        onChanged: (v) {
-                          model.updateSettings((s) => s.badgeEnabled = v);
-                          unawaited(model.registerPush());
-                        },
-                      ),
-                      if (s.pushEnabled) ...[
-                        _Toggle(
-                          title: l.settingsPushWaiting,
-                          value: s.pushWaiting,
-                          onChanged: (v) {
-                            model.updateSettings((s) => s.pushWaiting = v);
-                            unawaited(model.registerPush());
-                          },
-                        ),
-                        _Toggle(
-                          title: l.settingsPushDone,
-                          value: s.pushDone,
-                          onChanged: (v) {
-                            model.updateSettings((s) => s.pushDone = v);
-                            unawaited(model.registerPush());
-                          },
-                        ),
-                      ],
-                      _Note(switch (model.pushStatus) {
-                        PushStatus.unsupportedRelay => l.settingsPushOldRelay,
-                        PushStatus.on => l.settingsPushOn,
-                        PushStatus.noRelay => l.settingsPushNoRelay,
-                        PushStatus.denied => l.settingsPushDenied,
-                        PushStatus.off => l.settingsPushOff,
-                        PushStatus.unsupportedComputer =>
-                          l.settingsPushOldComputer,
-                        PushStatus.failed => l.settingsPushFailed,
-                        PushStatus.unknown ||
-                        PushStatus.unsupported => l.settingsPushUnknown,
-                      }),
-                      if (model.pushStatus == PushStatus.denied)
-                        RowTile(
-                          title: Text(l.settingsPushSystemSettings),
-                          onTap: () => unawaited(model.push!.openSettings()),
-                        ),
-                    ],
-                  ),
-                if (backgroundKeepSupported)
-                  Section(
-                    title: l.settingsBackgroundTitle,
-                    children: [
-                      _Toggle(
-                        title: l.settingsBackgroundKeep,
-                        value: s.backgroundKeep,
+                        title: l.settingsShowReasoning,
+                        value: s.showReasoning,
                         onChanged: (v) =>
-                            model.updateSettings((s) => s.backgroundKeep = v),
+                            model.updateSettings((s) => s.showReasoning = v),
                       ),
-                      _Note(
-                        s.backgroundKeep
-                            ? l.settingsBackgroundKeepOn
-                            : l.settingsBackgroundKeepOff,
-                      ),
-                    ],
-                  ),
-                if (deskSupported)
-                  Section(
-                    title: l.homeRemoteDesktop,
-                    children: [
                       _Toggle(
-                        title: l.homeRemoteDesktop,
-                        value: s.deskWatch,
+                        title: l.settingsExpandTools,
+                        value: s.expandTools,
                         onChanged: (v) =>
-                            model.updateSettings((s) => s.deskWatch = v),
+                            model.updateSettings((s) => s.expandTools = v),
                       ),
-                      _Note(l.settingsDeskNote),
-                      if (s.deskWatch) ...[
-                        _Choice(
-                          labels: [
-                            l.settingsDeskTrackpad,
-                            l.settingsDeskDirect,
-                          ],
-                          values: const ['trackpad', 'direct'],
-                          value: s.deskTrackpad ? 'trackpad' : 'direct',
-                          // 换了操作方式，下次进看桌面再提示一次手势
-                          onChanged: (v) => model.updateSettings((s) {
-                            s.deskTrackpad = v == 'trackpad';
-                            s.deskGesturesSeen = false;
-                          }),
-                        ),
-                        _Note(
-                          s.deskTrackpad
-                              ? l.settingsDeskTrackpadNote
-                              : l.settingsDeskDirectNote,
-                        ),
-                        const _DeskPasswords(),
-                      ],
                     ],
                   ),
-                Section(
-                  title: l.settingsAbout,
-                  children: [
-                    RowTile(
-                      chevron: false,
-                      title: const Text('Posse'),
-                      trailing: Text(
-                        appBuild > 0
-                            ? l.settingsVersionBuild(appVersion, '$appBuild')
-                            : appVersion,
-                        style: mono(Fs.small, color: c.muted),
-                      ),
-                    ),
-                    // 首页的更新提示关掉了也能在这里更新
-                    if (updates.latest case final release?)
+                  Section(
+                    title: l.settingsComputer,
+                    inset: 50,
+                    children: [
                       RowTile(
                         leading: Icon(
-                          Icons.system_update_rounded,
+                          Icons.laptop_mac_rounded,
                           size: Ic.button,
                           color: c.accent,
                         ),
                         title: Text(
-                          l.settingsUpdateTo(
-                            release.version,
-                            '${release.build}',
+                          model.current == null
+                              ? l.settingsNotConnected
+                              : model.labelOf(model.current, l),
+                        ),
+                        subtitle: Text(
+                          l.settingsPairedCount(model.computers.length),
+                        ),
+                        onTap: onComputers,
+                      ),
+                    ],
+                  ),
+                  if (model.tailscale.supported)
+                    Section(
+                      title: l.tailscaleTitle,
+                      children: [
+                        RowTile(
+                          key: const Key('settings-tailscale-entry'),
+                          leading: Icon(
+                            Icons.hub_rounded,
+                            size: Ic.button,
+                            color: tailscaleStatusColor(
+                              c,
+                              model.tailscale.status,
+                            ),
+                          ),
+                          title: Text(l.tailscaleTitle),
+                          subtitle: Text(
+                            tailscaleSummaryText(l, model.tailscale, s),
+                          ),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  TailscaleSettingsScreen(model: model),
+                            ),
                           ),
                         ),
-                        trailing: release.size.isEmpty
-                            ? null
-                            : Text(
-                                release.size,
-                                style: TextStyle(
-                                  fontSize: Fs.small,
-                                  color: c.faint,
+                      ],
+                    ),
+                  ProfileSection(model: model),
+                  if (model.push != null)
+                    Section(
+                      title: l.settingsPushTitle,
+                      children: [
+                        _Toggle(
+                          title: l.settingsPushTitle,
+                          value: s.pushEnabled,
+                          onChanged: (v) {
+                            model.updateSettings((s) => s.pushEnabled = v);
+                            unawaited(model.registerPush());
+                          },
+                        ),
+                        _Toggle(
+                          title: l.settingsPushBadge,
+                          value: s.badgeEnabled,
+                          onChanged: (v) {
+                            model.updateSettings((s) => s.badgeEnabled = v);
+                            unawaited(model.registerPush());
+                          },
+                        ),
+                        if (s.pushEnabled) ...[
+                          _Toggle(
+                            title: l.settingsPushWaiting,
+                            value: s.pushWaiting,
+                            onChanged: (v) {
+                              model.updateSettings((s) => s.pushWaiting = v);
+                              unawaited(model.registerPush());
+                            },
+                          ),
+                          _Toggle(
+                            title: l.settingsPushDone,
+                            value: s.pushDone,
+                            onChanged: (v) {
+                              model.updateSettings((s) => s.pushDone = v);
+                              unawaited(model.registerPush());
+                            },
+                          ),
+                        ],
+                        _Note(switch (model.pushStatus) {
+                          PushStatus.unsupportedRelay => l.settingsPushOldRelay,
+                          PushStatus.on => l.settingsPushOn,
+                          PushStatus.noRelay => l.settingsPushNoRelay,
+                          PushStatus.denied => l.settingsPushDenied,
+                          PushStatus.off => l.settingsPushOff,
+                          PushStatus.unsupportedComputer =>
+                            l.settingsPushOldComputer,
+                          PushStatus.failed => l.settingsPushFailed,
+                          PushStatus.unknown ||
+                          PushStatus.unsupported => l.settingsPushUnknown,
+                        }),
+                        if (model.pushStatus == PushStatus.denied)
+                          RowTile(
+                            title: Text(l.settingsPushSystemSettings),
+                            onTap: () => unawaited(model.push!.openSettings()),
+                          ),
+                      ],
+                    ),
+                  if (backgroundKeepSupported)
+                    Section(
+                      title: l.settingsBackgroundTitle,
+                      children: [
+                        _Toggle(
+                          title: l.settingsBackgroundKeep,
+                          value: s.backgroundKeep,
+                          onChanged: (v) =>
+                              model.updateSettings((s) => s.backgroundKeep = v),
+                        ),
+                        _Note(
+                          s.backgroundKeep
+                              ? l.settingsBackgroundKeepOn
+                              : l.settingsBackgroundKeepOff,
+                        ),
+                      ],
+                    ),
+                  if (deskSupported)
+                    Section(
+                      title: l.homeRemoteDesktop,
+                      children: [
+                        _Toggle(
+                          title: l.homeRemoteDesktop,
+                          value: s.deskWatch,
+                          onChanged: (v) =>
+                              model.updateSettings((s) => s.deskWatch = v),
+                        ),
+                        _Note(l.settingsDeskNote),
+                        if (s.deskWatch) ...[
+                          _Choice(
+                            labels: [
+                              l.settingsDeskTrackpad,
+                              l.settingsDeskDirect,
+                            ],
+                            values: const ['trackpad', 'direct'],
+                            value: s.deskTrackpad ? 'trackpad' : 'direct',
+                            // 换了操作方式，下次进看桌面再提示一次手势
+                            onChanged: (v) => model.updateSettings((s) {
+                              s.deskTrackpad = v == 'trackpad';
+                              s.deskGesturesSeen = false;
+                            }),
+                          ),
+                          _Note(
+                            s.deskTrackpad
+                                ? l.settingsDeskTrackpadNote
+                                : l.settingsDeskDirectNote,
+                          ),
+                          const _DeskPasswords(),
+                        ],
+                      ],
+                    ),
+                  Section(
+                    title: l.settingsAbout,
+                    children: [
+                      RowTile(
+                        chevron: false,
+                        title: const Text('Posse'),
+                        trailing: Text(
+                          appBuild > 0
+                              ? l.settingsVersionBuild(appVersion, '$appBuild')
+                              : appVersion,
+                          style: mono(Fs.small, color: c.muted),
+                        ),
+                      ),
+                      // 首页的更新提示关掉了也能在这里更新
+                      if (updates.latest case final release?)
+                        RowTile(
+                          leading: Icon(
+                            Icons.system_update_rounded,
+                            size: Ic.button,
+                            color: c.accent,
+                          ),
+                          title: Text(
+                            l.settingsUpdateTo(
+                              release.version,
+                              '${release.build}',
+                            ),
+                          ),
+                          trailing: release.size.isEmpty
+                              ? null
+                              : Text(
+                                  release.size,
+                                  style: TextStyle(
+                                    fontSize: Fs.small,
+                                    color: c.faint,
+                                  ),
                                 ),
-                              ),
-                        onTap: () => showUpdateSheet(context, release),
-                      )
-                    else if (updates.enabled)
-                      _CheckUpdate(checker: updates),
-                  ],
-                ),
-              ],
+                          onTap: () => showUpdateSheet(context, release),
+                        )
+                      else if (updates.enabled)
+                        _CheckUpdate(checker: updates),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         );

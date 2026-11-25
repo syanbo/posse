@@ -164,6 +164,10 @@ class PrefsPairingStore implements PairingStore {
 /// 看桌面设置的版本。1 起看桌面不再是实验，默认打开、用触控板。
 const deskVersion = 1;
 
+/// 看桌面浮动控件坐标格式版本：1 起返回、连接状态、工具条共用全屏（含安全区）归一化坐标，
+/// 旧版写进来的默认 `[1, 0]` 迁移时视为未拖动（回落到顶部状态按钮下方）。
+const deskFloatingVersion = 1;
+
 /// 看桌面能手选的帧率上限，和 Mac 认的一样；不在里面的是自动。
 const deskFpsChoices = [60, 30, 15];
 const deskResolutionChoices = [720, 1080, 1440];
@@ -181,8 +185,12 @@ class AppSettings {
     this.deskZoom = 1,
     this.deskWatch = true,
     this.deskLandscape = false,
-    this.deskToolbarPortrait = const Offset(1, 0),
-    this.deskToolbarLandscape = const Offset(1, 0),
+    this.deskToolbarPortrait,
+    this.deskToolbarLandscape,
+    this.deskBackPortrait,
+    this.deskBackLandscape,
+    this.deskStatusPortrait,
+    this.deskStatusLandscape,
     this.deskGesturesSeen = false,
     this.deskTrackpad = true,
     this.historyByFolder = false,
@@ -234,9 +242,13 @@ class AppSettings {
   /// 看桌面时锁横屏。离开页面恢复原来的方向，下次进来按这个锁。
   bool deskLandscape;
 
-  /// 工具条在横竖屏各自可移动范围内的位置（0 到 1），不含键盘临时避让。
-  Offset deskToolbarPortrait;
-  Offset deskToolbarLandscape;
+  /// 看桌面浮动按钮在横竖屏各自可移动范围内的位置（0 到 1，null 用默认位置），不含键盘临时避让。
+  Offset? deskToolbarPortrait;
+  Offset? deskToolbarLandscape;
+  Offset? deskBackPortrait;
+  Offset? deskBackLandscape;
+  Offset? deskStatusPortrait;
+  Offset? deskStatusLandscape;
 
   /// 看桌面的手势提示已经关过。只出现一次。
   bool deskGesturesSeen;
@@ -307,8 +319,18 @@ class AppSettings {
     'deskZoom': deskZoom,
     'deskWatch': deskWatch,
     'deskLandscape': deskLandscape,
-    'deskToolbarPortrait': [deskToolbarPortrait.dx, deskToolbarPortrait.dy],
-    'deskToolbarLandscape': [deskToolbarLandscape.dx, deskToolbarLandscape.dy],
+    'deskFloatingVersion': deskFloatingVersion,
+    if (deskToolbarPortrait case final pos?)
+      'deskToolbarPortrait': [pos.dx, pos.dy],
+    if (deskToolbarLandscape case final pos?)
+      'deskToolbarLandscape': [pos.dx, pos.dy],
+    if (deskBackPortrait case final pos?) 'deskBackPortrait': [pos.dx, pos.dy],
+    if (deskBackLandscape case final pos?)
+      'deskBackLandscape': [pos.dx, pos.dy],
+    if (deskStatusPortrait case final pos?)
+      'deskStatusPortrait': [pos.dx, pos.dy],
+    if (deskStatusLandscape case final pos?)
+      'deskStatusLandscape': [pos.dx, pos.dy],
     'deskGesturesSeen': deskGesturesSeen,
     'deskTrackpad': deskTrackpad,
     'deskVersion': deskVersion,
@@ -374,15 +396,34 @@ class AppSettings {
       if (map['deskLandscape'] is bool) {
         out.deskLandscape = map['deskLandscape'] as bool;
       }
-      Offset toolbarPosition(Object? value) {
+      final floatingV1 = map['deskFloatingVersion'] == deskFloatingVersion;
+      Offset? floatingPosition(Object? value, {bool legacyToolbar = false}) {
         if (value case [num x, num y] when x.isFinite && y.isFinite) {
-          return Offset(x.toDouble().clamp(0, 1), y.toDouble().clamp(0, 1));
+          final parsed = Offset(
+            x.toDouble().clamp(0, 1),
+            y.toDouble().clamp(0, 1),
+          );
+          // 旧版每次保存都会写入工具条默认值 [1, 0]，升级后回落到新默认位置，避免盖住右上角状态按钮。
+          if (legacyToolbar && !floatingV1 && parsed == const Offset(1, 0)) {
+            return null;
+          }
+          return parsed;
         }
-        return const Offset(1, 0);
+        return null;
       }
 
-      out.deskToolbarPortrait = toolbarPosition(map['deskToolbarPortrait']);
-      out.deskToolbarLandscape = toolbarPosition(map['deskToolbarLandscape']);
+      out.deskToolbarPortrait = floatingPosition(
+        map['deskToolbarPortrait'],
+        legacyToolbar: true,
+      );
+      out.deskToolbarLandscape = floatingPosition(
+        map['deskToolbarLandscape'],
+        legacyToolbar: true,
+      );
+      out.deskBackPortrait = floatingPosition(map['deskBackPortrait']);
+      out.deskBackLandscape = floatingPosition(map['deskBackLandscape']);
+      out.deskStatusPortrait = floatingPosition(map['deskStatusPortrait']);
+      out.deskStatusLandscape = floatingPosition(map['deskStatusLandscape']);
       if (map['deskGesturesSeen'] is bool) {
         out.deskGesturesSeen = map['deskGesturesSeen'] as bool;
       }
