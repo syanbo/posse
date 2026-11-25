@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -8,19 +9,38 @@ import (
 	"syscall"
 )
 
-// ScratchRoots 定义自动放行允许写入的临时目录与讨论目录根（测试可注入临时目录）。
+// ScratchRoots 定义自动放行允许写入的临时目录、讨论目录根及机器人级只读策略（测试与 daemon 可直接注入）。
 type ScratchRoots struct {
-	TmpDir         string // 默认 "/tmp"
-	NotesDir       string // 默认 os.Getenv("POSSE_NOTES")
-	DiscussionsDir string // 可选直接覆盖；为空时取 filepath.Join(NotesDir, "discussions")
+	TmpDir         string   // 默认 "/tmp"
+	NotesDir       string   // 默认 os.Getenv("POSSE_NOTES")
+	DiscussionsDir string   // 可选直接覆盖；为空时取 filepath.Join(NotesDir, "discussions")
+	ReadOnlyHosts  []string // 允许 curl /api/0/ 只读查询的域名白名单（默认空 = 不放行任何 curl）
+	TrustedScripts []string // 主人显式信任的脚本绝对路径或目录（目录以 / 结尾）
 }
 
-// DefaultScratchRoots 返回当前进程环境下的默认临时目录与讨论目录根。
+// DefaultScratchRoots 返回当前进程环境下的默认临时目录、讨论目录根及飞书 worker 注入的只读白名单策略。
 func DefaultScratchRoots() ScratchRoots {
 	return ScratchRoots{
-		TmpDir:   "/tmp",
-		NotesDir: strings.TrimSpace(os.Getenv("POSSE_NOTES")),
+		TmpDir:         "/tmp",
+		NotesDir:       strings.TrimSpace(os.Getenv("POSSE_NOTES")),
+		ReadOnlyHosts:  splitEnvList(os.Getenv("POSSE_LARK_READONLY_HOSTS"), ","),
+		TrustedScripts: splitEnvList(os.Getenv("POSSE_LARK_TRUSTED_SCRIPTS"), ":"),
 	}
+}
+
+func splitEnvList(raw, sep string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(raw, sep) {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 // NormalizeShellLine 仅把「未转义空白 + 反斜杠 + LF」形式的续行按 shell 语义规整为单个前导空白；
@@ -204,9 +224,10 @@ func SplitShellSegments(s string) ([]string, bool) {
 }
 
 type shellToken struct {
-	val          string
-	quoted       bool
-	singleQuoted bool
+	val               string
+	quoted            bool
+	singleQuoted      bool
+	hasSentryTokenVar bool
 }
 
 type shellRedir struct {
@@ -221,6 +242,16 @@ func ParseSegmentForRuleKey(seg string) (args []string, hasRedir bool, ok bool) 
 	toks, redirs, parsed := parseShellSegment(seg, true)
 	if !parsed || len(toks) == 0 {
 		return nil, false, false
+	}
+	for _, t := range toks {
+		if t.hasSentryTokenVar {
+			return nil, false, false
+		}
+	}
+	for _, r := range redirs {
+		if r.target.hasSentryTokenVar {
+			return nil, false, false
+		}
 	}
 	out := make([]string, len(toks))
 	for i, t := range toks {
@@ -323,7 +354,7 @@ func IsSafeReadOnlySegmentWithRoots(seg string, roots ScratchRoots) bool {
 		return false
 	}
 	for _, r := range redirs {
-		if !isSafeRedir(r, roots) {
+		if r.target.hasSentryTokenVar || !isSafeRedir(r, roots) {
 			return false
 		}
 	}
@@ -448,22 +479,33 @@ func isIdentByte(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
 }
 
-// matchAllowedDollar 检查 s[i:] 是否以允许的精确变量展开开头（$POSSE_NOTES、${POSSE_NOTES}、$HOME、${HOME}）。
-func matchAllowedDollar(s string, i int) (int, bool) {
+// matchAllowedDollar 检查 s[i:] 是否以双引号内允许的精确变量展开开头：
+// 通用允许 $POSSE_NOTES、${POSSE_NOTES}、$HOME、${HOME}；
+// 额外标记 $SENTRY_AUTH_TOKEN、${SENTRY_AUTH_TOKEN}，仅允许出现在 curl 的 -H/--header 值中。
+func matchAllowedDollar(s string, i int) (int, bool, bool) {
 	for _, braced := range []string{"${POSSE_NOTES}", "${HOME}"} {
 		if strings.HasPrefix(s[i:], braced) {
-			return len(braced), true
+			return len(braced), true, false
 		}
 	}
 	for _, bare := range []string{"$POSSE_NOTES", "$HOME"} {
 		if strings.HasPrefix(s[i:], bare) {
 			end := i + len(bare)
 			if end >= len(s) || !isIdentByte(s[end]) {
-				return len(bare), true
+				return len(bare), true, false
 			}
 		}
 	}
-	return 0, false
+	if strings.HasPrefix(s[i:], "${SENTRY_AUTH_TOKEN}") {
+		return len("${SENTRY_AUTH_TOKEN}"), true, true
+	}
+	if strings.HasPrefix(s[i:], "$SENTRY_AUTH_TOKEN") {
+		end := i + len("$SENTRY_AUTH_TOKEN")
+		if end >= len(s) || !isIdentByte(s[end]) {
+			return len("$SENTRY_AUTH_TOKEN"), true, true
+		}
+	}
+	return 0, false, false
 }
 
 func readShellToken(s string, i int, strictExpansions bool) (shellToken, int, bool, bool) {
@@ -475,6 +517,7 @@ func readShellToken(s string, i int, strictExpansions bool) (shellToken, int, bo
 	hasToken := false
 	quoted := false
 	singleQuoted := false
+	hasSentryTokenVar := false
 	for i < len(s) {
 		ch := s[i]
 		if quote != 0 {
@@ -497,9 +540,12 @@ func readShellToken(s string, i int, strictExpansions bool) (shellToken, int, bo
 					continue
 				}
 				if strictExpansions && ch == '$' {
-					n, ok := matchAllowedDollar(s, i)
+					n, ok, isSentry := matchAllowedDollar(s, i)
 					if !ok {
 						return shellToken{}, i, false, false
+					}
+					if isSentry {
+						hasSentryTokenVar = true
 					}
 					cur.WriteString(s[i : i+n])
 					i += n
@@ -575,9 +621,10 @@ func readShellToken(s string, i int, strictExpansions bool) (shellToken, int, bo
 		return shellToken{}, i, false, false
 	}
 	return shellToken{
-		val:          cur.String(),
-		quoted:       quoted,
-		singleQuoted: singleQuoted,
+		val:               cur.String(),
+		quoted:            quoted,
+		singleQuoted:      singleQuoted,
+		hasSentryTokenVar: hasSentryTokenVar,
 	}, i, hasToken, true
 }
 
@@ -824,12 +871,58 @@ func resolveTrustedCommand(tok shellToken) (string, bool) {
 	return "", false
 }
 
+func anySentryToken(tokens []shellToken) bool {
+	for _, t := range tokens {
+		if t.hasSentryTokenVar {
+			return true
+		}
+	}
+	return false
+}
+
+func isValidHostname(host string) bool {
+	if host == "" || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") ||
+		strings.HasPrefix(host, "-") || strings.HasSuffix(host, "-") || strings.Contains(host, "..") {
+		return false
+	}
+	for i := 0; i < len(host); i++ {
+		c := host[i]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 func isSafeReadOnlyTokens(tokens []shellToken, roots ScratchRoots) bool {
 	if len(tokens) == 0 {
 		return false
 	}
+	// glab 专属前置环境变量：仅允许 GITLAB_HOST=<合法域名> glab ...
+	if len(tokens) >= 2 && strings.HasPrefix(tokens[0].val, "GITLAB_HOST=") {
+		if anySentryToken(tokens) {
+			return false
+		}
+		host := strings.TrimPrefix(tokens[0].val, "GITLAB_HOST=")
+		if !isValidHostname(host) {
+			return false
+		}
+		cmd, ok := resolveTrustedCommand(tokens[1])
+		if !ok || cmd != "glab" {
+			return false
+		}
+		return isSafeReadOnlyGlab(tokens[2:], roots)
+	}
+	// 机器人级显式信任脚本（直接执行绝对路径或 bash/sh <绝对路径>）
+	if len(roots.TrustedScripts) > 0 && !anySentryToken(tokens) && isTrustedScriptCall(tokens, roots) {
+		return true
+	}
 	cmd, ok := resolveTrustedCommand(tokens[0])
 	if !ok {
+		return false
+	}
+	// $SENTRY_AUTH_TOKEN 仅允许出现在 curl 的 -H/--header 参数中，其他命令一律拒绝
+	if cmd != "curl" && anySentryToken(tokens) {
 		return false
 	}
 	argToks := tokens[1:]
@@ -869,6 +962,16 @@ func isSafeReadOnlyTokens(tokens []shellToken, roots ScratchRoots) bool {
 		return isSafeScratchMkdir(argToks, roots)
 	case "lark-cli":
 		return isSafeReadOnlyLarkCLI(argToks, roots)
+	case "glab":
+		return isSafeReadOnlyGlab(argToks, roots)
+	case "aliyun":
+		return isSafeReadOnlyAliyun(argToks, roots)
+	case "ossutil":
+		return isSafeReadOnlyOSS(argToks, roots)
+	case "tccli":
+		return isSafeReadOnlyTCCLI(args)
+	case "curl":
+		return isSafeReadOnlyCurl(argToks, roots)
 	case "find":
 		return isSafeReadOnlyFind(args)
 	case "sed":
@@ -1616,6 +1719,617 @@ func isExplicitSafeLarkCLI(domain, sub string) bool {
 		switch sub {
 		case "+search", "+get", "+list", "+fetch":
 			return true
+		}
+	}
+	return false
+}
+
+// --- Round 2: glab / aliyun / ossutil / tccli / curl / trustedScripts ---
+
+func isSafeReadOnlyGlab(argToks []shellToken, roots ScratchRoots) bool {
+	if len(argToks) == 0 {
+		return false
+	}
+	sub := argToks[0].val
+	if sub == "api" {
+		return isSafeReadOnlyGlabAPI(argToks[1:])
+	}
+	if len(argToks) < 2 {
+		return false
+	}
+	act := argToks[1].val
+	rest := argToks[2:]
+	if sub == "repo" && act == "clone" {
+		return isSafeReadOnlyGlabClone(rest, roots)
+	}
+	allowedSub := false
+	switch sub {
+	case "repo":
+		allowedSub = act == "view"
+	case "mr":
+		allowedSub = act == "view" || act == "list" || act == "diff"
+	case "issue", "release":
+		allowedSub = act == "view" || act == "list"
+	case "ci":
+		allowedSub = act == "view" || act == "list" || act == "status"
+	}
+	if !allowedSub {
+		return false
+	}
+	for i := 0; i < len(rest); i++ {
+		a := rest[i].val
+		if a == "--" {
+			break
+		}
+		if a == "--web" || strings.HasPrefix(a, "--web=") || a == "-w" {
+			return false
+		}
+		switch a {
+		case "-R", "--repo", "-F", "--output-format", "-O", "--output", "-l", "--label", "-a", "--assignee", "-p", "--per-page", "-P", "--page", "-b", "--branch", "-s", "--source-branch", "-t", "--target-branch":
+			i++
+			continue
+		}
+		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && len(a) > 1 {
+			first := a[1]
+			if first != 'R' && first != 'F' && first != 'O' && first != 'l' && first != 'a' && first != 'p' && first != 'P' && first != 'b' && first != 's' && first != 't' {
+				if strings.ContainsRune(a[1:], 'w') {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func isSafeReadOnlyGlabAPI(argToks []shellToken) bool {
+	var pos []string
+	endFlags := false
+	for i := 0; i < len(argToks); i++ {
+		a := argToks[i].val
+		if !endFlags && a == "--" {
+			endFlags = true
+			continue
+		}
+		if !endFlags && strings.HasPrefix(a, "-") {
+			switch {
+			case a == "--paginate":
+				continue
+			case a == "-X" || a == "--method":
+				if i+1 >= len(argToks) || !strings.EqualFold(argToks[i+1].val, "GET") {
+					return false
+				}
+				i++
+				continue
+			case strings.HasPrefix(a, "--method="):
+				if !strings.EqualFold(strings.TrimPrefix(a, "--method="), "GET") {
+					return false
+				}
+				continue
+			case strings.HasPrefix(a, "-X") && len(a) > 2:
+				if !strings.EqualFold(a[2:], "GET") {
+					return false
+				}
+				continue
+			case a == "-H" || a == "--header":
+				if i+1 >= len(argToks) || hasMethodOverrideHeader(argToks[i+1].val) {
+					return false
+				}
+				i++
+				continue
+			case strings.HasPrefix(a, "--header="):
+				if hasMethodOverrideHeader(strings.TrimPrefix(a, "--header=")) {
+					return false
+				}
+				continue
+			default:
+				// 拒绝 -f/-F/--field/--raw-field/--input 及任何未在白名单内的 flag
+				return false
+			}
+		}
+		pos = append(pos, a)
+	}
+	if len(pos) != 1 {
+		return false
+	}
+	p := pos[0]
+	if idx := strings.IndexAny(p, "?#"); idx >= 0 {
+		p = p[:idx]
+	}
+	p = strings.ToLower(strings.Trim(p, "/"))
+	if p == "" || p == "graphql" || strings.HasPrefix(p, "graphql/") ||
+		strings.HasSuffix(p, "/graphql") || strings.Contains(p, "/graphql/") {
+		return false
+	}
+	return true
+}
+
+func hasMethodOverrideHeader(h string) bool {
+	return strings.Contains(strings.ToLower(h), "x-http-method-override")
+}
+
+func isSafeReadOnlyGlabClone(argToks []shellToken, roots ScratchRoots) bool {
+	var before []shellToken
+	var gitFlags []shellToken
+	dashIdx := -1
+	for i, t := range argToks {
+		if t.val == "--" {
+			dashIdx = i
+			break
+		}
+	}
+	if dashIdx >= 0 {
+		before = argToks[:dashIdx]
+		gitFlags = argToks[dashIdx+1:]
+	} else {
+		before = argToks
+	}
+	if len(before) != 2 {
+		return false
+	}
+	if strings.HasPrefix(before[0].val, "-") || strings.HasPrefix(before[1].val, "-") {
+		return false
+	}
+	if !isSafeScratchToken(before[1], false, true, roots) {
+		return false
+	}
+	for i := 0; i < len(gitFlags); i++ {
+		a := gitFlags[i].val
+		switch {
+		case a == "--depth":
+			if i+1 >= len(gitFlags) || !isDigits(gitFlags[i+1].val) {
+				return false
+			}
+			i++
+		case strings.HasPrefix(a, "--depth="):
+			if !isDigits(strings.TrimPrefix(a, "--depth=")) {
+				return false
+			}
+		case a == "-b" || a == "--branch" || a == "--filter" || a == "--shallow-since":
+			if i+1 >= len(gitFlags) || strings.HasPrefix(gitFlags[i+1].val, "-") {
+				return false
+			}
+			i++
+		case strings.HasPrefix(a, "--branch=") || strings.HasPrefix(a, "--filter=") || strings.HasPrefix(a, "--shallow-since="):
+		case a == "--single-branch" || a == "--no-single-branch" || a == "--no-tags" || a == "--quiet" || a == "-q" || a == "--bare":
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func isPositiveNumber(s string) bool {
+	if s == "" {
+		return false
+	}
+	dot := false
+	hasDigit := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= '0' && c <= '9' {
+			hasDigit = true
+			continue
+		}
+		if c == '.' && !dot {
+			dot = true
+			continue
+		}
+		return false
+	}
+	return hasDigit
+}
+
+func hasPascalActionPrefix(action string, prefixes ...string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(action, p) && len(action) > len(p) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSafeReadOnlyAliyun(argToks []shellToken, roots ScratchRoots) bool {
+	i := 0
+	for i < len(argToks) {
+		a := argToks[i].val
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		switch {
+		case a == "--profile" || a == "-p" || a == "--region" || a == "--endpoint" || a == "--mode":
+			if i+1 >= len(argToks) {
+				return false
+			}
+			i += 2
+		case strings.HasPrefix(a, "--profile=") || strings.HasPrefix(a, "--region=") ||
+			strings.HasPrefix(a, "--endpoint=") || strings.HasPrefix(a, "--mode=") ||
+			a == "--secure" || a == "--quiet":
+			i++
+		default:
+			return false
+		}
+	}
+	if i >= len(argToks) {
+		return false
+	}
+	service := strings.ToLower(argToks[i].val)
+	rest := argToks[i+1:]
+	switch service {
+	case "sls":
+		if len(rest) == 0 || strings.HasPrefix(rest[0].val, "-") {
+			return false
+		}
+		action := rest[0].val
+		if !hasPascalActionPrefix(action, "Get", "List", "Describe") {
+			return false
+		}
+		for _, t := range rest[1:] {
+			a := t.val
+			if a == "--config-path" || strings.HasPrefix(a, "--config-path=") {
+				return false
+			}
+		}
+		return true
+	case "oss", "ossutil":
+		return isSafeReadOnlyOSS(rest, roots)
+	default:
+		// configure、ram、sts 等其余服务一律审批
+		return false
+	}
+}
+
+func isSafeReadOnlyOSS(argToks []shellToken, roots ScratchRoots) bool {
+	i := 0
+	for i < len(argToks) {
+		a := argToks[i].val
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		switch {
+		case a == "-e" || a == "--endpoint" || a == "--profile" || a == "--region":
+			if i+1 >= len(argToks) {
+				return false
+			}
+			i += 2
+		case strings.HasPrefix(a, "--endpoint=") || strings.HasPrefix(a, "--profile=") || strings.HasPrefix(a, "--region="):
+			i++
+		default:
+			return false
+		}
+	}
+	if i >= len(argToks) {
+		return false
+	}
+	sub := argToks[i].val
+	rest := argToks[i+1:]
+	switch sub {
+	case "ls", "stat":
+		for _, t := range rest {
+			a := t.val
+			if a == "--" {
+				break
+			}
+			if a == "-c" || a == "--config-file" || strings.HasPrefix(a, "--config-file=") ||
+				a == "-o" || a == "--output" || strings.HasPrefix(a, "--output=") ||
+				a == "--output-dir" || strings.HasPrefix(a, "--output-dir=") ||
+				a == "--checkpoint-dir" || strings.HasPrefix(a, "--checkpoint-dir=") ||
+				a == "--snapshot-path" || strings.HasPrefix(a, "--snapshot-path=") {
+				return false
+			}
+		}
+		return true
+	case "cp":
+		var pos []shellToken
+		endFlags := false
+		for j := 0; j < len(rest); j++ {
+			a := rest[j].val
+			if !endFlags && a == "--" {
+				endFlags = true
+				continue
+			}
+			if !endFlags && strings.HasPrefix(a, "-") {
+				switch {
+				case a == "-r" || a == "--recursive" || a == "-f" || a == "--force" ||
+					a == "-u" || a == "--update" || a == "--only-current-dir" ||
+					a == "--disable-all-symlink" || a == "--disable-dir-object":
+					continue
+				case a == "-e" || a == "--endpoint" || a == "--profile" || a == "--region" ||
+					a == "-j" || a == "--jobs" || a == "--parallel" || a == "--part-size" ||
+					a == "--bigfile-threshold" || a == "--maxupspeed" || a == "--maxdownspeed" ||
+					a == "--retry-times" || a == "--timeout" || a == "--include" || a == "--exclude" ||
+					a == "--payer" || a == "--encoding-type" || a == "--version-id":
+					if j+1 >= len(rest) {
+						return false
+					}
+					j++
+					continue
+				case strings.HasPrefix(a, "--endpoint=") || strings.HasPrefix(a, "--profile=") ||
+					strings.HasPrefix(a, "--region=") || strings.HasPrefix(a, "--jobs=") ||
+					strings.HasPrefix(a, "--parallel=") || strings.HasPrefix(a, "--part-size=") ||
+					strings.HasPrefix(a, "--retry-times=") || strings.HasPrefix(a, "--timeout=") ||
+					strings.HasPrefix(a, "--include=") || strings.HasPrefix(a, "--exclude=") ||
+					strings.HasPrefix(a, "--payer=") || strings.HasPrefix(a, "--encoding-type=") ||
+					strings.HasPrefix(a, "--version-id="):
+					continue
+				default:
+					return false
+				}
+			}
+			pos = append(pos, rest[j])
+		}
+		if len(pos) != 2 {
+			return false
+		}
+		src, dst := pos[0], pos[1]
+		if !strings.HasPrefix(src.val, "oss://") || strings.HasPrefix(dst.val, "oss://") {
+			return false
+		}
+		return isSafeScratchToken(dst, false, true, roots)
+	default:
+		return false
+	}
+}
+
+func isSafeReadOnlyTCCLI(args []string) bool {
+	i := 0
+	for i < len(args) {
+		a := args[i]
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		switch {
+		case a == "--profile" || a == "--region" || a == "--endpoint" || a == "--output" || a == "--version" || a == "--timeout":
+			if i+1 >= len(args) {
+				return false
+			}
+			i += 2
+		case strings.HasPrefix(a, "--profile=") || strings.HasPrefix(a, "--region=") ||
+			strings.HasPrefix(a, "--endpoint=") || strings.HasPrefix(a, "--output=") ||
+			strings.HasPrefix(a, "--version=") || strings.HasPrefix(a, "--timeout="):
+			i++
+		default:
+			return false
+		}
+	}
+	if i+1 >= len(args) {
+		return false
+	}
+	service := strings.ToLower(args[i])
+	action := args[i+1]
+	if strings.HasPrefix(action, "-") {
+		return false
+	}
+	switch service {
+	case "auth", "configure", "sts", "cam":
+		return false
+	}
+	return hasPascalActionPrefix(action, "Describe", "Search", "Get", "List")
+}
+
+func isSafeReadOnlyCurl(argToks []shellToken, roots ScratchRoots) bool {
+	if len(roots.ReadOnlyHosts) == 0 {
+		return false
+	}
+	var urls []shellToken
+	endFlags := false
+	for i := 0; i < len(argToks); i++ {
+		t := argToks[i]
+		a := t.val
+		if !endFlags && a == "--" {
+			endFlags = true
+			continue
+		}
+		if !endFlags && strings.HasPrefix(a, "-") && a != "-" {
+			switch {
+			case a == "--silent" || a == "--show-error" || a == "--location" ||
+				a == "--get" || a == "--compressed" || a == "--fail":
+				if t.hasSentryTokenVar {
+					return false
+				}
+				continue
+			case a == "-X" || a == "--request":
+				if i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar || !strings.EqualFold(argToks[i+1].val, "GET") {
+					return false
+				}
+				i++
+				continue
+			case strings.HasPrefix(a, "--request="):
+				if t.hasSentryTokenVar || !strings.EqualFold(strings.TrimPrefix(a, "--request="), "GET") {
+					return false
+				}
+				continue
+			case a == "-H" || a == "--header":
+				if i+1 >= len(argToks) {
+					return false
+				}
+				hv := argToks[i+1].val
+				// 仅 curl 的 -H/--header 值允许 $SENTRY_AUTH_TOKEN，拒绝 @file 读盘与方法覆盖头
+				if strings.HasPrefix(hv, "@") || hasMethodOverrideHeader(hv) {
+					return false
+				}
+				i++
+				continue
+			case strings.HasPrefix(a, "--header="):
+				hv := strings.TrimPrefix(a, "--header=")
+				if strings.HasPrefix(hv, "@") || hasMethodOverrideHeader(hv) {
+					return false
+				}
+				continue
+			case a == "-m" || a == "--max-time":
+				if i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar || !isPositiveNumber(argToks[i+1].val) {
+					return false
+				}
+				i++
+				continue
+			case strings.HasPrefix(a, "--max-time="):
+				if t.hasSentryTokenVar || !isPositiveNumber(strings.TrimPrefix(a, "--max-time=")) {
+					return false
+				}
+				continue
+			case a == "-w" || a == "--write-out":
+				if i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar || strings.HasPrefix(argToks[i+1].val, "@") {
+					return false
+				}
+				i++
+				continue
+			case strings.HasPrefix(a, "--write-out="):
+				if t.hasSentryTokenVar || strings.HasPrefix(strings.TrimPrefix(a, "--write-out="), "@") {
+					return false
+				}
+				continue
+			case a == "-o" || a == "--output":
+				if i+1 >= len(argToks) || argToks[i+1].hasSentryTokenVar {
+					return false
+				}
+				if !isSafeScratchToken(argToks[i+1], false, false, roots) {
+					return false
+				}
+				i++
+				continue
+			case strings.HasPrefix(a, "--output="):
+				if t.hasSentryTokenVar {
+					return false
+				}
+				outTok := shellToken{
+					val:          strings.TrimPrefix(a, "--output="),
+					quoted:       t.quoted,
+					singleQuoted: t.singleQuoted,
+				}
+				if !isSafeScratchToken(outTok, false, false, roots) {
+					return false
+				}
+				continue
+			default:
+				if strings.HasPrefix(a, "--") || t.hasSentryTokenVar {
+					return false
+				}
+				// 仅允许纯短布尔组合：s / S / L / G / f
+				for _, ch := range a[1:] {
+					switch ch {
+					case 's', 'S', 'L', 'G', 'f':
+					default:
+						return false
+					}
+				}
+				continue
+			}
+		}
+		if t.hasSentryTokenVar {
+			return false
+		}
+		urls = append(urls, t)
+	}
+	if len(urls) != 1 {
+		return false
+	}
+	return isAllowedReadOnlyURL(urls[0].val, roots.ReadOnlyHosts)
+}
+
+func isAllowedReadOnlyURL(rawURL string, hosts []string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Opaque != "" || u.User != nil {
+		return false
+	}
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return false
+	}
+	if !strings.HasPrefix(u.Path, "/api/0/") || hasDotDotSegment(u.Path) || strings.Contains(strings.ToLower(u.EscapedPath()), "%2e") {
+		return false
+	}
+	hostname := strings.ToLower(u.Hostname())
+	hostPort := strings.ToLower(u.Host)
+	if hostname == "" {
+		return false
+	}
+	for _, h := range hosts {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if h == "" {
+			continue
+		}
+		if strings.Contains(h, ":") {
+			if hostPort == h {
+				return true
+			}
+		} else if hostname == h {
+			return true
+		}
+	}
+	return false
+}
+
+func isTrustedScriptCall(tokens []shellToken, roots ScratchRoots) bool {
+	if len(tokens) == 0 || len(roots.TrustedScripts) == 0 {
+		return false
+	}
+	var scriptPath string
+	if filepath.IsAbs(tokens[0].val) && !strings.Contains(tokens[0].val, "=") {
+		scriptPath = tokens[0].val
+	} else {
+		cmd, ok := resolveTrustedCommand(tokens[0])
+		if !ok || (cmd != "bash" && cmd != "sh") {
+			return false
+		}
+		if len(tokens) < 2 || strings.HasPrefix(tokens[1].val, "-") {
+			return false
+		}
+		scriptPath = tokens[1].val
+	}
+	return isPathTrustedScript(scriptPath, roots.TrustedScripts)
+}
+
+func isPathTrustedScript(targetPath string, trustedEntries []string) bool {
+	if targetPath == "" || strings.TrimSpace(targetPath) != targetPath ||
+		!filepath.IsAbs(targetPath) || hasDotDotSegment(targetPath) || strings.ContainsAny(targetPath, "$~") {
+		return false
+	}
+	resolvedTarget, err := filepath.EvalSymlinks(targetPath)
+	if err != nil {
+		return false
+	}
+	resolvedTarget = filepath.Clean(resolvedTarget)
+	fi, err := os.Stat(resolvedTarget)
+	if err != nil || !fi.Mode().IsRegular() {
+		return false
+	}
+	for _, entry := range trustedEntries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" || !filepath.IsAbs(entry) || hasDotDotSegment(entry) {
+			continue
+		}
+		if strings.HasSuffix(entry, "/") {
+			dirPath := filepath.Clean(entry)
+			resolvedDir, err := filepath.EvalSymlinks(dirPath)
+			if err != nil {
+				continue
+			}
+			resolvedDir = filepath.Clean(resolvedDir)
+			dfi, err := os.Stat(resolvedDir)
+			if err != nil || !dfi.IsDir() {
+				continue
+			}
+			if strings.HasPrefix(resolvedTarget, resolvedDir+string(filepath.Separator)) {
+				return true
+			}
+		} else {
+			resolvedEntry, err := filepath.EvalSymlinks(filepath.Clean(entry))
+			if err != nil {
+				continue
+			}
+			if resolvedTarget == filepath.Clean(resolvedEntry) {
+				return true
+			}
 		}
 	}
 	return false

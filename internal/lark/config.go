@@ -46,6 +46,8 @@ type BotConfig struct {
 	GroupContextCount int      `json:"groupContextCount,omitempty"` // 群聊 @ 触发时自动附带的最近 N 条群消息（0=关闭，最多 50）
 	AllowedUsers      []string `json:"allowedUsers,omitempty"`
 	AllowedChats      []string `json:"allowedChats,omitempty"`
+	ReadOnlyHosts     []string `json:"readOnlyHosts,omitempty"`  // 允许 curl /api/0/ 只读查询的域名白名单（默认空 = 不放行任何 curl）
+	TrustedScripts    []string `json:"trustedScripts,omitempty"` // 主人显式信任的脚本绝对路径或目录（目录以 / 结尾）
 }
 
 // ProfileInfo 来自 `lark-cli profile list` 的已配置飞书应用概览。
@@ -140,7 +142,45 @@ func NormalizeBot(b BotConfig) BotConfig {
 	}
 	b.AllowedUsers = cleanIDs(b.AllowedUsers)
 	b.AllowedChats = cleanIDs(b.AllowedChats)
+	b.ReadOnlyHosts = cleanHosts(b.ReadOnlyHosts)
+	b.TrustedScripts = cleanScriptPaths(b.TrustedScripts)
 	return b
+}
+
+func cleanHosts(in []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, v := range in {
+		v = strings.ToLower(strings.TrimSpace(v))
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
+}
+
+func cleanScriptPaths(in []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, v := range in {
+		v = strings.TrimSpace(v)
+		if v == "" || !filepath.IsAbs(v) {
+			continue
+		}
+		isDir := strings.HasSuffix(v, "/")
+		clean := filepath.Clean(v)
+		if isDir && clean != "/" {
+			clean += "/"
+		}
+		if seen[clean] {
+			continue
+		}
+		seen[clean] = true
+		out = append(out, clean)
+	}
+	return out
 }
 
 func cleanIDs(in []string) []string {

@@ -3,10 +3,15 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"posse/internal/agent"
 	"posse/internal/lark"
+	"posse/internal/store"
 )
 
 type stubPermWatcher struct {
@@ -50,15 +55,15 @@ func TestPermissionHubAntigravityPreToolUse(t *testing.T) {
 		t.Fatalf("unexpected resolved event: %q", res)
 	}
 
-	// 测试「本会话允许同类」：同类命令记住后第二次不再弹出飞书卡片，但不同命令或拼接危险命令仍会拦截
-	p1 := json.RawMessage(`{"toolCall":{"id":"call_2","name":"run_command","args":{"CommandLine":"python3 /tmp/parse_logs.py a.log"}}}`)
+	// 测试「本会话允许同类」：非解释器命令记住后第二次不再弹出飞书卡片，但不同命令或拼接危险命令仍会拦截
+	p1 := json.RawMessage(`{"toolCall":{"id":"call_2","name":"run_command","args":{"CommandLine":"go test ./internal/cli"}}}`)
 	done2 := make(chan string, 1)
 	go func() {
 		done2 <- hub.Hold(context.Background(), "t_agy", "antigravity", p1, nil, nil)
 	}()
 	req2 := <-w.reqCh
-	if req2.RuleLabel != "python3" {
-		t.Fatalf("expected rule label python3, got %q", req2.RuleLabel)
+	if req2.RuleLabel != "go test" {
+		t.Fatalf("expected rule label go test, got %q", req2.RuleLabel)
 	}
 	if !hub.Decide(req2.ID, "allow_session", "feishu") {
 		t.Fatal("Decide allow_session returned false")
@@ -70,10 +75,10 @@ func TestPermissionHubAntigravityPreToolUse(t *testing.T) {
 		t.Fatalf("unexpected session resolved event: %q", res)
 	}
 
-	// 同会话再次调用 python3：直接秒放行，不触发 WatchPermission
-	p2 := json.RawMessage(`{"toolCall":{"id":"call_3","name":"run_command","args":{"CommandLine":"python3 /tmp/other.py b.log"}}}`)
+	// 同会话再次调用 go test：直接秒放行，不触发 WatchPermission
+	p2 := json.RawMessage(`{"toolCall":{"id":"call_3","name":"run_command","args":{"CommandLine":"go test ./internal/agent"}}}`)
 	if got := hub.Hold(context.Background(), "t_agy", "antigravity", p2, nil, nil); got != "allow" {
-		t.Fatalf("expected session-allowed python3 to bypass prompt, got %q", got)
+		t.Fatalf("expected session-allowed go test to bypass prompt, got %q", got)
 	}
 	select {
 	case extra := <-w.reqCh:
@@ -82,7 +87,7 @@ func TestPermissionHubAntigravityPreToolUse(t *testing.T) {
 	}
 
 	// 复合命令带未放行的 rm：必须依然弹窗拦截
-	pBad := json.RawMessage(`{"toolCall":{"id":"call_4","name":"run_command","args":{"CommandLine":"python3 /tmp/a.py && rm -rf /tmp/x"}}}`)
+	pBad := json.RawMessage(`{"toolCall":{"id":"call_4","name":"run_command","args":{"CommandLine":"go test ./internal/cli && rm -rf /tmp/x"}}}`)
 	doneBad := make(chan string, 1)
 	go func() {
 		doneBad <- hub.Hold(context.Background(), "t_agy", "antigravity", pBad, nil, nil)
@@ -233,11 +238,56 @@ func TestDeriveCommandRuleKeysSkipsReadOnly(t *testing.T) {
 		t.Fatalf("expected deny for mixed unauthorized write command, got %q", got)
 	}
 	<-w.resolvedCh
+	// 验证通用解释器与包装命令不生成同类规则键（只能单次审批）
+	interpreters := []string{
+		"bash /tmp/a.sh",
+		"sh /tmp/a.sh",
+		"zsh /tmp/a.sh",
+		"fish /tmp/a.fish",
+		"python /tmp/a.py",
+		"python3 /tmp/a.py",
+		"cd /tmp/x && python3 /tmp/a.py",
+		"node /tmp/a.js",
+		"deno run /tmp/a.ts",
+		"bun run /tmp/a.ts",
+		"ruby /tmp/a.rb",
+		"perl /tmp/a.pl",
+		"php /tmp/a.php",
+		"osascript -e 'display dialog 1'",
+		"eval echo hi",
+		"sudo ls /tmp",
+		"xargs echo",
+		"npx prettier --check .",
+		"uvx ruff check .",
+		"pipx list",
+		"env FOO=1 ls",
+	}
+	for _, cmd := range interpreters {
+		if ks, lbl := deriveCommandRuleKeys(cmd); len(ks) != 0 || lbl != "" {
+			t.Errorf("interpreter/wrapper %q must not produce session rule key, got keys=%v label=%q", cmd, ks, lbl)
+		}
+	}
+
+	// 验证 daemon 侧结合机器人 trustedScripts / readOnlyHosts 策略跳过已放行的受信脚本与只读 curl 段
+	scriptFile := filepath.Join(t.TempDir(), "download-log.sh")
+	if err := os.WriteFile(scriptFile, []byte("#!/bin/sh\necho ok\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	botRoots := agent.ScratchRoots{
+		TmpDir:         "/tmp",
+		ReadOnlyHosts:  []string{"sentry.corp.laoyuegou.com"},
+		TrustedScripts: []string{scriptFile},
+	}
+	ksBot, lblBot := deriveCommandRuleKeysWithRoots("bash "+scriptFile+" --id 1 && curl -sS \"https://sentry.corp.laoyuegou.com/api/0/issues/\" && lark-cli base +foo-update --as user", botRoots)
+	if len(ksBot) != 1 || ksBot[0] != "cmd:lark-cli base +foo-update" || lblBot != "lark-cli base +foo-update" {
+		t.Fatalf("expected bot-trusted segments skipped, got keys=%v label=%q", ksBot, lblBot)
+	}
 }
 
-// 验证 lark.bots.save / list / toggle / delete RPC 与持久化配置。
+// 验证 lark.bots.save / list / toggle / delete RPC 与持久化配置，以及 worker 启动环境注入。
 func TestDaemonLarkBotRPC(t *testing.T) {
 	d, w, _ := newDiscDaemon(t)
+	scriptPath := filepath.Join(t.TempDir(), "download-log.sh")
 	saved := call(t, d.larkBotSave, map[string]any{
 		"ownerOpenId": "ou_test",
 		"bot": map[string]any{
@@ -249,10 +299,40 @@ func TestDaemonLarkBotRPC(t *testing.T) {
 			"permissionMode": "ask",
 			"sessionMode":    "chat",
 			"triggerPolicy":  "self",
+			"readOnlyHosts":  []string{"Sentry.Corp.Laoyuegou.com"},
+			"trustedScripts": []string{scriptPath},
 		},
 	}).(lark.BotConfig)
 	if saved.ID == "" || saved.Name != "Works Triage" || saved.Agent != "antigravity" {
 		t.Fatalf("unexpected saved bot: %+v", saved)
+	}
+	if len(saved.ReadOnlyHosts) != 1 || saved.ReadOnlyHosts[0] != "sentry.corp.laoyuegou.com" {
+		t.Fatalf("unexpected ReadOnlyHosts: %+v", saved.ReadOnlyHosts)
+	}
+	if len(saved.TrustedScripts) != 1 || saved.TrustedScripts[0] != scriptPath {
+		t.Fatalf("unexpected TrustedScripts: %+v", saved.TrustedScripts)
+	}
+
+	// 验证 larkLaunchOptions 注入 POSSE_LARK_APPROVAL / POSSE_LARK_TRUSTED_SCRIPTS / POSSE_LARK_READONLY_HOSTS
+	if err := d.store.SaveLarkBinding(store.LarkBinding{
+		BotID:          saved.ID,
+		ChatID:         "oc_1",
+		ThreadKey:      "",
+		DiscussionKey:  "disc_lark_1",
+		PermissionMode: lark.PermAsk,
+		Active:         true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	permMode, extApproval, extraEnv := d.larkLaunchOptions("disc_lark_1")
+	if permMode != agent.PermissionAsk || !extApproval {
+		t.Fatalf("unexpected launch options: perm=%q ext=%v", permMode, extApproval)
+	}
+	envText := strings.Join(extraEnv, "\n")
+	if !strings.Contains(envText, "POSSE_LARK_APPROVAL=1") ||
+		!strings.Contains(envText, "POSSE_LARK_TRUSTED_SCRIPTS="+scriptPath) ||
+		!strings.Contains(envText, "POSSE_LARK_READONLY_HOSTS=sentry.corp.laoyuegou.com") {
+		t.Fatalf("missing injected lark env: %+v", extraEnv)
 	}
 	toggled := call(t, d.larkBotToggle, map[string]any{"id": saved.ID, "enabled": true}).(lark.BotConfig)
 	if !toggled.Enabled {

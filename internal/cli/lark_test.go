@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -39,6 +40,9 @@ func TestAntigravityPreToolUseHelpers(t *testing.T) {
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"echo hi | tee -a /tmp/out.txt"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"tar -tvzf /tmp/a.tar.gz"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"cd /tmp/posse-triage && \\\nlark-cli base +record-list --base-token EHz --table-id tbl --as user"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"GITLAB_HOST=gitlab.corp.laoyuegou.com glab api projects/1/issues"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"aliyun sls GetLogs --project=p1 --logstore=s1"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"tccli cls SearchLog --TopicId t1"}}}`,
 		`{"toolCall":{"name":"write_file","args":{"Path":"` + filepath.Join(notesDir, "discussions", "mb_1", "reply.md") + `"}}}`,
 	}
 	for _, tc := range allowed {
@@ -71,6 +75,12 @@ func TestAntigravityPreToolUseHelpers(t *testing.T) {
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"echo $HOME"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"file --vers"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"file --mime-t /dev/null"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"glab api -X POST projects/1/issues"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"glab api graphql"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"curl -sS \"https://sentry.corp.laoyuegou.com/api/0/projects/\""}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"bsk snapshot"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"npx prettier --check ."}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"python3 -c \"print(1)\""}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli drive +resolve-comment --token doc1 --comment-id c1 --as user"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli drive +version-get --token doc1 --version-id v1 --as user"}}}`,
 		`{"toolCall":{"name":"run_command","args":{"CommandLine":"lark-cli drive +preview --token doc1 --as user"}}}`,
@@ -106,6 +116,25 @@ func TestAntigravityPreToolUseHelpers(t *testing.T) {
 	for _, tc := range denied {
 		if isSafeLarkToolCall([]byte(tc)) {
 			t.Fatalf("should require approval for %s", tc)
+		}
+	}
+
+	// 验证通过环境变量注入 POSSE_LARK_READONLY_HOSTS 与 POSSE_LARK_TRUSTED_SCRIPTS 后放行受信脚本与 Sentry 只读 curl
+	scriptDir := t.TempDir()
+	scriptPath := filepath.Join(scriptDir, "download-log.sh")
+	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\necho ok\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("POSSE_LARK_READONLY_HOSTS", "sentry.corp.laoyuegou.com")
+	t.Setenv("POSSE_LARK_TRUSTED_SCRIPTS", scriptPath)
+	envAllowed := []string{
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"curl -sS -H \"Authorization: Bearer $SENTRY_AUTH_TOKEN\" \"https://sentry.corp.laoyuegou.com/api/0/issues/\""}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"bash ` + scriptPath + ` --uid 123"}}}`,
+		`{"toolCall":{"name":"run_command","args":{"CommandLine":"` + scriptPath + ` --uid 123"}}}`,
+	}
+	for _, tc := range envAllowed {
+		if !isSafeLarkToolCall([]byte(tc)) {
+			t.Fatalf("expected env-configured auto-allow for %s", tc)
 		}
 	}
 }

@@ -69,11 +69,13 @@ func (d *Daemon) larkStart(ctx context.Context) {
 	d.lark.gw = gw
 	d.lark.mu.Unlock()
 	d.perms.SetWatcher(larkPermAdapter{d: d})
+	d.perms.SetRootsResolver(d.larkReadOnlyRoots)
 	gw.Start(ctx, cfg)
 }
 
 func (d *Daemon) larkStop() {
 	d.perms.SetWatcher(nil)
+	d.perms.SetRootsResolver(nil)
 	d.lark.mu.Lock()
 	gw := d.lark.gw
 	d.lark.gw = nil
@@ -81,6 +83,38 @@ func (d *Daemon) larkStop() {
 	if gw != nil {
 		gw.Stop()
 	}
+}
+
+func (d *Daemon) larkBotByID(botID string) (lark.BotConfig, bool) {
+	if botID == "" {
+		return lark.BotConfig{}, false
+	}
+	cfg, err := lark.LoadConfig(d.cfg.Home)
+	if err != nil {
+		return lark.BotConfig{}, false
+	}
+	for _, bot := range cfg.Bots {
+		if bot.ID == botID {
+			return bot, true
+		}
+	}
+	return lark.BotConfig{}, false
+}
+
+func (d *Daemon) larkReadOnlyRoots(terminalID string) agent.ScratchRoots {
+	roots := agent.DefaultScratchRoots()
+	if d.store == nil || terminalID == "" {
+		return roots
+	}
+	b, ok := larkHost{d: d}.BindingByTerminal(terminalID)
+	if !ok {
+		return roots
+	}
+	if bot, ok := d.larkBotByID(b.BotID); ok {
+		roots.ReadOnlyHosts = bot.ReadOnlyHosts
+		roots.TrustedScripts = bot.TrustedScripts
+	}
+	return roots
 }
 
 func (d *Daemon) larkLaunchOptions(discKey string) (permOverride string, externalApproval bool, extraEnv []string) {
@@ -94,7 +128,16 @@ func (d *Daemon) larkLaunchOptions(discKey string) (permOverride string, externa
 	if b.PermissionMode == lark.PermSkip {
 		return agent.PermissionSkip, false, nil
 	}
-	return agent.PermissionAsk, true, []string{"POSSE_LARK_APPROVAL=1"}
+	extraEnv = []string{"POSSE_LARK_APPROVAL=1"}
+	if bot, ok := d.larkBotByID(b.BotID); ok {
+		if len(bot.TrustedScripts) > 0 {
+			extraEnv = append(extraEnv, "POSSE_LARK_TRUSTED_SCRIPTS="+strings.Join(bot.TrustedScripts, ":"))
+		}
+		if len(bot.ReadOnlyHosts) > 0 {
+			extraEnv = append(extraEnv, "POSSE_LARK_READONLY_HOSTS="+strings.Join(bot.ReadOnlyHosts, ","))
+		}
+	}
+	return agent.PermissionAsk, true, extraEnv
 }
 
 func (d *Daemon) larkOnExecFinished(discKey, execID, outcome, body string) {

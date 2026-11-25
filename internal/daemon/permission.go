@@ -47,7 +47,8 @@ type permissionHub struct {
 	waits        map[string]*permWaiter
 	sessionRules map[string]map[string]bool // terminalID -> 已在本会话放行的同类规则键集合
 	watcher      PermWatcher
-	timeout      time.Duration // 飞书审批挂起时长，默认 3 分钟（测试可覆写）
+	rootsFor     func(terminalID string) agent.ScratchRoots // 按终端读取对应飞书机器人的只读白名单配置
+	timeout      time.Duration                              // 飞书审批挂起时长，默认 3 分钟（测试可覆写）
 }
 
 func (h *permissionHub) ClearTerminal(terminalID string) {
@@ -81,6 +82,22 @@ func (h *permissionHub) SetWatcher(w PermWatcher) {
 	h.mu.Lock()
 	h.watcher = w
 	h.mu.Unlock()
+}
+
+func (h *permissionHub) SetRootsResolver(fn func(terminalID string) agent.ScratchRoots) {
+	h.mu.Lock()
+	h.rootsFor = fn
+	h.mu.Unlock()
+}
+
+func (h *permissionHub) rootsForTerminal(terminalID string) agent.ScratchRoots {
+	h.mu.Lock()
+	fn := h.rootsFor
+	h.mu.Unlock()
+	if fn != nil && terminalID != "" {
+		return fn(terminalID)
+	}
+	return agent.DefaultScratchRoots()
 }
 
 func (h *permissionHub) larkTimeout() time.Duration {
@@ -144,7 +161,8 @@ func (h *permissionHub) Hold(
 	mobileHold func(context.Context) string,
 	lastInput func() time.Time,
 ) string {
-	tool, summary, ruleKeys, ruleLabel := parsePermPayload(agentName, payload)
+	roots := h.rootsForTerminal(terminalID)
+	tool, summary, ruleKeys, ruleLabel := parsePermPayloadWithRoots(agentName, payload, roots)
 	if h.isSessionAllowed(terminalID, ruleKeys) {
 		return "allow"
 	}
@@ -234,6 +252,10 @@ done:
 
 // parsePermPayload 从 Claude PermissionRequest 或 Antigravity PreToolUse 负载中提取工具名、摘要与本会话同类规则键。
 func parsePermPayload(agentName string, payload json.RawMessage) (tool, summary string, ruleKeys []string, ruleLabel string) {
+	return parsePermPayloadWithRoots(agentName, payload, agent.DefaultScratchRoots())
+}
+
+func parsePermPayloadWithRoots(agentName string, payload json.RawMessage, roots agent.ScratchRoots) (tool, summary string, ruleKeys []string, ruleLabel string) {
 	if len(payload) == 0 {
 		return "", "", nil, ""
 	}
@@ -262,11 +284,15 @@ func parsePermPayload(agentName string, payload json.RawMessage) (tool, summary 
 		return "", "", nil, ""
 	}
 	summary = permArgsSummary(args)
-	ruleKeys, ruleLabel = derivePermRule(tool, args)
+	ruleKeys, ruleLabel = derivePermRuleWithRoots(tool, args, roots)
 	return tool, summary, ruleKeys, ruleLabel
 }
 
 func derivePermRule(tool string, args map[string]any) ([]string, string) {
+	return derivePermRuleWithRoots(tool, args, agent.DefaultScratchRoots())
+}
+
+func derivePermRuleWithRoots(tool string, args map[string]any, roots agent.ScratchRoots) ([]string, string) {
 	switch tool {
 	case "run_command", "Bash", "bash":
 		cmdLine := ""
@@ -276,7 +302,7 @@ func derivePermRule(tool string, args map[string]any) ([]string, string) {
 				break
 			}
 		}
-		return deriveCommandRuleKeys(cmdLine)
+		return deriveCommandRuleKeysWithRoots(cmdLine, roots)
 	case "call_mcp_tool":
 		srv, _ := args["ServerName"].(string)
 		tn, _ := args["ToolName"].(string)
@@ -297,7 +323,21 @@ func derivePermRule(tool string, args map[string]any) ([]string, string) {
 	}
 }
 
+// noSessionRuleCommands 列出通用解释器/包装命令：执行任意代码或子命令，绝不生成「本会话允许同类」规则键。
+var noSessionRuleCommands = map[string]bool{
+	"bash": true, "sh": true, "zsh": true, "fish": true,
+	"python": true, "python3": true,
+	"node": true, "deno": true, "bun": true,
+	"ruby": true, "perl": true, "php": true,
+	"osascript": true, "eval": true, "sudo": true, "xargs": true,
+	"npx": true, "uvx": true, "pipx": true, "env": true,
+}
+
 func deriveCommandRuleKeys(cmdLine string) ([]string, string) {
+	return deriveCommandRuleKeysWithRoots(cmdLine, agent.DefaultScratchRoots())
+}
+
+func deriveCommandRuleKeysWithRoots(cmdLine string, roots agent.ScratchRoots) ([]string, string) {
 	normalized := agent.NormalizeShellLine(cmdLine)
 	if agent.HasUnsafeShellSyntax(normalized) {
 		return nil, ""
@@ -310,17 +350,20 @@ func deriveCommandRuleKeys(cmdLine string) ([]string, string) {
 	var labels []string
 	seen := map[string]bool{}
 	for _, seg := range segs {
-		// 跳过本身已由只读安全白名单放行的段（如 cd/echo/ls/mkdir /tmp 等），仅记录需要审批的段
-		if agent.IsSafeReadOnlySegment(seg) {
+		// 跳过本身已由只读安全白名单（含当前机器人配置的 readOnlyHosts/trustedScripts）放行的段，仅记录需要审批的段
+		if agent.IsSafeReadOnlySegmentWithRoots(seg, roots) {
 			continue
 		}
-		// 需审批的段若无法可靠解析、带有任意重定向、包含前置环境变量赋值、程序以带 / 的路径给出，
-		// 或指向非临时输出目的地，整条命令不生成同类规则键，只能单次审批。
+		// 需审批的段若无法可靠解析、带有任意重定向、包含前置环境变量赋值、程序以带 / 的路径给出、
+		// 属于通用解释器/包装命令，或指向非临时输出目的地，整条命令不生成同类规则键，只能单次审批。
 		fields, hasRedir, ok := agent.ParseSegmentForRuleKey(seg)
 		if !ok || len(fields) == 0 || hasRedir {
 			return nil, ""
 		}
 		if strings.Contains(fields[0], "=") || strings.Contains(fields[0], "/") {
+			return nil, ""
+		}
+		if noSessionRuleCommands[fields[0]] {
 			return nil, ""
 		}
 		if agent.HasUnsafeRuleOutputFlag(fields) {

@@ -512,3 +512,210 @@ func TestScratchPathSymlinkAndTraversal(t *testing.T) {
 		t.Fatal("symlinked POSSE_NOTES root should reject write_file")
 	}
 }
+
+func TestRound2QueryCommandsAndTrustedScripts(t *testing.T) {
+	tmpRoot := t.TempDir()
+	notesDir := t.TempDir()
+	outsideDir := t.TempDir()
+
+	// 准备受信脚本目录与单个受信脚本、以及指向目录外的软链逃逸脚本
+	trustedDir := filepath.Join(t.TempDir(), "trusted-scripts")
+	if err := os.MkdirAll(trustedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dirScript := filepath.Join(trustedDir, "fetch.sh")
+	if err := os.WriteFile(dirScript, []byte("#!/bin/sh\necho ok\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	singleScript := filepath.Join(t.TempDir(), "download-log.sh")
+	if err := os.WriteFile(singleScript, []byte("#!/bin/sh\necho ok\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outsideScript := filepath.Join(outsideDir, "evil.sh")
+	if err := os.WriteFile(outsideScript, []byte("#!/bin/sh\nrm -rf /\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	escapeLink := filepath.Join(trustedDir, "escape.sh")
+	if err := os.Symlink(outsideScript, escapeLink); err != nil {
+		t.Fatal(err)
+	}
+	tmpOutLink := filepath.Join(tmpRoot, "outlink")
+	if err := os.Symlink(outsideDir, tmpOutLink); err != nil {
+		t.Fatal(err)
+	}
+
+	roots := ScratchRoots{
+		TmpDir:         tmpRoot,
+		NotesDir:       notesDir,
+		ReadOnlyHosts:  []string{"sentry.corp.laoyuegou.com"},
+		TrustedScripts: []string{singleScript, trustedDir + "/"},
+	}
+
+	allowed := []string{
+		// 1. glab
+		`glab api projects/123/issues`,
+		`glab api --paginate projects/123/merge_requests`,
+		`glab api -X GET projects/123/pipelines`,
+		`glab api --method=get -H "Accept: application/json" projects/123`,
+		`GITLAB_HOST=gitlab.corp.laoyuegou.com glab api projects/123/issues`,
+		`GITLAB_HOST=gitlab.corp.laoyuegou.com glab mr list -R group/proj`,
+		`glab repo view group/proj`,
+		`glab mr view 42`,
+		`glab mr list`,
+		`glab mr diff 42`,
+		`glab issue view 7`,
+		`glab issue list`,
+		`glab release view v1.2.3`,
+		`glab release list`,
+		`glab ci view`,
+		`glab ci list`,
+		`glab ci status`,
+		`glab repo clone group/proj ` + filepath.Join(tmpRoot, "repo1"),
+		`glab repo clone group/proj ` + filepath.Join(tmpRoot, "repo2") + ` -- --depth 1 -b main --single-branch`,
+
+		// 2. aliyun & ossutil
+		`aliyun sls GetLogs --project=p1 --logstore=s1 --from=1 --to=2`,
+		`aliyun --profile prod --region cn-hangzhou sls GetHistograms --project=p1`,
+		`aliyun sls ListProject`,
+		`aliyun sls ListLogStores --project=p1`,
+		`aliyun sls DescribeLogstore --project=p1`,
+		`aliyun oss ls oss://my-bucket/logs/`,
+		`aliyun oss stat oss://my-bucket/logs/a.log`,
+		`aliyun ossutil ls oss://my-bucket/logs/`,
+		`aliyun ossutil stat oss://my-bucket/logs/a.log`,
+		`ossutil ls oss://my-bucket/logs/`,
+		`ossutil stat oss://my-bucket/logs/a.log`,
+		`aliyun oss cp oss://my-bucket/logs/a.log ` + filepath.Join(tmpRoot, "a.log"),
+		`ossutil cp -r oss://my-bucket/logs/ ` + filepath.Join(tmpRoot, "logs"),
+
+		// 3. tccli
+		`tccli cls SearchLog --TopicId t1 --From 1 --To 2 --Query 'error'`,
+		`tccli --region ap-shanghai cls DescribeTopics`,
+		`tccli cls DescribeLogsets`,
+		`tccli cls DescribeLogContext --TopicId t1`,
+		`tccli cvm GetRegions`,
+		`tccli cvm ListInstances`,
+
+		// 4. curl (Sentry 只读接口)
+		`curl -sS -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" "https://sentry.corp.laoyuegou.com/api/0/projects/"`,
+		`curl -fsSL -G -m 10 --compressed -H "Authorization: Bearer ${SENTRY_AUTH_TOKEN}" "https://sentry.corp.laoyuegou.com/api/0/issues/123/events/latest/"`,
+		`curl -sS -X GET -w '\n%{http_code}' -o ` + filepath.Join(tmpRoot, "sentry.json") + ` -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" "https://sentry.corp.laoyuegou.com/api/0/organizations/org/issues/"`,
+
+		// 5. 机器人级受信脚本
+		`bash ` + singleScript + ` --uid 12345 --out ` + filepath.Join(tmpRoot, "client.log"),
+		`sh ` + dirScript + ` --date 20261125`,
+		singleScript + ` --uid 12345 > ` + filepath.Join(tmpRoot, "out.log"),
+		dirScript + ` --date 20261125 | head -n 50`,
+	}
+	for _, cmd := range allowed {
+		if !IsSafeReadOnlyCommandLineWithRoots(cmd, roots) {
+			t.Errorf("expected SAFE for Round 2 cmd: %s", cmd)
+		}
+	}
+
+	denied := []string{
+		// 1. glab 负例
+		`glab api -X POST projects/1/issues`,
+		`glab api --method DELETE projects/1/issues/1`,
+		`glab api graphql`,
+		`glab api /graphql`,
+		`glab api api/graphql?query=x`,
+		`glab api -f title=x projects/1/issues`,
+		`glab api -F body=@/etc/passwd projects/1/issues`,
+		`glab api --field title=x projects/1/issues`,
+		`glab api --raw-field title=x projects/1/issues`,
+		`glab api --input /tmp/a.json projects/1/issues`,
+		`glab api -H "X-HTTP-Method-Override: POST" projects/1/issues`,
+		`glab api --unknown-flag projects/1/issues`,
+		`glab mr view 42 --web`,
+		`glab mr list -w`,
+		`glab mr create --title x`,
+		`glab issue delete 1`,
+		`glab repo clone group/proj`,
+		`glab repo clone group/proj /Users/x/repo`,
+		`glab repo clone group/proj ` + filepath.Join(tmpOutLink, "repo"),
+		`glab repo clone group/proj ` + filepath.Join(tmpRoot, "r3") + ` -- -c core.sshCommand=evil`,
+		`glab repo clone group/proj ` + filepath.Join(tmpRoot, "r3") + ` -- --upload-pack=evil`,
+		`OTHER_HOST=x glab mr list`,
+		`GITLAB_HOST=bad/host glab mr list`,
+		`GITLAB_HOST=gitlab.corp.laoyuegou.com ls /tmp`,
+
+		// 2. aliyun / ossutil 负例
+		`aliyun sls DeleteLogStore --project=p1 --logstore=s1`,
+		`aliyun sls CreateLogStore --project=p1 --logstore=s1`,
+		`aliyun sls PutLogs --project=p1`,
+		`aliyun oss cp a.txt oss://b/`,
+		`aliyun oss cp ` + filepath.Join(tmpRoot, "a.txt") + ` oss://b/a.txt`,
+		`aliyun oss cp oss://b/a.txt /Users/x/a.txt`,
+		`aliyun oss cp oss://b/a.txt ./a.txt`,
+		`aliyun oss cp oss://b/a.txt ` + filepath.Join(tmpOutLink, "a.txt"),
+		`aliyun oss rm oss://b/a.txt`,
+		`aliyun oss sync oss://b/ ` + filepath.Join(tmpRoot, "sync"),
+		`ossutil rm oss://b/a.txt`,
+		`ossutil cp a.txt oss://b/`,
+		`aliyun configure`,
+		`aliyun ram ListUsers`,
+		`aliyun sts GetCallerIdentity`,
+
+		// 3. tccli 负例
+		`tccli cls DeleteTopic --TopicId t1`,
+		`tccli cls CreateTopic --TopicName t1`,
+		`tccli auth login`,
+		`tccli configure set secretId x`,
+		`tccli sts AssumeRole`,
+		`tccli sts GetFederationToken`,
+
+		// 4. curl 负例
+		`curl -sS "https://evil.com/api/0/projects/"`,
+		`curl -sS "https://sentry.corp.laoyuegou.com/admin/"`,
+		`curl -sS "https://sentry.corp.laoyuegou.com/api/0/../../admin/"`,
+		`curl -sS "https://sentry.corp.laoyuegou.com/api/0/%2e%2e/admin/"`,
+		`curl -d x "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl --data-raw x "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -X POST "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -F a=b "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -T /etc/hosts "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -K /tmp/cfg "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -x http://127.0.0.1:8080 "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl --unix-socket /tmp/sock "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -u a:b "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -O "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -o /Users/x/out.json "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -o ` + filepath.Join(tmpOutLink, "out.json") + ` "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -H "X: $OTHER" "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -H "X-HTTP-Method-Override: DELETE" "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl -H @/etc/hosts "https://sentry.corp.laoyuegou.com/api/0/issues/"`,
+		`curl "https://sentry.corp.laoyuegou.com/api/0/issues/?t=$SENTRY_AUTH_TOKEN"`,
+		`echo "$SENTRY_AUTH_TOKEN"`,
+
+		// 5. 受信脚本负例（软链逃逸、未信任路径、bash -c、越界重定向、非法参数）
+		`bash ` + escapeLink,
+		escapeLink,
+		`bash ` + outsideScript,
+		outsideScript,
+		`bash -c "echo hi"`,
+		`bash ` + singleScript + ` > /Users/x/out.log`,
+		`bash ` + singleScript + ` $OTHER`,
+		`bash ` + singleScript + ` /tmp/*.log`,
+
+		// 6. 明确不放行工具
+		`bsk snapshot`,
+		`bsk evaluate "document.title"`,
+		`npx prettier --check .`,
+		`uvx ruff check .`,
+		`pip list`,
+		`python -c "print(1)"`,
+		`python3 -c "print(1)"`,
+	}
+	for _, cmd := range denied {
+		if IsSafeReadOnlyCommandLineWithRoots(cmd, roots) {
+			t.Errorf("expected UNSAFE for Round 2 cmd: %s", cmd)
+		}
+	}
+
+	// 未配置 readOnlyHosts 时，所有 curl 一律拒绝
+	emptyHostRoots := ScratchRoots{TmpDir: tmpRoot, NotesDir: notesDir}
+	if IsSafeReadOnlyCommandLineWithRoots(`curl -sS -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" "https://sentry.corp.laoyuegou.com/api/0/projects/"`, emptyHostRoots) {
+		t.Fatal("curl must be denied when readOnlyHosts is empty")
+	}
+}
