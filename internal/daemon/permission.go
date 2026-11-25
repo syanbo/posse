@@ -315,7 +315,19 @@ func deriveCommandRuleKeys(cmdLine string) ([]string, string) {
 		if agent.IsSafeReadOnlySegment(seg) {
 			continue
 		}
-		lbl := commandSegmentLabel(seg)
+		// 需审批的段若无法可靠解析、带有任意重定向、包含前置环境变量赋值或指向非临时输出目的地，
+		// 整条命令不生成同类规则键，只能单次审批。
+		fields, hasRedir, ok := agent.ParseSegmentForRuleKey(seg)
+		if !ok || len(fields) == 0 || hasRedir {
+			return nil, ""
+		}
+		if strings.Contains(fields[0], "=") {
+			return nil, ""
+		}
+		if agent.HasUnsafeRuleOutputFlag(fields) {
+			return nil, ""
+		}
+		lbl := commandSegmentLabelArgs(fields)
 		if lbl == "" {
 			return nil, ""
 		}
@@ -332,30 +344,21 @@ func deriveCommandRuleKeys(cmdLine string) ([]string, string) {
 	return keys, strings.Join(labels, " + ")
 }
 
-func commandSegmentLabel(seg string) string {
-	fields, ok := agent.SegmentArgs(seg)
-	if !ok || len(fields) == 0 {
-		fields = strings.Fields(seg)
-	}
+func commandSegmentLabelArgs(fields []string) string {
 	if len(fields) == 0 {
 		return ""
 	}
-	// 跳过前置环境变量赋值（如 FOO=bar cmd ...）
-	i := 0
-	for i < len(fields) && strings.Contains(fields[i], "=") && !strings.HasPrefix(fields[i], "-") {
-		i++
-	}
-	if i >= len(fields) {
-		return ""
-	}
-	cmd := filepath.Base(fields[i])
-	rest := fields[i+1:]
+	cmd := filepath.Base(fields[0])
+	rest := fields[1:]
 	switch cmd {
 	case "lark-cli":
 		var parts []string
 		for j := 0; j < len(rest) && len(parts) < 2; j++ {
 			a := rest[j]
-			if a == "--profile" || a == "--as" || a == "--format" || a == "--jq" || a == "--output" || a == "--output-dir" || a == "-o" {
+			if a == "--" {
+				break
+			}
+			if a == "--profile" || a == "--as" || a == "--format" || a == "--jq" || a == "-q" || a == "--output" || a == "--output-dir" || a == "-o" {
 				j++
 				continue
 			}
@@ -368,9 +371,28 @@ func commandSegmentLabel(seg string) string {
 			return "lark-cli " + strings.Join(parts, " ")
 		}
 		return "lark-cli"
-	case "git", "posse", "go", "npm", "pnpm", "yarn", "docker", "kubectl", "adb":
+	case "posse":
+		var parts []string
+		for j := 0; j < len(rest) && len(parts) < 2; j++ {
+			a := rest[j]
+			if a == "--" {
+				break
+			}
+			if strings.HasPrefix(a, "-") {
+				continue
+			}
+			parts = append(parts, a)
+		}
+		if len(parts) > 0 {
+			return "posse " + strings.Join(parts, " ")
+		}
+		return "posse"
+	case "git", "go", "npm", "pnpm", "yarn", "docker", "kubectl", "adb":
 		for j := 0; j < len(rest); j++ {
 			a := rest[j]
+			if a == "--" {
+				break
+			}
 			if a == "-C" || a == "--git-dir" || a == "--work-tree" || a == "-c" {
 				j++
 				continue

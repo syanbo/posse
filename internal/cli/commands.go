@@ -821,21 +821,11 @@ func isSafeLarkToolCall(payload []byte) bool {
 }
 
 func isDiscussionNoteWrite(args map[string]any) bool {
-	notes := strings.TrimSpace(os.Getenv("POSSE_NOTES"))
-	if notes == "" {
-		return false
-	}
 	target, _ := args["Path"].(string)
 	if target == "" {
 		target, _ = args["TargetFile"].(string)
 	}
-	target = strings.TrimSpace(target)
-	if target == "" || !filepath.IsAbs(target) {
-		return false
-	}
-	root := filepath.Join(filepath.Clean(notes), "discussions") + string(filepath.Separator)
-	clean := filepath.Clean(target)
-	return strings.HasPrefix(clean, root)
+	return agent.IsSafeDiscussionWritePath(target, agent.DefaultScratchRoots())
 }
 
 func cmdVersion(e *env, args []string) error {
