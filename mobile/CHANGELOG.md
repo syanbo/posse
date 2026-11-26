@@ -3,6 +3,14 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.38
+
+- 修复初次进入终端时常驻语音与草稿输入栏会短暂遮挡底部会话内容的问题：常驻模式下直接预留单行基准高度并关闭入场滑动动画，多行输入与键盘弹出仍保持不改变终端尺寸。
+
+### English
+
+- Fixed the persistent voice & draft bar briefly overlapping the bottom of a terminal session on initial entry: reserves the single-line bar height directly in the terminal viewport and skips the entry slide animation, while keeping multi-line expansion and keyboard lift free of PTY resizes.
+
 ## 0.1.37
 
 - 终端「常驻语音与草稿输入栏」（设置 › 终端）改为默认开启：开启后草稿与语音栏常驻在终端快捷键栏上方，并自动隐藏工具栏中的语音按钮与收起键；关闭后恢复从工具栏随时展开或收起。
