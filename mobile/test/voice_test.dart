@@ -1301,7 +1301,7 @@ void main() {
       expect(voice.isIdle, isTrue);
     });
 
-    testWidgets('启动中先画成未亮起的录音行，不闪「正在转写」，完成不可点', (tester) async {
+    testWidgets('启动中先画成内联录音态，不闪「正在转写」，完成不可点', (tester) async {
       final platform = _FakeVoicePlatform()..delayedStart = Completer<void>();
       final secrets = _MemorySecretStore()..map['asr_openai'] = 'sk-test';
       final voice = VoiceController(
@@ -1318,16 +1318,21 @@ void main() {
         readContextTerms: () => const [],
         onResult: (_) {},
       );
+      final text = TextEditingController();
+      final focus = FocusNode();
       addTearDown(() {
         voice.dispose();
+        text.dispose();
+        focus.dispose();
         platform.close();
       });
-      await tester.pumpWidget(_wrap(VoiceActiveRow(controller: voice)));
+      await tester.pumpWidget(draftBar(text, focus, voice));
       unawaited(voice.start());
       await tester.pump();
       await tester.pump();
       expect(voice.isStarting, isTrue);
       expect(find.byKey(const Key('voice-recording-row')), findsOneWidget);
+      expect(find.byKey(const Key('voice-mini-wave')), findsOneWidget);
       expect(find.text('正在转写…'), findsNothing);
       await tester.tap(find.byKey(const Key('voice-finish-button')));
       await tester.pump();
@@ -1423,7 +1428,7 @@ void main() {
       await tester.pump();
     });
 
-    testWidgets('实时预览在本机识别收尾时仍然显示', (tester) async {
+    testWidgets('实时识别文字直接内联显示在输入框内，无上方独立预览框，收尾时保留显示', (tester) async {
       final platform = _FakeVoicePlatform();
       final voice = nativeVoice(platform);
       final text = TextEditingController();
@@ -1441,11 +1446,105 @@ void main() {
         VoicePartialEvent('你好世界', sessionId: platform.lastSessionId!),
       );
       await tester.pump();
-      expect(find.byKey(const Key('voice-partial-preview')), findsOneWidget);
+      expect(find.byKey(const Key('voice-inline-text')), findsOneWidget);
+      expect(find.byKey(const Key('voice-mini-wave')), findsOneWidget);
+      expect(find.byKey(const Key('voice-partial-preview')), findsNothing);
+      expect(find.text('你好世界'), findsOneWidget);
       await tester.tap(find.byKey(const Key('voice-finish-button')));
       await tester.pump();
       expect(voice.isTranscribing, isTrue);
       expect(find.text('你好世界'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 3100));
+    });
+
+    testWidgets('空输入框长按触发按住说话（松手完成、上滑取消），有文字时长按不触发语音', (tester) async {
+      final platform = _FakeVoicePlatform();
+      final results = <String>[];
+      final voice = nativeVoice(platform, onResult: results.add);
+      final text = TextEditingController();
+      final focus = FocusNode();
+      addTearDown(() {
+        voice.dispose();
+        text.dispose();
+        focus.dispose();
+        platform.close();
+      });
+      await tester.pumpWidget(draftBar(text, focus, voice));
+
+      // 1) 空输入框长按 → 进入按住说话，松手触发完成并转写
+      final fieldCenter = tester.getCenter(
+        find.byKey(const Key('terminal-draft-field')),
+      );
+      final g1 = await tester.startGesture(fieldCenter);
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(voice.isHolding, isTrue);
+      expect(voice.isRecording, isTrue);
+      expect(find.byKey(const Key('voice-mini-wave')), findsOneWidget);
+      platform.emit(
+        VoicePartialEvent('测试语音', sessionId: platform.lastSessionId!),
+      );
+      await tester.pump();
+      expect(find.text('测试语音'), findsOneWidget);
+      await g1.up();
+      await tester.pump();
+      expect(voice.isHolding, isFalse);
+      expect(voice.isTranscribing, isTrue);
+      platform.emit(
+        VoiceFinalEvent('测试语音', sessionId: platform.lastSessionId!),
+      );
+      await tester.pump();
+      expect(results, ['测试语音']);
+      expect(voice.isIdle, isTrue);
+
+      // 2) 空输入框长按并上滑进入取消区 → 松手直接取消不转写
+      final g2 = await tester.startGesture(fieldCenter);
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(voice.isHolding, isTrue);
+      await g2.moveBy(const Offset(0, -70));
+      await tester.pump();
+      expect(voice.holdCancelArmed, isTrue);
+      expect(find.text('松手取消'), findsOneWidget);
+      await g2.up();
+      await tester.pump();
+      expect(voice.isIdle, isTrue);
+      expect(voice.isHolding, isFalse);
+
+      // 3) 输入框有文字时长按 → 不触发语音，留给系统选字/移动光标
+      text.text = 'existing draft';
+      await tester.pump();
+      final g3 = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('terminal-draft-field'))),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(voice.isIdle, isTrue);
+      expect(voice.isHolding, isFalse);
+      await g3.up();
+      await tester.pump();
+    });
+
+    testWidgets('麦克风按钮也支持长按说话并保持手势直到松手', (tester) async {
+      final platform = _FakeVoicePlatform();
+      final voice = nativeVoice(platform);
+      final text = TextEditingController(text: 'prefix');
+      final focus = FocusNode();
+      addTearDown(() {
+        voice.dispose();
+        text.dispose();
+        focus.dispose();
+        platform.close();
+      });
+      await tester.pumpWidget(draftBar(text, focus, voice));
+      final micCenter = tester.getCenter(
+        find.byKey(const Key('voice-mic-button')),
+      );
+      final g = await tester.startGesture(micCenter);
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(voice.isHolding, isTrue);
+      expect(voice.isRecording, isTrue);
+      await g.up();
+      await tester.pump();
+      expect(voice.isHolding, isFalse);
+      expect(voice.isTranscribing, isTrue);
       await tester.pump(const Duration(milliseconds: 3100));
     });
 

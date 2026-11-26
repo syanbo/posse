@@ -4001,6 +4001,18 @@
   "@voiceTranscribing": {
     "description": "Status text shown while speech audio is being transcribed."
   },
+  "voiceListening": "Listening…",
+  "@voiceListening": {
+    "description": "Status text shown inline inside the input field while listening for voice input."
+  },
+  "voiceSlideUpToCancel": "Slide up to cancel",
+  "@voiceSlideUpToCancel": {
+    "description": "Hint shown inline inside the input field while holding to record voice."
+  },
+  "voiceReleaseToCancel": "Release to cancel",
+  "@voiceReleaseToCancel": {
+    "description": "Hint shown inline inside the input field when finger slides up into the cancel zone during hold-to-talk."
+  },
   "voiceRetry": "Retry",
   "@voiceRetry": {
     "description": "Button label to retry transcribing a saved voice recording after failure."

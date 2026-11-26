@@ -5054,6 +5054,24 @@ abstract class AppLocalizations {
   /// **'Transcribing…'**
   String get voiceTranscribing;
 
+  /// Status text shown inline inside the input field while listening for voice input.
+  ///
+  /// In en, this message translates to:
+  /// **'Listening…'**
+  String get voiceListening;
+
+  /// Hint shown inline inside the input field while holding to record voice.
+  ///
+  /// In en, this message translates to:
+  /// **'Slide up to cancel'**
+  String get voiceSlideUpToCancel;
+
+  /// Hint shown inline inside the input field when finger slides up into the cancel zone during hold-to-talk.
+  ///
+  /// In en, this message translates to:
+  /// **'Release to cancel'**
+  String get voiceReleaseToCancel;
+
   /// Button label to retry transcribing a saved voice recording after failure.
   ///
   /// In en, this message translates to:

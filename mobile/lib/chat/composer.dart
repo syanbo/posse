@@ -127,7 +127,7 @@ class ChatComposer extends StatelessWidget {
     final voiceCtrl = voice;
     if (voiceCtrl != null) {
       return ListenableBuilder(
-        listenable: voiceCtrl,
+        listenable: Listenable.merge([voiceCtrl, controller]),
         builder: (context, _) => _buildComposer(context, c, voiceCtrl),
       );
     }
@@ -154,13 +154,13 @@ class ChatComposer extends StatelessWidget {
           children: [
             if (voiceCtrl != null && voiceCtrl.hasFailedRetry)
               VoiceRetryStrip(controller: voiceCtrl),
-            if (voiceCtrl != null && showVoicePartial(voiceCtrl))
-              VoicePartialPreview(text: voiceCtrl.partialText),
             Container(
               decoration: BoxDecoration(
                 color: c.card,
                 borderRadius: BorderRadius.circular(Rd.composer),
-                border: Border.all(color: c.line),
+                border: Border.all(
+                  color: voiceCapsuleBorderColor(c, voice: voiceCtrl),
+                ),
               ),
               // 四边一样宽：单行时按钮正好在框的正中，多行时停在底部
               padding: const EdgeInsets.all(4),
@@ -232,26 +232,32 @@ class ChatComposer extends StatelessWidget {
                         },
                       ),
                     ),
-                  if (busyVoice)
-                    VoiceActiveRow(controller: voiceCtrl)
-                  else
-                    Row(
-                      // 单行时输入框和 34 的按钮同高；多行时按钮停在底部，不悬在框中间
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        ComposerIconButton(
-                          icon: Icons.image_rounded,
-                          iconSize: Ic.button,
-                          tooltip: context.l10n.chatSendImage,
-                          onPressed: sending || !connected ? null : onPickImage,
-                          color: images.isEmpty ? c.muted : c.accent,
-                        ),
-                        Expanded(
+                  Row(
+                    // 单行时输入框和 34 的按钮同高；多行时按钮停在底部，不悬在框中间
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      ComposerIconButton(
+                        icon: Icons.image_rounded,
+                        iconSize: Ic.button,
+                        tooltip: context.l10n.chatSendImage,
+                        onPressed: sending || !connected || busyVoice
+                            ? null
+                            : onPickImage,
+                        color: images.isEmpty ? c.muted : c.accent,
+                      ),
+                      Expanded(
+                        child: VoiceInlineField(
+                          controller: controller,
+                          voice: voiceCtrl,
+                          enabled: !sending,
+                          padding: const EdgeInsets.fromLTRB(6, 6, 4, 6),
                           child: TextField(
                             controller: controller,
                             minLines: 1,
                             maxLines: 6,
                             textInputAction: TextInputAction.newline,
+                            enableInteractiveSelection:
+                                voiceCtrl == null || controller.text.isNotEmpty,
                             onChanged: onChanged,
                             contentInsertionConfiguration:
                                 ContentInsertionConfiguration(
@@ -276,10 +282,15 @@ class ChatComposer extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (voiceCtrl != null)
-                          VoiceMicButton(
-                            onPressed: sending ? null : voiceCtrl.start,
-                          ),
+                      ),
+                      if (busyVoice) VoiceInlineTrailing(controller: voiceCtrl),
+                      if (voiceCtrl != null &&
+                          (!busyVoice || voiceCtrl.isHolding))
+                        VoiceMicButton(
+                          controller: voiceCtrl,
+                          onPressed: sending ? null : voiceCtrl.start,
+                        ),
+                      if (!busyVoice) ...[
                         const SizedBox(width: 4),
                         ComposerSendButton(
                           ready: ready,
@@ -288,7 +299,8 @@ class ChatComposer extends StatelessWidget {
                           onPressed: onSubmit,
                         ),
                       ],
-                    ),
+                    ],
+                  ),
                 ],
               ),
             ),

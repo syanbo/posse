@@ -2859,6 +2859,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceTranscribing => '正在转写…';
 
   @override
+  String get voiceListening => '正在聆听…';
+
+  @override
+  String get voiceSlideUpToCancel => '上滑取消';
+
+  @override
+  String get voiceReleaseToCancel => '松手取消';
+
+  @override
   String get voiceRetry => '重试';
 
   @override

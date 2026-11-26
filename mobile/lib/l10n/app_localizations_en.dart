@@ -3033,6 +3033,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceTranscribing => 'Transcribing…';
 
   @override
+  String get voiceListening => 'Listening…';
+
+  @override
+  String get voiceSlideUpToCancel => 'Slide up to cancel';
+
+  @override
+  String get voiceReleaseToCancel => 'Release to cancel';
+
+  @override
   String get voiceRetry => 'Retry';
 
   @override

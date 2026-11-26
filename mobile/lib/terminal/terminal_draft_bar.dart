@@ -158,91 +158,103 @@ class _TerminalDraftBarState extends State<TerminalDraftBar> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (voice.hasFailedRetry) VoiceRetryStrip(controller: voice),
-              if (showVoicePartial(voice))
-                VoicePartialPreview(text: voice.partialText),
               Container(
                 key: const Key('terminal-draft-bar'),
                 decoration: BoxDecoration(
                   color: c.card,
                   borderRadius: BorderRadius.circular(Rd.composer),
                   border: Border.all(
-                    color: focused && !busyVoice
-                        ? c.accent.withValues(alpha: 0.6)
-                        : c.line,
+                    color: voiceCapsuleBorderColor(
+                      c,
+                      voice: voice,
+                      focused: focused,
+                    ),
                   ),
                 ),
                 padding: const EdgeInsets.all(4),
-                child: busyVoice
-                    ? VoiceActiveRow(controller: voice)
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (widget.onCollapse case final onCollapse?)
-                            ComposerIconButton(
-                              key: const Key('terminal-draft-collapse'),
-                              icon: Icons.keyboard_arrow_down_rounded,
-                              tooltip: l.terminalDraftHide,
-                              onPressed: onCollapse,
-                            )
-                          else
-                            const SizedBox(width: 4),
-                          Expanded(
-                            child: TextField(
-                              key: const Key('terminal-draft-field'),
-                              controller: widget.controller,
-                              focusNode: widget.focusNode,
-                              minLines: 1,
-                              maxLines: 6,
-                              keyboardType: TextInputType.multiline,
-                              textInputAction: TextInputAction.newline,
-                              // 草稿是要进终端的命令：iOS 的智能引号、破折号和自动更正会把 " -- 换成排版字符，命令直接坏掉
-                              autocorrect: false,
-                              smartQuotesType: SmartQuotesType.disabled,
-                              smartDashesType: SmartDashesType.disabled,
-                              style: TextStyle(
-                                fontSize: Fs.body,
-                                color: c.text,
-                                height: Lh.body,
-                              ),
-                              decoration: InputDecoration(
-                                isDense: true,
-                                filled: false,
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                // 单行 21 + 6 + 6，不超过 34 的按钮：和录音行同高
-                                contentPadding: const EdgeInsets.all(6),
-                                hintText: l.terminalDraftHint,
-                                hintStyle: TextStyle(
-                                  fontSize: Fs.body,
-                                  color: c.faint,
-                                ),
-                              ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (widget.onCollapse case final onCollapse?)
+                      ComposerIconButton(
+                        key: const Key('terminal-draft-collapse'),
+                        icon: Icons.keyboard_arrow_down_rounded,
+                        tooltip: l.terminalDraftHide,
+                        onPressed: busyVoice ? null : onCollapse,
+                      )
+                    else
+                      const SizedBox(width: 4),
+                    Expanded(
+                      child: VoiceInlineField(
+                        controller: widget.controller,
+                        voice: voice,
+                        enabled: !widget.sending,
+                        padding: const EdgeInsets.all(6),
+                        child: TextField(
+                          key: const Key('terminal-draft-field'),
+                          controller: widget.controller,
+                          focusNode: widget.focusNode,
+                          minLines: 1,
+                          maxLines: 6,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          // 空框时让出长按给按住说话，有文字时保留系统原生长按选字与移动光标
+                          enableInteractiveSelection: text.isNotEmpty,
+                          // 草稿是要进终端的命令：iOS 的智能引号、破折号和自动更正会把 " -- 换成排版字符，命令直接坏掉
+                          autocorrect: false,
+                          smartQuotesType: SmartQuotesType.disabled,
+                          smartDashesType: SmartDashesType.disabled,
+                          style: TextStyle(
+                            fontSize: Fs.body,
+                            color: c.text,
+                            height: Lh.body,
+                          ),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            filled: false,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            // 单行 21 + 6 + 6，不超过 34 的按钮：和内联语音态同高
+                            contentPadding: const EdgeInsets.all(6),
+                            hintText: l.terminalDraftHint,
+                            hintStyle: TextStyle(
+                              fontSize: Fs.body,
+                              color: c.faint,
                             ),
                           ),
-                          // 填入离发送隔一个麦克风：误触的后果是开始录音，不是执行命令
-                          ComposerIconButton(
-                            key: const Key('terminal-draft-paste'),
-                            icon: Icons.input_rounded,
-                            tooltip: pasteSafe || !hasText
-                                ? l.terminalDraftPaste
-                                : l.terminalDraftPasteUnsafe,
-                            onPressed: canAct ? widget.onPasteOnly : null,
-                            color: canAct && pasteSafe ? c.muted : c.faint,
-                          ),
-                          VoiceMicButton(
-                            onPressed: widget.sending ? null : voice.start,
-                          ),
-                          const SizedBox(width: 4),
-                          ComposerSendButton(
-                            key: const Key('terminal-draft-send'),
-                            ready: canAct,
-                            busy: widget.sending,
-                            tooltip: l.terminalDraftSend,
-                            onPressed: widget.onSend,
-                          ),
-                        ],
+                        ),
                       ),
+                    ),
+                    if (busyVoice) VoiceInlineTrailing(controller: voice),
+                    if (!busyVoice)
+                      // 填入离发送隔一个麦克风：误触的后果是开始录音，不是执行命令
+                      ComposerIconButton(
+                        key: const Key('terminal-draft-paste'),
+                        icon: Icons.input_rounded,
+                        tooltip: pasteSafe || !hasText
+                            ? l.terminalDraftPaste
+                            : l.terminalDraftPasteUnsafe,
+                        onPressed: canAct ? widget.onPasteOnly : null,
+                        color: canAct && pasteSafe ? c.muted : c.faint,
+                      ),
+                    if (!busyVoice || voice.isHolding)
+                      VoiceMicButton(
+                        controller: voice,
+                        onPressed: widget.sending ? null : voice.start,
+                      ),
+                    if (!busyVoice) ...[
+                      const SizedBox(width: 4),
+                      ComposerSendButton(
+                        key: const Key('terminal-draft-send'),
+                        ready: canAct,
+                        busy: widget.sending,
+                        tooltip: l.terminalDraftSend,
+                        onPressed: widget.onSend,
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
           ),

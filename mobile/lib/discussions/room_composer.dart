@@ -393,7 +393,7 @@ extension _ComposerViews on _DiscussionRoomState {
       });
     }
     return ListenableBuilder(
-      listenable: voice,
+      listenable: Listenable.merge([voice, input]),
       builder: (context, _) {
         final busyVoice = voice.isBusy;
         final ready =
@@ -437,13 +437,13 @@ extension _ComposerViews on _DiscussionRoomState {
                         controller: voice,
                         enabled: !locked && !sending,
                       ),
-                    if (showVoicePartial(voice))
-                      VoicePartialPreview(text: voice.partialText),
                     Container(
                       decoration: BoxDecoration(
                         color: c.card,
                         borderRadius: BorderRadius.circular(Rd.composer),
-                        border: Border.all(color: c.line),
+                        border: Border.all(
+                          color: voiceCapsuleBorderColor(c, voice: voice),
+                        ),
                       ),
                       padding: const EdgeInsets.all(4),
                       child: Column(
@@ -459,27 +459,35 @@ extension _ComposerViews on _DiscussionRoomState {
                                 children: chips,
                               ),
                             ),
-                          if (busyVoice)
-                            VoiceActiveRow(controller: voice)
-                          else
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                ComposerIconButton(
-                                  icon: Icons.add_rounded,
-                                  iconSize: Ic.button,
-                                  tooltip: l.discAddFile,
-                                  onPressed:
-                                      locked ||
-                                          uploading ||
-                                          answering.isNotEmpty
-                                      ? null
-                                      : pickAttachment,
-                                  color: answering.isNotEmpty
-                                      ? c.faint
-                                      : c.muted,
-                                ),
-                                Expanded(
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              ComposerIconButton(
+                                icon: Icons.add_rounded,
+                                iconSize: Ic.button,
+                                tooltip: l.discAddFile,
+                                onPressed:
+                                    locked ||
+                                        uploading ||
+                                        busyVoice ||
+                                        answering.isNotEmpty
+                                    ? null
+                                    : pickAttachment,
+                                color: answering.isNotEmpty
+                                    ? c.faint
+                                    : c.muted,
+                              ),
+                              Expanded(
+                                child: VoiceInlineField(
+                                  controller: input,
+                                  voice: voice,
+                                  enabled: !locked && !sending,
+                                  padding: const EdgeInsets.fromLTRB(
+                                    6,
+                                    6,
+                                    4,
+                                    6,
+                                  ),
                                   child: TextField(
                                     controller: input,
                                     focusNode: focus,
@@ -487,6 +495,8 @@ extension _ComposerViews on _DiscussionRoomState {
                                     minLines: 1,
                                     maxLines: 6,
                                     textInputAction: TextInputAction.newline,
+                                    enableInteractiveSelection:
+                                        input.text.isNotEmpty,
                                     onChanged: (_) => update(() {}),
                                     onTap: () => update(() {}),
                                     style: TextStyle(
@@ -511,18 +521,24 @@ extension _ComposerViews on _DiscussionRoomState {
                                     ),
                                   ),
                                 ),
-                                // 手机键盘打 @ 要切一次键盘：这里一下插进去，弹出候选
-                                if (answering.isEmpty && !locked)
-                                  ComposerIconButton(
-                                    icon: Icons.alternate_email_rounded,
-                                    tooltip: l.discAtButton,
-                                    onPressed: insertAt,
-                                  ),
+                              ),
+                              if (busyVoice)
+                                VoiceInlineTrailing(controller: voice),
+                              // 手机键盘打 @ 要切一次键盘：这里一下插进去，弹出候选
+                              if (!busyVoice && answering.isEmpty && !locked)
+                                ComposerIconButton(
+                                  icon: Icons.alternate_email_rounded,
+                                  tooltip: l.discAtButton,
+                                  onPressed: insertAt,
+                                ),
+                              if (!busyVoice || voice.isHolding)
                                 VoiceMicButton(
+                                  controller: voice,
                                   onPressed: locked || sending
                                       ? null
                                       : voice.start,
                                 ),
+                              if (!busyVoice) ...[
                                 const SizedBox(width: 4),
                                 ComposerSendButton(
                                   ready: ready,
@@ -534,7 +550,8 @@ extension _ComposerViews on _DiscussionRoomState {
                                   onPressed: send,
                                 ),
                               ],
-                            ),
+                            ],
+                          ),
                         ],
                       ),
                     ),

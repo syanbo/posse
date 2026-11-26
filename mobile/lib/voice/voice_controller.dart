@@ -106,6 +106,14 @@ class VoiceController extends ChangeNotifier {
   String _partialText = '';
   String get partialText => _partialText;
 
+  /// 是否处于按住说话手势（空输入框长按或麦克风长按）。
+  bool _holding = false;
+  bool get isHolding => _holding;
+
+  /// 按住说话期间手指上滑进入取消区。
+  bool _holdCancelArmed = false;
+  bool get holdCancelArmed => _holdCancelArmed;
+
   VoiceFailedAudio? _failed;
   VoiceFailedAudio? get failed => _failed;
 
@@ -127,6 +135,36 @@ class VoiceController extends ChangeNotifier {
   String _nextSessionId() {
     _sessionSeq++;
     return 'vs_${DateTime.now().microsecondsSinceEpoch}_$_sessionSeq';
+  }
+
+  /// 按住说话开始（空输入框长按或麦克风长按）：启动录音并在松手时自动结束或取消。
+  void beginHold() {
+    if (isBusy || _disposed) return;
+    _holding = true;
+    _holdCancelArmed = false;
+    unawaited(start());
+  }
+
+  /// 更新按住说话期间是否上滑进入取消区。
+  void setHoldCancelArmed(bool armed) {
+    if (!_holding || _holdCancelArmed == armed || _disposed) return;
+    _holdCancelArmed = armed;
+    notifyListeners();
+  }
+
+  /// 按住说话松手或手势被中断：取消区或尚未进入录音态时直接取消，录音中则完成并转写。
+  void endHold({bool cancel = false}) {
+    if (!_holding) return;
+    final shouldCancel = cancel || _holdCancelArmed;
+    _holding = false;
+    _holdCancelArmed = false;
+    if (shouldCancel || isStarting) {
+      unawaited(this.cancel());
+    } else if (isRecording) {
+      unawaited(finish());
+    } else if (!_disposed) {
+      notifyListeners();
+    }
   }
 
   /// 开始一次新的语音录制/识别。
@@ -268,6 +306,8 @@ class VoiceController extends ChangeNotifier {
 
   void _abortStart(int opId, {String? noticeCode}) {
     if (!_isCurrent(opId)) return;
+    _holding = false;
+    _holdCancelArmed = false;
     _clearActiveSession();
     _stage = _failed != null ? VoiceStage.failedRetryable : VoiceStage.idle;
     notifyListeners();
@@ -279,6 +319,8 @@ class VoiceController extends ChangeNotifier {
   /// 结束录音并进入转写。
   Future<void> finish() async {
     if (!isRecording || _disposed) return;
+    _holding = false;
+    _holdCancelArmed = false;
     _stopClock();
     final opId = _opId;
     final sid = _activeSessionId;
@@ -379,6 +421,8 @@ class VoiceController extends ChangeNotifier {
   Future<void> cancel() async {
     if (!isBusy) return;
     _opId++;
+    _holding = false;
+    _holdCancelArmed = false;
     _stopClock();
     _cancelNativeFinishGuard();
     _cancelToken?.cancel();
@@ -656,6 +700,8 @@ class VoiceController extends ChangeNotifier {
   }
 
   void _clearActiveSession() {
+    _holding = false;
+    _holdCancelArmed = false;
     _activeSessionId = null;
     _activeConfig = null;
     _activeTerms = const [];
