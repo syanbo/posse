@@ -3087,7 +3087,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceErrorUnavailable =>
-      'On-device speech recognition is unavailable on this device';
+      'System speech recognition is unavailable on this device';
 
   @override
   String get voiceErrorFailed => 'Transcription failed';
@@ -3131,7 +3131,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceNativeNote =>
-      'Audio stays on your phone using the system speech recognizer. Great for zero setup on iOS; switch to a cloud engine if mixed Chinese/English coding terms need higher accuracy or on Android devices without speech services.';
+      'Uses the system speech recognizer (iOS prefers on-device recognition and falls back to Apple speech services if offline assets aren’t ready; Android requires on-device speech support). Switch to a cloud engine if mixed Chinese/English coding terms need higher accuracy.';
 
   @override
   String get voiceCloudNote =>
@@ -3191,11 +3191,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Comma-separated terms sent as recognition hints alongside the current project, branch, and agent name.';
 
   @override
-  String get settingsTerminalDraftDefault => 'Open Draft Input Bar by Default';
+  String get settingsTerminalDraftDefault => 'Persistent Voice & Draft Bar';
 
   @override
   String get settingsTerminalDraftDefaultNote =>
-      'Show an editable multi-line draft bar above the key bar for Chinese and voice input without resizing the terminal.';
+      'Keep the editable voice and multi-line draft bar above the terminal key bar and hide the toolbar voice button. Turn off to toggle it from the key bar.';
 
   @override
   String get terminalKeyVoice => 'Draft / Voice';

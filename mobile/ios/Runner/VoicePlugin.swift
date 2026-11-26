@@ -29,6 +29,7 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
   private var latestTranscript = ""
   private var nativeActive = false
   private var nativeFinishing = false
+  private var lastLevelEmittedAt: TimeInterval = 0
 
   private var observersInstalled = false
 
@@ -92,10 +93,10 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
     case "capabilities":
       let localeId = args["locale"] as? String
       let recognizer = Self.makeRecognizer(localeId: localeId)
-      // 系统本机识别强制要求离线能力，不支持离线时上报不可用，避免把音频静默发往云端。
-      let onDevice = (recognizer?.isAvailable ?? false) && (recognizer?.supportsOnDeviceRecognition ?? false)
+      let available = recognizer?.isAvailable ?? false
+      let onDevice = available && (recognizer?.supportsOnDeviceRecognition ?? false)
       result([
-        "nativeAvailable": onDevice,
+        "nativeAvailable": available,
         "onDeviceAvailable": onDevice,
         "maxNativeSeconds": 55,
       ])
@@ -142,9 +143,21 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
 
   private static func makeRecognizer(localeId: String?) -> SFSpeechRecognizer? {
     if let localeId, !localeId.isEmpty {
-      return SFSpeechRecognizer(locale: Locale(identifier: localeId))
+      if let r = SFSpeechRecognizer(locale: Locale(identifier: localeId)) {
+        return r
+      }
     }
-    return SFSpeechRecognizer()
+    if let current = SFSpeechRecognizer() {
+      return current
+    }
+    let preferZh = Locale.preferredLanguages.first?.lowercased().hasPrefix("zh") == true
+    let fallbacks = preferZh ? ["zh-CN", "en-US"] : ["en-US", "zh-CN"]
+    for id in fallbacks {
+      if let r = SFSpeechRecognizer(locale: Locale(identifier: id)) {
+        return r
+      }
+    }
+    return nil
   }
 
   // MARK: - Authorization
@@ -204,18 +217,28 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
 
   // MARK: - Audio Session
 
-  private func configureAudioSession() throws {
+  private func configureAudioSession(forNativeSpeech: Bool) throws {
     BackgroundPlugin.shared.beginAudioCapture()
     audioSessionClaimed = true
     do {
       let session = AVAudioSession.sharedInstance()
-      // 录音使用 .default 模式并暂停背景音乐防串音；结束时 notifyOthersOnDeactivation 恢复音乐。
-      try session.setCategory(
-        .playAndRecord,
-        mode: .default,
-        options: [.allowBluetooth, .defaultToSpeaker]
-      )
-      try session.setActive(true)
+      if forNativeSpeech {
+        // Apple 官方推荐系统语音识别使用 .record + .measurement，避免 .playAndRecord 的蓝牙路由/DSP 冲突。
+        try session.setCategory(
+          .record,
+          mode: .measurement,
+          options: [.duckOthers]
+        )
+        try session.setActive(true, options: .notifyOthersOnDeactivation)
+      } else {
+        // 文件录音使用 .default 模式并暂停背景音乐防串音；结束时 notifyOthersOnDeactivation 恢复音乐。
+        try session.setCategory(
+          .playAndRecord,
+          mode: .default,
+          options: [.allowBluetooth, .defaultToSpeaker]
+        )
+        try session.setActive(true)
+      }
     } catch {
       releaseAudioSession(restoreBackgroundIfNeeded: false)
       throw error
@@ -276,7 +299,7 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
         at: url.deletingLastPathComponent(),
         withIntermediateDirectories: true
       )
-      try configureAudioSession()
+      try configureAudioSession(forNativeSpeech: false)
 
       let settings: [String: Any]
       if format == "wav" {
@@ -391,19 +414,24 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
     preemptActiveCapture()
 
     guard let recognizer = Self.makeRecognizer(localeId: localeId),
-      recognizer.isAvailable,
-      recognizer.supportsOnDeviceRecognition
+      recognizer.isAvailable
     else {
-      result(FlutterError(code: "speech_unavailable", message: "on-device speech recognizer unavailable", details: nil))
+      result(FlutterError(code: "speech_unavailable", message: "speech recognizer unavailable", details: nil))
       return
     }
 
     do {
-      try configureAudioSession()
+      try configureAudioSession(forNativeSpeech: true)
       let engine = AVAudioEngine()
       let req = SFSpeechAudioBufferRecognitionRequest()
       req.shouldReportPartialResults = true
-      req.requiresOnDeviceRecognition = true
+      // 不强锁 requiresOnDeviceRecognition：离线语音包就绪时 iOS 仍自动离线识别，
+      // 未下载离线包或关闭键盘听写时可平滑回退到 Apple 系统语音服务，避免真机报 1101。
+      req.requiresOnDeviceRecognition = false
+      req.taskHint = .dictation
+      if #available(iOS 16.0, *) {
+        req.addsPunctuation = true
+      }
       if !hints.isEmpty {
         req.contextualStrings = Array(hints.prefix(100))
       }
@@ -415,9 +443,13 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
         result(FlutterError(code: "speech_failed", message: "invalid audio input format", details: nil))
         return
       }
+      lastLevelEmittedAt = 0
       input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
         req.append(buffer)
         guard let self, let ch = buffer.floatChannelData?[0] else { return }
+        let now = CACurrentMediaTime()
+        guard now - self.lastLevelEmittedAt >= 0.06 else { return }
+        self.lastLevelEmittedAt = now
         let frames = Int(buffer.frameLength)
         guard frames > 0 else { return }
         var sum: Float = 0
@@ -437,15 +469,12 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
       audioEngine = engine
       recognitionRequest = req
       speechRecognizer = recognizer
-
-      engine.prepare()
-      try engine.start()
-
       activeSessionId = sessionId
       latestTranscript = ""
       nativeActive = true
       nativeFinishing = false
 
+      // 先建 recognitionTask 再启动音频引擎，避免首个音频帧先于任务挂载被丢弃或触发状态异常。
       var taskRef: SFSpeechRecognitionTask?
       taskRef = recognizer.recognitionTask(with: req) { [weak self] resp, error in
         DispatchQueue.main.async {
@@ -457,7 +486,7 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
             let text = resp.bestTranscription.formattedString
             self.latestTranscript = text
             if resp.isFinal {
-              self.cleanupNative(restoreBackground: false)
+              self.cleanupNative(restoreBackground: false, cancelTask: false)
               self.emit([
                 "type": "final",
                 "sessionId": sessionId,
@@ -473,10 +502,12 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
             }
           }
           if let error {
+            let nsErr = error as NSError
+            NSLog("posse voice: native speech error domain=\(nsErr.domain) code=\(nsErr.code) msg=\(nsErr.localizedDescription)")
             let active = self.nativeActive
             let finishing = self.nativeFinishing
             let fallback = self.latestTranscript
-            self.cleanupNative(restoreBackground: false)
+            self.cleanupNative(restoreBackground: false, cancelTask: true)
             if finishing && !fallback.isEmpty {
               self.emit([
                 "type": "final",
@@ -484,20 +515,26 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
                 "text": fallback,
               ])
             } else if active {
+              let isNoSpeech = nsErr.domain == "kAFAssistantErrorDomain"
+                && (nsErr.code == 1110 || nsErr.code == 203)
               self.emit([
                 "type": "error",
                 "sessionId": sessionId,
-                "code": "speech_failed",
-                "message": error.localizedDescription,
+                "code": isNoSpeech ? "empty_result" : "speech_failed",
+                "message": "[\(nsErr.domain):\(nsErr.code)] \(nsErr.localizedDescription)",
               ])
             }
           }
         }
       }
       recognitionTask = taskRef
+
+      engine.prepare()
+      try engine.start()
       result(true)
     } catch {
-      cleanupNative(restoreBackground: false)
+      NSLog("posse voice: startNativeRecognition failed: \(error)")
+      cleanupNative(restoreBackground: false, cancelTask: true)
       result(FlutterError(code: "speech_failed", message: error.localizedDescription, details: nil))
     }
   }
@@ -521,15 +558,16 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
     nativeFinishing = true
     stopEngineAndTap()
     recognitionRequest?.endAudio()
+    recognitionTask?.finish()
     let task = recognitionTask
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
       guard let self,
         self.activeSessionId == sid,
         self.recognitionTask === task,
         self.nativeActive
       else { return }
       let text = self.latestTranscript
-      self.cleanupNative(restoreBackground: restoreBackground)
+      self.cleanupNative(restoreBackground: restoreBackground, cancelTask: true)
       self.emit([
         "type": "final",
         "sessionId": sid,
@@ -547,14 +585,18 @@ final class VoicePlugin: NSObject, FlutterStreamHandler {
     audioEngine?.stop()
   }
 
-  private func cleanupNative(restoreBackground: Bool) {
+  private func cleanupNative(restoreBackground: Bool, cancelTask: Bool = true) {
     stopEngineAndTap()
     nativeActive = false
     nativeFinishing = false
     audioEngine = nil
     recognitionRequest?.endAudio()
     recognitionRequest = nil
+    let task = recognitionTask
     recognitionTask = nil
+    if cancelTask {
+      task?.cancel()
+    }
     speechRecognizer = nil
     if recorder == nil {
       activeSessionId = nil

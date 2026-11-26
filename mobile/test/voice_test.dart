@@ -312,6 +312,14 @@ void main() {
     });
 
     test('AppSettings序列化与反序列化保留语音与明文开关配置，不存Key', () {
+      expect(AppSettings().terminalDraftOpenByDefault, isTrue);
+      // 老版本（无 terminalDraftPinned 字段）升级后默认开启常驻语音/草稿栏
+      expect(
+        AppSettings.decode(
+          jsonEncode({'terminalDraftOpenByDefault': false}),
+        ).terminalDraftOpenByDefault,
+        isTrue,
+      );
       final s = AppSettings(
         voiceEngine: 'volcengine',
         voiceBaseUrl: 'https://example.com/flash',
@@ -319,7 +327,7 @@ void main() {
         voiceLanguage: 'zh',
         voiceVocab: 'Posse, flterm',
         voiceAllowInsecureHttp: true,
-        terminalDraftOpenByDefault: true,
+        terminalDraftOpenByDefault: false,
       );
       final encoded = jsonEncode(s.toJson());
       final decoded = AppSettings.decode(encoded);
@@ -329,7 +337,7 @@ void main() {
       expect(decoded.voiceLanguage, 'zh');
       expect(decoded.voiceVocab, 'Posse, flterm');
       expect(decoded.voiceAllowInsecureHttp, isTrue);
-      expect(decoded.terminalDraftOpenByDefault, isTrue);
+      expect(decoded.terminalDraftOpenByDefault, isFalse);
     });
 
     test('normalizeBarKeys把新增voice内置键插在paste后面', () {
@@ -1289,7 +1297,7 @@ void main() {
       expect(platform.cancelledSessions, isEmpty);
 
       // 本机识别收尾兜底到期后回到空闲
-      await tester.pump(const Duration(milliseconds: 1600));
+      await tester.pump(const Duration(milliseconds: 3100));
       expect(voice.isIdle, isTrue);
     });
 
@@ -1438,7 +1446,7 @@ void main() {
       await tester.pump();
       expect(voice.isTranscribing, isTrue);
       expect(find.text('你好世界'), findsOneWidget);
-      await tester.pump(const Duration(milliseconds: 1600));
+      await tester.pump(const Duration(milliseconds: 3100));
     });
 
     testWidgets('快捷键栏：收起时有草稿显示强调色圆点，有待重试录音显示琥珀色', (tester) async {
@@ -1473,11 +1481,22 @@ void main() {
           ),
         ),
       );
+      // 默认常驻语音/草稿栏开启时，工具栏隐藏语音按钮，底层 barKeys 仍保留该键
+      await pump();
+      expect(find.byKey(const Key('terminal-key-voice')), findsNothing);
+      expect(
+        model.settings.barKeys.any((k) => k.builtin == 'voice'),
+        isTrue,
+      );
+
+      // 关闭常驻开关后工具栏恢复显示语音按钮与草稿/待重试圆点
+      model.updateSettings((s) => s.terminalDraftOpenByDefault = false);
       final dot = find.byKey(const Key('terminal-key-voice-dot'));
       Color dotColor() =>
           (tester.widget<Container>(dot).decoration! as BoxDecoration).color!;
 
       await pump();
+      expect(find.byKey(const Key('terminal-key-voice')), findsOneWidget);
       expect(dot, findsNothing);
       await pump(draft: true);
       expect(dot, findsOneWidget);
@@ -1488,6 +1507,40 @@ void main() {
       expect(dotColor(), PosseColors.darkColors.honey);
       await pump(open: true, draft: true);
       expect(dot, findsNothing);
+    });
+
+    testWidgets('常驻模式下 TerminalDraftBar 隐藏收起按钮', (tester) async {
+      final platform = _FakeVoicePlatform();
+      final textCtrl = TextEditingController();
+      final focus = FocusNode();
+      final voice = nativeVoice(platform);
+      addTearDown(() {
+        voice.dispose();
+        textCtrl.dispose();
+        focus.dispose();
+        platform.close();
+      });
+      await tester.pumpWidget(
+        _wrap(
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: TerminalDraftBar(
+              controller: textCtrl,
+              focusNode: focus,
+              voice: voice,
+              canSend: true,
+              sending: false,
+              onSend: () {},
+              onPasteOnly: () {},
+              onHeightChanged: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('terminal-draft-collapse')), findsNothing);
+      expect(find.byKey(const Key('terminal-draft-field')), findsOneWidget);
+      expect(find.byKey(const Key('voice-mic-button')), findsOneWidget);
     });
 
     test('设置首页摘要：本机只写名字，云端写 Key 状态，未读到时只写引擎名', () async {

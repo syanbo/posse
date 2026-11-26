@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import 'asr_provider.dart';
 import 'voice_config.dart';
@@ -245,10 +246,22 @@ class VoiceController extends ChangeNotifier {
       _stage = VoiceStage.recording;
       _startClock();
       notifyListeners();
-    } catch (_) {
+    } on PlatformException catch (e) {
       if (createdPath != null && !_retainedPaths.contains(createdPath)) {
         unawaited(_platform.deleteTempFile(createdPath));
       }
+      debugPrint('voice start failed: ${e.code} ${e.message}');
+      _abortStart(
+        opId,
+        noticeCode: e.code == 'speech_unavailable'
+            ? 'speech_unavailable'
+            : 'failed',
+      );
+    } catch (e) {
+      if (createdPath != null && !_retainedPaths.contains(createdPath)) {
+        unawaited(_platform.deleteTempFile(createdPath));
+      }
+      debugPrint('voice start failed: $e');
       _abortStart(opId, noticeCode: 'failed');
     }
   }
@@ -597,17 +610,18 @@ class VoiceController extends ChangeNotifier {
             onNotice?.call('interrupted');
           }
         }
-      case VoiceErrorEvent(:final code):
+      case VoiceErrorEvent(:final code, :final message):
         if (!isStarting && !isRecording && !isStopping && !isTranscribing) {
           return;
         }
+        debugPrint('voice native error: $code $message');
         _settleNativeFallbackOrError(_opId, code);
     }
   }
 
   void _armNativeFinishGuard(int opId, String sid) {
     _cancelNativeFinishGuard();
-    _nativeFinishGuard = Timer(const Duration(milliseconds: 1500), () {
+    _nativeFinishGuard = Timer(const Duration(milliseconds: 3000), () {
       if (!_isCurrent(opId) || _stage != VoiceStage.transcribing) return;
       unawaited(_platform.cancelNativeRecognition(sessionId: sid));
       _settleNativeFallbackOrError(opId, 'speech_failed');

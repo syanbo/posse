@@ -14,3 +14,11 @@ void syncKeepAlive(bool on) {
   _sent = on;
   _channel.invokeMethod<void>('setKeepAlive', on).catchError((Object _) {});
 }
+
+/// 发起 iOS OTA 安装前暂停后台静音保活与后台任务，避免切回主屏幕后旧进程不挂起导致覆盖安装卡住。
+Future<void> prepareBackgroundForUpdate() async {
+  if (!backgroundKeepSupported) return;
+  try {
+    await _channel.invokeMethod<void>('prepareForUpdate');
+  } catch (_) {}
+}

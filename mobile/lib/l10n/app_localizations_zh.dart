@@ -2952,7 +2952,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get voiceNativeNote =>
-      '使用系统内置语音识别，音频不离开本机。iOS 零配置即可用；如需更高的中英混杂代码术语准确率，或在无系统语音服务的安卓机上使用，可切换云端引擎。';
+      '使用系统内置语音识别（iOS 优先本机离线识别，离线语音包未就绪时自动回退 Apple 系统语音服务；Android 需设备支持系统离线识别）。如需更高的中英混杂代码术语准确率，可切换云端引擎。';
 
   @override
   String get voiceCloudNote =>
@@ -3010,11 +3010,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceVocabNote => '用逗号分隔，转写时会与当前项目名、分支名、Agent 名一起作为识别提示。';
 
   @override
-  String get settingsTerminalDraftDefault => '默认展开草稿输入栏';
+  String get settingsTerminalDraftDefault => '常驻语音与草稿输入栏';
 
   @override
   String get settingsTerminalDraftDefaultNote =>
-      '进入终端时在快捷键栏上方显示多行草稿框，方便中文和语音输入，不改变终端尺寸。';
+      '在终端快捷键栏上方常驻可编辑的语音与多行草稿栏，并隐藏工具栏中的语音按钮。关闭后可从工具栏随时展开或收起。';
 
   @override
   String get terminalKeyVoice => '草稿 / 语音';

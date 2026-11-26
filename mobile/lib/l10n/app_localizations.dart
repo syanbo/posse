@@ -5153,7 +5153,7 @@ abstract class AppLocalizations {
   /// Error shown when native speech recognition is unavailable.
   ///
   /// In en, this message translates to:
-  /// **'On-device speech recognition is unavailable on this device'**
+  /// **'System speech recognition is unavailable on this device'**
   String get voiceErrorUnavailable;
 
   /// Generic fallback error when voice recording or transcription fails.
@@ -5231,7 +5231,7 @@ abstract class AppLocalizations {
   /// Privacy and usage note for system on-device voice recognition.
   ///
   /// In en, this message translates to:
-  /// **'Audio stays on your phone using the system speech recognizer. Great for zero setup on iOS; switch to a cloud engine if mixed Chinese/English coding terms need higher accuracy or on Android devices without speech services.'**
+  /// **'Uses the system speech recognizer (iOS prefers on-device recognition and falls back to Apple speech services if offline assets aren’t ready; Android requires on-device speech support). Switch to a cloud engine if mixed Chinese/English coding terms need higher accuracy.'**
   String get voiceNativeNote;
 
   /// Privacy and storage note for cloud BYOK voice recognition.
@@ -5342,16 +5342,16 @@ abstract class AppLocalizations {
   /// **'Comma-separated terms sent as recognition hints alongside the current project, branch, and agent name.'**
   String get voiceVocabNote;
 
-  /// Terminal settings toggle: expand the staged draft input bar automatically when opening a terminal.
+  /// Terminal settings toggle: keep the editable voice and staged draft input bar pinned above the key bar by default.
   ///
   /// In en, this message translates to:
-  /// **'Open Draft Input Bar by Default'**
+  /// **'Persistent Voice & Draft Bar'**
   String get settingsTerminalDraftDefault;
 
   /// Note explaining the default terminal staged draft bar toggle.
   ///
   /// In en, this message translates to:
-  /// **'Show an editable multi-line draft bar above the key bar for Chinese and voice input without resizing the terminal.'**
+  /// **'Keep the editable voice and multi-line draft bar above the terminal key bar and hide the toolbar voice button. Turn off to toggle it from the key bar.'**
   String get settingsTerminalDraftDefaultNote;
 
   /// Label in key bar settings for the built-in staged draft and voice input button.

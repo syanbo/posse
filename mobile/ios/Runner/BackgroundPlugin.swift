@@ -18,16 +18,31 @@ final class BackgroundPlugin: NSObject {
   private var audioClaimed = false
   /// App 当前确实处于后台：用于录音在后台或来电后释放音频锁时决定是否立即恢复静音保活
   private var inBackground = false
+  /// 正在发起 iOS OTA 安装：此截止时间前禁止后台静音保活与 beginBackgroundTask，让系统在切回主屏幕后直接挂起并覆盖安装。
+  private var updatingUntil: Date?
+
+  private var isUpdating: Bool {
+    if let until = updatingUntil, Date() < until { return true }
+    updatingUntil = nil
+    return false
+  }
 
   func install(messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(name: "posse/background", binaryMessenger: messenger)
     self.channel = channel
     channel.setMethodCallHandler { [weak self] call, result in
-      if call.method == "setKeepAlive" {
+      switch call.method {
+      case "setKeepAlive":
         self?.keepAlive = call.arguments as? Bool ?? false
         if self?.keepAlive == false { self?.stopSilence() }
         result(nil)
-      } else {
+      case "prepareForUpdate":
+        // 留出系统弹出安装确认框、用户点安装并退回主屏幕的时间窗口；回到前台即自动恢复。
+        self?.updatingUntil = Date().addingTimeInterval(120)
+        self?.stopSilence()
+        self?.endTask()
+        result(nil)
+      default:
         result(FlutterMethodNotImplemented)
       }
     }
@@ -64,14 +79,14 @@ final class BackgroundPlugin: NSObject {
   /// 录音或原生语音识别结束后调用；若此时已在后台且开启了保活，立即恢复静音保活。
   func endAudioCapture(resumeSilenceIfBackground: Bool) {
     audioClaimed = false
-    if (resumeSilenceIfBackground || inBackground) && keepAlive {
+    if (resumeSilenceIfBackground || inBackground) && keepAlive && !isUpdating {
       startSilence()
     }
   }
 
   // 在 inactive 时就开始放：进了后台再激活音频会话可能被拒
   @objc private func resignActive() {
-    guard !audioClaimed else { return }
+    guard !audioClaimed, !isUpdating else { return }
     if keepAlive { startSilence() }
   }
 
@@ -82,6 +97,11 @@ final class BackgroundPlugin: NSObject {
 
   @objc private func enteredBackground() {
     inBackground = true
+    if isUpdating {
+      stopSilence()
+      endTask()
+      return
+    }
     if !audioClaimed && keepAlive && !playing {
       startSilence()
     }
@@ -93,6 +113,7 @@ final class BackgroundPlugin: NSObject {
 
   @objc private func enteringForeground() {
     inBackground = false
+    updatingUntil = nil
     endTask()
   }
 

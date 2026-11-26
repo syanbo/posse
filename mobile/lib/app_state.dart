@@ -215,7 +215,7 @@ class AppSettings {
     this.voiceLanguage = '',
     this.voiceVocab = '',
     this.voiceAllowInsecureHttp = false,
-    this.terminalDraftOpenByDefault = false,
+    this.terminalDraftOpenByDefault = true,
     Map<String, int>? deskDisplays,
     Map<String, int>? deskFps,
     Map<String, int>? deskResolution,
@@ -379,7 +379,7 @@ class AppSettings {
     'voiceLanguage': voiceLanguage,
     'voiceVocab': voiceVocab,
     'voiceAllowInsecureHttp': voiceAllowInsecureHttp,
-    'terminalDraftOpenByDefault': terminalDraftOpenByDefault,
+    'terminalDraftPinned': terminalDraftOpenByDefault,
     'barKeys': [for (final k in barKeys) k.toJson()],
     'barKeysVersion': barKeysVersion,
   };
@@ -558,9 +558,8 @@ class AppSettings {
       if (map['voiceAllowInsecureHttp'] is bool) {
         out.voiceAllowInsecureHttp = map['voiceAllowInsecureHttp'] as bool;
       }
-      if (map['terminalDraftOpenByDefault'] is bool) {
-        out.terminalDraftOpenByDefault =
-            map['terminalDraftOpenByDefault'] as bool;
+      if (map['terminalDraftPinned'] is bool) {
+        out.terminalDraftOpenByDefault = map['terminalDraftPinned'] as bool;
       }
       final bar = map['barKeys'];
       final custom = map['customKeys'];

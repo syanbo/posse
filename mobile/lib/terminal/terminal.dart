@@ -150,9 +150,13 @@ class _TerminalScreenState extends State<TerminalScreen>
   final _draftFocus = FocusNode();
   late final VoiceController _voice;
   var _draftOpen = false;
+  var _wasDraftPinned = true;
   var _draftHeight = 0.0;
   var _draftSending = false;
   var _busy = false;
+
+  bool get _draftPinned => widget.model.settings.terminalDraftOpenByDefault;
+  bool get _draftVisible => _draftPinned || _draftOpen;
 
   /// 点终端、点快捷键栏的键盘键都走这里：键盘弹着就放下，收着就弹出来。
   void _toggleKeyboard() {
@@ -161,7 +165,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       _draftFocus.unfocus();
       return;
     }
-    if (_draftOpen) {
+    if (_draftVisible) {
       _draftFocus.requestFocus();
       SystemChannels.textInput.invokeMethod<void>('TextInput.show');
       return;
@@ -191,7 +195,8 @@ class _TerminalScreenState extends State<TerminalScreen>
     _controller = TerminalController()
       ..onOutput = _onOutput
       ..onResize = _onResize;
-    _draftOpen = widget.model.settings.terminalDraftOpenByDefault;
+    _wasDraftPinned = _draftPinned;
+    _draftOpen = _draftPinned;
     _voice = VoiceController(
       readConfig: () => VoiceConfig.fromSettings(widget.model.settings),
       readContextTerms: _voiceContextTerms,
@@ -477,8 +482,20 @@ class _TerminalScreenState extends State<TerminalScreen>
       _schedule(fresh: true);
     }
     _agentState = agentState;
+    final pinned = _draftPinned;
+    if (pinned != _wasDraftPinned) {
+      _wasDraftPinned = pinned;
+      if (pinned) {
+        _draftOpen = true;
+      } else if (_draftController.text.isEmpty &&
+          !_voice.isBusy &&
+          !_voice.hasFailedRetry) {
+        _draftOpen = false;
+        _draftHeight = 0;
+      }
+    }
     final key =
-        '${tab.title}|${tab.agent}|${tab.sessionId}|${tab.state}|${tab.toolName}|${widget.model.settings.terminalFontSize}|$_ended|${widget.model.rpc == null}';
+        '${tab.title}|${tab.agent}|${tab.sessionId}|${tab.state}|${tab.toolName}|${widget.model.settings.terminalFontSize}|$pinned|$_ended|${widget.model.rpc == null}';
     if (key != _titleKey && mounted) setState(() => _titleKey = key);
   }
 
@@ -1013,7 +1030,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   Future<void> _sendFile() async {
     if (widget.model.rpc == null || _busy) return;
     // 选文件的面板和相册都不需要键盘，挡着反而看不见；并按发起时的目的地锁定去向。
-    final toDraft = _draftOpen;
+    final toDraft = _draftVisible;
     _focus.unfocus();
     _draftFocus.unfocus();
     setState(() => _busy = true);
@@ -1059,7 +1076,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   /// 文字交给终端自己的粘贴（不回车）。图片上传后只把路径打进去，和发送图片一样。
   Future<void> _pasteClipboard() async {
     if (widget.model.rpc == null || _busy) return;
-    final toDraft = _draftOpen;
+    final toDraft = _draftVisible;
     setState(() => _busy = true);
     try {
       final paste = await readClipboardPaste();
@@ -1288,7 +1305,7 @@ class _TerminalScreenState extends State<TerminalScreen>
           // 键盘与折叠草稿栏盖住的终端高度：快捷键内容底边统一取 max(safe, keyboard)，
           // 键盘收起时 barBottom == safe、covered == draftPad，过渡期也不与安全区重叠。
           final barBottom = math.max(keyboard, safe);
-          final draftPad = _draftOpen ? _draftHeight : 0.0;
+          final draftPad = _draftVisible ? _draftHeight : 0.0;
           final covered = (barBottom - safe + draftPad).clamp(0.0, height);
           return Stack(
             children: [
@@ -1361,7 +1378,7 @@ class _TerminalScreenState extends State<TerminalScreen>
                       _selectionChrome(width, height, covered),
                 ),
               ),
-              if (_draftOpen)
+              if (_draftVisible)
                 Positioned(
                   left: 0,
                   right: 0,
@@ -1374,7 +1391,7 @@ class _TerminalScreenState extends State<TerminalScreen>
                     sending: _draftSending,
                     onSend: () => unawaited(_sendDraftToTerminal()),
                     onPasteOnly: () => unawaited(_pasteDraftToTerminal()),
-                    onCollapse: _collapseDraft,
+                    onCollapse: _draftPinned ? null : _collapseDraft,
                     onHeightChanged: (h) {
                       if (!mounted || (_draftHeight - h).abs() < 0.5) return;
                       setState(() => _draftHeight = h);
@@ -1522,6 +1539,14 @@ class TerminalKeyBar extends StatelessWidget {
 
   /// 键盘开关后面的键，按设置里排的顺序。
   List<BarKey> get keys => model.settings.barKeys;
+
+  /// 常驻语音/草稿栏开启时隐藏工具栏里的「草稿 / 语音」键，避免重复占位置；底层 barKeys 顺序原样保留。
+  List<BarKey> get _visibleKeys => model.settings.terminalDraftOpenByDefault
+      ? [
+          for (final k in keys)
+            if (k.builtin != 'voice') k,
+        ]
+      : keys;
   final void Function(CustomKey key) onCustom;
   final VoidCallback? onImage;
   final VoidCallback? onPaste;
@@ -1712,6 +1737,7 @@ class TerminalKeyBar extends StatelessWidget {
 
   Widget _buildBar(BuildContext context) {
     final c = PosseColors.of(context);
+    final shown = _visibleKeys;
     return Container(
       decoration: BoxDecoration(
         color: c.band,
@@ -1729,11 +1755,16 @@ class TerminalKeyBar extends StatelessWidget {
               padding: const EdgeInsets.only(right: 6),
               child: _hideKeyboard(c),
             ),
-            itemCount: keys.length,
+            itemCount: shown.length,
             onReorderItem: (from, to) {
               if (from == to) return;
+              final moved = shown[from];
+              final anchor = shown[to];
               final next = List.of(keys);
-              next.insert(to, next.removeAt(from));
+              next.remove(moved);
+              final anchorIdx = next.indexOf(anchor);
+              if (anchorIdx < 0) return;
+              next.insert(from < to ? anchorIdx + 1 : anchorIdx, moved);
               model.updateSettings((s) => s.barKeys = next);
             },
             proxyDecorator: (child, _, _) => Material(
@@ -1744,13 +1775,13 @@ class TerminalKeyBar extends StatelessWidget {
               child: child,
             ),
             itemBuilder: (context, i) => ReorderableDelayedDragStartListener(
-              key: ObjectKey(keys[i]),
+              key: ObjectKey(shown[i]),
               index: i,
               child: Padding(
-                padding: i < keys.length - 1
+                padding: i < shown.length - 1
                     ? const EdgeInsets.only(right: 6)
                     : EdgeInsets.zero,
-                child: _barKey(context, c, keys[i]),
+                child: _barKey(context, c, shown[i]),
               ),
             ),
           ),

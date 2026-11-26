@@ -10,12 +10,12 @@
   - 终端页底部 `TerminalKeyBar` 上方提供折叠式「草稿输入栏（Staged Input）」（样式同 `ChatComposer`，`Rd.composer` 胶囊，1–6 行自适应滚动）。
   - **绝不触发 PTY resize**：草稿栏作为 `Stack` 覆盖层贴在 `TerminalKeyBar` 正上方，遵循 `terminal.dart` 的 `resizeToAvoidBottomInset: false`，将草稿栏实际高度叠加进 `covered` 走现有 `keyboardLift` 上抬终端画面，不缩减终端 `height`。
   - **双发送动作**：主按钮「发送」（走 `sendTerminal(text: text, enter: true)`，自动享受服务端原子检查括号粘贴 + 120ms 回车），次动作「仅填入」（仅允许安全单行纯文本，拒绝换行与所有控制字符含 Tab/ESC，走 `sendTerminal(raw: bytes, enter: false)` 等待回执确认）。
-  - **协同与防丢**：展开草稿栏时 `TerminalKeyBar` 的 `Esc` / `Tab` / `^C` / 方向键仍直发 PTY；回形针上传的文件路径在草稿栏展开时插入草稿光标处；收起保留内存草稿并在键帽标圆点；设置页提供「终端默认展开草稿输入栏」开关。
+  - **协同与防丢**：展开草稿栏时 `TerminalKeyBar` 的 `Esc` / `Tab` / `^C` / 方向键仍直发 PTY；回形针上传的文件路径在草稿栏展开时插入草稿光标处；设置页提供「常驻语音与草稿输入栏」开关（默认开启）：开启时常驻展示草稿栏（隐藏收起按钮）并隐藏工具栏里的 `voice` 键；关闭时恢复工具栏 `voice` 键可随时折叠/展开，收起保留内存草稿并在键帽标圆点。
 - **对话页与讨论页**：
   - 输入胶囊常驻 `34×34` 麦克风按钮；对话页按来源会话归属防切会话串台（A→B→A 回到原会话时写回当前输入框），且断线重连态仍允许系统离线与手机直连云端预录草稿；讨论页遵循既有只读/断线隐藏输入区边界，锁定态（`pending != null`）禁用录音与重试并将已完成的在途转写结果暂存至解锁后合并。
 
 ### 2. 一期 ASR 引擎（双轨）
-- **系统本机离线识别（默认零配置）**：iOS 强制检查 `supportsOnDeviceRecognition` 并开启 `requiresOnDeviceRecognition = true`（支持 `contextualStrings` <= 100 词，55 秒软上限）；Android API 31+ 使用 `createOnDeviceSpeechRecognizer`（Android 13+ 经 `EXTRA_BIASING_STRINGS` 传提示词），无离线服务时提示前往语音设置切云端，绝不静默上传音频。
+- **系统本机识别（默认零配置）**：iOS 使用 `SFSpeechRecognizer`（`.record` + `.measurement` 音频会话，优先离线并在离线包未就绪时自动回退 Apple 系统语音服务，支持 `contextualStrings` <= 100 词与自动标点，55 秒软上限）；Android API 31+ 使用 `createOnDeviceSpeechRecognizer`（Android 13+ 经 `EXTRA_BIASING_STRINGS` 传提示词），无离线服务时提示前往语音设置切云端。
 - **云端 BYOK 整段上传（高准确率主力，默认强制 HTTPS，可选显式开启局域网明文 HTTP）**：
   - **OpenAI 兼容 `/v1/audio/transcriptions`**：一套 `multipart/form-data` 客户端覆盖 OpenAI（`gpt-4o-mini-transcribe` / `gpt-4o-transcribe`）、Groq（`whisper-large-v3-turbo`）、硅基流动（`FunAudioLLM/SenseVoiceSmall`，不传 `prompt`）及自定义网关，支持 `prompt` 注入当前项目名、分支名、Agent 名与用户自定义词表。
   - **火山引擎豆包录音极速版 HTTP**：`POST https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash`（`X-Api-Key` + `X-Api-Resource-Id: volc.bigasr.auc_turbo` + UUID 请求 ID，先校验响应头 `X-Api-Status-Code` 区分成功/静音/业务错），国内中英混杂最稳；当前不传 OpenAI `prompt` 与语言覆盖。

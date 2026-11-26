@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
+import '../background.dart';
 import '../l10n/l10n.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
@@ -291,6 +292,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
     _reset = Timer(const Duration(seconds: 15), () {
       if (mounted) setState(() => _busy = false);
     });
+    await prepareBackgroundForUpdate();
     final ok = await launchUrl(
       Uri.parse(widget.release.install),
       mode: LaunchMode.externalApplication,

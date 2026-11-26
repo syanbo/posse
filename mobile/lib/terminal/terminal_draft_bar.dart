@@ -49,7 +49,7 @@ class TerminalDraftBar extends StatefulWidget {
     required this.sending,
     required this.onSend,
     required this.onPasteOnly,
-    required this.onCollapse,
+    this.onCollapse,
     required this.onHeightChanged,
   });
 
@@ -60,7 +60,7 @@ class TerminalDraftBar extends StatefulWidget {
   final bool sending;
   final VoidCallback onSend;
   final VoidCallback onPasteOnly;
-  final VoidCallback onCollapse;
+  final VoidCallback? onCollapse;
   final ValueChanged<double> onHeightChanged;
 
   @override
@@ -168,12 +168,15 @@ class _TerminalDraftBarState extends State<TerminalDraftBar> {
                     : Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          ComposerIconButton(
-                            key: const Key('terminal-draft-collapse'),
-                            icon: Icons.keyboard_arrow_down_rounded,
-                            tooltip: l.terminalDraftHide,
-                            onPressed: widget.onCollapse,
-                          ),
+                          if (widget.onCollapse case final onCollapse?)
+                            ComposerIconButton(
+                              key: const Key('terminal-draft-collapse'),
+                              icon: Icons.keyboard_arrow_down_rounded,
+                              tooltip: l.terminalDraftHide,
+                              onPressed: onCollapse,
+                            )
+                          else
+                            const SizedBox(width: 4),
                           Expanded(
                             child: TextField(
                               key: const Key('terminal-draft-field'),
