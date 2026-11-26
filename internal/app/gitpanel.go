@@ -355,12 +355,15 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			}
 		}
 		changeGlyph(c, e.Path, e.IsDir(), letter == 'D')
-		name := ui.Text(c, filepath.Base(e.Path)).FontSize(fsBody).SingleLine().Shrink(0).TextColor(color).Tooltip(gitStatusText(L(c), letter))
+		name := ui.Text(c, filepath.Base(e.Path)).FontSize(fsBody).SingleLine().Shrink(1).TextColor(color).Tooltip(gitStatusTooltip(L(c), letter, e.Orig, e.Path, false))
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
 		}
 		if dir := filepath.Dir(strings.TrimSuffix(e.Path, "/")); dir != "." && !r.tree {
-			ui.Text(c, dir).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			ui.Text(c, dir).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(2)
+		}
+		if origin := gitRenameOrigin(L(c), e.Orig, e.Path); origin != "" {
+			ui.Text(c, origin).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().MinWidth(sz(48)).Shrink(2).Tooltip(gitRenamePath(e.Orig, e.Path))
 		}
 		ui.Spacer(c)
 		if s, ok := g.head[e.Path]; ok && !s.Binary && r.group != groupUntracked {
@@ -937,13 +940,17 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		}
 		// 点路径弹出同一组的文件，在这个标签里换着看
 		group := diffGroup(v, df)
+		pathTip := L(c).GitSwitchFileTip(a.keyText("nextChange"), a.keyText("prevChange"))
+		if df.orig != "" && df.orig != df.rel {
+			pathTip = gitRenamePath(df.orig, df.rel) + "\n" + pathTip
+		}
 		path := ui.Row(c.Key("diff-file")).Gap(4).Padding(2, 6).Radius(rSmall).AlignItems(ui.Center).Shrink(1).
-			Role(ui.RoleButton).Label(L(c).GitSwitchFile()).Tooltip(L(c).GitSwitchFileTip(a.keyText("nextChange"), a.keyText("prevChange")))
+			Role(ui.RoleButton).Label(L(c).GitSwitchFile()).Tooltip(pathTip)
 		if path.Hovered() && len(group) > 1 {
 			path.Background(t.SurfaceHover)
 		}
 		path.Children(func() {
-			ui.Text(c, df.rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			ui.Text(c, gitDiffPath(df.orig, df.rel)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 			if len(group) > 1 {
 				ui.Icon(c, iconDown).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 			}
@@ -951,11 +958,15 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		if len(group) > 1 {
 			menuButton(c, path, func(m *popMenu) {
 				for _, s := range group {
-					label := s.rel
+					label := gitDiffPath(s.orig, s.rel)
 					if s.rel == df.rel {
 						label = "✓ " + label
 					}
-					if m.Item(label).Chosen() {
+					it := m.Item(label)
+					if s.orig != "" && s.orig != s.rel {
+						it.Tooltip(gitRenamePath(s.orig, s.rel))
+					}
+					if it.Chosen() {
 						a.openDiff(w, s, df.siblings, true)
 					}
 				}
@@ -969,13 +980,12 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		}
 		if d.kind == docDiff {
 			n := len(df.state.Hunks())
-			added, deleted := df.state.Stats()
-			msg := L(c).GitNoDifferences()
-			if n == 0 && df.state.IgnoreWhitespace && df.state.Old.String() != df.state.New.String() {
-				msg = L(c).GitWhitespaceOnly()
-			}
+			var msg string
 			if n > 0 {
+				added, deleted := df.state.Stats()
 				msg = L(c).GitChangeStats(min(df.hunk+1, n), n, added, deleted)
+			} else {
+				msg = gitDiffZeroMsg(L(c), df)
 			}
 			ui.Text(c, msg).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1).Padding(0, 0, 0, 8)
 		}

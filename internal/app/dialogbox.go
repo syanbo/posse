@@ -27,12 +27,24 @@ func (b *dialogBox) reset() { b.dx, b.dy, b.ax, b.ay = 0, 0, 0, 0 }
 func (b *dialogBox) sized() bool { return b.w[b.mode] > 0 }
 
 // title 是对话框的标题行，按住拖动整个对话框。
-func (b *dialogBox) title(c *ui.Context, text string) { b.titleBar(c, text, nil) }
+func (b *dialogBox) title(c *ui.Context, text string) { b.titleBarTooltip(c, text, "", nil) }
+
+// titleTooltip 同 title，并给标题文字加上悬停提示（长路径折叠时显示完整路径）。
+func (b *dialogBox) titleTooltip(c *ui.Context, text, tip string) {
+	b.titleBarTooltip(c, text, tip, nil)
+}
 
 // titleBar 同 title，标题右边可以再放关闭这类按钮。
 func (b *dialogBox) titleBar(c *ui.Context, text string, trailing func()) {
+	b.titleBarTooltip(c, text, "", trailing)
+}
+
+func (b *dialogBox) titleBarTooltip(c *ui.Context, text, tip string, trailing func()) {
 	row := ui.Row(c.Key("dialog-title")).Gap(8).AlignItems(ui.Center).Children(func() {
-		titleText(c, text, fsTitle).Shrink(1)
+		tt := titleText(c, text, fsTitle).Shrink(1)
+		if tip != "" {
+			tt.Tooltip(tip)
+		}
 		ui.Spacer(c)
 		if trailing != nil {
 			trailing()

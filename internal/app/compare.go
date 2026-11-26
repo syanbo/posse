@@ -929,9 +929,12 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 			// 文件没有展开箭头，留出同样的宽度，和上一层目录名对齐
 			ui.Box(c).Width(miniBox()).Shrink(0)
 			changeGlyph(c, r.name, false, f.Status == 'D')
-			name := ui.Text(c, r.name).FontSize(fsBody).SingleLine().Shrink(1).Tooltip(gitStatusText(L(c), f.Status) + "\n" + f.Path).TextColor(color)
+			name := ui.Text(c, r.name).FontSize(fsBody).SingleLine().Shrink(1).Tooltip(gitStatusTooltip(L(c), f.Status, f.Orig, f.Path, true)).TextColor(color)
 			if f.Status == 'D' {
 				name.Strikethrough().TextColor(t.TextMuted)
+			}
+			if origin := gitRenameOrigin(L(c), f.Orig, f.Path); origin != "" {
+				ui.Text(c, origin).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().MinWidth(sz(48)).Shrink(2).Tooltip(gitRenamePath(f.Orig, f.Path))
 			}
 		})
 		if row.Clicked() {
@@ -1463,11 +1466,13 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 			if pressable(iconButtonSized(c, iconArrowDown, a.withKey(L(c).GitNextChange(), "nextChange"), buttonBox(), iconSize)).Clicked() {
 				a.pushStep(L(c), v, ps, 1)
 			}
-			ui.Text(c, df.rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Padding(0, 4).Tooltip(df.rel)
+			ui.Text(c, gitDiffPath(df.orig, df.rel)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Padding(0, 4).Tooltip(gitRenamePath(df.orig, df.rel))
 			if d.kind == docDiff {
 				if n := len(df.state.Hunks()); n > 0 {
 					added, deleted := df.state.Stats()
 					ui.Text(c, L(c).GitChangeStats(min(df.hunk+1, n), n, added, deleted)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1)
+				} else if df.orig != "" && df.orig != df.rel {
+					ui.Text(c, gitDiffZeroMsg(L(c), df)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				}
 			}
 			ui.Spacer(c)

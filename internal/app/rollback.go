@@ -422,7 +422,7 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 			col.Width(1080).Height(640)
 		}
 		col.Children(func() {
-			box.title(c, df.rel)
+			box.titleTooltip(c, gitDiffPath(df.orig, df.rel), gitRenamePath(df.orig, df.rel))
 			ui.Row(c).Height(sz(28)).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
 				if pressable(iconButtonSized(c, iconArrowUp, a.withKey(L(c).GitPreviousChange(), "prevChange"), buttonBox(), iconSize)).Clicked() {
 					a.rollbackStep(L(c), -1)
@@ -454,6 +454,8 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 					if n := len(df.state.Hunks()); n > 0 {
 						added, deleted := df.state.Stats()
 						ui.Text(c, L(c).GitChangeStats(min(df.hunk+1, n), n, added, deleted)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1)
+					} else if df.orig != "" && df.orig != df.rel {
+						ui.Text(c, gitDiffZeroMsg(L(c), df)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 					}
 					// 每处旁边的 >> 要找到那一处才点得到，这里常驻一个，作用在 F7 走到的那一处
 					if df.hunk < len(df.state.Hunks()) {
@@ -535,9 +537,12 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 		}
 		letter := statusLetter(e)
 		changeGlyph(c, row.name, e.IsDir(), letter == 'D')
-		name := ui.Text(c, row.name).FontSize(fsBody).SingleLine().Shrink(1).TextColor(letterColor(c, letter)).Tooltip(gitStatusText(L(c), letter))
+		name := ui.Text(c, row.name).FontSize(fsBody).SingleLine().Shrink(1).TextColor(letterColor(c, letter)).Tooltip(gitStatusTooltip(L(c), letter, e.Orig, e.Path, false))
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
+		}
+		if origin := gitRenameOrigin(L(c), e.Orig, e.Path); origin != "" {
+			ui.Text(c, origin).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().MinWidth(sz(48)).Shrink(2).Tooltip(gitRenamePath(e.Orig, e.Path))
 		}
 		ui.Spacer(c)
 		if s, ok := g.head[e.Path]; ok && !s.Binary && !e.Untracked {

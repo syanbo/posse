@@ -179,6 +179,10 @@ func (a *app) targetRevertHunk(m locales.Messages, v *filesView, d *fileDoc, i i
 				df.state.Revert(i)
 				clampHunk(df)
 				df.stamp = out.Version.Stamp
+				if len(df.state.Hunks()) == 0 {
+					df.bytesChecked, df.sameBytes, df.sameText = false, false, false
+					a.loadDiff(v, d)
+				}
 			})
 		})
 	}()

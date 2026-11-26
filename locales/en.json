@@ -3007,6 +3007,19 @@
       }
     }
   },
+  "gitMovedFrom": "moved from {path}",
+  "@gitMovedFrom": {
+    "description": "Secondary label next to a moved file in Git change lists, showing its previous path or directory.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "gitMovedUnchanged": "Moved, contents are identical",
+  "@gitMovedUnchanged": {
+    "description": "Diff toolbar status text when a file was moved to another directory without text changes."
+  },
   "gitNewFile": "New File",
   "@gitNewFile": {
     "description": "Label on the old side of an image diff when the file is new."
@@ -3138,6 +3151,19 @@
   "gitRenamed": "Renamed",
   "@gitRenamed": {
     "description": "Change status of a renamed file, shown when hovering its name in the change lists."
+  },
+  "gitRenamedFrom": "renamed from {path}",
+  "@gitRenamedFrom": {
+    "description": "Secondary label next to a file renamed in the same directory in Git change lists, showing its previous filename.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "gitRenamedUnchanged": "Renamed, contents are identical",
+  "@gitRenamedUnchanged": {
+    "description": "Diff toolbar status text when a file was renamed in the same directory without text changes."
   },
   "gitRepoPickerLabel": "Repository {repo}",
   "@gitRepoPickerLabel": {

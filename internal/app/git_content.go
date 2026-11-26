@@ -159,7 +159,9 @@ func (a *app) loadTargetDiff(v *filesView, d *fileDoc) {
 			lines = [2]int{lineCount(old), lineCount(nw)}
 		}
 		var cmp *editor.DiffComparison
+		var sameBytes, sameText bool
 		if err == nil && !isImage && !tooLarge && !files.IsBinary(old) && !files.IsBinary(nw) {
+			sameBytes, sameText = diffBytesSame(old, nw, oldExists, newExists)
 			cmp = editor.CompareTexts(string(old), string(nw), ignore)
 		}
 		a.update(func() {
@@ -183,6 +185,7 @@ func (a *app) loadTargetDiff(v *filesView, d *fileDoc) {
 				return
 			}
 			df.loaded, df.retry, df.stamp = true, false, stamp
+			df.bytesChecked, df.sameBytes, df.sameText = false, false, false
 			d.err = ""
 			if tooLarge {
 				df.sizes, df.lines = [2]int{len(old), len(nw)}, lines
@@ -198,6 +201,7 @@ func (a *app) loadTargetDiff(v *filesView, d *fileDoc) {
 				return
 			}
 			df.binary = false
+			df.bytesChecked, df.sameBytes, df.sameText = true, sameBytes, sameText
 			lang := editor.LanguageFor(spec.rel)
 			if df.state.Old == nil {
 				df.state.Old, df.state.New = editor.NewBuffer(string(old)), editor.NewBuffer(string(nw))

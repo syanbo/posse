@@ -8125,6 +8125,38 @@ func (msgs Messages) GitMoreLines(count int) string {
 	return Catalog.Format(msgs.locale, "gitMoreLines", map[string]any{"count": count})
 }
 
+// GitMovedFrom says "moved from {path}"
+// in the language the app shows.
+//
+// Secondary label next to a moved file in Git change lists, showing its
+// previous path or directory.
+func GitMovedFrom(path string) string { return In(i18n.Locale()).GitMovedFrom(path) }
+
+// GitMovedFrom says "moved from {path}"
+// in the language of msgs.
+//
+// Secondary label next to a moved file in Git change lists, showing its
+// previous path or directory.
+func (msgs Messages) GitMovedFrom(path string) string {
+	return Catalog.Format(msgs.locale, "gitMovedFrom", map[string]any{"path": path})
+}
+
+// GitMovedUnchanged says "Moved, contents are identical"
+// in the language the app shows.
+//
+// Diff toolbar status text when a file was moved to another directory
+// without text changes.
+func GitMovedUnchanged() string { return In(i18n.Locale()).GitMovedUnchanged() }
+
+// GitMovedUnchanged says "Moved, contents are identical"
+// in the language of msgs.
+//
+// Diff toolbar status text when a file was moved to another directory
+// without text changes.
+func (msgs Messages) GitMovedUnchanged() string {
+	return Catalog.Format(msgs.locale, "gitMovedUnchanged", nil)
+}
+
 // GitNewFile says "New File"
 // in the language the app shows.
 //
@@ -8503,6 +8535,38 @@ func GitRenamed() string { return In(i18n.Locale()).GitRenamed() }
 // change lists.
 func (msgs Messages) GitRenamed() string {
 	return Catalog.Format(msgs.locale, "gitRenamed", nil)
+}
+
+// GitRenamedFrom says "renamed from {path}"
+// in the language the app shows.
+//
+// Secondary label next to a file renamed in the same directory in Git
+// change lists, showing its previous filename.
+func GitRenamedFrom(path string) string { return In(i18n.Locale()).GitRenamedFrom(path) }
+
+// GitRenamedFrom says "renamed from {path}"
+// in the language of msgs.
+//
+// Secondary label next to a file renamed in the same directory in Git
+// change lists, showing its previous filename.
+func (msgs Messages) GitRenamedFrom(path string) string {
+	return Catalog.Format(msgs.locale, "gitRenamedFrom", map[string]any{"path": path})
+}
+
+// GitRenamedUnchanged says "Renamed, contents are identical"
+// in the language the app shows.
+//
+// Diff toolbar status text when a file was renamed in the same directory
+// without text changes.
+func GitRenamedUnchanged() string { return In(i18n.Locale()).GitRenamedUnchanged() }
+
+// GitRenamedUnchanged says "Renamed, contents are identical"
+// in the language of msgs.
+//
+// Diff toolbar status text when a file was renamed in the same directory
+// without text changes.
+func (msgs Messages) GitRenamedUnchanged() string {
+	return Catalog.Format(msgs.locale, "gitRenamedUnchanged", nil)
 }
 
 // GitRepoPickerLabel says "Repository {repo}"

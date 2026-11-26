@@ -3197,3 +3197,135 @@ func TestAddGitRunReplacesOldStart(t *testing.T) {
 		t.Fatalf("%d push records", n)
 	}
 }
+
+func TestGitRenameHelpers(t *testing.T) {
+	pathCases := []struct {
+		orig, rel, want string
+	}{
+		{"", "a/b.go", "a/b.go"},
+		{"a/b.go", "a/b.go", "a/b.go"},
+		{"old.go", "new.go", "old.go → new.go"},
+		{"a/b/old.go", "a/b/new.go", "a/b/{old.go → new.go}"},
+		{"android/app/src/qa/java/Foo.kt", "android/app/src/internalUpdater/java/Foo.kt", "android/app/src/{qa → internalUpdater}/java/Foo.kt"},
+		{"src/Foo.kt", "src/sub/Foo.kt", "src/Foo.kt → src/sub/Foo.kt"},
+		{"a/x.go", "b/y.go", "a/x.go → b/y.go"},
+	}
+	for _, tc := range pathCases {
+		if got := gitDiffPath(tc.orig, tc.rel); got != tc.want {
+			t.Errorf("gitDiffPath(%q, %q) = %q, want %q", tc.orig, tc.rel, got, tc.want)
+		}
+	}
+
+	m := locales.In("zh-Hans")
+	originCases := []struct {
+		orig, cur, want string
+	}{
+		{"", "a/b.go", ""},
+		{"a/b.go", "a/b.go", ""},
+		{"a/old.go", "a/new.go", "重命名自 old.go"},
+		{"src/qa/Foo.kt", "src/internal/Foo.kt", "移动自 src/qa"},
+		{"Foo.kt", "src/Foo.kt", "移动自 Foo.kt"},
+		{"src/qa/Old.kt", "src/internal/New.kt", "移动自 src/qa/Old.kt"},
+	}
+	for _, tc := range originCases {
+		if got := gitRenameOrigin(m, tc.orig, tc.cur); got != tc.want {
+			t.Errorf("gitRenameOrigin(%q, %q) = %q, want %q", tc.orig, tc.cur, got, tc.want)
+		}
+	}
+
+	dfSame := &diffDoc{diffSpec: diffSpec{rel: "a.go"}, bytesChecked: true, sameBytes: true, sameText: true}
+	if got := gitDiffZeroMsg(m, dfSame); got != "没有差异" {
+		t.Errorf("normal zero diff = %q", got)
+	}
+	dfMoved := &diffDoc{diffSpec: diffSpec{orig: "src/qa/Foo.kt", rel: "src/internal/Foo.kt"}, bytesChecked: true, sameBytes: true, sameText: true}
+	if got := gitDiffZeroMsg(m, dfMoved); got != "已移动，内容相同" {
+		t.Errorf("moved zero diff = %q", got)
+	}
+	dfRenamed := &diffDoc{diffSpec: diffSpec{orig: "src/old.go", rel: "src/new.go"}, bytesChecked: true, sameBytes: true, sameText: true}
+	if got := gitDiffZeroMsg(m, dfRenamed); got != "已重命名，内容相同" {
+		t.Errorf("renamed zero diff = %q", got)
+	}
+	dfSpace := &diffDoc{diffSpec: diffSpec{orig: "src/old.go", rel: "src/new.go"}, bytesChecked: true, sameBytes: false, sameText: false}
+	dfSpace.state.IgnoreWhitespace = true
+	if got := gitDiffZeroMsg(m, dfSpace); got != m.GitWhitespaceOnly() {
+		t.Errorf("whitespace-only renamed diff = %q", got)
+	}
+	// CRLF/LF 不同或一边缺失时，不能误报「内容相同」；单独 CR 不当作换行（与 mygo 编辑器一致）
+	sameBytes, sameText := diffBytesSame([]byte("a\r\nb\r\n"), []byte("a\nb\n"), true, true)
+	if sameBytes || !sameText {
+		t.Fatalf("CRLF/LF diffBytesSame = (%v, %v), want (false, true)", sameBytes, sameText)
+	}
+	if _, st := diffBytesSame([]byte("alpha\r \nbeta\n"), []byte("alpha\n \rbeta\n"), true, true); st {
+		t.Fatal("standalone CR must not normalize equal to LF")
+	}
+	dfCRLF := &diffDoc{
+		diffSpec:     diffSpec{orig: "src/qa/Foo.kt", rel: "src/internal/Foo.kt"},
+		bytesChecked: true,
+		sameBytes:    sameBytes,
+		sameText:     sameText,
+	}
+	if got := gitDiffZeroMsg(m, dfCRLF); got != "没有差异" {
+		t.Errorf("CRLF-different moved diff = %q, want 没有差异", got)
+	}
+	if sb, _ := diffBytesSame(nil, nil, true, false); sb {
+		t.Fatal("missing target empty file must not report sameBytes")
+	}
+}
+
+// 纯移动、纯重命名与移动后再修改（RM）：改动列表保留目标目录并标出来源，
+// diff 顶栏折叠显示旧新路径，纯移动/重命名提示内容相同，RM 正常显示改动统计。
+func TestGitRenameDisplay(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	os.MkdirAll(filepath.Join(root, "src", "qa"), 0o755)
+	os.MkdirAll(filepath.Join(root, "src", "internal"), 0o755)
+	os.WriteFile(filepath.Join(root, "src", "qa", "Manager.kt"), []byte("package qa\n\nclass Manager\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "src", "qa", "Old.kt"), []byte("package qa\n\nclass Old\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "src", "qa", "Edited.kt"), []byte("package qa\n\nclass Edited\n"), 0o644)
+	gitRun(t, root, "add", "src/qa/Manager.kt", "src/qa/Old.kt", "src/qa/Edited.kt")
+	gitRun(t, root, "commit", "-q", "-m", "add files")
+	gitRun(t, root, "mv", "src/qa/Manager.kt", "src/internal/Manager.kt")
+	gitRun(t, root, "mv", "src/qa/Old.kt", "src/qa/New.kt")
+	gitRun(t, root, "mv", "src/qa/Edited.kt", "src/internal/Edited.kt")
+	os.WriteFile(filepath.Join(root, "src", "internal", "Edited.kt"), []byte("package qa\n\nclass Edited {\n    val x = 1\n}\n"), 0o644)
+
+	tt := newTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	until(t, tt, "moved and renamed rows", func() bool {
+		return tt.HasText("src/internal") &&
+			tt.HasText("移动自 src/qa") &&
+			tt.HasText("重命名自 Old.kt")
+	})
+
+	a.openDiff(&a.workspaces[0], changeSpec("", gitx.Entry{Path: "src/internal/Manager.kt", Orig: "src/qa/Manager.kt", X: 'R', Y: '.'}), nil, true)
+	until(t, tt, "moved diff bar", func() bool {
+		return v.cur != nil && v.cur.kind == docDiff &&
+			tt.HasText("src/{qa → internal}/Manager.kt") &&
+			tt.HasText("已移动，内容相同")
+	})
+
+	a.openDiff(&a.workspaces[0], changeSpec("", gitx.Entry{Path: "src/qa/New.kt", Orig: "src/qa/Old.kt", X: 'R', Y: '.'}), nil, true)
+	until(t, tt, "renamed diff bar", func() bool {
+		return v.cur != nil && v.cur.kind == docDiff &&
+			tt.HasText("src/qa/{Old.kt → New.kt}") &&
+			tt.HasText("已重命名，内容相同")
+	})
+
+	a.openDiff(&a.workspaces[0], changeSpec("", gitx.Entry{Path: "src/internal/Edited.kt", Orig: "src/qa/Edited.kt", X: 'R', Y: 'M'}), nil, true)
+	until(t, tt, "moved and modified diff bar", func() bool {
+		return v.cur != nil && v.cur.kind == docDiff &&
+			tt.HasText("src/{qa → internal}/Edited.kt") &&
+			len(v.cur.diff.state.Hunks()) > 0 &&
+			!tt.HasText("已移动，内容相同")
+	})
+
+	// 回滚 RM 文件的最后一处改动后，重新核对原始字节并显示「已移动，内容相同」
+	a.revertHunk(locales.In("zh-Hans"), v, v.cur, 0)
+	until(t, tt, "reverted RM back to identical", func() bool {
+		return v.cur != nil && v.cur.kind == docDiff &&
+			v.cur.diff.bytesChecked &&
+			len(v.cur.diff.state.Hunks()) == 0 &&
+			tt.HasText("已移动，内容相同")
+	})
+}

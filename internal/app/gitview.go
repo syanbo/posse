@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -323,22 +324,25 @@ type diffDoc struct {
 	loaded     bool
 	retry      bool
 	diffSpec
-	siblings  []diffSpec // 同一组的文件（比较、提交里的），F7 在它们之间跳；为空时在改动列表里跳
-	state     editor.DiffState
-	hunk      int  // F7 走到的改动
-	first     bool // 读进来后跳到第一处改动；⇧F7 从后一个文件退回来时为假，跳到最后一处
-	jumped    bool // 已经跳过
-	binary    bool
-	images    [2]diffImage // 图片文件的两边：改之前、改之后
-	checkers  [2]checkerCache
-	stamp     files.Stamp // 工作区文件的磁盘戳，变了才重读
-	hint      string      // F7 到头时 diff 栏下面的提示（diffHint）
-	hintAt    time.Time
-	force     bool   // 超过 diffMaxSize 也比较：点过"仍要比较"
-	comparing bool   // 大文件正在后台比较（读进来之后，或切换了忽略空白）
-	sizes     [2]int // 超过 diffMaxSize 时两边的字节数和行数，给提示用
-	lines     [2]int
-	tracked   bool // 已经记进 trackBigDiff
+	siblings     []diffSpec // 同一组的文件（比较、提交里的），F7 在它们之间跳；为空时在改动列表里跳
+	state        editor.DiffState
+	hunk         int  // F7 走到的改动
+	first        bool // 读进来后跳到第一处改动；⇧F7 从后一个文件退回来时为假，跳到最后一处
+	jumped       bool // 已经跳过
+	binary       bool
+	images       [2]diffImage // 图片文件的两边：改之前、改之后
+	checkers     [2]checkerCache
+	stamp        files.Stamp // 工作区文件的磁盘戳，变了才重读
+	hint         string      // F7 到头时 diff 栏下面的提示（diffHint）
+	hintAt       time.Time
+	force        bool   // 超过 diffMaxSize 也比较：点过"仍要比较"
+	comparing    bool   // 大文件正在后台比较（读进来之后，或切换了忽略空白）
+	sizes        [2]int // 超过 diffMaxSize 时两边的字节数和行数，给提示用
+	lines        [2]int
+	tracked      bool // 已经记进 trackBigDiff
+	bytesChecked bool // 加载时已比较原始字节和两边存在性，避免渲染时每帧拷贝全文
+	sameBytes    bool // 两边都存在且原始字节完全相同
+	sameText     bool // 两边按 LF 规范化后的文本完全相同
 }
 
 // diffImage 是图片 diff 的一边：缩好的图、原始尺寸、文件大小；size 为 -1 表示这一边没有文件（新增或删除）。
@@ -585,7 +589,10 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 		var err error
 		oldExists, newExists := spec.oldRev != "", true
 		if spec.oldRev != "" {
-			old, err = showRev(ctx, root, spec.oldRev, oldPath)
+			old, err = gitx.Show(ctx, root, spec.oldRev, oldPath)
+			if errors.Is(err, gitx.ErrNotFound) {
+				old, err, oldExists = nil, nil, false
+			}
 		}
 		var stamp files.Stamp
 		if err == nil {
@@ -598,8 +605,10 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 					nw, err, newExists = nil, nil, false
 				}
 			default:
-				nw, err = showRev(ctx, root, spec.newRev, spec.rel)
-				newExists = len(nw) > 0
+				nw, err = gitx.Show(ctx, root, spec.newRev, spec.rel)
+				if errors.Is(err, gitx.ErrNotFound) {
+					nw, err, newExists = nil, nil, false
+				}
 			}
 		}
 		// 图片：两边都解码成位图，左右对照看
@@ -615,6 +624,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 		}
 		// 比较在这里做完，界面线程只装结果
 		var cmp *editor.DiffComparison
+		var sameBytes, sameText bool
 		if err == nil && !isImage && !tooLarge && !files.IsBinary(old) && !files.IsBinary(nw) {
 			if len(old)+len(nw) > diffAheadSize {
 				a.update(func() {
@@ -623,6 +633,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 					}
 				})
 			}
+			sameBytes, sameText = diffBytesSame(old, nw, oldExists, newExists)
 			cmp = editor.CompareTexts(string(old), string(nw), ignore)
 		}
 		a.update(func() {
@@ -636,6 +647,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 				return
 			}
 			df.stamp = stamp
+			df.bytesChecked, df.sameBytes, df.sameText = false, false, false
 			if tooLarge {
 				df.sizes, df.lines = [2]int{len(old), len(nw)}, lines
 				d.kind = docTooLarge
@@ -649,6 +661,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 				df.binary, d.kind = true, docBinary
 				return
 			}
+			df.bytesChecked, df.sameBytes, df.sameText = true, sameBytes, sameText
 			lang := editor.LanguageFor(spec.rel)
 			if df.state.Old == nil {
 				df.state.Old, df.state.New = editor.NewBuffer(string(old)), editor.NewBuffer(string(nw))
@@ -812,6 +825,11 @@ func (a *app) revertHunk(m locales.Messages, v *filesView, d *fileDoc, i int) {
 		return
 	}
 	df.stamp = st
+	if len(df.state.Hunks()) == 0 {
+		// 回滚到零处改动时重读一次原始字节，准确刷新「内容相同 / 仅空白不同」状态
+		df.bytesChecked, df.sameBytes, df.sameText = false, false, false
+		a.loadDiff(v, d)
+	}
 	if g := v.repoAt(df.root); g != nil {
 		a.refreshRepo(g)
 	}
@@ -1186,6 +1204,110 @@ func gitStatusText(m locales.Messages, letter byte) string {
 		return m.GitHasConflicts()
 	}
 	return m.GitModified()
+}
+
+// gitRenamePath 返回重命名或移动的完整旧新路径；不是重命名时原样返回当前路径。
+func gitRenamePath(orig, cur string) string {
+	if orig == "" || orig == cur {
+		return cur
+	}
+	return orig + " → " + cur
+}
+
+// gitDiffPath 在 diff 顶栏和菜单里展示路径：重命名或移动时折叠公共目录前后缀，避免长路径把变化处截断。
+func gitDiffPath(orig, rel string) string {
+	if orig == "" || orig == rel {
+		return rel
+	}
+	op := strings.Split(orig, "/")
+	rp := strings.Split(rel, "/")
+	p := 0
+	for p < len(op) && p < len(rp) && op[p] == rp[p] {
+		p++
+	}
+	s := 0
+	for s < len(op)-p && s < len(rp)-p && op[len(op)-1-s] == rp[len(rp)-1-s] {
+		s++
+	}
+	oldMid := op[p : len(op)-s]
+	newMid := rp[p : len(rp)-s]
+	if (p > 0 || s > 0) && len(oldMid) > 0 && len(newMid) > 0 {
+		var b strings.Builder
+		if p > 0 {
+			b.WriteString(strings.Join(op[:p], "/"))
+			b.WriteByte('/')
+		}
+		b.WriteByte('{')
+		b.WriteString(strings.Join(oldMid, "/"))
+		b.WriteString(" → ")
+		b.WriteString(strings.Join(newMid, "/"))
+		b.WriteByte('}')
+		if s > 0 {
+			b.WriteByte('/')
+			b.WriteString(strings.Join(op[len(op)-s:], "/"))
+		}
+		return b.String()
+	}
+	return orig + " → " + rel
+}
+
+// gitRenameOrigin 照 WebStorm 在文件行里标出重命名或移动来源。
+func gitRenameOrigin(m locales.Messages, orig, cur string) string {
+	if orig == "" || orig == cur {
+		return ""
+	}
+	if path.Dir(orig) == path.Dir(cur) {
+		return m.GitRenamedFrom(path.Base(orig))
+	}
+	if path.Base(orig) == path.Base(cur) {
+		if dir := path.Dir(orig); dir != "." {
+			return m.GitMovedFrom(dir)
+		}
+	}
+	return m.GitMovedFrom(orig)
+}
+
+// gitStatusTooltip 是悬停文件名时的提示：有旧路径时附上完整旧新路径，方便核对移动前的位置。
+func gitStatusTooltip(m locales.Messages, letter byte, orig, cur string, withPath bool) string {
+	tip := gitStatusText(m, letter)
+	if orig != "" && orig != cur {
+		return tip + "\n" + gitRenamePath(orig, cur)
+	}
+	if withPath && cur != "" {
+		return tip + "\n" + cur
+	}
+	return tip
+}
+
+// diffBytesSame 在后台一次算出原始字节与规范化文本是否相等，避免渲染期每帧拷贝大文本。
+func diffBytesSame(old, nw []byte, oldExists, newExists bool) (sameBytes, sameText bool) {
+	if oldExists && newExists && bytes.Equal(old, nw) {
+		return true, true
+	}
+	return false, normalizeDiffLF(old) == normalizeDiffLF(nw)
+}
+
+func normalizeDiffLF(b []byte) string {
+	// 与 mygo 编辑器保持一致：只把 CRLF 转为 LF，不改单独的 CR。
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
+}
+
+// gitDiffZeroMsg 是 diff 算出 0 处文本改动时的说明：只在零处改动时调用，
+// 直接读加载阶段缓存的原始字节与规范化文本比对结果，不在渲染帧拷贝缓冲区。
+func gitDiffZeroMsg(m locales.Messages, df *diffDoc) string {
+	if !df.bytesChecked {
+		return m.GitNoDifferences()
+	}
+	if df.state.IgnoreWhitespace && !df.sameText {
+		return m.GitWhitespaceOnly()
+	}
+	if df.sameBytes && df.orig != "" && df.orig != df.rel {
+		if path.Dir(df.orig) == path.Dir(df.rel) {
+			return m.GitRenamedUnchanged()
+		}
+		return m.GitMovedUnchanged()
+	}
+	return m.GitNoDifferences()
 }
 
 // rollbackDiffFile 是 diff 栏的"回滚这个文件"：在回滚对话框里回滚了这个文件后接着看同一组的下一个文件（没有就看上一个），

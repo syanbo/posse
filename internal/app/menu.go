@@ -21,6 +21,7 @@ type menuItem struct {
 	m        *popMenu
 	seq      int
 	label    string
+	tip      string
 	keys     string
 	icon     *ui.SVG
 	lead     func() // 自己画最左边（agent 图标），优先于 icon
@@ -63,6 +64,10 @@ func (it *menuItem) Lead(draw func()) *menuItem  { it.lead = draw; return it }
 func (it *menuItem) Disabled(d bool) *menuItem   { it.disabled = d; return it }
 func (it *menuItem) Checked(on bool) *menuItem   { it.checked = &on; return it }
 func (it *menuItem) Danger() *menuItem           { it.danger = true; return it }
+func (it *menuItem) Tooltip(tip string) *menuItem {
+	it.tip = tip
+	return it
+}
 
 // Shortcut 只在右边写出快捷键，不绑定：快捷键本身由界面别处处理。
 func (it *menuItem) Shortcut(mods ui.Modifiers, key ui.Key) *menuItem {
@@ -311,6 +316,9 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 		prevSep = false
 		row := ui.Row(c.Key(it.seq)).Height(sz(28)).Margin(2, 0, 0, 0).Padding(0, 12, 0, 8).Gap(8).Radius(rRow).AlignItems(ui.Center).
 			Role(ui.RoleMenuItem).Label(it.label)
+		if it.tip != "" {
+			row.Tooltip(it.tip)
+		}
 		if it.disabled {
 			row.Cursor(ui.CursorDefault)
 		} else if row.Hovered() {
