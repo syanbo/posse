@@ -3,6 +3,14 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.40
+
+- 修复 iOS 界面中英文混排字重割裂与副标题偏细发虚的问题：iOS 全局界面字体统一使用系统内置 `PingFang SC`，与等宽代码字体独立、不影响安卓端。
+
+### English
+
+- Fixed iOS mixed Chinese/Latin font weight mismatch and overly thin subtitles by setting iOS global UI font family to built-in `PingFang SC` (keeping monospace code fonts and Android unchanged).
+
 ## 0.1.39
 
 - 语音识别改为输入框内联交互（覆盖终端草稿栏、对话页与讨论页）：移除上方独立预览框，识别文字直接流式显示在输入框内，右侧显示柔和的小声波动画与取消/完成键，输入栏单行高度保持不变、零跳动。
