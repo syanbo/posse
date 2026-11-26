@@ -116,6 +116,7 @@ type Client interface {
 	Consume(ctx context.Context, profile, eventKey string, onReady func(), onLine func([]byte)) error
 	SendCard(ctx context.Context, profile, chatID, cardJSON string) (string, error)
 	ReplyCard(ctx context.Context, profile, messageID string, inThread bool, cardJSON string) (string, error)
+	ReplyText(ctx context.Context, profile, messageID string, inThread bool, text string) (string, error)
 	PatchCard(ctx context.Context, profile, cardMsgID, cardJSON string) error
 	SendFile(ctx context.Context, profile, chatID, filePath string) error
 	DownloadResource(ctx context.Context, profile, messageID, fileKey, kind, outDir string) (string, error)
@@ -622,6 +623,21 @@ func (c *CLIClient) ReplyCard(ctx context.Context, profile, messageID string, in
 		args = append(args, "--reply-in-thread")
 	}
 	out, err := c.run(ctx, profile, "", []byte(cardJSON), args...)
+	if err != nil {
+		return "", err
+	}
+	return parseLarkMessageID(out)
+}
+
+func (c *CLIClient) ReplyText(ctx context.Context, profile, messageID string, inThread bool, text string) (string, error) {
+	if strings.TrimSpace(text) == "" {
+		return "", errors.New("reply text is required")
+	}
+	args := []string{"im", "+messages-reply", "--as", "bot", "--message-id", messageID, "--text", "-"}
+	if inThread {
+		args = append(args, "--reply-in-thread")
+	}
+	out, err := c.run(ctx, profile, "", []byte(text), args...)
 	if err != nil {
 		return "", err
 	}

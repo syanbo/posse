@@ -17,6 +17,7 @@ import (
 type fakeClient struct {
 	mu            sync.Mutex
 	sent          []fakeCardCall
+	repliedTexts  []fakeTextCall
 	patched       []fakeCardCall
 	patchErr      error
 	patchHook     func(ctx context.Context, cardMsgID, cardJSON string) error
@@ -37,6 +38,13 @@ type fakeCardCall struct {
 	target   string
 	inThread bool
 	cardJSON string
+}
+
+type fakeTextCall struct {
+	profile  string
+	target   string
+	inThread bool
+	text     string
 }
 
 func (f *fakeClient) Profiles(context.Context) ([]ProfileInfo, error) {
@@ -77,6 +85,14 @@ func (f *fakeClient) ReplyCard(ctx context.Context, profile, msgID string, inThr
 	f.nextID++
 	f.sent = append(f.sent, fakeCardCall{profile: profile, target: msgID, inThread: inThread, cardJSON: cardJSON})
 	return "om_reply_" + string(rune('0'+f.nextID)), nil
+}
+
+func (f *fakeClient) ReplyText(_ context.Context, profile, msgID string, inThread bool, text string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	f.repliedTexts = append(f.repliedTexts, fakeTextCall{profile: profile, target: msgID, inThread: inThread, text: text})
+	return "om_text_" + string(rune('0'+f.nextID)), nil
 }
 
 func (f *fakeClient) PatchCard(ctx context.Context, profile, cardMsgID, cardJSON string) error {
@@ -455,22 +471,27 @@ func TestGatewayMessageSecurityCommandsAndReverseSync(t *testing.T) {
 		t.Fatalf("expected form answer canary, got %q", fh.answered["q_1"])
 	}
 
-	// 7. 执行完成：先收拢最初的进度卡，再把最终结果作为新卡片发到对话底部（回复原提问消息）
+	// 7. 执行完成：中间已有审批/问答卡插队，继续原地更新原进度卡为完整结果，并在底部发轻量文本引用提醒
 	sentBeforeFinish := len(fc.sent)
 	patchedBeforeFinish := len(fc.patched)
+	repliedBeforeFinish := len(fc.repliedTexts)
 	gw.OnExecFinished("self/d_oc_grp1", "x_1", "done", "Root cause: null pointer in login.")
 	if len(fc.patched) != patchedBeforeFinish+1 {
-		t.Fatalf("expected progress card to be patched into compact closed receipt, got %d patches", len(fc.patched)-patchedBeforeFinish)
+		t.Fatalf("expected progress card to be patched in place with full result, got %d patches", len(fc.patched)-patchedBeforeFinish)
 	}
-	if strings.Contains(fc.patched[len(fc.patched)-1].cardJSON, "null pointer in login") {
-		t.Fatalf("progress card should NOT contain full result body")
+	lastPatched := fc.patched[len(fc.patched)-1]
+	if !strings.Contains(lastPatched.cardJSON, "null pointer in login") {
+		t.Fatalf("progress card should contain full result body: %+v", lastPatched)
 	}
-	if len(fc.sent) != sentBeforeFinish+1 {
-		t.Fatalf("expected a NEW result card at bottom of chat, got %d new sends", len(fc.sent)-sentBeforeFinish)
+	if len(fc.sent) != sentBeforeFinish {
+		t.Fatalf("expected no duplicate result card at bottom, got %d new sends", len(fc.sent)-sentBeforeFinish)
 	}
-	lastSent := fc.sent[len(fc.sent)-1]
-	if lastSent.target != "om_1" || !strings.Contains(lastSent.cardJSON, "null pointer in login") {
-		t.Fatalf("unexpected final result card: %+v", lastSent)
+	if len(fc.repliedTexts) != repliedBeforeFinish+1 {
+		t.Fatalf("expected lightweight quote notice at bottom, got %d text replies", len(fc.repliedTexts)-repliedBeforeFinish)
+	}
+	lastNotice := fc.repliedTexts[len(fc.repliedTexts)-1]
+	if lastNotice.target != lastPatched.target || lastNotice.text == "" {
+		t.Fatalf("unexpected interleaved quote notice: %+v (want target %q)", lastNotice, lastPatched.target)
 	}
 }
 
@@ -577,16 +598,16 @@ func TestGatewayOnExecFinishedInPlaceVsInterleaved(t *testing.T) {
 			t.Fatalf("expected 1 progress card, got %d", len(fc.sent))
 		}
 		gw.OnExecFinished("self/d_oc_p2p", "x_1", "done", "作者是 xukai")
-		if len(fc.sent) != 1 {
-			t.Fatalf("expected NO new result card when no interleaved message, got %d sent", len(fc.sent))
+		if len(fc.sent) != 1 || len(fc.repliedTexts) != 0 {
+			t.Fatalf("expected NO new result card or notice when no interleaved message, got sent=%d texts=%+v", len(fc.sent), fc.repliedTexts)
 		}
 		if len(fc.patched) != 1 || fc.patched[0].target != "om_reply_1" || !strings.Contains(fc.patched[0].cardJSON, "作者是 xukai") {
 			t.Fatalf("expected progress card patched in place with result body, got %+v", fc.patched)
 		}
 	})
 
-	// 2. 群聊中间收到同事未 @ 机器人的普通消息：视为插队，收拢旧卡 + 底部发新卡
-	t.Run("new card when group message interleaved", func(t *testing.T) {
+	// 2. 群聊中间收到同事未 @ 机器人的普通消息：继续原地更新原进度卡 + 底部补发轻量引用提醒
+	t.Run("in place with quote notice when group message interleaved", func(t *testing.T) {
 		fc := &fakeClient{}
 		fh := newFakeHost()
 		gw := NewGateway(t.TempDir(), fc, fh)
@@ -601,16 +622,19 @@ func TestGatewayOnExecFinishedInPlaceVsInterleaved(t *testing.T) {
 			SenderID: "ou_colleague", Content: "顺便问下下午开会吗",
 		})
 		gw.OnExecFinished("self/d_oc_grp", "x_1", "done", "已查明原因")
-		if len(fc.patched) != 1 || strings.Contains(fc.patched[0].cardJSON, "已查明原因") {
-			t.Fatalf("expected compact closed progress card patch, got %+v", fc.patched)
+		if len(fc.patched) != 1 || fc.patched[0].target != "om_reply_1" || !strings.Contains(fc.patched[0].cardJSON, "已查明原因") {
+			t.Fatalf("expected progress card patched in place with result body, got %+v", fc.patched)
 		}
-		if len(fc.sent) != 2 || !strings.Contains(fc.sent[1].cardJSON, "已查明原因") {
-			t.Fatalf("expected new result card at bottom, got %+v", fc.sent)
+		if len(fc.sent) != 1 {
+			t.Fatalf("expected no duplicate result card at bottom, got %+v", fc.sent)
+		}
+		if len(fc.repliedTexts) != 1 || fc.repliedTexts[0].target != "om_reply_1" || fc.repliedTexts[0].text == "" {
+			t.Fatalf("expected lightweight quote notice replying to progress card, got %+v", fc.repliedTexts)
 		}
 	})
 
-	// 3. 本地未收到插队事件，但远端最新消息已不是进度卡：兜底识别插队并发送新卡
-	t.Run("new card when remote latest message differs", func(t *testing.T) {
+	// 3. 本地未收到插队事件，但远端最新消息已不是进度卡：兜底识别插队，原地更新原卡 + 底部发轻量引用提醒
+	t.Run("in place with quote notice when remote latest message differs", func(t *testing.T) {
 		fc := &fakeClient{
 			recentMsgs: []FetchedMessage{{MessageID: "om_newer_msg"}},
 		}
@@ -623,12 +647,18 @@ func TestGatewayOnExecFinishedInPlaceVsInterleaved(t *testing.T) {
 			SenderID: "ou_owner", Content: "@Works Triage 查一下", Mentions: []MessageMention{{Name: "Works Triage"}},
 		})
 		gw.OnExecFinished("self/d_oc_grp2", "x_1", "done", "远端检测到插队")
-		if len(fc.sent) != 2 || !strings.Contains(fc.sent[1].cardJSON, "远端检测到插队") {
-			t.Fatalf("expected fallback to new card when remote latest message differs, got %+v", fc.sent)
+		if len(fc.patched) != 1 || !strings.Contains(fc.patched[0].cardJSON, "远端检测到插队") {
+			t.Fatalf("expected progress card patched in place, got %+v", fc.patched)
+		}
+		if len(fc.sent) != 1 {
+			t.Fatalf("expected no new result card when remote latest message differs, got %+v", fc.sent)
+		}
+		if len(fc.repliedTexts) != 1 || fc.repliedTexts[0].target != "om_reply_1" {
+			t.Fatalf("expected lightweight quote notice when remote latest message differs, got %+v", fc.repliedTexts)
 		}
 	})
 
-	// 4. 远端最新消息仍是进度卡（且跳过已撤回消息）：原地更新
+	// 4. 远端最新消息仍是进度卡（且跳过已撤回消息）：原地更新且不发引用提醒
 	t.Run("in place when remote latest non-deleted message matches progress card", func(t *testing.T) {
 		fc := &fakeClient{
 			recentMsgs: []FetchedMessage{
@@ -645,8 +675,8 @@ func TestGatewayOnExecFinishedInPlaceVsInterleaved(t *testing.T) {
 			SenderID: "ou_owner", Content: "查一下",
 		})
 		gw.OnExecFinished("self/d_oc_p2p2", "x_1", "done", "直接更新")
-		if len(fc.sent) != 1 || len(fc.patched) != 1 || !strings.Contains(fc.patched[0].cardJSON, "直接更新") {
-			t.Fatalf("expected in-place patch when latest non-deleted message matches progress card, sent=%d patched=%+v", len(fc.sent), fc.patched)
+		if len(fc.sent) != 1 || len(fc.repliedTexts) != 0 || len(fc.patched) != 1 || !strings.Contains(fc.patched[0].cardJSON, "直接更新") {
+			t.Fatalf("expected in-place patch without quote notice when latest non-deleted message matches progress card, sent=%d texts=%+v patched=%+v", len(fc.sent), fc.repliedTexts, fc.patched)
 		}
 	})
 
@@ -756,7 +786,7 @@ func TestGatewayOnExecFinishedInPlaceVsInterleaved(t *testing.T) {
 		}
 	})
 
-	// 8. 话题模式重试保留 inThread / threadKey，且按话题列表检查最新消息
+	// 8. 话题模式重试保留原失败卡、新建话题内进度卡，完成时按话题列表检查最新消息并原地更新新卡
 	t.Run("thread retry preserves thread scope", func(t *testing.T) {
 		threadBot := NormalizeBot(BotConfig{
 			ID: "lbot_t", Name: "Works Triage", Profile: "bot-a", Enabled: true,
@@ -764,7 +794,7 @@ func TestGatewayOnExecFinishedInPlaceVsInterleaved(t *testing.T) {
 			SessionMode: SessionThread, TriggerPolicy: TriggerSelf,
 		})
 		fc := &fakeClient{
-			threadMsgs: []FetchedMessage{{MessageID: "om_reply_1"}},
+			threadMsgs: []FetchedMessage{{MessageID: "om_reply_2"}},
 		}
 		fh := newFakeHost()
 		gw := NewGateway(t.TempDir(), fc, fh)
@@ -787,8 +817,49 @@ func TestGatewayOnExecFinishedInPlaceVsInterleaved(t *testing.T) {
 		if fc.threadCalls == 0 {
 			t.Fatalf("expected thread fetcher to be consulted for thread retry")
 		}
-		if len(fc.sent) != 1 || !strings.Contains(fc.patched[len(fc.patched)-1].cardJSON, "话题重试完成") {
-			t.Fatalf("expected in-place thread result update, sent=%d patched=%+v", len(fc.sent), fc.patched)
+		if len(fc.sent) != 2 || !fc.sent[1].inThread {
+			t.Fatalf("expected retry to send a new in-thread progress card preserving original card, sent=%+v", fc.sent)
+		}
+		if len(fc.patched) == 0 || fc.patched[len(fc.patched)-1].target != "om_reply_2" || !strings.Contains(fc.patched[len(fc.patched)-1].cardJSON, "话题重试完成") {
+			t.Fatalf("expected retry result patched onto new card om_reply_2, patched=%+v", fc.patched)
+		}
+	})
+
+	// 9. 空正文手动停止时若 PatchCard 失败，降级发送新结果卡，不留僵尸停止按钮
+	t.Run("manual stop patch failure falls back to new card", func(t *testing.T) {
+		fc := &fakeClient{patchErr: errors.New("patch timeout")}
+		fh := newFakeHost()
+		gw := NewGateway(t.TempDir(), fc, fh)
+		gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_q9", ChatID: "oc_p2p9", ChatType: "p2p",
+			SenderID: "ou_owner", Content: "查一下",
+		})
+		gw.OnExecFinished("self/d_oc_p2p9", "x_1", "stopped", "stopped by the user")
+		if len(fc.sent) != 2 {
+			t.Fatalf("expected fallback result card when stopped patch fails, got %+v", fc.sent)
+		}
+	})
+
+	// 10. interrupted 结局插队时引用提醒与失败卡分类保持一致
+	t.Run("interrupted outcome uses failure quote notice", func(t *testing.T) {
+		fc := &fakeClient{}
+		fh := newFakeHost()
+		gw := NewGateway(t.TempDir(), fc, fh)
+		gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_q10", ChatID: "oc_grp10", ChatType: "group",
+			SenderID: "ou_owner", Content: "@Works Triage 查一下", Mentions: []MessageMention{{Name: "Works Triage"}},
+		})
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_chatter10", ChatID: "oc_grp10", ChatType: "group",
+			SenderID: "ou_colleague", Content: "插一句话",
+		})
+		gw.OnExecFinished("self/d_oc_grp10", "x_1", "interrupted", "执行中断")
+		if len(fc.repliedTexts) != 1 || fc.repliedTexts[0].text != tr("Execution failed — tap the quote above for details") {
+			t.Fatalf("expected failure quote notice for interrupted outcome, got %+v", fc.repliedTexts)
 		}
 	})
 }

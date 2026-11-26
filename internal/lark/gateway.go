@@ -1390,26 +1390,28 @@ func (g *Gateway) HandleCardAction(ctx context.Context, bot BotConfig, ev CardAc
 				prevExecID := g.queuedBehindExecID(snap.Discussion, newID)
 				agentLabel := FormatModelLabel(snap.Agent, snap.Model, snap.Effort)
 				cardJSON := BuildProgressCard(effBot.ID, effBot.Name, agentLabel, snap.Workspace, newID, tr("Queued"), "0s", "", "", "", 0, prevExecID)
-				cardMsgID := ev.MessageID
-				if err := g.client.PatchCard(ctx, bot.Profile, ev.MessageID, cardJSON); err != nil {
-					log.Printf("lark bot %s: patch retry progress card (fallback to new card): %v", bot.Name, err)
-					var sentID string
-					var sendErr error
-					if origReplyTo != "" {
-						sentID, sendErr = g.client.ReplyCard(ctx, bot.Profile, origReplyTo, inThread, cardJSON)
-					}
-					if sendErr != nil || sentID == "" {
-						sentID, sendErr = g.client.SendCard(ctx, bot.Profile, ev.ChatID, cardJSON)
-						if sendErr == nil && sentID != "" {
-							inThread = false
-							threadKey = ""
-						}
-					}
-					if sendErr == nil && sentID != "" {
-						cardMsgID = sentID
-						g.markChatInterleaved(ev.ChatID, threadKey, "", newID)
+				// 重试保留原失败结果卡不覆盖，新建一张进度卡，避免指向原结果卡的引用跳到下一轮。
+				var cardMsgID string
+				var sendErr error
+				replyTarget := origReplyTo
+				if replyTarget == "" {
+					replyTarget = ev.MessageID
+				}
+				if replyTarget != "" {
+					cardMsgID, sendErr = g.client.ReplyCard(ctx, bot.Profile, replyTarget, inThread, cardJSON)
+				}
+				if sendErr != nil || cardMsgID == "" {
+					cardMsgID, sendErr = g.client.SendCard(ctx, bot.Profile, ev.ChatID, cardJSON)
+					if sendErr == nil && cardMsgID != "" {
+						inThread = false
+						threadKey = ""
 					}
 				}
+				if sendErr != nil || cardMsgID == "" {
+					log.Printf("lark bot %s: send retry progress card: %v", bot.Name, sendErr)
+					return
+				}
+				g.markChatInterleaved(ev.ChatID, threadKey, "", newID)
 				_ = g.host.SaveCard(store.LarkCard{
 					Kind: "exec", RefID: newID, BotID: bot.ID, ChatID: ev.ChatID,
 					ReplyTo: origReplyTo, CardMsgID: cardMsgID, DiscussionKey: snap.Discussion, Status: "active",
@@ -1682,19 +1684,28 @@ func (g *Gateway) OnExecFinished(discKey, execID, outcome, body string) {
 		return g.client.PatchCard(pctx, bot.Profile, progressMsgID, payload)
 	}
 
-	// 手动停止且没有正文结论时，直接把原进度卡改成「已停止」，不再多发一条空卡片
+	// 手动停止且没有正文结论时，原地把进度卡改成「已停止」后安静返回；若补丁失败则继续走下方降级发新卡，不留僵尸停止按钮。
 	trimmedBody := strings.TrimSpace(body)
+	inPlaceFailed := false
 	if progressMsgID != "" && (outcome == "stopped" || outcome == "cancelled") && (trimmedBody == "" || trimmedBody == "stopped by the user") {
-		if err := patchProgress(cardJSON, 10*time.Second); err != nil {
-			log.Printf("lark bot %s: patch stopped card: %v", bot.Name, err)
+		if err := patchProgress(cardJSON, 10*time.Second); err == nil {
+			if err := g.host.SaveCard(store.LarkCard{
+				Kind: "result", RefID: execID, BotID: bot.ID, ChatID: binding.ChatID,
+				ReplyTo: replyTo, CardMsgID: progressMsgID, DiscussionKey: discKey, Status: outcome,
+			}); err != nil {
+				log.Printf("lark bot %s: save stopped result card: %v", bot.Name, err)
+			}
+			return
+		} else {
+			inPlaceFailed = true
+			log.Printf("lark bot %s: patch stopped card (fallback to new card): %v", bot.Name, err)
 		}
-		return
 	}
 
-	// 中间没有插入其他消息时，直接把结果原地更新到原进度卡，避免紧挨着出现两张重复标题的卡片；
-	// 历史查询、原地补丁与降级发新卡各自使用独立超时预算，避免前一阶段超时耗尽后续降级发送。
-	inPlaceFailed := false
-	if g.canUpdateProgressInPlace(bot, binding, ac, progressMsgID, inThread, threadKey) {
+	// 有原进度卡时，始终优先把完整结果原地更新到原进度卡，避免聊天记录留下灰卡占位和重复大卡片；
+	// 若期间插入了其他消息（或群聊因无历史权限/超时无法确认未插队），则在底部补发一条轻量纯文本引用原卡片，触发未读提醒并支持一键跳转。
+	// 原地更新失败时再降级走底部的「收拢旧卡 + 发新结果卡」。
+	if progressMsgID != "" && !inPlaceFailed {
 		if err := patchProgress(cardJSON, 10*time.Second); err == nil {
 			if err := g.host.SaveCard(store.LarkCard{
 				Kind: "result", RefID: execID, BotID: bot.ID, ChatID: binding.ChatID,
@@ -1707,6 +1718,22 @@ func (g *Gateway) OnExecFinished(discKey, execID, outcome, body string) {
 				g.sendLongMarkdownFile(fctx, bot, binding.ChatID, execID, body)
 				fcancel()
 			}
+			if !g.canUpdateProgressInPlace(bot, binding, ac, progressMsgID, inThread, threadKey) {
+				nctx, ncancel := context.WithTimeout(context.Background(), 10*time.Second)
+				noticeID, nerr := g.client.ReplyText(nctx, bot.Profile, progressMsgID, inThread, interleavedReplyNotice(outcome))
+				ncancel()
+				if nerr != nil {
+					log.Printf("lark bot %s: send interleaved reply notice: %v", bot.Name, nerr)
+				} else if noticeID == "" {
+					log.Printf("lark bot %s: send interleaved reply notice returned empty message_id", bot.Name)
+				} else {
+					sentThreadKey := ""
+					if inThread {
+						sentThreadKey = threadKey
+					}
+					g.markChatInterleaved(binding.ChatID, sentThreadKey, "", execID)
+				}
+			}
 			return
 		} else {
 			inPlaceFailed = true
@@ -1714,7 +1741,7 @@ func (g *Gateway) OnExecFinished(discKey, execID, outcome, body string) {
 		}
 	}
 
-	// 中间有其他消息插队（审批卡、提问卡或新发言）或原地更新失败时：
+	// 无原进度卡或原地更新失败时：
 	// 先尽力收拢最初的进度卡（移除停止按钮），再使用独立超时把结果作为新卡片发到对话底部。
 	if progressMsgID != "" {
 		closedTimeout := 10 * time.Second
@@ -1936,6 +1963,17 @@ func (g *Gateway) markChatInterleavedLocked(chatID, threadKey, rootID, excludeEx
 		if threadKey == "" {
 			ac.interleaved = true
 		}
+	}
+}
+
+func interleavedReplyNotice(outcome string) string {
+	switch outcome {
+	case "failed", "error", "interrupted":
+		return tr("Execution failed — tap the quote above for details")
+	case "stopped", "cancelled":
+		return tr("Execution stopped — tap the quote above for details")
+	default:
+		return tr("Replied above — tap the quote to view the full result")
 	}
 }
 
