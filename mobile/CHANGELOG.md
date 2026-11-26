@@ -3,6 +3,16 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.39
+
+- 语音识别改为输入框内联交互（覆盖终端草稿栏、对话页与讨论页）：移除上方独立预览框，识别文字直接流式显示在输入框内，右侧显示柔和的小声波动画与取消/完成键，输入栏单行高度保持不变、零跳动。
+- 新增按住说话手势：输入框为空时长按输入框即可直接说话（松手完成转写、上滑取消，参考微信输入法），有文字时长按仍完整保留系统选字与移动光标；麦克风按钮同时支持轻点免手按与长按说话。
+
+### English
+
+- Redesigned voice recognition as an inline in-field experience across the Terminal draft bar, Chat, and Discussions: removed the floating preview box above the composer, streams recognized text directly inside the input box, and shows a subtle mini sound-wave animation with cancel/finish controls on the right at the exact same row height.
+- Added hold-to-talk gestures: long-press an empty input box to speak (release to transcribe, slide up to cancel), while non-empty fields keep native cursor and text selection untouched; the mic button also supports both tap (hands-free) and long-press hold-to-talk.
+
 ## 0.1.38
 
 - 修复初次进入终端时常驻语音与草稿输入栏会短暂遮挡底部会话内容的问题：常驻模式下直接预留单行基准高度并关闭入场滑动动画，多行输入与键盘弹出仍保持不改变终端尺寸。
