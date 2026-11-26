@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.53
+
+- 飞书机器人与群分身支持选择模型和思考深度：daemon 新增带缓存的 `agent.models` RPC 动态发现本机各家 CLI 可用模型（Antigravity 按基础模型聚合档位、Codex 读取 `models_cache.json`、Cursor 平铺展示且不设独立档位，并保留自定义输入兜底），在「设置 › 飞书机器人」支持按机器人默认或群分身三态覆写（继承 / 使用 Agent 默认 / 指定），`/status` 同步展示当前生效模型与档位，切换 Agent 或模型时自动清理不兼容残留。
+- 优化飞书机器人配置与卡片交互：默认工作区支持直接选择任意本地文件夹并自动加入工作区；结果始终优先原地更新原进度卡，期间若有真实消息插队才在底部补发带一句话问题简介的轻量引用提醒（自动忽略改群头像等系统消息）；连续消息被合并进上一轮时，自动把被合并的旧进度卡收拢为灰色「已合并」状态并移除停止按钮。
+- 修复右侧图片面板悬停看图体验：大图底部显示原图分辨率、格式与文件大小，宽图最大预览宽度提升至 960pt（同步优化超长图解码内存与底栏宽度），解决宽图偏小、高图偏大的问题。
+
+### English
+
+- Added model and reasoning effort selection for Feishu/Lark bots and group personas: added a cached `agent.models` RPC to discover available models from local CLIs (grouping Antigravity models by base ID, reading Codex `models_cache.json`, showing Cursor models flat without separate effort, plus custom fallback), exposed three-state group overrides (inherit / agent default / custom) in Settings › Feishu Bots, added the active model line to `/status`, and cleared incompatible overrides when switching agents or models.
+- Improved Feishu bot setup and card UX: added a local folder picker for bot/group default workspaces; results now update the progress card in place and only send a lightweight bottom quote reminder with a short prompt brief when real messages interleave (ignoring system events like group photo changes); merged burst requests automatically close their superseded progress cards as grey "Merged" receipts without a Stop button.
+- Improved the right-side Images panel hover preview: displayed original resolution, format, and file size below the preview, raised the max preview width to 960pt with bounded decode memory for tall images so wide and tall previews stay balanced.
+
 ## 0.1.52
 
 - 修复飞书机器人群聊 `@` 识别问题：改为通过 `/open-apis/bot/v3/info` 与 `auth status` 并发获取机器人真实的 `open_id`、`app_id` 与应用显示名，支持按 `ou_` / `cli_` 独立精确匹配、单次刷新并发合并（singleflight）与身份瞬时不可用时的有界延迟重判，同时对齐 `reply_to` 引用字段并过滤其他机器人消息（`sender_type=bot`）。
