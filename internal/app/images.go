@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"image"
@@ -41,6 +42,7 @@ type imagesView struct {
 	hover   string // 悬停的图片的 key
 	big     *ui.Bitmap
 	bigAnim *animPlayer // 悬停的是动图：big 是它的位图
+	bigInfo imageInfo   // 原图像素、格式与文件大小，悬停预览底部显示
 	bigKey  string
 	bigBusy bool
 }
@@ -51,10 +53,14 @@ type imageItem struct {
 }
 
 const (
-	imagesRefresh = 3 * time.Second
-	thumbWidth    = 512  // 2 倍屏下正好是面板宽度
-	bigWidth      = 1120 // 悬停放大的宽度，2 倍屏下 560pt
-	thumbMaxH     = 240  // 缩略图最高显示多少
+	imagesRefresh      = 3 * time.Second
+	thumbWidth         = 512     // 2 倍屏下正好是面板宽度
+	bigWidth           = 1920    // 悬停放大的解码宽度，2 倍屏下 960pt 仍清晰
+	bigMaxPixels       = 4 << 20 // 悬停静图解码像素上限（约 16 MiB RGBA），避免超长竖图内存暴涨
+	imagePreviewMaxW   = 960     // 右侧图片面板悬停预览的最大宽度，让宽图与高图在宽窗下比例均衡
+	imagePreviewMinCap = 360     // 小图悬停放大时的宽度上限下界
+	imagePreviewMetaW  = 200     // 超窄长图悬停时，底栏元信息的最小可读宽度
+	thumbMaxH          = 240     // 缩略图最高显示多少
 	// maxMadeImages 是面板里最多列几张 agent 生成的图片：用手机、浏览器的会话动辄几百张截图，缩略图都留着太占内存
 	maxMadeImages = 40
 	// thumbFlushEvery 是做缩略图时多久交给界面一批：一张约 20～50 ms，每张都重建界面太频繁
@@ -194,7 +200,7 @@ func (a *app) loadBig(it imageItem) {
 	v.bigBusy = true
 	id := v.term
 	go func() {
-		anim, img, err := decodeBig(it.Item)
+		anim, img, info, err := decodeBig(it.Item)
 		a.update(func() {
 			v := &a.images
 			if v.term != id {
@@ -205,7 +211,7 @@ func (a *app) loadBig(it imageItem) {
 				v.markFailed(it.Key)
 				return
 			}
-			v.big, v.bigAnim, v.bigKey = ui.NewBitmap(img), anim, it.Key
+			v.big, v.bigAnim, v.bigInfo, v.bigKey = ui.NewBitmap(img), anim, info, it.Key
 			if anim != nil {
 				v.big = anim.bm
 			}
@@ -213,17 +219,56 @@ func (a *app) loadBig(it imageItem) {
 	}()
 }
 
-// decodeBig 解码悬停放大的那张图；动图给出播放器，img 是它的第一帧。
-func decodeBig(it media.Item) (*animPlayer, *image.RGBA, error) {
-	if !it.Video {
-		if b, err := media.ReadImage(it); err == nil {
-			if anim, _, err := newAnimPlayer(b, bigWidth); anim != nil && err == nil {
-				return anim, anim.cur, nil
+// imageBytesInfo 从原始图片字节读取像素尺寸、格式与文件大小。
+func imageBytesInfo(data []byte) imageInfo {
+	var info imageInfo
+	if len(data) == 0 {
+		return info
+	}
+	info.bytes = int64(len(data))
+	if cfg, format, err := image.DecodeConfig(bytes.NewReader(data)); err == nil {
+		info.w, info.h, info.format = cfg.Width, cfg.Height, format
+	}
+	return info
+}
+
+// decodeBig 解码悬停放大的那张图并返回原图元信息；动图给出播放器，img 是它的第一帧。
+// 静图按像素上限解码，避免超长截图在 1920px 宽下产生过大 RGBA 缓存；视频不展示缩略图伪装的原图属性。
+func decodeBig(it media.Item) (*animPlayer, *image.RGBA, imageInfo, error) {
+	if it.Video {
+		img, err := media.Decode(it, bigWidth)
+		return nil, img, imageInfo{}, err
+	}
+	var info imageInfo
+	if it.Tool == nil && it.InlineMime == "" && it.Path != "" {
+		info = imageFileInfo(it.Path)
+	}
+	if b, err := media.ReadImage(it); err == nil {
+		if info.w == 0 {
+			info = imageBytesInfo(b)
+		}
+		if anim, _, err := newAnimPlayer(b, bigWidth); anim != nil && err == nil {
+			return anim, anim.cur, info, nil
+		}
+		if pi, perr := media.DecodePreviewBytes(b, bigMaxPixels); perr == nil {
+			if info.w == 0 {
+				info.w, info.h, info.format = pi.Size.X, pi.Size.Y, pi.Format
 			}
+			if info.bytes == 0 {
+				info.bytes = int64(len(b))
+			}
+			return nil, pi.Img, info, nil
 		}
 	}
 	img, err := media.Decode(it, bigWidth)
-	return nil, img, err
+	if err != nil {
+		return nil, nil, info, err
+	}
+	if info.w == 0 && img != nil {
+		b := img.Bounds()
+		info.w, info.h = b.Dx(), b.Dy()
+	}
+	return nil, img, info, nil
 }
 
 // withImagePath 拿到原图或视频的路径后在主线程调用 f。工具返回的图片只在会话文件里，先写到临时目录：
@@ -497,28 +542,68 @@ func playBadge(c *ui.Context) {
 	})
 }
 
-// imagePreview 是悬停时浮在图片面板左边的大图：宽不超过 544、高不超过 body，竖的长截图按高缩小，整张看得见。
+func imagePreviewWidth(imgW, imgH, origW int, bodyW, bodyH, metaH float32) float32 {
+	w := float32(max(imgW, 1))
+	h := float32(max(imgH, 1))
+	maxW := float32(imagePreviewMaxW)
+	if bodyW > 0 {
+		// 左边留 8，右边让开面板（8+panelWidth+8），卡片左右内边距各 8
+		availW := bodyW - 8 - (8 + panelWidth + 8) - 16
+		if availW < 80 {
+			return 0
+		}
+		maxW = min(maxW, availW)
+	}
+	refW := float32(origW)
+	if refW <= 0 {
+		refW = w
+	}
+	// 小图不强行拉大到超过原图宽度（但至少允许到 imagePreviewMinCap 便于看清）
+	maxW = min(maxW, max(float32(imagePreviewMinCap), refW))
+	if bodyH > 0 {
+		// 上下各留 8，卡片上下内边距各 8，再扣掉底部尺寸元信息行高度
+		maxH := max(bodyH-32-metaH, 80)
+		dw, _ := fitSize(w, h, maxW, maxH)
+		return dw
+	}
+	return maxW
+}
+
+// imagePreview 是悬停时浮在图片面板左边的大图：充分利用左侧可用宽与高，并显示原图像素/格式/文件大小。
 func (a *app) imagePreview(c *ui.Context, body ui.Element) {
 	v := &a.images
 	if v.hover == "" || v.big == nil || v.bigKey != v.hover {
 		return
 	}
 	w, h := v.big.Size()
-	dw := float32(544)
+	metaH := float32(0)
+	if v.bigInfo.w > 0 {
+		metaH = hoverPreviewMeta
+	}
 	b := body.Bounds()
-	if b.W > 0 {
-		// 左边留 8，右边让开面板
-		dw = min(dw, max(b.W-8-(8+280+8)-16, 80))
+	dw := imagePreviewWidth(w, h, v.bigInfo.w, b.W, b.H, metaH)
+	if dw <= 0 {
+		return
 	}
-	if bh := b.H; bh > 0 {
-		// 上下各留 8，卡片自己的内边距各 8
-		dw, _ = fitSize(float32(max(w, 1)), float32(max(h, 1)), dw, max(bh-32, 80))
+	cardW := dw
+	if v.bigInfo.w > 0 {
+		availW := float32(imagePreviewMaxW)
+		if b.W > 0 {
+			availW = max(b.W-8-(8+panelWidth+8)-16, dw)
+		}
+		// 超窄长图按高缩窄时，底栏保留足够宽度以完整展示分辨率/格式/大小
+		cardW = max(dw, min(availW, imagePreviewMetaW))
 	}
-	floating(c, ui.Box(c).Absolute().Top(8).Right(8+280+8).Padding(8)).Children(func() {
+	floating(c, ui.Box(c).Absolute().Top(8).Right(8+panelWidth+8).Padding(8)).Children(func() {
 		anim := v.bigAnim
-		// 动图在外层的 Draw 里换帧，里面的图片画的就是这一帧
-		ui.Box(c).Draw(func(p *ui.Painter, r ui.Rect) { animate(p, anim) }).Children(func() {
-			ui.Image(c, v.big).Width(dw).Radius(rSmall) // 外框内边距 8：12 - 8
+		ui.Column(c).Gap(4).Width(cardW).AlignItems(ui.Center).Children(func() {
+			// 动图在外层的 Draw 里换帧，里面的图片画的就是这一帧
+			ui.Box(c).Draw(func(p *ui.Painter, r ui.Rect) { animate(p, anim) }).Children(func() {
+				ui.Image(c, v.big).Width(dw).Radius(rSmall) // 外框内边距 8：12 - 8
+			})
+			if v.bigInfo.w > 0 {
+				ui.Text(c, imageMetaText(v.bigInfo)).FontSize(fsSmall).TextColor(c.Theme().TextMuted).SingleLine()
+			}
 		})
 	})
 }

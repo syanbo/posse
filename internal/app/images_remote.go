@@ -183,12 +183,26 @@ func (a *app) loadTargetBig(it imageItem) {
 		data, err := s.request.readMedia(ctx, it.Item)
 		var anim *animPlayer
 		var img *image.RGBA
+		var info imageInfo
 		if err == nil {
 			if !it.Video {
+				info = imageBytesInfo(data)
 				anim, _, _ = newAnimPlayer(data, bigWidth)
 			}
 			if anim != nil {
 				img = anim.cur
+			} else if !it.Video {
+				if pi, perr := media.DecodePreviewBytes(data, bigMaxPixels); perr == nil {
+					img = pi.Img
+					if info.w == 0 {
+						info.w, info.h, info.format = pi.Size.X, pi.Size.Y, pi.Format
+					}
+					if info.bytes == 0 {
+						info.bytes = int64(len(data))
+					}
+				} else {
+					img, _, err = media.ScaledImageBytes(data, bigWidth)
+				}
 			} else {
 				img, _, err = media.ScaledImageBytes(data, bigWidth)
 			}
@@ -203,7 +217,7 @@ func (a *app) loadTargetBig(it imageItem) {
 				v.markFailed(it.Key)
 				return
 			}
-			v.big, v.bigAnim, v.bigKey = ui.NewBitmap(img), anim, it.Key
+			v.big, v.bigAnim, v.bigInfo, v.bigKey = ui.NewBitmap(img), anim, info, it.Key
 			if anim != nil {
 				v.big = anim.bm
 			}
