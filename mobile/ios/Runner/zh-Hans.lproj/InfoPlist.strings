@@ -6,3 +6,7 @@
 "NSPhotoLibraryAddUsageDescription" = "把电脑上的图片和视频存进相册的「Posse」相簿。";
 /* 本地网络：连电脑 */
 "NSLocalNetworkUsageDescription" = "连接这台电脑上的 Posse，查看终端和改动。";
+/* 麦克风：语音输入转草稿 */
+"NSMicrophoneUsageDescription" = "录制语音并转写成可编辑的消息草稿。";
+/* 语音识别：本机识别语音 */
+"NSSpeechRecognitionUsageDescription" = "在本机将语音识别为可编辑的消息草稿。";

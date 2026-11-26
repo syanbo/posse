@@ -24,8 +24,12 @@ class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
     // 等相机权限的那次 authorize
     private var cameraResult: MethodChannel.Result? = null
+    // 等麦克风权限的回调队列：合并同一轮并发请求，不覆盖前者
+    private val micCallbacks = mutableListOf<(Boolean) -> Unit>()
+    private var micRequestInFlight = false
     private var update: AppUpdate? = null
     private var desk: DeskPlugin? = null
+    private var voice: VoicePlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -37,6 +41,13 @@ class MainActivity : FlutterActivity() {
         val desk = DeskPlugin(this, flutterEngine.renderer, messenger)
         this.desk = desk
         flutterEngine.platformViewsController.registry.registerViewFactory("posse/desk/view", desk.viewFactory)
+        voice = VoicePlugin(this, messenger) { cb ->
+            micCallbacks.add(cb)
+            if (!micRequestInFlight) {
+                micRequestInFlight = true
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_RECORD_AUDIO)
+            }
+        }
         update = AppUpdate(this, messenger)
         MethodChannel(messenger, "posse/qr").setMethodCallHandler { call, result ->
             if (call.method != "authorize") {
@@ -98,9 +109,19 @@ class MainActivity : FlutterActivity() {
 
     // Activity 关掉时 Flutter 引擎跟着销毁、进程还在：先让 Go 断开 QUIC 连接、不再回调，
     // 否则之后的连接事件调到失效的 Dart 回调上，进程崩溃（小米上进程被冻住，回到前台解冻时必现）
+    override fun onStop() {
+        voice?.onAppBackgrounded()
+        super.onStop()
+    }
+
     override fun onDestroy() {
+        micRequestInFlight = false
+        val pendingMic = micCallbacks.toList()
+        micCallbacks.clear()
+        pendingMic.forEach { it(false) }
         quicReset()
         desk?.dispose()
+        voice?.dispose()
         super.onDestroy()
     }
 
@@ -114,6 +135,14 @@ class MainActivity : FlutterActivity() {
         if (requestCode == REQUEST_CAMERA) {
             cameraResult?.success(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
             cameraResult = null
+            return
+        }
+        if (requestCode == REQUEST_RECORD_AUDIO) {
+            micRequestInFlight = false
+            val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+            val callbacks = micCallbacks.toList()
+            micCallbacks.clear()
+            callbacks.forEach { it(granted) }
             return
         }
         if (requestCode != REQUEST_WRITE) return
@@ -261,5 +290,6 @@ class MainActivity : FlutterActivity() {
 
         private const val REQUEST_WRITE = 7301
         private const val REQUEST_CAMERA = 7302
+        private const val REQUEST_RECORD_AUDIO = 7303
     }
 }

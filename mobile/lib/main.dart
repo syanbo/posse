@@ -9,6 +9,7 @@ import 'ui/keyboard.dart';
 import 'ui/splash.dart';
 import 'ui/theme.dart';
 import 'update/update.dart';
+import 'voice/voice_service.dart';
 import 'workspace/workspace.dart';
 
 /// 点通知打开会话时从这里拿到导航，见 [PosseAppModel.onOpenSession]。
@@ -38,6 +39,7 @@ class _PosseAppState extends State<PosseApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(voicePlatform.cleanupStaleAudio());
     widget.model.addListener(_rebuild);
     widget.model.onOpenSession = (tab) {
       final nav = _navigator.currentState;

@@ -209,6 +209,13 @@ class AppSettings {
     this.tailscaleHostname = '',
     this.tailscaleControlUrl = '',
     this.tailscaleDisableBind = false,
+    this.voiceEngine = 'native',
+    this.voiceBaseUrl = '',
+    this.voiceModel = '',
+    this.voiceLanguage = '',
+    this.voiceVocab = '',
+    this.voiceAllowInsecureHttp = false,
+    this.terminalDraftOpenByDefault = false,
     Map<String, int>? deskDisplays,
     Map<String, int>? deskFps,
     Map<String, int>? deskResolution,
@@ -303,6 +310,19 @@ class AppSettings {
   String tailscaleControlUrl;
   bool tailscaleDisableBind;
 
+  /// 语音输入转可编辑草稿设置（API Key 存在钥匙串 / Keystore，不写进 SharedPreferences）。
+  String voiceEngine;
+  String voiceBaseUrl;
+  String voiceModel;
+  String voiceLanguage;
+  String voiceVocab;
+
+  /// 允许自定义或自建局域网语音接口走明文 HTTP（默认关，仅允许 HTTPS）。
+  bool voiceAllowInsecureHttp;
+
+  /// 终端页默认展开底部草稿输入栏（Staged Input），方便主力终端用户直接打中文和语音。
+  bool terminalDraftOpenByDefault;
+
   /// 终端快捷键栏上的键和顺序（键盘开关除外，它固定在最左边），内置的和自己加的混排。
   List<BarKey> barKeys;
 
@@ -353,6 +373,13 @@ class AppSettings {
     'tailscaleHostname': tailscaleHostname,
     'tailscaleControlUrl': tailscaleControlUrl,
     'tailscaleDisableBind': tailscaleDisableBind,
+    'voiceEngine': voiceEngine,
+    'voiceBaseUrl': voiceBaseUrl,
+    'voiceModel': voiceModel,
+    'voiceLanguage': voiceLanguage,
+    'voiceVocab': voiceVocab,
+    'voiceAllowInsecureHttp': voiceAllowInsecureHttp,
+    'terminalDraftOpenByDefault': terminalDraftOpenByDefault,
     'barKeys': [for (final k in barKeys) k.toJson()],
     'barKeysVersion': barKeysVersion,
   };
@@ -502,6 +529,38 @@ class AppSettings {
       }
       if (map['tailscaleDisableBind'] is bool) {
         out.tailscaleDisableBind = map['tailscaleDisableBind'] as bool;
+      }
+      final voiceEngine = map['voiceEngine'];
+      if (voiceEngine is String &&
+          {
+            'native',
+            'openai',
+            'groq',
+            'siliconflow',
+            'volcengine',
+            'custom',
+          }.contains(voiceEngine)) {
+        out.voiceEngine = voiceEngine;
+      }
+      if (map['voiceBaseUrl'] is String) {
+        out.voiceBaseUrl = map['voiceBaseUrl'] as String;
+      }
+      if (map['voiceModel'] is String) {
+        out.voiceModel = map['voiceModel'] as String;
+      }
+      final voiceLang = map['voiceLanguage'];
+      if (voiceLang is String && {'', 'zh', 'en'}.contains(voiceLang)) {
+        out.voiceLanguage = voiceLang;
+      }
+      if (map['voiceVocab'] is String) {
+        out.voiceVocab = map['voiceVocab'] as String;
+      }
+      if (map['voiceAllowInsecureHttp'] is bool) {
+        out.voiceAllowInsecureHttp = map['voiceAllowInsecureHttp'] as bool;
+      }
+      if (map['terminalDraftOpenByDefault'] is bool) {
+        out.terminalDraftOpenByDefault =
+            map['terminalDraftOpenByDefault'] as bool;
       }
       final bar = map['barKeys'];
       final custom = map['customKeys'];

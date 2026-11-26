@@ -64,6 +64,7 @@ import UserNotifications
     self.desk = desk
     PushPlugin.shared.install(messenger: registrar.messenger())
     BackgroundPlugin.shared.install(messenger: registrar.messenger())
+    VoicePlugin.shared.install(messenger: registrar.messenger())
     channel.setMethodCallHandler { call, result in
       if call.method == "authorize" {
         QrCamera.authorize(result)

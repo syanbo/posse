@@ -238,9 +238,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('编辑快捷键'), findsNothing);
 
-    // 把 Esc 拖到最上面
+    // 把 Esc 拖到最上面（前面依次是 image、paste、voice）
     final handles = find.byIcon(Icons.drag_handle_rounded);
-    final esc = tester.getCenter(handles.at(2));
+    final esc = tester.getCenter(handles.at(3));
     final top = tester.getCenter(handles.at(0));
     final drag = await tester.startGesture(esc);
     await tester.pump(const Duration(milliseconds: 100));

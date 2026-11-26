@@ -186,6 +186,7 @@ class _KeyRow extends StatelessWidget {
           leading: switch (item.builtin) {
             'image' => const _KeyCap(icon: Icons.attach_file_rounded),
             'paste' => const _KeyCap(icon: Icons.content_paste_rounded),
+            'voice' => const _KeyCap(icon: Icons.mic_rounded),
             sendNowLabel => _KeyCap(glyph: SendNowGlyph(color: c.text)),
             _ => _KeyCap(
               label: custom?.shown ?? item.termKey?.label(l) ?? item.builtin,
@@ -230,6 +231,7 @@ String describeKey(AppLocalizations l, CustomKey key) => switch (key.kind) {
 String describeBuiltin(AppLocalizations l, String name) => switch (name) {
   'image' => l.keysImage,
   'paste' => l.keysPaste,
+  'voice' => l.terminalKeyVoice,
   'Esc' => l.keysEsc,
   'Tab' => l.keysTab,
   'Enter' => l.keysEnter,

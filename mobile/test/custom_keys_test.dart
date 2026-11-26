@@ -78,6 +78,7 @@ void main() {
       '/clear',
       'image',
       'paste',
+      'voice',
       '搜索',
     ]);
     expect(back.customKeys.map((k) => k.bytes), [
@@ -96,8 +97,8 @@ void main() {
       }),
     );
     expect(
-      [for (final k in back.barKeys) k.builtin ?? k.custom!.shown].take(4),
-      ['image', 'paste', '/compact', 'Esc'],
+      [for (final k in back.barKeys) k.builtin ?? k.custom!.shown].take(5),
+      ['image', 'paste', 'voice', '/compact', 'Esc'],
     );
     expect([
       for (final k in AppSettings.decode(null).barKeys) k.builtin,
@@ -127,6 +128,7 @@ void main() {
     expect(names, [
       'image',
       'paste',
+      'voice',
       'Esc',
       'Tab',
       'Enter',

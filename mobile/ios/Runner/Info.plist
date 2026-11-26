@@ -12,6 +12,10 @@
 	<string>Save images and videos from your computer to the “Posse” album.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Connect to Posse on your computer to see its terminals and changes.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record voice input to transcribe into an editable message draft.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Transcribe your voice input on-device into an editable message draft.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

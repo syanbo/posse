@@ -3,8 +3,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
-import '../ui/loading.dart';
 import '../ui/theme.dart';
+import '../voice/voice_bar.dart';
+import '../voice/voice_controller.dart';
 
 /// 对话页底部的输入区：待发的图片、选图按钮、输入框和发送按钮。状态都在对话页里，这里只画。
 class ChatComposer extends StatelessWidget {
@@ -22,6 +23,7 @@ class ChatComposer extends StatelessWidget {
     required this.onRemoveImage,
     required this.onPaste,
     required this.onContentInserted,
+    this.voice,
   });
 
   final TextEditingController controller;
@@ -40,6 +42,7 @@ class ChatComposer extends StatelessWidget {
   /// 菜单里的粘贴：只认文字和图片，由对话页读剪贴板。
   final VoidCallback onPaste;
   final ValueChanged<KeyboardInsertedContent> onContentInserted;
+  final VoiceController? voice;
 
   void _pasteFromMenu(EditableTextState state) {
     state.hideToolbar();
@@ -121,154 +124,175 @@ class ChatComposer extends StatelessWidget {
         ),
       );
     }
+    final voiceCtrl = voice;
+    if (voiceCtrl != null) {
+      return ListenableBuilder(
+        listenable: voiceCtrl,
+        builder: (context, _) => _buildComposer(context, c, voiceCtrl),
+      );
+    }
+    return _buildComposer(context, c, null);
+  }
+
+  Widget _buildComposer(
+    BuildContext context,
+    PosseColors c,
+    VoiceController? voiceCtrl,
+  ) {
+    final busyVoice = voiceCtrl != null && voiceCtrl.isBusy;
     final ready =
         !sending &&
+        !busyVoice &&
         connected &&
         (images.isNotEmpty || controller.text.trim().isNotEmpty);
     return SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 2, 10, 6),
-        child: Container(
-          decoration: BoxDecoration(
-            color: c.card,
-            borderRadius: BorderRadius.circular(Rd.composer),
-            border: Border.all(color: c.line),
-          ),
-          // 四边一样宽：单行时按钮正好在框的正中，多行时停在底部
-          padding: const EdgeInsets.all(4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (images.isNotEmpty)
-                SizedBox(
-                  height: 56,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
-                    itemCount: images.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      return SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: Stack(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(Rd.button),
-                              child: Image.memory(
-                                images[index],
-                                width: 48,
-                                height: 48,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: Tooltip(
-                                message: context.l10n.chatRemoveImage,
-                                child: GestureDetector(
-                                  onTap: sending
-                                      ? null
-                                      : () => onRemoveImage(index),
-                                  child: const DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: PosseColors.scrimHeavy,
-                                      borderRadius: BorderRadius.only(
-                                        topRight: Radius.circular(Rd.button),
-                                        bottomLeft: Radius.circular(Rd.button),
-                                      ),
-                                    ),
-                                    child: SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: Icon(
-                                        Icons.close_rounded,
-                                        size: Ic.inline,
-                                        color: Colors.white,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (voiceCtrl != null && voiceCtrl.hasFailedRetry)
+              VoiceRetryStrip(controller: voiceCtrl),
+            if (voiceCtrl != null && showVoicePartial(voiceCtrl))
+              VoicePartialPreview(text: voiceCtrl.partialText),
+            Container(
+              decoration: BoxDecoration(
+                color: c.card,
+                borderRadius: BorderRadius.circular(Rd.composer),
+                border: Border.all(color: c.line),
+              ),
+              // 四边一样宽：单行时按钮正好在框的正中，多行时停在底部
+              padding: const EdgeInsets.all(4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (images.isNotEmpty)
+                    SizedBox(
+                      height: 56,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+                        itemCount: images.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          return SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                    Rd.button,
+                                  ),
+                                  child: Image.memory(
+                                    images[index],
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 0,
+                                  right: 0,
+                                  child: Tooltip(
+                                    message: context.l10n.chatRemoveImage,
+                                    child: GestureDetector(
+                                      onTap: sending
+                                          ? null
+                                          : () => onRemoveImage(index),
+                                      child: const DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          color: PosseColors.scrimHeavy,
+                                          borderRadius: BorderRadius.only(
+                                            topRight: Radius.circular(
+                                              Rd.button,
+                                            ),
+                                            bottomLeft: Radius.circular(
+                                              Rd.button,
+                                            ),
+                                          ),
+                                        ),
+                                        child: SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: Icon(
+                                            Icons.close_rounded,
+                                            size: Ic.inline,
+                                            color: Colors.white,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              Row(
-                // 发送按钮和输入框上下居中
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  IconButton(
-                    tooltip: context.l10n.chatSendImage,
-                    // Material 会把点按区补到 48、撑高整条，收到和发送按钮一样 34
-                    style: IconButton.styleFrom(
-                      fixedSize: const Size.square(34),
-                      minimumSize: const Size.square(34),
-                      padding: EdgeInsets.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: sending || !connected ? null : onPickImage,
-                    icon: Icon(
-                      Icons.image_rounded,
-                      size: Ic.button,
-                      color: images.isEmpty ? c.muted : c.accent,
-                    ),
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      minLines: 1,
-                      maxLines: 6,
-                      textInputAction: TextInputAction.newline,
-                      onChanged: onChanged,
-                      contentInsertionConfiguration:
-                          ContentInsertionConfiguration(
-                            onContentInserted: onContentInserted,
-                          ),
-                      contextMenuBuilder: _composerMenu,
-                      style: TextStyle(fontSize: Fs.body, color: c.text),
-                      decoration: InputDecoration(
-                        hintText: hint,
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        isDense: true,
-                        // 单行时和 34 高的发送按钮一样高
-                        contentPadding: const EdgeInsets.fromLTRB(6, 6, 4, 6),
+                          );
+                        },
                       ),
                     ),
-                  ),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: ready ? c.accent : c.fill,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      tooltip: context.l10n.chatSend,
-                      onPressed: ready ? onSubmit : null,
-                      icon: sending
-                          ? HexSpinner(color: c.muted)
-                          : Icon(
-                              Icons.arrow_upward_rounded,
-                              size: Ic.medium,
-                              color: ready ? Colors.white : c.faint,
+                  if (busyVoice)
+                    VoiceActiveRow(controller: voiceCtrl)
+                  else
+                    Row(
+                      // 单行时输入框和 34 的按钮同高；多行时按钮停在底部，不悬在框中间
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        ComposerIconButton(
+                          icon: Icons.image_rounded,
+                          iconSize: Ic.button,
+                          tooltip: context.l10n.chatSendImage,
+                          onPressed: sending || !connected ? null : onPickImage,
+                          color: images.isEmpty ? c.muted : c.accent,
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: controller,
+                            minLines: 1,
+                            maxLines: 6,
+                            textInputAction: TextInputAction.newline,
+                            onChanged: onChanged,
+                            contentInsertionConfiguration:
+                                ContentInsertionConfiguration(
+                                  onContentInserted: onContentInserted,
+                                ),
+                            contextMenuBuilder: _composerMenu,
+                            style: TextStyle(fontSize: Fs.body, color: c.text),
+                            decoration: InputDecoration(
+                              hintText: hint,
+                              filled: false,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              isDense: true,
+                              // 单行时和 34 高的发送按钮一样高
+                              contentPadding: const EdgeInsets.fromLTRB(
+                                6,
+                                6,
+                                4,
+                                6,
+                              ),
                             ),
+                          ),
+                        ),
+                        if (voiceCtrl != null)
+                          VoiceMicButton(
+                            onPressed: sending ? null : voiceCtrl.start,
+                          ),
+                        const SizedBox(width: 4),
+                        ComposerSendButton(
+                          ready: ready,
+                          busy: sending,
+                          tooltip: context.l10n.chatSend,
+                          onPressed: onSubmit,
+                        ),
+                      ],
                     ),
-                  ),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

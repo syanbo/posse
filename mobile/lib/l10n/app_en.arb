@@ -3984,5 +3984,295 @@
         "format": "decimalPattern"
       }
     }
+  },
+  "voiceButtonTooltip": "Voice input",
+  "@voiceButtonTooltip": {
+    "description": "Tooltip for the microphone button that starts voice-to-draft recording."
+  },
+  "voiceCancelTooltip": "Cancel recording",
+  "@voiceCancelTooltip": {
+    "description": "Tooltip for cancelling an active voice recording or transcription."
+  },
+  "voiceFinishTooltip": "Finish and transcribe",
+  "@voiceFinishTooltip": {
+    "description": "Tooltip for finishing voice recording and starting transcription."
+  },
+  "voiceTranscribing": "Transcribing…",
+  "@voiceTranscribing": {
+    "description": "Status text shown while speech audio is being transcribed."
+  },
+  "voiceRetry": "Retry",
+  "@voiceRetry": {
+    "description": "Button label to retry transcribing a saved voice recording after failure."
+  },
+  "voiceDiscard": "Discard",
+  "@voiceDiscard": {
+    "description": "Tooltip to discard a failed voice recording."
+  },
+  "voiceLimitReached": "Reached time limit; transcribing recorded audio",
+  "@voiceLimitReached": {
+    "description": "Notice shown when a voice recording hits its maximum duration and auto-finishes."
+  },
+  "voiceInterruptedSaved": "Recording paused; tap Retry to transcribe",
+  "@voiceInterruptedSaved": {
+    "description": "Notice shown when recording was interrupted by a call or backgrounding, keeping the audio file for retry."
+  },
+  "voicePermissionTitle": "Microphone Permission Needed",
+  "@voicePermissionTitle": {
+    "description": "Dialog title when microphone or speech recognition permission is denied."
+  },
+  "voicePermissionBody": "Allow microphone access in System Settings to record voice drafts.",
+  "@voicePermissionBody": {
+    "description": "Dialog body explaining why microphone permission is needed."
+  },
+  "voiceSpeechPermissionBody": "Allow microphone and speech recognition access in System Settings, or switch to a cloud engine in Voice Settings.",
+  "@voiceSpeechPermissionBody": {
+    "description": "Dialog body when on-device speech recognition permission is denied."
+  },
+  "voiceOpenSettings": "Open Settings",
+  "@voiceOpenSettings": {
+    "description": "Confirm button to open system settings for voice permissions."
+  },
+  "voiceConfigureCloud": "Voice Settings",
+  "@voiceConfigureCloud": {
+    "description": "Action button to open Posse voice settings."
+  },
+  "voiceErrorMissingKey": "API key not set for the selected voice engine",
+  "@voiceErrorMissingKey": {
+    "description": "Error shown when a cloud voice engine has no saved API key."
+  },
+  "voiceErrorInvalidUrl": "Invalid voice API URL",
+  "@voiceErrorInvalidUrl": {
+    "description": "Error shown when the configured voice API endpoint URL is invalid."
+  },
+  "voiceErrorAuth": "Voice API key rejected",
+  "@voiceErrorAuth": {
+    "description": "Error shown when the cloud ASR endpoint returns 401 or 403."
+  },
+  "voiceErrorRateLimit": "Voice API rate limit reached",
+  "@voiceErrorRateLimit": {
+    "description": "Error shown when the cloud ASR endpoint returns 429."
+  },
+  "voiceErrorNetwork": "Network error while transcribing",
+  "@voiceErrorNetwork": {
+    "description": "Error shown when a network failure interrupts cloud transcription."
+  },
+  "voiceErrorTimeout": "Transcription timed out",
+  "@voiceErrorTimeout": {
+    "description": "Error shown when cloud transcription times out."
+  },
+  "voiceErrorEmpty": "No speech recognized",
+  "@voiceErrorEmpty": {
+    "description": "Error shown when transcription succeeds with empty text."
+  },
+  "voiceErrorUnavailable": "On-device speech recognition is unavailable on this device",
+  "@voiceErrorUnavailable": {
+    "description": "Error shown when native speech recognition is unavailable."
+  },
+  "voiceErrorFailed": "Transcription failed",
+  "@voiceErrorFailed": {
+    "description": "Generic fallback error when voice recording or transcription fails."
+  },
+  "voiceSettingsTitle": "Voice Input",
+  "@voiceSettingsTitle": {
+    "description": "Settings section and page title for voice-to-draft input."
+  },
+  "voiceEngineSection": "Recognition Engine",
+  "@voiceEngineSection": {
+    "description": "Voice settings: section title for choosing the speech recognition engine."
+  },
+  "voiceEngineNative": "System On-Device",
+  "@voiceEngineNative": {
+    "description": "Voice engine option: iOS/Android built-in speech recognizer."
+  },
+  "voiceEngineOpenAI": "OpenAI",
+  "@voiceEngineOpenAI": {
+    "description": "Voice engine option: OpenAI transcription API."
+  },
+  "voiceEngineGroq": "Groq Whisper",
+  "@voiceEngineGroq": {
+    "description": "Voice engine option: Groq hosted Whisper API."
+  },
+  "voiceEngineSiliconFlow": "SiliconFlow",
+  "@voiceEngineSiliconFlow": {
+    "description": "Voice engine option: SiliconFlow OpenAI-compatible ASR API."
+  },
+  "voiceEngineVolcengine": "Volcengine Doubao",
+  "@voiceEngineVolcengine": {
+    "description": "Voice engine option: Volcengine Doubao Flash ASR HTTP API."
+  },
+  "voiceEngineCustom": "Custom (OpenAI-Compatible)",
+  "@voiceEngineCustom": {
+    "description": "Voice engine option: custom OpenAI-compatible /audio/transcriptions endpoint."
+  },
+  "voiceSummaryNative": "System on-device",
+  "@voiceSummaryNative": {
+    "description": "Short summary on Settings main page when using system native recognition."
+  },
+  "voiceSummaryCloudReady": "{engine} · Key saved",
+  "@voiceSummaryCloudReady": {
+    "description": "Short summary on Settings main page when a cloud voice engine has an API key saved.",
+    "placeholders": {
+      "engine": {
+        "type": "String"
+      }
+    }
+  },
+  "voiceSummaryCloudMissing": "{engine} · API key needed",
+  "@voiceSummaryCloudMissing": {
+    "description": "Short summary on Settings main page when a cloud voice engine has no API key.",
+    "placeholders": {
+      "engine": {
+        "type": "String"
+      }
+    }
+  },
+  "voiceNativeNote": "Audio stays on your phone using the system speech recognizer. Great for zero setup on iOS; switch to a cloud engine if mixed Chinese/English coding terms need higher accuracy or on Android devices without speech services.",
+  "@voiceNativeNote": {
+    "description": "Privacy and usage note for system on-device voice recognition."
+  },
+  "voiceCloudNote": "Recorded audio is uploaded directly from your phone to the configured provider and deleted locally once transcribed. API keys are stored in the device keychain/keystore and excluded from backups.",
+  "@voiceCloudNote": {
+    "description": "Privacy and storage note for cloud BYOK voice recognition."
+  },
+  "voiceCredentialsSection": "API Configuration",
+  "@voiceCredentialsSection": {
+    "description": "Voice settings: section title for cloud API key, URL, and model."
+  },
+  "voiceApiKeyLabel": "API Key",
+  "@voiceApiKeyLabel": {
+    "description": "Label for the cloud ASR API key field."
+  },
+  "voiceApiKeySavedHint": "Saved securely (enter a new key to replace)",
+  "@voiceApiKeySavedHint": {
+    "description": "Placeholder in the API key field when a key is already stored."
+  },
+  "voiceApiKeyEmptyHint": "Paste your API key",
+  "@voiceApiKeyEmptyHint": {
+    "description": "Placeholder in the API key field when no key is stored."
+  },
+  "voiceApiKeySave": "Save Key",
+  "@voiceApiKeySave": {
+    "description": "Button to save the entered API key."
+  },
+  "voiceApiKeyClear": "Clear",
+  "@voiceApiKeyClear": {
+    "description": "Button to remove the saved API key."
+  },
+  "voiceApiKeySaved": "API key saved",
+  "@voiceApiKeySaved": {
+    "description": "Feedback notice after saving an API key."
+  },
+  "voiceApiKeyCleared": "API key cleared",
+  "@voiceApiKeyCleared": {
+    "description": "Feedback notice after clearing an API key."
+  },
+  "voiceBaseUrlLabel": "Endpoint URL",
+  "@voiceBaseUrlLabel": {
+    "description": "Label for the optional custom API endpoint URL."
+  },
+  "voiceModelLabel": "Model",
+  "@voiceModelLabel": {
+    "description": "Label for the ASR model or resource ID field."
+  },
+  "voiceLanguageSection": "Language",
+  "@voiceLanguageSection": {
+    "description": "Voice settings: section title for recognition language preference."
+  },
+  "voiceLanguageAuto": "Auto",
+  "@voiceLanguageAuto": {
+    "description": "Voice language option: automatic detection."
+  },
+  "voiceLanguageZh": "Chinese",
+  "@voiceLanguageZh": {
+    "description": "Voice language option: Chinese."
+  },
+  "voiceLanguageEn": "English",
+  "@voiceLanguageEn": {
+    "description": "Voice language option: English."
+  },
+  "voiceVocabSection": "Coding Vocabulary Hints",
+  "@voiceVocabSection": {
+    "description": "Voice settings: section title for custom technical terms."
+  },
+  "voiceVocabHint": "Posse, worktree, rebase, Tailscale, QUIC…",
+  "@voiceVocabHint": {
+    "description": "Placeholder for the custom coding vocabulary hints text field."
+  },
+  "voiceVocabNote": "Comma-separated terms sent as recognition hints alongside the current project, branch, and agent name.",
+  "@voiceVocabNote": {
+    "description": "Explanation below the custom vocabulary text field."
+  },
+  "settingsTerminalDraftDefault": "Open Draft Input Bar by Default",
+  "@settingsTerminalDraftDefault": {
+    "description": "Terminal settings toggle: expand the staged draft input bar automatically when opening a terminal."
+  },
+  "settingsTerminalDraftDefaultNote": "Show an editable multi-line draft bar above the key bar for Chinese and voice input without resizing the terminal.",
+  "@settingsTerminalDraftDefaultNote": {
+    "description": "Note explaining the default terminal staged draft bar toggle."
+  },
+  "terminalKeyVoice": "Draft / Voice",
+  "@terminalKeyVoice": {
+    "description": "Label in key bar settings for the built-in staged draft and voice input button."
+  },
+  "terminalDraftHint": "Type or dictate a draft…",
+  "@terminalDraftHint": {
+    "description": "Placeholder inside the terminal staged draft input bar."
+  },
+  "terminalDraftPaste": "Paste without Enter",
+  "@terminalDraftPaste": {
+    "description": "Tooltip for inserting the staged draft into the terminal without pressing Enter."
+  },
+  "terminalDraftSend": "Send to terminal",
+  "@terminalDraftSend": {
+    "description": "Tooltip for sending the staged draft to the terminal with Enter."
+  },
+  "terminalDraftHide": "Hide draft bar",
+  "@terminalDraftHide": {
+    "description": "Tooltip for collapsing the terminal staged draft input bar while keeping unsent text."
+  },
+  "terminalDraftPasteUnsafe": "Paste without Enter supports single-line plain text only; use Send for multi-line or control characters",
+  "@terminalDraftPasteUnsafe": {
+    "description": "Notice shown when Paste without Enter is blocked because the terminal does not have bracketed paste enabled or the text contains unsafe control sequences."
+  },
+  "voiceApiKeySaveFailed": "Failed to save API key",
+  "@voiceApiKeySaveFailed": {
+    "description": "Error shown when persisting the voice API key to keychain or keystore fails."
+  },
+  "voiceApiKeyClearFailed": "Failed to clear API key",
+  "@voiceApiKeyClearFailed": {
+    "description": "Error shown when deleting the voice API key from keychain or keystore fails."
+  },
+  "voiceHttpsRequired": "Use an https:// URL, or enable insecure HTTP below for local network servers",
+  "@voiceHttpsRequired": {
+    "description": "Validation hint under the voice endpoint URL field when a non-HTTPS URL is entered while insecure HTTP is disabled."
+  },
+  "voiceAllowInsecureHttp": "Allow Insecure HTTP (LAN Only)",
+  "@voiceAllowInsecureHttp": {
+    "description": "Voice settings toggle allowing plain http:// endpoints for self-hosted local network servers."
+  },
+  "voiceAllowInsecureHttpNote": "Sends your API key and recorded audio without TLS encryption. Only enable for trusted local network servers.",
+  "@voiceAllowInsecureHttpNote": {
+    "description": "Warning note below the insecure HTTP toggle in voice settings."
+  },
+  "voiceKeyStateSaved": "Key saved",
+  "@voiceKeyStateSaved": {
+    "description": "Status next to the API key field and under a cloud engine in the engine list when its API key is stored in the keychain."
+  },
+  "voiceKeyStateMissing": "API key needed",
+  "@voiceKeyStateMissing": {
+    "description": "Status next to the API key field and under the selected cloud engine when no API key is stored yet."
+  },
+  "voiceAdvancedSection": "Advanced",
+  "@voiceAdvancedSection": {
+    "description": "Collapsible row in voice settings that holds the endpoint URL, model and insecure HTTP options."
+  },
+  "voiceCustomUrlRequired": "The custom engine needs an endpoint URL",
+  "@voiceCustomUrlRequired": {
+    "description": "Hint under the endpoint URL field when the custom OpenAI-compatible engine is selected and no URL has been entered."
+  },
+  "terminalKeyVoiceHasDraft": "Draft / Voice, unsent draft",
+  "@terminalKeyVoiceHasDraft": {
+    "description": "Accessibility label of the terminal key bar Draft / Voice key when the draft bar is collapsed with unsent text or a recording waiting for retry."
   }
 }

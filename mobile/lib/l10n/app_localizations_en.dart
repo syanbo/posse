@@ -3019,4 +3019,233 @@ class AppLocalizationsEn extends AppLocalizations {
 
     return '$usedString tokens';
   }
+
+  @override
+  String get voiceButtonTooltip => 'Voice input';
+
+  @override
+  String get voiceCancelTooltip => 'Cancel recording';
+
+  @override
+  String get voiceFinishTooltip => 'Finish and transcribe';
+
+  @override
+  String get voiceTranscribing => 'Transcribing…';
+
+  @override
+  String get voiceRetry => 'Retry';
+
+  @override
+  String get voiceDiscard => 'Discard';
+
+  @override
+  String get voiceLimitReached =>
+      'Reached time limit; transcribing recorded audio';
+
+  @override
+  String get voiceInterruptedSaved =>
+      'Recording paused; tap Retry to transcribe';
+
+  @override
+  String get voicePermissionTitle => 'Microphone Permission Needed';
+
+  @override
+  String get voicePermissionBody =>
+      'Allow microphone access in System Settings to record voice drafts.';
+
+  @override
+  String get voiceSpeechPermissionBody =>
+      'Allow microphone and speech recognition access in System Settings, or switch to a cloud engine in Voice Settings.';
+
+  @override
+  String get voiceOpenSettings => 'Open Settings';
+
+  @override
+  String get voiceConfigureCloud => 'Voice Settings';
+
+  @override
+  String get voiceErrorMissingKey =>
+      'API key not set for the selected voice engine';
+
+  @override
+  String get voiceErrorInvalidUrl => 'Invalid voice API URL';
+
+  @override
+  String get voiceErrorAuth => 'Voice API key rejected';
+
+  @override
+  String get voiceErrorRateLimit => 'Voice API rate limit reached';
+
+  @override
+  String get voiceErrorNetwork => 'Network error while transcribing';
+
+  @override
+  String get voiceErrorTimeout => 'Transcription timed out';
+
+  @override
+  String get voiceErrorEmpty => 'No speech recognized';
+
+  @override
+  String get voiceErrorUnavailable =>
+      'On-device speech recognition is unavailable on this device';
+
+  @override
+  String get voiceErrorFailed => 'Transcription failed';
+
+  @override
+  String get voiceSettingsTitle => 'Voice Input';
+
+  @override
+  String get voiceEngineSection => 'Recognition Engine';
+
+  @override
+  String get voiceEngineNative => 'System On-Device';
+
+  @override
+  String get voiceEngineOpenAI => 'OpenAI';
+
+  @override
+  String get voiceEngineGroq => 'Groq Whisper';
+
+  @override
+  String get voiceEngineSiliconFlow => 'SiliconFlow';
+
+  @override
+  String get voiceEngineVolcengine => 'Volcengine Doubao';
+
+  @override
+  String get voiceEngineCustom => 'Custom (OpenAI-Compatible)';
+
+  @override
+  String get voiceSummaryNative => 'System on-device';
+
+  @override
+  String voiceSummaryCloudReady(String engine) {
+    return '$engine · Key saved';
+  }
+
+  @override
+  String voiceSummaryCloudMissing(String engine) {
+    return '$engine · API key needed';
+  }
+
+  @override
+  String get voiceNativeNote =>
+      'Audio stays on your phone using the system speech recognizer. Great for zero setup on iOS; switch to a cloud engine if mixed Chinese/English coding terms need higher accuracy or on Android devices without speech services.';
+
+  @override
+  String get voiceCloudNote =>
+      'Recorded audio is uploaded directly from your phone to the configured provider and deleted locally once transcribed. API keys are stored in the device keychain/keystore and excluded from backups.';
+
+  @override
+  String get voiceCredentialsSection => 'API Configuration';
+
+  @override
+  String get voiceApiKeyLabel => 'API Key';
+
+  @override
+  String get voiceApiKeySavedHint =>
+      'Saved securely (enter a new key to replace)';
+
+  @override
+  String get voiceApiKeyEmptyHint => 'Paste your API key';
+
+  @override
+  String get voiceApiKeySave => 'Save Key';
+
+  @override
+  String get voiceApiKeyClear => 'Clear';
+
+  @override
+  String get voiceApiKeySaved => 'API key saved';
+
+  @override
+  String get voiceApiKeyCleared => 'API key cleared';
+
+  @override
+  String get voiceBaseUrlLabel => 'Endpoint URL';
+
+  @override
+  String get voiceModelLabel => 'Model';
+
+  @override
+  String get voiceLanguageSection => 'Language';
+
+  @override
+  String get voiceLanguageAuto => 'Auto';
+
+  @override
+  String get voiceLanguageZh => 'Chinese';
+
+  @override
+  String get voiceLanguageEn => 'English';
+
+  @override
+  String get voiceVocabSection => 'Coding Vocabulary Hints';
+
+  @override
+  String get voiceVocabHint => 'Posse, worktree, rebase, Tailscale, QUIC…';
+
+  @override
+  String get voiceVocabNote =>
+      'Comma-separated terms sent as recognition hints alongside the current project, branch, and agent name.';
+
+  @override
+  String get settingsTerminalDraftDefault => 'Open Draft Input Bar by Default';
+
+  @override
+  String get settingsTerminalDraftDefaultNote =>
+      'Show an editable multi-line draft bar above the key bar for Chinese and voice input without resizing the terminal.';
+
+  @override
+  String get terminalKeyVoice => 'Draft / Voice';
+
+  @override
+  String get terminalDraftHint => 'Type or dictate a draft…';
+
+  @override
+  String get terminalDraftPaste => 'Paste without Enter';
+
+  @override
+  String get terminalDraftSend => 'Send to terminal';
+
+  @override
+  String get terminalDraftHide => 'Hide draft bar';
+
+  @override
+  String get terminalDraftPasteUnsafe =>
+      'Paste without Enter supports single-line plain text only; use Send for multi-line or control characters';
+
+  @override
+  String get voiceApiKeySaveFailed => 'Failed to save API key';
+
+  @override
+  String get voiceApiKeyClearFailed => 'Failed to clear API key';
+
+  @override
+  String get voiceHttpsRequired =>
+      'Use an https:// URL, or enable insecure HTTP below for local network servers';
+
+  @override
+  String get voiceAllowInsecureHttp => 'Allow Insecure HTTP (LAN Only)';
+
+  @override
+  String get voiceAllowInsecureHttpNote =>
+      'Sends your API key and recorded audio without TLS encryption. Only enable for trusted local network servers.';
+
+  @override
+  String get voiceKeyStateSaved => 'Key saved';
+
+  @override
+  String get voiceKeyStateMissing => 'API key needed';
+
+  @override
+  String get voiceAdvancedSection => 'Advanced';
+
+  @override
+  String get voiceCustomUrlRequired =>
+      'The custom engine needs an endpoint URL';
+
+  @override
+  String get terminalKeyVoiceHasDraft => 'Draft / Voice, unsent draft';
 }

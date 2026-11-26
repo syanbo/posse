@@ -2845,4 +2845,223 @@ class AppLocalizationsZh extends AppLocalizations {
 
     return '$usedString token';
   }
+
+  @override
+  String get voiceButtonTooltip => '语音输入';
+
+  @override
+  String get voiceCancelTooltip => '取消录音';
+
+  @override
+  String get voiceFinishTooltip => '完成并转写';
+
+  @override
+  String get voiceTranscribing => '正在转写…';
+
+  @override
+  String get voiceRetry => '重试';
+
+  @override
+  String get voiceDiscard => '丢弃';
+
+  @override
+  String get voiceLimitReached => '已达单次时长上限，正在转写';
+
+  @override
+  String get voiceInterruptedSaved => '录音已暂停，点重试可继续转写';
+
+  @override
+  String get voicePermissionTitle => '需要麦克风权限';
+
+  @override
+  String get voicePermissionBody => '在系统设置里允许访问麦克风，才能录制语音草稿。';
+
+  @override
+  String get voiceSpeechPermissionBody =>
+      '在系统设置里允许麦克风和语音识别权限，或在「语音输入」设置中切换为云端引擎。';
+
+  @override
+  String get voiceOpenSettings => '打开设置';
+
+  @override
+  String get voiceConfigureCloud => '语音设置';
+
+  @override
+  String get voiceErrorMissingKey => '当前语音引擎未配置 API Key';
+
+  @override
+  String get voiceErrorInvalidUrl => '语音接口地址无效';
+
+  @override
+  String get voiceErrorAuth => '语音 API Key 无效或无权限';
+
+  @override
+  String get voiceErrorRateLimit => '语音接口触发限流，请稍后重试';
+
+  @override
+  String get voiceErrorNetwork => '转写时网络异常';
+
+  @override
+  String get voiceErrorTimeout => '转写超时';
+
+  @override
+  String get voiceErrorEmpty => '未识别到有效语音';
+
+  @override
+  String get voiceErrorUnavailable => '当前设备不支持系统语音识别';
+
+  @override
+  String get voiceErrorFailed => '语音转写失败';
+
+  @override
+  String get voiceSettingsTitle => '语音输入';
+
+  @override
+  String get voiceEngineSection => '识别引擎';
+
+  @override
+  String get voiceEngineNative => '系统本机识别';
+
+  @override
+  String get voiceEngineOpenAI => 'OpenAI';
+
+  @override
+  String get voiceEngineGroq => 'Groq Whisper';
+
+  @override
+  String get voiceEngineSiliconFlow => '硅基流动';
+
+  @override
+  String get voiceEngineVolcengine => '火山豆包极速版';
+
+  @override
+  String get voiceEngineCustom => '自定义（OpenAI 兼容）';
+
+  @override
+  String get voiceSummaryNative => '系统本机识别';
+
+  @override
+  String voiceSummaryCloudReady(String engine) {
+    return '$engine · 已配置 Key';
+  }
+
+  @override
+  String voiceSummaryCloudMissing(String engine) {
+    return '$engine · 需配置 API Key';
+  }
+
+  @override
+  String get voiceNativeNote =>
+      '使用系统内置语音识别，音频不离开本机。iOS 零配置即可用；如需更高的中英混杂代码术语准确率，或在无系统语音服务的安卓机上使用，可切换云端引擎。';
+
+  @override
+  String get voiceCloudNote =>
+      '录音文件由手机直连所选服务商转写，成功后立即删除本地临时音频。API Key 保存在系统钥匙串/Keystore，不参与备份。';
+
+  @override
+  String get voiceCredentialsSection => '接口配置';
+
+  @override
+  String get voiceApiKeyLabel => 'API Key';
+
+  @override
+  String get voiceApiKeySavedHint => '已安全保存（输入新 Key 可覆盖）';
+
+  @override
+  String get voiceApiKeyEmptyHint => '粘贴 API Key';
+
+  @override
+  String get voiceApiKeySave => '保存 Key';
+
+  @override
+  String get voiceApiKeyClear => '清除';
+
+  @override
+  String get voiceApiKeySaved => 'API Key 已保存';
+
+  @override
+  String get voiceApiKeyCleared => 'API Key 已清除';
+
+  @override
+  String get voiceBaseUrlLabel => '接口地址';
+
+  @override
+  String get voiceModelLabel => '模型';
+
+  @override
+  String get voiceLanguageSection => '识别语言';
+
+  @override
+  String get voiceLanguageAuto => '自动';
+
+  @override
+  String get voiceLanguageZh => '中文';
+
+  @override
+  String get voiceLanguageEn => '英文';
+
+  @override
+  String get voiceVocabSection => '编程术语提示词';
+
+  @override
+  String get voiceVocabHint => 'Posse, worktree, rebase, Tailscale, QUIC…';
+
+  @override
+  String get voiceVocabNote => '用逗号分隔，转写时会与当前项目名、分支名、Agent 名一起作为识别提示。';
+
+  @override
+  String get settingsTerminalDraftDefault => '默认展开草稿输入栏';
+
+  @override
+  String get settingsTerminalDraftDefaultNote =>
+      '进入终端时在快捷键栏上方显示多行草稿框，方便中文和语音输入，不改变终端尺寸。';
+
+  @override
+  String get terminalKeyVoice => '草稿 / 语音';
+
+  @override
+  String get terminalDraftHint => '输入或口述草稿…';
+
+  @override
+  String get terminalDraftPaste => '填入终端（不回车）';
+
+  @override
+  String get terminalDraftSend => '发送到终端';
+
+  @override
+  String get terminalDraftHide => '收起草稿栏';
+
+  @override
+  String get terminalDraftPasteUnsafe => '「仅填入」只支持单行纯文本；多行或含控制字符请改用「发送」';
+
+  @override
+  String get voiceApiKeySaveFailed => '保存 API Key 失败';
+
+  @override
+  String get voiceApiKeyClearFailed => '清除 API Key 失败';
+
+  @override
+  String get voiceHttpsRequired => '请使用 https:// 地址，或在下方显式开启局域网明文 HTTP';
+
+  @override
+  String get voiceAllowInsecureHttp => '允许明文 HTTP（仅局域网）';
+
+  @override
+  String get voiceAllowInsecureHttpNote =>
+      '开启后 API Key 与录音将不经 TLS 加密传输，仅建议用于可信局域网自建服务。';
+
+  @override
+  String get voiceKeyStateSaved => '已配置 Key';
+
+  @override
+  String get voiceKeyStateMissing => '需配置 API Key';
+
+  @override
+  String get voiceAdvancedSection => '高级设置';
+
+  @override
+  String get voiceCustomUrlRequired => '自定义引擎需要填写接口地址';
+
+  @override
+  String get terminalKeyVoiceHasDraft => '草稿 / 语音，有未发送的草稿';
 }

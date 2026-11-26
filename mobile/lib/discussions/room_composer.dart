@@ -86,7 +86,9 @@ extension _ComposerViews on _DiscussionRoomState {
   }
 
   void addTarget(String id) {
-    if (id.isEmpty || targets.contains(id) || targets.length >= discMaxTargets) {
+    if (id.isEmpty ||
+        targets.contains(id) ||
+        targets.length >= discMaxTargets) {
       return;
     }
     targets = [...targets, id];
@@ -291,6 +293,9 @@ extension _ComposerViews on _DiscussionRoomState {
     final l = context.l10n;
     final locked = pending != null;
     if (!writable) {
+      if (voice.isBusy) {
+        unawaited(voice.cancel());
+      }
       return SafeArea(
         top: false,
         child: Container(
@@ -382,150 +387,164 @@ extension _ComposerViews on _DiscussionRoomState {
             targetRows.length - 1,
           )
         : l.discMessageHint;
-    final ready =
-        !sending &&
-        !uploading &&
-        (locked ||
-            input.text.trim().isNotEmpty ||
-            answering.isEmpty && attachments.isNotEmpty);
-    return SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          atPicker(),
-          if (locked)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 8, 2),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      l.discUnknown,
-                      style: TextStyle(fontSize: Fs.small, color: c.muted),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: sending ? null : editDraft,
-                    child: Text(l.discEditDraft),
-                  ),
-                ],
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 2, 10, 6),
-            child: Container(
-              decoration: BoxDecoration(
-                color: c.card,
-                borderRadius: BorderRadius.circular(Rd.composer),
-                border: Border.all(color: c.line),
-              ),
-              padding: const EdgeInsets.all(4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (chips.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(6, 4, 6, 2),
-                      child: Wrap(spacing: 6, runSpacing: 6, children: chips),
-                    ),
-                  Row(
+    if (!locked && deferredVoiceDraft.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) flushDeferredVoiceDraft();
+      });
+    }
+    return ListenableBuilder(
+      listenable: voice,
+      builder: (context, _) {
+        final busyVoice = voice.isBusy;
+        final ready =
+            !sending &&
+            !uploading &&
+            !busyVoice &&
+            (locked ||
+                input.text.trim().isNotEmpty ||
+                answering.isEmpty && attachments.isNotEmpty);
+        return SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              atPicker(),
+              if (locked)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 8, 2),
+                  child: Row(
                     children: [
-                      IconButton(
-                        tooltip: l.discAddFile,
-                        style: IconButton.styleFrom(
-                          fixedSize: const Size.square(34),
-                          minimumSize: const Size.square(34),
-                          padding: EdgeInsets.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: locked || uploading || answering.isNotEmpty
-                            ? null
-                            : pickAttachment,
-                        icon: Icon(
-                          Icons.add_rounded,
-                          size: Ic.button,
-                          color: answering.isNotEmpty ? c.faint : c.muted,
-                        ),
-                      ),
                       Expanded(
-                        child: TextField(
-                          controller: input,
-                          focusNode: focus,
-                          enabled: !locked,
-                          minLines: 1,
-                          maxLines: 6,
-                          textInputAction: TextInputAction.newline,
-                          onChanged: (_) => update(() {}),
-                          onTap: () => update(() {}),
-                          style: TextStyle(fontSize: Fs.body, color: c.text),
-                          decoration: InputDecoration(
-                            hintText: hint,
-                            hintMaxLines: 1,
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            disabledBorder: InputBorder.none,
-                            isDense: true,
-                            contentPadding: const EdgeInsets.fromLTRB(
-                              6,
-                              6,
-                              4,
-                              6,
-                            ),
-                          ),
+                        child: Text(
+                          l.discUnknown,
+                          style: TextStyle(fontSize: Fs.small, color: c.muted),
                         ),
                       ),
-                      // 手机键盘打 @ 要切一次键盘：这里一下插进去，弹出候选
-                      if (answering.isEmpty && !locked)
-                        IconButton(
-                          tooltip: l.discAtButton,
-                          style: IconButton.styleFrom(
-                            fixedSize: const Size.square(34),
-                            minimumSize: const Size.square(34),
-                            padding: EdgeInsets.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          onPressed: insertAt,
-                          icon: Icon(
-                            Icons.alternate_email_rounded,
-                            size: Ic.medium,
-                            color: c.muted,
-                          ),
-                        ),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: ready ? c.accent : c.fill,
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          tooltip: locked ? l.discRetry : l.discSend,
-                          onPressed: ready ? send : null,
-                          icon: sending
-                              ? HexSpinner(color: c.muted)
-                              : Icon(
-                                  locked
-                                      ? Icons.refresh_rounded
-                                      : Icons.arrow_upward_rounded,
-                                  size: Ic.medium,
-                                  color: ready ? Colors.white : c.faint,
-                                ),
-                        ),
+                      TextButton(
+                        onPressed: sending ? null : editDraft,
+                        child: Text(l.discEditDraft),
                       ),
                     ],
                   ),
-                ],
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 2, 10, 6),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (voice.hasFailedRetry)
+                      VoiceRetryStrip(
+                        controller: voice,
+                        enabled: !locked && !sending,
+                      ),
+                    if (showVoicePartial(voice))
+                      VoicePartialPreview(text: voice.partialText),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: c.card,
+                        borderRadius: BorderRadius.circular(Rd.composer),
+                        border: Border.all(color: c.line),
+                      ),
+                      padding: const EdgeInsets.all(4),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (chips.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(6, 4, 6, 2),
+                              child: Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: chips,
+                              ),
+                            ),
+                          if (busyVoice)
+                            VoiceActiveRow(controller: voice)
+                          else
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                ComposerIconButton(
+                                  icon: Icons.add_rounded,
+                                  iconSize: Ic.button,
+                                  tooltip: l.discAddFile,
+                                  onPressed:
+                                      locked ||
+                                          uploading ||
+                                          answering.isNotEmpty
+                                      ? null
+                                      : pickAttachment,
+                                  color: answering.isNotEmpty
+                                      ? c.faint
+                                      : c.muted,
+                                ),
+                                Expanded(
+                                  child: TextField(
+                                    controller: input,
+                                    focusNode: focus,
+                                    enabled: !locked,
+                                    minLines: 1,
+                                    maxLines: 6,
+                                    textInputAction: TextInputAction.newline,
+                                    onChanged: (_) => update(() {}),
+                                    onTap: () => update(() {}),
+                                    style: TextStyle(
+                                      fontSize: Fs.body,
+                                      color: c.text,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: hint,
+                                      hintMaxLines: 1,
+                                      filled: false,
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      disabledBorder: InputBorder.none,
+                                      isDense: true,
+                                      contentPadding: const EdgeInsets.fromLTRB(
+                                        6,
+                                        6,
+                                        4,
+                                        6,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // 手机键盘打 @ 要切一次键盘：这里一下插进去，弹出候选
+                                if (answering.isEmpty && !locked)
+                                  ComposerIconButton(
+                                    icon: Icons.alternate_email_rounded,
+                                    tooltip: l.discAtButton,
+                                    onPressed: insertAt,
+                                  ),
+                                VoiceMicButton(
+                                  onPressed: locked || sending
+                                      ? null
+                                      : voice.start,
+                                ),
+                                const SizedBox(width: 4),
+                                ComposerSendButton(
+                                  ready: ready,
+                                  busy: sending,
+                                  icon: locked
+                                      ? Icons.refresh_rounded
+                                      : Icons.arrow_upward_rounded,
+                                  tooltip: locked ? l.discRetry : l.discSend,
+                                  onPressed: send,
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

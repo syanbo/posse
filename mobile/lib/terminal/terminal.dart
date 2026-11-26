@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
-import 'package:flterm/flterm.dart' hide TerminalScreen;
+import 'package:flterm/flterm.dart' hide Key, TerminalScreen;
 // ignore: implementation_imports
 import 'package:flterm/src/foundation.dart' show CellMetrics;
 // ignore: implementation_imports
@@ -31,8 +32,12 @@ import 'frames.dart';
 import 'keyboard_lift.dart';
 import 'link_target.dart';
 import 'term_colors.dart';
+import 'terminal_draft_bar.dart';
 import '../chat/media.dart';
 import '../chat/tools.dart';
+import '../voice/voice_bar.dart';
+import '../voice/voice_config.dart';
+import '../voice/voice_controller.dart';
 
 /// 完全复位（RIS）并清掉回滚。
 final _resetBytes = Uint8List.fromList('\x1bc\x1b[3J'.codeUnits);
@@ -141,12 +146,24 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 
   final _focus = FocusNode();
+  final _draftController = TextEditingController();
+  final _draftFocus = FocusNode();
+  late final VoiceController _voice;
+  var _draftOpen = false;
+  var _draftHeight = 0.0;
+  var _draftSending = false;
   var _busy = false;
 
   /// 点终端、点快捷键栏的键盘键都走这里：键盘弹着就放下，收着就弹出来。
   void _toggleKeyboard() {
     if (MediaQuery.viewInsetsOf(context).bottom > 0) {
       _focus.unfocus();
+      _draftFocus.unfocus();
+      return;
+    }
+    if (_draftOpen) {
+      _draftFocus.requestFocus();
+      SystemChannels.textInput.invokeMethod<void>('TextInput.show');
       return;
     }
     _showKeyboard();
@@ -174,7 +191,196 @@ class _TerminalScreenState extends State<TerminalScreen>
     _controller = TerminalController()
       ..onOutput = _onOutput
       ..onResize = _onResize;
+    _draftOpen = widget.model.settings.terminalDraftOpenByDefault;
+    _voice = VoiceController(
+      readConfig: () => VoiceConfig.fromSettings(widget.model.settings),
+      readContextTerms: _voiceContextTerms,
+      onResult: _onVoiceResult,
+      onPermissionDenied: (issue) {
+        if (mounted) {
+          unawaited(
+            showVoicePermissionDialog(context, needSpeech: issue.needSpeech),
+          );
+        }
+      },
+      onNotice: (code) {
+        if (!mounted) return;
+        if (isVoiceConfigError(code)) {
+          unawaited(
+            showVoiceConfigPrompt(context, model: widget.model, code: code),
+          );
+          return;
+        }
+        _flash(voiceErrorMessage(context.l10n, code));
+      },
+    );
     widget.model.addListener(_onModel);
+  }
+
+  List<String> _voiceContextTerms() {
+    final terms = <String>[];
+    final tab = _liveTab;
+    if (tab.agent case final a? when a.isNotEmpty) terms.add(a);
+    for (final wt in widget.model.worktrees) {
+      if (wt.id == widget.tab.worktreeId) {
+        if (wt.repo.isNotEmpty) terms.add(wt.repo);
+        if (wt.branch.isNotEmpty) terms.add(wt.branch);
+        if (wt.name.isNotEmpty) terms.add(wt.name);
+        break;
+      }
+    }
+    return terms;
+  }
+
+  void _onVoiceResult(String text) {
+    if (!mounted) return;
+    if (!_draftOpen) {
+      setState(() => _draftOpen = true);
+    }
+    // 只插入、不抢焦点：录音时输入框被换下、键盘已收起，转写完再弹出来会把终端顶上去又落回，挡住发送
+    _insertVoiceIntoDraft(text);
+  }
+
+  void _insertVoiceIntoDraft(String incoming) {
+    final sel = _draftController.selection;
+    final merged = mergeVoiceDraft(
+      current: _draftController.text,
+      start: sel.isValid ? sel.start : _draftController.text.length,
+      end: sel.isValid ? sel.end : _draftController.text.length,
+      incoming: incoming,
+    );
+    _draftController.value = TextEditingValue(
+      text: merged.text,
+      selection: TextSelection.collapsed(offset: merged.cursor),
+    );
+  }
+
+  void _insertRawIntoDraft(String raw) {
+    final sel = _draftController.selection;
+    final merged = insertRawDraft(
+      current: _draftController.text,
+      start: sel.isValid ? sel.start : _draftController.text.length,
+      end: sel.isValid ? sel.end : _draftController.text.length,
+      raw: raw,
+    );
+    _draftController.value = TextEditingValue(
+      text: merged.text,
+      selection: TextSelection.collapsed(offset: merged.cursor),
+    );
+  }
+
+  void _insertPathIntoDraft(String path) {
+    final sel = _draftController.selection;
+    final merged = insertPathDraft(
+      current: _draftController.text,
+      start: sel.isValid ? sel.start : _draftController.text.length,
+      end: sel.isValid ? sel.end : _draftController.text.length,
+      path: path,
+    );
+    _draftController.value = TextEditingValue(
+      text: merged.text,
+      selection: TextSelection.collapsed(offset: merged.cursor),
+    );
+  }
+
+  void _onVoiceKey() {
+    switch (draftKeyAction(draftOpen: _draftOpen, stage: _voice.stage)) {
+      case DraftKeyAction.open:
+        _focus.unfocus();
+        setState(() => _draftOpen = true);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _draftOpen) _draftFocus.requestFocus();
+        });
+      case DraftKeyAction.finish:
+        unawaited(_voice.finish());
+      case DraftKeyAction.ignore:
+        break;
+      case DraftKeyAction.collapse:
+        _collapseDraft();
+    }
+  }
+
+  void _collapseDraft() {
+    if (_voice.isBusy) unawaited(_voice.cancel());
+    _draftFocus.unfocus();
+    setState(() {
+      _draftOpen = false;
+      _draftHeight = 0;
+    });
+  }
+
+  /// 仅填入不回车：仅允许安全单行纯文本（防本地括号粘贴状态落后导致多行被执行），并等 RPC 回执确认后再清理已提交的草稿快照。
+  Future<void> _pasteDraftToTerminal() async {
+    final rpc = widget.model.rpc;
+    final snapshot = _draftController.text;
+    if (rpc == null || snapshot.trim().isEmpty || _draftSending) return;
+    final bytes = encodeSafeTerminalPaste(snapshot);
+    if (bytes == null) {
+      _flash(context.l10n.terminalDraftPasteUnsafe);
+      return;
+    }
+    setState(() => _draftSending = true);
+    try {
+      final outcome = await sendTerminal(
+        rpc,
+        terminal: widget.tab.terminalId,
+        raw: bytes,
+        enter: false,
+      );
+      if (!mounted) return;
+      final note = sendOutcomeText(context.l10n, outcome);
+      if (note.isNotEmpty) {
+        _flash(note);
+        return;
+      }
+      // 仅当输入框仍是本次提交的快照时清空，避免抹掉用户在等待回执期间新编辑的草稿。
+      if (_draftController.text == snapshot) {
+        _draftController.clear();
+        if (!widget.model.settings.terminalDraftOpenByDefault) {
+          setState(() {
+            _draftOpen = false;
+            _draftHeight = 0;
+          });
+        }
+        _draftFocus.unfocus();
+        _focus.requestFocus();
+      }
+    } finally {
+      if (mounted) setState(() => _draftSending = false);
+    }
+  }
+
+  Future<void> _sendDraftToTerminal() async {
+    final rpc = widget.model.rpc;
+    final snapshot = _draftController.text;
+    if (rpc == null || snapshot.trim().isEmpty || _draftSending) return;
+    setState(() => _draftSending = true);
+    try {
+      final outcome = await sendTerminal(
+        rpc,
+        terminal: widget.tab.terminalId,
+        text: snapshot,
+        enter: true,
+      );
+      if (!mounted) return;
+      final note = sendOutcomeText(context.l10n, outcome);
+      if (note.isNotEmpty) {
+        _flash(note);
+        return;
+      }
+      if (_draftController.text == snapshot) {
+        _draftController.clear();
+        if (!widget.model.settings.terminalDraftOpenByDefault) {
+          _draftFocus.unfocus();
+          setState(() {
+            _draftOpen = false;
+            _draftHeight = 0;
+          });
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _draftSending = false);
+    }
   }
 
   Animation<double>? _entry;
@@ -209,6 +415,9 @@ class _TerminalScreenState extends State<TerminalScreen>
     _pose.dispose();
     _contentRows.dispose();
     _focus.dispose();
+    _draftController.dispose();
+    _draftFocus.dispose();
+    _voice.dispose();
     super.dispose();
   }
 
@@ -803,8 +1012,10 @@ class _TerminalScreenState extends State<TerminalScreen>
   /// 快捷键栏的「发送文件」：相册里的照片或视频、拍照、「文件」App 里的，传到电脑上后把路径打进终端。
   Future<void> _sendFile() async {
     if (widget.model.rpc == null || _busy) return;
-    // 选文件的面板和相册都不需要键盘，挡着反而看不见
+    // 选文件的面板和相册都不需要键盘，挡着反而看不见；并按发起时的目的地锁定去向。
+    final toDraft = _draftOpen;
     _focus.unfocus();
+    _draftFocus.unfocus();
     setState(() => _busy = true);
     try {
       final ask = await askFileSource(context);
@@ -832,8 +1043,12 @@ class _TerminalScreenState extends State<TerminalScreen>
         if (mounted) setState(() => _upload = null);
       }
       if (!mounted) return;
-      // 和图片一样当成一次粘贴、不回车；路径里的空格这些转义掉，shell 和 agent 都当成一个文件
-      _controller.paste(shellPath(path));
+      final escaped = shellPath(path);
+      if (toDraft) {
+        _insertPathIntoDraft(escaped);
+      } else {
+        _controller.paste(escaped);
+      }
     } catch (error) {
       if (mounted) _flash(friendlyError(error, context.l10n));
     } finally {
@@ -844,16 +1059,21 @@ class _TerminalScreenState extends State<TerminalScreen>
   /// 文字交给终端自己的粘贴（不回车）。图片上传后只把路径打进去，和发送图片一样。
   Future<void> _pasteClipboard() async {
     if (widget.model.rpc == null || _busy) return;
+    final toDraft = _draftOpen;
     setState(() => _busy = true);
     try {
       final paste = await readClipboardPaste();
       if (!mounted) return;
       if (paste.isText) {
-        _controller.paste(paste.text!);
+        if (toDraft) {
+          _insertRawIntoDraft(paste.text!);
+        } else {
+          _controller.paste(paste.text!);
+        }
         return;
       }
       if (paste.isImage) {
-        await _typeImagePath(paste.image!);
+        await _typeImagePath(paste.image!, toDraft: toDraft);
         return;
       }
       _flash(context.l10n.terminalClipboardEmpty);
@@ -864,7 +1084,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     }
   }
 
-  Future<void> _typeImagePath(Uint8List bytes) async {
+  Future<void> _typeImagePath(Uint8List bytes, {required bool toDraft}) async {
     setState(() {
       _upload = 0;
       _uploadFile = false;
@@ -885,9 +1105,11 @@ class _TerminalScreenState extends State<TerminalScreen>
       if (mounted) setState(() => _upload = null);
     }
     if (!mounted) return;
-    // 和桌面端一样当成一次粘贴发（程序开了括号粘贴就包上）：Claude Code、Codex 认出粘贴的是图片文件，
-    // 显示成 [Image #1] 当附件，而不是一长串路径。不回车：还能接着写说明，shell 里也不会把路径当命令执行
-    _controller.paste(path);
+    if (toDraft) {
+      _insertPathIntoDraft(path);
+    } else {
+      _controller.paste(path);
+    }
   }
 
   /// 专用键和自定义键按程序当前的光标键模式编码，见 [cursorKeysApp]。
@@ -1063,8 +1285,11 @@ class _TerminalScreenState extends State<TerminalScreen>
           // 横屏时刘海和圆角那侧让开：终端只占中间，两边露出的是同色的页面底，快捷键栏自己让
           final side = MediaQuery.paddingOf(context);
           final width = body.maxWidth - side.horizontal;
-          // 键盘盖住的终端高度：快捷键栏下面的安全区本来就不算终端
-          final covered = (keyboard - safe).clamp(0.0, height);
+          // 键盘与折叠草稿栏盖住的终端高度：快捷键内容底边统一取 max(safe, keyboard)，
+          // 键盘收起时 barBottom == safe、covered == draftPad，过渡期也不与安全区重叠。
+          final barBottom = math.max(keyboard, safe);
+          final draftPad = _draftOpen ? _draftHeight : 0.0;
+          final covered = (barBottom - safe + draftPad).clamp(0.0, height);
           return Stack(
             children: [
               Positioned(
@@ -1136,22 +1361,52 @@ class _TerminalScreenState extends State<TerminalScreen>
                       _selectionChrome(width, height, covered),
                 ),
               ),
+              if (_draftOpen)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: barBottom + _keyBarHeight,
+                  child: TerminalDraftBar(
+                    controller: _draftController,
+                    focusNode: _draftFocus,
+                    voice: _voice,
+                    canSend: widget.model.rpc != null && !_ended,
+                    sending: _draftSending,
+                    onSend: () => unawaited(_sendDraftToTerminal()),
+                    onPasteOnly: () => unawaited(_pasteDraftToTerminal()),
+                    onCollapse: _collapseDraft,
+                    onHeightChanged: (h) {
+                      if (!mounted || (_draftHeight - h).abs() < 0.5) return;
+                      setState(() => _draftHeight = h);
+                    },
+                  ),
+                ),
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: keyboard,
-                child: TerminalKeyBar(
-                  model: widget.model,
-                  onKey: _sendKey,
-                  onExit: () => unawaited(_exitAgent()),
-                  onClear: () => unawaited(_clearInput()),
-                  onCustom: (key) => _sendKey(key.bytes, enter: key.enter),
-                  onImage: widget.model.rpc == null || _busy ? null : _sendFile,
-                  onPaste: widget.model.rpc == null || _busy
-                      ? null
-                      : _pasteClipboard,
-                  keyboardUp: keyboard > 0,
-                  onKeyboard: _toggleKeyboard,
+                child: ListenableBuilder(
+                  listenable: Listenable.merge([_draftController, _voice]),
+                  builder: (context, _) => TerminalKeyBar(
+                    model: widget.model,
+                    onKey: _sendKey,
+                    onExit: () => unawaited(_exitAgent()),
+                    onClear: () => unawaited(_clearInput()),
+                    onCustom: (key) => _sendKey(key.bytes, enter: key.enter),
+                    onImage: widget.model.rpc == null || _busy
+                        ? null
+                        : _sendFile,
+                    onPaste: widget.model.rpc == null || _busy
+                        ? null
+                        : _pasteClipboard,
+                    onVoice: _onVoiceKey,
+                    draftOpen: _draftOpen,
+                    hasDraft: _draftController.text.trim().isNotEmpty,
+                    voicePending: _voice.hasFailedRetry,
+                    voiceActive: _voice.isBusy,
+                    keyboardUp: keyboard > 0,
+                    onKeyboard: _toggleKeyboard,
+                  ),
                 ),
               ),
             ],
@@ -1252,6 +1507,11 @@ class TerminalKeyBar extends StatelessWidget {
     required this.onKeyboard,
     required this.onExit,
     required this.onClear,
+    this.onVoice,
+    this.draftOpen = false,
+    this.hasDraft = false,
+    this.voicePending = false,
+    this.voiceActive = false,
   });
 
   final Future<void> Function(List<int> bytes) onKey;
@@ -1265,6 +1525,13 @@ class TerminalKeyBar extends StatelessWidget {
   final void Function(CustomKey key) onCustom;
   final VoidCallback? onImage;
   final VoidCallback? onPaste;
+  final VoidCallback? onVoice;
+  final bool draftOpen;
+  final bool hasDraft;
+
+  /// 收起时还有待重试的录音：键上用琥珀色圆点提醒，否则这段录音就看不见了。
+  final bool voicePending;
+  final bool voiceActive;
   final bool keyboardUp;
   final VoidCallback onKeyboard;
 
@@ -1345,6 +1612,55 @@ class TerminalKeyBar extends StatelessWidget {
     }
     if (term != null) {
       return _textKey(c, term.label(context.l10n), () => onKey(term.bytes));
+    }
+    if (key.builtin == 'voice') {
+      final lit = draftOpen || voiceActive;
+      final marked = !draftOpen && (hasDraft || voicePending);
+      return Semantics(
+        button: true,
+        label: marked
+            ? context.l10n.terminalKeyVoiceHasDraft
+            : context.l10n.terminalKeyVoice,
+        child: Material(
+          color: lit ? c.tint : c.fill,
+          borderRadius: BorderRadius.circular(Rd.button),
+          child: InkWell(
+            key: const Key('terminal-key-voice'),
+            borderRadius: BorderRadius.circular(Rd.button),
+            onTap: onVoice,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  constraints: const BoxConstraints(minWidth: 40),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.mic_rounded,
+                    size: Ic.medium,
+                    color: lit ? c.accent : c.text,
+                  ),
+                ),
+                // 8 的实心点外描一圈顶栏底色，从键帽的淡底上抠出来，整屏看也认得出
+                if (marked)
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: Container(
+                      key: const Key('terminal-key-voice-dot'),
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: voicePending ? c.honey : c.accent,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: c.band, width: 2),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
     return key.builtin == 'image'
         ? _iconKey(

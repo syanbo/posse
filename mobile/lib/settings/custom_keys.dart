@@ -148,13 +148,19 @@ const relabeledBuiltins = {
   '\u6e05\u7a7a': clearInputKey,
 };
 
-/// 内置键的名字，也是默认顺序：图片、粘贴，然后是终端键。
-final builtinBarKeys = ['image', 'paste', for (final key in termKeys) key.id];
+/// 内置键的名字，也是默认顺序：图片、粘贴、草稿/语音，然后是终端键。
+final builtinBarKeys = [
+  'image',
+  'paste',
+  'voice',
+  for (final key in termKeys) key.id,
+];
 
-/// 默认顺序：图片、粘贴、自己加的键、终端键。旧版只存了自己加的键，读进来也排成这样。
+/// 默认顺序：图片、粘贴、草稿/语音、自己加的键、终端键。旧版只存了自己加的键，读进来也排成这样。
 List<BarKey> defaultBarKeys([List<CustomKey> custom = const []]) => [
   const BarKey.builtin('image'),
   const BarKey.builtin('paste'),
+  const BarKey.builtin('voice'),
   for (final key in custom) BarKey.custom(key),
   for (final key in termKeys) BarKey.builtin(key.id),
 ];

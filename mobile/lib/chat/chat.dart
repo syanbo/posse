@@ -31,6 +31,9 @@ import 'echo.dart';
 import 'session_bar.dart';
 import 'media.dart';
 import 'tools.dart';
+import '../voice/voice_bar.dart';
+import '../voice/voice_config.dart';
+import '../voice/voice_controller.dart';
 
 export 'bubbles.dart';
 export 'cards.dart';
@@ -60,6 +63,8 @@ typedef _InputDraft = ({String caption, List<Uint8List> images});
 class _ChatScreenState extends State<ChatScreen> {
   var _window = ChatWindow();
   final _input = TextEditingController();
+  late final VoiceController _voice;
+  (String?, String?)? _voiceOrigin;
   final _scroll = ScrollController();
   late final ListObserverController _observer = ListObserverController(
     controller: _scroll,
@@ -147,9 +152,80 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _voice = VoiceController(
+      readConfig: () {
+        _voiceOrigin = _session;
+        return VoiceConfig.fromSettings(widget.model.settings);
+      },
+      readContextTerms: _voiceContextTerms,
+      onResult: _onVoiceResult,
+      onPermissionDenied: (issue) {
+        if (mounted) {
+          unawaited(
+            showVoicePermissionDialog(context, needSpeech: issue.needSpeech),
+          );
+        }
+      },
+      onNotice: (code) {
+        if (!mounted) return;
+        if (isVoiceConfigError(code)) {
+          unawaited(
+            showVoiceConfigPrompt(context, model: widget.model, code: code),
+          );
+          return;
+        }
+        _flash(voiceErrorMessage(context.l10n, code));
+      },
+    );
     widget.model.addListener(_onModel);
     _scroll.addListener(_onScroll);
     _scheduleOpen();
+  }
+
+  List<String> _voiceContextTerms() {
+    final terms = <String>[];
+    if (tab.agent case final a? when a.isNotEmpty) terms.add(a);
+    for (final wt in widget.model.worktrees) {
+      if (wt.id == tab.worktreeId) {
+        if (wt.repo.isNotEmpty) terms.add(wt.repo);
+        if (wt.branch.isNotEmpty) terms.add(wt.branch);
+        if (wt.name.isNotEmpty) terms.add(wt.name);
+        break;
+      }
+    }
+    return terms;
+  }
+
+  void _onVoiceResult(String text) {
+    if (!mounted) return;
+    // 按来源会话归属路由：A→B 时写入 A 的后台草稿；A→B→A 回到原会话时直接写回当前输入框。
+    final origin = _voiceOrigin;
+    if (origin != null && origin != _session) {
+      final prev = _inputDrafts[origin];
+      final merged = mergeVoiceDraft(
+        current: prev?.caption ?? '',
+        start: prev?.caption.length ?? 0,
+        end: prev?.caption.length ?? 0,
+        incoming: text,
+      );
+      _inputDrafts[origin] = (
+        caption: merged.text,
+        images: prev?.images ?? const [],
+      );
+      return;
+    }
+    final sel = _input.selection;
+    final merged = mergeVoiceDraft(
+      current: _input.text,
+      start: sel.isValid ? sel.start : _input.text.length,
+      end: sel.isValid ? sel.end : _input.text.length,
+      incoming: text,
+    );
+    _input.value = TextEditingValue(
+      text: merged.text,
+      selection: TextSelection.collapsed(offset: merged.cursor),
+    );
+    setState(() {});
   }
 
   /// 倒序列表的偏移 0 是底部。靠近顶部就读更早的消息；回到底部就收起「新消息」。
@@ -185,6 +261,7 @@ class _ChatScreenState extends State<ChatScreen> {
     unawaited(_chat?.cancel());
     unawaited(_tabs?.cancel());
     _input.dispose();
+    _voice.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -986,6 +1063,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     setState(() => _uploaded.remove(_pending.removeAt(index))),
                 onPaste: () => unawaited(_pasteClipboard()),
                 onContentInserted: _onContentInserted,
+                voice: _voice,
               ),
           ],
         ),

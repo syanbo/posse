@@ -26,6 +26,9 @@ import 'forms.dart';
 import 'member_form.dart';
 import 'models.dart';
 import 'profile.dart';
+import '../voice/voice_bar.dart';
+import '../voice/voice_config.dart';
+import '../voice/voice_controller.dart';
 
 part 'room_composer.dart';
 part 'room_details.dart';
@@ -53,6 +56,9 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     widget.room,
   );
   final input = TextEditingController();
+  late final VoiceController voice;
+  /// 讨论锁定态（pending != null）下收到的转写结果暂存于此，解锁后自动合并回输入框不丢话。
+  String deferredVoiceDraft = '';
   final scroll = ScrollController();
   late final observer = ListObserverController(controller: scroll)
     ..cacheJumpIndexOffset = false;
@@ -117,6 +123,50 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     state.addListener(changed);
     scroll.addListener(scrolled);
     input.addListener(scheduleSave);
+    voice = VoiceController(
+      readConfig: () => VoiceConfig.fromSettings(widget.api.model.settings),
+      readContextTerms: () => [
+        if (discText(state.discussion, 'title').isNotEmpty)
+          discText(state.discussion, 'title'),
+        for (final m in activeMembers)
+          if (discText(m, 'name').isNotEmpty) discText(m, 'name'),
+      ],
+      onResult: (text) {
+        if (!mounted) return;
+        if (pending != null) {
+          final merged = mergeVoiceDraft(
+            current: deferredVoiceDraft,
+            start: deferredVoiceDraft.length,
+            end: deferredVoiceDraft.length,
+            incoming: text,
+          );
+          deferredVoiceDraft = merged.text;
+          return;
+        }
+        _applyVoiceDraftText(text);
+      },
+      onPermissionDenied: (issue) {
+        if (mounted) {
+          unawaited(
+            showVoicePermissionDialog(context, needSpeech: issue.needSpeech),
+          );
+        }
+      },
+      onNotice: (code) {
+        if (!mounted) return;
+        if (isVoiceConfigError(code)) {
+          unawaited(
+            showVoiceConfigPrompt(
+              context,
+              model: widget.api.model,
+              code: code,
+            ),
+          );
+          return;
+        }
+        setState(() => error = voiceErrorMessage(context.l10n, code));
+      },
+    );
     unawaited(start());
     unawaited(loadProfile());
     timer = Timer.periodic(const Duration(seconds: 2), (_) {
@@ -125,6 +175,29 @@ class _DiscussionRoomState extends State<DiscussionRoom>
         unawaited(poll());
       }
     });
+  }
+
+  void _applyVoiceDraftText(String text) {
+    final sel = input.selection;
+    final merged = mergeVoiceDraft(
+      current: input.text,
+      start: sel.isValid ? sel.start : input.text.length,
+      end: sel.isValid ? sel.end : input.text.length,
+      incoming: text,
+    );
+    input.value = TextEditingValue(
+      text: merged.text,
+      selection: TextSelection.collapsed(offset: merged.cursor),
+    );
+    scheduleSave();
+    update(() {});
+  }
+
+  void flushDeferredVoiceDraft() {
+    if (pending != null || deferredVoiceDraft.isEmpty) return;
+    final text = deferredVoiceDraft;
+    deferredVoiceDraft = '';
+    _applyVoiceDraftText(text);
   }
 
   Future<void> start() async {
@@ -241,6 +314,7 @@ class _DiscussionRoomState extends State<DiscussionRoom>
     WidgetsBinding.instance.removeObserver(this);
     input.removeListener(scheduleSave);
     input.dispose();
+    voice.dispose();
     focus.dispose();
     searchInput.dispose();
     scroll.dispose();

@@ -5029,6 +5029,426 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{used} tokens'**
   String chatContextTokens(int used);
+
+  /// Tooltip for the microphone button that starts voice-to-draft recording.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice input'**
+  String get voiceButtonTooltip;
+
+  /// Tooltip for cancelling an active voice recording or transcription.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel recording'**
+  String get voiceCancelTooltip;
+
+  /// Tooltip for finishing voice recording and starting transcription.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish and transcribe'**
+  String get voiceFinishTooltip;
+
+  /// Status text shown while speech audio is being transcribed.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribing…'**
+  String get voiceTranscribing;
+
+  /// Button label to retry transcribing a saved voice recording after failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get voiceRetry;
+
+  /// Tooltip to discard a failed voice recording.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get voiceDiscard;
+
+  /// Notice shown when a voice recording hits its maximum duration and auto-finishes.
+  ///
+  /// In en, this message translates to:
+  /// **'Reached time limit; transcribing recorded audio'**
+  String get voiceLimitReached;
+
+  /// Notice shown when recording was interrupted by a call or backgrounding, keeping the audio file for retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording paused; tap Retry to transcribe'**
+  String get voiceInterruptedSaved;
+
+  /// Dialog title when microphone or speech recognition permission is denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone Permission Needed'**
+  String get voicePermissionTitle;
+
+  /// Dialog body explaining why microphone permission is needed.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow microphone access in System Settings to record voice drafts.'**
+  String get voicePermissionBody;
+
+  /// Dialog body when on-device speech recognition permission is denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow microphone and speech recognition access in System Settings, or switch to a cloud engine in Voice Settings.'**
+  String get voiceSpeechPermissionBody;
+
+  /// Confirm button to open system settings for voice permissions.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Settings'**
+  String get voiceOpenSettings;
+
+  /// Action button to open Posse voice settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice Settings'**
+  String get voiceConfigureCloud;
+
+  /// Error shown when a cloud voice engine has no saved API key.
+  ///
+  /// In en, this message translates to:
+  /// **'API key not set for the selected voice engine'**
+  String get voiceErrorMissingKey;
+
+  /// Error shown when the configured voice API endpoint URL is invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid voice API URL'**
+  String get voiceErrorInvalidUrl;
+
+  /// Error shown when the cloud ASR endpoint returns 401 or 403.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice API key rejected'**
+  String get voiceErrorAuth;
+
+  /// Error shown when the cloud ASR endpoint returns 429.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice API rate limit reached'**
+  String get voiceErrorRateLimit;
+
+  /// Error shown when a network failure interrupts cloud transcription.
+  ///
+  /// In en, this message translates to:
+  /// **'Network error while transcribing'**
+  String get voiceErrorNetwork;
+
+  /// Error shown when cloud transcription times out.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcription timed out'**
+  String get voiceErrorTimeout;
+
+  /// Error shown when transcription succeeds with empty text.
+  ///
+  /// In en, this message translates to:
+  /// **'No speech recognized'**
+  String get voiceErrorEmpty;
+
+  /// Error shown when native speech recognition is unavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'On-device speech recognition is unavailable on this device'**
+  String get voiceErrorUnavailable;
+
+  /// Generic fallback error when voice recording or transcription fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcription failed'**
+  String get voiceErrorFailed;
+
+  /// Settings section and page title for voice-to-draft input.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice Input'**
+  String get voiceSettingsTitle;
+
+  /// Voice settings: section title for choosing the speech recognition engine.
+  ///
+  /// In en, this message translates to:
+  /// **'Recognition Engine'**
+  String get voiceEngineSection;
+
+  /// Voice engine option: iOS/Android built-in speech recognizer.
+  ///
+  /// In en, this message translates to:
+  /// **'System On-Device'**
+  String get voiceEngineNative;
+
+  /// Voice engine option: OpenAI transcription API.
+  ///
+  /// In en, this message translates to:
+  /// **'OpenAI'**
+  String get voiceEngineOpenAI;
+
+  /// Voice engine option: Groq hosted Whisper API.
+  ///
+  /// In en, this message translates to:
+  /// **'Groq Whisper'**
+  String get voiceEngineGroq;
+
+  /// Voice engine option: SiliconFlow OpenAI-compatible ASR API.
+  ///
+  /// In en, this message translates to:
+  /// **'SiliconFlow'**
+  String get voiceEngineSiliconFlow;
+
+  /// Voice engine option: Volcengine Doubao Flash ASR HTTP API.
+  ///
+  /// In en, this message translates to:
+  /// **'Volcengine Doubao'**
+  String get voiceEngineVolcengine;
+
+  /// Voice engine option: custom OpenAI-compatible /audio/transcriptions endpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom (OpenAI-Compatible)'**
+  String get voiceEngineCustom;
+
+  /// Short summary on Settings main page when using system native recognition.
+  ///
+  /// In en, this message translates to:
+  /// **'System on-device'**
+  String get voiceSummaryNative;
+
+  /// Short summary on Settings main page when a cloud voice engine has an API key saved.
+  ///
+  /// In en, this message translates to:
+  /// **'{engine} · Key saved'**
+  String voiceSummaryCloudReady(String engine);
+
+  /// Short summary on Settings main page when a cloud voice engine has no API key.
+  ///
+  /// In en, this message translates to:
+  /// **'{engine} · API key needed'**
+  String voiceSummaryCloudMissing(String engine);
+
+  /// Privacy and usage note for system on-device voice recognition.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio stays on your phone using the system speech recognizer. Great for zero setup on iOS; switch to a cloud engine if mixed Chinese/English coding terms need higher accuracy or on Android devices without speech services.'**
+  String get voiceNativeNote;
+
+  /// Privacy and storage note for cloud BYOK voice recognition.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded audio is uploaded directly from your phone to the configured provider and deleted locally once transcribed. API keys are stored in the device keychain/keystore and excluded from backups.'**
+  String get voiceCloudNote;
+
+  /// Voice settings: section title for cloud API key, URL, and model.
+  ///
+  /// In en, this message translates to:
+  /// **'API Configuration'**
+  String get voiceCredentialsSection;
+
+  /// Label for the cloud ASR API key field.
+  ///
+  /// In en, this message translates to:
+  /// **'API Key'**
+  String get voiceApiKeyLabel;
+
+  /// Placeholder in the API key field when a key is already stored.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved securely (enter a new key to replace)'**
+  String get voiceApiKeySavedHint;
+
+  /// Placeholder in the API key field when no key is stored.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste your API key'**
+  String get voiceApiKeyEmptyHint;
+
+  /// Button to save the entered API key.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Key'**
+  String get voiceApiKeySave;
+
+  /// Button to remove the saved API key.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get voiceApiKeyClear;
+
+  /// Feedback notice after saving an API key.
+  ///
+  /// In en, this message translates to:
+  /// **'API key saved'**
+  String get voiceApiKeySaved;
+
+  /// Feedback notice after clearing an API key.
+  ///
+  /// In en, this message translates to:
+  /// **'API key cleared'**
+  String get voiceApiKeyCleared;
+
+  /// Label for the optional custom API endpoint URL.
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoint URL'**
+  String get voiceBaseUrlLabel;
+
+  /// Label for the ASR model or resource ID field.
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get voiceModelLabel;
+
+  /// Voice settings: section title for recognition language preference.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get voiceLanguageSection;
+
+  /// Voice language option: automatic detection.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get voiceLanguageAuto;
+
+  /// Voice language option: Chinese.
+  ///
+  /// In en, this message translates to:
+  /// **'Chinese'**
+  String get voiceLanguageZh;
+
+  /// Voice language option: English.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get voiceLanguageEn;
+
+  /// Voice settings: section title for custom technical terms.
+  ///
+  /// In en, this message translates to:
+  /// **'Coding Vocabulary Hints'**
+  String get voiceVocabSection;
+
+  /// Placeholder for the custom coding vocabulary hints text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse, worktree, rebase, Tailscale, QUIC…'**
+  String get voiceVocabHint;
+
+  /// Explanation below the custom vocabulary text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated terms sent as recognition hints alongside the current project, branch, and agent name.'**
+  String get voiceVocabNote;
+
+  /// Terminal settings toggle: expand the staged draft input bar automatically when opening a terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Draft Input Bar by Default'**
+  String get settingsTerminalDraftDefault;
+
+  /// Note explaining the default terminal staged draft bar toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show an editable multi-line draft bar above the key bar for Chinese and voice input without resizing the terminal.'**
+  String get settingsTerminalDraftDefaultNote;
+
+  /// Label in key bar settings for the built-in staged draft and voice input button.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft / Voice'**
+  String get terminalKeyVoice;
+
+  /// Placeholder inside the terminal staged draft input bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Type or dictate a draft…'**
+  String get terminalDraftHint;
+
+  /// Tooltip for inserting the staged draft into the terminal without pressing Enter.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste without Enter'**
+  String get terminalDraftPaste;
+
+  /// Tooltip for sending the staged draft to the terminal with Enter.
+  ///
+  /// In en, this message translates to:
+  /// **'Send to terminal'**
+  String get terminalDraftSend;
+
+  /// Tooltip for collapsing the terminal staged draft input bar while keeping unsent text.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide draft bar'**
+  String get terminalDraftHide;
+
+  /// Notice shown when Paste without Enter is blocked because the terminal does not have bracketed paste enabled or the text contains unsafe control sequences.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste without Enter supports single-line plain text only; use Send for multi-line or control characters'**
+  String get terminalDraftPasteUnsafe;
+
+  /// Error shown when persisting the voice API key to keychain or keystore fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to save API key'**
+  String get voiceApiKeySaveFailed;
+
+  /// Error shown when deleting the voice API key from keychain or keystore fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to clear API key'**
+  String get voiceApiKeyClearFailed;
+
+  /// Validation hint under the voice endpoint URL field when a non-HTTPS URL is entered while insecure HTTP is disabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Use an https:// URL, or enable insecure HTTP below for local network servers'**
+  String get voiceHttpsRequired;
+
+  /// Voice settings toggle allowing plain http:// endpoints for self-hosted local network servers.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow Insecure HTTP (LAN Only)'**
+  String get voiceAllowInsecureHttp;
+
+  /// Warning note below the insecure HTTP toggle in voice settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Sends your API key and recorded audio without TLS encryption. Only enable for trusted local network servers.'**
+  String get voiceAllowInsecureHttpNote;
+
+  /// Status next to the API key field and under a cloud engine in the engine list when its API key is stored in the keychain.
+  ///
+  /// In en, this message translates to:
+  /// **'Key saved'**
+  String get voiceKeyStateSaved;
+
+  /// Status next to the API key field and under the selected cloud engine when no API key is stored yet.
+  ///
+  /// In en, this message translates to:
+  /// **'API key needed'**
+  String get voiceKeyStateMissing;
+
+  /// Collapsible row in voice settings that holds the endpoint URL, model and insecure HTTP options.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get voiceAdvancedSection;
+
+  /// Hint under the endpoint URL field when the custom OpenAI-compatible engine is selected and no URL has been entered.
+  ///
+  /// In en, this message translates to:
+  /// **'The custom engine needs an endpoint URL'**
+  String get voiceCustomUrlRequired;
+
+  /// Accessibility label of the terminal key bar Draft / Voice key when the draft bar is collapsed with unsent text or a recording waiting for retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft / Voice, unsent draft'**
+  String get terminalKeyVoiceHasDraft;
 }
 
 class _AppLocalizationsDelegate

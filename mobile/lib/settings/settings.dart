@@ -15,6 +15,10 @@ import '../ui/widgets.dart';
 import '../update/update.dart';
 import 'custom_keys_screen.dart';
 import 'tailscale_screen.dart';
+import 'voice_settings_screen.dart';
+import '../voice/voice_bar.dart';
+import '../voice/voice_config.dart';
+import '../voice/voice_service.dart';
 
 /// 设置：外观、打开会话的方式、终端字号和快捷键、对话里显示什么，以及配对的电脑。改了立即生效并存在手机上。
 class SettingsScreen extends StatelessWidget {
@@ -189,6 +193,20 @@ class SettingsScreen extends StatelessWidget {
                           ),
                         ),
                       ),
+                      _Toggle(
+                        title: l.settingsTerminalDraftDefault,
+                        value: s.terminalDraftOpenByDefault,
+                        onChanged: (v) => model.updateSettings(
+                          (s) => s.terminalDraftOpenByDefault = v,
+                        ),
+                      ),
+                      _Note(l.settingsTerminalDraftDefaultNote),
+                    ],
+                  ),
+                  Section(
+                    title: l.voiceSettingsTitle,
+                    children: [
+                      _VoiceEntry(model: model, engineId: s.voiceEngine),
                     ],
                   ),
                   Section(
@@ -591,6 +609,80 @@ class _Note extends StatelessWidget {
         text,
         style: TextStyle(fontSize: Fs.small, height: Lh.body, color: c.muted),
       ),
+    );
+  }
+}
+
+/// 设置首页「语音输入」一行：副标题写当前引擎和 API Key 是否已配置，缺 Key 时图标换琥珀色（待处理）。
+/// Key 在系统钥匙串里，异步读：引擎变了、从语音设置页回来时各读一次。
+class _VoiceEntry extends StatefulWidget {
+  const _VoiceEntry({required this.model, required this.engineId});
+
+  final PosseAppModel model;
+  final String engineId;
+
+  @override
+  State<_VoiceEntry> createState() => _VoiceEntryState();
+}
+
+class _VoiceEntryState extends State<_VoiceEntry> {
+  bool? _hasKey;
+  var _gen = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_refresh());
+  }
+
+  @override
+  void didUpdateWidget(_VoiceEntry old) {
+    super.didUpdateWidget(old);
+    if (old.engineId != widget.engineId) unawaited(_refresh());
+  }
+
+  Future<void> _refresh() async {
+    final engine = VoiceEngine.fromId(widget.engineId);
+    final gen = ++_gen;
+    if (engine.isNative) {
+      if (mounted) setState(() => _hasKey = null);
+      return;
+    }
+    bool? has;
+    try {
+      has = await voiceSecretStore.has(engine.secretKey);
+    } catch (_) {
+      has = null;
+    }
+    if (mounted && gen == _gen) setState(() => _hasKey = has);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = PosseColors.of(context);
+    final l = context.l10n;
+    final engine = VoiceEngine.fromId(widget.engineId);
+    final missing = !engine.isNative && _hasKey == false;
+    return RowTile(
+      key: const Key('settings-voice-entry'),
+      leading: Icon(
+        Icons.mic_rounded,
+        size: Ic.button,
+        color: missing ? c.honey : c.accent,
+      ),
+      title: Text(l.voiceSettingsTitle),
+      subtitle: Text(
+        voiceSummaryText(l, engine, _hasKey),
+        key: const Key('settings-voice-summary'),
+      ),
+      onTap: () async {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => VoiceSettingsScreen(model: widget.model),
+          ),
+        );
+        if (mounted) unawaited(_refresh());
+      },
     );
   }
 }

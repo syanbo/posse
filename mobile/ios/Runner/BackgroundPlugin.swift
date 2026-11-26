@@ -14,6 +14,10 @@ final class BackgroundPlugin: NSObject {
   private var player: AVAudioPlayer?
   /// 应该在放静音：中断（来电、别的 App 独占音频）结束后据此接着放
   private var playing = false
+  /// 语音录音/识别正在占用共享 AVAudioSession：期间禁止静音保活切回 .playback 或反激活会话
+  private var audioClaimed = false
+  /// App 当前确实处于后台：用于录音在后台或来电后释放音频锁时决定是否立即恢复静音保活
+  private var inBackground = false
 
   func install(messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(name: "posse/background", binaryMessenger: messenger)
@@ -48,16 +52,39 @@ final class BackgroundPlugin: NSObject {
       name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
   }
 
+  /// 录音或原生语音识别开始前调用：暂停静音播放器但不反激活 AVAudioSession，避免切换抖动。
+  func beginAudioCapture() {
+    audioClaimed = true
+    if playing {
+      playing = false
+      player?.stop()
+    }
+  }
+
+  /// 录音或原生语音识别结束后调用；若此时已在后台且开启了保活，立即恢复静音保活。
+  func endAudioCapture(resumeSilenceIfBackground: Bool) {
+    audioClaimed = false
+    if (resumeSilenceIfBackground || inBackground) && keepAlive {
+      startSilence()
+    }
+  }
+
   // 在 inactive 时就开始放：进了后台再激活音频会话可能被拒
   @objc private func resignActive() {
+    guard !audioClaimed else { return }
     if keepAlive { startSilence() }
   }
 
   @objc private func becameActive() {
+    guard !audioClaimed else { return }
     stopSilence()
   }
 
   @objc private func enteredBackground() {
+    inBackground = true
+    if !audioClaimed && keepAlive && !playing {
+      startSilence()
+    }
     guard task == .invalid else { return }
     task = UIApplication.shared.beginBackgroundTask(withName: "posse.connection") { [weak self] in
       self?.endTask()
@@ -65,6 +92,7 @@ final class BackgroundPlugin: NSObject {
   }
 
   @objc private func enteringForeground() {
+    inBackground = false
     endTask()
   }
 
@@ -101,7 +129,7 @@ final class BackgroundPlugin: NSObject {
   }
 
   @objc private func interrupted(_ note: Notification) {
-    guard playing,
+    guard !audioClaimed, playing,
       let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
       AVAudioSession.InterruptionType(rawValue: raw) == .ended
     else { return }
@@ -110,7 +138,7 @@ final class BackgroundPlugin: NSObject {
 
   @objc private func mediaReset() {
     player = nil
-    if playing { startSilence() }
+    if !audioClaimed && playing { startSilence() }
   }
 
   /// 一秒 8 kHz 单声道 16 位的全零 WAV。
