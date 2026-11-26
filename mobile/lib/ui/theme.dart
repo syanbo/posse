@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 
 // 设计约定和桌面端 internal/app/style.go 一致：暖灰底色分顶栏、画布、卡片几层，靠明度差和 8% 透明细线分层；
@@ -271,9 +272,15 @@ ThemeData posseTheme(Brightness brightness) {
   final buttonShape = RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(Rd.input),
   );
+  // iOS 默认的 CupertinoSystemText 不带中文回退表，混排时中文字重会掉档发细（w500 英文配偏细中文、12pt 副标题发虚）；
+  // 统一走系统内置 PingFang SC，让中英数字字重（Regular / Medium / Semibold）与基线一致，不影响等宽字体与安卓。
+  final uiFont = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+      ? 'PingFang SC'
+      : null;
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
+    fontFamily: uiFont,
     colorScheme: scheme,
     scaffoldBackgroundColor: c.canvas,
     canvasColor: c.canvas,
@@ -294,6 +301,7 @@ ThemeData posseTheme(Brightness brightness) {
       scrolledUnderElevation: 0,
       centerTitle: false,
       titleTextStyle: TextStyle(
+        fontFamily: uiFont,
         fontSize: Fs.title,
         fontWeight: Fw.bold,
         color: c.text,
@@ -307,7 +315,11 @@ ThemeData posseTheme(Brightness brightness) {
         disabledForegroundColor: c.faint,
         minimumSize: const Size(0, 44),
         shape: buttonShape,
-        textStyle: const TextStyle(fontSize: Fs.body, fontWeight: Fw.medium),
+        textStyle: TextStyle(
+          fontFamily: uiFont,
+          fontSize: Fs.body,
+          fontWeight: Fw.medium,
+        ),
         elevation: 0,
       ),
     ),
@@ -317,7 +329,11 @@ ThemeData posseTheme(Brightness brightness) {
         backgroundColor: c.fill,
         minimumSize: const Size(0, 44),
         shape: buttonShape,
-        textStyle: const TextStyle(fontSize: Fs.body, fontWeight: Fw.medium),
+        textStyle: TextStyle(
+          fontFamily: uiFont,
+          fontSize: Fs.body,
+          fontWeight: Fw.medium,
+        ),
       ),
     ),
     iconButtonTheme: IconButtonThemeData(
@@ -361,12 +377,14 @@ ThemeData posseTheme(Brightness brightness) {
       surfaceTintColor: Colors.transparent,
       // Material 3 默认标题是 24 号，跳出字号阶梯；左右离屏幕边默认 40，内容被挤窄
       titleTextStyle: TextStyle(
+        fontFamily: uiFont,
         fontSize: Fs.title,
         fontWeight: Fw.bold,
         height: Lh.title,
         color: c.text,
       ),
       contentTextStyle: TextStyle(
+        fontFamily: uiFont,
         fontSize: Fs.body,
         height: Lh.body,
         color: c.muted,
@@ -383,7 +401,11 @@ ThemeData posseTheme(Brightness brightness) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: c.dark ? c.raised : const Color(0xFF2A2A27),
-      contentTextStyle: const TextStyle(color: Colors.white, fontSize: Fs.body),
+      contentTextStyle: TextStyle(
+        fontFamily: uiFont,
+        color: Colors.white,
+        fontSize: Fs.body,
+      ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(Rd.input),
       ),
