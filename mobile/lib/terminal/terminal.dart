@@ -1298,14 +1298,22 @@ class _TerminalScreenState extends State<TerminalScreen>
         builder: (context, body) {
           final keyboard = MediaQuery.viewInsetsOf(context).bottom;
           final safe = MediaQuery.viewPaddingOf(context).bottom;
-          final height = body.maxHeight - _keyBarHeight - safe;
+          // 常驻模式把单行语音/草稿条高度直接从终端可视区扣掉，首帧即不遮挡底部会话也不裁切顶部；
+          // 多行输入、实时预览或重试条多出的高度仍并入 covered 走 keyboardLift，不触发 PTY resize。
+          final pinnedBase = _draftPinned ? terminalDraftBarBaseHeight : 0.0;
+          final height = math.max(
+            0.0,
+            body.maxHeight - _keyBarHeight - pinnedBase - safe,
+          );
           // 横屏时刘海和圆角那侧让开：终端只占中间，两边露出的是同色的页面底，快捷键栏自己让
           final side = MediaQuery.paddingOf(context);
           final width = body.maxWidth - side.horizontal;
-          // 键盘与折叠草稿栏盖住的终端高度：快捷键内容底边统一取 max(safe, keyboard)，
+          // 键盘与草稿栏超出预留区盖住的终端高度：快捷键内容底边统一取 max(safe, keyboard)，
           // 键盘收起时 barBottom == safe、covered == draftPad，过渡期也不与安全区重叠。
           final barBottom = math.max(keyboard, safe);
-          final draftPad = _draftVisible ? _draftHeight : 0.0;
+          final draftPad = _draftVisible
+              ? math.max(0.0, _draftHeight - pinnedBase)
+              : 0.0;
           final covered = (barBottom - safe + draftPad).clamp(0.0, height);
           return Stack(
             children: [
@@ -1392,6 +1400,7 @@ class _TerminalScreenState extends State<TerminalScreen>
                     onSend: () => unawaited(_sendDraftToTerminal()),
                     onPasteOnly: () => unawaited(_pasteDraftToTerminal()),
                     onCollapse: _draftPinned ? null : _collapseDraft,
+                    animate: !_draftPinned,
                     onHeightChanged: (h) {
                       if (!mounted || (_draftHeight - h).abs() < 0.5) return;
                       setState(() => _draftHeight = h);

@@ -36,9 +36,14 @@ DraftKeyAction draftKeyAction({
   };
 }
 
-/// 终端页底部的折叠式草稿输入栏（Staged Input）：
-/// 浮在 [TerminalKeyBar] 正上方，通过 [onHeightChanged] 把实际高度回报给终端页并入 covered，
-/// 不缩小终端本身的高度，避免触发 PTY resize。
+/// 单行草稿/语音栏的基准高度：上边线 1 + 外边距 6×2 + 胶囊边框 1×2 + 胶囊内边距 4×2 + 34 按钮行 = 57。
+/// 常驻模式下终端可视高度直接扣掉这部分，首帧就刚好停在语音条上方、不遮挡底部会话也不裁切顶部；
+/// 多行输入、实时预览或重试条多出的高度仍并入 covered 走 keyboardLift，不触发 PTY resize。
+const terminalDraftBarBaseHeight = 57.0;
+
+/// 终端页底部的草稿输入栏（Staged Input）：
+/// 浮在 [TerminalKeyBar] 正上方，通过 [onHeightChanged] 把实际高度回报给终端页，
+/// 常驻模式下单行基准高度由终端预留，超出部分并入 covered；折叠模式下整段并入 covered，均不触发 PTY resize。
 class TerminalDraftBar extends StatefulWidget {
   const TerminalDraftBar({
     super.key,
@@ -50,6 +55,7 @@ class TerminalDraftBar extends StatefulWidget {
     required this.onSend,
     required this.onPasteOnly,
     this.onCollapse,
+    this.animate = true,
     required this.onHeightChanged,
   });
 
@@ -61,6 +67,7 @@ class TerminalDraftBar extends StatefulWidget {
   final VoidCallback onSend;
   final VoidCallback onPasteOnly;
   final VoidCallback? onCollapse;
+  final bool animate;
   final ValueChanged<double> onHeightChanged;
 
   @override
@@ -95,8 +102,20 @@ class _TerminalDraftBarState extends State<TerminalDraftBar> {
 
   @override
   Widget build(BuildContext context) {
+    final content = ListenableBuilder(
+      listenable: Listenable.merge([
+        widget.controller,
+        widget.voice,
+        widget.focusNode,
+      ]),
+      builder: (context, _) {
+        _reportHeight();
+        return _buildBar(context);
+      },
+    );
+    if (!widget.animate) return content;
     final reduced = reduceMotionOf(context);
-    // 展开时淡入并上移 8（和弹框一样）；只改变换和透明度，栏高第一帧就定了，终端不跟着逐帧挪。
+    // 折叠模式展开时淡入并上移 8（和弹框一样）；只改变换和透明度，栏高第一帧就定了，终端不跟着逐帧挪。
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: reduced ? Duration.zero : const Duration(milliseconds: 180),
@@ -108,17 +127,7 @@ class _TerminalDraftBarState extends State<TerminalDraftBar> {
           child: child,
         ),
       ),
-      child: ListenableBuilder(
-        listenable: Listenable.merge([
-          widget.controller,
-          widget.voice,
-          widget.focusNode,
-        ]),
-        builder: (context, _) {
-          _reportHeight();
-          return _buildBar(context);
-        },
-      ),
+      child: content,
     );
   }
 

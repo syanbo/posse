@@ -1520,6 +1520,7 @@ void main() {
         focus.dispose();
         platform.close();
       });
+      double reported = 0;
       await tester.pumpWidget(
         _wrap(
           Align(
@@ -1532,7 +1533,8 @@ void main() {
               sending: false,
               onSend: () {},
               onPasteOnly: () {},
-              onHeightChanged: (_) {},
+              animate: false,
+              onHeightChanged: (h) => reported = h,
             ),
           ),
         ),
@@ -1541,6 +1543,7 @@ void main() {
       expect(find.byKey(const Key('terminal-draft-collapse')), findsNothing);
       expect(find.byKey(const Key('terminal-draft-field')), findsOneWidget);
       expect(find.byKey(const Key('voice-mic-button')), findsOneWidget);
+      expect(reported, terminalDraftBarBaseHeight);
     });
 
     test('设置首页摘要：本机只写名字，云端写 Key 状态，未读到时只写引擎名', () async {
