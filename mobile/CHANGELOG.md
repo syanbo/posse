@@ -3,6 +3,16 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.36
+
+- 新增「语音输入转可编辑草稿」（设置 › 语音输入），覆盖终端草稿栏、对话页与讨论页：支持系统本机离线识别及云端转写（OpenAI 兼容 / Groq / 硅基流动 / 火山豆包极速版 / 自定义），支持项目、分支、Agent 与自定义编程术语提示词，API Key 存于系统钥匙串 / Keystore，录音中断或转写失败自动保留音频供原地重试。
+- 终端页新增折叠式草稿输入栏（Staged Input）：快捷键栏新增「草稿 / 语音」入口，支持多行草稿编辑、单行「仅填入」与「发送」，收起后保留草稿并显示指示点，展开不触发终端尺寸重排，并可在设置中设为默认展开。
+
+### English
+
+- Added Voice-to-Editable-Draft input (Settings › Voice Input) across the Terminal draft bar, Chat, and Discussions: supports on-device offline speech recognition and cloud transcription (OpenAI-compatible / Groq / SiliconFlow / Volcengine Doubao Flash / Custom), project/branch/agent and custom developer term prompts, Keychain/Keystore API key storage, and in-place retry with retained audio on interruption or failure.
+- Added a collapsible Terminal Draft Bar (Staged Input): adds a Draft / Voice key to the terminal keybar with multi-line editing, single-line Paste-only and Send actions, draft persistence with an indicator dot when collapsed, zero PTY resize when toggling, and an option to expand by default.
+
 ## 0.1.35
 
 - 远程桌面的返回、连接状态/FPS 和工具条三个按钮均支持自由拖动，拖动范围可延伸至屏幕安全区，横竖屏位置分别记住并自动避开重叠。
