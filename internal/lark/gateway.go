@@ -20,6 +20,8 @@ type ExecSnap struct {
 	Discussion string
 	MemberName string
 	Agent      string
+	Model      string
+	Effort     string
 	Workspace  string
 	State      string
 	StartedAt  *time.Time
@@ -60,6 +62,8 @@ type PermNotice struct {
 	ID         string
 	TerminalID string
 	Agent      string
+	Model      string
+	Effort     string
 	Tool       string
 	Summary    string
 	RuleLabel  string
@@ -106,21 +110,28 @@ type activePerm struct {
 }
 
 type botRunner struct {
-	cfg       BotConfig
-	cancel    context.CancelFunc
-	mu        sync.Mutex
-	running   bool
-	msgReady  bool
-	cardReady bool
-	lastErr   string
-	ident     BotIdentity
+	cfg                 BotConfig
+	cancel              context.CancelFunc
+	mu                  sync.Mutex
+	running             bool
+	msgReady            bool
+	cardReady           bool
+	lastErr             string
+	ident               BotIdentity
+	identTriedAt        time.Time
+	identDone           chan struct{}
+	pendingIdentRetries int
 }
 
 const (
-	pendingAttachTTL       = 15 * time.Minute
-	maxStagedAttachments   = 20
-	defaultInboundDebounce = 1500 * time.Millisecond
-	maxInboundDebounce     = 6 * time.Second
+	pendingAttachTTL         = 15 * time.Minute
+	maxStagedAttachments     = 20
+	defaultInboundDebounce   = 1500 * time.Millisecond
+	maxInboundDebounce       = 6 * time.Second
+	botIdentityRetryAfter    = 30 * time.Second
+	defaultIdentityRetryWait = 3 * time.Second
+	maxIdentityRetryAttempts = 2
+	maxPendingIdentityEvents = 32
 )
 
 type stagedKey struct {
@@ -180,12 +191,13 @@ type stagedBatch struct {
 
 // Gateway 管理全部已启用的飞书机器人长连接、事件路由、卡片节流更新和三端同步。
 type Gateway struct {
-	client         Client
-	host           Host
-	home           string
-	nowFn          func() time.Time // 单测可注入时钟
-	debounceWindow time.Duration    // 连续短文本入站防抖静默窗；Start 默认开启 1.5s，单测默认 0 保持同步
-	debounceMax    time.Duration    // 单次防抖最大等待上限
+	client             Client
+	host               Host
+	home               string
+	nowFn              func() time.Time // 单测可注入时钟
+	debounceWindow     time.Duration    // 连续短文本入站防抖静默窗；Start 默认开启 1.5s，单测默认 0 保持同步
+	debounceMax        time.Duration    // 单次防抖最大等待上限
+	identityRetryDelay time.Duration    // 机器人身份暂时不可用时不确定 @ 消息的重判间隔；默认 3s
 
 	mu          sync.Mutex
 	parentCtx   context.Context
@@ -364,23 +376,16 @@ func (g *Gateway) Status() []BotStatus {
 }
 
 func (g *Gateway) runBot(ctx context.Context, r *botRunner) {
-	if bip, ok := g.client.(botIdentityProvider); ok {
-		r.mu.Lock()
-		prof := r.cfg.Profile
-		r.mu.Unlock()
-		ictx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		if id, err := bip.BotIdentity(ictx, prof); err == nil {
-			r.mu.Lock()
-			r.ident = id
-			r.mu.Unlock()
-		}
-		cancel()
-	}
+	// 异步预热机器人真实身份，不阻塞消息与卡片长连接订阅；
+	// 若首条群消息早于预热完成到达，refreshBotIdentity 的 singleflight 会无缝等待本次预热结束。
+	go g.refreshBotIdentity(ctx, r, true)
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		g.consumeLoop(ctx, r, "im.message.receive_v1", true, g.handleMessageRaw)
+		g.consumeLoop(ctx, r, "im.message.receive_v1", true, func(cfg BotConfig, line []byte) {
+			g.handleMessageRaw(ctx, cfg, line)
+		})
 	}()
 	go func() {
 		defer wg.Done()
@@ -442,23 +447,40 @@ func (g *Gateway) consumeLoop(ctx context.Context, r *botRunner, key string, isM
 	}
 }
 
-func (g *Gateway) handleMessageRaw(bot BotConfig, raw []byte) {
+func (g *Gateway) handleMessageRaw(ctx context.Context, bot BotConfig, raw []byte) {
 	var ev MessageEvent
 	if err := json.Unmarshal(raw, &ev); err != nil {
 		return
 	}
-	g.HandleMessage(context.Background(), bot, ev)
+	g.HandleMessage(ctx, bot, ev)
 }
 
 // HandleMessage 处理一条飞书 IM 消息（单测可直接调用）。
 func (g *Gateway) HandleMessage(ctx context.Context, bot BotConfig, ev MessageEvent) {
-	bot = NormalizeBot(bot)
-	msgID := ev.MsgID()
-	if msgID == "" || ev.ChatID == "" || ev.SenderType == "app" {
+	g.handleMessage(ctx, bot, ev, true)
+}
+
+func (g *Gateway) handleMessage(ctx context.Context, bot BotConfig, ev MessageEvent, allowIdentityRetry bool) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ctx.Err() != nil {
 		return
 	}
-	if ok, err := g.host.MarkEvent(bot.ID, "msg:"+msgID); err != nil || !ok {
+	bot = NormalizeBot(bot)
+	msgID := ev.MsgID()
+	if msgID == "" || ev.ChatID == "" || ev.SenderType == "app" || ev.SenderType == "bot" {
 		return
+	}
+	latest, hadConfig := g.botByID(bot.ID)
+	if hadConfig {
+		if !latest.Enabled || latest.Profile != bot.Profile {
+			return
+		}
+		bot = latest
+	}
+	if ev.ParentID == "" && ev.ReplyTo != "" {
+		ev.ParentID = ev.ReplyTo
 	}
 	// 同会话/话题在执行期间收到任何新消息（含未 @ 机器人的群聊发言），都视为已有插队消息
 	g.markChatInterleaved(ev.ChatID, ev.ThreadID, ev.RootID, "")
@@ -469,14 +491,39 @@ func (g *Gateway) HandleMessage(ctx context.Context, bot BotConfig, ev MessageEv
 	}
 	// 群聊 @ 判定始终按机器人真实身份（不以分身别名匹配，避免与同名同事冲突）；
 	// 开启免 @ 的群仍忽略显式 @ 其他同事的发言，防止群内有第三人时误抢话。
-	ident := g.botIdentity(bot.ID)
+	ident := g.botIdentity(ctx, bot.ID, bot.Profile)
+	if ctx.Err() != nil {
+		return
+	}
+	owner = g.Config().OwnerOpenID
+	if hadConfig {
+		latest, ok := g.botByID(bot.ID)
+		if !ok || !latest.Enabled || latest.Profile != bot.Profile {
+			return
+		}
+		bot = latest
+		effBot, noMention = bot.EffectiveForChat(ev.ChatID)
+		if !effBot.AllowsTrigger(ev.SenderID, owner, ev.ChatID) {
+			return
+		}
+	}
 	if ev.ChatType == "group" {
-		if !noMention && !isMentioningBot(bot, ident, ev) {
+		matched, uncertain := evaluateGroupMention(bot, ident, ev)
+		if !noMention && !matched {
+			if uncertain && allowIdentityRetry {
+				g.scheduleIdentityRetry(ctx, bot, ev)
+			}
 			return
 		}
-		if noMention && isMentioningOthersOnly(bot, ident, ev) {
+		if noMention && !matched && isMentioningOthersOnly(bot, ident, ev) {
+			if uncertain && allowIdentityRetry {
+				g.scheduleIdentityRetry(ctx, bot, ev)
+			}
 			return
 		}
+	}
+	if ok, err := g.host.MarkEvent(bot.ID, "msg:"+msgID); err != nil || !ok {
+		return
 	}
 
 	threadKey := computeThreadKey(effBot.SessionMode, ev)
@@ -636,7 +683,8 @@ func (g *Gateway) dispatchMessage(ctx context.Context, bot BotConfig, ev Message
 
 	wsLabel := g.workspaceLabel(binding.WorkspaceID)
 	prevExecID := g.queuedBehindExecID(binding.DiscussionKey, execID)
-	cardJSON := BuildProgressCard(bot.ID, bot.Name, binding.Agent, wsLabel, execID, tr("Queued"), "0s", "", "", "", 0, prevExecID)
+	agentLabel := g.execAgentLabel(execID, binding.Agent, bot.Model, bot.Effort)
+	cardJSON := BuildProgressCard(bot.ID, bot.Name, agentLabel, wsLabel, execID, tr("Queued"), "0s", "", "", "", 0, prevExecID)
 	cardMsgID, err := g.client.ReplyCard(ctx, bot.Profile, msgID, inThread, cardJSON)
 	if err != nil {
 		log.Printf("lark bot %s: reply progress card: %v", bot.Name, err)
@@ -685,7 +733,76 @@ func computeThreadKey(sessionMode string, ev MessageEvent) string {
 	return ""
 }
 
-func (g *Gateway) botIdentity(botID string) BotIdentity {
+func (g *Gateway) refreshBotIdentity(ctx context.Context, r *botRunner, force bool) BotIdentity {
+	if r == nil {
+		return BotIdentity{}
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	r.mu.Lock()
+	cur := r.ident
+	// 已有完整真实身份（OpenID、AppID 与应用显示名）则无需重复请求。
+	complete := cur.BotOpenID != "" && cur.BotAppID != "" && cur.BotAppName != ""
+	if complete {
+		r.mu.Unlock()
+		return cur
+	}
+	if done := r.identDone; done != nil {
+		r.mu.Unlock()
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return cur
+		}
+		r.mu.Lock()
+		cur = r.ident
+		r.mu.Unlock()
+		return cur
+	}
+	if !force && !r.identTriedAt.IsZero() && time.Since(r.identTriedAt) < botIdentityRetryAfter {
+		r.mu.Unlock()
+		return cur
+	}
+	bip, ok := g.client.(botIdentityProvider)
+	if !ok {
+		r.mu.Unlock()
+		return cur
+	}
+	prof := r.cfg.Profile
+	botName := r.cfg.Name
+	done := make(chan struct{})
+	r.identDone = done
+	r.mu.Unlock()
+
+	ictx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	id, err := bip.BotIdentity(ictx, prof)
+	cancel()
+
+	r.mu.Lock()
+	if err == nil {
+		if id.BotOpenID != "" {
+			r.ident.BotOpenID = id.BotOpenID
+		}
+		if id.BotAppID != "" {
+			r.ident.BotAppID = id.BotAppID
+		}
+		if id.BotAppName != "" {
+			r.ident.BotAppName = id.BotAppName
+		}
+		r.identTriedAt = time.Now()
+	} else if ctx.Err() == nil {
+		r.identTriedAt = time.Now()
+		log.Printf("lark bot %s (%s): fetch bot identity: %v", botName, prof, err)
+	}
+	r.identDone = nil
+	close(done)
+	cur = r.ident
+	r.mu.Unlock()
+	return cur
+}
+
+func (g *Gateway) botIdentity(ctx context.Context, botID, profile string) BotIdentity {
 	g.mu.Lock()
 	r := g.runners[botID]
 	g.mu.Unlock()
@@ -693,26 +810,135 @@ func (g *Gateway) botIdentity(botID string) BotIdentity {
 		return BotIdentity{}
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.ident
+	sameProfile := profile == "" || r.cfg.Profile == profile
+	r.mu.Unlock()
+	if !sameProfile {
+		return BotIdentity{}
+	}
+	return g.refreshBotIdentity(ctx, r, false)
+}
+
+func (g *Gateway) identityRetryWait() time.Duration {
+	if g.identityRetryDelay > 0 {
+		return g.identityRetryDelay
+	}
+	return defaultIdentityRetryWait
+}
+
+// scheduleIdentityRetry 在机器人真实身份暂时不可用且无法确定群消息是否 @ 本机器人时，
+// 对该条一次性入站事件做有界延迟重判，避免因瞬时 CLI 抖动永久丢失合法 @。
+func (g *Gateway) scheduleIdentityRetry(ctx context.Context, bot BotConfig, ev MessageEvent) {
+	if _, ok := g.client.(botIdentityProvider); !ok {
+		return
+	}
+	g.mu.Lock()
+	r := g.runners[bot.ID]
+	g.mu.Unlock()
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	if r.cfg.Profile != bot.Profile || r.pendingIdentRetries >= maxPendingIdentityEvents {
+		r.mu.Unlock()
+		return
+	}
+	r.pendingIdentRetries++
+	r.mu.Unlock()
+
+	wait := g.identityRetryWait()
+	go func() {
+		defer func() {
+			r.mu.Lock()
+			r.pendingIdentRetries--
+			r.mu.Unlock()
+		}()
+		for attempt := 0; attempt < maxIdentityRetryAttempts; attempt++ {
+			timer := time.NewTimer(wait)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+			if latest, ok := g.botByID(bot.ID); ok && (!latest.Enabled || latest.Profile != bot.Profile) {
+				return
+			}
+			ident := g.refreshBotIdentity(ctx, r, true)
+			if ctx.Err() != nil {
+				return
+			}
+			matched, uncertain := evaluateGroupMention(bot, ident, ev)
+			if matched || !uncertain {
+				g.handleMessage(ctx, bot, ev, false)
+				return
+			}
+		}
+	}()
+}
+
+// evaluateGroupMention 区分「命中」「明确未命中」与「因本机身份字段缺失而暂时不确定」。
+func evaluateGroupMention(bot BotConfig, ident BotIdentity, ev MessageEvent) (matched bool, uncertain bool) {
+	if isMentioningBot(bot, ident, ev) {
+		return true, false
+	}
+	if len(ev.Mentions) > 0 {
+		for _, m := range ev.Mentions {
+			hasID := false
+			for _, mid := range []string{strings.TrimSpace(m.ID), strings.TrimSpace(m.OpenID)} {
+				if mid == "" {
+					continue
+				}
+				hasID = true
+				if strings.HasPrefix(mid, "cli_") {
+					if ident.BotAppID == "" {
+						return false, true
+					}
+				} else if ident.BotOpenID == "" {
+					return false, true
+				}
+			}
+			if !hasID && ident.BotAppName == "" {
+				return false, true
+			}
+		}
+		return false, false
+	}
+	if hasAnyTextMention(ev.Content) && ident.BotAppName == "" {
+		return false, true
+	}
+	return false, false
 }
 
 func isMentioningBot(bot BotConfig, ident BotIdentity, ev MessageEvent) bool {
 	if len(ev.Mentions) > 0 {
-		hasStructuredID := false
 		for _, m := range ev.Mentions {
-			if m.ID != "" || m.OpenID != "" {
-				hasStructuredID = true
+			ids := make([]string, 0, 2)
+			if id := strings.TrimSpace(m.ID); id != "" {
+				ids = append(ids, id)
 			}
-			if ident.BotOpenID != "" && (m.ID == ident.BotOpenID || m.OpenID == ident.BotOpenID) {
-				return true
+			if oid := strings.TrimSpace(m.OpenID); oid != "" && (len(ids) == 0 || oid != ids[0]) {
+				ids = append(ids, oid)
 			}
-		}
-		// 已知机器人真实 OpenID 且事件带有结构化 mention ID 时，严格以 ID 判定，避免撞名同事误触发
-		if ident.BotOpenID != "" && hasStructuredID {
-			return false
-		}
-		for _, m := range ev.Mentions {
+			if len(ids) > 0 {
+				// 任一结构化 ID 命中本机器人即直接触发；否则仅当该条 mention 所属命名空间的本机 ID 未知时才允许按名回退，
+				// 防止同消息里混入其他命名空间（如同时 @ 同名 cli_other 和无关 ou_colleague）破坏已知 ID 的否决权。
+				allNamespacesKnown := true
+				for _, mid := range ids {
+					if (ident.BotOpenID != "" && mid == ident.BotOpenID) || (ident.BotAppID != "" && mid == ident.BotAppID) {
+						return true
+					}
+					if strings.HasPrefix(mid, "cli_") {
+						if ident.BotAppID == "" {
+							allNamespacesKnown = false
+						}
+					} else if ident.BotOpenID == "" {
+						allNamespacesKnown = false
+					}
+				}
+				if allNamespacesKnown {
+					continue
+				}
+			}
 			if ident.BotAppName != "" && strings.EqualFold(strings.TrimSpace(m.Name), ident.BotAppName) {
 				return true
 			}
@@ -1162,7 +1388,8 @@ func (g *Gateway) HandleCardAction(ctx context.Context, bot BotConfig, ev CardAc
 					effBot, _ = bot.EffectiveForChat(binding.ChatID)
 				}
 				prevExecID := g.queuedBehindExecID(snap.Discussion, newID)
-				cardJSON := BuildProgressCard(effBot.ID, effBot.Name, snap.Agent, snap.Workspace, newID, tr("Queued"), "0s", "", "", "", 0, prevExecID)
+				agentLabel := FormatModelLabel(snap.Agent, snap.Model, snap.Effort)
+				cardJSON := BuildProgressCard(effBot.ID, effBot.Name, agentLabel, snap.Workspace, newID, tr("Queued"), "0s", "", "", "", 0, prevExecID)
 				cardMsgID := ev.MessageID
 				if err := g.client.PatchCard(ctx, bot.Profile, ev.MessageID, cardJSON); err != nil {
 					log.Printf("lark bot %s: patch retry progress card (fallback to new card): %v", bot.Name, err)
@@ -1356,7 +1583,8 @@ func (g *Gateway) tickProgress(ctx context.Context) {
 		if snap.State == "queued" {
 			prevExecID = g.queuedBehindExecID(snap.Discussion, c.execID)
 		}
-		cardJSON := BuildProgressCard(c.botID, c.botName, snap.Agent, snap.Workspace, c.execID, snap.State, elapsed, snap.Tool, snap.ToolInput, snap.Phase, snap.Subagents, prevExecID)
+		agentLabel := FormatModelLabel(snap.Agent, snap.Model, snap.Effort)
+		cardJSON := BuildProgressCard(c.botID, c.botName, agentLabel, snap.Workspace, c.execID, snap.State, elapsed, snap.Tool, snap.ToolInput, snap.Phase, snap.Subagents, prevExecID)
 		c.patchMu.Lock()
 		if c.closed || cardJSON == c.lastJSON {
 			c.patchMu.Unlock()
@@ -1406,8 +1634,16 @@ func (g *Gateway) OnExecFinished(discKey, execID, outcome, body string) {
 	if agentName == "" {
 		agentName = binding.Agent
 	}
+	model, effort := snap.Model, snap.Effort
+	if model == "" {
+		model = effBot.Model
+		if effort == "" {
+			effort = effBot.Effort
+		}
+	}
+	agentLabel := FormatModelLabel(agentName, model, effort)
 
-	cardJSON, truncated := BuildResultCard(effBot.ID, effBot.Name, agentName, wsLabel, execID, outcome, elapsed, snap.TraceCount, body)
+	cardJSON, truncated := BuildResultCard(effBot.ID, effBot.Name, agentLabel, wsLabel, execID, outcome, elapsed, snap.TraceCount, body)
 
 	g.mu.Lock()
 	ac := g.activeCards[execID]
@@ -1485,7 +1721,7 @@ func (g *Gateway) OnExecFinished(discKey, execID, outcome, body string) {
 		if inPlaceFailed {
 			closedTimeout = 5 * time.Second
 		}
-		closedCard := BuildProgressClosedCard(effBot.Name, agentName, wsLabel, outcome, elapsed, snap.TraceCount)
+		closedCard := BuildProgressClosedCard(effBot.Name, agentLabel, wsLabel, outcome, elapsed, snap.TraceCount)
 		if err := patchProgress(closedCard, closedTimeout); err != nil {
 			log.Printf("lark bot %s: patch progress closed card: %v", bot.Name, err)
 		}
@@ -1564,7 +1800,8 @@ func (g *Gateway) OnQuestion(discKey, execID, questionID, agentName, question st
 		return
 	}
 	effBot, _ := bot.EffectiveForChat(binding.ChatID)
-	cardJSON := BuildQuestionCard(effBot.ID, effBot.Name, agentName, questionID, question, choices, "")
+	agentLabel := g.execAgentLabel(execID, agentName, effBot.Model, effBot.Effort)
+	cardJSON := BuildQuestionCard(effBot.ID, effBot.Name, agentLabel, questionID, question, choices, "")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -1593,7 +1830,7 @@ func (g *Gateway) OnQuestion(discKey, execID, questionID, agentName, question st
 	g.mu.Lock()
 	g.qCards[questionID] = questionMem{
 		botID: effBot.ID, chatID: binding.ChatID, profile: effBot.Profile, botName: effBot.Name,
-		agentName: agentName, question: question, choices: choices, cardMsgID: cardMsgID,
+		agentName: agentLabel, question: question, choices: choices, cardMsgID: cardMsgID,
 	}
 	g.mu.Unlock()
 }
@@ -1625,7 +1862,15 @@ func (g *Gateway) WatchPermission(req PermNotice) bool {
 	}
 	effBot, _ := bot.EffectiveForChat(binding.ChatID)
 	wsLabel := g.workspaceLabel(binding.WorkspaceID)
-	cardJSON := BuildPermissionCard(effBot.ID, effBot.Name, req.Agent, wsLabel, req.ID, req.Tool, req.Summary, req.RuleLabel, "", "")
+	model, effort := req.Model, req.Effort
+	if model == "" {
+		model = effBot.Model
+		if effort == "" {
+			effort = effBot.Effort
+		}
+	}
+	agentLabel := FormatModelLabel(req.Agent, model, effort)
+	cardJSON := BuildPermissionCard(effBot.ID, effBot.Name, agentLabel, wsLabel, req.ID, req.Tool, req.Summary, req.RuleLabel, "", "")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cardMsgID, err := g.client.SendCard(ctx, effBot.Profile, binding.ChatID, cardJSON)
@@ -1642,7 +1887,7 @@ func (g *Gateway) WatchPermission(req PermNotice) bool {
 	g.mu.Lock()
 	g.activePerms[req.ID] = &activePerm{
 		botID: effBot.ID, profile: effBot.Profile, botName: effBot.Name,
-		agentName: req.Agent, wsLabel: wsLabel, tool: req.Tool, summary: req.Summary, ruleLabel: req.RuleLabel, cardMsgID: cardMsgID,
+		agentName: agentLabel, wsLabel: wsLabel, tool: req.Tool, summary: req.Summary, ruleLabel: req.RuleLabel, cardMsgID: cardMsgID,
 	}
 	g.mu.Unlock()
 	return true
@@ -1740,6 +1985,24 @@ func (g *Gateway) canUpdateProgressInPlace(bot BotConfig, binding store.LarkBind
 		return false
 	}
 	return ac != nil
+}
+
+func (g *Gateway) execAgentLabel(execID, fallbackAgent, fallbackModel, fallbackEffort string) string {
+	agentName, model, effort := fallbackAgent, fallbackModel, fallbackEffort
+	if execID != "" && g.host != nil {
+		if snap, ok := g.host.ExecutionSnapshot(execID); ok {
+			if snap.Agent != "" {
+				agentName = snap.Agent
+			}
+			if snap.Model != "" {
+				model = snap.Model
+				effort = snap.Effort
+			} else if snap.Effort != "" {
+				effort = snap.Effort
+			}
+		}
+	}
+	return FormatModelLabel(agentName, model, effort)
 }
 
 func (g *Gateway) workspaceLabel(wsID string) string {
@@ -1876,8 +2139,24 @@ func (g *Gateway) flushDebounced(key stagedKey, target *debounceBatch, seq uint6
 		return
 	}
 	if ev.ChatType == "group" {
-		if !noMention && !isMentioningBot(latest, g.botIdentity(latest.ID), ev) {
-			return
+		if !noMention {
+			ident := g.botIdentity(ctx, latest.ID, latest.Profile)
+			if ctx.Err() != nil {
+				return
+			}
+			// 身份刷新可能等待外部 CLI，返回后再次复查最新配置、owner 与群策略，防止等待期间被禁用/换 profile/收紧白名单
+			latest, ok = g.botByID(bot.ID)
+			if !ok || !latest.Enabled || latest.Profile != bot.Profile {
+				return
+			}
+			effBot, noMention = latest.EffectiveForChat(ev.ChatID)
+			owner = g.Config().OwnerOpenID
+			if !effBot.AllowsTrigger(ev.SenderID, owner, ev.ChatID) {
+				return
+			}
+			if !noMention && !isMentioningBot(latest, ident, ev) {
+				return
+			}
 		}
 		if (effBot.SessionMode == SessionThread) != inThread {
 			return
@@ -2178,7 +2457,8 @@ func (g *Gateway) submitStagedBatch(ctx context.Context, bot BotConfig, b *stage
 
 	wsLabel := g.workspaceLabel(binding.WorkspaceID)
 	prevExecID := g.queuedBehindExecID(binding.DiscussionKey, execID)
-	cardJSON := BuildProgressCard(bot.ID, bot.Name, binding.Agent, wsLabel, execID, tr("Queued"), "0s", "", "", "", 0, prevExecID)
+	agentLabel := g.execAgentLabel(execID, binding.Agent, bot.Model, bot.Effort)
+	cardJSON := BuildProgressCard(bot.ID, bot.Name, agentLabel, wsLabel, execID, tr("Queued"), "0s", "", "", "", 0, prevExecID)
 	finalCardID := cardID
 	if finalCardID == "" || g.client.PatchCard(ctx, bot.Profile, finalCardID, cardJSON) != nil {
 		sentID, serr := g.client.ReplyCard(ctx, bot.Profile, lastItem.msgID, b.inThread, cardJSON)

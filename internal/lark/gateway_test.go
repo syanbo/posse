@@ -1397,3 +1397,310 @@ func TestGatewayChatOverridesAndSecurity(t *testing.T) {
 		t.Fatalf("stale picker must expire without creating binding, switchedWS=%q patched=%+v", fh.switchedWS, fc.patched)
 	}
 }
+
+type fakeIdentityClient struct {
+	fakeClient
+	mu    sync.Mutex
+	calls int
+	ident BotIdentity
+	err   error
+	block chan struct{}
+}
+
+func (f *fakeIdentityClient) BotIdentity(ctx context.Context, _ string) (BotIdentity, error) {
+	f.mu.Lock()
+	f.calls++
+	blk := f.block
+	ident, err := f.ident, f.err
+	f.mu.Unlock()
+	if blk != nil {
+		select {
+		case <-blk:
+		case <-ctx.Done():
+			return BotIdentity{}, ctx.Err()
+		}
+	}
+	return ident, err
+}
+
+func TestGroupMentionByAppIDAndBotIdentityLazyRefresh(t *testing.T) {
+	bot := NormalizeBot(BotConfig{
+		ID:            "lbot_cli",
+		Name:          "Works Triage",
+		Profile:       "cli_a945f8f32b38dcd4",
+		Enabled:       true,
+		WorkspaceID:   "w_works",
+		Agent:         "antigravity",
+		TriggerPolicy: TriggerGroup,
+	})
+
+	// 1. 已知 BotAppID 时，mentions[].id 为 cli_... 精确命中本机器人（即使本地配置名不同）
+	if !isMentioningBot(bot, BotIdentity{BotAppID: "cli_a945f8f32b38dcd4", BotAppName: "Feishu CLI"}, MessageEvent{
+		Content:  "@Feishu CLI hello",
+		Mentions: []MessageMention{{Key: "@_user_1", ID: "cli_a945f8f32b38dcd4", Name: "Feishu CLI"}},
+	}) {
+		t.Fatalf("expected cli_ mention matching BotAppID to trigger")
+	}
+
+	// 2. 群内另一个机器人（cli_other）必须忽略，即使同名
+	if isMentioningBot(bot, BotIdentity{BotOpenID: "ou_self", BotAppID: "cli_a945f8f32b38dcd4", BotAppName: "Feishu CLI"}, MessageEvent{
+		Content:  "@Feishu CLI hello",
+		Mentions: []MessageMention{{Key: "@_user_1", ID: "cli_other_bot", Name: "Feishu CLI"}},
+	}) {
+		t.Fatalf("mention of another bot appId must be ignored")
+	}
+
+	// 3. 仅有 BotAppID、BotOpenID 临时为空时：遇 ou_ 仍可按 BotAppName 回退，遇 cli_other 仍严格拒绝；
+	//    混合 mentions（同时 @ 同名的 cli_other 和无关的 ou_colleague）不得因 ou_ 命名空间未知而放行 cli_other。
+	partial := BotIdentity{BotAppID: "cli_a945f8f32b38dcd4", BotAppName: "Feishu CLI"}
+	if !isMentioningBot(bot, partial, MessageEvent{
+		Content:  "@Feishu CLI hello",
+		Mentions: []MessageMention{{Key: "@_user_1", ID: "ou_self", Name: "Feishu CLI"}},
+	}) {
+		t.Fatalf("partial identity without BotOpenID should fall back to BotAppName for ou_ mentions")
+	}
+	if isMentioningBot(bot, partial, MessageEvent{
+		Content:  "@Feishu CLI hello",
+		Mentions: []MessageMention{{Key: "@_user_1", ID: "cli_other_bot", Name: "Feishu CLI"}},
+	}) {
+		t.Fatalf("partial identity with BotAppID must still reject other cli_ mentions")
+	}
+	if isMentioningBot(bot, partial, MessageEvent{
+		Content: "@Feishu CLI @Alice hello",
+		Mentions: []MessageMention{
+			{Key: "@_user_1", ID: "cli_other_bot", Name: "Feishu CLI"},
+			{Key: "@_user_2", ID: "ou_colleague", Name: "Alice"},
+		},
+	}) {
+		t.Fatalf("mixed mentions must keep per-mention known-ID veto and not fall back cli_other by name")
+	}
+
+	// 4. 并发刷新 singleflight：两条群消息并发到达时只调 1 次 BotIdentity，且双方都等待刷新结果并命中；
+	//    sender_type=bot 被忽略；reply_to 归一化到 ParentID。
+	release := make(chan struct{})
+	fc := &fakeIdentityClient{
+		ident: BotIdentity{BotOpenID: "ou_bot_real", BotAppID: "cli_a945f8f32b38dcd4", BotAppName: "Feishu CLI"},
+		block: release,
+	}
+	fh := newFakeHost()
+	gw := NewGateway(t.TempDir(), fc, fh)
+	gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+	gw.mu.Lock()
+	gw.runners[bot.ID] = &botRunner{cfg: bot, cancel: func() {}, identTriedAt: time.Now().Add(-time.Minute)}
+	gw.mu.Unlock()
+
+	gw.HandleMessage(context.Background(), bot, MessageEvent{
+		MessageID: "om_from_other_bot", ChatID: "oc_grp", ChatType: "group", SenderID: "ou_other_bot", SenderType: "bot",
+		MessageType: "text", Content: "@Feishu CLI ping",
+		Mentions: []MessageMention{{Key: "@_user_1", ID: "ou_bot_real", Name: "Feishu CLI"}},
+	})
+	if len(fh.posted) != 0 {
+		t.Fatalf("messages from sender_type=bot must be ignored, posted=%v", fh.posted)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_from_user_1", ChatID: "oc_grp", ChatType: "group", SenderID: "ou_owner", SenderType: "user",
+			ReplyTo:     "om_parent_1",
+			MessageType: "text", Content: "@Feishu CLI check 710",
+			Mentions: []MessageMention{{Key: "@_user_1", ID: "ou_bot_real", Name: "Feishu CLI"}},
+		})
+	}()
+	go func() {
+		defer wg.Done()
+		gw.HandleMessage(context.Background(), bot, MessageEvent{
+			MessageID: "om_from_user_2", ChatID: "oc_grp", ChatType: "group", SenderID: "ou_owner", SenderType: "user",
+			MessageType: "text", Content: "@Feishu CLI check 711",
+			Mentions: []MessageMention{{Key: "@_user_1", ID: "ou_bot_real", Name: "Feishu CLI"}},
+		})
+	}()
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	fh.mu.Lock()
+	postedCopy := append([]string(nil), fh.posted...)
+	fh.mu.Unlock()
+	if len(postedCopy) != 2 {
+		t.Fatalf("expected both concurrent group mentions to wait for singleflight refresh and post, got %d: %v", len(postedCopy), postedCopy)
+	}
+	foundParent := false
+	for _, p := range postedCopy {
+		if strings.Contains(p, "parent_id=om_parent_1") {
+			foundParent = true
+		}
+	}
+	if !foundParent {
+		t.Fatalf("expected reply_to normalized into parent_id=om_parent_1, posted=%v", postedCopy)
+	}
+	if fc.calls != 1 {
+		t.Fatalf("expected singleflight BotIdentity refresh to call once, got %d", fc.calls)
+	}
+
+	// 5. 换 Profile 后，带着旧 Profile 的事件必须被拒绝，不得借用新 runner 的身份执行
+	newBot := bot
+	newBot.Profile = "cli_new_profile"
+	gw.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{newBot}})
+	gw.mu.Lock()
+	gw.runners[bot.ID] = &botRunner{
+		cfg:    newBot,
+		cancel: func() {},
+		ident:  BotIdentity{BotOpenID: "ou_new_bot", BotAppID: "cli_new_profile", BotAppName: "New Bot"},
+	}
+	gw.mu.Unlock()
+	gw.HandleMessage(context.Background(), bot, MessageEvent{
+		MessageID: "om_stale_profile", ChatID: "oc_grp", ChatType: "group", SenderID: "ou_owner", SenderType: "user",
+		MessageType: "text", Content: "@New Bot stale",
+		Mentions: []MessageMention{{Key: "@_user_1", ID: "ou_new_bot", Name: "New Bot"}},
+	})
+	fh.mu.Lock()
+	afterStale := len(fh.posted)
+	fh.mu.Unlock()
+	if afterStale != 2 {
+		t.Fatalf("stale event with old profile must be rejected after reload, posted=%d", afterStale)
+	}
+
+	// 6. 阻塞刷新期间修改 OwnerOpenID 或删除/换 Profile：等待返回后按最新配置拒绝旧主人与防抖批次
+	relOwner := make(chan struct{})
+	fcOwner := &fakeIdentityClient{
+		ident: BotIdentity{BotOpenID: "ou_bot_real", BotAppID: "cli_a945f8f32b38dcd4", BotAppName: "Feishu CLI"},
+		block: relOwner,
+	}
+	fhOwner := newFakeHost()
+	gwOwner := NewGateway(t.TempDir(), fcOwner, fhOwner)
+	selfBot := bot
+	selfBot.TriggerPolicy = TriggerSelf
+	gwOwner.Reload(Config{OwnerOpenID: "ou_old_owner", Bots: []BotConfig{selfBot}})
+	gwOwner.mu.Lock()
+	gwOwner.runners[selfBot.ID] = &botRunner{cfg: selfBot, cancel: func() {}, identTriedAt: time.Now().Add(-time.Minute)}
+	gwOwner.mu.Unlock()
+
+	doneOwner := make(chan struct{})
+	go func() {
+		defer close(doneOwner)
+		gwOwner.HandleMessage(context.Background(), selfBot, MessageEvent{
+			MessageID: "om_old_owner_cmd", ChatID: "oc_grp", ChatType: "group", SenderID: "ou_old_owner", SenderType: "user",
+			MessageType: "text", Content: "@Feishu CLI check",
+			Mentions: []MessageMention{{Key: "@_user_1", ID: "ou_bot_real", Name: "Feishu CLI"}},
+		})
+	}()
+	time.Sleep(20 * time.Millisecond)
+	gwOwner.Reload(Config{OwnerOpenID: "ou_new_owner", Bots: []BotConfig{selfBot}})
+	close(relOwner)
+	<-doneOwner
+	fhOwner.mu.Lock()
+	if len(fhOwner.posted) != 0 {
+		fhOwner.mu.Unlock()
+		t.Fatalf("old owner must be rejected when OwnerOpenID changes during identity refresh")
+	}
+	fhOwner.mu.Unlock()
+
+	// 7. 身份暂时失败（或仅获 AppID、缺 OpenID）时，一次性投递的合法 ou_ @ 会在身份恢复后自动延迟重判并执行，无需外部重投
+	fcRetry := &fakeIdentityClient{ident: BotIdentity{BotAppID: "cli_a945f8f32b38dcd4"}}
+	fhRetry := newFakeHost()
+	gwRetry := NewGateway(t.TempDir(), fcRetry, fhRetry)
+	gwRetry.identityRetryDelay = 15 * time.Millisecond
+	gwRetry.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+	gwRetry.mu.Lock()
+	gwRetry.runners[bot.ID] = &botRunner{cfg: bot, cancel: func() {}}
+	gwRetry.mu.Unlock()
+
+	retryCtx, retryCancel := context.WithCancel(context.Background())
+	defer retryCancel()
+	retryEv := MessageEvent{
+		MessageID: "om_once_only_1", ChatID: "oc_grp", ChatType: "group", SenderID: "ou_owner", SenderType: "user",
+		MessageType: "text", Content: "@Feishu CLI retry me",
+		Mentions: []MessageMention{{Key: "@_user_1", ID: "ou_bot_real", Name: "Feishu CLI"}},
+	}
+	// 只投递一次：首次因缺少 BotOpenID 与 BotAppName 无法确定，进入有界延迟重判
+	gwRetry.HandleMessage(retryCtx, bot, retryEv)
+	fhRetry.mu.Lock()
+	initialPosted := len(fhRetry.posted)
+	fhRetry.mu.Unlock()
+	if initialPosted != 0 {
+		t.Fatalf("expected initial delivery with partial identity to defer, posted=%d", initialPosted)
+	}
+	// 随后身份接口恢复，无需再次调用 HandleMessage，后台重判自动命中并派发
+	fcRetry.mu.Lock()
+	fcRetry.ident = BotIdentity{BotOpenID: "ou_bot_real", BotAppID: "cli_a945f8f32b38dcd4", BotAppName: "Feishu CLI"}
+	fcRetry.mu.Unlock()
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		fhRetry.mu.Lock()
+		n := len(fhRetry.posted)
+		fhRetry.mu.Unlock()
+		if n == 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	fhRetry.mu.Lock()
+	retryPosted := len(fhRetry.posted)
+	fhRetry.mu.Unlock()
+	if retryPosted != 1 {
+		t.Fatalf("expected single-delivery message to succeed automatically after identity recovers, posted=%d", retryPosted)
+	}
+
+	// 8. 防抖 flush 在阻塞刷新身份期间被换 Profile，返回后必须丢弃旧批次
+	relFlush := make(chan struct{})
+	fcFlush := &fakeIdentityClient{
+		ident: BotIdentity{BotOpenID: "ou_bot_real", BotAppID: "cli_a945f8f32b38dcd4", BotAppName: "Feishu CLI"},
+		block: relFlush,
+	}
+	fhFlush := newFakeHost()
+	gwFlush := NewGateway(t.TempDir(), fcFlush, fhFlush)
+	gwFlush.debounceWindow = 10 * time.Millisecond
+	gwFlush.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{bot}})
+	gwFlush.mu.Lock()
+	gwFlush.runners[bot.ID] = &botRunner{
+		cfg:          bot,
+		cancel:       func() {},
+		ident:        BotIdentity{BotAppID: "cli_a945f8f32b38dcd4", BotAppName: "Feishu CLI"},
+		identTriedAt: time.Now(), // 入队时不触发刷新
+	}
+	gwFlush.mu.Unlock()
+
+	gwFlush.HandleMessage(context.Background(), bot, MessageEvent{
+		MessageID: "om_deb_reload", ChatID: "oc_grp", ChatType: "group", SenderID: "ou_owner", SenderType: "user",
+		MessageType: "text", Content: "@Feishu CLI debounced",
+		Mentions: []MessageMention{{Key: "@_user_1", ID: "cli_a945f8f32b38dcd4", Name: "Feishu CLI"}},
+	})
+	gwFlush.mu.Lock()
+	gwFlush.runners[bot.ID].identTriedAt = time.Now().Add(-time.Minute) // 到期 flush 时触发阻塞刷新
+	gwFlush.mu.Unlock()
+	time.Sleep(35 * time.Millisecond)
+	reloadedBot := bot
+	reloadedBot.Profile = "cli_other_profile"
+	gwFlush.Reload(Config{OwnerOpenID: "ou_owner", Bots: []BotConfig{reloadedBot}})
+	close(relFlush)
+	time.Sleep(30 * time.Millisecond)
+	fhFlush.mu.Lock()
+	if len(fhFlush.posted) != 0 {
+		fhFlush.mu.Unlock()
+		t.Fatalf("debounced flush must drop batch when profile changes during identity refresh")
+	}
+	fhFlush.mu.Unlock()
+}
+
+func TestFormatModelLabel(t *testing.T) {
+	cases := []struct {
+		agent, model, effort, want string
+	}{
+		{"antigravity", "", "", "antigravity"},
+		{"antigravity", "", "high", "antigravity (high)"},
+		{"antigravity", "Gemini 4 Neon (Medium)", "", "Gemini 4 Neon (Medium)"},
+		{"antigravity", "Gemini 4 Neon (Medium)", "medium", "Gemini 4 Neon (Medium)"},
+		{"antigravity", "Gemini 4 Neon (Medium)", "high", "Gemini 4 Neon (high)"},
+		{"codex", "gpt-6.2-sol", "high", "gpt-6.2-sol (high)"},
+		{"codex", "gpt-6.2-sol (Ultra)", "ultra", "gpt-6.2-sol (Ultra)"},
+		{"claude", "claude-opus-4-8 (1M context)", "xhigh", "claude-opus-4-8 (xhigh)"},
+	}
+	for _, tc := range cases {
+		if got := FormatModelLabel(tc.agent, tc.model, tc.effort); got != tc.want {
+			t.Errorf("FormatModelLabel(%q, %q, %q) = %q, want %q", tc.agent, tc.model, tc.effort, got, tc.want)
+		}
+	}
+}

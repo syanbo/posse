@@ -82,3 +82,43 @@ func TestReadCappedLineDrainsLongLine(t *testing.T) {
 		t.Fatalf("expected second line after draining long line, got %q", got2)
 	}
 }
+
+func TestParseBotInfoAndAuthStatusIdentity(t *testing.T) {
+	openID, appName, err := parseBotInfo([]byte(`{
+		"ok": true,
+		"identity": "bot",
+		"data": {
+			"activate_status": 2,
+			"app_name": "Feishu CLI",
+			"open_id": "ou_bot_real"
+		}
+	}`))
+	if err != nil || openID != "ou_bot_real" || appName != "Feishu CLI" {
+		t.Fatalf("parseBotInfo(data) = (%q, %q, %v), want (ou_bot_real, Feishu CLI, nil)", openID, appName, err)
+	}
+
+	openID, appName, err = parseBotInfo([]byte(`{"bot":{"open_id":"ou_raw","app_name":"Raw Bot"}}`))
+	if err != nil || openID != "ou_raw" || appName != "Raw Bot" {
+		t.Fatalf("parseBotInfo(bot) = (%q, %q, %v), want (ou_raw, Raw Bot, nil)", openID, appName, err)
+	}
+
+	if _, _, err := parseBotInfo([]byte(`{"ok":false,"error":{"message":"forbidden"}}`)); err == nil {
+		t.Fatalf("parseBotInfo(ok=false) expected error")
+	}
+	if _, _, err := parseBotInfo([]byte(`{"ok":true,"data":{}}`)); err == nil {
+		t.Fatalf("parseBotInfo(empty data) expected error")
+	}
+
+	appID, openID, appName, err := parseAuthStatusIdentity([]byte(`{
+		"appId": "cli_a945f8f32b38dcd4",
+		"identities": {
+			"bot": {"status": "ready", "available": true}
+		}
+	}`))
+	if err != nil || appID != "cli_a945f8f32b38dcd4" || openID != "" || appName != "" {
+		t.Fatalf("parseAuthStatusIdentity() = (%q, %q, %q, %v)", appID, openID, appName, err)
+	}
+	if _, _, _, err := parseAuthStatusIdentity([]byte(`{"identities":{"bot":{"status":"ready"}}}`)); err == nil {
+		t.Fatalf("parseAuthStatusIdentity(empty fields) expected error")
+	}
+}

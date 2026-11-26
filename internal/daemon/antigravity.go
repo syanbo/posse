@@ -24,6 +24,11 @@ type antigravityStatus struct {
 	Product string `json:"product"`
 	Session string `json:"conversation_id"`
 	Title   string `json:"conversation_title"`
+	Model   *struct {
+		ID          string `json:"id"`
+		DisplayName string `json:"display_name"`
+		Effort      string `json:"effort"`
+	} `json:"model"`
 	Context *struct {
 		Window  int      `json:"context_window_size"`
 		Percent *float64 `json:"used_percentage"`
@@ -73,11 +78,24 @@ func (d *Daemon) antigravityStatusline(ctx context.Context, raw json.RawMessage)
 		return nil, nil
 	}
 	title := strings.TrimSpace(p.Payload.Title)
+	if pg != s.agyReportPG || id != s.agyReportSID {
+		s.agyReportModel = ""
+		s.agyReportEffort = ""
+	}
 	s.agyReportPG, s.agyReportAt = pg, p.At
 	if title != "" {
 		s.agyReportSID, s.agyReportTitle = id, title
 	} else if s.agyReportSID != id {
 		s.agyReportSID, s.agyReportTitle = id, ""
+	}
+	if p.Payload.Model != nil {
+		if name := strings.TrimSpace(p.Payload.Model.DisplayName); name != "" {
+			s.agyReportModel = name
+		} else if mid := strings.TrimSpace(p.Payload.Model.ID); mid != "" {
+			s.agyReportModel = mid
+		}
+		// effort 仅多档位模型上报；切换到无档位模型时必须覆盖清空旧档位，防止串拼。
+		s.agyReportEffort = strings.TrimSpace(p.Payload.Model.Effort)
 	}
 	// agy 1.5.15 的上报路径指向桌面 App 目录，CLI 日志单独存放。
 	path := history.AntigravityTranscriptPath(d.agentDataHome(), id)

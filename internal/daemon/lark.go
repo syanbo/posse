@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/BurntSushi/toml"
 
 	"posse/internal/agent"
 	"posse/internal/collaboration"
@@ -17,11 +20,18 @@ import (
 	"posse/internal/store"
 )
 
+type execModelSnap struct {
+	model  string
+	effort string
+	frozen bool
+}
+
 type larkState struct {
-	mu     sync.Mutex
-	cfgMu  sync.Mutex // 串行化 lark-bots.json 读改写与 Reload，防止并发写丢更新
-	gw     *lark.Gateway
-	client lark.Client
+	mu         sync.Mutex
+	cfgMu      sync.Mutex // 串行化 lark-bots.json 读改写与 Reload，防止并发写丢更新
+	gw         *lark.Gateway
+	client     lark.Client
+	execModels map[string]execModelSnap // 按 execID 记录实时采样与终态冻结，防止停终端或复用 worker 后结果卡错标
 }
 
 type larkPermAdapter struct{ d *Daemon }
@@ -31,10 +41,14 @@ func (a larkPermAdapter) WatchPermission(req PermRequest) bool {
 	if gw == nil {
 		return false
 	}
+	cfgModel, cfgEffort := a.d.configuredModelForTerminal(req.TerminalID)
+	model, effort := a.d.resolveLarkModel("", req.Agent, cfgModel, cfgEffort, req.TerminalID, true)
 	return gw.WatchPermission(lark.PermNotice{
 		ID:         req.ID,
 		TerminalID: req.TerminalID,
 		Agent:      req.Agent,
+		Model:      model,
+		Effort:     effort,
 		Tool:       req.Tool,
 		Summary:    req.Summary,
 		RuleLabel:  req.RuleLabel,
@@ -147,6 +161,11 @@ func (d *Daemon) larkLaunchOptions(discKey string) (permOverride string, externa
 }
 
 func (d *Daemon) larkOnExecFinished(discKey, execID, outcome, body string) {
+	if execID != "" {
+		if x, err := d.store.Execution(execID); err == nil {
+			d.freezeExecModel(x.ID, x.Agent, x.Worker)
+		}
+	}
 	if gw := d.larkGateway(); gw != nil && discKey != "" && execID != "" {
 		go gw.OnExecFinished(discKey, execID, outcome, body)
 	}
@@ -903,6 +922,7 @@ func (h larkHost) StopExecution(execID string) error {
 	if !store.ExecActive(x.State) {
 		return nil
 	}
+	h.d.freezeExecModel(x.ID, x.Agent, x.Worker)
 	h.d.finalizeTraceAsync(x.ID, x.Worker)
 	h.d.store.EndTask(x.TaskID, store.TaskStopped, nil, store.ExecStopped, "stopped by the user", false, time.Now())
 	h.d.closeTerminal(x.Worker, 2*time.Second)
@@ -944,9 +964,17 @@ func (h larkHost) ExecutionSnapshot(execID string) (lark.ExecSnap, bool) {
 		StartedAt:  x.StartedAt,
 		EndedAt:    x.EndedAt,
 	}
+	cfgModel, cfgEffort := x.Model, x.Effort
 	if m, err := h.d.store.Member(x.Member); err == nil {
 		snap.MemberName = m.Name
+		if cfgModel == "" {
+			cfgModel = m.Model
+		}
+		if cfgEffort == "" {
+			cfgEffort = m.Effort
+		}
 	}
+	snap.Model, snap.Effort = h.d.resolveLarkModel(x.ID, x.Agent, cfgModel, cfgEffort, x.Worker, store.ExecActive(x.State))
 	if counts := h.d.store.ExecTraceCounts([]string{x.ID}); counts[x.ID] > 0 {
 		snap.TraceCount = counts[x.ID]
 	}
@@ -988,4 +1016,245 @@ func (h larkHost) MarkEvent(botID, eventKey string) (bool, error) {
 
 func (h larkHost) MutateChatOverride(botID, chatID string, mutate func(*lark.ChatOverride)) (lark.BotConfig, error) {
 	return h.d.mutateLarkChatOverride(botID, chatID, mutate)
+}
+
+// liveReportedModel 仅在终端前台进程与当前会话 ID 均与最近一次 statusline 上报一致时返回实时模型与档位，防止跨进程/跨会话串味。
+func (d *Daemon) liveReportedModel(agentName, workerTermID string) (model, effort string) {
+	if workerTermID == "" || !strings.EqualFold(strings.TrimSpace(agentName), "antigravity") {
+		return "", ""
+	}
+	s := d.liveSession(workerTermID)
+	if s == nil || !s.Running() {
+		return "", ""
+	}
+	pg := s.Foreground()
+	curSID := strings.TrimSpace(s.Agent().SessionID)
+	s.agyReportMu.Lock()
+	if s.agyReportPG > 0 && s.agyReportPG == pg && (curSID == "" || s.agyReportSID == curSID) {
+		model = strings.TrimSpace(s.agyReportModel)
+		effort = strings.TrimSpace(s.agyReportEffort)
+	}
+	s.agyReportMu.Unlock()
+	return model, effort
+}
+
+func (d *Daemon) recordExecModel(execID, model, effort string) {
+	if execID == "" || model == "" {
+		return
+	}
+	d.lark.mu.Lock()
+	defer d.lark.mu.Unlock()
+	if d.lark.execModels == nil {
+		d.lark.execModels = map[string]execModelSnap{}
+	}
+	if cur, ok := d.lark.execModels[execID]; ok && cur.frozen {
+		return
+	}
+	if len(d.lark.execModels) >= 200 {
+		for k := range d.lark.execModels {
+			delete(d.lark.execModels, k)
+			if len(d.lark.execModels) < 150 {
+				break
+			}
+		}
+	}
+	d.lark.execModels[execID] = execModelSnap{model: model, effort: effort}
+}
+
+func (d *Daemon) frozenExecModel(execID string) (model, effort string, ok bool) {
+	if execID == "" {
+		return "", "", false
+	}
+	d.lark.mu.Lock()
+	defer d.lark.mu.Unlock()
+	v, ok := d.lark.execModels[execID]
+	return v.model, v.effort, ok && v.model != ""
+}
+
+func (d *Daemon) freezeExecModel(execID, agentName, workerTermID string) {
+	if execID == "" {
+		return
+	}
+	d.lark.mu.Lock()
+	if cur, ok := d.lark.execModels[execID]; ok && cur.frozen {
+		d.lark.mu.Unlock()
+		return
+	}
+	d.lark.mu.Unlock()
+
+	m, e := d.liveReportedModel(agentName, workerTermID)
+
+	d.lark.mu.Lock()
+	defer d.lark.mu.Unlock()
+	if d.lark.execModels == nil {
+		d.lark.execModels = map[string]execModelSnap{}
+	}
+	if cur, ok := d.lark.execModels[execID]; ok && cur.frozen {
+		return
+	}
+	if m != "" {
+		d.lark.execModels[execID] = execModelSnap{model: m, effort: e, frozen: true}
+		return
+	}
+	if cur, ok := d.lark.execModels[execID]; ok && cur.model != "" {
+		cur.frozen = true
+		d.lark.execModels[execID] = cur
+	}
+}
+
+func (d *Daemon) configuredModelForTerminal(termID string) (model, effort string) {
+	if termID == "" {
+		return "", ""
+	}
+	if xs, err := d.store.ActiveExecutions(); err == nil {
+		for _, x := range xs {
+			if x.Worker == termID {
+				model, effort = x.Model, x.Effort
+				if m, merr := d.store.Member(x.Member); merr == nil {
+					if model == "" {
+						model = m.Model
+					}
+					if effort == "" {
+						effort = m.Effort
+					}
+				}
+				break
+			}
+		}
+	}
+	if b, ok := (larkHost{d: d}).BindingByTerminal(termID); ok {
+		if model == "" || effort == "" {
+			if m, err := d.store.Member(b.MemberID); err == nil {
+				if model == "" {
+					model = m.Model
+				}
+				if effort == "" {
+					effort = m.Effort
+				}
+			}
+		}
+		if model == "" || effort == "" {
+			if gw := d.larkGateway(); gw != nil {
+				for _, bot := range gw.Config().Bots {
+					if bot.ID == b.BotID {
+						effBot, _ := bot.EffectiveForChat(b.ChatID)
+						if model == "" {
+							model = effBot.Model
+						}
+						if effort == "" {
+							effort = effBot.Effort
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+	return model, effort
+}
+
+// resolveLarkModel 按「本轮实时/冻结上报 > 显式配置 > 本机默认配置」的顺序解析飞书卡片显示的模型与思考档位。
+// 一旦拿到实时或冻结上报的模型名，直接以该上报的 (model, effort) 为准（即使 effort 为空也不跨模型拼接旧启动档位）。
+func (d *Daemon) resolveLarkModel(execID, agentName, cfgModel, cfgEffort, workerTermID string, active bool) (model, effort string) {
+	if active {
+		if m, e := d.liveReportedModel(agentName, workerTermID); m != "" {
+			d.recordExecModel(execID, m, e)
+			return m, e
+		}
+	} else if m, e, ok := d.frozenExecModel(execID); ok && m != "" {
+		return m, e
+	}
+	model = strings.TrimSpace(cfgModel)
+	effort = strings.TrimSpace(cfgEffort)
+	if model == "" || effort == "" {
+		defModel, defEffort := readDefaultAgentModel(d.agentDataHome(), agentName, model)
+		if model == "" {
+			model = defModel
+		}
+		if effort == "" && defEffort != "" {
+			effort = defEffort
+		}
+	}
+	return model, effort
+}
+
+// readDefaultAgentModel 读取各 agent 本机默认配置中的模型与思考档位，仅作未显式指定且尚未收到实时上报时的兜底。
+func readDefaultAgentModel(homeDir, agentName, explicitModel string) (model, effort string) {
+	if homeDir == "" {
+		return "", ""
+	}
+	explicitModel = strings.TrimSpace(explicitModel)
+	switch strings.ToLower(strings.TrimSpace(agentName)) {
+	case "antigravity":
+		raw, err := os.ReadFile(filepath.Join(homeDir, ".gemini", "antigravity-cli", "settings.json"))
+		if err != nil {
+			return "", ""
+		}
+		var cfg struct {
+			Model  string `json:"model"`
+			Effort string `json:"effort"`
+		}
+		if json.Unmarshal(raw, &cfg) != nil {
+			return "", ""
+		}
+		defModel := strings.TrimSpace(cfg.Model)
+		defEffort := strings.TrimSpace(cfg.Effort)
+		if explicitModel != "" && defModel != "" && !strings.EqualFold(explicitModel, defModel) {
+			return defModel, ""
+		}
+		return defModel, defEffort
+	case "codex":
+		codexDir := strings.TrimSpace(os.Getenv("CODEX_HOME"))
+		if codexDir == "" {
+			codexDir = filepath.Join(homeDir, ".codex")
+		}
+		var cfg struct {
+			Model                string `toml:"model"`
+			ModelReasoningEffort string `toml:"model_reasoning_effort"`
+		}
+		if _, err := toml.DecodeFile(filepath.Join(codexDir, "config.toml"), &cfg); err != nil {
+			return "", ""
+		}
+		model = strings.TrimSpace(cfg.Model)
+		effort = strings.TrimSpace(cfg.ModelReasoningEffort)
+		if explicitModel != "" && model != "" && !strings.EqualFold(explicitModel, model) {
+			return model, ""
+		}
+		return model, effort
+	case "claude":
+		claudeDir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR"))
+		if claudeDir == "" {
+			claudeDir = filepath.Join(homeDir, ".claude")
+		}
+		raw, err := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+		if err != nil {
+			return "", ""
+		}
+		var cfg struct {
+			Model         string `json:"model"`
+			EffortLevel   string `json:"effortLevel"`
+			ModelSettings map[string]struct {
+				EffortLevel string `json:"effortLevel"`
+			} `json:"modelSettings"`
+		}
+		if json.Unmarshal(raw, &cfg) != nil {
+			return "", ""
+		}
+		model = strings.TrimSpace(cfg.Model)
+		target := explicitModel
+		if target == "" {
+			target = model
+		}
+		if target != "" {
+			if ms, ok := cfg.ModelSettings[target]; ok && strings.TrimSpace(ms.EffortLevel) != "" {
+				effort = strings.TrimSpace(ms.EffortLevel)
+			}
+		}
+		if effort == "" && (explicitModel == "" || model == "" || strings.EqualFold(explicitModel, model)) {
+			effort = strings.TrimSpace(cfg.EffortLevel)
+		}
+		return model, effort
+	default:
+		return "", ""
+	}
 }

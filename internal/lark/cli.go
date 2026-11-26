@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,7 @@ type MessageEvent struct {
 	ChatType    string           `json:"chat_type"` // p2p | group
 	RootID      string           `json:"root_id"`
 	ParentID    string           `json:"parent_id"`
+	ReplyTo     string           `json:"reply_to"`
 	ThreadID    string           `json:"thread_id"`
 	SenderID    string           `json:"sender_id"`
 	SenderType  string           `json:"sender_type"`
@@ -50,10 +52,11 @@ type MessageMention struct {
 	Name   string `json:"name"`
 }
 
-// BotIdentity 是从 `lark-cli auth status` 读取到的当前机器人自身 OpenID 与飞书应用显示名，
+// BotIdentity 保存当前机器人自身的 OpenID、AppID 与飞书应用显示名，
 // 用于在开通全群消息权限的群里精确识别「是否真的 @ 了本机器人」。
 type BotIdentity struct {
 	BotOpenID  string
+	BotAppID   string
 	BotAppName string
 }
 
@@ -199,6 +202,14 @@ func (c *CLIClient) run(ctx context.Context, profile, dir string, stdin []byte, 
 	}
 	full = append(full, args...)
 	cmd := exec.CommandContext(ctx, bin, full...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		if cmd.Process != nil && cmd.Process.Pid > 0 {
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+		return cmd.Process.Kill()
+	}
+	cmd.WaitDelay = 500 * time.Millisecond
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -254,11 +265,101 @@ func (c *CLIClient) OwnerOpenID(ctx context.Context, profile string) (string, er
 }
 
 func (c *CLIClient) BotIdentity(ctx context.Context, profile string) (BotIdentity, error) {
-	out, err := c.run(ctx, profile, "", nil, "auth", "status")
-	if err != nil {
-		return BotIdentity{}, err
+	var (
+		wg              sync.WaitGroup
+		botOpenID       string
+		botAppName      string
+		authAppID       string
+		authOpenID      string
+		authAppName     string
+		botErr, authErr error
+	)
+
+	// 并发调用 /open-apis/bot/v3/info 与 auth status，避免两个命令串行挤占同一超时预算；
+	// lark-cli auth status 的 identities.bot 仅返回就绪状态，不带 openId/appName。
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		out, err := c.run(ctx, profile, "", nil, "api", "GET", "/open-apis/bot/v3/info", "--as", "bot")
+		if err != nil {
+			botErr = err
+			return
+		}
+		botOpenID, botAppName, botErr = parseBotInfo(out)
+	}()
+	go func() {
+		defer wg.Done()
+		out, err := c.run(ctx, profile, "", nil, "auth", "status")
+		if err != nil {
+			authErr = err
+			return
+		}
+		authAppID, authOpenID, authAppName, authErr = parseAuthStatusIdentity(out)
+	}()
+	wg.Wait()
+
+	id := BotIdentity{
+		BotOpenID:  firstNonEmpty(botOpenID, authOpenID),
+		BotAppID:   authAppID,
+		BotAppName: firstNonEmpty(botAppName, authAppName),
 	}
+	if id.BotOpenID == "" && id.BotAppID == "" && id.BotAppName == "" {
+		if botErr != nil {
+			return BotIdentity{}, botErr
+		}
+		if authErr != nil {
+			return BotIdentity{}, authErr
+		}
+		return BotIdentity{}, errors.New("lark-cli returned empty bot identity")
+	}
+	if botErr != nil || authErr != nil {
+		log.Printf("lark bot (%s): partial bot identity (botInfoErr=%v, authStatusErr=%v)", profile, botErr, authErr)
+	}
+	return id, nil
+}
+
+func parseBotInfo(raw []byte) (openID, appName string, err error) {
+	var env struct {
+		OK   *bool `json:"ok"`
+		Data struct {
+			OpenID  string `json:"open_id"`
+			AppName string `json:"app_name"`
+			Bot     struct {
+				OpenID  string `json:"open_id"`
+				AppName string `json:"app_name"`
+			} `json:"bot"`
+		} `json:"data"`
+		Bot struct {
+			OpenID  string `json:"open_id"`
+			AppName string `json:"app_name"`
+		} `json:"bot"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(raw), &env); err != nil {
+		return "", "", err
+	}
+	if env.OK != nil && !*env.OK {
+		return "", "", errors.New("bot info returned ok=false")
+	}
+	openID = firstNonEmpty(env.Data.OpenID, env.Data.Bot.OpenID, env.Bot.OpenID)
+	appName = firstNonEmpty(env.Data.AppName, env.Data.Bot.AppName, env.Bot.AppName)
+	if openID == "" && appName == "" {
+		return "", "", errors.New("bot info missing open_id and app_name")
+	}
+	return openID, appName, nil
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func parseAuthStatusIdentity(raw []byte) (appID, openID, appName string, err error) {
 	var st struct {
+		AppID      string `json:"appId"`
 		Identities struct {
 			Bot struct {
 				OpenID  string `json:"openId"`
@@ -266,13 +367,16 @@ func (c *CLIClient) BotIdentity(ctx context.Context, profile string) (BotIdentit
 			} `json:"bot"`
 		} `json:"identities"`
 	}
-	if err := json.Unmarshal(bytes.TrimSpace(out), &st); err != nil {
-		return BotIdentity{}, err
+	if err := json.Unmarshal(bytes.TrimSpace(raw), &st); err != nil {
+		return "", "", "", err
 	}
-	return BotIdentity{
-		BotOpenID:  strings.TrimSpace(st.Identities.Bot.OpenID),
-		BotAppName: strings.TrimSpace(st.Identities.Bot.AppName),
-	}, nil
+	appID = strings.TrimSpace(st.AppID)
+	openID = strings.TrimSpace(st.Identities.Bot.OpenID)
+	appName = strings.TrimSpace(st.Identities.Bot.AppName)
+	if appID == "" && openID == "" && appName == "" {
+		return "", "", "", errors.New("auth status missing bot identity fields")
+	}
+	return appID, openID, appName, nil
 }
 
 // Consume 启动一个 `lark-cli --profile <p> event consume <eventKey> --as bot` 长连接子进程，

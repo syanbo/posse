@@ -1703,6 +1703,7 @@ func (d *Daemon) discStop(ctx context.Context, raw json.RawMessage) (any, error)
 	if x.State == store.ExecStarting {
 		return nil, rpc.Errorf(rpc.CodeConflict, "execution %s is still starting; try again in a moment", x.ID)
 	}
+	d.freezeExecModel(x.ID, x.Agent, x.Worker)
 	d.finalizeTraceAsync(x.ID, x.Worker)
 	d.store.EndTask(x.TaskID, store.TaskStopped, nil, store.ExecStopped, "stopped by the user", false, time.Now())
 	d.closeTerminal(x.Worker, 2*time.Second)
@@ -2390,6 +2391,7 @@ func (d *Daemon) discDone(t store.Task, p taskDoneParams) (any, error) {
 	case err != nil:
 		return nil, discError(err)
 	}
+	d.freezeExecModel(p.Execution, t.Agent, t.Worker)
 	d.finalizeTraceAsync(p.Execution, t.Worker)
 	d.taskNotify()
 	d.discKick()

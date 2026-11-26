@@ -54,22 +54,24 @@ type session struct {
 	Command     []string
 	CreatedAt   time.Time
 
-	nameMu         sync.Mutex // 改名写库单独串行，不能让数据库等待占住 PTY 回调用的 mu
-	resumeMu       sync.Mutex // 恢复记录写库单独串行，避免并发覆盖或持 mu 等 SQLite
-	mu             sync.Mutex
-	agent          string // 终端里的 agent：启动时指定的，或之后在前台认出来的
-	agentGen       uint64 // agent 实例代际，启动、切换或退出递增，用来挡住过期的退出和标题事件
-	hooked         bool   // agent 是 posse 启动的那个，带着注入的 hooks
-	agentPg        int    // agent 的进程组（组长就是 agent 进程），在前台认出它或收到 hook 时记下，0 是还不知道
-	fg             int    // 上次检查时的前台进程组
-	agyDir         string
-	agyDirs        []string
-	agyRecordedSID string
-	agyReportMu    sync.Mutex
-	agyReportPG    int
-	agyReportAt    time.Time
-	agyReportSID   string
-	agyReportTitle string
+	nameMu          sync.Mutex // 改名写库单独串行，不能让数据库等待占住 PTY 回调用的 mu
+	resumeMu        sync.Mutex // 恢复记录写库单独串行，避免并发覆盖或持 mu 等 SQLite
+	mu              sync.Mutex
+	agent           string // 终端里的 agent：启动时指定的，或之后在前台认出来的
+	agentGen        uint64 // agent 实例代际，启动、切换或退出递增，用来挡住过期的退出和标题事件
+	hooked          bool   // agent 是 posse 启动的那个，带着注入的 hooks
+	agentPg         int    // agent 的进程组（组长就是 agent 进程），在前台认出它或收到 hook 时记下，0 是还不知道
+	fg              int    // 上次检查时的前台进程组
+	agyDir          string
+	agyDirs         []string
+	agyRecordedSID  string
+	agyReportMu     sync.Mutex
+	agyReportPG     int
+	agyReportAt     time.Time
+	agyReportSID    string
+	agyReportTitle  string
+	agyReportModel  string
+	agyReportEffort string
 	// grok 上次空闲时标题里的会话名：工作中的标题只是状态，手机的标签名用它
 	grokName string
 	// agentTitle 是当前 agent 运行期间看到过的最后一个非空终端标题，agent 退出回 shell 时用来留住手机标签名。

@@ -461,3 +461,70 @@ func TestDaemonLarkBotRPC(t *testing.T) {
 		t.Fatalf("expected empty bots after delete, got %+v err=%v", cfg.Bots, err)
 	}
 }
+
+func TestReadDefaultAgentModel(t *testing.T) {
+	t.Setenv("CODEX_HOME", "")
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".gemini", "antigravity-cli"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".gemini", "antigravity-cli", "settings.json"), []byte(`{"model":"Gemini 4 Neon (Medium)"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".codex", "config.toml"), []byte("model = \"gpt-6.2-sol\"\nmodel_reasoning_effort = \"high\"\n[projects.\"x\"]\nmodel = \"ignored\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(`{"model":"claude-opus-4-8","modelSettings":{"claude-opus-4-8":{"effortLevel":"xhigh"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if m, e := readDefaultAgentModel(home, "antigravity", ""); m != "Gemini 4 Neon (Medium)" || e != "" {
+		t.Fatalf("antigravity default = (%q, %q)", m, e)
+	}
+	if m, e := readDefaultAgentModel(home, "codex", ""); m != "gpt-6.2-sol" || e != "high" {
+		t.Fatalf("codex default = (%q, %q)", m, e)
+	}
+	if m, e := readDefaultAgentModel(home, "claude", ""); m != "claude-opus-4-8" || e != "xhigh" {
+		t.Fatalf("claude default = (%q, %q)", m, e)
+	}
+	// Claude 显式指定非默认模型时，应读取该模型在 modelSettings 里的档位
+	if err := os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(`{"model":"claude-opus-4-8","modelSettings":{"claude-fable-5-1":{"effortLevel":"high"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, e := readDefaultAgentModel(home, "claude", "claude-fable-5-1"); e != "high" {
+		t.Fatalf("claude explicit non-default model effort = %q, want high", e)
+	}
+	// Codex 带引号键和字符串内的 # 注释符
+	if err := os.WriteFile(filepath.Join(home, ".codex", "config.toml"), []byte("\"model\" = \"gpt-6.2#preview\" # inline\nmodel_reasoning_effort = 'ultra'\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if m, e := readDefaultAgentModel(home, "codex", ""); m != "gpt-6.2#preview" || e != "ultra" {
+		t.Fatalf("codex quoted/# parse = (%q, %q)", m, e)
+	}
+
+	// 冻结执行模型：结束后（active=false）即使无 live worker 也返回冻结的实时模型；
+	// 且若实时/冻结模型本身无档位（effort=""），绝不跨模型拼接旧启动 cfgEffort。
+	d, _, _ := newDiscDaemon(t)
+	d.recordExecModel("x_frozen", "Gemini 4 Neon", "high")
+	if m, e := d.resolveLarkModel("x_frozen", "antigravity", "fallback-model", "low", "", false); m != "Gemini 4 Neon" || e != "high" {
+		t.Fatalf("frozen exec model = (%q, %q), want (Gemini 4 Neon, high)", m, e)
+	}
+	d.recordExecModel("x_frozen_no_effort", "Gemini Flash", "")
+	if m, e := d.resolveLarkModel("x_frozen_no_effort", "antigravity", "old-model", "high", "", false); m != "Gemini Flash" || e != "" {
+		t.Fatalf("frozen model without effort must not inherit old cfgEffort, got (%q, %q)", m, e)
+	}
+	// 活跃采样后冻结，冻结后迟到的活跃采样不得覆盖终态
+	d.recordExecModel("x_sample_then_freeze", "Model A", "low")
+	d.freezeExecModel("x_sample_then_freeze", "antigravity", "")
+	d.recordExecModel("x_sample_then_freeze", "Model B", "high")
+	if m, e := d.resolveLarkModel("x_sample_then_freeze", "antigravity", "", "", "", false); m != "Model A" || e != "low" {
+		t.Fatalf("late active sample must not overwrite frozen model, got (%q, %q)", m, e)
+	}
+}

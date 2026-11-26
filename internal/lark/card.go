@@ -104,6 +104,63 @@ func FormatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dh %dm", hours, m)
 }
 
+// FormatModelLabel 将 agent 名、模型名和思考档位格式化为飞书卡片展示标签：
+// 优先显示模型名与思考档位；若模型名末尾已自带相同档位括号（如 "Gemini 4 Neon (Medium)"），
+// 不重复追加；若配置了不同档位则替换末尾旧档位括号；无模型名时回退到 agent 名。
+func FormatModelLabel(agentName, model, effort string) string {
+	agentName = strings.TrimSpace(agentName)
+	model = stripContextParen(strings.TrimSpace(model))
+	effort = strings.TrimSpace(effort)
+	if model == "" {
+		if agentName != "" && effort != "" {
+			return fmt.Sprintf("%s (%s)", agentName, effort)
+		}
+		return agentName
+	}
+	if effort == "" {
+		return model
+	}
+	base, trailing := splitTrailingEffortParen(model)
+	if trailing != "" {
+		if strings.EqualFold(trailing, effort) {
+			return model
+		}
+		return fmt.Sprintf("%s (%s)", base, effort)
+	}
+	return fmt.Sprintf("%s (%s)", model, effort)
+}
+
+func stripContextParen(s string) string {
+	if !strings.HasSuffix(s, ")") {
+		return s
+	}
+	open := strings.LastIndex(s, "(")
+	if open < 0 {
+		return s
+	}
+	inner := strings.ToLower(strings.TrimSpace(s[open+1 : len(s)-1]))
+	if strings.Contains(inner, "context") {
+		return strings.TrimSpace(s[:open])
+	}
+	return s
+}
+
+func splitTrailingEffortParen(s string) (base, effort string) {
+	if !strings.HasSuffix(s, ")") {
+		return s, ""
+	}
+	open := strings.LastIndex(s, "(")
+	if open <= 0 {
+		return s, ""
+	}
+	inner := strings.TrimSpace(s[open+1 : len(s)-1])
+	switch strings.ToLower(inner) {
+	case "low", "medium", "med", "high", "xhigh", "extra", "max", "ultra", "minimal", "none":
+		return strings.TrimSpace(s[:open]), inner
+	}
+	return s, ""
+}
+
 func cardTitle(botName, agentName, wsLabel, state string) string {
 	parts := []string{}
 	if botName != "" {
