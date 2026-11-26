@@ -235,6 +235,9 @@ func BuildProgressClosedCard(botName, agentName, wsLabel, outcome, elapsed strin
 	case "stopped", "cancelled":
 		label = tr("Stopped")
 		note = ""
+	case "merged":
+		label = tr("Merged")
+		note = tr("Merged into the previous round.")
 	}
 	parts := []string{label}
 	if elapsed != "" {

@@ -10660,6 +10660,46 @@
   "@larkFieldAgent": {
     "description": "Form label for choosing the bot's default agent."
   },
+  "larkFieldModel": "Model",
+  "@larkFieldModel": {
+    "description": "Form label for choosing the model of a Feishu bot or group override."
+  },
+  "larkFieldEffort": "Reasoning Effort",
+  "@larkFieldEffort": {
+    "description": "Form label for choosing the reasoning effort of a Feishu bot or group override."
+  },
+  "larkModelAgentDefault": "Agent Default",
+  "@larkModelAgentDefault": {
+    "description": "Option meaning use the agent's own default model."
+  },
+  "larkModelCustom": "Custom…",
+  "@larkModelCustom": {
+    "description": "Option to enter a custom model ID manually."
+  },
+  "larkModelCustomPlaceholder": "Enter model ID…",
+  "@larkModelCustomPlaceholder": {
+    "description": "Placeholder text for the custom model ID input."
+  },
+  "larkEffortDefault": "Default",
+  "@larkEffortDefault": {
+    "description": "Option meaning use the default reasoning effort."
+  },
+  "larkModelLoading": "Loading models…",
+  "@larkModelLoading": {
+    "description": "Status hint while fetching available models from the local agent CLI."
+  },
+  "larkEffortIncludedInModel": "Reasoning effort is included in the model name.",
+  "@larkEffortIncludedInModel": {
+    "description": "Hint shown for agents like Cursor whose model IDs already encode reasoning effort."
+  },
+  "larkEffortNotSupported": "This model does not support separate reasoning effort.",
+  "@larkEffortNotSupported": {
+    "description": "Hint shown when the selected model has no configurable reasoning effort levels."
+  },
+  "larkModelPinAgentHint": "Select a specific Agent above to override model or reasoning effort.",
+  "@larkModelPinAgentHint": {
+    "description": "Hint shown in a group override when Agent is set to Inherit."
+  },
   "larkFieldPermission": "Tool Approval",
   "@larkFieldPermission": {
     "description": "Form label for tool permission mode on a Feishu bot."

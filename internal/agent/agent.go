@@ -46,6 +46,66 @@ type Model struct {
 	ExternalApproval bool `json:"-"`
 }
 
+// ValidateModel 校验某家 agent 与指定模型/思考深度的组合是否合法（供配置保存与界面拦截）。
+func ValidateModel(agentName string, m Model) error {
+	name := NormalizeName(agentName)
+	model := strings.TrimSpace(m.Name)
+	effort := strings.ToLower(strings.TrimSpace(m.Effort))
+	switch name {
+	case "zcode":
+		if model != "" || effort != "" {
+			return fmt.Errorf("select the model and effort in the ZCode terminal")
+		}
+	case "cursor":
+		if effort != "" {
+			return fmt.Errorf("cursor selects reasoning effort via the model ID; leave effort empty")
+		}
+	case "antigravity":
+		if model != "" && effort != "" {
+			if _, suf, ok := SplitAntigravityModelEffort(model); ok && !strings.EqualFold(suf, effort) {
+				return fmt.Errorf("model %q conflicts with effort %q", model, effort)
+			}
+		}
+	}
+	return nil
+}
+
+// ValidateModelWithCatalog 结合已发现的模型目录校验已知模型是否支持指定思考深度；
+// 目录未加载或模型不在目录中（自定义模型）时放行，仅校验基础规则。
+func ValidateModelWithCatalog(agentName string, m Model, catalog *ModelList) error {
+	if err := ValidateModel(agentName, m); err != nil {
+		return err
+	}
+	if catalog == nil || len(catalog.Models) == 0 {
+		return nil
+	}
+	model := strings.TrimSpace(m.Name)
+	effort := strings.ToLower(strings.TrimSpace(m.Effort))
+	if model == "" || effort == "" {
+		return nil
+	}
+	lookup := model
+	if NormalizeName(agentName) == "antigravity" {
+		if base, _, ok := SplitAntigravityModelEffort(model); ok {
+			lookup = base
+		}
+	}
+	for _, opt := range catalog.Models {
+		if strings.EqualFold(opt.ID, lookup) {
+			if len(opt.Efforts) == 0 {
+				return fmt.Errorf("model %q does not support reasoning effort", opt.ID)
+			}
+			for _, ef := range opt.Efforts {
+				if strings.EqualFold(ef, effort) {
+					return nil
+				}
+			}
+			return fmt.Errorf("model %q does not support effort %q", opt.ID, effort)
+		}
+	}
+	return nil
+}
+
 // args 是 agent 启动参数里的模型部分。Cursor 没有单独的思考深度参数，只能写进模型名的方括号。
 func (m Model) args(agentName string) ([]string, error) {
 	var parts []string

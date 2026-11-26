@@ -289,7 +289,20 @@ func (d *Daemon) larkBotSave(_ context.Context, raw json.RawMessage) (any, error
 		}
 	}
 	if !hasPrev {
+		if err := d.validateEffectiveLarkBot(bot); err != nil {
+			return nil, rpc.Errorf(rpc.CodeBadRequest, "%s", err.Error())
+		}
 		cfg.Bots = append(cfg.Bots, bot)
+	} else {
+		if err := d.validateEffectiveLarkBot(bot); err != nil {
+			return nil, rpc.Errorf(rpc.CodeBadRequest, "%s", err.Error())
+		}
+		for i := range cfg.Bots {
+			if cfg.Bots[i].ID == bot.ID {
+				cfg.Bots[i] = bot
+				break
+			}
+		}
 	}
 	cfg.Revision++
 	if err := lark.SaveConfig(d.cfg.Home, cfg); err != nil {
@@ -494,6 +507,9 @@ func (d *Daemon) mutateLarkChatOverrideOpts(botID, chatID string, createOnly boo
 		nextBot.Chats = append(nextBot.Chats, cur)
 	}
 	nextBot = lark.NormalizeBot(nextBot)
+	if err := d.validateEffectiveLarkBot(nextBot); err != nil {
+		return lark.BotConfig{}, rpc.Errorf(rpc.CodeBadRequest, "%s", err.Error())
+	}
 	cfg.Bots[idx] = nextBot
 	cfg.Revision++
 	if err := lark.SaveConfig(d.cfg.Home, cfg); err != nil {
@@ -753,16 +769,20 @@ func (h larkHost) EnsureDiscussion(bot lark.BotConfig, chatID, chatType, threadK
 		return store.LarkBinding{}, err
 	}
 	agentName := bot.Agent
+	modelName := bot.Model
+	effortLevel := bot.Effort
 	if !agent.CanJoinDiscussion(agentName) {
 		agentName = "antigravity"
+		modelName = ""
+		effortLevel = ""
 	}
 	m := store.Member{
 		ID:          store.NewID("mb_"),
 		Discussion:  key,
 		Name:        bot.Name,
 		Agent:       agentName,
-		Model:       bot.Model,
-		Effort:      bot.Effort,
+		Model:       modelName,
+		Effort:      effortLevel,
 		WorkspaceID: w.ID,
 		Role:        bot.Role,
 		Owner:       id.ID,
@@ -806,6 +826,12 @@ func (h larkHost) SwitchAgent(b store.LarkBinding, agentName, model string) (sto
 	m, err := h.d.store.Member(b.MemberID)
 	if err != nil {
 		return b, err
+	}
+	if m.Agent != agentName {
+		m.Model = ""
+		m.Effort = ""
+	} else if model != "" && m.Model != model {
+		m.Effort = ""
 	}
 	m.Agent = agentName
 	if model != "" {
@@ -862,6 +888,43 @@ func (h larkHost) ResetBinding(botID, chatID, threadKey string) error {
 		_ = h.d.store.SetArchived(b.DiscussionKey, true, time.Now())
 	}
 	return h.d.store.DeactivateLarkBinding(botID, chatID, threadKey)
+}
+
+func (h larkHost) MemberModel(memberID string) (model, effort string, ok bool) {
+	if memberID == "" {
+		return "", "", false
+	}
+	if m, err := h.d.store.Member(memberID); err == nil {
+		return m.Model, m.Effort, true
+	}
+	return "", "", false
+}
+
+// validateEffectiveLarkBot 校验机器人自身及每个群分身合并后的模型/思考深度，
+// 对已缓存的模型目录额外检查已知模型是否支持目标档位。
+func (d *Daemon) validateEffectiveLarkBot(bot lark.BotConfig) error {
+	if err := lark.ValidateEffectiveBot(bot); err != nil {
+		return err
+	}
+	norm := lark.NormalizeBot(bot)
+	if cat, ok := d.cachedAgentModels(norm.Agent); ok {
+		if err := agent.ValidateModelWithCatalog(norm.Agent, agent.Model{Name: norm.Model, Effort: norm.Effort}, &cat); err != nil {
+			return err
+		}
+	}
+	for _, ch := range norm.Chats {
+		eff, _ := norm.EffectiveForChat(ch.ChatID)
+		if cat, ok := d.cachedAgentModels(eff.Agent); ok {
+			if err := agent.ValidateModelWithCatalog(eff.Agent, agent.Model{Name: eff.Model, Effort: eff.Effort}, &cat); err != nil {
+				label := ch.Name
+				if label == "" {
+					label = ch.ChatID
+				}
+				return fmt.Errorf("group %s: %w", label, err)
+			}
+		}
+	}
+	return nil
 }
 
 func (h larkHost) PostFromLark(b store.LarkBinding, body, metaHeader string, attachments []string) (string, error) {
@@ -967,10 +1030,8 @@ func (h larkHost) ExecutionSnapshot(execID string) (lark.ExecSnap, bool) {
 	cfgModel, cfgEffort := x.Model, x.Effort
 	if m, err := h.d.store.Member(x.Member); err == nil {
 		snap.MemberName = m.Name
-		if cfgModel == "" {
+		if cfgModel == "" && cfgEffort == "" && (m.Agent == "" || m.Agent == x.Agent) {
 			cfgModel = m.Model
-		}
-		if cfgEffort == "" {
 			cfgEffort = m.Effort
 		}
 	}
@@ -1106,15 +1167,15 @@ func (d *Daemon) configuredModelForTerminal(termID string) (model, effort string
 	if termID == "" {
 		return "", ""
 	}
+	execFound := false
 	if xs, err := d.store.ActiveExecutions(); err == nil {
 		for _, x := range xs {
 			if x.Worker == termID {
+				execFound = true
 				model, effort = x.Model, x.Effort
-				if m, merr := d.store.Member(x.Member); merr == nil {
-					if model == "" {
+				if model == "" && effort == "" {
+					if m, merr := d.store.Member(x.Member); merr == nil && (m.Agent == "" || m.Agent == x.Agent) {
 						model = m.Model
-					}
-					if effort == "" {
 						effort = m.Effort
 					}
 				}
@@ -1122,29 +1183,31 @@ func (d *Daemon) configuredModelForTerminal(termID string) (model, effort string
 			}
 		}
 	}
-	if b, ok := (larkHost{d: d}).BindingByTerminal(termID); ok {
-		if model == "" || effort == "" {
+	if !execFound {
+		if b, ok := (larkHost{d: d}).BindingByTerminal(termID); ok {
+			memberAgent := b.Agent
+			memberFound := false
 			if m, err := d.store.Member(b.MemberID); err == nil {
-				if model == "" {
-					model = m.Model
+				memberFound = true
+				if m.Agent != "" {
+					memberAgent = m.Agent
 				}
-				if effort == "" {
+				if model == "" && effort == "" {
+					model = m.Model
 					effort = m.Effort
 				}
 			}
-		}
-		if model == "" || effort == "" {
-			if gw := d.larkGateway(); gw != nil {
-				for _, bot := range gw.Config().Bots {
-					if bot.ID == b.BotID {
-						effBot, _ := bot.EffectiveForChat(b.ChatID)
-						if model == "" {
-							model = effBot.Model
+			if !memberFound && model == "" && effort == "" {
+				if gw := d.larkGateway(); gw != nil {
+					for _, bot := range gw.Config().Bots {
+						if bot.ID == b.BotID {
+							effBot, _ := bot.EffectiveForChat(b.ChatID)
+							if memberAgent == "" || effBot.Agent == memberAgent {
+								model = effBot.Model
+								effort = effBot.Effort
+							}
+							break
 						}
-						if effort == "" {
-							effort = effBot.Effort
-						}
-						break
 					}
 				}
 			}

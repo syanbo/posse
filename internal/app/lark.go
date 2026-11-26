@@ -33,12 +33,20 @@ type larkUIState struct {
 	profiles []lark.ProfileInfo
 	err      string
 
-	editing      bool
-	botEditGen   uint64
-	botWSPickSeq uint64
-	botWSPicking bool
-	botWSErr     string
-	draft        lark.BotConfig
+	editing        bool
+	botEditGen     uint64
+	botWSPickSeq   uint64
+	botWSPicking   bool
+	botWSErr       string
+	draft          lark.BotConfig
+	botModelMode   int // 1=使用 Agent 默认 | 2=列表指定 | 3=自定义
+	botModelText   string
+	botEffortMode  int // 1=默认 | 2=指定档位
+	botEffortText  string
+	botModelDirty  bool
+	botEffortDirty bool
+	botOrigModel   string
+	botOrigEffort  string
 
 	// 群分身编辑状态
 	chatEditing     bool
@@ -49,6 +57,15 @@ type larkUIState struct {
 	chatEditIsNew   bool
 	chatBotID       string
 	chatDraft       lark.ChatOverride
+	chatModelMode   int // 0=继承默认 | 1=使用 Agent 默认 | 2=列表指定 | 3=自定义
+	chatModelText   string
+	chatEffortMode  int // 0=继承默认 | 1=使用 Agent 默认 | 2=指定档位
+	chatEffortText  string
+	chatModelDirty  bool
+	chatEffortDirty bool
+	chatSplitSuffix bool // 仅展示拆分了旧 agy 带档位后缀的模型 ID；修改档位时同步落盘基础 ID
+	chatOrigModel   *string
+	chatOrigEffort  *string
 	chatNameAuto    bool // 当前显示名是否由选群自动填入，切换选中群时自动同步
 	chatRoleMode    int  // 0=继承默认 | 1=自定义 | 2=无角色
 	chatRoleText    string
@@ -61,6 +78,11 @@ type larkUIState struct {
 	chatListErr     string
 	chatListHasMore bool
 	chatList        []lark.ChatInfo
+
+	// 按 Agent 缓存的本机可用模型列表
+	models        map[string]agent.ModelList
+	modelsLoading map[string]bool
+	modelsReqID   map[string]uint64
 }
 
 func (a *app) loadLark() {
@@ -228,6 +250,56 @@ func (a *app) deleteLarkChat(botID, chatID string) {
 	}()
 }
 
+func (a *app) loadLarkAgentModels(agentName string, refresh bool) {
+	name := agent.NormalizeName(agentName)
+	if a.c == nil || name == "" {
+		return
+	}
+	l := &a.lark
+	if l.models == nil {
+		l.models = map[string]agent.ModelList{}
+	}
+	if l.modelsLoading == nil {
+		l.modelsLoading = map[string]bool{}
+	}
+	if l.modelsReqID == nil {
+		l.modelsReqID = map[string]uint64{}
+	}
+	if l.modelsLoading[name] {
+		return
+	}
+	if !refresh {
+		if _, ok := l.models[name]; ok {
+			return
+		}
+	}
+	l.modelsReqID[name]++
+	reqID := l.modelsReqID[name]
+	l.modelsLoading[name] = true
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 16*time.Second)
+		var out agent.ModelList
+		err := a.c.Call(ctx, "agent.models", map[string]any{
+			"agent":   name,
+			"refresh": refresh,
+		}, &out)
+		cancel()
+		a.update(func() {
+			if a.lark.modelsReqID[name] != reqID {
+				return
+			}
+			a.lark.modelsLoading[name] = false
+			if err != nil {
+				out = agent.ModelList{Agent: name, Error: err.Error()}
+			}
+			if out.Agent == "" {
+				out.Agent = name
+			}
+			a.lark.models[name] = out
+		})
+	}()
+}
+
 func (a *app) openLarkBotEditor(bot lark.BotConfig) {
 	l := &a.lark
 	a.closeLarkChatEditor()
@@ -236,7 +308,34 @@ func (a *app) openLarkBotEditor(bot lark.BotConfig) {
 	l.botWSPicking = false
 	l.botWSErr = ""
 	l.draft = lark.CloneBot(bot)
+	l.botOrigModel = l.draft.Model
+	l.botOrigEffort = l.draft.Effort
+	l.botModelDirty = false
+	l.botEffortDirty = false
+	dispModel, dispEffort := l.draft.Model, l.draft.Effort
+	// 兼容旧配置：agy 带档位后缀的完整 ID 仅用于展示拆分为基础模型与档位，未改模型时不改写原值
+	if l.draft.Agent == "antigravity" && dispModel != "" && dispEffort == "" {
+		if base, ef, ok := agent.SplitAntigravityModelEffort(dispModel); ok {
+			dispModel = base
+			dispEffort = ef
+		}
+	}
+	if dispModel == "" {
+		l.botModelMode = 1
+		l.botModelText = ""
+	} else {
+		l.botModelMode = 2
+		l.botModelText = dispModel
+	}
+	if dispEffort == "" {
+		l.botEffortMode = 1
+		l.botEffortText = ""
+	} else {
+		l.botEffortMode = 2
+		l.botEffortText = dispEffort
+	}
 	l.editing = true
+	a.loadLarkAgentModels(l.draft.Agent, false)
 }
 
 func (a *app) closeLarkBotEditor() {
@@ -268,6 +367,61 @@ func (a *app) openLarkChatEditor(botID string, ov lark.ChatOverride, isNew bool)
 	l.chatEditIsNew = isNew
 	l.chatBotID = botID
 	l.chatDraft = lark.NormalizeChatOverride(ov)
+	l.chatOrigModel = cloneOptStr(l.chatDraft.Model)
+	l.chatOrigEffort = cloneOptStr(l.chatDraft.Effort)
+	l.chatModelDirty = false
+	l.chatEffortDirty = false
+	l.chatSplitSuffix = false
+	var parentAgent string
+	for _, b := range l.bots {
+		if b.ID == botID {
+			parentAgent = b.Agent
+			break
+		}
+	}
+	effAgent := l.chatDraft.Agent
+	if effAgent == "" {
+		effAgent = parentAgent
+	}
+	dispModelPtr := cloneOptStr(l.chatDraft.Model)
+	dispEffortPtr := cloneOptStr(l.chatDraft.Effort)
+	// 兼容旧配置：agy 带档位后缀的完整 ID 仅用于展示拆分，未改模型时不改写原三态
+	if l.chatDraft.Agent == "antigravity" && dispModelPtr != nil && *dispModelPtr != "" &&
+		(dispEffortPtr == nil || *dispEffortPtr == "") {
+		if base, ef, ok := agent.SplitAntigravityModelEffort(*dispModelPtr); ok {
+			dispModelPtr = &base
+			dispEffortPtr = &ef
+			l.chatSplitSuffix = true
+		}
+	}
+	if dispModelPtr == nil {
+		if l.chatDraft.Agent != "" && l.chatDraft.Agent != parentAgent {
+			l.chatModelMode = 1
+		} else {
+			l.chatModelMode = 0
+		}
+		l.chatModelText = ""
+	} else if *dispModelPtr == "" {
+		l.chatModelMode = 1
+		l.chatModelText = ""
+	} else {
+		l.chatModelMode = 2
+		l.chatModelText = *dispModelPtr
+	}
+	if dispEffortPtr == nil {
+		if l.chatDraft.Agent != "" && l.chatDraft.Agent != parentAgent {
+			l.chatEffortMode = 1
+		} else {
+			l.chatEffortMode = 0
+		}
+		l.chatEffortText = ""
+	} else if *dispEffortPtr == "" {
+		l.chatEffortMode = 1
+		l.chatEffortText = ""
+	} else {
+		l.chatEffortMode = 2
+		l.chatEffortText = *dispEffortPtr
+	}
 	l.chatNameAuto = isNew && strings.TrimSpace(ov.Name) == ""
 	l.chatSearch = ""
 	l.chatShowManual = !isNew
@@ -288,6 +442,7 @@ func (a *app) openLarkChatEditor(botID string, ov lark.ChatOverride, isNew bool)
 		l.chatListErr = ""
 		a.loadLarkBotChats(botID)
 	}
+	a.loadLarkAgentModels(effAgent, false)
 }
 
 func (a *app) toggleLarkBot(id string, on bool) {
@@ -412,6 +567,9 @@ func (a *app) larkSettings(c *ui.Context) {
 						ui.Text(c, wsLabel).FontSize(fsSmall).TextColor(t.TextMuted)
 					}
 					ui.Text(c, agentTitle(bot.Agent)).FontSize(fsSmall).TextColor(t.TextMuted)
+					if ml := larkModelSummary(m, bot.Model, bot.Effort); ml != "" {
+						ui.Text(c, ml).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(1)
+					}
 					if bot.GroupContextCount > 0 {
 						ui.Text(c, m.LarkGroupContextCount(bot.GroupContextCount)).FontSize(fsSmall).TextColor(t.TextMuted)
 					}
@@ -460,6 +618,9 @@ func (a *app) larkSettings(c *ui.Context) {
 										ui.Text(c, wl).FontSize(fsSmall).TextColor(t.TextMuted)
 									}
 									ui.Text(c, agentTitle(eff.Agent)).FontSize(fsSmall).TextColor(t.TextMuted)
+									if ml := larkModelSummary(m, eff.Model, eff.Effort); ml != "" {
+										ui.Text(c, ml).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(1)
+									}
 									if ov.Role != nil {
 										roleTag := m.LarkRoleCustom()
 										if *ov.Role == "" {
@@ -565,12 +726,22 @@ func (a *app) larkBotEditor(c *ui.Context) {
 			}
 			settingsRow(c, m.LarkFieldAgent(), func() {
 				if ui.Select(c.Key("lark-f-agent"), &agSel, agLabels).Changed() {
-					if ag := agByLabel[agSel]; ag != "" {
+					if ag := agByLabel[agSel]; ag != "" && ag != d.Agent {
 						d.Agent = ag
+						d.Model = ""
+						d.Effort = ""
+						a.lark.botModelMode = 1
+						a.lark.botModelText = ""
+						a.lark.botEffortMode = 1
+						a.lark.botEffortText = ""
+						a.lark.botModelDirty = true
+						a.lark.botEffortDirty = true
+						a.loadLarkAgentModels(ag, false)
 					}
 				}
 			})
 		}
+		a.larkModelEffortFields(c, "lark-f", d.Agent, "", "", false, false, false, &a.lark.botModelMode, &a.lark.botModelText, &a.lark.botModelDirty, &a.lark.botEffortMode, &a.lark.botEffortText, &a.lark.botEffortDirty)
 		permIdx := 0
 		if d.PermissionMode == lark.PermSkip {
 			permIdx = 1
@@ -651,7 +822,23 @@ func (a *app) larkBotEditor(c *ui.Context) {
 			}
 			valid := strings.TrimSpace(d.Profile) != ""
 			if valid && !a.lark.saving && !a.lark.botWSPicking && pressable(accentButton(c.Key("lark-save"), m.LarkSave())).Clicked() {
-				a.saveLarkBot(*d)
+				out := *d
+				if !a.lark.botModelDirty && !a.lark.botEffortDirty {
+					out.Model = a.lark.botOrigModel
+					out.Effort = a.lark.botOrigEffort
+				} else {
+					if a.lark.botModelMode == 1 {
+						out.Model = ""
+					} else {
+						out.Model = strings.TrimSpace(a.lark.botModelText)
+					}
+					if a.lark.botEffortMode == 1 || d.Agent == "cursor" {
+						out.Effort = ""
+					} else {
+						out.Effort = strings.ToLower(strings.TrimSpace(a.lark.botEffortText))
+					}
+				}
+				a.saveLarkBot(out)
 			}
 		})
 	})
@@ -794,13 +981,43 @@ func (a *app) larkChatEditor(c *ui.Context) {
 				if ui.Select(c.Key("lark-cf-agent"), &agSel, agLabels).Changed() {
 					for i, lbl := range agLabels {
 						if lbl == agSel {
-							d.Agent = agIDs[i]
+							if agIDs[i] != d.Agent {
+								d.Agent = agIDs[i]
+								if d.Agent != "" && d.Agent != parentBot.Agent {
+									l.chatModelMode = 1
+									l.chatEffortMode = 1
+								} else {
+									l.chatModelMode = 0
+									l.chatEffortMode = 0
+								}
+								l.chatModelText = ""
+								l.chatEffortText = ""
+								l.chatModelDirty = true
+								l.chatEffortDirty = true
+								effAg := d.Agent
+								if effAg == "" {
+									effAg = parentBot.Agent
+								}
+								a.loadLarkAgentModels(effAg, false)
+							}
 							break
 						}
 					}
 				}
 			})
 		}
+
+		// 4b. 模型与思考深度
+		effAgent := d.Agent
+		if effAgent == "" {
+			effAgent = parentBot.Agent
+		}
+		canInheritModel := d.Agent == "" || d.Agent == parentBot.Agent
+		parentModel, parentEffort := "", ""
+		if canInheritModel {
+			parentModel, parentEffort = parentBot.Model, parentBot.Effort
+		}
+		a.larkModelEffortFields(c, "lark-cf", effAgent, parentModel, parentEffort, true, d.Agent == "", canInheritModel, &l.chatModelMode, &l.chatModelText, &l.chatModelDirty, &l.chatEffortMode, &l.chatEffortText, &l.chatEffortDirty)
 
 		// 5. 免 @ 直接触发开关
 		ui.Column(c).Gap(2).Children(func() {
@@ -908,6 +1125,54 @@ func (a *app) larkChatEditor(c *ui.Context) {
 			valid := strings.TrimSpace(d.ChatID) != ""
 			if valid && !l.saving && !l.chatWSPicking && pressable(accentButton(c.Key("lark-chat-save"), m.LarkSave())).Clicked() {
 				out := *d
+				if !l.chatModelDirty && !l.chatEffortDirty {
+					out.Model = cloneOptStr(l.chatOrigModel)
+					out.Effort = cloneOptStr(l.chatOrigEffort)
+				} else {
+					if !l.chatModelDirty && !(l.chatEffortDirty && l.chatSplitSuffix) {
+						out.Model = cloneOptStr(l.chatOrigModel)
+					} else {
+						switch l.chatModelMode {
+						case 0:
+							if d.Agent == "" || d.Agent == parentBot.Agent {
+								out.Model = nil
+							} else {
+								empty := ""
+								out.Model = &empty
+							}
+						case 1:
+							empty := ""
+							out.Model = &empty
+						default:
+							v := strings.TrimSpace(l.chatModelText)
+							out.Model = &v
+						}
+					}
+					if !l.chatEffortDirty {
+						out.Effort = cloneOptStr(l.chatOrigEffort)
+					} else {
+						switch l.chatEffortMode {
+						case 0:
+							if d.Agent == "" || d.Agent == parentBot.Agent {
+								out.Effort = nil
+							} else {
+								empty := ""
+								out.Effort = &empty
+							}
+						case 1:
+							empty := ""
+							out.Effort = &empty
+						default:
+							if effAgent == "cursor" {
+								empty := ""
+								out.Effort = &empty
+							} else {
+								v := strings.ToLower(strings.TrimSpace(l.chatEffortText))
+								out.Effort = &v
+							}
+						}
+					}
+				}
 				switch l.chatRoleMode {
 				case 0:
 					out.Role = nil
@@ -921,6 +1186,314 @@ func (a *app) larkChatEditor(c *ui.Context) {
 				a.saveLarkChat(l.chatBotID, out, l.chatEditIsNew)
 			}
 		})
+	})
+}
+
+func cloneOptStr(p *string) *string {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
+func larkModelSummary(m locales.Messages, model, effort string) string {
+	model = strings.TrimSpace(model)
+	effort = strings.TrimSpace(effort)
+	if model == "" && effort == "" {
+		return ""
+	}
+	if model == "" {
+		return m.LarkModelAgentDefault() + " (" + effort + ")"
+	}
+	return lark.FormatModelLabel("", model, effort)
+}
+
+// larkModelEffortFields 渲染机器人或群分身编辑器里的「模型」与「思考深度」两行控件。
+// 渲染期不主动改写用户草稿；仅在用户显式切换模型/档位时更新草稿与脏标记。
+func (a *app) larkModelEffortFields(
+	c *ui.Context,
+	keyPrefix, agentName, parentModel, parentEffort string,
+	isChat, agentInherited, canInherit bool,
+	modelMode *int, modelText *string, modelDirty *bool,
+	effortMode *int, effortText *string, effortDirty *bool,
+) {
+	t, m := c.Theme(), L(c)
+	normAgent := agent.NormalizeName(agentName)
+	list := a.lark.models[normAgent]
+	loading := a.lark.modelsLoading[normAgent]
+
+	// 群分身且 Agent 选「继承」：只能选「继承默认」或「使用 Agent 默认」，防止父级换 Agent 后模型串扰
+	if isChat && agentInherited {
+		mLabels := []string{m.LarkInherit(), m.LarkModelAgentDefault()}
+		mSel := mLabels[0]
+		if *modelMode == 1 {
+			mSel = mLabels[1]
+		}
+		settingsRow(c, m.LarkFieldModel(), func() {
+			if ui.Select(c.Key(keyPrefix+"-model"), &mSel, mLabels).Changed() {
+				if mSel == mLabels[1] {
+					*modelMode = 1
+				} else {
+					*modelMode = 0
+				}
+				*modelText = ""
+				*modelDirty = true
+			}
+		})
+		eLabels := []string{m.LarkInherit(), m.LarkModelAgentDefault()}
+		eSel := eLabels[0]
+		if *effortMode == 1 {
+			eSel = eLabels[1]
+		}
+		ui.Column(c).Gap(2).Children(func() {
+			settingsRow(c, m.LarkFieldEffort(), func() {
+				if ui.Select(c.Key(keyPrefix+"-effort"), &eSel, eLabels).Changed() {
+					if eSel == eLabels[1] {
+						*effortMode = 1
+					} else {
+						*effortMode = 0
+					}
+					*effortText = ""
+					*effortDirty = true
+				}
+			})
+			ui.Text(c, m.LarkModelPinAgentHint()).FontSize(fsSmall).TextColor(t.TextMuted)
+		})
+		return
+	}
+
+	// 构造模型下拉项（按索引映射，避免重名标签串扰）
+	var mLabels []string
+	var mModes []int
+	var mIDs []string
+	if isChat && canInherit {
+		mLabels = append(mLabels, m.LarkInherit())
+		mModes = append(mModes, 0)
+		mIDs = append(mIDs, "")
+	}
+	mLabels = append(mLabels, m.LarkModelAgentDefault())
+	mModes = append(mModes, 1)
+	mIDs = append(mIDs, "")
+
+	labelCount := map[string]int{}
+	for _, opt := range list.Models {
+		lbl := opt.Label
+		if lbl == "" {
+			lbl = opt.ID
+		}
+		labelCount[lbl]++
+	}
+	var matchedOpt *agent.ModelOption
+	selectedIdx := 0
+	for i := range list.Models {
+		opt := list.Models[i]
+		lbl := opt.Label
+		if lbl == "" {
+			lbl = opt.ID
+		}
+		if labelCount[lbl] > 1 {
+			lbl = lbl + " (" + opt.ID + ")"
+		}
+		idx := len(mLabels)
+		mLabels = append(mLabels, lbl)
+		mModes = append(mModes, 2)
+		mIDs = append(mIDs, opt.ID)
+		if *modelMode == 2 && *modelText == opt.ID {
+			selectedIdx = idx
+			matchedOpt = &list.Models[i]
+		}
+	}
+	customIdx := len(mLabels)
+	mLabels = append(mLabels, m.LarkModelCustom())
+	mModes = append(mModes, 3)
+	mIDs = append(mIDs, "")
+
+	curModelMode := *modelMode
+	if curModelMode == 0 && !(isChat && canInherit) {
+		curModelMode = 1
+	}
+	switch curModelMode {
+	case 0:
+		selectedIdx = 0
+	case 1:
+		for i, md := range mModes {
+			if md == 1 {
+				selectedIdx = i
+				break
+			}
+		}
+	case 2:
+		if matchedOpt == nil && *modelText != "" {
+			selectedIdx = customIdx
+		}
+	case 3:
+		selectedIdx = customIdx
+	}
+
+	mSel := mLabels[selectedIdx]
+	ui.Column(c).Gap(6).Children(func() {
+		settingsRow(c, m.LarkFieldModel(), func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				if ui.Select(c.Key(keyPrefix+"-model"), &mSel, mLabels).Changed() {
+					for i, lbl := range mLabels {
+						if lbl == mSel {
+							*modelMode = mModes[i]
+							*modelDirty = true
+							if mModes[i] == 2 {
+								*modelText = mIDs[i]
+								// 切换到具体模型时，若当前有效档位（显式或继承自父级）不被新模型支持，切回默认
+								var newOpt *agent.ModelOption
+								for j := range list.Models {
+									if list.Models[j].ID == mIDs[i] {
+										newOpt = &list.Models[j]
+										break
+									}
+								}
+								if newOpt != nil {
+									effVal := ""
+									if *effortMode == 2 {
+										effVal = *effortText
+									} else if isChat && canInherit && *effortMode == 0 {
+										effVal = parentEffort
+									}
+									if effVal != "" && !slices.Contains(newOpt.Efforts, effVal) {
+										*effortMode = 1
+										*effortText = ""
+										*effortDirty = true
+									}
+								}
+							} else if mModes[i] <= 1 {
+								*modelText = ""
+							}
+							break
+						}
+					}
+				}
+				if !loading && pressable(textButton(c.Key(keyPrefix+"-model-refresh"), m.LarkRefresh())).Clicked() {
+					a.loadLarkAgentModels(normAgent, true)
+				}
+			})
+		})
+		if selectedIdx == customIdx {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Spacer(c)
+				before := *modelText
+				fieldInputSized(c.Key(keyPrefix+"-model-custom"), modelText, m.LarkModelCustomPlaceholder(), sz(280), sz(120))
+				if *modelText != before {
+					*modelDirty = true
+				}
+			})
+		}
+		if loading {
+			ui.Text(c, m.LarkModelLoading()).FontSize(fsSmall).TextColor(t.TextMuted)
+		} else if list.Error != "" {
+			ui.Text(c, errtext.Text(errors.New(list.Error))).FontSize(fsSmall).TextColor(t.Danger)
+		}
+	})
+
+	// 思考深度下拉（按当前 Agent 与已选模型过滤可用档位；不在渲染期清空已有草稿）
+	if normAgent == "cursor" {
+		ui.Column(c).Gap(2).Children(func() {
+			settingsRow(c, m.LarkFieldEffort(), func() {
+				ui.Text(c, m.LarkEffortIncludedInModel()).FontSize(fsSmall).TextColor(t.TextMuted)
+			})
+		})
+		return
+	}
+
+	// 群分身模型选「继承默认」时，按父级模型查找对应的档位能力（避免 Carbon 继承时误展示 xhigh）
+	effMatchedOpt := matchedOpt
+	if effMatchedOpt == nil && isChat && canInherit && curModelMode == 0 && parentModel != "" {
+		lookup := parentModel
+		if normAgent == "antigravity" {
+			if base, _, ok := agent.SplitAntigravityModelEffort(parentModel); ok {
+				lookup = base
+			}
+		}
+		for i := range list.Models {
+			if strings.EqualFold(list.Models[i].ID, lookup) {
+				effMatchedOpt = &list.Models[i]
+				break
+			}
+		}
+	}
+
+	var availEfforts []string
+	if effMatchedOpt != nil {
+		availEfforts = effMatchedOpt.Efforts
+	} else if len(list.Efforts) > 0 {
+		availEfforts = list.Efforts
+	} else {
+		availEfforts = agent.DefaultEfforts(normAgent)
+	}
+	inheritedConflict := isChat && canInherit && *effortMode == 0 && parentEffort != "" &&
+		effMatchedOpt != nil && !slices.Contains(availEfforts, parentEffort)
+	staleExplicit := *effortMode == 2 && *effortText != "" && !slices.Contains(availEfforts, *effortText)
+	if len(availEfforts) == 0 && !inheritedConflict && !staleExplicit {
+		settingsRow(c, m.LarkFieldEffort(), func() {
+			ui.Text(c, m.LarkEffortNotSupported()).FontSize(fsSmall).TextColor(t.TextMuted)
+		})
+		return
+	}
+
+	var eLabels []string
+	var eModes []int
+	var eVals []string
+	if isChat && canInherit {
+		eLabels = append(eLabels, m.LarkInherit())
+		eModes = append(eModes, 0)
+		eVals = append(eVals, "")
+	}
+	eLabels = append(eLabels, m.LarkEffortDefault())
+	eModes = append(eModes, 1)
+	eVals = append(eVals, "")
+	eSelectedIdx := 0
+	for _, ef := range availEfforts {
+		idx := len(eLabels)
+		eLabels = append(eLabels, ef)
+		eModes = append(eModes, 2)
+		eVals = append(eVals, ef)
+		if *effortMode == 2 && *effortText == ef {
+			eSelectedIdx = idx
+		}
+	}
+	// 保留尚未出现在候选中的已有档位草稿，避免加载中或刷新时静默丢失
+	if *effortMode == 2 && *effortText != "" && !slices.Contains(availEfforts, *effortText) {
+		eSelectedIdx = len(eLabels)
+		eLabels = append(eLabels, *effortText)
+		eModes = append(eModes, 2)
+		eVals = append(eVals, *effortText)
+	}
+	curEffortMode := *effortMode
+	if curEffortMode == 0 && !(isChat && canInherit) {
+		curEffortMode = 1
+	}
+	if curEffortMode == 1 {
+		for i, md := range eModes {
+			if md == 1 {
+				eSelectedIdx = i
+				break
+			}
+		}
+	}
+	eSel := eLabels[eSelectedIdx]
+	ui.Column(c).Gap(2).Children(func() {
+		settingsRow(c, m.LarkFieldEffort(), func() {
+			if ui.Select(c.Key(keyPrefix+"-effort"), &eSel, eLabels).Changed() {
+				for i, lbl := range eLabels {
+					if lbl == eSel {
+						*effortMode = eModes[i]
+						*effortText = eVals[i]
+						*effortDirty = true
+						break
+					}
+				}
+			}
+		})
+		if inheritedConflict || (len(availEfforts) == 0 && staleExplicit) {
+			ui.Text(c, m.LarkEffortNotSupported()).FontSize(fsSmall).TextColor(t.Danger)
+		}
 	})
 }
 

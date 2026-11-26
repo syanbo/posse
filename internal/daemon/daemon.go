@@ -458,11 +458,12 @@ type Daemon struct {
 	gitTrace  *gitTrace // 终端里的 git 命令，测试里为空
 	ln        *gateListener
 	handoff   handoffState
-	agents    agentScan     // 本机装了哪些 agent（agents.go）
-	disc      discState     // 讨论的调度（discussion.go）
-	collab    collabState   // 讨论的局域网协作（collab.go、collab_join.go）
-	perms     permissionHub // 手机与飞书共用的权限审批协调（permission.go）
-	lark      larkState     // 飞书多机器人网关（lark.go）
+	agents    agentScan        // 本机装了哪些 agent（agents.go）
+	models    agentModelsState // 本机各家 agent 可用模型缓存（models.go）
+	disc      discState        // 讨论的调度（discussion.go）
+	collab    collabState      // 讨论的局域网协作（collab.go、collab_join.go）
+	perms     permissionHub    // 手机与飞书共用的权限审批协调（permission.go）
+	lark      larkState        // 飞书多机器人网关（lark.go）
 
 	// zsh 集成和同名脚本（agent.WriteShellFiles）：写成功一次就不再写
 	shellMu     sync.Mutex
@@ -921,6 +922,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("collab.status", d.collabStatus)
 	srv.Handle("collab.quota", d.collabQuota)
 	srv.Handle("collab.rename", d.collabRename)
+	srv.Handle("agent.models", d.agentModelsRPC)
 	srv.Handle("lark.profiles", d.larkProfiles)
 	srv.Handle("lark.bots.list", d.larkBotsList)
 	srv.Handle("lark.bots.save", d.larkBotSave)

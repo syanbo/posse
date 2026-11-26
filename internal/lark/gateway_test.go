@@ -858,7 +858,7 @@ func TestGatewayOnExecFinishedInPlaceVsInterleaved(t *testing.T) {
 			SenderID: "ou_colleague", Content: "插一句话",
 		})
 		gw.OnExecFinished("self/d_oc_grp10", "x_1", "interrupted", "执行中断")
-		if len(fc.repliedTexts) != 1 || fc.repliedTexts[0].text != tr("Execution failed — tap the quote above for details") {
+		if len(fc.repliedTexts) != 1 || fc.repliedTexts[0].text != tr("Execution failed — tap the quote above for details")+" — 查一下" {
 			t.Fatalf("expected failure quote notice for interrupted outcome, got %+v", fc.repliedTexts)
 		}
 	})

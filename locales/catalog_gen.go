@@ -29951,6 +29951,152 @@ func (msgs Messages) LarkFieldAgent() string {
 	return Catalog.Format(msgs.locale, "larkFieldAgent", nil)
 }
 
+// LarkFieldModel says "Model"
+// in the language the app shows.
+//
+// Form label for choosing the model of a Feishu bot or group override.
+func LarkFieldModel() string { return In(i18n.Locale()).LarkFieldModel() }
+
+// LarkFieldModel says "Model"
+// in the language of msgs.
+//
+// Form label for choosing the model of a Feishu bot or group override.
+func (msgs Messages) LarkFieldModel() string {
+	return Catalog.Format(msgs.locale, "larkFieldModel", nil)
+}
+
+// LarkFieldEffort says "Reasoning Effort"
+// in the language the app shows.
+//
+// Form label for choosing the reasoning effort of a Feishu bot or group
+// override.
+func LarkFieldEffort() string { return In(i18n.Locale()).LarkFieldEffort() }
+
+// LarkFieldEffort says "Reasoning Effort"
+// in the language of msgs.
+//
+// Form label for choosing the reasoning effort of a Feishu bot or group
+// override.
+func (msgs Messages) LarkFieldEffort() string {
+	return Catalog.Format(msgs.locale, "larkFieldEffort", nil)
+}
+
+// LarkModelAgentDefault says "Agent Default"
+// in the language the app shows.
+//
+// Option meaning use the agent's own default model.
+func LarkModelAgentDefault() string { return In(i18n.Locale()).LarkModelAgentDefault() }
+
+// LarkModelAgentDefault says "Agent Default"
+// in the language of msgs.
+//
+// Option meaning use the agent's own default model.
+func (msgs Messages) LarkModelAgentDefault() string {
+	return Catalog.Format(msgs.locale, "larkModelAgentDefault", nil)
+}
+
+// LarkModelCustom says "Custom…"
+// in the language the app shows.
+//
+// Option to enter a custom model ID manually.
+func LarkModelCustom() string { return In(i18n.Locale()).LarkModelCustom() }
+
+// LarkModelCustom says "Custom…"
+// in the language of msgs.
+//
+// Option to enter a custom model ID manually.
+func (msgs Messages) LarkModelCustom() string {
+	return Catalog.Format(msgs.locale, "larkModelCustom", nil)
+}
+
+// LarkModelCustomPlaceholder says "Enter model ID…"
+// in the language the app shows.
+//
+// Placeholder text for the custom model ID input.
+func LarkModelCustomPlaceholder() string { return In(i18n.Locale()).LarkModelCustomPlaceholder() }
+
+// LarkModelCustomPlaceholder says "Enter model ID…"
+// in the language of msgs.
+//
+// Placeholder text for the custom model ID input.
+func (msgs Messages) LarkModelCustomPlaceholder() string {
+	return Catalog.Format(msgs.locale, "larkModelCustomPlaceholder", nil)
+}
+
+// LarkEffortDefault says "Default"
+// in the language the app shows.
+//
+// Option meaning use the default reasoning effort.
+func LarkEffortDefault() string { return In(i18n.Locale()).LarkEffortDefault() }
+
+// LarkEffortDefault says "Default"
+// in the language of msgs.
+//
+// Option meaning use the default reasoning effort.
+func (msgs Messages) LarkEffortDefault() string {
+	return Catalog.Format(msgs.locale, "larkEffortDefault", nil)
+}
+
+// LarkModelLoading says "Loading models…"
+// in the language the app shows.
+//
+// Status hint while fetching available models from the local agent CLI.
+func LarkModelLoading() string { return In(i18n.Locale()).LarkModelLoading() }
+
+// LarkModelLoading says "Loading models…"
+// in the language of msgs.
+//
+// Status hint while fetching available models from the local agent CLI.
+func (msgs Messages) LarkModelLoading() string {
+	return Catalog.Format(msgs.locale, "larkModelLoading", nil)
+}
+
+// LarkEffortIncludedInModel says "Reasoning effort is included in the model name."
+// in the language the app shows.
+//
+// Hint shown for agents like Cursor whose model IDs already encode
+// reasoning effort.
+func LarkEffortIncludedInModel() string { return In(i18n.Locale()).LarkEffortIncludedInModel() }
+
+// LarkEffortIncludedInModel says "Reasoning effort is included in the model name."
+// in the language of msgs.
+//
+// Hint shown for agents like Cursor whose model IDs already encode
+// reasoning effort.
+func (msgs Messages) LarkEffortIncludedInModel() string {
+	return Catalog.Format(msgs.locale, "larkEffortIncludedInModel", nil)
+}
+
+// LarkEffortNotSupported says "This model does not support separate reasoning effort."
+// in the language the app shows.
+//
+// Hint shown when the selected model has no configurable reasoning effort
+// levels.
+func LarkEffortNotSupported() string { return In(i18n.Locale()).LarkEffortNotSupported() }
+
+// LarkEffortNotSupported says "This model does not support separate reasoning effort."
+// in the language of msgs.
+//
+// Hint shown when the selected model has no configurable reasoning effort
+// levels.
+func (msgs Messages) LarkEffortNotSupported() string {
+	return Catalog.Format(msgs.locale, "larkEffortNotSupported", nil)
+}
+
+// LarkModelPinAgentHint says "Select a specific Agent above to override model or reasoning effort."
+// in the language the app shows.
+//
+// Hint shown in a group override when Agent is set to Inherit.
+func LarkModelPinAgentHint() string { return In(i18n.Locale()).LarkModelPinAgentHint() }
+
+// LarkModelPinAgentHint says "Select a specific Agent above to override model or reasoning effort."
+// in the language of msgs.
+//
+// Hint shown in a group override when Agent is set to Inherit.
+func (msgs Messages) LarkModelPinAgentHint() string {
+	return Catalog.Format(msgs.locale, "larkModelPinAgentHint", nil)
+}
+
 // LarkFieldPermission says "Tool Approval"
 // in the language the app shows.
 //

@@ -79,6 +79,7 @@ type activeCard struct {
 	replyTo     string
 	inThread    bool
 	cardMsgID   string
+	promptBrief string
 	lastJSON    string
 	interleaved bool
 	doneSeenAt  time.Time
@@ -199,16 +200,17 @@ type Gateway struct {
 	debounceMax        time.Duration    // 单次防抖最大等待上限
 	identityRetryDelay time.Duration    // 机器人身份暂时不可用时不确定 @ 消息的重判间隔；默认 3s
 
-	mu          sync.Mutex
-	parentCtx   context.Context
-	cfg         Config
-	runners     map[string]*botRunner
-	activeCards map[string]*activeCard       // execID -> 正在轮询更新的进度卡
-	activePerms map[string]*activePerm       // permID -> 正在等待审批的权限卡
-	qCards      map[string]questionMem       // questionID -> 提问卡片上下文
-	staged      map[stagedKey]*stagedBatch   // 单聊纯附件暂存，等待后续指令一并提交
-	debounced   map[stagedKey]*debounceBatch // 连续短文本入站防抖缓存
-	loopCancel  context.CancelFunc
+	mu           sync.Mutex
+	parentCtx    context.Context
+	cfg          Config
+	runners      map[string]*botRunner
+	activeCards  map[string]*activeCard       // execID -> 正在轮询更新的进度卡
+	promptBriefs map[string]string            // execID -> 原提问简短摘要，供重试后继续带出引用简介
+	activePerms  map[string]*activePerm       // permID -> 正在等待审批的权限卡
+	qCards       map[string]questionMem       // questionID -> 提问卡片上下文
+	staged       map[stagedKey]*stagedBatch   // 单聊纯附件暂存，等待后续指令一并提交
+	debounced    map[stagedKey]*debounceBatch // 连续短文本入站防抖缓存
+	loopCancel   context.CancelFunc
 }
 
 type questionMem struct {
@@ -700,19 +702,30 @@ func (g *Gateway) dispatchMessage(ctx context.Context, bot BotConfig, ev Message
 		DiscussionKey: binding.DiscussionKey,
 		Status:        "active",
 	})
+	brief := summarizePromptBrief(body, 28)
 	g.mu.Lock()
 	g.markChatInterleavedLocked(ev.ChatID, threadKey, ev.RootID, execID)
+	if brief != "" {
+		if g.promptBriefs == nil {
+			g.promptBriefs = map[string]string{}
+		}
+		if len(g.promptBriefs) >= 256 {
+			g.promptBriefs = map[string]string{}
+		}
+		g.promptBriefs[execID] = brief
+	}
 	g.activeCards[execID] = &activeCard{
-		botID:     bot.ID,
-		profile:   bot.Profile,
-		botName:   bot.Name,
-		execID:    execID,
-		chatID:    ev.ChatID,
-		threadKey: threadKey,
-		replyTo:   msgID,
-		inThread:  inThread,
-		cardMsgID: cardMsgID,
-		lastJSON:  cardJSON,
+		botID:       bot.ID,
+		profile:     bot.Profile,
+		botName:     bot.Name,
+		execID:      execID,
+		chatID:      ev.ChatID,
+		threadKey:   threadKey,
+		replyTo:     msgID,
+		inThread:    inThread,
+		cardMsgID:   cardMsgID,
+		promptBrief: brief,
+		lastJSON:    cardJSON,
 	}
 	g.mu.Unlock()
 }
@@ -1256,11 +1269,24 @@ func (g *Gateway) handleCommand(ctx context.Context, rawBot, bot BotConfig, noMe
 				roleState = tr("Custom")
 			}
 		}
+		formatStatusModel := func(model, effort string) string {
+			model = strings.TrimSpace(model)
+			effort = strings.TrimSpace(effort)
+			if model == "" && effort == "" {
+				return tr("Agent default")
+			}
+			if model == "" {
+				return fmt.Sprintf("%s (%s)", tr("Agent default"), effort)
+			}
+			return FormatModelLabel("", model, effort)
+		}
 		binding, err := g.host.ActiveBinding(bot.ID, ev.ChatID, threadKey)
 		if err != nil {
+			modelDisplay := formatStatusModel(bot.Model, bot.Effort)
 			lines := []string{
 				fmt.Sprintf("**%s**: `%s`", tr("Chat ID"), ev.ChatID),
 				fmt.Sprintf("**%s**: `%s`", tr("Agent"), bot.Agent),
+				fmt.Sprintf("**%s**: `%s`", tr("Model"), modelDisplay),
 				fmt.Sprintf("**%s**: `%s`", tr("Workspace"), g.workspaceLabel(bot.WorkspaceID)),
 				fmt.Sprintf("**%s**: `%s`", tr("Permission"), bot.PermissionMode),
 			}
@@ -1273,9 +1299,21 @@ func (g *Gateway) handleCommand(ctx context.Context, rawBot, bot BotConfig, noMe
 			g.replyNotice(ctx, bot, msgID, inThread, bot.Name+" — "+tr("Status"), "blue", strings.Join(lines, "\n"))
 			return true
 		}
+		var mModel, mEffort string
+		memberFound := false
+		if mm, ok := g.host.(interface {
+			MemberModel(memberID string) (string, string, bool)
+		}); ok {
+			mModel, mEffort, memberFound = mm.MemberModel(binding.MemberID)
+		}
+		if !memberFound && binding.Agent == bot.Agent {
+			mModel, mEffort = bot.Model, bot.Effort
+		}
+		modelDisplay := formatStatusModel(mModel, mEffort)
 		lines := []string{
 			fmt.Sprintf("**%s**: `%s`", tr("Chat ID"), ev.ChatID),
 			fmt.Sprintf("**%s**: `%s`", tr("Agent"), binding.Agent),
+			fmt.Sprintf("**%s**: `%s`", tr("Model"), modelDisplay),
 			fmt.Sprintf("**%s**: `%s`", tr("Workspace"), g.workspaceLabel(binding.WorkspaceID)),
 			fmt.Sprintf("**%s**: `%s`", tr("Permission"), binding.PermissionMode),
 			fmt.Sprintf("**%s**: `%s`", tr("Discussion"), binding.DiscussionKey),
@@ -1417,10 +1455,18 @@ func (g *Gateway) HandleCardAction(ctx context.Context, bot BotConfig, ev CardAc
 					ReplyTo: origReplyTo, CardMsgID: cardMsgID, DiscussionKey: snap.Discussion, Status: "active",
 				})
 				g.mu.Lock()
+				retryBrief := ""
+				if g.promptBriefs != nil {
+					retryBrief = g.promptBriefs[val["execId"]]
+					if retryBrief != "" {
+						g.promptBriefs[newID] = retryBrief
+					}
+				}
 				g.activeCards[newID] = &activeCard{
 					botID: bot.ID, profile: bot.Profile, botName: bot.Name,
 					execID: newID, chatID: ev.ChatID, threadKey: threadKey,
-					replyTo: origReplyTo, inThread: inThread, cardMsgID: cardMsgID, lastJSON: cardJSON,
+					replyTo: origReplyTo, inThread: inThread, cardMsgID: cardMsgID,
+					promptBrief: retryBrief, lastJSON: cardJSON,
 				}
 				g.mu.Unlock()
 			}
@@ -1566,6 +1612,40 @@ func (g *Gateway) tickProgress(ctx context.Context) {
 			continue
 		}
 		if !isActiveExecState(snap.State) {
+			if snap.State == store.ExecMerged {
+				agentLabel := FormatModelLabel(snap.Agent, snap.Model, snap.Effort)
+				cardJSON := BuildProgressClosedCard(c.botName, agentLabel, snap.Workspace, store.ExecMerged, "", 0)
+				c.patchMu.Lock()
+				if !c.closed {
+					pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+					err := g.client.PatchCard(pctx, c.profile, c.cardMsgID, cardJSON)
+					cancel()
+					if err == nil {
+						c.closed = true
+						c.lastJSON = cardJSON
+						_ = g.host.SaveCard(store.LarkCard{
+							Kind:          "exec",
+							RefID:         c.execID,
+							BotID:         c.botID,
+							ChatID:        c.chatID,
+							ReplyTo:       c.replyTo,
+							CardMsgID:     c.cardMsgID,
+							DiscussionKey: snap.Discussion,
+							Status:        store.ExecMerged,
+						})
+					}
+				}
+				closed := c.closed
+				c.patchMu.Unlock()
+				if closed {
+					g.mu.Lock()
+					if g.activeCards[c.execID] == c {
+						delete(g.activeCards, c.execID)
+					}
+					g.mu.Unlock()
+					continue
+				}
+			}
 			// 不立即删除 activeCards，保留本地 interleaved 状态供 OnExecFinished 决策；
 			// 仅对超过 2 分钟仍未触发 OnExecFinished 的孤儿项做兜底清理。
 			g.mu.Lock()
@@ -1719,8 +1799,12 @@ func (g *Gateway) OnExecFinished(discKey, execID, outcome, body string) {
 				fcancel()
 			}
 			if !g.canUpdateProgressInPlace(bot, binding, ac, progressMsgID, inThread, threadKey) {
+				brief := ""
+				if ac != nil {
+					brief = ac.promptBrief
+				}
 				nctx, ncancel := context.WithTimeout(context.Background(), 10*time.Second)
-				noticeID, nerr := g.client.ReplyText(nctx, bot.Profile, progressMsgID, inThread, interleavedReplyNotice(outcome))
+				noticeID, nerr := g.client.ReplyText(nctx, bot.Profile, progressMsgID, inThread, interleavedReplyNotice(outcome, brief))
 				ncancel()
 				if nerr != nil {
 					log.Printf("lark bot %s: send interleaved reply notice: %v", bot.Name, nerr)
@@ -1966,15 +2050,49 @@ func (g *Gateway) markChatInterleavedLocked(chatID, threadKey, rootID, excludeEx
 	}
 }
 
-func interleavedReplyNotice(outcome string) string {
+func interleavedReplyNotice(outcome, promptBrief string) string {
+	var base string
 	switch outcome {
 	case "failed", "error", "interrupted":
-		return tr("Execution failed — tap the quote above for details")
+		base = tr("Execution failed — tap the quote above for details")
 	case "stopped", "cancelled":
-		return tr("Execution stopped — tap the quote above for details")
+		base = tr("Execution stopped — tap the quote above for details")
 	default:
-		return tr("Replied above — tap the quote to view the full result")
+		base = tr("Replied above — tap the quote to view the full result")
 	}
+	if promptBrief == "" {
+		return base
+	}
+	return base + " — " + promptBrief
+}
+
+// summarizePromptBrief 从用户提问正文提取一行简短摘要，去掉图片占位与多余空白，供底部引用提醒区分多条并行/历史问题。
+func summarizePromptBrief(body string, maxRunes int) string {
+	s := strings.TrimSpace(body)
+	if s == "" || maxRunes <= 0 {
+		return ""
+	}
+	// 只去掉飞书图片占位（如 ![Image](img_v3_...)），不误伤用户讨论的普通 Markdown 语法
+	for {
+		start := strings.Index(s, "![Image](img_")
+		if start < 0 {
+			break
+		}
+		end := strings.IndexByte(s[start+len("![Image](img_"):], ')')
+		if end < 0 {
+			break
+		}
+		s = s[:start] + " " + s[start+len("![Image](img_")+end+1:]
+	}
+	s = strings.Join(strings.Fields(s), " ")
+	if s == "" {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= maxRunes {
+		return s
+	}
+	return string(r[:maxRunes-1]) + "…"
 }
 
 func (g *Gateway) canUpdateProgressInPlace(bot BotConfig, binding store.LarkBinding, ac *activeCard, progressMsgID string, inThread bool, threadKey string) bool {
@@ -2011,7 +2129,7 @@ func (g *Gateway) canUpdateProgressInPlace(bot BotConfig, binding store.LarkBind
 	}
 	if checked {
 		for _, m := range msgs {
-			if m.Deleted || m.MessageID == "" {
+			if m.Deleted || m.MessageID == "" || m.MsgType == "system" {
 				continue
 			}
 			return m.MessageID == progressMsgID

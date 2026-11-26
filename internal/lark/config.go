@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"posse/internal/agent"
 )
 
 const (
@@ -39,6 +41,8 @@ type ChatOverride struct {
 	Name              string  `json:"name,omitempty"`              // 群分身显示名（卡片与讨论标题；空=继承 bot.Name）
 	WorkspaceID       string  `json:"workspaceId,omitempty"`       // 覆写默认工作区（空=继承）
 	Agent             string  `json:"agent,omitempty"`             // 覆写默认 Agent（空=继承）
+	Model             *string `json:"model,omitempty"`             // nil=继承 | ""=显式用 Agent 本机默认 | 非空=覆写
+	Effort            *string `json:"effort,omitempty"`            // nil=继承 | ""=显式用 Agent 本机默认 | 非空=覆写
 	PermissionMode    string  `json:"permissionMode,omitempty"`    // ""=继承 | "ask" | "skip"
 	Role              *string `json:"role,omitempty"`              // nil=继承 | ""=显式无角色 | 非空=覆写
 	SessionMode       string  `json:"sessionMode,omitempty"`       // ""=继承 | "chat" | "thread"
@@ -169,10 +173,12 @@ func NormalizeBot(b BotConfig) BotConfig {
 	b.Name = strings.TrimSpace(b.Name)
 	b.Profile = strings.TrimSpace(b.Profile)
 	b.WorkspaceID = strings.TrimSpace(b.WorkspaceID)
-	b.Agent = strings.TrimSpace(b.Agent)
+	b.Agent = agent.NormalizeName(b.Agent)
 	if b.Agent == "" {
 		b.Agent = "antigravity"
 	}
+	b.Model = strings.TrimSpace(b.Model)
+	b.Effort = strings.ToLower(strings.TrimSpace(b.Effort))
 	if b.Name == "" {
 		b.Name = b.Profile
 	}
@@ -209,9 +215,14 @@ func NormalizeChatOverride(c ChatOverride) ChatOverride {
 	c.ChatID = strings.TrimSpace(c.ChatID)
 	c.Name = strings.TrimSpace(c.Name)
 	c.WorkspaceID = strings.TrimSpace(c.WorkspaceID)
-	c.Agent = strings.ToLower(strings.TrimSpace(c.Agent))
-	if c.Agent == "agy" {
-		c.Agent = "antigravity"
+	c.Agent = agent.NormalizeName(c.Agent)
+	if c.Model != nil {
+		v := strings.TrimSpace(*c.Model)
+		c.Model = &v
+	}
+	if c.Effort != nil {
+		v := strings.ToLower(strings.TrimSpace(*c.Effort))
+		c.Effort = &v
 	}
 	switch c.PermissionMode {
 	case PermAsk, PermSkip:
@@ -268,7 +279,7 @@ func normalizeChatOverrides(in []ChatOverride) []ChatOverride {
 	return out
 }
 
-// ValidateChatOverride 校验按群分身的基础合法性（非空合法 chat_id）。
+// ValidateChatOverride 校验按群分身的基础合法性（非空合法 chat_id；非空模型/思考深度覆写必须同时固定 Agent）。
 func ValidateChatOverride(c ChatOverride) error {
 	id := strings.TrimSpace(c.ChatID)
 	if id == "" {
@@ -276,6 +287,29 @@ func ValidateChatOverride(c ChatOverride) error {
 	}
 	if strings.ContainsAny(id, " \t\r\n/\\") {
 		return fmt.Errorf("invalid chat ID %q", id)
+	}
+	hasModel := c.Model != nil && strings.TrimSpace(*c.Model) != ""
+	hasEffort := c.Effort != nil && strings.TrimSpace(*c.Effort) != ""
+	if (hasModel || hasEffort) && agent.NormalizeName(c.Agent) == "" {
+		return errors.New("agent must be specified when overriding model or effort for a group")
+	}
+	return nil
+}
+
+// ValidateEffectiveBot 校验机器人自身及所有群分身在合并后的生效模型/思考深度是否合法。
+func ValidateEffectiveBot(b BotConfig) error {
+	norm := NormalizeBot(b)
+	if err := agent.ValidateModel(norm.Agent, agent.Model{Name: norm.Model, Effort: norm.Effort}); err != nil {
+		return err
+	}
+	for _, ch := range norm.Chats {
+		if err := ValidateChatOverride(ch); err != nil {
+			return err
+		}
+		eff, _ := norm.EffectiveForChat(ch.ChatID)
+		if err := agent.ValidateModel(eff.Agent, agent.Model{Name: eff.Model, Effort: eff.Effort}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -315,6 +349,12 @@ func (b BotConfig) EffectiveForChat(chatID string) (eff BotConfig, noMention boo
 			eff.Effort = ""
 		}
 		eff.Agent = ov.Agent
+	}
+	if ov.Model != nil {
+		eff.Model = *ov.Model
+	}
+	if ov.Effort != nil {
+		eff.Effort = *ov.Effort
 	}
 	if ov.PermissionMode != "" {
 		eff.PermissionMode = ov.PermissionMode

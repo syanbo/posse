@@ -262,7 +262,23 @@ func cmdLarkEdit(e *env, args []string) error {
 		bot.WorkspaceID = *ws
 	}
 	if visited["agent"] {
+		prev := strings.ToLower(strings.TrimSpace(bot.Agent))
+		if prev == "" || prev == "agy" {
+			prev = "antigravity"
+		}
+		next := strings.ToLower(strings.TrimSpace(*agentName))
+		if next == "" || next == "agy" {
+			next = "antigravity"
+		}
 		bot.Agent = *agentName
+		if prev != next {
+			if !visited["model"] {
+				bot.Model = ""
+			}
+			if !visited["effort"] {
+				bot.Effort = ""
+			}
+		}
 	}
 	if visited["model"] {
 		bot.Model = *model
