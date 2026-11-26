@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.52
+
+- 修复飞书机器人群聊 `@` 识别问题：改为通过 `/open-apis/bot/v3/info` 与 `auth status` 并发获取机器人真实的 `open_id`、`app_id` 与应用显示名，支持按 `ou_` / `cli_` 独立精确匹配、单次刷新并发合并（singleflight）与身份瞬时不可用时的有界延迟重判，同时对齐 `reply_to` 引用字段并过滤其他机器人消息（`sender_type=bot`）。
+- 优化飞书卡片标题展示：进度卡、结果卡、完结回执卡、审批卡与提问卡将 Agent 名称升级为对应的模型名称与思考档位（按本轮实时/冻结上报 → 显式配置 → 本机默认配置逐层解析，并自动去重末尾档位括号）。
+- Git 改动列表与 diff 顶栏支持展示文件重命名和移动来源路径。
+
+### English
+
+- Fixed Feishu/Lark group `@mention` matching by fetching the bot's real `open_id`, `app_id`, and `app_name` concurrently via `/open-apis/bot/v3/info` and `auth status`, matching `ou_` / `cli_` IDs per mention with singleflight identity refresh and bounded retry when identity is temporarily unavailable, while normalizing `reply_to` and ignoring other bots (`sender_type=bot`).
+- Updated Feishu/Lark progress, result, receipt, permission, and question card titles to show the active model name and reasoning effort (resolved from live/frozen statusline reports, explicit configuration, or local agent defaults, with trailing effort parentheses deduplicated).
+- Added rename and move source path indicators to the Git changes list and diff header.
+
 ## 0.1.51
 
 - 飞书网关支持**单机器人按群分身**：在「设置 › 飞书机器人」中可直接拉取机器人已加入的飞书群一键点选，按群独立覆写显示名、工作区、Agent、权限模式、会话粒度、触发权限、角色说明（继承 / 自定义 / 无角色）与免 `@` 直接触发；群内支持 `/mention on|off`、`/role <text|clear|inherit>`（所有变更会话、执行或配置的命令统一仅限主人执行），修改工作区/Agent/角色/权限/会话粒度后自动退役旧绑定与旧排队轮次。
