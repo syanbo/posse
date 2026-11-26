@@ -2,15 +2,23 @@ package app
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/agent"
 	"posse/internal/errtext"
 	"posse/internal/lark"
+	"posse/internal/rpc"
+	"posse/locales"
 )
 
 type larkUIState struct {
@@ -25,11 +33,19 @@ type larkUIState struct {
 	profiles []lark.ProfileInfo
 	err      string
 
-	editing bool
-	draft   lark.BotConfig
+	editing      bool
+	botEditGen   uint64
+	botWSPickSeq uint64
+	botWSPicking bool
+	botWSErr     string
+	draft        lark.BotConfig
 
 	// 群分身编辑状态
 	chatEditing     bool
+	chatEditGen     uint64
+	chatWSPickSeq   uint64
+	chatWSPicking   bool
+	chatWSErr       string
 	chatEditIsNew   bool
 	chatBotID       string
 	chatDraft       lark.ChatOverride
@@ -116,7 +132,7 @@ func (a *app) saveLarkBot(bot lark.BotConfig) {
 				return
 			}
 			a.lark.err = ""
-			a.lark.editing = false
+			a.closeLarkBotEditor()
 			a.loadLark()
 		})
 	}()
@@ -177,7 +193,7 @@ func (a *app) saveLarkChat(botID string, ov lark.ChatOverride, createOnly bool) 
 				return
 			}
 			a.lark.err = ""
-			a.lark.chatEditing = false
+			a.closeLarkChatEditor()
 			a.loadLark()
 		})
 	}()
@@ -205,16 +221,49 @@ func (a *app) deleteLarkChat(botID, chatID string) {
 			}
 			a.lark.err = ""
 			if a.lark.chatEditing && a.lark.chatBotID == botID && a.lark.chatDraft.ChatID == chatID {
-				a.lark.chatEditing = false
+				a.closeLarkChatEditor()
 			}
 			a.loadLark()
 		})
 	}()
 }
 
-func (a *app) openLarkChatEditor(botID string, ov lark.ChatOverride, isNew bool) {
+func (a *app) openLarkBotEditor(bot lark.BotConfig) {
+	l := &a.lark
+	a.closeLarkChatEditor()
+	l.botEditGen++
+	l.botWSPickSeq++
+	l.botWSPicking = false
+	l.botWSErr = ""
+	l.draft = lark.CloneBot(bot)
+	l.editing = true
+}
+
+func (a *app) closeLarkBotEditor() {
 	l := &a.lark
 	l.editing = false
+	l.botEditGen++
+	l.botWSPickSeq++
+	l.botWSPicking = false
+	l.botWSErr = ""
+}
+
+func (a *app) closeLarkChatEditor() {
+	l := &a.lark
+	l.chatEditing = false
+	l.chatEditGen++
+	l.chatWSPickSeq++
+	l.chatWSPicking = false
+	l.chatWSErr = ""
+}
+
+func (a *app) openLarkChatEditor(botID string, ov lark.ChatOverride, isNew bool) {
+	l := &a.lark
+	a.closeLarkBotEditor()
+	l.chatEditGen++
+	l.chatWSPickSeq++
+	l.chatWSPicking = false
+	l.chatWSErr = ""
 	l.chatEditing = true
 	l.chatEditIsNew = isNew
 	l.chatBotID = botID
@@ -306,7 +355,7 @@ func (a *app) larkSettings(c *ui.Context) {
 				if len(a.workspaces) > 0 {
 					defWS = a.workspaces[0].ID
 				}
-				l.draft = lark.NormalizeBot(lark.BotConfig{
+				a.openLarkBotEditor(lark.BotConfig{
 					Profile:        defProfile,
 					Name:           defProfile,
 					WorkspaceID:    defWS,
@@ -316,7 +365,6 @@ func (a *app) larkSettings(c *ui.Context) {
 					TriggerPolicy:  lark.TriggerSelf,
 					Enabled:        true,
 				})
-				l.editing = true
 			}
 		})
 
@@ -351,9 +399,7 @@ func (a *app) larkSettings(c *ui.Context) {
 						a.toggleLarkBot(bot.ID, on)
 					}
 					if pressable(textButton(c.Key("lark-ed:"+bot.ID), m.LarkEditBot())).Clicked() {
-						l.chatEditing = false
-						l.draft = lark.CloneBot(bot)
-						l.editing = true
+						a.openLarkBotEditor(bot)
 					}
 					if pressable(textButton(c.Key("lark-rm:"+bot.ID), m.LarkDeleteBot())).Clicked() {
 						a.deleteLarkBot(bot.ID)
@@ -493,39 +539,9 @@ func (a *app) larkBotEditor(c *ui.Context) {
 				}
 			})
 		}
-		if len(a.workspaces) > 0 {
-			wsLabels := make([]string, 0, len(a.workspaces))
-			wsIDs := make([]string, 0, len(a.workspaces))
-			labelSeen := map[string]int{}
-			for _, w := range a.workspaces {
-				labelSeen[w.Label]++
-			}
-			wsSel := ""
-			for _, w := range a.workspaces {
-				lbl := w.Label
-				if labelSeen[w.Label] > 1 {
-					lbl = w.Label + " (" + shortChatID(w.ID) + ")"
-				}
-				wsLabels = append(wsLabels, lbl)
-				wsIDs = append(wsIDs, w.ID)
-				if w.ID == d.WorkspaceID {
-					wsSel = lbl
-				}
-			}
-			if wsSel == "" {
-				wsSel = wsLabels[0]
-			}
-			settingsRow(c, m.LarkFieldWorkspace(), func() {
-				if ui.Select(c.Key("lark-f-ws"), &wsSel, wsLabels).Changed() {
-					for i, lbl := range wsLabels {
-						if lbl == wsSel {
-							d.WorkspaceID = wsIDs[i]
-							break
-						}
-					}
-				}
-			})
-		}
+		a.larkWorkspaceRow(c, "lark-f-ws", false, &d.WorkspaceID, a.lark.botWSPicking, a.lark.botWSErr, func() {
+			a.pickLarkWorkspaceFolder(m, larkPickBot)
+		})
 		var agents []string
 		for _, ag := range a.installedAgents() {
 			if !slices.Contains(a.disabled, ag) && agent.CanJoinDiscussion(ag) {
@@ -631,10 +647,10 @@ func (a *app) larkBotEditor(c *ui.Context) {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Spacer(c)
 			if pressable(textButton(c.Key("lark-cancel"), m.LarkCancel())).Clicked() {
-				a.lark.editing = false
+				a.closeLarkBotEditor()
 			}
 			valid := strings.TrimSpace(d.Profile) != ""
-			if valid && !a.lark.saving && pressable(accentButton(c.Key("lark-save"), m.LarkSave())).Clicked() {
+			if valid && !a.lark.saving && !a.lark.botWSPicking && pressable(accentButton(c.Key("lark-save"), m.LarkSave())).Clicked() {
 				a.saveLarkBot(*d)
 			}
 		})
@@ -664,16 +680,20 @@ func (a *app) larkChatEditor(c *ui.Context) {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, m.LarkChatPickLabel()).FontSize(fsBody).Shrink(0)
 					ui.Spacer(c)
-					if pressable(textButton(c.Key("lark-chat-refresh"), m.LarkRefresh())).Clicked() {
-						a.loadLarkBotChats(l.chatBotID)
-					}
 					if pressable(textButton(c.Key("lark-chat-manual"), m.LarkChatManualToggle())).Clicked() {
 						l.chatShowManual = !l.chatShowManual
 					}
 				})
-				if len(l.chatList) > 0 {
-					fieldInput(c.Key("lark-chat-search"), &l.chatSearch, m.LarkChatSearchPlaceholder())
-				}
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+					ui.Box(c).Grow(1).Shrink(1).Children(func() {
+						if fieldInput(c.Key("lark-chat-search"), &l.chatSearch, m.LarkChatSearchPlaceholder()).Submitted() {
+							a.loadLarkBotChats(l.chatBotID)
+						}
+					})
+					if pressable(textButton(c.Key("lark-chat-refresh"), m.LarkChatSearchButton())).Clicked() {
+						a.loadLarkBotChats(l.chatBotID)
+					}
+				})
 				switch {
 				case l.chatListLoading:
 					ui.Text(c, m.LarkChatLoading()).FontSize(fsSmall).TextColor(t.TextMuted)
@@ -745,38 +765,9 @@ func (a *app) larkChatEditor(c *ui.Context) {
 		})
 
 		// 3. 工作区（首项继承默认，按索引映射 ID 避免同名工作区覆盖）
-		if len(a.workspaces) > 0 {
-			wsLabels := make([]string, 0, len(a.workspaces)+1)
-			wsIDs := make([]string, 0, len(a.workspaces)+1)
-			wsLabels = append(wsLabels, m.LarkInherit())
-			wsIDs = append(wsIDs, "")
-			wsSel := wsLabels[0]
-			labelSeen := map[string]int{}
-			for _, w := range a.workspaces {
-				labelSeen[w.Label]++
-			}
-			for _, w := range a.workspaces {
-				lbl := w.Label
-				if labelSeen[w.Label] > 1 {
-					lbl = w.Label + " (" + shortChatID(w.ID) + ")"
-				}
-				wsLabels = append(wsLabels, lbl)
-				wsIDs = append(wsIDs, w.ID)
-				if w.ID == d.WorkspaceID {
-					wsSel = lbl
-				}
-			}
-			settingsRow(c, m.LarkFieldWorkspace(), func() {
-				if ui.Select(c.Key("lark-cf-ws"), &wsSel, wsLabels).Changed() {
-					for i, lbl := range wsLabels {
-						if lbl == wsSel {
-							d.WorkspaceID = wsIDs[i]
-							break
-						}
-					}
-				}
-			})
-		}
+		a.larkWorkspaceRow(c, "lark-cf-ws", true, &d.WorkspaceID, l.chatWSPicking, l.chatWSErr, func() {
+			a.pickLarkWorkspaceFolder(m, larkPickChat)
+		})
 
 		// 4. Agent（首项继承默认）
 		var agents []string
@@ -912,10 +903,10 @@ func (a *app) larkChatEditor(c *ui.Context) {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Spacer(c)
 			if pressable(textButton(c.Key("lark-chat-cancel"), m.LarkCancel())).Clicked() {
-				l.chatEditing = false
+				a.closeLarkChatEditor()
 			}
 			valid := strings.TrimSpace(d.ChatID) != ""
-			if valid && !l.saving && pressable(accentButton(c.Key("lark-chat-save"), m.LarkSave())).Clicked() {
+			if valid && !l.saving && !l.chatWSPicking && pressable(accentButton(c.Key("lark-chat-save"), m.LarkSave())).Clicked() {
 				out := *d
 				switch l.chatRoleMode {
 				case 0:
@@ -931,4 +922,374 @@ func (a *app) larkChatEditor(c *ui.Context) {
 			}
 		})
 	})
+}
+
+type larkPickTarget uint8
+
+const (
+	larkPickBot larkPickTarget = iota
+	larkPickChat
+)
+
+type larkPickToken struct {
+	target  larkPickTarget
+	editGen uint64
+	pickSeq uint64
+}
+
+func (a *app) larkWorkspaceRow(c *ui.Context, key string, allowInherit bool, wsID *string, picking bool, wsErr string, onPick func()) {
+	t, m := c.Theme(), L(c)
+	capN := len(a.workspaces)
+	if allowInherit {
+		capN++
+	}
+	wsLabels := make([]string, 0, capN)
+	wsIDs := make([]string, 0, capN)
+	wsSel := ""
+	if allowInherit {
+		wsLabels = append(wsLabels, m.LarkInherit())
+		wsIDs = append(wsIDs, "")
+		wsSel = wsLabels[0]
+	}
+	labelSeen := map[string]int{}
+	for _, w := range a.workspaces {
+		labelSeen[w.Label]++
+	}
+	for _, w := range a.workspaces {
+		lbl := w.Label
+		if labelSeen[w.Label] > 1 {
+			lbl = w.Label + " (" + shortChatID(w.ID) + ")"
+		}
+		wsLabels = append(wsLabels, lbl)
+		wsIDs = append(wsIDs, w.ID)
+		if w.ID == *wsID {
+			wsSel = lbl
+		}
+	}
+	if wsSel == "" && len(wsLabels) > 0 {
+		wsSel = wsLabels[0]
+	}
+	r := a.request()
+	canPick := r.canWrite() && !a.remoteHost()
+	ui.Column(c).Gap(2).Children(func() {
+		settingsRow(c, m.LarkFieldWorkspace(), func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				if len(wsLabels) > 0 {
+					if ui.Select(c.Key(key), &wsSel, wsLabels).Changed() {
+						for i, lbl := range wsLabels {
+							if lbl == wsSel {
+								*wsID = wsIDs[i]
+								break
+							}
+						}
+					}
+				}
+				if canPick {
+					if pressable(textButton(c.Key(key+"-pick"), m.LarkChooseFolder())).Clicked() && !picking {
+						onPick()
+					}
+				}
+			})
+		})
+		if wsErr != "" {
+			ui.Text(c, wsErr).FontSize(fsSmall).TextColor(t.Danger)
+		}
+	})
+}
+
+func (a *app) larkPickActive(tok larkPickToken) bool {
+	l := &a.lark
+	switch tok.target {
+	case larkPickBot:
+		return l.editing && l.botEditGen == tok.editGen && l.botWSPickSeq == tok.pickSeq
+	case larkPickChat:
+		return l.chatEditing && l.chatEditGen == tok.editGen && l.chatWSPickSeq == tok.pickSeq
+	default:
+		return false
+	}
+}
+
+func (a *app) beginLarkPick(target larkPickTarget) (larkPickToken, bool) {
+	l := &a.lark
+	switch target {
+	case larkPickBot:
+		if !l.editing || l.botWSPicking {
+			return larkPickToken{}, false
+		}
+		l.botWSPickSeq++
+		l.botWSPicking = true
+		l.botWSErr = ""
+		return larkPickToken{target: target, editGen: l.botEditGen, pickSeq: l.botWSPickSeq}, true
+	case larkPickChat:
+		if !l.chatEditing || l.chatWSPicking {
+			return larkPickToken{}, false
+		}
+		l.chatWSPickSeq++
+		l.chatWSPicking = true
+		l.chatWSErr = ""
+		return larkPickToken{target: target, editGen: l.chatEditGen, pickSeq: l.chatWSPickSeq}, true
+	default:
+		return larkPickToken{}, false
+	}
+}
+
+func (a *app) finishLarkPick(tok larkPickToken, wsID string, errMsg string) {
+	if !a.larkPickActive(tok) {
+		return
+	}
+	l := &a.lark
+	switch tok.target {
+	case larkPickBot:
+		l.botWSPicking = false
+		l.botWSErr = errMsg
+		if wsID != "" {
+			l.draft.WorkspaceID = wsID
+		}
+	case larkPickChat:
+		l.chatWSPicking = false
+		l.chatWSErr = errMsg
+		if wsID != "" {
+			l.chatDraft.WorkspaceID = wsID
+		}
+	}
+}
+
+func (a *app) pickLarkWorkspaceFolder(m locales.Messages, target larkPickTarget) {
+	r := a.request()
+	if !r.canWrite() || !r.canChooseLocalDirectory() || a.dialogOpen {
+		return
+	}
+	tok, ok := a.beginLarkPick(target)
+	if !ok {
+		return
+	}
+	var dialogErr error
+	a.inDialog(func() []string {
+		paths, err := openDialog(mygo.OpenDialogOptions{
+			Parent:      a.win,
+			Title:       m.LarkChooseFolderTitle(),
+			ButtonLabel: m.ChatChooseButton(),
+			Directory:   true,
+		})
+		dialogErr = err
+		return paths
+	}, func(paths []string) {
+		if !r.current() || !a.larkPickActive(tok) {
+			return
+		}
+		if dialogErr != nil {
+			a.finishLarkPick(tok, "", errtext.Text(dialogErr))
+			return
+		}
+		if len(paths) == 0 {
+			a.finishLarkPick(tok, "", "")
+			return
+		}
+		if !r.canWrite() {
+			a.finishLarkPick(tok, "", "")
+			return
+		}
+		a.startLarkWorkspaceForDir(r, tok, paths[0])
+	})
+}
+
+// startLarkWorkspaceForDir 在界面线程校验路径与已有工作区；原样保留路径传给 daemon，不裁剪尾随空格或 link/..。
+func (a *app) startLarkWorkspaceForDir(r appRequest, tok larkPickToken, dir string) {
+	if !r.current() || r.client == nil || !a.larkPickActive(tok) {
+		return
+	}
+	if dir == "" || !filepath.IsAbs(dir) {
+		a.finishLarkPick(tok, "", "")
+		return
+	}
+	if w, ok := findWorkspaceByDir(a.workspaces, dir); ok {
+		a.finishLarkPick(tok, w.ID, "")
+		return
+	}
+	projectNames := make([]string, 0, len(a.projects))
+	for _, p := range a.projects {
+		projectNames = append(projectNames, p.Name)
+	}
+	go r.ensureLarkWorkspaceForDir(tok, dir, projectNames)
+}
+
+func (r appRequest) ensureLarkWorkspaceForDir(tok larkPickToken, dir string, projectNames []string) {
+	a := r.app
+	if !r.current() || r.client == nil {
+		return
+	}
+	var added struct {
+		ID string `json:"id"`
+	}
+	tried := make(map[string]bool, len(projectNames)+4)
+	for _, n := range projectNames {
+		tried[strings.ToLower(n)] = true
+	}
+	// 首次不传 name，由 daemon 按原始目录名校验与登记；遇重名或非法字符再换候选名做有限次重试。
+	err := r.callProjectAddForLark(dir, "", &added)
+	if err != nil && isProjectNameErr(err) {
+		tried[strings.ToLower(filepath.Base(dir))] = true
+		for range 3 {
+			cand := nextLarkProjectName(dir, tried)
+			tried[strings.ToLower(cand)] = true
+			err = r.callProjectAddForLark(dir, cand, &added)
+			if err == nil || !isProjectNameErr(err) {
+				break
+			}
+		}
+	}
+	if err != nil && !isProjectAlreadyAddedErr(err) {
+		r.update(func() {
+			a.finishLarkPick(tok, "", errtext.Text(err))
+		})
+		return
+	}
+
+	// 单独查询最新 workspace.list，不依赖整轮 refresh（避免 task.list 等无关 RPC 失败丢失自动选中）。
+	ctx, cancel := context.WithTimeout(a.windowContext(), 10*time.Second)
+	var fresh []workspace
+	listErr := r.invoke(ctx, "workspace.list", nil, &fresh)
+	cancel()
+	if listErr != nil {
+		r.update(func() {
+			a.finishLarkPick(tok, "", errtext.Text(listErr))
+		})
+		return
+	}
+	ws, ok := findWorkspaceForAddedProject(fresh, added.ID, dir)
+	if !ok {
+		r.update(func() {
+			a.finishLarkPick(tok, "", errtext.Text(errors.New("workspace not found after adding project")))
+		})
+		return
+	}
+	r.update(func() {
+		if !slices.ContainsFunc(a.workspaces, func(cur workspace) bool { return cur.ID == ws.ID }) {
+			a.workspaces = append(a.workspaces, ws)
+		}
+		a.finishLarkPick(tok, ws.ID, "")
+	})
+	go r.refresh()
+}
+
+func (r appRequest) callProjectAddForLark(path, name string, out any) error {
+	params := map[string]any{"path": path}
+	if name != "" {
+		params["name"] = name
+	}
+	ctx, cancel := context.WithTimeout(r.app.windowContext(), 10*time.Second)
+	defer cancel()
+	return r.invoke(ctx, "project.add", params, out)
+}
+
+func findWorkspaceForAddedProject(list []workspace, projectID, dir string) (workspace, bool) {
+	if projectID != "" {
+		for _, w := range list {
+			if w.ProjectID == projectID && w.Kind == "main" {
+				return w, true
+			}
+		}
+		for _, w := range list {
+			if w.ProjectID == projectID {
+				return w, true
+			}
+		}
+	}
+	return findWorkspaceByDir(list, dir)
+}
+
+func findWorkspaceByDir(list []workspace, dir string) (workspace, bool) {
+	var fallback workspace
+	var foundFallback bool
+	for _, w := range list {
+		if !sameLocalDir(w.Path, dir) {
+			continue
+		}
+		if w.Kind == "main" {
+			return w, true
+		}
+		if !foundFallback {
+			fallback = w
+			foundFallback = true
+		}
+	}
+	return fallback, foundFallback
+}
+
+// sameLocalDir 通过文件系统目录身份比对本机路径，涵盖软链接、大小写不敏感卷与带尾随空格的目录名。
+func sameLocalDir(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	fa, errA := os.Stat(a)
+	fb, errB := os.Stat(b)
+	if errA == nil && errB == nil {
+		return os.SameFile(fa, fb)
+	}
+	return a == b
+}
+
+func isProjectAlreadyAddedErr(err error) bool {
+	var re *rpc.Error
+	if !errors.As(err, &re) || re.Code != rpc.CodeConflict {
+		return false
+	}
+	return strings.HasPrefix(re.Message, "project ") && strings.Contains(re.Message, " already added as ")
+}
+
+func isProjectNameErr(err error) bool {
+	var re *rpc.Error
+	if !errors.As(err, &re) {
+		return false
+	}
+	if re.Code == rpc.CodeConflict {
+		return strings.HasPrefix(re.Message, "project name ") && strings.HasSuffix(re.Message, " already used")
+	}
+	if re.Code == rpc.CodeBadRequest {
+		return re.Message == "name required" ||
+			strings.HasPrefix(re.Message, "invalid name ") ||
+			strings.HasSuffix(re.Message, " must not contain spaces")
+	}
+	return false
+}
+
+func sanitizeProjectName(raw string) string {
+	var b strings.Builder
+	lastDash := false
+	for _, r := range strings.TrimSpace(raw) {
+		bad := unicode.IsSpace(r) || unicode.IsControl(r) || strings.ContainsRune(`/\:*?"<>|~^`, r)
+		if bad {
+			if !lastDash && b.Len() > 0 {
+				b.WriteByte('-')
+				lastDash = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		lastDash = false
+	}
+	s := strings.Trim(b.String(), "-")
+	if s == "" || s == "." || s == ".." {
+		return "folder"
+	}
+	return s
+}
+
+func nextLarkProjectName(dir string, tried map[string]bool) string {
+	base := sanitizeProjectName(filepath.Base(dir))
+	if !tried[strings.ToLower(base)] {
+		return base
+	}
+	if parent := sanitizeProjectName(filepath.Base(filepath.Dir(dir))); parent != "" && parent != "folder" && parent != base {
+		cand := parent + "-" + base
+		if !tried[strings.ToLower(cand)] {
+			return cand
+		}
+	}
+	for i := 2; ; i++ {
+		cand := fmt.Sprintf("%s-%d", base, i)
+		if !tried[strings.ToLower(cand)] {
+			return cand
+		}
+	}
 }

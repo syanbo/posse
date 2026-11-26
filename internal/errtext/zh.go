@@ -377,6 +377,7 @@ var zh = [][2]string{
 	{"project %q not found", "找不到项目 {1}"},
 	{"project name %q already used", "项目名 {1} 已经有了"},
 	{"project %s already added as %q", "{1} 已经添加过了，项目名是 {2}"},
+	{"workspace not found after adding project", "已添加项目，但未找到对应的工作区"},
 	{"project %s is not a git repository", "项目 {1} 不是 Git 仓库"},
 	{"project has worktree workspace %q; remove it first", "项目里还有 worktree 工作区 {1}，先删掉它"},
 	{"project directory %s no longer exists; pass force to remove it with its worktree workspaces", "项目目录 {1} 已经不在了，强制移除会连同它的 worktree 工作区一起移除"},

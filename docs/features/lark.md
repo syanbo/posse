@@ -37,4 +37,4 @@ Posse 常驻进程原生托管多个本机 `lark-cli` profile 长连接（无需
 
 - 飞书内支持 `/agent [name]`、`/ws [name]`、`/new`、`/status`、`/stop`、`/mention on|off`、`/role <text|clear|inherit>`、`/help`（所有修改会话、执行或配置的命令均强制仅限 Posse 主人执行）。
 - CLI 管理：`posse lark profiles`、`posse lark list`、`posse lark add --profile <p> [--trusted-script PATH]... [--read-only-host HOST]...`、`posse lark edit <bot> [--trusted-script PATH]... [--read-only-host HOST]...`、`posse lark enable/disable <id>`、`posse lark rm <id>`。
-- 桌面管理：「设置 › 飞书机器人」（支持自动通过 `im +chat-list --as bot` 拉取机器人已加入的飞书群一键点选配置群分身）。
+- 桌面管理：「设置 › 飞书机器人」（支持自动通过 `im +chat-list --as bot` 拉取机器人已加入的飞书群一键点选配置群分身，支持在默认工作区直接选择任意本地文件夹并自动加入工作区）。

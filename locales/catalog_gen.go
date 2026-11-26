@@ -29905,6 +29905,38 @@ func (msgs Messages) LarkFieldWorkspace() string {
 	return Catalog.Format(msgs.locale, "larkFieldWorkspace", nil)
 }
 
+// LarkChooseFolder says "Choose Folder…"
+// in the language the app shows.
+//
+// Button label for picking a local folder as a Feishu bot or group override
+// workspace.
+func LarkChooseFolder() string { return In(i18n.Locale()).LarkChooseFolder() }
+
+// LarkChooseFolder says "Choose Folder…"
+// in the language of msgs.
+//
+// Button label for picking a local folder as a Feishu bot or group override
+// workspace.
+func (msgs Messages) LarkChooseFolder() string {
+	return Catalog.Format(msgs.locale, "larkChooseFolder", nil)
+}
+
+// LarkChooseFolderTitle says "Choose Workspace Folder"
+// in the language the app shows.
+//
+// Dialog title for picking a folder as a Feishu bot or group override
+// workspace.
+func LarkChooseFolderTitle() string { return In(i18n.Locale()).LarkChooseFolderTitle() }
+
+// LarkChooseFolderTitle says "Choose Workspace Folder"
+// in the language of msgs.
+//
+// Dialog title for picking a folder as a Feishu bot or group override
+// workspace.
+func (msgs Messages) LarkChooseFolderTitle() string {
+	return Catalog.Format(msgs.locale, "larkChooseFolderTitle", nil)
+}
+
 // LarkFieldAgent says "Default Agent"
 // in the language the app shows.
 //
@@ -30275,6 +30307,22 @@ func LarkChatSearchPlaceholder() string { return In(i18n.Locale()).LarkChatSearc
 // Placeholder for the group picker search input.
 func (msgs Messages) LarkChatSearchPlaceholder() string {
 	return Catalog.Format(msgs.locale, "larkChatSearchPlaceholder", nil)
+}
+
+// LarkChatSearchButton says "Search"
+// in the language the app shows.
+//
+// Button beside the group search input to refresh joined groups from Feishu
+// and apply the filter.
+func LarkChatSearchButton() string { return In(i18n.Locale()).LarkChatSearchButton() }
+
+// LarkChatSearchButton says "Search"
+// in the language of msgs.
+//
+// Button beside the group search input to refresh joined groups from Feishu
+// and apply the filter.
+func (msgs Messages) LarkChatSearchButton() string {
+	return Catalog.Format(msgs.locale, "larkChatSearchButton", nil)
 }
 
 // LarkChatLoading says "Loading joined groups…"
