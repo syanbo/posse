@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.37
+
+- 终端「常驻语音与草稿输入栏」（设置 › 终端）改为默认开启：开启后草稿与语音栏常驻在终端快捷键栏上方，并自动隐藏工具栏中的语音按钮与收起键；关闭后恢复从工具栏随时展开或收起。
+- 修复 iOS 系统语音识别持续报错「语音转写失败」的问题：改为 `.record + .measurement` 音频会话、调整识别任务与音频引擎启停顺序、清理旧识别任务避免连续报错，并放开强锁离线限制（优先本机离线，离线包未就绪时自动回退 Apple 系统语音服务）且开启自动标点。
+- 修复 iOS 应用内点击更新下载后需手动杀掉 App 才能完成安装的问题：触发更新前自动暂停后台静音保活与后台任务，切回主屏幕后系统可直接覆盖安装。
+
+### English
+
+- Enabled the Persistent Voice & Draft Bar (Settings › Terminal) by default: keeps the voice and multi-line draft bar pinned above the terminal key bar while hiding the toolbar voice button and collapse arrow; turn it off to toggle the bar from the key bar.
+- Fixed iOS system speech recognition repeatedly failing: switched to `.record` + `.measurement` audio session, fixed task/engine start order, cancelled stale recognition tasks on teardown, added automatic punctuation, and allowed fallback to Apple speech services when on-device assets are not ready.
+- Fixed iOS in-app updates waiting until the app is manually force-quit: pauses background silent audio keep-alive and background tasks before launching OTA installation so iOS can replace the app cleanly once you return to the Home Screen.
+
 ## 0.1.36
 
 - 新增「语音输入转可编辑草稿」（设置 › 语音输入），覆盖终端草稿栏、对话页与讨论页：支持系统本机离线识别及云端转写（OpenAI 兼容 / Groq / 硅基流动 / 火山豆包极速版 / 自定义），支持项目、分支、Agent 与自定义编程术语提示词，API Key 存于系统钥匙串 / Keystore，录音中断或转写失败自动保留音频供原地重试。
