@@ -69,3 +69,94 @@ func TestCursorEvents(t *testing.T) {
 		}
 	}
 }
+
+func TestCursorIdlePrompt(t *testing.T) {
+	cases := []struct {
+		name   string
+		screen []string
+		want   bool
+	}{
+		{
+			name: "standard follow-up prompt",
+			screen: []string{
+				"已回复完成。",
+				"",
+				"  → Add a follow-up",
+				"",
+				"  Auto | ctx 7% 17.4k/256k",
+				"  /Users/me/repo · Session",
+			},
+			want: true,
+		},
+		{
+			name: "bordered follow-up with plan hint",
+			screen: []string{
+				"┌──────────────────────────────┐",
+				"│ → Add a follow-up — /plan to review and build │",
+				"└──────────────────────────────┘",
+			},
+			want: true,
+		},
+		{
+			name: "empty session prompt",
+			screen: []string{
+				"  → Plan, search, build anything",
+				"  Auto | ctx 0%",
+			},
+			want: true,
+		},
+		{
+			name: "generating with ctrl+c to stop",
+			screen: []string{
+				"  → Add a follow-up                              ctrl+c to stop",
+				"  Auto | ctx 7% 17.4k/256k",
+			},
+			want: false,
+		},
+		{
+			name: "waiting for approval decision",
+			screen: []string{
+				"  → Waiting for decision (y/n/p)...",
+				"  Auto | ctx 7%",
+			},
+			want: false,
+		},
+		{
+			name: "confirmation dialog alongside prompt",
+			screen: []string{
+				"  → Add a follow-up",
+				"  y to confirm · n or Esc to cancel",
+			},
+			want: false,
+		},
+		{
+			name: "user typing draft replaces placeholder",
+			screen: []string{
+				"  → 帮我看看这个报错",
+				"  Auto | ctx 7%",
+			},
+			want: false,
+		},
+		{
+			name: "body text mentioning Add a follow-up without prompt arrow",
+			screen: []string{
+				"  终端停在 Add a follow-up 输入框",
+				"  Running shell command...",
+			},
+			want: false,
+		},
+		{
+			name: "prompt scrolled far above bottom 12 lines",
+			screen: []string{
+				"  → Add a follow-up",
+				"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13",
+			},
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		if got := CursorIdlePrompt(tc.screen); got != tc.want {
+			t.Errorf("%s: CursorIdlePrompt() = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

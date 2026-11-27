@@ -95,6 +95,7 @@ type session struct {
 	oscTurn   bool      // 这之后 hook 报过工作中
 
 	discussionTurn discussionTurn
+	cursorDone     cursorDoneWatch
 
 	hookSeq uint64    // 收到的 hook 事件计数：本轮结束时交了提醒，靠它看 agent 之后有没有接着做
 	turnAt  time.Time // 这一轮开始工作的时间，痕迹账本凭它判断文件是不是这一轮新建的
@@ -137,6 +138,7 @@ func (s *session) markHooked(name, sessionID string) uint64 {
 		s.unread = false
 		s.agyDir, s.agyDirs = "", nil
 		s.discussionTurn = discussionTurn{}
+		s.cursorDone = cursorDoneWatch{}
 		// 切到新 agent 实例时清空上个实例残留的退出态、会话 ID 与标题（session.mu → Terminal.mu）。
 		s.ResetAgent(host.AgentState{SessionID: sessionID, At: time.Now()})
 	} else if sessionID != "" {
@@ -402,6 +404,7 @@ func (s *session) detectAgent() (name string, hooked, changed bool, sid string, 
 		s.unread = false
 		s.agyDir, s.agyDirs = "", nil
 		s.discussionTurn = discussionTurn{}
+		s.cursorDone = cursorDoneWatch{}
 		sid = agent.SessionFromArgs(found, args)
 		status := agent.StatusIdle
 		if found == "zcode" {

@@ -915,6 +915,9 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 		}
 	}
 	s.discussionHook(p.Agent, p.Event, p.Payload, res.Deliver != "")
+	if p.Agent == "cursor" && (p.Event == "stop" || p.Event == "beforeSubmitPrompt") {
+		s.clearCursorDone()
+	}
 	d.setAgentFor(s, st, gen)
 	if p.Agent == "codex" && (p.Event == "Stop" || p.Event == "Interrupt") {
 		d.discKick()
@@ -1133,6 +1136,7 @@ func (d *Daemon) agentLoop(ctx context.Context) {
 			d.syncZCode(ctx, s)
 			d.syncZCodeDispatch(ctx, s)
 			d.syncAntigravity(s)
+			d.checkCursorDoneIdle(s)
 			// 标题和进程检查发现的 agent 变化、shell 里换的目录在这里记下
 			d.saveResume(s, false)
 		}

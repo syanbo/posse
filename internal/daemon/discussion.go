@@ -218,6 +218,7 @@ func (d *Daemon) continueRound(m store.Member, x store.Execution) {
 	claimed = true
 	finish(true)
 	d.recordTraceStart(x.ID, t.Worker, true)
+	s.clearCursorDone()
 	d.taskNotify()
 	go d.deliver(t.Worker)
 }
@@ -2393,6 +2394,7 @@ func (d *Daemon) discDone(t store.Task, p taskDoneParams) (any, error) {
 	}
 	d.freezeExecModel(p.Execution, t.Agent, t.Worker)
 	d.finalizeTraceAsync(p.Execution, t.Worker)
+	d.armCursorDoneIdle(t)
 	d.taskNotify()
 	d.discKick()
 	outcome := store.ExecDone

@@ -41,13 +41,14 @@ type handoffHello struct {
 }
 
 type handoffTerm struct {
-	Term           host.Record    `json:"term"`
-	Agent          string         `json:"agent,omitempty"`
-	DiscussionTurn discussionTurn `json:"discussionTurn,omitzero"`
-	ZCodeStart     string         `json:"zcodeStart,omitempty"`
-	Hooked         bool           `json:"hooked,omitempty"`
-	HookedPg       int            `json:"hookedPg,omitempty"` // session.agentPg；沿用旧名，和旧版本互相交接时格式不变
-	Fg             int            `json:"fg,omitempty"`
+	Term           host.Record     `json:"term"`
+	Agent          string          `json:"agent,omitempty"`
+	DiscussionTurn discussionTurn  `json:"discussionTurn,omitzero"`
+	CursorDone     cursorDoneWatch `json:"cursorDone,omitzero"`
+	ZCodeStart     string          `json:"zcodeStart,omitempty"`
+	Hooked         bool            `json:"hooked,omitempty"`
+	HookedPg       int             `json:"hookedPg,omitempty"` // session.agentPg；沿用旧名，和旧版本互相交接时格式不变
+	Fg             int             `json:"fg,omitempty"`
 	// Unread 可以省略：旧进程交过来时没有，当作看过；交给旧进程时它不认，丢掉也只是少提醒一次，不用升 handoffVersion
 	Unread bool `json:"unread,omitempty"`
 	// Runtime 是拉起终端的常驻进程所在的副本（session.runtime）。新加的可选字段，没加 handoffVersion：
@@ -389,7 +390,7 @@ func pauseForHandoff(s *session) (handoffTerm, *os.File, error) {
 	rec.Agent = s.Agent()
 	ht := handoffTerm{
 		Term: rec, Agent: s.agent, Hooked: s.hooked, HookedPg: s.agentPg, Fg: s.fg, Unread: s.unread,
-		Runtime: s.runtime, DiscussionTurn: s.discussionTurn, ZCodeStart: s.zcodeStart,
+		Runtime: s.runtime, DiscussionTurn: s.discussionTurn, CursorDone: s.cursorDone, ZCodeStart: s.zcodeStart,
 		TitleState: true, GrokName: s.grokName, AgentTitle: s.agentTitle,
 		ExitedSessionTitle: s.exitedSessionTitle, ExitedTitle: s.exitedTitle,
 	}
@@ -513,9 +514,13 @@ func (d *Daemon) adopt(in *incoming) error {
 		if ht.Agent != "" {
 			agentGen = 1
 		}
+		cursorDone := ht.CursorDone
+		if cursorDone.TaskID != "" {
+			cursorDone.gen = agentGen
+		}
 		s := &session{Terminal: t, ID: info.ID, WorkspaceID: info.WorkspaceID, Dir: info.Dir, Command: info.Command, CreatedAt: info.CreatedAt,
 			agent: ht.Agent, agentGen: agentGen, hooked: ht.Hooked, agentPg: ht.HookedPg, fg: ht.Fg, unread: ht.Unread, runtime: ht.Runtime, discussionTurn: ht.DiscussionTurn,
-			zcodeStart: ht.ZCodeStart, zcodeNudge: ht.Agent == "zcode",
+			cursorDone: cursorDone, zcodeStart: ht.ZCodeStart, zcodeNudge: ht.Agent == "zcode",
 			grokName: grokName, agentTitle: agentTitle, exitedSessionTitle: ht.ExitedSessionTitle, exitedTitle: ht.ExitedTitle}
 		// 标签名和恢复信息不在交接记录里：两边共用一个数据库
 		if r, err := d.store.TerminalResume(s.ID); err == nil {

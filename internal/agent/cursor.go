@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"path/filepath"
+	"strings"
 )
 
 // Cursor 的 hooks 原本只能写进 ~/.cursor/hooks.json 或项目的 .cursor/hooks.json；
@@ -61,4 +62,63 @@ func cursorStatus(event string) string {
 		return StatusExited
 	}
 	return ""
+}
+
+// cursorPromptLines 是 Cursor 底部输入区与状态栏的扫描范围。
+const cursorPromptLines = 12
+
+// cursorBusyHints 是 Cursor 仍在生成或等待交互决策时底部会出现的关键提示（小写匹配）。
+var cursorBusyHints = []string{
+	"ctrl+c to stop",
+	"waiting for decision",
+	"approve mode switch",
+	"answer questions",
+	"ready to proceed?",
+	"y to confirm",
+	"esc to cancel",
+}
+
+// CursorIdlePrompt 判断 Cursor 终端屏幕底部是否已稳定回到空闲输入框。
+// cursor-agent 2026.11.22 的 stop hook 前置守卫漏判 pluginHooks，未配置用户/项目 hooks.json 时
+// 不会发 stop；Posse 结合 task done 与输出静默，用这里的屏幕信号兜底判定空闲。
+func CursorIdlePrompt(screen []string) bool {
+	end := len(screen)
+	for end > 0 && strings.TrimSpace(screen[end-1]) == "" {
+		end--
+	}
+	if end == 0 {
+		return false
+	}
+	start := max(end-cursorPromptLines, 0)
+	hasPrompt := false
+	for i := start; i < end; i++ {
+		lower := strings.ToLower(screen[i])
+		for _, hint := range cursorBusyHints {
+			if strings.Contains(lower, hint) {
+				return false
+			}
+		}
+		if isCursorIdlePromptLine(screen[i]) {
+			hasPrompt = true
+		}
+	}
+	return hasPrompt
+}
+
+func isCursorIdlePromptLine(line string) bool {
+	s := strings.TrimSpace(line)
+	// 兼容带竖线边框的输入区写法（│ → Add a follow-up │）
+	s = strings.TrimSpace(strings.Trim(s, "│"))
+	var rest string
+	switch {
+	case strings.HasPrefix(s, "→"):
+		rest = strings.TrimSpace(strings.TrimPrefix(s, "→"))
+	case strings.HasPrefix(s, ">"):
+		rest = strings.TrimSpace(strings.TrimPrefix(s, ">"))
+	default:
+		return false
+	}
+	return rest == "Add a follow-up" ||
+		strings.HasPrefix(rest, "Add a follow-up — ") ||
+		rest == "Plan, search, build anything"
 }

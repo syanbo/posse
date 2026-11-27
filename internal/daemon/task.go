@@ -453,6 +453,7 @@ func (d *Daemon) taskDone(ctx context.Context, raw json.RawMessage) (any, error)
 	if err := d.postMessage(t, done); err != nil {
 		return nil, err
 	}
+	d.armCursorDoneIdle(t)
 	t, _ = d.store.Task(t.ID)
 	return d.taskInfo(t, nil, nil), nil
 }
@@ -906,6 +907,9 @@ func (d *Daemon) deliver(terminalID string) {
 	text, ids := d.takeNudge(terminalID)
 	if text == "" {
 		return
+	}
+	if name == "cursor" {
+		s.clearCursorDone()
 	}
 	if err := s.Inject([]byte(text)); err != nil {
 		d.store.UnmarkNudged(ids)
