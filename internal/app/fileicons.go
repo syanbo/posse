@@ -158,7 +158,7 @@ var kindByName = map[string]fileKind{
 }
 
 var kindByExt = map[string]fileKind{
-	".ts": kindTS, ".tsx": kindTS, ".mts": kindTS, ".cts": kindTS,
+	".ts": kindTS, ".tsx": kindTS, ".mts": kindTS, ".cts": kindTS, ".ets": kindTS,
 	".js": kindJS, ".jsx": kindJS, ".mjs": kindJS, ".cjs": kindJS,
 	".go": kindGo,
 	".py": kindCode, ".rs": kindCode, ".c": kindCode,

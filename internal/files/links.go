@@ -166,7 +166,7 @@ func quotedAt(line string, col int) (int, int, bool) {
 }
 
 // importExts 是补扩展名时试的顺序；目录再试 index.*。
-var importExts = []string{".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue", ".svelte", ".d.ts", ".json", ".css", ".scss", ".less", ".sass", ".dart", ".py", ".rs", ".go", ".md"}
+var importExts = []string{".ts", ".tsx", ".ets", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue", ".svelte", ".d.ts", ".d.ets", ".json", ".css", ".scss", ".less", ".sass", ".dart", ".py", ".rs", ".go", ".md"}
 
 // ResolveImport 把代码里写的路径 spec 解析成磁盘上的文件：相对路径按 from 所在目录（from 为空按 root），
 // 绝对路径照原样，`~/`、`@/` 这类别名按 tsconfig、jsconfig 的 paths，没有就试 root/src 和 root；

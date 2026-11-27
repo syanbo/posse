@@ -111,6 +111,21 @@ func TestFindDefinitionsGo(t *testing.T) {
 	}
 }
 
+func TestFindDefinitionsArkTS(t *testing.T) {
+	root := t.TempDir()
+	l := writeFiles(t, root, map[string]string{
+		"entry/src/main/ets/pages/Index.ets": "@Entry\n@Component\nstruct Index {\n  build() {\n    CardView()\n  }\n}\n",
+		"entry/src/main/ets/views/Card.ets":  "@Component\nexport struct CardView {\n  build() {}\n}\n",
+	})
+	defs, err := FindDefinitions(context.Background(), l, nil, DefinitionQuery{Word: "CardView", From: "entry/src/main/ets/pages/Index.ets"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(defs) != 1 || defs[0].Path != "entry/src/main/ets/views/Card.ets" || defs[0].Line != 1 || defs[0].Kind != "type" || !defs[0].Decl {
+		t.Fatalf("defs = %+v", defs)
+	}
+}
+
 func TestFindDefinitionsUnique(t *testing.T) {
 	root := t.TempDir()
 	l := writeFiles(t, root, map[string]string{

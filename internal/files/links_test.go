@@ -51,6 +51,8 @@ func TestResolveImport(t *testing.T) {
 	}
 	put("src/constants/scene-keys.ts", "")
 	put("src/utils/common/index.js", "")
+	put("src/views/Card.ets", "")
+	put("src/types/env.d.ets", "")
 	put("src/app.tsx", "")
 	put("lib/x.go", "package lib")
 	put("go.mod", "module example.com/m\n\ngo 1.22\n")
@@ -62,6 +64,8 @@ func TestResolveImport(t *testing.T) {
 	}{
 		{"~/constants/scene-keys", "src/constants/scene-keys.ts", 0},
 		{"./utils/common", "src/utils/common/index.js", 0},
+		{"./views/Card", "src/views/Card.ets", 0},
+		{"./types/env", "src/types/env.d.ets", 0},
 		{"./constants/scene-keys.ts:12", "src/constants/scene-keys.ts", 12},
 		{"example.com/m/lib", "lib/x.go", 0},
 		{"/src/app.tsx", "src/app.tsx", 0},

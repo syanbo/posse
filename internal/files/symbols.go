@@ -112,7 +112,7 @@ const (
 var families = map[string]family{
 	".go":   famGo,
 	".java": famJava, ".kt": famJava, ".kts": famJava, ".scala": famJava, ".cs": famJava, ".swift": famJava, ".dart": famJava, ".groovy": famJava,
-	".js": famJS, ".jsx": famJS, ".mjs": famJS, ".cjs": famJS, ".ts": famJS, ".tsx": famJS, ".mts": famJS, ".cts": famJS, ".vue": famJS, ".svelte": famJS,
+	".js": famJS, ".jsx": famJS, ".mjs": famJS, ".cjs": famJS, ".ts": famJS, ".tsx": famJS, ".mts": famJS, ".cts": famJS, ".ets": famJS, ".vue": famJS, ".svelte": famJS,
 	".py": famPy, ".pyi": famPy, ".pyw": famPy,
 	".rb": famRuby, ".rake": famRuby,
 	".rs": famRust,

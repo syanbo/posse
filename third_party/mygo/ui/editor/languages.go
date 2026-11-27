@@ -61,6 +61,9 @@ func languageAlias(name string) string {
 		return "javascript"
 	case "ts":
 		return "typescript"
+	// Posse: 鸿蒙 ArkTS（.ets）代码围栏别名。
+	case "ets", "arkts":
+		return "arkts"
 	case "py", "python3":
 		return "python"
 	case "sh", "bash", "zsh", "console", "shellscript", "fish":
@@ -162,6 +165,15 @@ func makeLanguages() {
 		Brackets: cBrackets, AutoClose: cAutoClose("\"", "'", "`"), WordChars: "$", TabSize: 2,
 		Tokenizer: &lexer{lineComments: []string{"//"}, blockComments: [][2]string{{"/*", "*/"}}, strings: jsStrings,
 			words: words(tsWords...), identChars: "$", calls: true, capitalTypes: true, regexps: true, decorator: '@', operators: cOperators},
+	}
+	// Posse: 鸿蒙 ArkTS（.ets / .d.ets）沿用 TypeScript 词法与 @ 装饰器高亮，并补充 struct 关键字。
+	arktsWords := append(append([]any{}, tsWords...), TokenKeyword, "struct")
+	arkts := &Language{
+		Name: "ArkTS", Extensions: []string{".ets"}, LineComment: "//", BlockComment: [2]string{"/*", "*/"},
+		Imports:  regexp.MustCompile(`^import[\s{*'"]`),
+		Brackets: cBrackets, AutoClose: cAutoClose("\"", "'", "`"), WordChars: "$", TabSize: 2,
+		Tokenizer: &lexer{lineComments: []string{"//"}, blockComments: [][2]string{{"/*", "*/"}}, strings: jsStrings,
+			words: words(arktsWords...), identChars: "$", calls: true, capitalTypes: true, regexps: true, decorator: '@', operators: cOperators},
 	}
 	json := &Language{
 		Name: "JSON", Extensions: []string{".json", ".jsonc", ".json5", ".webmanifest"}, Filenames: []string{".babelrc", ".eslintrc", "tsconfig.json"},
@@ -491,6 +503,6 @@ func makeLanguages() {
 	}
 	// HTML's tokenizer highlights the scripts and styles inside it.
 	html.Tokenizer = &markupLexer{html: true, script: javascript.Tokenizer, style: css.Tokenizer}
-	languageList = []*Language{goLang, javascript, typescript, json, python, rust, c, cpp, java, kotlin, scala, swift, dart, csharp,
+	languageList = []*Language{goLang, javascript, typescript, arkts, json, python, rust, c, cpp, java, kotlin, scala, swift, dart, csharp,
 		shell, yaml, toml, sql, rLang, ruby, lua, php, css, html, xml, markdown, diffLang, dockerfile, makefile, protobuf, graphql, zig}
 }

@@ -11,6 +11,7 @@ func TestKindOf(t *testing.T) {
 		"main.go":                             kindGo,
 		"internal/app/view.go":                kindGo,
 		"App.TSX":                             kindTS,
+		"entry/src/main/ets/pages/Index.ets":  kindTS,
 		"package.json":                        kindData,
 		"package-lock.json":                   kindLock,
 		"go.sum":                              kindLock,

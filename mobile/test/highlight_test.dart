@@ -12,6 +12,7 @@ void main() {
   test('language by file name and extension', () {
     expect(languageForPath('lib/main.dart'), 'dart');
     expect(languageForPath('a/b/Component.TSX'), 'typescript');
+    expect(languageForPath('entry/src/main/ets/pages/Index.ets'), 'typescript');
     expect(languageForPath('ios/Podfile'), 'ruby');
     expect(languageForPath('Dockerfile'), 'dockerfile');
     expect(languageForPath('notes.txt'), isNull);
@@ -20,6 +21,8 @@ void main() {
 
   test('fence languages accept highlight.js aliases', () {
     expect(languageForFence('ts'), 'ts');
+    expect(languageForFence('ets'), 'typescript');
+    expect(languageForFence('arkts'), 'typescript');
     expect(languageForFence('sh'), 'bash');
     expect(languageForFence('python title="x"'), 'python');
     expect(languageForFence('nope'), isNull);

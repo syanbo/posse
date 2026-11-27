@@ -164,6 +164,7 @@ const _byExt = {
   'mts': 'typescript',
   'cts': 'typescript',
   'tsx': 'typescript',
+  'ets': 'typescript',
   'json': 'json',
   'jsonc': 'json',
   'json5': 'json',
@@ -244,6 +245,8 @@ const _fenceAlias = {
   'toml': 'ini',
   'jsonc': 'json',
   'tsx': 'typescript',
+  'ets': 'typescript',
+  'arkts': 'typescript',
   'jsx': 'javascript',
   'objc': 'objectivec',
 };
