@@ -426,12 +426,11 @@ func (a *app) taskBoard(c *ui.Context) {
 // taskSidebar 是任务页的模块侧栏：标题行带派发按钮，下面是任务列表。
 func (a *app) taskSidebar(c *ui.Context) {
 	t, m := c.Theme(), L(c)
-	moduleHeader(c, a.moduleLabel(c, taskBoardID, m.TasksTitle()), func() {
+	a.moduleHeader(c, a.moduleLabel(c, taskBoardID, m.TasksTitle()), func() {
 		if iconButton(c, iconPlus, m.TasksDispatchEllipsis()).Clicked() {
 			a.openDispatch()
 		}
 	})
-	a.hostContextRow(c)
 	// 可以聚焦：点过列表后方向键归它，不被别处拿走（和历史页一样）
 	ui.Column(c).Grow(1).MinHeight(0).Focusable().FocusRing(false).Label(m.TasksList()).Children(func() {
 		if len(a.tasks) == 0 {

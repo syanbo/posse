@@ -383,6 +383,7 @@ type app struct {
 	iconEdit       iconEditor                // 更换项目图标的对话框
 	projIcons      map[string]projectIcon    // 项目自定义的图标，键是项目 ID
 	projIconCache  map[string]ui.ImageSource // 项目图标的图片，键是文件名
+	hostIconCache  map[string]ui.ImageSource // SSH 主机自定义图标的图片缓存，只由 windowOwner 持有
 	previewLoading map[string]bool
 	// lastPanel 是最后打开的右侧面板：关闭动画期间还要画它
 	lastPanel string
@@ -1677,7 +1678,11 @@ func (a *app) addProject(m locales.Messages) {
 func (r appRequest) addProject(m locales.Messages) {
 	a := r.app
 	if r.client != nil && r.client.Remote {
-		r.chooseTargetDirectory(m.AppAddProjectTitle(), m.AppAddProjectButton(), "/", func(path string) {
+		start := "/"
+		if h := filepath.Clean(r.client.Home); filepath.IsAbs(h) && h != "/" {
+			start = filepath.Dir(h)
+		}
+		r.chooseTargetDirectory(m.AppAddProjectTitle(), m.AppAddProjectButton(), start, func(path string) {
 			if r.call("project.add", map[string]any{"path": path}, nil, 10*time.Second) == nil {
 				r.refresh()
 			}

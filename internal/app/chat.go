@@ -91,7 +91,7 @@ func (a *app) chatSidebarItem(c *ui.Context) ui.Element {
 func (a *app) chatHeader(c *ui.Context) {
 	l := L(c)
 	w := a.chatWorkspace()
-	header := moduleHeader(c, a.moduleLabel(c, chatBoardID, l.ChatTitle()), func() {
+	header := a.moduleHeader(c, a.moduleLabel(c, chatBoardID, l.ChatTitle()), func() {
 		last := ""
 		if w != nil {
 			last = lastChatAgent(w)
@@ -103,7 +103,6 @@ func (a *app) chatHeader(c *ui.Context) {
 	if w != nil {
 		contextMenu(c, header, func(m *popMenu) { a.workspaceMenu(c, m, *w) })
 	}
-	a.hostContextRow(c)
 }
 
 // openChat 切到聊天工作区（停在上次看的标签），fresh 时再开一个新聊天：沿用最近一次聊天的 agent，

@@ -226,7 +226,28 @@ func (a *app) remoteHostTile(c *ui.Context, m locales.Messages, h remote.Host, m
 			badge = v.remoteHostBadge(c)
 		}
 	}
-	tile := navigationTile(c, "host-"+h.ID, nil, monogram, h.Name, st, badge)
+	t, p := c.Theme(), colors(c.Theme())
+	tile := ui.Box(c.Key("navigation-host-"+h.ID)).Size(navigationBox(), navigationBox()).Shrink(0).Radius(rControl).Center().Label(h.Name).Role(ui.RoleButton).Focusable()
+	fg, bg, border := t.TextMuted, p.fill, p.line
+	switch st {
+	case tileSelected:
+		fg, bg, border = t.Accent, p.tint, t.Accent
+	case tileCurrentHost:
+		fg, border = t.Accent, t.Accent
+		if tile.Hovered() {
+			bg = p.wash
+		}
+	default:
+		if tile.Hovered() {
+			fg, bg = t.Text, p.wash
+		}
+	}
+	tile.Background(tile.AnimateColor("bg", bg, hover)).BorderWidth(hairline).BorderColor(border).Children(func() {
+		a.hostTileGlyph(c, h, monogram, fg)
+		if badge != nil {
+			ui.Row(c).Absolute().Top(0).Right(0).AlignItems(ui.Center).Children(badge)
+		}
+	})
 	tile.Tooltip(m.HostTileTip(h.Name, h.Target))
 	if tile.Clicked() {
 		a.openHost(h)
@@ -384,11 +405,13 @@ func (a *app) sidebarNotices(c *ui.Context) {
 	a.errorBar(c)
 }
 
-// moduleHeader 是工作区、聊天、讨论、任务、历史这几个模块侧栏顶上的标题行，右边放这个模块的操作。
+// moduleHeader 是工作区、聊天、讨论、任务、历史这几个模块侧栏顶上的标题行，右边放这个模块的操作；
+// 远端主机时把主机名标签紧跟在标题右侧并垂直居中对齐。
 // 操作按钮有 buttonBox 和 compactBox 两种大小，行高按大的定，切换模块时标题和下面的列表不跳。
-func moduleHeader(c *ui.Context, title string, actions func()) ui.Element {
+func (a *app) moduleHeader(c *ui.Context, title string, actions func()) ui.Element {
 	return ui.Row(c).MinHeight(buttonBox()+20).Padding(12, iconBarPad(), 8, trafficLightX).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
-		titleText(c, title, fsTitle).MaxLines(1).Shrink(1).MinWidth(0)
+		titleText(c, title, fsTitle).MaxLines(1).Shrink(0)
+		a.hostHeaderBadge(c)
 		ui.Spacer(c)
 		actions()
 	})
@@ -396,7 +419,7 @@ func moduleHeader(c *ui.Context, title string, actions func()) ui.Element {
 
 func (a *app) discussionSidebar(c *ui.Context) {
 	m := L(c)
-	moduleHeader(c, a.moduleLabel(c, discBoardID, m.DiscTitle()), func() {
+	a.moduleHeader(c, a.moduleLabel(c, discBoardID, m.DiscTitle()), func() {
 		if iconButton(c, iconPlus, m.DiscNewEllipsis()).Disabled(len(a.projects) == 0).Clicked() && len(a.projects) > 0 {
 			a.openNewDiscussion()
 		}

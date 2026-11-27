@@ -21,7 +21,7 @@ func (a *app) sidebarGroupSwitch(c *ui.Context) {
 	if on {
 		title = L(c).RunningTitle()
 	}
-	moduleHeader(c, a.moduleLabel(c, workspacesBoardID, title), func() {
+	a.moduleHeader(c, a.moduleLabel(c, workspacesBoardID, title), func() {
 		if len(a.projects) == 0 {
 			return
 		}
@@ -36,7 +36,6 @@ func (a *app) sidebarGroupSwitch(c *ui.Context) {
 			a.saveState()
 		}
 	})
-	a.hostContextRow(c)
 }
 
 // runRank 是「运行中」里的排序：要你处理的在前，空闲在后，还没恢复的最后。

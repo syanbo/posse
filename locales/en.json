@@ -73,6 +73,8 @@
   "@hostFieldTargetPlaceholder": {"description": "Placeholder for the SSH target input."},
   "hostFieldName": "Name",
   "@hostFieldName": {"description": "Label for the SSH host display name input."},
+  "hostFieldIcon": "Icon",
+  "@hostFieldIcon": {"description": "Label for the optional custom SSH host icon input."},
   "hostAdvanced": "Advanced",
   "@hostAdvanced": {"description": "Collapsible advanced SSH settings section."},
   "hostFieldUser": "Username",

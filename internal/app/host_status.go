@@ -135,22 +135,34 @@ func (a *app) hostChip(c *ui.Context) {
 	}
 }
 
-// hostContextRow 画在工作区、聊天、任务、历史四个模块侧栏标题行的正下方，仅远端主机显示，
-// 写明当前侧栏内容属于哪台机器以及非正常连接状态。
-func (a *app) hostContextRow(c *ui.Context) {
+// hostHeaderBadge 画在工作区、聊天、任务、历史模块侧栏标题（如「项目」）右侧，
+// 仅远端主机显示，与标题垂直居中对齐；点击可呼出主机切换菜单。
+func (a *app) hostHeaderBadge(c *ui.Context) {
 	if !a.remoteHost() {
 		return
 	}
-	t, m := c.Theme(), L(c)
+	t, p, m := c.Theme(), colors(c.Theme()), L(c)
 	name := a.hostName(m)
 	status := a.hostStatus(m)
-	ui.Row(c.Key("host-context-row")).Padding(0, iconBarPad(), 8, trafficLightX).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
-		ui.Icon(c, iconHost).FontSize(fsSmall).TextColor(t.Accent).Shrink(0)
+	saved, _ := a.findSavedHost(a.viewID)
+	tip := name
+	if status != "" {
+		tip += " · " + status
+	}
+	chip := ui.Row(c.Key("host-context-badge")).Height(sz(22)).Padding(0, 6).Gap(4).Radius(rRow).
+		AlignItems(ui.Center).Shrink(1).MinWidth(0).Role(ui.RoleButton).Label(name).Tooltip(tip).
+		BorderWidth(hairline).BorderColor(p.line)
+	bg := p.fill
+	if chip.Hovered() {
+		bg = p.wash
+	}
+	chip.Background(chip.AnimateColor("bg", bg, hover)).Children(func() {
+		a.hostMiniGlyph(c, saved)
 		ui.Text(c, name).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.Text).SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-		if status != "" {
-			ui.Text(c, status).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-		}
 	})
+	if chip.Clicked() {
+		a.openHostMenu()
+	}
 }
 
 // remoteLandingCard 在首次连接远端（尚无缓存数据）期间或失败时占据主区域中央，避免整块白屏。

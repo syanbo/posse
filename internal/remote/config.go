@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/sys/unix"
 )
@@ -24,6 +25,8 @@ type Host struct {
 	Port       int    `json:"port,omitempty"`
 	Executable string `json:"executable,omitempty"`
 	Home       string `json:"home,omitempty"`
+	Icon       string `json:"icon,omitempty"`
+	IconImage  string `json:"iconImage,omitempty"`
 }
 
 func (h Host) Validate() error {
@@ -46,6 +49,12 @@ func (h Host) Validate() error {
 		if p != "" && ((!filepath.IsAbs(p) && !strings.HasPrefix(p, "~/")) || strings.ContainsAny(p, "\x00\r\n")) {
 			return errors.New("remote paths must be absolute or start with ~/")
 		}
+	}
+	if strings.ContainsAny(h.Icon, "\x00\r\n") || utf8.RuneCountInString(strings.TrimSpace(h.Icon)) > 16 {
+		return errors.New("invalid host icon")
+	}
+	if h.IconImage != "" && (filepath.Base(h.IconImage) != h.IconImage || h.IconImage == "." || h.IconImage == ".." || strings.ContainsAny(h.IconImage, "/\\\x00\r\n")) {
+		return errors.New("invalid host icon image")
 	}
 	return nil
 }

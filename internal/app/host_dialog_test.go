@@ -81,6 +81,7 @@ func TestHostDialogValidationPasteAndSave(t *testing.T) {
 	}
 	// 合法提交写入 hosts.json 并切到新主机（前面可能有异步 ConfigAliases 的 update 排队）
 	d.name = "Builder"
+	d.icon = "🖥️"
 	a.submitHostDialog(m, d, false)
 	for i := 0; i < 4 && a.hostDlg.saving; i++ {
 		awaitHostUpdate(t, a)
@@ -92,8 +93,14 @@ func TestHostDialogValidationPasteAndSave(t *testing.T) {
 	}
 	awaitHostUpdate(t, active)
 	saved, err := remote.Load(a.home)
-	if err != nil || len(saved) != 2 || saved[1].Name != "Builder" || saved[1].Port != 2222 {
+	if err != nil || len(saved) != 2 || saved[1].Name != "Builder" || saved[1].Port != 2222 || saved[1].Icon != "🖥️" {
 		t.Fatalf("saved hosts = %+v (%v)", saved, err)
+	}
+	// 仅改自定义图标不应触发断连重连
+	a.openHostDialog(saved[1])
+	a.hostDlg.icon = "⚡"
+	if a.editingLiveConnectionChanged(&a.hostDlg) {
+		t.Fatal("changing only host icon triggered live reconnect")
 	}
 }
 

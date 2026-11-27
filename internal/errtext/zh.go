@@ -47,6 +47,8 @@ var zh = [][2]string{
 	{"host name already exists", "已有同名主机"},
 	{"host configuration changed; reopen the dialog to edit", "主机配置已被其他地方修改，请重新打开弹窗编辑"},
 	{"invalid SSH target", "SSH 目标格式无效"},
+	{"invalid host icon", "主机图标格式无效"},
+	{"invalid host icon image", "主机图标文件无效"},
 	{"invalid SSH user", "SSH 用户名格式无效"},
 	{"specify SSH user either in target or separately", "SSH 用户名只需写在目标或用户名栏其中一处"},
 	{"SSH port must be between 1 and 65535", "SSH 端口须在 1 到 65535 之间"},

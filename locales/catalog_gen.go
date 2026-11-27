@@ -555,6 +555,20 @@ func (msgs Messages) HostFieldName() string {
 	return Catalog.Format(msgs.locale, "hostFieldName", nil)
 }
 
+// HostFieldIcon says "Icon"
+// in the language the app shows.
+//
+// Label for the optional custom SSH host icon input.
+func HostFieldIcon() string { return In(i18n.Locale()).HostFieldIcon() }
+
+// HostFieldIcon says "Icon"
+// in the language of msgs.
+//
+// Label for the optional custom SSH host icon input.
+func (msgs Messages) HostFieldIcon() string {
+	return Catalog.Format(msgs.locale, "hostFieldIcon", nil)
+}
+
 // HostAdvanced says "Advanced"
 // in the language the app shows.
 //

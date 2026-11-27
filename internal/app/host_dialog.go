@@ -19,6 +19,9 @@ type hostDialogState struct {
 	editing     remote.Host // ID 为空表示添加
 	target      string
 	name        string
+	icon        string
+	iconImage   string
+	pickingIcon bool
 	user        string
 	port        string
 	home        string
@@ -37,6 +40,9 @@ type hostDialogState struct {
 
 func (a *app) openHostDialog(editing remote.Host) {
 	owner := a.windowOwner()
+	if owner.hostDlg.open {
+		owner.dropHostIconFile(owner.hostDlg.iconImage, owner.hostDlg.editing.IconImage)
+	}
 	owner.loadHostMenu()
 	d := &owner.hostDlg
 	nextGen := d.gen + 1
@@ -46,6 +52,8 @@ func (a *app) openHostDialog(editing remote.Host) {
 		editing:     editing,
 		target:      editing.Target,
 		name:        editing.Name,
+		icon:        editing.Icon,
+		iconImage:   editing.IconImage,
 		user:        editing.User,
 		home:        editing.Home,
 		exe:         editing.Executable,
@@ -172,6 +180,42 @@ func (a *app) hostDialog(c *ui.Context) {
 						}
 					})
 
+					// 图标（自定义 Emoji/文字或图片，留空则显示名称缩略）
+					ui.Column(c).Gap(4).Children(func() {
+						ui.Text(c, m.HostFieldIcon()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
+						draftHost, _, _ := a.buildHostFromDialog(d)
+						previewMono := "SH"
+						if cands := monogramCandidates(draftHost.Name); len(cands) > 0 {
+							previewMono = cands[0]
+						}
+						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+							ui.Box(c.Key("host-icon-preview")).Size(navigationBox(), navigationBox()).Shrink(0).Radius(rControl).Center().
+								Background(p.tint).BorderWidth(hairline).BorderColor(t.Accent).Children(func() {
+								a.hostTileGlyph(c, draftHost, previewMono, t.Accent)
+							})
+							ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+								inp := fieldInput(c.Key("host-icon-text"), &d.icon, m.ProjectIconTextPlaceholder()).Label(m.HostFieldIcon())
+								if inp.Submitted() {
+									submit = true
+								}
+							})
+							pickLabel := m.ProjectIconChooseImage()
+							if d.pickingIcon {
+								pickLabel = m.ProjectIconChoosing()
+							}
+							if pressable(textButton(c.Key("host-icon-pick"), pickLabel).Disabled(d.pickingIcon || d.saving)).Clicked() && !d.pickingIcon && !d.saving {
+								d.pickingIcon = true
+								go a.pickHostIcon(m, d.gen, draftHost.Name)
+							}
+							if strings.TrimSpace(d.icon) != "" || d.iconImage != "" {
+								if pressable(textButton(c.Key("host-icon-reset"), m.CommonResetToDefault()).Disabled(d.saving)).Clicked() && !d.saving {
+									owner.dropHostIconFile(d.iconImage, d.editing.IconImage)
+									d.icon, d.iconImage = "", ""
+								}
+							}
+						})
+					})
+
 					// 折叠高级设置
 					ui.Column(c).Gap(8).Children(func() {
 						chev := iconChevron
@@ -253,12 +297,14 @@ func (a *app) hostDialog(c *ui.Context) {
 					rm := confirmButton(c, pressable(textButton(c.Key("host-remove"), m.HostRemove()).TextColor(t.Danger).Disabled(d.saving)))
 					if rm.Clicked() && !d.saving {
 						editing := d.editing
+						owner.dropHostIconFile(d.iconImage, d.editing.IconImage)
 						d.open = false
 						a.confirmRemoveHost(m, editing)
 					}
 				}
 				ui.Spacer(c)
 				if confirmButton(c, pressable(textButton(c.Key("host-cancel"), m.CommonCancel()).Disabled(d.saving))).Clicked() && !d.saving {
+					owner.dropHostIconFile(d.iconImage, d.editing.IconImage)
 					d.open = false
 				}
 				primary := m.HostAddConnect()
@@ -280,6 +326,8 @@ func (a *app) hostDialog(c *ui.Context) {
 	})
 	if modal.ClickedOutside() || d.saving {
 		d.open = true
+	} else if !d.open {
+		owner.dropHostIconFile(d.iconImage, d.editing.IconImage)
 	}
 }
 
@@ -325,6 +373,11 @@ func (a *app) buildHostFromDialog(d *hostDialogState) (remote.Host, int, bool) {
 			portVal = n
 		}
 	}
+	iconText := strings.TrimSpace(d.icon)
+	iconImg := ""
+	if iconText == "" {
+		iconImg = d.iconImage
+	}
 	h := remote.Host{
 		ID:         d.editing.ID,
 		Name:       name,
@@ -333,6 +386,8 @@ func (a *app) buildHostFromDialog(d *hostDialogState) (remote.Host, int, bool) {
 		Port:       portVal,
 		Home:       strings.TrimSpace(d.home),
 		Executable: strings.TrimSpace(d.exe),
+		Icon:       iconText,
+		IconImage:  iconImg,
 	}
 	return h, portVal, portOK
 }
@@ -429,6 +484,14 @@ func (a *app) submitHostDialog(m locales.Messages, d *hostDialogState, reconnect
 				return
 			}
 			owner.loadHostMenu()
+			oldImg := owner.hostDlg.editing.IconImage
+			draftImg := owner.hostDlg.iconImage
+			if draftImg != saved.IconImage {
+				owner.dropHostIconFile(draftImg, saved.IconImage)
+			}
+			if oldImg != "" && oldImg != saved.IconImage {
+				owner.removeHostIconFile(oldImg)
+			}
 			owner.hostDlg.open = false
 			if !isEdit {
 				owner.selectRemoteHost(saved)
@@ -450,6 +513,9 @@ func (a *app) confirmRemoveHost(m locales.Messages, h remote.Host) {
 			if err != nil {
 				owner.displayed().err = errtext.Text(err)
 				return
+			}
+			if h.IconImage != "" {
+				owner.removeHostIconFile(h.IconImage)
 			}
 			if owner.views != nil && (owner.views.active.Load().viewID == h.ID || owner.views.target.viewID == h.ID) {
 				if owner.hosts != nil {

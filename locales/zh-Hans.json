@@ -36,6 +36,7 @@
   "hostFieldTarget": "SSH 目标",
   "hostFieldTargetPlaceholder": "user@host、~/.ssh/config 别名或 ssh 命令",
   "hostFieldName": "名称",
+  "hostFieldIcon": "图标",
   "hostAdvanced": "高级设置",
   "hostFieldUser": "用户名",
   "hostFieldPort": "端口",

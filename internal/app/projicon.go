@@ -74,6 +74,10 @@ func (a *app) projectIconImage(name string) ui.ImageSource {
 // importProjectIcon 把选的图片缩到 projectIconPx 存成 PNG，放进 $POSSE_HOME/project-icons：
 // 原文件之后挪走、删掉都不影响图标。SVG 也画成 PNG，手机不用会画 SVG。返回存下的文件名。
 func importProjectIcon(home, projectID, src string) (string, error) {
+	return importIconPNG(projectIconDir(home), projectID, src)
+}
+
+func importIconPNG(dir, prefix, src string) (string, error) {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return "", err
@@ -103,11 +107,10 @@ func importProjectIcon(home, projectID, src string) (string, error) {
 	if err := png.Encode(&buf, img); err != nil {
 		return "", err
 	}
-	dir := projectIconDir(home)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	name := fmt.Sprintf("%s-%d.png", projectID, time.Now().UnixNano())
+	name := fmt.Sprintf("%s-%d.png", prefix, time.Now().UnixNano())
 	if err := os.WriteFile(filepath.Join(dir, name), buf.Bytes(), 0o644); err != nil {
 		return "", err
 	}

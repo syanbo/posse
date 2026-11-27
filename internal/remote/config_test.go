@@ -67,6 +67,15 @@ func TestHostValidation(t *testing.T) {
 	if h.Validate() == nil {
 		t.Fatal("invalid port accepted")
 	}
+	if err := (Host{Name: "Mac", Target: "mac", Icon: "🖥️"}).Validate(); err != nil {
+		t.Fatalf("emoji icon rejected: %v", err)
+	}
+	if err := (Host{Name: "Mac", Target: "mac", IconImage: "../escape.png"}).Validate(); err == nil {
+		t.Fatal("path traversal iconImage accepted")
+	}
+	if err := (Host{Name: "Mac", Target: "mac", IconImage: "host-1.png"}).Validate(); err != nil {
+		t.Fatalf("valid iconImage rejected: %v", err)
+	}
 }
 
 func TestPutUniqueAndRemoveIf(t *testing.T) {
