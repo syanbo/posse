@@ -1679,10 +1679,13 @@ func (r appRequest) addProject(m locales.Messages) {
 	a := r.app
 	if r.client != nil && r.client.Remote {
 		start := "/"
+		var fallbacks []string
 		if h := filepath.Clean(r.client.Home); filepath.IsAbs(h) && h != "/" {
-			start = filepath.Dir(h)
+			userHome := filepath.Dir(h)
+			start = filepath.Join(userHome, "Desktop")
+			fallbacks = []string{userHome, "/"}
 		}
-		r.chooseTargetDirectory(m.AppAddProjectTitle(), m.AppAddProjectButton(), start, func(path string) {
+		r.chooseTargetDirectoryWithFallbacks(m.AppAddProjectTitle(), m.AppAddProjectButton(), start, fallbacks, func(path string) {
 			if r.call("project.add", map[string]any{"path": path}, nil, 10*time.Second) == nil {
 				r.refresh()
 			}

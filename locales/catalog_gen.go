@@ -1325,6 +1325,22 @@ func (msgs Messages) TargetDirectoryPath() string {
 	return Catalog.Format(msgs.locale, "targetDirectoryPath", nil)
 }
 
+// TargetDirectoryPathPlaceholder says "Type a path or filter folders…"
+// in the language the app shows.
+//
+// Placeholder in the target directory path input.
+func TargetDirectoryPathPlaceholder() string {
+	return In(i18n.Locale()).TargetDirectoryPathPlaceholder()
+}
+
+// TargetDirectoryPathPlaceholder says "Type a path or filter folders…"
+// in the language of msgs.
+//
+// Placeholder in the target directory path input.
+func (msgs Messages) TargetDirectoryPathPlaceholder() string {
+	return Catalog.Format(msgs.locale, "targetDirectoryPathPlaceholder", nil)
+}
+
 // TargetDirectoryEmpty says "No subfolders"
 // in the language the app shows.
 //
@@ -1339,6 +1355,82 @@ func TargetDirectoryEmpty() string { return In(i18n.Locale()).TargetDirectoryEmp
 // be selected.
 func (msgs Messages) TargetDirectoryEmpty() string {
 	return Catalog.Format(msgs.locale, "targetDirectoryEmpty", nil)
+}
+
+// TargetDirectoryNoMatch says "No matching folders"
+// in the language the app shows.
+//
+// Shown when the typed path filter matches no subfolders in the current
+// directory.
+func TargetDirectoryNoMatch() string { return In(i18n.Locale()).TargetDirectoryNoMatch() }
+
+// TargetDirectoryNoMatch says "No matching folders"
+// in the language of msgs.
+//
+// Shown when the typed path filter matches no subfolders in the current
+// directory.
+func (msgs Messages) TargetDirectoryNoMatch() string {
+	return Catalog.Format(msgs.locale, "targetDirectoryNoMatch", nil)
+}
+
+// TargetDirectoryNewFolder says "New Folder"
+// in the language the app shows.
+//
+// Button to create a new subfolder in the currently viewed remote
+// directory.
+func TargetDirectoryNewFolder() string { return In(i18n.Locale()).TargetDirectoryNewFolder() }
+
+// TargetDirectoryNewFolder says "New Folder"
+// in the language of msgs.
+//
+// Button to create a new subfolder in the currently viewed remote
+// directory.
+func (msgs Messages) TargetDirectoryNewFolder() string {
+	return Catalog.Format(msgs.locale, "targetDirectoryNewFolder", nil)
+}
+
+// TargetDirectoryNewFolderPlaceholder says "Folder name"
+// in the language the app shows.
+//
+// Placeholder for the new folder name input.
+func TargetDirectoryNewFolderPlaceholder() string {
+	return In(i18n.Locale()).TargetDirectoryNewFolderPlaceholder()
+}
+
+// TargetDirectoryNewFolderPlaceholder says "Folder name"
+// in the language of msgs.
+//
+// Placeholder for the new folder name input.
+func (msgs Messages) TargetDirectoryNewFolderPlaceholder() string {
+	return Catalog.Format(msgs.locale, "targetDirectoryNewFolderPlaceholder", nil)
+}
+
+// TargetDirectoryCreate says "Create"
+// in the language the app shows.
+//
+// Confirm button for creating a new remote folder.
+func TargetDirectoryCreate() string { return In(i18n.Locale()).TargetDirectoryCreate() }
+
+// TargetDirectoryCreate says "Create"
+// in the language of msgs.
+//
+// Confirm button for creating a new remote folder.
+func (msgs Messages) TargetDirectoryCreate() string {
+	return Catalog.Format(msgs.locale, "targetDirectoryCreate", nil)
+}
+
+// TargetDirectoryInvalidName says "Folder name cannot be empty or contain /"
+// in the language the app shows.
+//
+// Validation error when the new folder name is empty or invalid.
+func TargetDirectoryInvalidName() string { return In(i18n.Locale()).TargetDirectoryInvalidName() }
+
+// TargetDirectoryInvalidName says "Folder name cannot be empty or contain /"
+// in the language of msgs.
+//
+// Validation error when the new folder name is empty or invalid.
+func (msgs Messages) TargetDirectoryInvalidName() string {
+	return Catalog.Format(msgs.locale, "targetDirectoryInvalidName", nil)
 }
 
 // SshAuthTitle says "Connect to {host}"

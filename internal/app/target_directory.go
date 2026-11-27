@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/files"
+	"posse/internal/rpc"
+	"posse/locales"
 )
 
 type targetDirectory struct {
@@ -19,16 +22,26 @@ type targetDirectory struct {
 	title, verb, host string
 	input, path       string
 	entries           []files.Entry
+	fallbacks         []string
 	loaded, loading   bool
 	err               error
 	seq               uint64
 	cancel            context.CancelFunc
 	done              func(string)
 	list              ui.ListState
+
+	newOpen  bool
+	newName  string
+	newErr   string
+	creating bool
 }
 
 // chooseTargetDirectory 可从后台调用；打开和后续状态变更都排到窗口线程。
 func (r appRequest) chooseTargetDirectory(title, verb, start string, done func(string)) {
+	r.chooseTargetDirectoryWithFallbacks(title, verb, start, nil, done)
+}
+
+func (r appRequest) chooseTargetDirectoryWithFallbacks(title, verb, start string, fallbacks []string, done func(string)) {
 	r.update(func() {
 		if r.client == nil || !r.client.Remote || r.client.Desktop == nil || !r.mayWrite() {
 			return
@@ -41,9 +54,16 @@ func (r appRequest) chooseTargetDirectory(title, verb, start string, done func(s
 		if r.host != nil && r.host.label != "" {
 			host = r.host.label
 		}
-		d := &targetDirectory{request: r, title: title, verb: verb, host: host, done: done}
+		d := &targetDirectory{
+			request:   r,
+			title:     title,
+			verb:      verb,
+			host:      host,
+			fallbacks: slices.Clone(fallbacks),
+			done:      done,
+		}
 		r.app.targetDir = d
-		d.load(start)
+		d.loadWithInput(start, "", true)
 	})
 }
 
@@ -64,7 +84,11 @@ func (d *targetDirectory) current() bool {
 }
 
 func (d *targetDirectory) canSelect() bool {
-	return d.current() && d.request.snapshot.Controlled && d.loaded && !d.loading && d.err == nil && d.input == d.path
+	return d.current() && d.request.snapshot.Controlled && d.loaded && !d.loading && !d.creating && d.err == nil && d.input == d.path
+}
+
+func (d *targetDirectory) canCreateDir() bool {
+	return d.current() && d.request.snapshot.Controlled && d.loaded && !d.loading && !d.creating && d.err == nil
 }
 
 func (d *targetDirectory) selectDirectory() {
@@ -83,19 +107,32 @@ func (d *targetDirectory) selectDirectory() {
 }
 
 func (d *targetDirectory) load(next string) {
+	d.loadWithInput(next, "", false)
+}
+
+func (d *targetDirectory) loadWithInput(next, displayInput string, keepFallbacks bool) {
 	if !d.current() || !d.request.mayWrite() {
 		return
 	}
 	if d.cancel != nil {
 		d.cancel()
 	}
+	if !keepFallbacks {
+		d.fallbacks = nil
+	}
 	d.seq++
 	seq := d.seq
-	d.input, d.path = next, next
+	d.path = next
+	if displayInput != "" {
+		d.input = displayInput
+	} else {
+		d.input = next
+	}
 	d.loaded, d.loading, d.err = false, true, nil
 	d.entries = nil
 	d.list = ui.ListState{}
 	d.cancel = nil
+	d.newOpen, d.newName, d.newErr = false, "", ""
 	if !path.IsAbs(next) || strings.ContainsRune(next, '\x00') {
 		d.loading = false
 		d.err = errors.New("file path must be absolute and contain no NUL")
@@ -132,6 +169,13 @@ func (d *targetDirectory) load(next string) {
 				return
 			}
 			d.cancel = nil
+			if err != nil && len(d.fallbacks) > 0 {
+				fb := d.fallbacks[0]
+				d.fallbacks = d.fallbacks[1:]
+				d.loadWithInput(fb, "", true)
+				return
+			}
+			d.fallbacks = nil
 			d.loading, d.loaded, d.err = false, err == nil, err
 			if err == nil {
 				d.entries = entries
@@ -165,6 +209,132 @@ func targetDirectoryParent(value string) string {
 	return "/"
 }
 
+// filterQuery 返回当前输入框在 d.path 目录下对应的子文件夹过滤词。
+func (d *targetDirectory) filterQuery() string {
+	in := d.input
+	if in == "" || in == d.path {
+		return ""
+	}
+	if !path.IsAbs(in) {
+		return strings.TrimSpace(in)
+	}
+	if strings.HasSuffix(in, "/") {
+		return ""
+	}
+	base := strings.TrimRight(d.path, "/")
+	prefix := base + "/"
+	if base == "" {
+		prefix = "/"
+	}
+	if strings.HasPrefix(in, prefix) {
+		rest := in[len(prefix):]
+		if !strings.ContainsRune(rest, '/') {
+			return rest
+		}
+	}
+	return ""
+}
+
+// visibleEntries 按输入过滤词筛选并排序当前目录子文件夹：前缀匹配优先，其次子串，最后模糊匹配。
+func (d *targetDirectory) visibleEntries() []files.Entry {
+	q := strings.ToLower(strings.TrimSpace(d.filterQuery()))
+	if q == "" {
+		return d.entries
+	}
+	var prefixMatch, containsMatch, fuzzyMatch []files.Entry
+	for _, e := range d.entries {
+		low := strings.ToLower(e.Name)
+		switch {
+		case strings.HasPrefix(low, q):
+			prefixMatch = append(prefixMatch, e)
+		case strings.Contains(low, q):
+			containsMatch = append(containsMatch, e)
+		case fuzzySubsequence(low, q):
+			fuzzyMatch = append(fuzzyMatch, e)
+		}
+	}
+	out := make([]files.Entry, 0, len(prefixMatch)+len(containsMatch)+len(fuzzyMatch))
+	out = append(out, prefixMatch...)
+	out = append(out, containsMatch...)
+	out = append(out, fuzzyMatch...)
+	return out
+}
+
+func fuzzySubsequence(haystack, needle string) bool {
+	if needle == "" {
+		return true
+	}
+	nr := []rune(needle)
+	i := 0
+	for _, r := range haystack {
+		if r == nr[i] {
+			i++
+			if i == len(nr) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// onInputChanged 在用户输入或修改路径时实时筛选当前目录列表（纯内存过滤，不发多余 RPC），
+// 回车或点击匹配项时再向目标机请求目标目录。
+func (d *targetDirectory) onInputChanged() {
+	d.fallbacks = nil
+	d.list = ui.ListState{}
+}
+
+func (d *targetDirectory) submitInput() {
+	if q := d.filterQuery(); q != "" {
+		if vis := d.visibleEntries(); len(vis) > 0 {
+			if strings.EqualFold(vis[0].Name, q) || len(vis) == 1 {
+				d.enter(vis[0].Name)
+				return
+			}
+		}
+	}
+	if path.IsAbs(d.input) {
+		target := d.input
+		if target != "/" {
+			target = strings.TrimRight(target, "/")
+		}
+		d.load(target)
+	}
+}
+
+func (d *targetDirectory) createFolder(m locales.Messages) {
+	if !d.canCreateDir() || !d.request.mayWrite() {
+		return
+	}
+	name := strings.TrimSpace(d.newName)
+	if !targetDirectoryName(name) {
+		d.newErr = m.TargetDirectoryInvalidName()
+		return
+	}
+	fullPath := strings.TrimRight(d.path, "/") + "/" + name
+	d.creating = true
+	d.newErr = ""
+	seq := d.seq
+	r := d.request
+	go func() {
+		ctx, cancel := context.WithTimeout(r.app.windowContext(), 15*time.Second)
+		defer cancel()
+		err := r.invoke(ctx, "files.mkdir", rpc.FileMkdirParams{Path: fullPath}, nil)
+		r.update(func() {
+			if !d.current() || seq != d.seq {
+				return
+			}
+			d.creating = false
+			if err != nil {
+				d.newErr = errtext.Text(err)
+				return
+			}
+			d.newOpen, d.newName, d.newErr = false, "", ""
+			d.load(fullPath)
+		})
+	}()
+}
+
 func (a *app) targetDirectoryDialog(c *ui.Context) {
 	d := a.targetDir
 	if d == nil {
@@ -176,7 +346,7 @@ func (a *app) targetDirectoryDialog(c *ui.Context) {
 	}
 	open := true
 	ui.Modal(c.Key(d), &open, func() {
-		m, t := L(c), c.Theme()
+		m, t, p := L(c), c.Theme(), colors(c.Theme())
 		ui.Column(c).Width(targetDirectoryWidth()).Gap(12).Children(func() {
 			titleText(c, d.title, fsTitle)
 			ui.Text(c, m.TargetDirectoryHost(d.host)).FontSize(fsSmall).TextColor(t.TextMuted).Wrap()
@@ -185,12 +355,20 @@ func (a *app) targetDirectoryDialog(c *ui.Context) {
 					d.load(targetDirectoryParent(d.path))
 				}
 				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-					if fieldInput(c, &d.input, "/").Label(m.TargetDirectoryPath()).AutoFocus().Submitted() {
-						d.load(d.input)
+					inp := fieldInput(c.Key("target-dir-path"), &d.input, m.TargetDirectoryPathPlaceholder()).Label(m.TargetDirectoryPath())
+					if !d.newOpen {
+						inp.AutoFocus()
+					}
+					if inp.Changed() {
+						d.onInputChanged()
+					}
+					if inp.Submitted() {
+						d.submitInput()
 					}
 				})
 			})
 			ui.Column(c).Height(targetDirectoryHeight()).Children(func() {
+				entries := d.visibleEntries()
 				switch {
 				case d.loading:
 					ui.Text(c, m.CommonLoading()).FontSize(fsBody).TextColor(t.TextMuted).Padding(8)
@@ -198,8 +376,9 @@ func (a *app) targetDirectoryDialog(c *ui.Context) {
 					ui.Text(c, errtext.Text(d.err)).FontSize(fsBody).TextColor(t.Danger).Wrap().Padding(8)
 				case len(d.entries) == 0:
 					ui.Text(c, m.TargetDirectoryEmpty()).FontSize(fsBody).TextColor(t.TextMuted).Padding(8)
+				case len(entries) == 0:
+					ui.Text(c, m.TargetDirectoryNoMatch()).FontSize(fsBody).TextColor(t.TextMuted).Padding(8)
 				default:
-					entries := d.entries
 					var entered string
 					d.list.Key = func(i int) any { return entries[i].Name }
 					list := ui.List(c.Key(d.seq), &d.list, len(entries), func(i int) {
@@ -219,13 +398,41 @@ func (a *app) targetDirectoryDialog(c *ui.Context) {
 							entered = entry.Name
 						}
 					}).Grow(1)
-					fadeEdges(list, &d.list, colors(t).raised)
+					fadeEdges(list, &d.list, p.raised)
 					if entered != "" {
 						d.enter(entered)
 					}
 				}
 			})
-			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if d.newOpen {
+				ui.Column(c.Key("target-dir-new-box")).Gap(4).Children(func() {
+					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+						ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+							ni := fieldInput(c.Key("target-dir-new-name"), &d.newName, m.TargetDirectoryNewFolderPlaceholder()).Label(m.TargetDirectoryNewFolder()).AutoFocus()
+							if ni.Changed() {
+								d.newErr = ""
+							}
+							if ni.Submitted() {
+								d.createFolder(m)
+							}
+						})
+						if confirmButton(c, pressable(accentButton(c.Key("target-dir-create"), m.TargetDirectoryCreate()).Disabled(d.creating))).Clicked() {
+							d.createFolder(m)
+						}
+						if confirmButton(c, pressable(textButton(c.Key("target-dir-new-cancel"), m.CommonCancel()).Disabled(d.creating))).Clicked() {
+							d.newOpen, d.newName, d.newErr = false, "", ""
+						}
+					})
+					if d.newErr != "" {
+						ui.Text(c, d.newErr).FontSize(fsSmall).TextColor(t.Danger).Wrap()
+					}
+				})
+			}
+			ui.Row(c).Gap(8).Justify(ui.End).AlignItems(ui.Center).Children(func() {
+				if confirmButton(c, pressable(textButton(c.Key("target-dir-new-folder"), m.TargetDirectoryNewFolder()).Disabled(!d.canCreateDir()))).Clicked() {
+					d.newOpen = !d.newOpen
+					d.newErr = ""
+				}
 				if confirmButton(c, pressable(textButton(c, m.CommonCancel()))).Clicked() {
 					open = false
 				}

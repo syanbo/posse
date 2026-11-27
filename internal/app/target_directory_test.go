@@ -423,3 +423,88 @@ func TestTargetDirectoryRealActions(t *testing.T) {
 		}
 	}
 }
+
+func TestTargetDirectoryFallbackSearchAndCreateFolder(t *testing.T) {
+	a, f, _ := targetDirectoryFixture(t, nil)
+	var createdPath string
+	f.mu.Lock()
+	f.desktopCall = func(_ context.Context, p rpc.DesktopCall) (any, error) {
+		switch p.Method {
+		case "files.readDirs":
+			var args rpc.FilePathsParams
+			if err := json.Unmarshal(p.Params, &args); err != nil {
+				return nil, err
+			}
+			dir := args.Paths[0]
+			switch dir {
+			case "/Users/pur/Desktop":
+				return []rpc.FileDirectoryResult{{Path: dir, Error: rpc.Errorf(rpc.CodeNotFound, "not found")}}, nil
+			case "/Users/pur":
+				return []rpc.FileDirectoryResult{{
+					Path: dir,
+					Entries: []files.Entry{
+						{Name: "my-flutter", Dir: true},
+						{Name: "flutter", Dir: true},
+						{Name: "ohio", Dir: true},
+					},
+					Stamp: files.Stamp{Mode: os.ModeDir},
+				}}, nil
+			default:
+				return []rpc.FileDirectoryResult{{Path: dir, Stamp: files.Stamp{Mode: os.ModeDir}}}, nil
+			}
+		case "files.mkdir":
+			var args rpc.FileMkdirParams
+			if err := json.Unmarshal(p.Params, &args); err != nil {
+				return nil, err
+			}
+			createdPath = args.Path
+			return map[string]any{"path": args.Path}, nil
+		default:
+			return nil, rpc.Errorf(rpc.CodeUnknown, "unexpected method")
+		}
+	}
+	f.mu.Unlock()
+
+	// 1. Desktop 不可读时自动回退到 /Users/pur
+	a.request().chooseTargetDirectoryWithFallbacks(appL().AppAddProjectTitle(), appL().AppAddProjectButton(), "/Users/pur/Desktop", []string{"/Users/pur", "/"}, nil)
+	a.runPending()
+	waitFileUpdate(t, a)
+	a.runPending()
+	waitFileUpdate(t, a)
+	a.runPending()
+	d := a.targetDir
+	if d == nil || d.path != "/Users/pur" || !d.loaded {
+		t.Fatalf("fallback did not load /Users/pur: %+v", d)
+	}
+
+	// 2. 路径末尾输入过滤词（或纯关键词）时实时匹配，前缀匹配排在子串匹配前
+	d.input = "/Users/pur/fl"
+	vis := d.visibleEntries()
+	if len(vis) != 2 || vis[0].Name != "flutter" || vis[1].Name != "my-flutter" {
+		t.Fatalf("filtered entries = %+v", vis)
+	}
+	d.input = "oh"
+	vis = d.visibleEntries()
+	if len(vis) != 1 || vis[0].Name != "ohio" {
+		t.Fatalf("keyword filtered entries = %+v", vis)
+	}
+	// 回车自动进入唯一匹配目录
+	d.submitInput()
+	waitFileUpdate(t, a)
+	a.runPending()
+	if d.path != "/Users/pur/ohio" {
+		t.Fatalf("submitInput did not enter matched folder: path=%q", d.path)
+	}
+
+	// 3. 创建文件夹调用 files.mkdir 并自动进入新目录
+	d.newOpen = true
+	d.newName = "new-app"
+	d.createFolder(appL())
+	waitFileUpdate(t, a)
+	a.runPending()
+	waitFileUpdate(t, a)
+	a.runPending()
+	if createdPath != "/Users/pur/ohio/new-app" || d.path != "/Users/pur/ohio/new-app" || d.newOpen {
+		t.Fatalf("createFolder: created=%q path=%q newOpen=%v", createdPath, d.path, d.newOpen)
+	}
+}
