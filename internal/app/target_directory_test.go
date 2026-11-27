@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 	"posse/internal/files"
 	"posse/internal/rpc"
+	"posse/locales"
 )
 
 func targetDirectoryFixture(t *testing.T, entries []files.Entry) (*app, *hostControlFixture, <-chan string) {
@@ -563,5 +565,42 @@ func TestTargetDirectoryFallbackSearchAndCreateFolder(t *testing.T) {
 	a.runPending()
 	if a.targetDir.path != "/Users/pur/Desktop" || a.targetDir.err == nil {
 		t.Fatalf("transport timeout triggered fallback: path=%q err=%v", a.targetDir.path, a.targetDir.err)
+	}
+}
+
+func TestTargetDirectoryNewFolderNoLayoutShift(t *testing.T) {
+	a, _, _ := targetDirectoryFixture(t, nil)
+	d := openTargetDirectory(t, a, "/", nil)
+	m := locales.In("zh-Hans")
+	tt := newTester(a.targetDirectoryDialog, 800, 600)
+	settle(tt)
+	before, ok := tt.Find(d.title)
+	if !ok {
+		t.Fatal("dialog title not found before opening new-folder row")
+	}
+	if err := tt.Click(m.TargetDirectoryNewFolder()); err != nil {
+		t.Fatalf("click New Folder: %v", err)
+	}
+	settle(tt)
+	if !d.newOpen {
+		t.Fatal("clicking New Folder did not enter inline create mode")
+	}
+	after, ok := tt.Find(d.title)
+	if !ok {
+		t.Fatal("dialog title not found after opening new-folder row")
+	}
+	if before.Y != after.Y {
+		t.Fatalf("modal jumped vertically when opening New Folder: y %.1f -> %.1f", before.Y, after.Y)
+	}
+	// 底栏原地替换：主提交按钮应切为「创建」，不再同时显示「添加」
+	if !tt.HasText(m.TargetDirectoryCreate()) || slices.Contains(tt.Texts(), d.verb) {
+		t.Fatalf("footer did not switch in-place during inline create: %v", tt.Texts())
+	}
+	if err := tt.Click(m.CommonCancel()); err != nil {
+		t.Fatalf("click inline Cancel: %v", err)
+	}
+	settle(tt)
+	if d.newOpen || a.targetDir != d {
+		t.Fatalf("inline Cancel should exit create mode without closing modal: newOpen=%v targetDir=%v", d.newOpen, a.targetDir != nil)
 	}
 }

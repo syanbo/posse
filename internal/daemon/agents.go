@@ -85,6 +85,7 @@ func (d *Daemon) detectLoop(ctx context.Context) {
 		d.agents.mu.Lock()
 		newAntigravity := slices.Contains(got, "antigravity") &&
 			(!slices.Contains(d.agents.installed, "antigravity") || path != d.agents.path)
+		newCodex := slices.Contains(got, "codex") && !slices.Contains(d.agents.installed, "codex")
 		if !slices.Equal(got, d.agents.installed) {
 			log.Printf("installed agents: %s", strings.Join(got, ", "))
 		}
@@ -93,6 +94,9 @@ func (d *Daemon) detectLoop(ctx context.Context) {
 		d.agents.mu.Unlock()
 		if newAntigravity {
 			go d.antigravityAsk(ctx, false)
+		}
+		if newCodex {
+			go d.codexAsk(ctx, false)
 		}
 		select {
 		case <-ctx.Done():

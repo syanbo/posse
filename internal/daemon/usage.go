@@ -185,7 +185,8 @@ func (d *Daemon) usageSnapshot(refresh bool) *usageStatus {
 	d.usage.mu.Lock()
 	codexError, codexReading := d.usage.codexError, d.usage.codexPending != nil
 	d.usage.mu.Unlock()
-	if slices.Contains(off, "codex") || d.usage.store.CodexOff() {
+	installed := d.installedAgents()
+	if slices.Contains(off, "codex") || d.usage.store.CodexOff() || (installed != nil && !slices.Contains(installed, "codex")) {
 		codexError, codexReading = "", false
 	}
 	list := slices.DeleteFunc(d.usage.store.List(time.Now()), func(u usage.Usage) bool { return slices.Contains(off, u.Agent) })
@@ -335,6 +336,11 @@ func (d *Daemon) codexAsk(ctx context.Context, force bool) {
 	s := &d.usage
 	if !d.usageAgentOn("codex") || s.store.CodexOff() {
 		return
+	}
+	if !force {
+		if installed := d.installedAgents(); installed != nil && !slices.Contains(installed, "codex") {
+			return
+		}
 	}
 	s.mu.Lock()
 	done := s.codexPending

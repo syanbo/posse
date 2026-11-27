@@ -487,33 +487,35 @@ func (a *app) targetDirectoryDialog(c *ui.Context) {
 					}
 				}
 			})
-			if d.newOpen {
-				ui.Column(c.Key("target-dir-new-box")).Gap(4).Children(func() {
-					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-						ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-							ni := fieldInput(c.Key("target-dir-new-name"), &d.newName, m.TargetDirectoryNewFolderPlaceholder()).Label(m.TargetDirectoryNewFolder()).AutoFocus()
-							if ni.Changed() {
-								d.newErr = ""
-							}
-							if ni.Submitted() {
-								d.createFolder(m)
-							}
-						})
-						if confirmButton(c, pressable(accentButton(c.Key("target-dir-create"), m.TargetDirectoryCreate()).Disabled(d.creating))).Clicked() {
+			if d.newOpen && d.newErr != "" {
+				ui.Text(c, d.newErr).FontSize(fsSmall).TextColor(t.Danger).Wrap()
+			}
+			// 底部操作栏固定高度，点击「新建文件夹」原地切换成名称输入与创建/取消，不增高弹窗避免居中抖动。
+			ui.Row(c.Key("target-dir-footer")).Height(targetDirectoryFooterHeight()).Gap(8).AlignItems(ui.Center).Children(func() {
+				if d.newOpen {
+					ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+						ni := fieldInput(c.Key("target-dir-new-name"), &d.newName, m.TargetDirectoryNewFolderPlaceholder()).Label(m.TargetDirectoryNewFolder()).AutoFocus()
+						if ni.Changed() {
+							d.newErr = ""
+						}
+						if ni.Submitted() {
 							d.createFolder(m)
 						}
-						if confirmButton(c, pressable(textButton(c.Key("target-dir-new-cancel"), m.CommonCancel()).Disabled(d.creating))).Clicked() {
+						if !d.creating && ni.Shortcut(0, ui.KeyEscape) {
 							d.newOpen, d.newName, d.newErr = false, "", ""
 						}
 					})
-					if d.newErr != "" {
-						ui.Text(c, d.newErr).FontSize(fsSmall).TextColor(t.Danger).Wrap()
+					if confirmButton(c, pressable(accentButton(c.Key("target-dir-create"), m.TargetDirectoryCreate()).Disabled(d.creating))).Clicked() {
+						d.createFolder(m)
 					}
-				})
-			}
-			ui.Row(c).Gap(8).Justify(ui.End).AlignItems(ui.Center).Children(func() {
+					if confirmButton(c, pressable(textButton(c.Key("target-dir-new-cancel"), m.CommonCancel()).Disabled(d.creating))).Clicked() {
+						d.newOpen, d.newName, d.newErr = false, "", ""
+					}
+					return
+				}
+				ui.Spacer(c)
 				if confirmButton(c, pressable(textButton(c.Key("target-dir-new-folder"), m.TargetDirectoryNewFolder()).Disabled(!d.canCreateDir()))).Clicked() {
-					d.newOpen = !d.newOpen
+					d.newOpen = true
 					d.newErr = ""
 				}
 				if confirmButton(c, pressable(textButton(c, m.CommonCancel()))).Clicked() {

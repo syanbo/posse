@@ -177,7 +177,13 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 			shown = append(shown, u)
 		}
 	}
-	if (st.CodexError != "" || st.CodexReading) && !slices.ContainsFunc(shown, func(u usage.Usage) bool { return u.Agent == "codex" }) {
+	// 目标主机未安装任何 agent CLI 且无已有用量读数时，隐藏底部用量区域，不显示空的「Codex 尚未登录」或「暂无用量」。
+	if a.daemon.Agents != nil && len(a.daemon.Agents) == 0 && len(shown) == 0 {
+		a.planOpen = false
+		return
+	}
+	codexAvailable := a.daemon.Agents == nil || slices.Contains(a.daemon.Agents, "codex")
+	if codexAvailable && (st.CodexError != "" || st.CodexReading) && !slices.ContainsFunc(shown, func(u usage.Usage) bool { return u.Agent == "codex" }) {
 		shown = append(shown, usage.Usage{Agent: "codex"})
 	}
 	if len(shown) == 0 {
@@ -474,7 +480,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 	now := time.Now()
 	// 打开的浮层也补查，不能靠后台更新恰好触发重建；失败时同样等一分钟再试。
 	c.After(time.Minute)
-	if st := a.daemon.Usage; a.c != nil && a.request().canWrite() && st != nil && !st.CodexOff && !slices.Contains(a.disabled, "codex") && !a.planBusy && time.Since(a.planAutoAt) >= time.Minute {
+	if st := a.daemon.Usage; a.c != nil && a.request().canWrite() && st != nil && !st.CodexOff && !slices.Contains(a.disabled, "codex") && (a.daemon.Agents == nil || slices.Contains(a.daemon.Agents, "codex")) && !a.planBusy && time.Since(a.planAutoAt) >= time.Minute {
 		a.planAutoAt = now
 		a.refreshPlanQuery(L(c), map[string]any{"agent": "codex", "force": false})
 	}

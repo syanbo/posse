@@ -258,3 +258,20 @@ func TestPreviewPlanFreshness(t *testing.T) {
 		savePNG(t, newPreviewTester(a, dark), "plan-unavailable-"+suffix+".png")
 	}
 }
+
+func TestPlanButtonHiddenWhenNoAgentsInstalled(t *testing.T) {
+	a := previewApp(t)
+	a.daemon.Agents = []string{}
+	a.daemon.Usage = &planStatus{CodexError: "codex: not logged in; run codex login"}
+	tt := newTester(func(c *ui.Context) { a.planButton(c, a.daemon.Usage) }, 600, 80)
+	tt.Frame()
+	if len(tt.Texts()) != 0 {
+		t.Fatalf("planButton should hide when no agent CLIs are installed, got %v", tt.Texts())
+	}
+	// 安装了其他 agent 但未安装 codex 时，也不应合成 Codex 报错占位，正常回落到暂无用量
+	a.daemon.Agents = []string{"claude"}
+	tt.Frame()
+	if tt.HasText("本期") {
+		t.Fatalf("planButton synthesized codex chip when codex is not installed: %v", tt.Texts())
+	}
+}
