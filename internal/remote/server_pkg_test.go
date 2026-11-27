@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -104,7 +105,7 @@ func TestResolveServerPackageLocalAndDownload(t *testing.T) {
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/server-darwin-arm64.json":
-			m := serverManifest{
+			m := ServerManifest{
 				Version: "0.9.0", OS: "darwin", Arch: "arm64",
 				URL:    srv.URL + "/bundle.tar.gz",
 				SHA256: wantSHA,
@@ -191,5 +192,90 @@ func TestInspectServerArchiveRejectsTruncatedGzipAndExtraEntries(t *testing.T) {
 	_ = f.Close()
 	if _, err := inspectAndSnapshot(context.Background(), extra, "0.9.0", "darwin", "arm64", ""); err == nil {
 		t.Fatal("archive with unexpected extra file was accepted")
+	}
+}
+
+func TestSignAndVerifyServerManifest(t *testing.T) {
+	dir := t.TempDir()
+	archivePath, wantSHA := makeTestServerArchive(t, dir, "0.9.0", "darwin", "arm64")
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dlURL := "https://posse.shaoyan.uk/server/" + ServerArchiveName("0.9.0", "darwin", "arm64")
+	m, err := SignServerManifest(context.Background(), archivePath, "darwin", "arm64", "0.9.0", "abc1234", dlURL, priv)
+	if err != nil {
+		t.Fatalf("SignServerManifest failed: %v", err)
+	}
+	if m.SHA256 != wantSHA || m.Version != "0.9.0" || m.Commit != "abc1234" {
+		t.Fatalf("manifest = %+v, want sha=%s", m, wantSHA)
+	}
+	if err := VerifyServerManifest(m, "darwin", "arm64", defaultServerBaseURL, pub); err != nil {
+		t.Fatalf("VerifyServerManifest failed: %v", err)
+	}
+	// 版本不匹配必须被拒签
+	if _, err := SignServerManifest(context.Background(), archivePath, "darwin", "arm64", "9.9.9", "", dlURL, priv); err == nil {
+		t.Fatal("SignServerManifest accepted mismatched archive version")
+	}
+	// 篡改 SHA256 或 Commit 后验签必须失败
+	tampered := m
+	tampered.SHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
+	if err := VerifyServerManifest(tampered, "darwin", "arm64", defaultServerBaseURL, pub); err == nil {
+		t.Fatal("VerifyServerManifest accepted tampered SHA256")
+	}
+	tamperedCommit := m
+	tamperedCommit.Commit = "fffffff"
+	if err := VerifyServerManifest(tamperedCommit, "darwin", "arm64", defaultServerBaseURL, pub); err == nil {
+		t.Fatal("VerifyServerManifest accepted tampered commit")
+	}
+	// 非法版本号（点开头或超长）必须被拒签和拒验
+	for _, badVer := range []string{"", ".1.0", "1.0/evil", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"} {
+		if _, err := SignServerManifest(context.Background(), archivePath, "darwin", "arm64", badVer, "", dlURL, priv); err == nil {
+			t.Fatalf("SignServerManifest accepted invalid version %q", badVer)
+		}
+	}
+	// 含尾随垃圾的清单 JSON 必须拒绝
+	if _, err := DecodeServerManifest(strings.NewReader(`{"version":"1.0.0"}{"extra":true}`)); err == nil {
+		t.Fatal("DecodeServerManifest accepted trailing JSON value")
+	}
+	// 错误公钥必须验签失败
+	otherPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyServerManifest(m, "darwin", "arm64", defaultServerBaseURL, otherPub); err == nil {
+		t.Fatal("VerifyServerManifest accepted wrong public key")
+	}
+	// 私钥/公钥解析往返一致
+	parsedPriv, err := ParseUpdatePrivateKey(base64.StdEncoding.EncodeToString(priv))
+	if err != nil || !parsedPriv.Equal(priv) {
+		t.Fatalf("ParseUpdatePrivateKey roundtrip failed: %v", err)
+	}
+	parsedPub, err := ParseUpdatePublicKey(base64.StdEncoding.EncodeToString(pub))
+	if err != nil || !parsedPub.Equal(pub) {
+		t.Fatalf("ParseUpdatePublicKey roundtrip failed: %v", err)
+	}
+}
+
+func TestDefaultServerConfigMatchesMygoJSON(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "mygo.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		Updates struct {
+			PublicKey string `json:"publicKey"`
+			URL       string `json:"url"`
+		} `json:"updates"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if defaultServerPublicKey != cfg.Updates.PublicKey {
+		t.Fatalf("defaultServerPublicKey = %q, mygo.json updates.publicKey = %q", defaultServerPublicKey, cfg.Updates.PublicKey)
+	}
+	wantURL := cfg.Updates.URL + "/server"
+	if defaultServerBaseURL != wantURL {
+		t.Fatalf("defaultServerBaseURL = %q, want %q", defaultServerBaseURL, wantURL)
 	}
 }

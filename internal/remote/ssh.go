@@ -33,6 +33,7 @@ type Options struct {
 	ServerBaseURL         string
 	ServerPubKey          string
 	DisableRemoteDownload bool
+	InstallLaunchd        bool
 	Required              []string
 	config                string
 }

@@ -5,9 +5,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
-	"crypto/ed25519"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -69,16 +67,6 @@ type ServerResolveOptions struct {
 	PublicKey     string
 	HTTPClient    *http.Client
 	DisableRemote bool
-}
-
-type serverManifest struct {
-	Version   string `json:"version"`
-	Commit    string `json:"commit,omitempty"`
-	OS        string `json:"os"`
-	Arch      string `json:"arch"`
-	URL       string `json:"url"`
-	SHA256    string `json:"sha256"`
-	Signature string `json:"signature"`
 }
 
 // NormalizeArch 把 uname -m 规范为 Go 架构名。
@@ -274,6 +262,7 @@ func validateSnapshotStream(ctx context.Context, snap *os.File, snapPath, sum, f
 	entries := 0
 	ver := fallbackVer
 	var manifestSHAs map[string]string
+	hasManifest := false
 
 	tr := tar.NewReader(gr)
 	for {
@@ -371,22 +360,25 @@ func validateSnapshotStream(ctx context.Context, snap *os.File, snapPath, sum, f
 				_ = gr.Close()
 				return ServerPackage{}, fmt.Errorf("invalid server archive manifest: %w", uerr)
 			}
-			if m.OS != "" && m.OS != goos {
+			if m.OS != goos {
 				_ = gr.Close()
 				return ServerPackage{}, fmt.Errorf("server archive is for %s, want %s", m.OS, goos)
 			}
-			if m.Arch != "" && m.Arch != goarch {
+			if m.Arch != goarch {
 				_ = gr.Close()
 				return ServerPackage{}, fmt.Errorf("server archive is for %s, want %s", m.Arch, goarch)
 			}
-			if m.Edition != "" && m.Edition != "headless" {
+			if m.Edition != "headless" {
 				_ = gr.Close()
 				return ServerPackage{}, fmt.Errorf("server archive edition %q is not headless", m.Edition)
 			}
-			if m.Version != "" {
-				ver = m.Version
+			if !ValidServerVersion(m.Version) {
+				_ = gr.Close()
+				return ServerPackage{}, fmt.Errorf("invalid server version %q", m.Version)
 			}
+			ver = m.Version
 			manifestSHAs = m.SHA256
+			hasManifest = true
 		default:
 			_ = gr.Close()
 			return ServerPackage{}, fmt.Errorf("unexpected file %q in server archive", clean)
@@ -409,18 +401,19 @@ func validateSnapshotStream(ctx context.Context, snap *os.File, snapPath, sum, f
 	if posseSHA == "" || libSHA == "" {
 		return ServerPackage{}, fmt.Errorf("server archive missing required files (posse=%v, %s=%v)", posseSHA != "", needLib, libSHA != "")
 	}
-	if manifestSHAs != nil {
-		if want := manifestSHAs["posse"]; want != "" && !strings.EqualFold(want, posseSHA) {
-			return ServerPackage{}, errors.New("server archive manifest posse checksum mismatch")
-		}
-		if want := manifestSHAs[needLib]; want != "" && !strings.EqualFold(want, libSHA) {
-			return ServerPackage{}, fmt.Errorf("server archive manifest %s checksum mismatch", needLib)
-		}
+	if !hasManifest || manifestSHAs == nil {
+		return ServerPackage{}, errors.New("server archive missing manifest.json")
 	}
-	if ver == "" {
-		ver = "0"
+	if want := manifestSHAs["posse"]; want == "" || !strings.EqualFold(want, posseSHA) {
+		return ServerPackage{}, errors.New("server archive manifest posse checksum mismatch")
 	}
-	tag := sanitizeTag(ver) + "-" + sum[:12]
+	if want := manifestSHAs[needLib]; want == "" || !strings.EqualFold(want, libSHA) {
+		return ServerPackage{}, fmt.Errorf("server archive manifest %s checksum mismatch", needLib)
+	}
+	if !ValidServerVersion(ver) {
+		return ServerPackage{}, fmt.Errorf("invalid server version %q", ver)
+	}
+	tag := ver + "-" + sum[:12]
 	return ServerPackage{
 		Path:        snapPath,
 		Version:     ver,
@@ -450,11 +443,11 @@ func sanitizeTag(v string) string {
 
 func validDownloadURL(rawURL, baseURL string) error {
 	u, err := url.Parse(rawURL)
-	if err != nil || u.Host == "" {
+	if err != nil || u.Host == "" || u.User != nil {
 		return errors.New("invalid server download URL")
 	}
 	base, err := url.Parse(baseURL)
-	if err != nil {
+	if err != nil || base.Host == "" || base.User != nil {
 		return errors.New("invalid server base URL")
 	}
 	if u.Scheme == "https" {
@@ -482,24 +475,34 @@ func downloadServerPackage(ctx context.Context, opts ServerResolveOptions, _ str
 	if baseURL == "" {
 		baseURL = defaultServerBaseURL
 	}
+	if err := validDownloadURL(baseURL, baseURL); err != nil {
+		return ServerPackage{}, err
+	}
 	pubB64 := opts.PublicKey
 	if pubB64 == "" {
 		pubB64 = defaultServerPublicKey
 	}
-	pubBytes, err := base64.StdEncoding.DecodeString(pubB64)
-	if err != nil || len(pubBytes) != ed25519.PublicKeySize {
-		return ServerPackage{}, errors.New("invalid server verification public key")
+	pubKey, err := ParseUpdatePublicKey(pubB64)
+	if err != nil {
+		return ServerPackage{}, err
 	}
 	baseClient := opts.HTTPClient
 	if baseClient == nil {
 		baseClient = &http.Client{Timeout: 2 * time.Minute}
 	}
 	client := *baseClient
+	origCheckRedirect := baseClient.CheckRedirect
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 5 {
 			return errors.New("too many redirects")
 		}
-		return validDownloadURL(req.URL.String(), baseURL)
+		if err := validDownloadURL(req.URL.String(), baseURL); err != nil {
+			return err
+		}
+		if origCheckRedirect != nil {
+			return origCheckRedirect(req, via)
+		}
+		return nil
 	}
 
 	manifestURL := fmt.Sprintf("%s/server-%s-%s.json", baseURL, goos, goarch)
@@ -515,22 +518,15 @@ func downloadServerPackage(ctx context.Context, opts ServerResolveOptions, _ str
 	if resp.StatusCode != http.StatusOK {
 		return ServerPackage{}, fmt.Errorf("server manifest unavailable (HTTP %d); build locally with scripts/build-server.sh or pass --file", resp.StatusCode)
 	}
-	var m serverManifest
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxServerManifestBytes)).Decode(&m); err != nil {
-		return ServerPackage{}, fmt.Errorf("invalid server manifest: %w", err)
-	}
-	if m.OS != goos || m.Arch != goarch || m.Version == "" || m.URL == "" || len(m.SHA256) != 64 || m.Signature == "" {
-		return ServerPackage{}, errors.New("incomplete server manifest")
-	}
-	if err := validDownloadURL(m.URL, baseURL); err != nil {
+	m, err := DecodeServerManifest(resp.Body)
+	if err != nil {
 		return ServerPackage{}, err
 	}
-	sig, err := base64.StdEncoding.DecodeString(m.Signature)
-	if err != nil || !ed25519.Verify(ed25519.PublicKey(pubBytes), serverManifestSignPayload(m), sig) {
-		return ServerPackage{}, errors.New("server manifest signature verification failed")
+	if err := VerifyServerManifest(m, goos, goarch, baseURL, pubKey); err != nil {
+		return ServerPackage{}, err
 	}
 
-	// 按完整 SHA-256 存为不可变对象，每次读取都重新核对签名与全文件摘要
+	// 按完整 SHA-256 存为不可变对象，每次读取都重新核对签名、全文件摘要与内外版本一致
 	objDir := filepath.Join(os.TempDir(), "posse-server-cache", "objects")
 	if opts.LocalHome != "" {
 		objDir = filepath.Join(opts.LocalHome, "server-cache", "objects")
@@ -540,7 +536,10 @@ func downloadServerPackage(ctx context.Context, opts ServerResolveOptions, _ str
 	}
 	objPath := filepath.Join(objDir, strings.ToLower(m.SHA256)+".tar.gz")
 	if pkg, err := inspectAndSnapshot(ctx, objPath, m.Version, goos, goarch, m.SHA256); err == nil {
-		return pkg, nil
+		if pkg.Version == m.Version {
+			return pkg, nil
+		}
+		pkg.Close()
 	}
 
 	dlReq, err := http.NewRequestWithContext(ctx, http.MethodGet, m.URL, nil)
@@ -576,6 +575,10 @@ func downloadServerPackage(ctx context.Context, opts ServerResolveOptions, _ str
 	if err != nil {
 		return ServerPackage{}, err
 	}
+	if pkg.Version != m.Version {
+		pkg.Close()
+		return ServerPackage{}, fmt.Errorf("downloaded server archive version %q does not match signed manifest %q", pkg.Version, m.Version)
+	}
 	// 内容寻址对象不可变：原子移入缓存后仍由 pkg 私有快照上传，避免缓存变动影响本次推送
 	if err := os.Rename(tmpPath, objPath); err != nil {
 		pkg.Close()
@@ -584,6 +587,6 @@ func downloadServerPackage(ctx context.Context, opts ServerResolveOptions, _ str
 	return pkg, nil
 }
 
-func serverManifestSignPayload(m serverManifest) []byte {
-	return []byte(fmt.Sprintf("posse-server-v1\n%s\n%s\n%s\n%s\n%s\n", m.Version, m.OS, m.Arch, strings.ToLower(m.SHA256), m.URL))
+func serverManifestSignPayload(m ServerManifest) []byte {
+	return []byte(fmt.Sprintf("posse-server-v1\n%s\n%s\n%s\n%s\n%s\n%s\n", m.Version, m.Commit, m.OS, m.Arch, strings.ToLower(m.SHA256), m.URL))
 }

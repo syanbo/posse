@@ -117,13 +117,14 @@ func cmdRemoteInstall(e *env, args []string) error {
 	fs := flag.NewFlagSet("remote install", flag.ContinueOnError)
 	file := fs.String("file", "", "")
 	start := fs.Bool("start", true, "")
+	launchd := fs.Bool("launchd", false, "")
 	batch := fs.Bool("batch", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) != 1 {
-		return errors.New("usage: posse remote install <host> [--file TAR] [--start] [--batch]")
+		return errors.New("usage: posse remote install <host> [--file TAR] [--start] [--launchd] [--batch]")
 	}
 	h, err := remote.Find(e.home, pos[0])
 	if err != nil {
@@ -134,9 +135,10 @@ func cmdRemoteInstall(e *env, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	opts := remote.Options{
-		Start:         *start,
-		LocalHome:     e.home,
-		ServerArchive: *file,
+		Start:          *start,
+		InstallLaunchd: *launchd,
+		LocalHome:      e.home,
+		ServerArchive:  *file,
 	}
 	if !*batch {
 		opts.Prompt = remoteTerminalPrompt
@@ -154,6 +156,16 @@ func cmdRemoteInstall(e *env, args []string) error {
 			state = "installed and started"
 		}
 		fmt.Fprintf(e.out, "%s on %s (%s/%s)\nversion: %s (%s)\nexecutable: %s\n", state, h.Name, res.OS, res.Arch, res.Version, res.Tag, res.Executable)
+		if res.Launchd != nil {
+			lstate := "loaded"
+			if !res.Launchd.Loaded {
+				lstate = "installed (will load on GUI login)"
+			}
+			fmt.Fprintf(e.out, "launchd: %s (%s)\n", lstate, res.Launchd.Plist)
+			if res.Launchd.Note != "" {
+				fmt.Fprintf(e.out, "note: %s\n", res.Launchd.Note)
+			}
+		}
 	})
 }
 

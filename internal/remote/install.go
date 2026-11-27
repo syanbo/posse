@@ -14,12 +14,14 @@ import (
 	"time"
 
 	"posse/internal/rpc"
+	"posse/internal/spawn"
 )
 
 const (
 	missingMarker   = "POSSE_REMOTE_MISSING:"
 	installedMarker = "POSSE_REMOTE_INSTALLED:"
 	activatedMarker = "POSSE_REMOTE_ACTIVATED:"
+	launchdMarker   = "POSSE_REMOTE_LAUNCHD:"
 )
 
 // RemoteNotInstalledError 表示目标主机上未找到 Posse 可执行文件，同时带回远端系统、架构与解析后的 home。
@@ -44,14 +46,15 @@ func (e *MissingCapabilityError) Error() string {
 
 // InstallResult 描述一次远程无头服务端推送安装的结果。
 type InstallResult struct {
-	OS         string `json:"os"`
-	Arch       string `json:"arch"`
-	Version    string `json:"version"`
-	Tag        string `json:"tag"`
-	Executable string `json:"executable"`
-	Running    bool   `json:"running"`
-	HandedOff  bool   `json:"handedOff"`
-	Started    bool   `json:"started"`
+	OS         string                   `json:"os"`
+	Arch       string                   `json:"arch"`
+	Version    string                   `json:"version"`
+	Tag        string                   `json:"tag"`
+	Executable string                   `json:"executable"`
+	Running    bool                     `json:"running"`
+	HandedOff  bool                     `json:"handedOff"`
+	Started    bool                     `json:"started"`
+	Launchd    *spawn.LaunchAgentStatus `json:"launchd,omitempty"`
 }
 
 func parseMissing(line []byte) (*RemoteNotInstalledError, bool) {
@@ -225,6 +228,39 @@ func (s *Session) activateServer(ctx context.Context, exePath, home, tag string)
 	return err
 }
 
+func installLaunchdCommand(exePath, home string) string {
+	homeExpr := `"$HOME/.posse"`
+	if home != "" {
+		homeExpr = remotePath(home)
+	}
+	// 捕获 --json 输出：失败时将完整远端错误转到 stderr，成功时加单行标记避免被 SSH 横幅干扰。
+	script := "set -u\n" +
+		"export POSSE_HOME=" + homeExpr + "\n" +
+		"unset POSSE_SOCKET\n" +
+		"out=$(" + remotePath(exePath) + " server install --launchd --home \"$POSSE_HOME\" --json 2>&1) || {\n" +
+		"  printf '%s\\n' \"$out\" >&2\n" +
+		"  exit 1\n" +
+		"}\n" +
+		"printf '%s%s\\n' " + shellQuote(launchdMarker) + " \"$out\"\n"
+	return "/bin/sh -c " + shellQuote(script)
+}
+
+func (s *Session) installLaunchd(ctx context.Context, exePath, home string) (*spawn.LaunchAgentStatus, error) {
+	out, err := s.command(ctx, installLaunchdCommand(exePath, home))
+	if err != nil {
+		return nil, fmt.Errorf("remote launchd install failed: %w", err)
+	}
+	raw, err := parseSingleMarker(out, launchdMarker)
+	if err != nil {
+		return nil, fmt.Errorf("parse remote launchd status failed: %w", err)
+	}
+	var st spawn.LaunchAgentStatus
+	if err := json.Unmarshal([]byte(raw), &st); err != nil {
+		return nil, fmt.Errorf("parse remote launchd status failed: %w", err)
+	}
+	return &st, nil
+}
+
 func (s *Session) probeAt(ctx context.Context, exePath, home string, start bool) (rpc.RemoteProbe, error) {
 	h := s.Host
 	h.Executable = exePath
@@ -382,6 +418,64 @@ func Install(ctx context.Context, h Host, opts Options) (InstallResult, error) {
 		}
 		res.Running = true
 		res.HandedOff = true
+		if opts.InstallLaunchd {
+			st, err := s.installLaunchd(ctx, exePath, canonicalHome)
+			if err != nil {
+				return res, err
+			}
+			res.Launchd = st
+		}
+		return res, nil
+	}
+
+	// 未运行且请求 LaunchAgent：先切 current 并安装 LaunchAgent，若 Aqua 会话活跃则优先等待由 Aqua 拉起 daemon。
+	if opts.InstallLaunchd {
+		if err := s.activateServer(ctx, exePath, canonicalHome, pkg.Tag); err != nil {
+			return res, err
+		}
+		st, err := s.installLaunchd(ctx, exePath, canonicalHome)
+		if err != nil {
+			return res, err
+		}
+		res.Launchd = st
+		if opts.Start {
+			if st.Loaded {
+				deadline := time.Now().Add(5 * time.Second)
+				for {
+					p, perr := s.probeAt(ctx, exePath, canonicalHome, false)
+					if perr == nil && p.Running {
+						res.Running = true
+						res.Started = true
+						return res, nil
+					}
+					if time.Now().After(deadline) {
+						break
+					}
+					select {
+					case <-ctx.Done():
+						return res, ctx.Err()
+					case <-time.After(250 * time.Millisecond):
+					}
+				}
+			}
+			// 无活跃 Aqua 会话或 RunAtLoad 未在窗口内拉起时，回退经 SSH 启动以保证当前可用。
+			p, err := s.probeAt(ctx, exePath, canonicalHome, true)
+			if err != nil {
+				return res, err
+			}
+			if !p.Running {
+				return res, errors.New("installed headless server did not start")
+			}
+			res.Running = true
+			res.Started = true
+			return res, nil
+		}
+		p, err := s.probeAt(ctx, exePath, canonicalHome, false)
+		if err != nil {
+			return res, err
+		}
+		res.Running = p.Running
+		res.Started = p.Running
 		return res, nil
 	}
 

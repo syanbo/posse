@@ -25,6 +25,7 @@ wrangler() { npx --yes wrangler@4 "$@"; }
 
 current=$(plutil -extract version raw mygo.json)
 url=$(plutil -extract updates.url raw mygo.json)
+pubkey=$(plutil -extract updates.publicKey raw mygo.json)
 bump=${1:-}
 
 if [ -n "$bump" ]; then
@@ -52,14 +53,21 @@ else
 		echo "internal/daemon/daemon.go 的 Version 和 mygo.json 的 $version 不一致" >&2
 		exit 1
 	fi
+	if git rev-parse -q --verify "refs/tags/v$version" >/dev/null 2>&1; then
+		if [ "$(git rev-parse "refs/tags/v$version^{commit}")" != "$(git rev-parse HEAD)" ]; then
+			echo "当前 HEAD 与标签 v$version 不一致，禁止用不同代码补发同一版本" >&2
+			exit 1
+		fi
+	fi
 fi
 if ! grep -q "^## $version\$" CHANGELOG.md; then
 	echo "CHANGELOG.md 里没有 \"## $version\" 一节：它是更新时显示的更新内容" >&2
 	exit 1
 fi
-# Apple 芯片和 Intel 各一个包、各一份清单。清单最后传，线上清单已是这个版本的平台已经发完：
-# 重试时跳过它，不重新打包覆盖清单签过的文件，只补没发完的平台
+# Apple 芯片和 Intel 各一个包、各一份清单（桌面端 + 无头服务端分别校验，清单最后传）。
+# 线上清单已是这个版本的平台在重试时跳过，不重新打包覆盖清单签过的文件，只补没发完的平台。
 archs=
+server_archs=
 manifest=$(mktemp)
 trap 'rm -f "$manifest"' EXIT
 for arch in arm64 amd64; do
@@ -69,7 +77,7 @@ for arch in arm64 amd64; do
 	200) published=$(plutil -extract version raw "$manifest") ;;
 	404) published= ;;
 	*)
-		echo "读不到线上的 update-darwin-$arch.json（HTTP $code）" >&2
+		echo "读不到线上的 update-darwin-$arch.json（HTTP ${code}）" >&2
 		exit 1
 		;;
 	esac
@@ -80,14 +88,56 @@ for arch in arm64 amd64; do
 			exit 1
 		fi
 		if [ "$published" = "$version" ]; then
-			echo "darwin-$arch 已经发布了 ${version}，跳过"
-			continue
+			echo "darwin-$arch 桌面版已经发布了 ${version}，跳过"
+		else
+			archs="$archs $arch"
 		fi
+	else
+		archs="$archs $arch"
 	fi
-	archs="$archs $arch"
+
+	scode=$(curl -sS -o "$manifest" -w '%{http_code}' "$url/server/server-darwin-$arch.json" || true)
+	case $scode in
+	200)
+		verified=$(go run ./tools/servermanifest --verify --manifest "$manifest" --os darwin --arch "$arch" --base-url "$url/server" --public-key "$pubkey") || {
+			echo "线上 server/server-darwin-$arch.json 签名或格式无效，拒绝跳过" >&2
+			exit 1
+		}
+		spublished=$(printf '%s\n' "$verified" | awk -F '\t' '{print $1}')
+		sarchive_url=$(printf '%s\n' "$verified" | awk -F '\t' '{print $3}')
+		;;
+	404)
+		spublished=
+		sarchive_url=
+		;;
+	*)
+		echo "读不到线上的 server/server-darwin-$arch.json（HTTP ${scode}）" >&2
+		exit 1
+		;;
+	esac
+	if [ -n "$spublished" ]; then
+		snewest=$(printf '%s\n%s\n' "$spublished" "$version" | sort -V | tail -1)
+		if [ "$snewest" != "$version" ] || { [ "$spublished" = "$version" ] && [ -n "$bump" ]; }; then
+			echo "无头服务端 darwin-$arch 线上已经是 ${spublished}，$version 要比它新" >&2
+			exit 1
+		fi
+		if [ "$spublished" = "$version" ]; then
+			# 清单已验签且同版本，再确认其指向的归档对象在线上可达
+			if curl -fsSI "$sarchive_url" >/dev/null 2>&1; then
+				echo "无头服务端 darwin-$arch 已经发布了 ${version}，跳过"
+			else
+				echo "无头服务端 darwin-$arch 清单已为 ${version} 但归档不可访问（$sarchive_url），重新补发" >&2
+				server_archs="$server_archs $arch"
+			fi
+		else
+			server_archs="$server_archs $arch"
+		fi
+	else
+		server_archs="$server_archs $arch"
+	fi
 done
-if [ -z "$archs" ]; then
-	echo "$version 两个平台都已发布" >&2
+if [ -z "$archs" ] && [ -z "$server_archs" ]; then
+	echo "$version 两个平台桌面版与无头服务端都已发布" >&2
 	exit 1
 fi
 # 打包、公证要一分钟，先确认能上传
@@ -110,43 +160,87 @@ if [ -n "$bump" ]; then
 fi
 
 out=build/release/$version
-# 只清这次要重打的平台：重试时已发布平台的 dmg 还要留给 scripts/github-release.sh
-for arch in $archs; do
-	rm -rf "$out/darwin-$arch"
-done
-# 更新清单的地址按平台写进包里，已装的 arm64 版照旧读 update-darwin-arm64.json
-platforms=$(for arch in $archs; do printf 'darwin/%s,' "$arch"; done)
-MYGO_UPDATER_PRIVATE_KEY=$(cat "$key") go tool mygo build -platform "${platforms%,}" -o "$out"
-
 put() { # put <键> <文件> <类型> [缓存]
 	wrangler r2 object put "$bucket/$1" --file "$2" --content-type "$3" ${4:+--cache-control "$4"} --remote
 }
 
-# 先传清单指向的包，最后传清单：客户端看到新清单时，它要下载的东西一定已经在了
-for arch in $archs; do
-	dir=$out/darwin-$arch
-	for f in "$dir"/*.tar.gz; do
-		put "$(basename "$f")" "$f" application/gzip
+if [ -n "$archs" ]; then
+	# 只清这次要重打的平台：重试时已发布平台的 dmg 还要留给 scripts/github-release.sh
+	for arch in $archs; do
+		rm -rf "$out/darwin-$arch"
 	done
-	for f in "$dir"/*; do
-		case $f in *.tar.gz | *.json | *.dmg | *.app | *.sh) continue ;; esac
-		put "$(basename "$f")" "$f" application/octet-stream
+	# 更新清单的地址按平台写进包里，已装的 arm64 版照旧读 update-darwin-arm64.json
+	platforms=$(for arch in $archs; do printf 'darwin/%s,' "$arch"; done)
+	MYGO_UPDATER_PRIVATE_KEY=$(cat "$key") go tool mygo build -platform "${platforms%,}" -o "$out"
+
+	# 先传清单指向的包，最后传清单：客户端看到新清单时，它要下载的东西一定已经在了
+	for arch in $archs; do
+		dir=$out/darwin-$arch
+		for f in "$dir"/*.tar.gz; do
+			put "$(basename "$f")" "$f" application/gzip
+		done
+		for f in "$dir"/*; do
+			case $f in *.tar.gz | *.json | *.dmg | *.app | *.sh) continue ;; esac
+			put "$(basename "$f")" "$f" application/octet-stream
+		done
 	done
-done
-for arch in $archs; do
-	dmg=$(ls "$out/darwin-$arch"/*.dmg)
-	put "Posse-$version-$arch.dmg" "$dmg" application/x-apple-diskimage
-	case $arch in
-	arm64) put Posse.dmg "$dmg" application/x-apple-diskimage no-cache ;;
-	amd64) put Posse-Intel.dmg "$dmg" application/x-apple-diskimage no-cache ;;
-	esac
-done
-# install.sh 只由 mygo.json 生成，各平台的一样；它按本机架构读清单
-set -- $archs
-put install.sh "$out/darwin-$1/install.sh" application/octet-stream
-for arch in $archs; do
-	put "update-darwin-$arch.json" "$out/darwin-$arch/update-darwin-$arch.json" application/json no-cache
-done
+	for arch in $archs; do
+		dmg=$(ls "$out/darwin-$arch"/*.dmg)
+		put "Posse-$version-$arch.dmg" "$dmg" application/x-apple-diskimage
+		case $arch in
+		arm64) put Posse.dmg "$dmg" application/x-apple-diskimage no-cache ;;
+		amd64) put Posse-Intel.dmg "$dmg" application/x-apple-diskimage no-cache ;;
+		esac
+	done
+	# install.sh 只由 mygo.json 生成，各平台的一样；它按本机架构读清单
+	set -- $archs
+	put install.sh "$out/darwin-$1/install.sh" application/octet-stream
+	for arch in $archs; do
+		put "update-darwin-$arch.json" "$out/darwin-$arch/update-darwin-$arch.json" application/json no-cache
+	done
+fi
+
+if [ -n "$server_archs" ]; then
+	commit=$(git rev-parse --short=7 HEAD)
+	server_out="$out/server"
+	mkdir -p "$server_out"
+	server_failed=0
+	publish_server_arch() {
+		arch="$1"
+		work=$(mktemp -d "${TMPDIR:-/tmp}/posse-release-server.XXXXXX")
+		archive_name="posse-server-$version-darwin-$arch.tar.gz"
+		archive="$work/$archive_name"
+		smanifest="$work/server-darwin-$arch.json"
+		if scripts/build-server.sh --require-signing --arch "$arch" --version "$version" --commit "$commit" --out "$work" &&
+			MYGO_UPDATER_PRIVATE_KEY=$(cat "$key") go run ./tools/servermanifest \
+				--archive "$archive" \
+				--os darwin \
+				--arch "$arch" \
+				--version "$version" \
+				--commit "$commit" \
+				--url "$url/server/$archive_name" \
+				--public-key "$pubkey" \
+				--out "$smanifest" &&
+			put "server/$archive_name" "$archive" application/gzip &&
+			put "server/server-darwin-$arch.json" "$smanifest" application/json no-cache; then
+			cp -f "$archive" "${archive}.sha256" "$smanifest" "$server_out/"
+			rm -rf "$work"
+			return 0
+		fi
+		rm -rf "$work"
+		return 1
+	}
+	for arch in $server_archs; do
+		if ! publish_server_arch "$arch"; then
+			echo "无头服务端 darwin-$arch 发布失败，继续尝试其余架构" >&2
+			server_failed=1
+		fi
+	done
+	if [ "$server_failed" -ne 0 ]; then
+		echo "部分无头服务端架构发布失败，请修复后不带参数重跑 scripts/release.sh 补发" >&2
+		exit 1
+	fi
+fi
 
 echo "已发布 ${version}：$url/Posse.dmg（Intel：$url/Posse-Intel.dmg）"
 echo "推送提交和标签，再发 GitHub Release：git push && git push origin v$version && scripts/github-release.sh"
