@@ -43,8 +43,24 @@ func awakeTip(m locales.Messages, st *awakeStatus) string {
 	return m.AwakeRunningTip()
 }
 
+func (a *app) targetPlatform() string {
+	if a.host != nil {
+		if c := a.host.snapshot().Client; c != nil && c.Platform != "" {
+			return c.Platform
+		}
+	}
+	if a.c != nil {
+		return a.c.Platform
+	}
+	return ""
+}
+
 // awakeButton 在主区域状态栏最右边：咖啡杯图标加档位，托着不让睡时图标是强调色。点开选档位。
+// Linux 等非 macOS 远端不支持 caffeinate 防休眠，直接隐藏。
 func (a *app) awakeButton(c *ui.Context) {
+	if p := a.targetPlatform(); p != "" && p != "darwin" {
+		return
+	}
 	t := c.Theme()
 	st := a.daemon.Awake
 	short := L(c).AwakeUnavailable()

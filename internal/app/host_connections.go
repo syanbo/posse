@@ -54,7 +54,7 @@ func newHostConnections(v *hostViews) *hostConnections {
 		if err != nil {
 			return hostTransport{}, err
 		}
-		return hostTransport{client: &client.Client{Home: s.Info.Home, UserHome: s.Info.UserHome, Socket: s.Socket, Remote: true}, done: s.Done()}, nil
+		return hostTransport{client: &client.Client{Home: s.Info.Home, UserHome: s.Info.UserHome, Platform: s.Info.Platform, Socket: s.Socket, Remote: true}, done: s.Done()}, nil
 	}
 	return k
 }
@@ -91,7 +91,11 @@ func (k *hostConnections) connectRemoteReady(h remote.Host, start bool, onReady 
 	a.closeTargetPreviews()
 	a.ensurePanes([maxColumns]string{})
 	a.detachSkillRun()
-	a.connecting, a.connectStage, a.connectPct, a.err = true, remote.StageAuth, 0, ""
+	initialStage := remote.StageAuth
+	if k.poolConnected(h.ID) {
+		initialStage = remote.StageHandshake
+	}
+	a.connecting, a.connectStage, a.connectPct, a.err = true, initialStage, 0, ""
 	ctx, cancel := context.WithCancel(k.ctx)
 	r := &hostAttempt{app: a, ctx: ctx, cancel: cancel, onReady: onReady}
 	k.active = r

@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/client"
 	"posse/internal/usage"
 	"posse/locales"
 )
@@ -273,5 +274,21 @@ func TestPlanButtonHiddenWhenNoAgentsInstalled(t *testing.T) {
 	tt.Frame()
 	if tt.HasText("本期") {
 		t.Fatalf("planButton synthesized codex chip when codex is not installed: %v", tt.Texts())
+	}
+}
+
+func TestAwakeButtonHiddenOnLinuxRemote(t *testing.T) {
+	a := previewApp(t)
+	a.daemon.Awake = &awakeStatus{Mode: "auto", Active: false}
+	a.c = &client.Client{Platform: "linux", Remote: true}
+	tt := newTester(func(c *ui.Context) { a.awakeButton(c) }, 240, 60)
+	tt.Frame()
+	if len(tt.Texts()) != 0 {
+		t.Fatalf("awakeButton should hide on linux remote, got %v", tt.Texts())
+	}
+	a.c.Platform = "darwin"
+	tt.Frame()
+	if len(tt.Texts()) == 0 {
+		t.Fatal("awakeButton should render on darwin")
 	}
 }

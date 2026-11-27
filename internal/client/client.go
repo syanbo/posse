@@ -22,6 +22,7 @@ import (
 type Client struct {
 	Home     string
 	UserHome string
+	Platform string
 	Socket   string
 	Remote   bool
 	// Desktop 随 Client 固定；控制代次变化时创建新 Client，旧异步请求保留旧身份。
