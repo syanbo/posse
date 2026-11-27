@@ -168,6 +168,10 @@ func serverSearchDirs(opts ServerResolveOptions) []string {
 		if filepath.Base(exeDir) == "bin" {
 			add(filepath.Join(exeDir, "..", "build", "server"))
 		}
+		// 仓库内 build/darwin-<arch>/Posse.app 或 build/dev/PosseDev.app -> build/server
+		if buildDir := filepath.Clean(filepath.Join(exeDir, "..", "..", "..", "..")); filepath.Base(buildDir) == "build" {
+			add(filepath.Join(buildDir, "server"))
+		}
 	}
 	return dirs
 }
