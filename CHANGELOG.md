@@ -3,6 +3,14 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.54
+
+- 修复 Cursor（`cursor-agent`）作为飞书机器人、讨论或任务 worker 时，首轮回复后一直停在 `working`、后续追问持续卡在「排队中」的问题：在不修改用户全局 `~/.cursor/hooks.json` 的前提下，当 Cursor worker 通过 `posse task done` 汇报完成后，若因 `cursor-agent` 插件 `stop` hook 漏触发而未收到空闲事件，常驻进程在确认无用户新键入、输出与 hook 静默且终端底部已稳定回到 Cursor 空闲输入框（无 `ctrl+c to stop` 或审批/交互弹窗）后自动兜底切回空闲，放行后续排队轮次与追加提醒，并兼容升级交接（`daemon handoff`）。
+
+### English
+
+- Fixed Cursor (`cursor-agent`) workers for Feishu/Lark bots, discussions, and tasks getting stuck in `working` after their first reply and leaving follow-up requests queued: without touching the user's global `~/.cursor/hooks.json`, after a Cursor worker reports via `posse task done`, if `cursor-agent` misses emitting the plugin `stop` hook, the daemon now falls back to `idle` once there is no newer user input, output and hooks have settled, and the bottom of the terminal is back at Cursor's idle prompt (without `ctrl+c to stop` or confirmation dialogs), releasing queued rounds and follow-up reminders across `daemon handoff` as well.
+
 ## 0.1.53
 
 - 飞书机器人与群分身支持选择模型和思考深度：daemon 新增带缓存的 `agent.models` RPC 动态发现本机各家 CLI 可用模型（Antigravity 按基础模型聚合档位、Codex 读取 `models_cache.json`、Cursor 平铺展示且不设独立档位，并保留自定义输入兜底），在「设置 › 飞书机器人」支持按机器人默认或群分身三态覆写（继承 / 使用 Agent 默认 / 指定），`/status` 同步展示当前生效模型与档位，切换 Agent 或模型时自动清理不兼容残留。
