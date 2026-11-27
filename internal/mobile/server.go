@@ -55,6 +55,8 @@ type Server struct {
 	tools toolsCache
 	repos repoCache
 	icons projicon.Cache
+
+	hostInFlight atomic.Int32
 }
 
 // PairInfo 是给界面和 CLI 显示的配对信息。
@@ -408,6 +410,9 @@ type conn struct {
 	lastRead atomic.Int64  // 最近一次收到手机的帧（UnixNano），判断写卡住时连接还活没活着
 	// background 是手机报过 App 切到了后台（posse.push.presence），这时照常推送
 	background atomic.Bool
+
+	hostInFlight      atomic.Int32
+	hostWriteInFlight atomic.Int32
 }
 
 func (c *conn) setClientCaps(client string, version int, names []string, locale string) {

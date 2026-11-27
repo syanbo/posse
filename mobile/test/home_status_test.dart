@@ -368,7 +368,7 @@ void main() {
     );
     model.saved = SavedComputers(
       computers: [
-        for (var i = 0; i < 8; i++)
+        for (var i = 0; i < 12; i++)
           SavedComputer(id: 'k$i', code: '', name: '电脑$i'),
       ],
       active: 'k0',
@@ -394,7 +394,7 @@ void main() {
     expect(tester.getRect(find.text('扫码添加电脑')), add);
     // 列表滚了，按钮不动
     expect(tester.getTopLeft(find.text('电脑0')).dy, lessThan(first.dy));
-    expect(tester.getRect(find.text('电脑7')).bottom, lessThan(add.top));
+    expect(tester.getRect(find.text('电脑11')).bottom, lessThan(add.top));
   });
 
   testWidgets('a disconnect by hand says so and offers to reconnect', (

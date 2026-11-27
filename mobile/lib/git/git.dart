@@ -220,6 +220,7 @@ class _GitPaneState extends State<GitPane> {
         return SizedBox(
           height: MediaQuery.sizeOf(sheet).height * 0.6,
           child: ListView(
+            padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(sheet).bottom),
             children: [
               Section(
                 title: sheet.l10n.gitBranchesPickRepo,

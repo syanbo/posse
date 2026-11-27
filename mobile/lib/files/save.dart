@@ -336,8 +336,11 @@ Future<void> showSaveSheet(
   final picked = await showModalBottomSheet<SaveTo>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
+    useSafeArea: true,
     builder: (sheet) {
       final c = PosseColors.of(sheet);
+      final bottom = MediaQuery.paddingOf(sheet).bottom;
       Widget row(SaveTo to, String subtitle) => RowTile(
         chevron: false,
         leading: Icon(saveIcon(to), size: Ic.button, color: c.accent),
@@ -345,24 +348,19 @@ Future<void> showSaveSheet(
         subtitle: Text(subtitle),
         onTap: () => Navigator.of(sheet).pop(to),
       );
-      return SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          child: Section(
-            inset: 48,
-            children: [
-              switch (to) {
-                SaveTo.album => row(to, sheet.l10n.filesSaveToAlbumNote),
-                SaveTo.downloads => row(
-                  to,
-                  sheet.l10n.filesSaveToDownloadsNote,
-                ),
-                SaveTo.share => row(to, sheet.l10n.filesShareNote),
-              },
-              if (to != SaveTo.share)
-                row(SaveTo.share, sheet.l10n.filesShareOtherNote),
-            ],
-          ),
+      return SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: bottom),
+        child: Section(
+          inset: 48,
+          children: [
+            switch (to) {
+              SaveTo.album => row(to, sheet.l10n.filesSaveToAlbumNote),
+              SaveTo.downloads => row(to, sheet.l10n.filesSaveToDownloadsNote),
+              SaveTo.share => row(to, sheet.l10n.filesShareNote),
+            },
+            if (to != SaveTo.share)
+              row(SaveTo.share, sheet.l10n.filesShareOtherNote),
+          ],
         ),
       );
     },

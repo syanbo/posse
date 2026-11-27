@@ -367,6 +367,11 @@ class _BranchSheetState extends State<_BranchSheet> {
       );
     }
     return ListView(
+      padding: EdgeInsets.only(
+        bottom:
+            MediaQuery.paddingOf(context).bottom +
+            MediaQuery.viewInsetsOf(context).bottom,
+      ),
       children: [
         if (local.isNotEmpty)
           Section(

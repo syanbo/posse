@@ -141,7 +141,10 @@ func (d *Daemon) daemonMemory(ctx context.Context, raw json.RawMessage) (any, er
 			return nil, rpc.Errorf(rpc.CodeBadRequest, "invalid daemon.memory parameters")
 		}
 	}
+	return d.queryDaemonMemory(ctx, p.Expanded)
+}
 
+func (d *Daemon) queryDaemonMemory(ctx context.Context, rawExpanded []string) (rpc.DaemonMemoryResult, error) {
 	// 仅在 d.mu 内拍轻量终端快照，并据此过滤 expanded，防止无效 ID 制造无限单飞键。
 	d.mu.Lock()
 	runningSet := make(map[string]bool, len(d.terms))
@@ -173,7 +176,7 @@ func (d *Daemon) daemonMemory(ctx context.Context, raw json.RawMessage) (any, er
 	}
 	d.mu.Unlock()
 
-	_, expanded, key := normalizeExpandedIDs(p.Expanded, runningSet)
+	_, expanded, key := normalizeExpandedIDs(rawExpanded, runningSet)
 
 	d.mem.mu.Lock()
 	if entry, ok := d.mem.cache[key]; ok && time.Since(entry.at) < daemonMemoryCacheTTL {
@@ -186,11 +189,11 @@ func (d *Daemon) daemonMemory(ctx context.Context, raw json.RawMessage) (any, er
 		select {
 		case <-call.done:
 			if call.err != nil {
-				return nil, call.err
+				return rpc.DaemonMemoryResult{}, call.err
 			}
 			return cloneDaemonMemoryResult(call.res), nil
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return rpc.DaemonMemoryResult{}, ctx.Err()
 		}
 	}
 	call := &daemonMemoryCall{done: make(chan struct{})}
@@ -231,10 +234,10 @@ func (d *Daemon) daemonMemory(ctx context.Context, raw json.RawMessage) (any, er
 	d.mem.mu.Unlock()
 
 	if err != nil {
-		return nil, err
+		return rpc.DaemonMemoryResult{}, err
 	}
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return rpc.DaemonMemoryResult{}, ctx.Err()
 	}
 	return cloneDaemonMemoryResult(res), nil
 }
@@ -464,28 +467,73 @@ func (d *Daemon) autostartExpectedExecutable(managed bool, hint string) string {
 }
 
 func decodeAutostartSetParams(raw json.RawMessage) (bool, error) {
-	if len(bytes.TrimSpace(raw)) == 0 {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
 		return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
 	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	var p rpc.AutostartSetParams
-	if err := dec.Decode(&p); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(trimmed))
+	tok, err := dec.Token()
+	if err != nil {
+		return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
+	}
+	if delim, ok := tok.(json.Delim); !ok || delim != '{' {
+		return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
+	}
+	var (
+		hasEnabled bool
+		enabled    *bool
+	)
+	for dec.More() {
+		ktok, err := dec.Token()
+		if err != nil {
+			return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
+		}
+		key, ok := ktok.(string)
+		if !ok || key != "enabled" || hasEnabled {
+			return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
+		}
+		hasEnabled = true
+		var rawVal json.RawMessage
+		if err := dec.Decode(&rawVal); err != nil {
+			return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
+		}
+		if err := json.Unmarshal(rawVal, &enabled); err != nil || enabled == nil {
+			return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
+		}
+	}
+	endTok, err := dec.Token()
+	if err != nil {
+		return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
+	}
+	if endDelim, ok := endTok.(json.Delim); !ok || endDelim != '}' {
 		return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
 	}
 	var trailing any
 	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
 		return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
 	}
-	if p.Enabled == nil {
+	if !hasEnabled || enabled == nil {
 		return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
 	}
-	return *p.Enabled, nil
+	return *enabled, nil
 }
 
 func (d *Daemon) serverAutostartStatus(ctx context.Context, _ json.RawMessage) (any, error) {
+	return d.queryAutostartStatus(ctx)
+}
+
+func (d *Daemon) queryAutostartStatus(ctx context.Context) (rpc.AutostartStatus, error) {
 	qctx, cancel := context.WithTimeout(ctx, autostartQueryTimeout)
 	defer cancel()
+	// 与同一 home 的自启写操作串行：写或取消后的清理仍在途时等待其结束，避免对账读返回提交前的旧状态。
+	release, err := d.writes.Acquire(qctx, writecoord.Scope{Keys: []string{"autostart:" + d.cfg.Home}})
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return rpc.AutostartStatus{}, rpc.Errorf(rpc.CodeBusy, "another startup service update is in progress")
+		}
+		return rpc.AutostartStatus{}, err
+	}
+	defer release()
 	if d.autostart != nil {
 		return d.autostart(qctx)
 	}
@@ -497,7 +545,7 @@ func (d *Daemon) serverAutostartStatus(ctx context.Context, _ json.RawMessage) (
 			if errors.Is(err, exec.ErrNotFound) {
 				return rpc.AutostartStatus{Supported: false, Managed: managed}, nil
 			}
-			return nil, fmt.Errorf("launchd status query failed: %w", err)
+			return rpc.AutostartStatus{}, fmt.Errorf("launchd status query failed: %w", err)
 		}
 		return rpc.AutostartStatus{
 			Supported:          true,
@@ -518,7 +566,7 @@ func (d *Daemon) serverAutostartStatus(ctx context.Context, _ json.RawMessage) (
 			if errors.Is(err, exec.ErrNotFound) {
 				return rpc.AutostartStatus{Supported: false, Managed: managed}, nil
 			}
-			return nil, fmt.Errorf("systemd status query failed: %w", err)
+			return rpc.AutostartStatus{}, fmt.Errorf("systemd status query failed: %w", err)
 		}
 		return rpc.AutostartStatus{
 			Supported:          true,
@@ -549,17 +597,31 @@ func (d *Daemon) serverAutostartSet(ctx context.Context, raw json.RawMessage) (a
 	if err != nil {
 		return nil, err
 	}
+	return d.applyAutostartSet(ctx, enabled)
+}
+
+func (d *Daemon) applyAutostartSet(ctx context.Context, enabled bool) (rpc.AutostartStatus, error) {
+	// 通过 beginWorkspaceOperation 在同一临界区检查交接阻塞并登记活跃写入，确保手机与桌面入口均能阻止并发交接。
+	opCtx, finish, err := d.beginWorkspaceOperation(ctx)
+	if err != nil {
+		return rpc.AutostartStatus{}, err
+	}
+	defer finish()
+
 	managed := Edition == "headless" && d.runtime != ""
 	if d.setAutostart == nil && !managed {
-		return nil, rpc.Errorf(rpc.CodeBadRequest, "autostart can only be managed on managed headless servers")
+		return rpc.AutostartStatus{}, rpc.Errorf(rpc.CodeBadRequest, "autostart can only be managed on managed headless servers")
 	}
-	qctx, cancel := context.WithTimeout(ctx, autostartSetTimeout)
+	qctx, cancel := context.WithTimeout(opCtx, autostartSetTimeout)
 	defer cancel()
 
 	// 进程内经 writecoord 串行化同一 home 的自启修改（零值可用且支持 ctx 取消）。
 	release, err := d.writes.Acquire(qctx, writecoord.Scope{Keys: []string{"autostart:" + d.cfg.Home}})
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return rpc.AutostartStatus{}, rpc.Errorf(rpc.CodeBusy, "another startup service update is in progress")
+		}
+		return rpc.AutostartStatus{}, err
 	}
 	defer release()
 
@@ -583,9 +645,9 @@ func (d *Daemon) serverAutostartSet(ctx context.Context, raw json.RawMessage) (a
 		}
 		if err != nil {
 			if errors.Is(err, exec.ErrNotFound) {
-				return nil, rpc.Errorf(rpc.CodeBadRequest, "startup service tool is not available on this host")
+				return rpc.AutostartStatus{}, rpc.Errorf(rpc.CodeBadRequest, "startup service tool is not available on this host")
 			}
-			return nil, fmt.Errorf("launchd autostart update failed: %w", err)
+			return rpc.AutostartStatus{}, fmt.Errorf("launchd autostart update failed: %w", err)
 		}
 		return rpc.AutostartStatus{
 			Supported:          true,
@@ -615,9 +677,9 @@ func (d *Daemon) serverAutostartSet(ctx context.Context, raw json.RawMessage) (a
 		}
 		if err != nil {
 			if errors.Is(err, exec.ErrNotFound) {
-				return nil, rpc.Errorf(rpc.CodeBadRequest, "startup service tool is not available on this host")
+				return rpc.AutostartStatus{}, rpc.Errorf(rpc.CodeBadRequest, "startup service tool is not available on this host")
 			}
-			return nil, fmt.Errorf("systemd autostart update failed: %w", err)
+			return rpc.AutostartStatus{}, fmt.Errorf("systemd autostart update failed: %w", err)
 		}
 		return rpc.AutostartStatus{
 			Supported:          true,
@@ -635,6 +697,6 @@ func (d *Daemon) serverAutostartSet(ctx context.Context, raw json.RawMessage) (a
 			NoteCode:           st.NoteCode,
 		}, nil
 	default:
-		return nil, rpc.Errorf(rpc.CodeBadRequest, "startup service management is not supported on this platform")
+		return rpc.AutostartStatus{}, rpc.Errorf(rpc.CodeBadRequest, "startup service management is not supported on this platform")
 	}
 }

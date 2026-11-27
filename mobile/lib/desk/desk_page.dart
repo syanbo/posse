@@ -2420,9 +2420,11 @@ class _DeskPageState extends State<DeskPage>
         context: context,
         showDragHandle: true,
         isScrollControlled: true,
+        useSafeArea: true,
         builder: (sheet) {
           final c = PosseColors.of(sheet);
-          final bottom = MediaQuery.viewInsetsOf(sheet).bottom;
+          final keyboard = MediaQuery.viewInsetsOf(sheet).bottom;
+          final safeBottom = keyboard > 0 ? 0.0 : MediaQuery.paddingOf(sheet).bottom;
           return StatefulBuilder(
             builder: (context, setSheet) {
               void apply() {
@@ -2445,9 +2447,9 @@ class _DeskPageState extends State<DeskPage>
               }
 
               return Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottom),
-                child: SafeArea(
-                  top: false,
+                padding: EdgeInsets.only(bottom: keyboard),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + safeBottom),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,

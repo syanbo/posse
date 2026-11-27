@@ -19,14 +19,20 @@ enum ImageAsk { gallery, camera, clipboard, files }
 
 /// 问从哪选图。取消时返回 null。
 Future<ImageAsk?> askImageSource(BuildContext context) {
+  FocusManager.instance.primaryFocus?.unfocus();
   return showModalBottomSheet<ImageAsk>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
+    useSafeArea: true,
     builder: (sheet) {
       final c = PosseColors.of(sheet);
-      return SafeArea(
-        top: false,
+      final keyboard = MediaQuery.viewInsetsOf(sheet).bottom;
+      final bottom = keyboard > 0 ? 0.0 : MediaQuery.paddingOf(sheet).bottom;
+      return Padding(
+        padding: EdgeInsets.only(bottom: keyboard),
         child: SingleChildScrollView(
+          padding: EdgeInsets.only(bottom: bottom),
           child: Section(
             inset: 48,
             children: [
@@ -126,11 +132,16 @@ enum FileAsk { gallery, camera, files }
 
 /// 问从哪选文件。取消时返回 null。
 Future<FileAsk?> askFileSource(BuildContext context) {
+  FocusManager.instance.primaryFocus?.unfocus();
   return showModalBottomSheet<FileAsk>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
+    useSafeArea: true,
     builder: (sheet) {
       final c = PosseColors.of(sheet);
+      final keyboard = MediaQuery.viewInsetsOf(sheet).bottom;
+      final bottom = keyboard > 0 ? 0.0 : MediaQuery.paddingOf(sheet).bottom;
       Widget row(FileAsk ask, IconData icon, String title) => RowTile(
         key: Key('file-ask-${ask.name}'),
         leading: Icon(icon, size: Ic.button, color: c.accent),
@@ -138,9 +149,10 @@ Future<FileAsk?> askFileSource(BuildContext context) {
         chevron: false,
         onTap: () => Navigator.of(sheet).pop(ask),
       );
-      return SafeArea(
-        top: false,
+      return Padding(
+        padding: EdgeInsets.only(bottom: keyboard),
         child: SingleChildScrollView(
+          padding: EdgeInsets.only(bottom: bottom),
           child: Section(
             inset: 48,
             children: [

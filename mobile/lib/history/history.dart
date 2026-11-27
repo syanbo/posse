@@ -621,15 +621,16 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         titleSpacing: 0,
-        title: Row(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            AgentTile(agent: s.agent, size: Ic.large),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
+            Row(
+              children: [
+                AgentTile(agent: s.agent, size: Ic.medium),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
                     s.title.isEmpty ? context.l10n.historyUntitled : s.title,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -638,13 +639,14 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
                       color: c.text,
                     ),
                   ),
-                  Text(
-                    s.cwd,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: Fs.small, color: c.muted),
-                  ),
-                ],
-              ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              s.cwd,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: Fs.small, color: c.muted),
             ),
           ],
         ),

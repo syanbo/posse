@@ -813,6 +813,11 @@ class _SearchSheetState extends State<_SearchSheet> {
           ),
           Expanded(
             child: ListView.builder(
+              padding: EdgeInsets.only(
+                bottom:
+                    MediaQuery.paddingOf(context).bottom +
+                    MediaQuery.viewInsetsOf(context).bottom,
+              ),
               itemCount: _results.length,
               itemBuilder: (context, i) {
                 final path = _results[i];

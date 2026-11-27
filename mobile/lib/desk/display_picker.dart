@@ -55,10 +55,12 @@ Future<DeskPick?> pickDeskView(
       showDragHandle: true,
       // 看桌面常是横屏，默认的高度上限放不下排布图加列表
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (sheet) {
         sheetContext = sheet;
         invalidate();
         final c = PosseColors.of(sheet);
+        final bottom = MediaQuery.paddingOf(sheet).bottom;
         void pick(DeskPick p) => Navigator.of(sheet).pop(p);
         final fitAction = onFitScreen == null
             ? null
@@ -81,7 +83,10 @@ Future<DeskPick?> pickDeskView(
             windows == null &&
             resolution == null &&
             fps == null) {
-          return SafeArea(top: false, child: fitAction);
+          return Padding(
+            padding: EdgeInsets.only(bottom: bottom),
+            child: fitAction,
+          );
         }
         // 只看窗口时屏上不打勾，排布图照样标出窗口所在的那块
         final watching = displays.window;
@@ -90,18 +95,17 @@ Future<DeskPick?> pickDeskView(
           200.0,
           460.0,
         );
-        return SafeArea(
-          top: false,
-          child: SizedBox(
-            height: height,
-            child: _StreamChoices(
-              fitAction: fitAction,
-              resolution: resolution,
-              onResolution: onResolution,
-              fps: fps,
-              onFps: onFps,
-              child: SingleChildScrollView(
-                child: Column(
+        return SizedBox(
+          height: height,
+          child: _StreamChoices(
+            fitAction: fitAction,
+            resolution: resolution,
+            onResolution: onResolution,
+            fps: fps,
+            onFps: onFps,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: bottom),
+              child: Column(
                   children: [
                     if (displays.list.isNotEmpty)
                       Section(
@@ -211,7 +215,6 @@ Future<DeskPick?> pickDeskView(
                 ),
               ),
             ),
-          ),
         );
       },
     );

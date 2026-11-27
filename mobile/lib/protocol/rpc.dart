@@ -26,6 +26,7 @@ const posseCapabilities = [
   'posse.bulk.v1',
   'posse.push.v1',
   'posse.termcolors.v1',
+  'posse.host.v1',
 ];
 
 /// 大块数据的二进制帧（电脑的 internal/mobile/bulk.go）：u8 0x62、u8 版本 1、u8 操作、u8 0、
@@ -99,6 +100,7 @@ class PhoneRpc {
   final SocketReader _reader;
 
   final _wait = <String, Completer<Map<String, Object?>>>{};
+  final _longWaits = <String>{};
   final _subs = <String, void Function(Map<String, Object?> frame)>{};
   final _subErr = <String, void Function(RpcException error)>{};
   final _binary = StreamController<Uint8List>.broadcast();
@@ -167,16 +169,21 @@ class PhoneRpc {
     final id = 'rpc-${++_n}';
     final waiter = Completer<Map<String, Object?>>();
     _wait[id] = waiter;
+    if (timeout > const Duration(seconds: 20)) {
+      _longWaits.add(id);
+    }
     try {
       await _sendRequest(id, method, params);
     } catch (error) {
       _wait.remove(id);
+      _longWaits.remove(id);
       rethrow;
     }
     return waiter.future.timeout(
       timeout,
       onTimeout: () {
         _wait.remove(id);
+        _longWaits.remove(id);
         throw TimeoutException(method);
       },
     );
@@ -252,6 +259,7 @@ class PhoneRpc {
     await Future<void>.delayed(min);
     while (!_ended &&
         (_uploads > 0 ||
+            _longWaits.isNotEmpty ||
             (_wait.isNotEmpty || _subs.isNotEmpty) &&
                 DateTime.now().isBefore(deadline))) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -378,6 +386,7 @@ class PhoneRpc {
     final result = message['result'];
     if (result is Map) _fillBlobs(result.cast<String, Object?>());
     final waiter = _wait.remove(id);
+    _longWaits.remove(id);
     if (waiter == null || waiter.isCompleted) return;
     repliesReceived++;
     if (message['ok'] == true) {
@@ -463,6 +472,7 @@ class PhoneRpc {
   void _failAll(Object error) {
     final pending = _wait.values.toList();
     _wait.clear();
+    _longWaits.clear();
     for (final waiter in pending) {
       if (!waiter.isCompleted) waiter.completeError(error);
     }

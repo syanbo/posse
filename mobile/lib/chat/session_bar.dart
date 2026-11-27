@@ -21,7 +21,7 @@ class SessionTitle extends StatelessWidget {
 
   final SessionTab tab;
 
-  /// 给了就在 agent 图标右下角画连接状态的小圆点：绿色连着，琥珀色断开或正在重连。
+  /// 给了就在和电脑断开时把下方状态行临时换成重连进度。
   final PosseAppModel? model;
 
   @override
@@ -70,15 +70,16 @@ class SessionTitle extends StatelessWidget {
                   ? l.chatTerminal
                   : chatWho(l, 'assistant', tab.agent),
           };
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _withLink(c, AgentTile(agent: tab.agent, size: Ic.large)),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
+        Row(
+          children: [
+            AgentTile(agent: tab.agent, size: Ic.medium),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
                 cleanTitle(tab.title),
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -87,18 +88,19 @@ class SessionTitle extends StatelessWidget {
                   color: c.text,
                 ),
               ),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                layoutBuilder: (current, previous) => Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [...previous, ?current],
-                ),
-                child: offline && !ended
-                    ? _reconnecting(l, c, connecting)
-                    : _stateRow(context, c, l, state, stateText, ended),
-              ),
-            ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          layoutBuilder: (current, previous) => Stack(
+            alignment: Alignment.centerLeft,
+            children: [...previous, ?current],
           ),
+          child: offline && !ended
+              ? _reconnecting(l, c, connecting)
+              : _stateRow(context, c, l, state, stateText, ended),
         ),
       ],
     );
@@ -196,41 +198,6 @@ extension on SessionTitle {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _withLink(PosseColors c, Widget tile) {
-    final model = this.model;
-    if (model == null) return tile;
-    return ListenableBuilder(
-      listenable: model,
-      builder: (context, _) {
-        final online = model.rpc != null && !model.connecting;
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            tile,
-            Positioned(
-              right: -3,
-              bottom: -3,
-              child: Tooltip(
-                message: online
-                    ? context.l10n.chatConnected
-                    : context.l10n.chatDisconnected,
-                child: Container(
-                  width: 11,
-                  height: 11,
-                  decoration: BoxDecoration(
-                    color: online ? c.sage : c.honey,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: c.canvas, width: 2),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }

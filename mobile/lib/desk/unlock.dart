@@ -41,6 +41,7 @@ Future<MacPasswordAnswer?> askMacPassword(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
+    useSafeArea: true,
     builder: (sheet) => _PasswordSheet(canRemember: canRemember, saved: saved),
   );
 }
@@ -83,14 +84,14 @@ class _PasswordSheetState extends State<_PasswordSheet> {
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
     final l = context.l10n;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final safeBottom = keyboard > 0 ? 0.0 : MediaQuery.paddingOf(context).bottom;
     // 横屏时键盘占掉大半屏：「记住」和「解锁」跟输入框放一行，看得见输入框就点得到
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: Column(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + safeBottom),
+        child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -167,8 +168,7 @@ class _PasswordSheetState extends State<_PasswordSheet> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

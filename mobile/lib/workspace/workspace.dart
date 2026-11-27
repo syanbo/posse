@@ -1,5 +1,6 @@
 import '../discussions/discussions.dart';
 import '../history/history.dart';
+import '../host/host_details_screen.dart';
 import '../l10n/l10n.dart';
 import '../ui/loading.dart';
 import '../usage/usage.dart';
@@ -311,9 +312,11 @@ Future<WorktreeRow?> showWorkspacePicker(
   useSafeArea: true,
   builder: (sheet) {
     final c = PosseColors.of(sheet);
+    final bottom = MediaQuery.paddingOf(sheet).bottom;
     return SizedBox(
       height: MediaQuery.sizeOf(sheet).height * 0.7,
       child: ListView(
+        padding: EdgeInsets.only(bottom: bottom),
         children: [
           Section(
             title: sheet.l10n.sessionPickWorkspace,
@@ -437,6 +440,11 @@ class WorkspaceScreen extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+      ),
       builder: (_) => _ComputerSheet(
         model: model,
         onAdd: () {
@@ -447,6 +455,14 @@ class WorkspaceScreen extends StatelessWidget {
           Navigator.of(context).pop();
           Navigator.of(context)
               .push(DeskRoute(builder: (_) => DeskPage(model: model)));
+        },
+        onHostDetails: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => HostDetailsScreen(model: model),
+            ),
+          );
         },
       ),
     );
@@ -1380,51 +1396,54 @@ class _ComputerSheet extends StatelessWidget {
     required this.model,
     required this.onAdd,
     required this.onDesk,
+    required this.onHostDetails,
   });
 
   final PosseAppModel model;
   final VoidCallback onAdd;
   final VoidCallback onDesk;
+  final VoidCallback onHostDetails;
 
   /// 长按一台电脑：改名或者忘掉它。
   Future<void> _actions(BuildContext context, SavedComputer computer) async {
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
       builder: (sheet) {
         final c = PosseColors.of(sheet);
-        return SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            child: Section(
-              title: model.labelOf(computer, sheet.l10n),
-              inset: 48,
-              children: [
-                RowTile(
-                  chevron: false,
-                  leading: Icon(
-                    Icons.edit_rounded,
-                    size: Ic.button,
-                    color: c.accent,
-                  ),
-                  title: Text(context.l10n.homeRename),
-                  onTap: () => Navigator.of(sheet).pop('rename'),
+        final bottom = MediaQuery.paddingOf(sheet).bottom;
+        return SingleChildScrollView(
+          padding: EdgeInsets.only(bottom: bottom),
+          child: Section(
+            title: model.labelOf(computer, sheet.l10n),
+            inset: 48,
+            children: [
+              RowTile(
+                chevron: false,
+                leading: Icon(
+                  Icons.edit_rounded,
+                  size: Ic.button,
+                  color: c.accent,
                 ),
-                RowTile(
-                  chevron: false,
-                  leading: Icon(
-                    Icons.link_off_rounded,
-                    size: Ic.button,
-                    color: c.danger,
-                  ),
-                  title: Text(
-                    context.l10n.homeForgetComputer,
-                    style: TextStyle(color: c.danger),
-                  ),
-                  onTap: () => Navigator.of(sheet).pop('remove'),
+                title: Text(context.l10n.homeRename),
+                onTap: () => Navigator.of(sheet).pop('rename'),
+              ),
+              RowTile(
+                chevron: false,
+                leading: Icon(
+                  Icons.link_off_rounded,
+                  size: Ic.button,
+                  color: c.danger,
                 ),
-              ],
-            ),
+                title: Text(
+                  context.l10n.homeForgetComputer,
+                  style: TextStyle(color: c.danger),
+                ),
+                onTap: () => Navigator.of(sheet).pop('remove'),
+              ),
+            ],
           ),
         );
       },
@@ -1480,6 +1499,16 @@ class _ComputerSheet extends StatelessWidget {
                 ),
                 title: Text(l.homeRemoteDesktop),
                 onTap: onDesk,
+              ),
+            if (model.rpc != null)
+              RowTile(
+                leading: Icon(
+                  Icons.info_outline_rounded,
+                  size: Ic.button,
+                  color: c.accent,
+                ),
+                title: Text(l.hostDetailsTitle),
+                onTap: onHostDetails,
               ),
             for (final computer in model.computers)
               RowTile(
@@ -1538,7 +1567,9 @@ class _ComputerSheet extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(bottom: 8),
+            padding: EdgeInsets.only(
+              bottom: 8 + MediaQuery.paddingOf(context).bottom,
+            ),
             child: Text(
               l.homeLongPressHint,
               textAlign: TextAlign.center,
@@ -1546,30 +1577,27 @@ class _ComputerSheet extends StatelessWidget {
             ),
           ),
         ];
-        return SafeArea(
-          top: false,
-          child: LayoutBuilder(
-            builder: (context, box) {
-              // 横屏只有三百多高，按钮固定的话列表会被压成 0：高度不够时整张一起滚
-              if (!box.hasBoundedHeight || box.maxHeight < _sheetPinnedHeight) {
-                return SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [list, ...footer],
-                  ),
-                );
-              }
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Flexible(child: SingleChildScrollView(child: list)),
-                  ...footer,
-                ],
+        return LayoutBuilder(
+          builder: (context, box) {
+            // 横屏只有三百多高，按钮固定的话列表会被压成 0：高度不够时整张一起滚
+            if (!box.hasBoundedHeight || box.maxHeight < _sheetPinnedHeight) {
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [list, ...footer],
+                ),
               );
-            },
-          ),
+            }
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Flexible(child: SingleChildScrollView(child: list)),
+                ...footer,
+              ],
+            );
+          },
         );
       },
     );

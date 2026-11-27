@@ -1336,6 +1336,158 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get hostDetailsTitle => '主机详情';
+
+  @override
+  String get hostDetailRefresh => '刷新';
+
+  @override
+  String get hostDetailDisconnected => '连接主机后可查看服务端详情、资源占用与开机自启配置。';
+
+  @override
+  String get hostDetailLegacyNote => '升级电脑端 Posse 后可查看内存明细与开机自启设置。';
+
+  @override
+  String get hostDetailLoading => '正在读取…';
+
+  @override
+  String get hostDetailCopied => '已复制';
+
+  @override
+  String get hostSectionServer => '服务端';
+
+  @override
+  String get hostSectionResources => '资源占用';
+
+  @override
+  String get hostSectionAutostart => '开机自启';
+
+  @override
+  String get hostFieldEdition => '形态';
+
+  @override
+  String get hostEditionHeadlessManaged => '无头服务端（托管）';
+
+  @override
+  String get hostEditionHeadlessCustom => '无头服务端（自定义）';
+
+  @override
+  String get hostEditionFull => 'Posse.app（完整版）';
+
+  @override
+  String get hostFieldVersion => '版本';
+
+  @override
+  String get hostFieldPlatform => '系统';
+
+  @override
+  String get hostFieldProcess => '进程';
+
+  @override
+  String hostProcessPid(String pid) {
+    return 'PID $pid';
+  }
+
+  @override
+  String hostProcessUp(String uptime) {
+    return '已运行 $uptime';
+  }
+
+  @override
+  String get hostFieldDataDir => '数据目录';
+
+  @override
+  String get hostResDaemonMem => '常驻进程内存';
+
+  @override
+  String get hostResTerminals => '终端';
+
+  @override
+  String hostResTerminalsCount(int running, int total) {
+    return '运行中 $running / 共 $total';
+  }
+
+  @override
+  String get hostResTermsMem => '终端进程';
+
+  @override
+  String get hostResTruncated => '部分深层进程树已截断，以保证响应速度。';
+
+  @override
+  String hostResProcGroup(String name, int count) {
+    return '$name ×$count';
+  }
+
+  @override
+  String get hostAutostartLaunchd => 'macOS LaunchAgent';
+
+  @override
+  String get hostAutostartSystemd => 'Linux systemd --user';
+
+  @override
+  String get hostAutostartOff => '未开启';
+
+  @override
+  String get hostAutostartLoaded => '已加载';
+
+  @override
+  String get hostAutostartTimerActive => '定时器运行中';
+
+  @override
+  String get hostAutostartInstalledPending => '已安装（未加载）';
+
+  @override
+  String get hostAutostartUpdating => '正在更新…';
+
+  @override
+  String get hostAutostartFieldPath => '配置文件';
+
+  @override
+  String get hostAutostartToggleNote => '关闭仅取消开机自启，不停止当前常驻进程和终端。';
+
+  @override
+  String get hostAutostartFullNote => '完整版请在目标机的 Posse.app 中管理开机自启。';
+
+  @override
+  String get hostAutostartCustomNote => '仅托管无头服务端支持在此开关开机自启。';
+
+  @override
+  String get hostAutostartUnsupported => '当前主机不支持托管开机自启服务。';
+
+  @override
+  String get hostAutostartNoteAqua =>
+      '当前无活跃 macOS 图形登录会话，LaunchAgent 将在下次图形登录后自动加载。';
+
+  @override
+  String get hostAutostartNoteSystemdBus =>
+      '当前无活跃 systemd 用户总线，登录后或开启 linger 后生效。';
+
+  @override
+  String get hostAutostartNoteLinger =>
+      '未开启 linger，最后一个 SSH 会话退出后定时器与服务可能被系统回收。';
+
+  @override
+  String get hostAutostartCopyLinger => '复制命令';
+
+  @override
+  String get hostUptimeSeconds => '不足 1 分钟';
+
+  @override
+  String hostUptimeMins(int mins) {
+    return '$mins 分钟';
+  }
+
+  @override
+  String hostUptimeHours(int hours, int mins) {
+    return '$hours 小时 $mins 分钟';
+  }
+
+  @override
+  String hostUptimeDays(int days, int hours) {
+    return '$days 天 $hours 小时';
+  }
+
+  @override
   String get homeRename => '重命名';
 
   @override

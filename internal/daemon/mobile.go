@@ -18,6 +18,7 @@ import (
 	"posse/internal/history"
 	"posse/internal/host"
 	"posse/internal/mobile"
+	"posse/internal/procmem"
 	"posse/internal/rpc"
 	"posse/internal/store"
 	"posse/internal/usage"
@@ -28,6 +29,55 @@ type mobileHost struct{ d *Daemon }
 
 func (h mobileHost) HostMeta() mobile.HostMeta {
 	return buildMobileHostMeta(runtime.GOOS, runtime.GOARCH, Edition, h.d.runtime != "", Version, Commit)
+}
+
+func (h mobileHost) HostInfo(ctx context.Context) (mobile.HostInfo, error) {
+	d := h.d
+	d.mu.Lock()
+	total := len(d.terms)
+	running := 0
+	for _, s := range d.terms {
+		if s.Running() {
+			running++
+		}
+	}
+	started := d.started
+	d.mu.Unlock()
+
+	info := mobile.HostInfo{
+		Version:          Version,
+		Commit:           Commit,
+		Build:            Build,
+		Platform:         runtime.GOOS,
+		Arch:             runtime.GOARCH,
+		Edition:          Edition,
+		Managed:          Edition == "headless" && d.runtime != "",
+		Pid:              os.Getpid(),
+		Home:             d.cfg.Home,
+		Terminals:        total,
+		RunningTerminals: running,
+		DaemonMemoryKB:   int64(procmem.Footprint(os.Getpid()) >> 10),
+	}
+	if !started.IsZero() {
+		info.StartedAt = started.UnixMilli()
+	}
+	actx, acancel := context.WithTimeout(ctx, 5*time.Second)
+	st, err := d.queryAutostartStatus(actx)
+	acancel()
+	if err != nil {
+		info.AutostartError = err.Error()
+	} else {
+		info.Autostart = &st
+	}
+	return info, nil
+}
+
+func (h mobileHost) HostMemory(ctx context.Context, expanded []string) (rpc.DaemonMemoryResult, error) {
+	return h.d.queryDaemonMemory(ctx, expanded)
+}
+
+func (h mobileHost) SetHostAutostart(ctx context.Context, enabled bool) (rpc.AutostartStatus, error) {
+	return h.d.applyAutostartSet(ctx, enabled)
 }
 
 func buildMobileHostMeta(goos, goarch, edition string, managed bool, version, commit string) mobile.HostMeta {

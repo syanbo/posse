@@ -552,6 +552,12 @@ func (c *conn) dispatch(req request) error {
 			return c.fail(req.ID, "not_found", "icon not found")
 		}
 		return c.reply(req.ID, map[string]any{"data": base64.StdEncoding.EncodeToString(data)})
+	case "posse.host.info":
+		return c.dispatchHostInfo(req.ID, p)
+	case "posse.host.memory":
+		return c.dispatchHostMemory(req.ID, p)
+	case "posse.host.autostartSet":
+		return c.dispatchHostAutostartSet(req.ID, p)
 	case "runtime.ping":
 		// Posse 扩展：手机按往返时间显示延迟，连着几次不回就当连接死了重连。不做任何事，回得越快越准
 		return c.reply(req.ID, map[string]any{})

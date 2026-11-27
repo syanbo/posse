@@ -165,9 +165,12 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
     final c = PosseColors.of(context);
     final l = context.l10n;
     final row = _worktree;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final safeBottom = keyboard > 0 ? 0.0 : MediaQuery.paddingOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.only(bottom: keyboard),
       child: SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: safeBottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

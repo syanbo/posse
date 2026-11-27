@@ -1414,6 +1414,165 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get hostDetailsTitle => 'Host Details';
+
+  @override
+  String get hostDetailRefresh => 'Refresh';
+
+  @override
+  String get hostDetailDisconnected =>
+      'Connect to a host to inspect server details, resource usage, and startup settings.';
+
+  @override
+  String get hostDetailLegacyNote =>
+      'Update Posse on this host to view resource breakdown and startup settings.';
+
+  @override
+  String get hostDetailLoading => 'Loading…';
+
+  @override
+  String get hostDetailCopied => 'Copied';
+
+  @override
+  String get hostSectionServer => 'Server';
+
+  @override
+  String get hostSectionResources => 'Resources';
+
+  @override
+  String get hostSectionAutostart => 'Startup Service';
+
+  @override
+  String get hostFieldEdition => 'Edition';
+
+  @override
+  String get hostEditionHeadlessManaged => 'Headless Server (Managed)';
+
+  @override
+  String get hostEditionHeadlessCustom => 'Headless Server (Custom)';
+
+  @override
+  String get hostEditionFull => 'Posse.app (Full)';
+
+  @override
+  String get hostFieldVersion => 'Version';
+
+  @override
+  String get hostFieldPlatform => 'System';
+
+  @override
+  String get hostFieldProcess => 'Process';
+
+  @override
+  String hostProcessPid(String pid) {
+    return 'PID $pid';
+  }
+
+  @override
+  String hostProcessUp(String uptime) {
+    return 'up $uptime';
+  }
+
+  @override
+  String get hostFieldDataDir => 'Data Directory';
+
+  @override
+  String get hostResDaemonMem => 'Daemon Memory';
+
+  @override
+  String get hostResTerminals => 'Terminals';
+
+  @override
+  String hostResTerminalsCount(int running, int total) {
+    return '$running running / $total total';
+  }
+
+  @override
+  String get hostResTermsMem => 'Terminal Processes';
+
+  @override
+  String get hostResTruncated =>
+      'Some deep process trees were truncated to keep responses fast.';
+
+  @override
+  String hostResProcGroup(String name, int count) {
+    return '$name ×$count';
+  }
+
+  @override
+  String get hostAutostartLaunchd => 'macOS LaunchAgent';
+
+  @override
+  String get hostAutostartSystemd => 'Linux systemd --user';
+
+  @override
+  String get hostAutostartOff => 'Off';
+
+  @override
+  String get hostAutostartLoaded => 'Loaded';
+
+  @override
+  String get hostAutostartTimerActive => 'Timer active';
+
+  @override
+  String get hostAutostartInstalledPending => 'Installed (not loaded)';
+
+  @override
+  String get hostAutostartUpdating => 'Updating…';
+
+  @override
+  String get hostAutostartFieldPath => 'Config File';
+
+  @override
+  String get hostAutostartToggleNote =>
+      'Turning this off only disables autostart without stopping running terminals.';
+
+  @override
+  String get hostAutostartFullNote =>
+      'Manage startup settings inside Posse.app on this Mac.';
+
+  @override
+  String get hostAutostartCustomNote =>
+      'Only managed headless servers support toggling autostart here.';
+
+  @override
+  String get hostAutostartUnsupported =>
+      'Startup service management is not available on this host.';
+
+  @override
+  String get hostAutostartNoteAqua =>
+      'No active macOS GUI session; LaunchAgent will load on the next GUI login.';
+
+  @override
+  String get hostAutostartNoteSystemdBus =>
+      'No active systemd user bus; takes effect after login or enabling linger.';
+
+  @override
+  String get hostAutostartNoteLinger =>
+      'Linger is disabled; systemd services may stop after the last SSH session exits.';
+
+  @override
+  String get hostAutostartCopyLinger => 'Copy';
+
+  @override
+  String get hostUptimeSeconds => '<1m';
+
+  @override
+  String hostUptimeMins(int mins) {
+    return '${mins}m';
+  }
+
+  @override
+  String hostUptimeHours(int hours, int mins) {
+    return '${hours}h ${mins}m';
+  }
+
+  @override
+  String hostUptimeDays(int days, int hours) {
+    return '${days}d ${hours}h';
+  }
+
+  @override
   String get homeRename => 'Rename';
 
   @override

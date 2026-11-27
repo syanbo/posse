@@ -746,7 +746,10 @@ extension _MessageViews on _DiscussionRoomState {
     final picked = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
-      builder: (sheet) => SafeArea(
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheet) => SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(sheet).bottom),
         child: Section(
           children: [
             if (writable)

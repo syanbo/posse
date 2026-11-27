@@ -112,3 +112,130 @@ func TestDesktopMobileSurfaceAndTailscaleAuthURLRedacted(t *testing.T) {
 		t.Fatalf("expected AuthURL redacted on desktop.call, got %q", st.AuthURL)
 	}
 }
+
+func TestMobileHostInfoAndAutostartBlockedDuringHandoff(t *testing.T) {
+	d := &Daemon{
+		cfg: Config{Home: t.TempDir()},
+		autostart: func(ctx context.Context) (rpc.AutostartStatus, error) {
+			return rpc.AutostartStatus{Supported: true, Kind: "systemd", Managed: true, Writable: true, Enabled: true}, nil
+		},
+	}
+	mh := mobileHost{d: d}
+	info, err := mh.HostInfo(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Autostart == nil || !info.Autostart.Enabled || info.Pid <= 0 {
+		t.Fatalf("unexpected mobileHost.HostInfo: %+v", info)
+	}
+	// 交接期 blocked=true 时手机端也不能写开机自启，返回 CodeBusy。
+	d.desktop.mu.Lock()
+	d.desktop.blocked = true
+	d.desktop.mu.Unlock()
+	_, err = mh.SetHostAutostart(context.Background(), false)
+	desktopErrorCode(t, err, rpc.CodeBusy)
+
+	// 手机端先进入在途写入时，必须登记进 desktop.active，阻止 blockHandoff 并发交接；完成后恢复可交接。
+	d.desktop.mu.Lock()
+	d.desktop.blocked = false
+	d.desktop.mu.Unlock()
+	entered, release := make(chan struct{}), make(chan struct{})
+	d.setAutostart = func(ctx context.Context, enabled bool) (rpc.AutostartStatus, error) {
+		close(entered)
+		<-release
+		return rpc.AutostartStatus{Supported: true, Kind: "systemd", Managed: true, Writable: true, Enabled: enabled}, nil
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := mh.SetHostAutostart(context.Background(), false)
+		done <- err
+	}()
+	<-entered
+	if err := d.desktop.blockHandoff(); err == nil {
+		t.Fatal("blockHandoff unexpectedly succeeded while mobile autostart write is in progress")
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("mobile autostart write failed: %v", err)
+	}
+	if err := d.desktop.blockHandoff(); err != nil {
+		t.Fatalf("blockHandoff should succeed after mobile autostart write finishes: %v", err)
+	}
+}
+
+func TestDecodeAutostartSetParamsStrict(t *testing.T) {
+	bad := []string{
+		``,
+		`null`,
+		`[]`,
+		`{}`,
+		`{"enabled":null}`,
+		`{"Enabled":true}`,
+		`{"enabled":true,"enabled":false}`,
+		`{"enabled":true,"extra":1}`,
+		`{"enabled":"true"}`,
+		`{"enabled":true} {}`,
+	}
+	for _, raw := range bad {
+		if _, err := decodeAutostartSetParams(json.RawMessage(raw)); err == nil {
+			t.Fatalf("expected decodeAutostartSetParams(%s) to fail", raw)
+		}
+	}
+	if v, err := decodeAutostartSetParams(json.RawMessage(`{"enabled":true}`)); err != nil || !v {
+		t.Fatalf("decode true = (%v, %v)", v, err)
+	}
+	if v, err := decodeAutostartSetParams(json.RawMessage(`{"enabled":false}`)); err != nil || v {
+		t.Fatalf("decode false = (%v, %v)", v, err)
+	}
+}
+
+func TestAutostartQueryWaitsForInFlightWrite(t *testing.T) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	state := true
+	d := &Daemon{
+		cfg: Config{Home: t.TempDir()},
+		autostart: func(ctx context.Context) (rpc.AutostartStatus, error) {
+			return rpc.AutostartStatus{Supported: true, Kind: "systemd", Managed: true, Writable: true, Enabled: state}, nil
+		},
+		setAutostart: func(ctx context.Context, enabled bool) (rpc.AutostartStatus, error) {
+			close(entered)
+			<-release
+			state = enabled
+			return rpc.AutostartStatus{Supported: true, Kind: "systemd", Managed: true, Writable: true, Enabled: enabled}, nil
+		},
+	}
+	mh := mobileHost{d: d}
+
+	writeDone := make(chan error, 1)
+	go func() {
+		_, err := mh.SetHostAutostart(context.Background(), false)
+		writeDone <- err
+	}()
+	<-entered
+
+	// 写入在途时并发 HostInfo 必须等待写入结束（绝不返回写入前的 state=true）。
+	readDone := make(chan rpc.AutostartStatus, 1)
+	go func() {
+		st, err := d.queryAutostartStatus(context.Background())
+		if err != nil {
+			t.Errorf("queryAutostartStatus failed: %v", err)
+			return
+		}
+		readDone <- st
+	}()
+
+	select {
+	case st := <-readDone:
+		t.Fatalf("queryAutostartStatus returned early while write was in flight: %+v", st)
+	default:
+	}
+
+	close(release)
+	if err := <-writeDone; err != nil {
+		t.Fatalf("SetHostAutostart failed: %v", err)
+	}
+	st := <-readDone
+	if st.Enabled {
+		t.Fatalf("expected post-write Enabled=false, got true")
+	}
+}

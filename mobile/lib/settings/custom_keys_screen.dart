@@ -341,10 +341,12 @@ class _KeyEditorState extends State<_KeyEditor> {
     final l = context.l10n;
     final draft = _draft;
     final label = TextStyle(fontSize: Fs.small, color: c.muted);
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final safeBottom = keyboard > 0 ? 0.0 : MediaQuery.paddingOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.only(bottom: keyboard),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + safeBottom),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

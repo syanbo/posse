@@ -80,7 +80,7 @@ void main() {
     expect(find.textContaining('%'), findsNothing);
     await tester.tap(find.byKey(const Key('context-meter')));
     await tester.pumpAndSettle();
-    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.byType(BottomSheet), findsOneWidget);
     await tester.tapAt(const Offset(4, 4));
     await tester.pumpAndSettle();
     await show('codex');

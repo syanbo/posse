@@ -62,13 +62,18 @@ Future<String?> showSessionMore(
   return showModalBottomSheet<String>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
+    useSafeArea: true,
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+    ),
     builder: (sheet) {
       final c = PosseColors.of(sheet);
       final l = sheet.l10n;
-      return SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          child: Section(
+      final bottom = MediaQuery.paddingOf(sheet).bottom;
+      return SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: bottom),
+        child: Section(
             inset: 48,
             children: [
               if (switchLabel != null)
@@ -164,7 +169,6 @@ Future<String?> showSessionMore(
               ),
             ],
           ),
-        ),
       );
     },
   );

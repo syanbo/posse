@@ -2396,6 +2396,276 @@ abstract class AppLocalizations {
   /// **'{tag} · {endpoint}'**
   String homeHostSubtitleWithTag(String tag, String endpoint);
 
+  /// Host details page title and entry in the computer sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Host Details'**
+  String get hostDetailsTitle;
+
+  /// Host details: tooltip for refresh button.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get hostDetailRefresh;
+
+  /// Host details: empty state when not connected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to a host to inspect server details, resource usage, and startup settings.'**
+  String get hostDetailDisconnected;
+
+  /// Host details: notice when connected to an older host without posse.host.v1.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Posse on this host to view resource breakdown and startup settings.'**
+  String get hostDetailLegacyNote;
+
+  /// Host details: loading placeholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading…'**
+  String get hostDetailLoading;
+
+  /// Host details: snackbar shown after copying a path or command.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get hostDetailCopied;
+
+  /// Host details: server overview section header.
+  ///
+  /// In en, this message translates to:
+  /// **'Server'**
+  String get hostSectionServer;
+
+  /// Host details: memory and terminal resources section header.
+  ///
+  /// In en, this message translates to:
+  /// **'Resources'**
+  String get hostSectionResources;
+
+  /// Host details: autostart service section header.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup Service'**
+  String get hostSectionAutostart;
+
+  /// Host details: edition row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Edition'**
+  String get hostFieldEdition;
+
+  /// Host details: managed headless server edition.
+  ///
+  /// In en, this message translates to:
+  /// **'Headless Server (Managed)'**
+  String get hostEditionHeadlessManaged;
+
+  /// Host details: custom headless server edition.
+  ///
+  /// In en, this message translates to:
+  /// **'Headless Server (Custom)'**
+  String get hostEditionHeadlessCustom;
+
+  /// Host details: full desktop Posse.app edition.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse.app (Full)'**
+  String get hostEditionFull;
+
+  /// Host details: version row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get hostFieldVersion;
+
+  /// Host details: OS and architecture row label.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get hostFieldPlatform;
+
+  /// Host details: PID and uptime row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Process'**
+  String get hostFieldProcess;
+
+  /// Host details: process ID label.
+  ///
+  /// In en, this message translates to:
+  /// **'PID {pid}'**
+  String hostProcessPid(String pid);
+
+  /// Host details: process uptime label.
+  ///
+  /// In en, this message translates to:
+  /// **'up {uptime}'**
+  String hostProcessUp(String uptime);
+
+  /// Host details: daemon data directory label.
+  ///
+  /// In en, this message translates to:
+  /// **'Data Directory'**
+  String get hostFieldDataDir;
+
+  /// Host details: daemon footprint memory row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Daemon Memory'**
+  String get hostResDaemonMem;
+
+  /// Host details: terminal count row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminals'**
+  String get hostResTerminals;
+
+  /// Host details: running and total terminal counts.
+  ///
+  /// In en, this message translates to:
+  /// **'{running} running / {total} total'**
+  String hostResTerminalsCount(int running, int total);
+
+  /// Host details: total memory used by terminal process trees.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal Processes'**
+  String get hostResTermsMem;
+
+  /// Host details: note shown when process memory tree was truncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Some deep process trees were truncated to keep responses fast.'**
+  String get hostResTruncated;
+
+  /// Host details: grouped process name with instance count inside an expanded terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ×{count}'**
+  String hostResProcGroup(String name, int count);
+
+  /// Host details: macOS LaunchAgent autostart label.
+  ///
+  /// In en, this message translates to:
+  /// **'macOS LaunchAgent'**
+  String get hostAutostartLaunchd;
+
+  /// Host details: Linux systemd user service autostart label.
+  ///
+  /// In en, this message translates to:
+  /// **'Linux systemd --user'**
+  String get hostAutostartSystemd;
+
+  /// Host details: autostart disabled status.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get hostAutostartOff;
+
+  /// Host details: macOS LaunchAgent loaded status.
+  ///
+  /// In en, this message translates to:
+  /// **'Loaded'**
+  String get hostAutostartLoaded;
+
+  /// Host details: Linux systemd timer active status.
+  ///
+  /// In en, this message translates to:
+  /// **'Timer active'**
+  String get hostAutostartTimerActive;
+
+  /// Host details: autostart installed but currently inactive.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed (not loaded)'**
+  String get hostAutostartInstalledPending;
+
+  /// Host details: autostart toggle in progress.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating…'**
+  String get hostAutostartUpdating;
+
+  /// Host details: autostart config file path row.
+  ///
+  /// In en, this message translates to:
+  /// **'Config File'**
+  String get hostAutostartFieldPath;
+
+  /// Host details: reassurance note under the autostart toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turning this off only disables autostart without stopping running terminals.'**
+  String get hostAutostartToggleNote;
+
+  /// Host details: note when connected to a full desktop Posse.app.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage startup settings inside Posse.app on this Mac.'**
+  String get hostAutostartFullNote;
+
+  /// Host details: note when connected to an unmanaged headless server.
+  ///
+  /// In en, this message translates to:
+  /// **'Only managed headless servers support toggling autostart here.'**
+  String get hostAutostartCustomNote;
+
+  /// Host details: note when autostart is unsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup service management is not available on this host.'**
+  String get hostAutostartUnsupported;
+
+  /// Host details: macOS Aqua inactive notice.
+  ///
+  /// In en, this message translates to:
+  /// **'No active macOS GUI session; LaunchAgent will load on the next GUI login.'**
+  String get hostAutostartNoteAqua;
+
+  /// Host details: Linux systemd bus inactive notice.
+  ///
+  /// In en, this message translates to:
+  /// **'No active systemd user bus; takes effect after login or enabling linger.'**
+  String get hostAutostartNoteSystemdBus;
+
+  /// Host details: Linux linger disabled warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Linger is disabled; systemd services may stop after the last SSH session exits.'**
+  String get hostAutostartNoteLinger;
+
+  /// Host details: button to copy loginctl enable-linger command.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get hostAutostartCopyLinger;
+
+  /// Host details: uptime under one minute.
+  ///
+  /// In en, this message translates to:
+  /// **'<1m'**
+  String get hostUptimeSeconds;
+
+  /// Host details: uptime in minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{mins}m'**
+  String hostUptimeMins(int mins);
+
+  /// Host details: uptime in hours and minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours}h {mins}m'**
+  String hostUptimeHours(int hours, int mins);
+
+  /// Host details: uptime in days and hours.
+  ///
+  /// In en, this message translates to:
+  /// **'{days}d {hours}h'**
+  String hostUptimeDays(int days, int hours);
+
   /// Mac actions sheet: rename this Mac.
   ///
   /// In en, this message translates to:

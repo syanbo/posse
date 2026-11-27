@@ -1890,6 +1890,233 @@
       }
     }
   },
+  "hostDetailsTitle": "Host Details",
+  "@hostDetailsTitle": {
+    "description": "Host details page title and entry in the computer sheet."
+  },
+  "hostDetailRefresh": "Refresh",
+  "@hostDetailRefresh": {
+    "description": "Host details: tooltip for refresh button."
+  },
+  "hostDetailDisconnected": "Connect to a host to inspect server details, resource usage, and startup settings.",
+  "@hostDetailDisconnected": {
+    "description": "Host details: empty state when not connected."
+  },
+  "hostDetailLegacyNote": "Update Posse on this host to view resource breakdown and startup settings.",
+  "@hostDetailLegacyNote": {
+    "description": "Host details: notice when connected to an older host without posse.host.v1."
+  },
+  "hostDetailLoading": "Loading…",
+  "@hostDetailLoading": {
+    "description": "Host details: loading placeholder."
+  },
+  "hostDetailCopied": "Copied",
+  "@hostDetailCopied": {
+    "description": "Host details: snackbar shown after copying a path or command."
+  },
+  "hostSectionServer": "Server",
+  "@hostSectionServer": {
+    "description": "Host details: server overview section header."
+  },
+  "hostSectionResources": "Resources",
+  "@hostSectionResources": {
+    "description": "Host details: memory and terminal resources section header."
+  },
+  "hostSectionAutostart": "Startup Service",
+  "@hostSectionAutostart": {
+    "description": "Host details: autostart service section header."
+  },
+  "hostFieldEdition": "Edition",
+  "@hostFieldEdition": {
+    "description": "Host details: edition row label."
+  },
+  "hostEditionHeadlessManaged": "Headless Server (Managed)",
+  "@hostEditionHeadlessManaged": {
+    "description": "Host details: managed headless server edition."
+  },
+  "hostEditionHeadlessCustom": "Headless Server (Custom)",
+  "@hostEditionHeadlessCustom": {
+    "description": "Host details: custom headless server edition."
+  },
+  "hostEditionFull": "Posse.app (Full)",
+  "@hostEditionFull": {
+    "description": "Host details: full desktop Posse.app edition."
+  },
+  "hostFieldVersion": "Version",
+  "@hostFieldVersion": {
+    "description": "Host details: version row label."
+  },
+  "hostFieldPlatform": "System",
+  "@hostFieldPlatform": {
+    "description": "Host details: OS and architecture row label."
+  },
+  "hostFieldProcess": "Process",
+  "@hostFieldProcess": {
+    "description": "Host details: PID and uptime row label."
+  },
+  "hostProcessPid": "PID {pid}",
+  "@hostProcessPid": {
+    "description": "Host details: process ID label.",
+    "placeholders": {
+      "pid": {
+        "type": "String"
+      }
+    }
+  },
+  "hostProcessUp": "up {uptime}",
+  "@hostProcessUp": {
+    "description": "Host details: process uptime label.",
+    "placeholders": {
+      "uptime": {
+        "type": "String"
+      }
+    }
+  },
+  "hostFieldDataDir": "Data Directory",
+  "@hostFieldDataDir": {
+    "description": "Host details: daemon data directory label."
+  },
+  "hostResDaemonMem": "Daemon Memory",
+  "@hostResDaemonMem": {
+    "description": "Host details: daemon footprint memory row label."
+  },
+  "hostResTerminals": "Terminals",
+  "@hostResTerminals": {
+    "description": "Host details: terminal count row label."
+  },
+  "hostResTerminalsCount": "{running} running / {total} total",
+  "@hostResTerminalsCount": {
+    "description": "Host details: running and total terminal counts.",
+    "placeholders": {
+      "running": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "hostResTermsMem": "Terminal Processes",
+  "@hostResTermsMem": {
+    "description": "Host details: total memory used by terminal process trees."
+  },
+  "hostResTruncated": "Some deep process trees were truncated to keep responses fast.",
+  "@hostResTruncated": {
+    "description": "Host details: note shown when process memory tree was truncated."
+  },
+  "hostResProcGroup": "{name} ×{count}",
+  "@hostResProcGroup": {
+    "description": "Host details: grouped process name with instance count inside an expanded terminal.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "hostAutostartLaunchd": "macOS LaunchAgent",
+  "@hostAutostartLaunchd": {
+    "description": "Host details: macOS LaunchAgent autostart label."
+  },
+  "hostAutostartSystemd": "Linux systemd --user",
+  "@hostAutostartSystemd": {
+    "description": "Host details: Linux systemd user service autostart label."
+  },
+  "hostAutostartOff": "Off",
+  "@hostAutostartOff": {
+    "description": "Host details: autostart disabled status."
+  },
+  "hostAutostartLoaded": "Loaded",
+  "@hostAutostartLoaded": {
+    "description": "Host details: macOS LaunchAgent loaded status."
+  },
+  "hostAutostartTimerActive": "Timer active",
+  "@hostAutostartTimerActive": {
+    "description": "Host details: Linux systemd timer active status."
+  },
+  "hostAutostartInstalledPending": "Installed (not loaded)",
+  "@hostAutostartInstalledPending": {
+    "description": "Host details: autostart installed but currently inactive."
+  },
+  "hostAutostartUpdating": "Updating…",
+  "@hostAutostartUpdating": {
+    "description": "Host details: autostart toggle in progress."
+  },
+  "hostAutostartFieldPath": "Config File",
+  "@hostAutostartFieldPath": {
+    "description": "Host details: autostart config file path row."
+  },
+  "hostAutostartToggleNote": "Turning this off only disables autostart without stopping running terminals.",
+  "@hostAutostartToggleNote": {
+    "description": "Host details: reassurance note under the autostart toggle."
+  },
+  "hostAutostartFullNote": "Manage startup settings inside Posse.app on this Mac.",
+  "@hostAutostartFullNote": {
+    "description": "Host details: note when connected to a full desktop Posse.app."
+  },
+  "hostAutostartCustomNote": "Only managed headless servers support toggling autostart here.",
+  "@hostAutostartCustomNote": {
+    "description": "Host details: note when connected to an unmanaged headless server."
+  },
+  "hostAutostartUnsupported": "Startup service management is not available on this host.",
+  "@hostAutostartUnsupported": {
+    "description": "Host details: note when autostart is unsupported."
+  },
+  "hostAutostartNoteAqua": "No active macOS GUI session; LaunchAgent will load on the next GUI login.",
+  "@hostAutostartNoteAqua": {
+    "description": "Host details: macOS Aqua inactive notice."
+  },
+  "hostAutostartNoteSystemdBus": "No active systemd user bus; takes effect after login or enabling linger.",
+  "@hostAutostartNoteSystemdBus": {
+    "description": "Host details: Linux systemd bus inactive notice."
+  },
+  "hostAutostartNoteLinger": "Linger is disabled; systemd services may stop after the last SSH session exits.",
+  "@hostAutostartNoteLinger": {
+    "description": "Host details: Linux linger disabled warning."
+  },
+  "hostAutostartCopyLinger": "Copy",
+  "@hostAutostartCopyLinger": {
+    "description": "Host details: button to copy loginctl enable-linger command."
+  },
+  "hostUptimeSeconds": "<1m",
+  "@hostUptimeSeconds": {
+    "description": "Host details: uptime under one minute."
+  },
+  "hostUptimeMins": "{mins}m",
+  "@hostUptimeMins": {
+    "description": "Host details: uptime in minutes.",
+    "placeholders": {
+      "mins": {
+        "type": "int"
+      }
+    }
+  },
+  "hostUptimeHours": "{hours}h {mins}m",
+  "@hostUptimeHours": {
+    "description": "Host details: uptime in hours and minutes.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "mins": {
+        "type": "int"
+      }
+    }
+  },
+  "hostUptimeDays": "{days}d {hours}h",
+  "@hostUptimeDays": {
+    "description": "Host details: uptime in days and hours.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      },
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
   "homeRename": "Rename",
   "@homeRename": {
     "description": "Mac actions sheet: rename this Mac."

@@ -86,10 +86,9 @@ Material 图标一律用 `_rounded`。和首页项目行、文件树、Git 树�
 
 ## 弹框
 
-- 一律经 `showPosseDialog` 弹出（`lib/ui/widgets.dart`）：280ms 里从 0.94 带一点回弹放大、从下方升起 8、同时淡入，收起 160ms 不回弹；系统开了减少动态效果时只淡入淡出。
-- 确认框用 `showPosseConfirm`，不手写 `AlertDialog`：标题、说明，下面取消和确认两个等宽按钮。语气三种：`normal` 陶土色按钮；`warning`（有风险但不删东西，如 agent 工作时切分支）标题前加琥珀色警示图标，弹框落定后图标的淡底向外扩一圈，只播一次；`danger`（关会话、忘掉电脑这类删除）确认按钮用 `danger`。
-- 确认框的内容跟着弹框的推入动画分层出现（图标 80ms、文字 160ms、按钮 200ms 起），按钮按下缩到 0.97。只改变换和透明度，不另开常驻的动画，放完不再出帧。
-- 带输入框、进度这类自定义内容的仍用 `AlertDialog`，标题、正文字号和离屏幕边的距离由主题的 `dialogTheme` 统一。
+- 所有底部弹出面板（确认框、菜单、选择器、表单、套餐明细、更新说明等）统一按套餐明细样式：`showModalBottomSheet` 传 `showDragHandle: true`、`isScrollControlled: true`、`useSafeArea: true`（仅避开顶部状态栏和横屏左右安全区，让面板底色自然延伸到屏幕最底边），内部**不**再套外层 `SafeArea` 截断滚动区，改在内容或滚动视图的 `padding` 里叠加 `MediaQuery.paddingOf(context).bottom`（含输入框或可从编辑区拉起的选择器在拉起前收焦点，并在外层以 `Padding(padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom))` 实时避让软键盘）。
+- 确认框一律用 `showPosseConfirm`（`lib/ui/widgets.dart`），不手写 `AlertDialog`：从底部弹出（`maxWidth: 480`、`maxHeight: 0.85`），系统开了减少动态效果时禁用滑入动画；内含标题、说明，下面取消和确认两个等宽按钮。语气三种：`normal` 陶土色按钮；`warning`（有风险但不删东西，如 agent 工作时切分支）标题前加琥珀色警示图标，面板落定后图标的淡底向外扩一圈，只播一次；`danger`（关会话、忘掉电脑这类删除）确认按钮用 `danger`。按钮按下缩到 0.97，不另开常驻动画。
+- 带输入框、进度这类自定义表单对话框经 `showPosseDialog` 弹出：280ms 里从 0.94 带一点回弹放大、从下方升起 8、同时淡入，收起 160ms 不回弹；系统开了减少动态效果时只淡入淡出。标题、正文字号和离屏幕边的距离由主题的 `dialogTheme` 统一。
 
 ## 多语言与报错
 

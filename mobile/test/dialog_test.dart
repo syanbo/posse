@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:posse_mobile/chat/image_pick.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/ui/widgets.dart';
 
@@ -123,45 +124,172 @@ void main() {
       expect(results, [true, false, false]);
     });
 
-    testWidgets('content appears in layers, buttons last', (tester) async {
+    testWidgets('confirm opens as bottom sheet with warning icon and tones', (
+      tester,
+    ) async {
       await tester.pumpWidget(confirmHost((_) {}, tone: ConfirmTone.warning));
       await tester.tap(find.text('open'));
-      await tester.pump();
-      // 160ms：文字刚开始出现，按钮还没出来
-      await tester.pump(const Duration(milliseconds: 170));
-      double opacityAbove(String text) => tester
-          .widget<Opacity>(
-            find
-                .ancestor(of: find.text(text), matching: find.byType(Opacity))
-                .first,
-          )
-          .opacity;
-      expect(opacityAbove('切换分支？'), greaterThan(0));
-      expect(opacityAbove('仍然切换'), 0);
-      expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
-      // 落定后各层都是原样，警示图标的子树没有重建过
-      final icon = tester.element(find.byIcon(Icons.warning_amber_rounded));
       await tester.pumpAndSettle();
-      expect(opacityAbove('切换分支？'), 1);
-      expect(opacityAbove('仍然切换'), 1);
-      expect(
-        tester.element(find.byIcon(Icons.warning_amber_rounded)),
-        same(icon),
-      );
+      // 确认框统一从底部作为 BottomSheet 弹出，不再是居中 Dialog。
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(find.byType(Dialog), findsNothing);
+      expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+      expect(find.text('切换分支？'), findsOneWidget);
+      expect(find.text('仍然切换'), findsOneWidget);
+      final sheetRect = tester.getRect(find.byType(BottomSheet));
+      final screenSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+      expect(sheetRect.bottom, closeTo(screenSize.height, 1.0));
     });
 
-    testWidgets('reduced motion shows everything at once', (tester) async {
+    testWidgets('reduced motion shows bottom sheet immediately without slide', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         confirmHost((_) {}, tone: ConfirmTone.warning, reduceMotion: true),
       );
       await tester.tap(find.text('open'));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 20));
-      expect(
-        find.ancestor(of: find.text('仍然切换'), matching: find.byType(Opacity)),
-        findsNothing,
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(find.text('切换分支？'), findsOneWidget);
+      expect(find.text('仍然切换'), findsOneWidget);
+    });
+
+    testWidgets('confirm buttons stay above soft keyboard viewInsets', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(740, 360);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              viewInsets: const EdgeInsets.only(bottom: 160),
+              padding: const EdgeInsets.only(bottom: 20),
+            ),
+            child: child!,
+          ),
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showPosseConfirm(
+                context,
+                title: '关闭这个会话？',
+                body: '终端进程会被结束。',
+                confirm: '关闭',
+                tone: ConfirmTone.danger,
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
       );
+      await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
+      final btnRect = tester.getRect(find.text('关闭'));
+      // 360 高的窗口被 160 高软键盘挡住底部，确认按钮必须完全位于 y <= 200 的可见区上方。
+      expect(btnRect.bottom, lessThanOrEqualTo(200.0));
+    });
+
+    testWidgets(
+      'confirm sheet avoids overflow when keyboard rises dynamically or text is large',
+      (tester) async {
+        tester.view.physicalSize = const Size(740, 360);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final inset = ValueNotifier<double>(0);
+        addTearDown(inset.dispose);
+
+        await tester.pumpWidget(
+          ValueListenableBuilder<double>(
+            valueListenable: inset,
+            builder: (_, kb, _) => MaterialApp(
+              locale: const Locale('zh'),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  viewInsets: EdgeInsets.only(bottom: kb),
+                  padding: const EdgeInsets.only(bottom: 20),
+                  textScaler: const TextScaler.linear(2.0),
+                ),
+                child: child!,
+              ),
+              home: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => showPosseConfirm(
+                    context,
+                    title: '关闭这个会话？',
+                    body: '终端进程会被结束。',
+                    confirm: '关闭',
+                    tone: ConfirmTone.danger,
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+
+        // 打开后键盘再顶起至 240（仅剩 120 可用高度）+ 2.0 大字：不得发生 RenderFlex 溢出。
+        inset.value = 240;
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(find.byType(BottomSheet), findsOneWidget);
+      },
+    );
+
+    testWidgets('file attachment sheet lifts above persistent soft keyboard', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(740, 360);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      FileAsk? picked;
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              viewInsets: const EdgeInsets.only(bottom: 160),
+              padding: const EdgeInsets.only(bottom: 20),
+            ),
+            child: child!,
+          ),
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async {
+                picked = await askFileSource(context);
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      // 整个滚动视口必须完全位于键盘顶边（y <= 200）之上，滚动后末项完全可见且可点中。
+      final scrollRect = tester.getRect(find.byType(SingleChildScrollView));
+      expect(scrollRect.bottom, lessThanOrEqualTo(200.0));
+      await tester.ensureVisible(find.byKey(const Key('file-ask-files')));
+      await tester.pumpAndSettle();
+      final lastRow = tester.getRect(find.byKey(const Key('file-ask-files')));
+      expect(lastRow.bottom, lessThanOrEqualTo(200.0));
+      await tester.tap(find.byKey(const Key('file-ask-files')));
+      await tester.pumpAndSettle();
+      expect(picked, FileAsk.files);
     });
   });
 }

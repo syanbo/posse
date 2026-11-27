@@ -817,5 +817,8 @@ var zh = [][2]string{
 	{"remote daemon switched to a different version during handoff", "交接期间远端常驻进程已切换为其他版本，已保留其当前状态"},
 	{"desktop control was lost before handoff", "进入热交接前已失去桌面控制权，升级已取消"},
 	{"online server release %s is newer than this Posse version %s; update Posse on this Mac first", "线上服务端版本 {1} 高于当前本机 Posse {2}，请先更新本机 Posse"},
+	{"invalid host info parameters", "主机详情参数无效"},
+	{"another startup service update is in progress", "另一个开机自启修改正在进行，请稍后重试"},
+	{"too many host detail requests in progress", "正在查询主机详情的请求过多，请稍后重试"},
 	{"not found", "找不到"},
 }

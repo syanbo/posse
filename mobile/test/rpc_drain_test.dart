@@ -51,6 +51,7 @@ class _Mac {
   late final PhoneRpc rpc;
   var received = 0;
   var commits = 0;
+  String? lastAutostartId;
 
   void _push(Uint8List plain, {required bool binary}) {
     socket.incoming.add(
@@ -90,6 +91,8 @@ class _Mac {
       case 'clipboard.commitImageUpload':
         commits++;
         _reply(request['id'], {'value': '/tmp/posse-up.png'});
+      case 'posse.host.autostartSet':
+        lastAutostartId = request['id'] as String?;
     }
   }
 
@@ -207,5 +210,31 @@ void main() {
     );
     expect(tried, hasLength(1));
     await next.rpc.close();
+  });
+
+  test('a draining connection waits past max for a long-timeout write call', () async {
+    final mac = _Mac();
+    // 模拟超时 > 20s 的长写请求（如 posse.host.autostartSet）：排空 max=50ms 不得提前关闭连接。
+    final call = mac.rpc.call(
+      'posse.host.autostartSet',
+      const {'enabled': false},
+      timeout: const Duration(seconds: 45),
+    );
+    await pumpEventQueue();
+    final closing = mac.rpc.closeWhenIdle(
+      min: const Duration(milliseconds: 10),
+      max: const Duration(milliseconds: 50),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    expect(
+      mac.socket.closed,
+      isFalse,
+      reason: 'closed under an in-flight long-timeout write',
+    );
+    expect(mac.lastAutostartId, isNotNull);
+    mac._reply(mac.lastAutostartId, {'enabled': false});
+    expect((await call)['enabled'], isFalse);
+    await closing;
+    expect(mac.socket.closed, isTrue);
   });
 }

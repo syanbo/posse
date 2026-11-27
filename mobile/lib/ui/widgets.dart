@@ -449,7 +449,8 @@ class _PosseDialogRoute<T> extends RawDialogRoute<T> {
 /// 确认框的语气：普通确认、有风险（琥珀色警示图标）、删除类（红色按钮）。
 enum ConfirmTone { normal, warning, danger }
 
-/// 弹出确认框，确认返回 true，取消或点遮罩返回 false。
+/// 弹出底部确认面板（与套餐额度一致从底部滑出、背景延伸至安全区并用 padding 避让底部安全区与实时软键盘）。
+/// 确认返回 true，取消或点遮罩返回 false。
 Future<bool> showPosseConfirm(
   BuildContext context, {
   required String title,
@@ -457,16 +458,23 @@ Future<bool> showPosseConfirm(
   required String confirm,
   ConfirmTone tone = ConfirmTone.normal,
 }) async {
-  final ok = await showPosseDialog<bool>(
+  final ok = await showModalBottomSheet<bool>(
     context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    useSafeArea: true,
+    sheetAnimationStyle: reduceMotionOf(context)
+        ? AnimationStyle.noAnimation
+        : null,
+    constraints: const BoxConstraints(maxWidth: 480),
     builder: (_) =>
         PosseConfirm(title: title, body: body, confirm: confirm, tone: tone),
   );
   return ok == true;
 }
 
-/// 确认框：标题、说明，下面两个等宽按钮，取消在左。
-/// 内容跟着弹框的推入动画分层出现（图标、文字、按钮），不另开动画控制器。
+/// 底部确认面板：警示图标（风险操作）、标题、说明可独立滚动，底部两个等宽按钮，取消在左；
+/// 高度受软键盘或大字挤压时退化为整张滚动，避免按钮溢出。
 class PosseConfirm extends StatelessWidget {
   const PosseConfirm({
     super.key,
@@ -481,11 +489,6 @@ class PosseConfirm extends StatelessWidget {
   final String confirm;
   final ConfirmTone tone;
 
-  // 各层在 280ms 推入动画里开始的位置：图标 80ms、文字 160ms、按钮 200ms
-  static const _iconAt = 80 / 280;
-  static const _textAt = 160 / 280;
-  static const _buttonsAt = 200 / 280;
-
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
@@ -494,137 +497,114 @@ class PosseConfirm extends StatelessWidget {
         ? null
         : ModalRoute.of(context)?.animation;
     final body = this.body;
-    return Dialog(
-      child: ConstrainedBox(
-        // 平板上不铺满
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (tone == ConfirmTone.warning) ...[
-                _Stage(
-                  route: route,
-                  start: _iconAt,
-                  pop: true,
-                  child: _WarnIcon(route: route),
-                ),
-                const SizedBox(height: 14),
-              ],
-              _Stage(
-                route: route,
-                start: _textAt,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: Fs.title,
-                        fontWeight: Fw.bold,
-                        height: Lh.title,
-                        color: c.text,
-                      ),
-                    ),
-                    if (body != null && body.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        body,
-                        style: TextStyle(
-                          fontSize: Fs.body,
-                          height: Lh.body,
-                          color: c.muted,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              _Stage(
-                route: route,
-                start: _buttonsAt,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _Press(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: Text(l.commonCancel),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _Press(
-                        child: FilledButton(
-                          style: tone == ConfirmTone.danger
-                              ? FilledButton.styleFrom(
-                                  backgroundColor: c.danger,
-                                )
-                              : null,
-                          onPressed: () => Navigator.pop(context, true),
-                          child: Text(
-                            confirm,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+    final size = MediaQuery.sizeOf(context);
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final topActionPad = keyboard > 0 ? 12.0 : 20.0;
+    final bottomPad =
+        (keyboard > 0 ? 12.0 : 20.0) + (keyboard > 0 ? 0.0 : safeBottom);
+
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (tone == ConfirmTone.warning) ...[
+            _WarnIcon(route: route),
+            const SizedBox(height: 14),
+          ],
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: Fs.title,
+              fontWeight: Fw.bold,
+              height: Lh.title,
+              color: c.text,
+            ),
           ),
-        ),
+          if (body != null && body.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              body,
+              style: TextStyle(
+                fontSize: Fs.body,
+                height: Lh.body,
+                color: c.muted,
+              ),
+            ),
+          ],
+        ],
       ),
     );
-  }
-}
 
-/// 弹框里的一层：推入动画走到 [start] 后淡入并升起 4；[pop] 的从 0.6 回弹放大到原大。
-/// 收起时整体随弹框淡出。没有动画（减少动态效果）时直接显示。
-class _Stage extends StatelessWidget {
-  const _Stage({
-    required this.route,
-    required this.start,
-    required this.child,
-    this.pop = false,
-  });
+    final actions = Padding(
+      padding: EdgeInsets.fromLTRB(20, topActionPad, 20, bottomPad),
+      child: Row(
+        children: [
+          Expanded(
+            child: _Press(
+              child: TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l.commonCancel),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _Press(
+              child: FilledButton(
+                style: tone == ConfirmTone.danger
+                    ? FilledButton.styleFrom(backgroundColor: c.danger)
+                    : null,
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(
+                  confirm,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
 
-  final Animation<double>? route;
-  final double start;
-  final bool pop;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final route = this.route;
-    if (route == null) return child;
-    return AnimatedBuilder(
-      animation: route,
-      child: child,
-      builder: (_, child) {
-        // 收起时不分层；结构不随状态变，免得子树重建丢掉状态
-        final t = route.status == AnimationStatus.reverse
-            ? 1.0
-            : ((route.value - start) / (1 - start)).clamp(0.0, 1.0);
-        final fade = Curves.easeOutCubic.transform(t);
-        final moved = pop
-            ? Transform.scale(
-                scale: 0.6 + 0.4 * Curves.easeOutBack.transform(t),
-                alignment: AlignmentDirectional.centerStart,
-                child: child,
-              )
-            : Transform.translate(
-                offset: Offset(0, 4 * (1 - fade)),
-                child: child,
-              );
-        return Opacity(opacity: fade, child: moved);
-      },
+    // 实时读取键盘 inset 与路由可用高度：常规高度固定底部按钮，空间被横屏键盘或大字挤压时整张一起滚，绝不溢出。
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final cap = keyboard > 0
+              ? box.maxHeight
+              : math.min(box.maxHeight, size.height * 0.85);
+          if (!box.hasBoundedHeight || cap < 180) {
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: cap.isFinite ? math.max(0.0, cap) : double.infinity,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [content, actions],
+                ),
+              ),
+            );
+          }
+          return ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: cap),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Flexible(child: SingleChildScrollView(child: content)),
+                actions,
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

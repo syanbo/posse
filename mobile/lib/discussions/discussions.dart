@@ -137,7 +137,10 @@ class _DiscussionsScreenState extends State<DiscussionsScreen>
     final join = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
-      builder: (sheet) => SafeArea(
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheet) => SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(sheet).bottom),
         child: Section(
           children: [
             RowTile(

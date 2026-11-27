@@ -66,13 +66,13 @@ class _DeskSettingsState extends State<_DeskSettings> {
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
     final l = context.l10n;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final safeBottom = keyboard > 0 ? 0.0 : MediaQuery.paddingOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: ListenableBuilder(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: 12 + safeBottom),
+        child: ListenableBuilder(
             listenable: widget.model,
             builder: (context, _) {
               final trackpad = widget.model.settings.deskTrackpad;
@@ -171,7 +171,6 @@ class _DeskSettingsState extends State<_DeskSettings> {
             },
           ),
         ),
-      ),
-    );
+      );
   }
 }

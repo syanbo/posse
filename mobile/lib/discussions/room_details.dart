@@ -365,7 +365,13 @@ extension _DetailsViews on _DiscussionRoomState {
     target ??= await showModalBottomSheet<String>(
       context: sheet,
       showDragHandle: true,
-      builder: (picker) => SafeArea(
+      isScrollControlled: true,
+      useSafeArea: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(sheet).height * 0.85,
+      ),
+      builder: (picker) => SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(picker).bottom),
         child: Section(
           children: [
             for (final m in usable)

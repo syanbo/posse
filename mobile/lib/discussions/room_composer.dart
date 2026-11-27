@@ -585,29 +585,40 @@ extension _ComposerViews on _DiscussionRoomState {
 
   /// 加附件：照片或文件。
   Future<void> pickAttachment() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final l = context.l10n;
     final c = PosseColors.of(context);
     final photo = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
-      builder: (sheet) => SafeArea(
-        child: Section(
-          children: [
-            RowTile(
-              leading: Icon(Icons.photo_rounded, color: c.muted),
-              title: Text(l.discAddPhoto),
-              chevron: false,
-              onTap: () => Navigator.pop(sheet, true),
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheet) {
+        final keyboard = MediaQuery.viewInsetsOf(sheet).bottom;
+        final bottom = keyboard > 0 ? 0.0 : MediaQuery.paddingOf(sheet).bottom;
+        return Padding(
+          padding: EdgeInsets.only(bottom: keyboard),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: bottom),
+            child: Section(
+              children: [
+                RowTile(
+                  leading: Icon(Icons.photo_rounded, color: c.muted),
+                  title: Text(l.discAddPhoto),
+                  chevron: false,
+                  onTap: () => Navigator.pop(sheet, true),
+                ),
+                RowTile(
+                  leading: Icon(Icons.insert_drive_file_rounded, color: c.muted),
+                  title: Text(l.discAddFile),
+                  chevron: false,
+                  onTap: () => Navigator.pop(sheet, false),
+                ),
+              ],
             ),
-            RowTile(
-              leading: Icon(Icons.insert_drive_file_rounded, color: c.muted),
-              title: Text(l.discAddFile),
-              chevron: false,
-              onTap: () => Navigator.pop(sheet, false),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
     if (photo != null && mounted) await attach(photo: photo);
   }
