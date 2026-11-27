@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/errtext"
+	"posse/internal/remote"
 	"posse/internal/rpc"
 	"posse/locales"
 )
@@ -307,10 +309,12 @@ func (a *app) hostOverviewTab(c *ui.Context, owner *app, d *hostDialogState) {
 	target, isActive, connected := a.detailTargetView(owner, h.ID)
 	connState := owner.remoteHostConnState(h.ID)
 
-	// 概览打开期间若完成连接、切换到当前主机或更换实例/连接代次，自动拉取最新详情；离开或断开时立即取消在途请求。
+	// 概览打开期间若完成连接、切换到当前主机或更换实例/连接代次，自动拉取最新详情；热升级进行中暂停拉取；离开或断开时立即取消在途请求。
 	if isActive && connected && target != nil {
-		if key := detailLiveKey(h.ID, target); key != "" && key != d.detail.liveKey {
-			a.refreshHostDetails(owner, d)
+		if !target.upgrading.Load() {
+			if key := detailLiveKey(h.ID, target); key != "" && key != d.detail.liveKey {
+				a.refreshHostDetails(owner, d)
+			}
 		}
 	} else if d.detail.liveKey != "" {
 		owner.cancelHostDetails()
@@ -357,8 +361,10 @@ func (a *app) hostOverviewTab(c *ui.Context, owner *app, d *hostDialogState) {
 	hline(c)
 	a.hostOverviewServerSection(c, owner, d, target, isActive, connected, info)
 
-	// 二、资源占用（仅活动且已连接时拉取实时终端明细；否则展示缓存摘要）
+	// 二、服务端检查更新与热升级、资源占用与开机自启（仅活动且已连接时展示实时面板）
 	if isActive && connected && target != nil {
+		hline(c)
+		a.hostOverviewUpgradeSection(c, owner, d, target, info)
 		hline(c)
 		a.hostOverviewResourcesSection(c, owner, d, target)
 		hline(c)
@@ -379,6 +385,11 @@ func (a *app) hostDetailStatusDisplay(c *ui.Context, m locales.Messages, target 
 			return p.honey, target.connectStageText(m)
 		}
 		return p.honey, m.HostConnecting()
+	case hostConnUpgrading:
+		if target != nil {
+			return p.honey, target.upgradeStageText(m)
+		}
+		return p.honey, m.HostUpgrading()
 	case hostConnViewing:
 		if target != nil && target.host != nil {
 			s := target.host.snapshot()
@@ -403,6 +414,14 @@ func (a *app) hostOverviewPrimaryAction(c *ui.Context, owner *app, d *hostDialog
 			a.openHost(h)
 			d.detail.info, d.detail.autostart, d.detail.mem = nil, nil, nil
 			a.refreshHostDetails(owner, d)
+		}
+	case st == hostConnUpgrading:
+		if target != nil && target.upgradeCancel != nil {
+			if pressable(textButton(c.Key("host-detail-upgrade-cancel"), m.HostUpgradeCancelBtn())).Clicked() {
+				if owner.hosts != nil {
+					owner.hosts.cancelHostUpgrade(h.ID)
+				}
+			}
 		}
 	case st == hostConnConnecting:
 		if pressable(textButton(c.Key("host-detail-cancel"), m.HostCancelConnect())).Clicked() {
@@ -432,7 +451,7 @@ func (a *app) hostOverviewServerSection(c *ui.Context, owner *app, d *hostDialog
 	t, m := c.Theme(), L(c)
 	ui.Row(c).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, m.HostOverviewSectionServer()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Grow(1)
-		if isActive && connected {
+		if isActive && connected && (target == nil || !target.upgrading.Load()) {
 			if pressable(iconButtonSized(c.Key("host-detail-refresh"), iconRefresh, m.CommonRefresh(), compactBox(), smallIcon())).Clicked() {
 				a.refreshHostDetails(owner, d)
 			}
@@ -519,6 +538,153 @@ func (a *app) hostOverviewServerSection(c *ui.Context, owner *app, d *hostDialog
 			a.hostDetailCopyRow(c, d, "home", m.HostFieldDataDir(), home)
 		}
 	})
+}
+
+func (a *app) hostOverviewUpgradeSection(c *ui.Context, owner *app, d *hostDialogState, target *app, info *rpc.RemoteInfo) {
+	t, p, m := c.Theme(), colors(c.Theme()), L(c)
+	ui.Text(c, m.HostOverviewSectionUpgrade()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
+	if info == nil && d.detail.loadingInfo {
+		ui.Text(c, m.HostDetailLoading()).FontSize(fsSmall).TextColor(t.TextMuted)
+		return
+	}
+	edition := target.daemon.Edition
+	managed := false
+	if info != nil {
+		if info.Edition != "" {
+			edition = info.Edition
+		}
+		managed = info.Managed
+	}
+	if edition != "" && edition != "headless" {
+		ui.Text(c, m.HostUpgradeFullAppNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Wrap()
+		return
+	}
+	if !managed || d.editing.Executable != "" {
+		ui.Text(c, m.HostUpgradeUnmanagedNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Wrap()
+		return
+	}
+
+	controlled := target.host != nil && target.host.snapshot().Controlled
+	autostartBusy := target.autostartOp != nil && target.host != nil &&
+		target.autostartOp.instanceID == target.host.snapshot().Desktop.InstanceID && target.autostartOp.busy
+
+	ui.Column(c).Gap(8).Children(func() {
+		if target.upgrading.Load() {
+			ui.Column(c).Padding(8, 12).Gap(8).Radius(rRow).Background(p.fill).Children(func() {
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+					if c.Preferences().ReduceMotion {
+						ui.Icon(c, iconHexOutline).FontSize(fsSmall).TextColor(p.honey).Shrink(0)
+					} else {
+						ui.Spinner(c).Size(fsSmall, fsSmall).TextColor(p.honey).Shrink(0)
+					}
+					ui.Text(c, target.upgradeStageText(m)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.Text).Grow(1).Shrink(1).SingleLine().Ellipsis("…")
+					if target.upgradeCancel != nil {
+						if pressable(textButton(c.Key("host-upgrade-cancel"), m.HostUpgradeCancelBtn())).Clicked() {
+							if owner.hosts != nil {
+								owner.hosts.cancelHostUpgrade(d.editing.ID)
+							}
+						}
+					}
+				})
+				if target.upgradeStage == remote.StageUpload {
+					const barH = 4
+					pct := int(math.Round(target.upgradePct * 100))
+					if pct < 0 {
+						pct = 0
+					}
+					if pct > 100 {
+						pct = 100
+					}
+					ui.Box(c).Height(barH).Radius(full(barH)).Background(p.wash).Shrink(0).Children(func() {
+						if pct > 0 {
+							ui.Box(c).Height(barH).Radius(full(barH)).WidthPercent(float32(max(pct, 3))).Background(t.Accent)
+						}
+					})
+				}
+			})
+			return
+		}
+
+		// 检查结果或默认说明（缓存仅在当前实例/版本/构建/tag 仍一致时有效，避免陈旧结果误导）
+		var chk *remote.ServerUpgradeCheck
+		if target.upgradeCheck != nil && (info == nil || target.upgradeCheckKey == "" || target.upgradeCheckKey == upgradeCheckIdentity(*info)) {
+			chk = target.upgradeCheck
+		}
+		switch {
+		case target.upgradeChecking:
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				if !c.Preferences().ReduceMotion {
+					ui.Spinner(c).Size(fsSmall, fsSmall).TextColor(t.TextMuted).Shrink(0)
+				}
+				ui.Text(c, m.HostUpgradeChecking()).FontSize(fsSmall).TextColor(t.TextMuted)
+			})
+		case chk != nil:
+			ver := formatUpgradeVersion(chk.TargetVersion, chk.TargetCommit)
+			switch {
+			case chk.Available:
+				msg := m.HostUpgradeAvailableRemote(ver)
+				if chk.Source == "local" {
+					msg = m.HostUpgradeAvailableLocal(ver)
+				}
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					ui.Box(c).Size(hostStatusDotInner(), hostStatusDotInner()).Radius(full(hostStatusDotInner())).Background(p.sage).Shrink(0)
+					ui.Text(c, msg).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.Text).Grow(1).Shrink(1).Wrap()
+				})
+			case chk.DesktopTooOld:
+				ui.Text(c, m.HostUpgradeDesktopTooOld(ver, chk.DesktopVersion)).FontSize(fsSmall).FontFeatures("tnum").TextColor(p.honey).LineHeight(1.5).Wrap()
+			default:
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					ui.Box(c).Size(hostStatusDotInner(), hostStatusDotInner()).Radius(full(hostStatusDotInner())).Background(p.sage).Shrink(0)
+					ui.Text(c, m.HostUpgradeUpToDate()).FontSize(fsSmall).TextColor(t.TextMuted)
+				})
+			}
+		default:
+			ui.Text(c, m.HostUpgradeHint()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Wrap()
+		}
+
+		if target.upgradeNotice != "" {
+			ui.Text(c, target.upgradeNotice).FontSize(fsSmall).TextColor(p.sage).LineHeight(1.5).Wrap()
+		}
+		if target.upgradeCheckErr != "" {
+			ui.Text(c, target.upgradeCheckErr).FontSize(fsSmall).TextColor(t.Danger).Wrap()
+		}
+		if target.upgradeErr != "" {
+			ui.Text(c, target.upgradeErr).FontSize(fsSmall).TextColor(t.Danger).Wrap()
+		}
+
+		if !controlled {
+			ui.Text(c, m.HostUpgradeViewOnlyNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Wrap()
+			return
+		}
+
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			checkDisabled := target.upgradeChecking || info == nil
+			if pressable(textButton(c.Key("host-upgrade-check"), m.HostUpgradeCheckBtn()).Disabled(checkDisabled)).Clicked() && !checkDisabled {
+				if owner.hosts != nil {
+					owner.hosts.checkHostUpgrade(d.editing.ID, *info)
+				}
+			}
+			if chk != nil && chk.Available {
+				runDisabled := target.upgradeChecking || autostartBusy
+				if pressable(accentButton(c.Key("host-upgrade-run"), m.HostUpgradeRunBtn()).Disabled(runDisabled)).Clicked() && !runDisabled {
+					if owner.hosts != nil {
+						owner.hosts.upgradeRemote(d.editing.ID)
+					}
+				}
+			}
+		})
+	})
+}
+
+func formatUpgradeVersion(version, commit string) string {
+	c := strings.TrimSpace(commit)
+	if c != "" && c != "dev" {
+		if len(c) > 7 {
+			c = c[:7]
+		}
+		return version + " (" + c + ")"
+	}
+	return version
 }
 
 func (a *app) hostOverviewResourcesSection(c *ui.Context, owner *app, d *hostDialogState, target *app) {
@@ -672,9 +838,10 @@ func (a *app) hostOverviewAutostartSection(c *ui.Context, owner *app, d *hostDia
 	}
 
 	controlled := target != nil && target.host != nil && target.host.snapshot().Controlled
+	upgrading := target != nil && target.upgrading.Load()
 	// 仅远端明确宣告写能力（autostart.write.v1 + st.Writable）时开放开关，兼容只读的一期旧无头节点。
 	writable := st.Writable && st.Managed && !d.detail.autostartWriteUnsupported && (info == nil || len(info.Features) == 0 || slices.Contains(info.Features, "autostart.write.v1"))
-	canToggle := writable && controlled && !autostartBusy && !d.detail.loadingAutostart && d.detail.autostartErr == ""
+	canToggle := writable && controlled && !upgrading && !autostartBusy && !d.detail.loadingAutostart && d.detail.autostartErr == ""
 	// 无活跃 bus 或 Aqua 会话下已写入 unit/plist 文件时仍视为待启用态，允许用户切回关闭以清理文件。
 	on := st.Installed && (st.Enabled || st.NoteCode == rpc.AutostartNoteSystemdBusInactive || st.NoteCode == rpc.AutostartNoteAquaInactive)
 
@@ -784,7 +951,7 @@ func hostPlatformLabel(goos, arch string) string {
 }
 
 func (a *app) toggleHostAutostart(owner *app, d *hostDialogState, target *app, enabled bool) {
-	if target == nil {
+	if target == nil || target.upgrading.Load() {
 		return
 	}
 	r := target.request()

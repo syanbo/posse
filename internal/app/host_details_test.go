@@ -16,6 +16,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/client"
+	"posse/internal/remote"
 	"posse/internal/rpc"
 	"posse/locales"
 )
@@ -470,7 +471,15 @@ func TestPreviewHostDetails(t *testing.T) {
 				Platform: "linux",
 				Arch:     "amd64",
 				Home:     "/home/surgeadmin/.posse",
-				Features: []string{"autostart.v1", "memory.v1"},
+				Features: []string{"autostart.v1", "autostart.write.v1", "memory.v1"},
+			}
+			b.upgradeCheck = &remote.ServerUpgradeCheck{
+				Available:      true,
+				Source:         "remote",
+				CurrentVersion: "0.1.54",
+				TargetVersion:  "0.1.55",
+				TargetCommit:   "a1b2c3d",
+				DesktopVersion: "0.1.55",
 			}
 			a.hostDlg.detail.memExpanded = map[string]bool{"t1": true}
 			a.hostDlg.detail.mem = &rpc.DaemonMemoryResult{
@@ -492,6 +501,7 @@ func TestPreviewHostDetails(t *testing.T) {
 				Supported:          true,
 				Kind:               "systemd",
 				Managed:            true,
+				Writable:           true,
 				Installed:          true,
 				Enabled:            true,
 				Active:             true,
@@ -500,10 +510,293 @@ func TestPreviewHostDetails(t *testing.T) {
 				Linger:             "no",
 				NoteCode:           rpc.AutostartNoteSystemdLingerDisabled,
 			}
-			tt := newTester(func(c *ui.Context) { a.hostDialog(c) }, 760, 920)
+			tt := newTester(func(c *ui.Context) { a.hostDialog(c) }, 760, 1060)
 			tt.SetDark(dark)
 			settle(tt)
 			savePNG(t, tt, fmt.Sprintf("host-details-%t.png", dark))
 		})
+	}
+}
+
+func TestHostUpgradeStateMachineHeartbeatBusyViewerAndSeamlessReattach(t *testing.T) {
+	v, a, b := hostViewsFixture(t)
+	k := newHostConnections(v)
+	a.hosts = k
+	t.Cleanup(k.close)
+	h := remoteTestHost("remote")
+	h.Name = "bwh"
+	writeHostMenuConfig(t, a, h)
+	a.loadHostMenu()
+
+	var mu sync.Mutex
+	curInst := "inst-1"
+	curOwner := ""
+	curEpoch := uint64(0)
+	var takeCalls atomic.Int32
+
+	// 扩展 mock server 直接处理 desktop.status / desktop.take / desktop.release 供 connectRemoteAt 使用。
+	dir, err := os.MkdirTemp("/tmp", "hup-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	sock2 := filepath.Join(dir, "s")
+	ln, err := net.Listen("unix", sock2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := rpc.NewServer()
+	srv.Handle("desktop.status", func(context.Context, json.RawMessage) (any, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return rpc.DesktopState{InstanceID: curInst, Owner: curOwner, Epoch: curEpoch}, nil
+	})
+	srv.Handle("desktop.heartbeat", func(context.Context, json.RawMessage) (any, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return rpc.DesktopState{InstanceID: curInst, Owner: curOwner, Epoch: curEpoch}, nil
+	})
+	srv.Handle("desktop.take", func(_ context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			ClientID string `json:"clientId"`
+			Label    string `json:"label"`
+		}
+		_ = rpc.Decode(raw, &p)
+		takeCalls.Add(1)
+		mu.Lock()
+		defer mu.Unlock()
+		curOwner = p.ClientID
+		curEpoch++
+		return rpc.DesktopState{InstanceID: curInst, Owner: curOwner, Label: p.Label, Epoch: curEpoch}, nil
+	})
+	srv.Handle("desktop.release", func(context.Context, json.RawMessage) (any, error) {
+		return map[string]any{"ok": true}, nil
+	})
+	srv.Handle("desktop.call", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var call rpc.DesktopCall
+		_ = rpc.Decode(raw, &call)
+		switch call.Method {
+		case "daemon.info":
+			mu.Lock()
+			id := curInst
+			mu.Unlock()
+			return rpc.RemoteInfo{
+				Protocol: 1, InstanceID: id, Platform: "linux", Arch: "amd64",
+				Home: "/home/dev/.posse", Version: "0.1.55", Edition: "headless", Managed: true,
+				Features: []string{"autostart.v1", "autostart.write.v1", "memory.v1"},
+			}, nil
+		case "daemon.memory":
+			return rpc.DaemonMemoryResult{}, nil
+		case "server.autostart.status":
+			return rpc.AutostartStatus{Supported: true, Kind: "systemd", Managed: true, Writable: true}, nil
+		default:
+			return nil, rpc.Errorf(rpc.CodeUnknown, "unknown %s", call.Method)
+		}
+	})
+	sctx, scancel := context.WithCancel(context.Background())
+	go srv.Serve(sctx, ln)
+	t.Cleanup(func() { scancel(); ln.Close() })
+
+	baseClient := &client.Client{Socket: sock2, Remote: true, Platform: "linux", Home: "/home/dev/.posse"}
+	a.views.activate(h.ID)
+	// 先模拟其他端持控（查看态），通过真实 connectRemoteAt 建立连接。
+	mu.Lock()
+	curOwner = "other-window"
+	curEpoch = 1
+	mu.Unlock()
+	if err := b.host.connectRemoteAt(context.Background(), baseClient, b.host.snapshot().Generation); err != nil {
+		t.Fatalf("connectRemoteAt viewer failed: %v", err)
+	}
+	if b.host.snapshot().Controlled {
+		t.Fatal("expected viewer mode when another owner holds desktop control")
+	}
+
+	// 1. 查看态（Controlled=false）不允许触发热升级。
+	var upCalls atomic.Int32
+	k.upgrade = func(context.Context, string, remote.Options) (rpc.RemoteInfo, bool, error) {
+		upCalls.Add(1)
+		return rpc.RemoteInfo{}, false, nil
+	}
+	k.upgradeRemote(h.ID)
+	if upCalls.Load() != 0 || b.upgrading.Load() {
+		t.Fatal("viewer was allowed to trigger upgradeRemote")
+	}
+
+	// 2. 切回无人控制并走真实 connectRemoteAt 自动接管控制权，同时保留现有分栏（验证升级不清空 panes/tabs）。
+	mu.Lock()
+	curOwner = ""
+	curEpoch = 0
+	mu.Unlock()
+	if err := b.host.connectRemoteAt(context.Background(), baseClient, b.host.snapshot().Generation); err != nil {
+		t.Fatalf("connectRemoteAt controller failed: %v", err)
+	}
+	if !b.host.snapshot().Controlled {
+		t.Fatal("expected controller mode")
+	}
+	b.panes[0] = &termView{id: "term-keep"}
+	k.active = &hostAttempt{app: b, cancel: func() {}}
+
+	// 2a. 遇到 rpc.CodeBusy：保留原连接与分栏，设置报错文本。
+	k.upgrade = func(context.Context, string, remote.Options) (rpc.RemoteInfo, bool, error) {
+		return rpc.RemoteInfo{}, false, rpc.Errorf(rpc.CodeBusy, "handoff already in progress")
+	}
+	k.upgradeRemote(h.ID)
+	for range 40 {
+		a.runPending()
+		b.runPending()
+		if !b.upgrading.Load() {
+			break
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+	if !b.host.snapshot().Connected || !b.host.snapshot().Controlled || b.panes[0] == nil || b.panes[0].id != "term-keep" {
+		t.Fatalf("CodeBusy disrupted live session or panes: snap=%+v pane=%+v", b.host.snapshot(), b.panes[0])
+	}
+	if b.upgradeErr == "" {
+		t.Fatal("expected localized upgradeErr after CodeBusy")
+	}
+
+	// 2b. 正常热升级：验证 Stage 1（上传阶段）保持心跳续租不丢控制权；进入 Stage 2（BeforeHandoff）后才抑制心跳；
+	// disconnect/修改连接/移除主机均被锁；不占 dialMu；handoff 后无感重接管不丢 pane。
+	entered := make(chan struct{})
+	enterHandoff := make(chan struct{})
+	handoffStarted := make(chan struct{})
+	release := make(chan struct{})
+	k.upgrade = func(ctx context.Context, _ string, opts remote.Options) (rpc.RemoteInfo, bool, error) {
+		if opts.Progress != nil {
+			opts.Progress(remote.StageUpload, 0.5)
+		}
+		close(entered)
+		<-enterHandoff
+		if opts.BeforeHandoff != nil {
+			if err := opts.BeforeHandoff(ctx); err != nil {
+				return rpc.RemoteInfo{}, false, err
+			}
+		}
+		if opts.Progress != nil {
+			opts.Progress(remote.StageUpgrade, 0)
+		}
+		close(handoffStarted)
+		<-release
+		mu.Lock()
+		curInst = "inst-2"
+		curOwner = ""
+		curEpoch = 0
+		mu.Unlock()
+		return rpc.RemoteInfo{
+			InstanceID: "inst-2", Platform: "linux", Arch: "amd64", Home: "/home/dev/.posse",
+			Version: "0.1.55", Edition: "headless", Managed: true,
+			Features: []string{"autostart.v1", "autostart.write.v1", "memory.v1"},
+		}, true, nil
+	}
+
+	beforeTakes := takeCalls.Load()
+	k.upgradeRemote(h.ID)
+	<-entered
+	a.runPending()
+	b.runPending()
+	if !b.upgrading.Load() || b.upgradeHandingOff.Load() || a.remoteHostConnState(h.ID) != hostConnUpgrading {
+		t.Fatalf("expected stage 1 upgrading state, got upgrading=%v handingOff=%v state=%v", b.upgrading.Load(), b.upgradeHandingOff.Load(), a.remoteHostConnState(h.ID))
+	}
+	// Stage 1 上传期间 heartbeat 保持运行续租（返回 true），不丢 15s 桌面租约。
+	if !k.heartbeat(b) {
+		t.Fatal("heartbeat should stay active during Stage 1 upload to keep desktop lease alive")
+	}
+	// 升级期间禁止修改连接配置与移除主机。
+	a.openHostDialog(h)
+	a.hostDlg.target = "other@host.example"
+	if !a.editingLiveConnectionChanged(&a.hostDlg) {
+		t.Fatal("expected editingLiveConnectionChanged=true while upgrading")
+	}
+	a.submitHostDialog(locales.In("zh-Hans"), &a.hostDlg, false)
+	if a.hostDlg.saving || a.hostDlg.err == "" {
+		t.Fatalf("submitHostDialog should block connection changes while upgrading: saving=%v err=%q", a.hostDlg.saving, a.hostDlg.err)
+	}
+	a.hostDlg.open = false
+
+	// 进入 Stage 2 handoff：BeforeHandoff 切 upgradeHandingOff=true，此时抑制 heartbeat 防止瞬断拆隧道。
+	close(enterHandoff)
+	<-handoffStarted
+	a.runPending()
+	b.runPending()
+	if k.heartbeat(b) {
+		t.Fatal("heartbeat should be suppressed during Stage 2 handoff")
+	}
+	a.runPending()
+	b.runPending()
+	if !b.host.snapshot().Connected {
+		t.Fatal("heartbeat unexpectedly disconnected host during upgrade")
+	}
+	// disconnect 在升级期间被阻止。
+	k.disconnect(h.ID)
+	if !b.host.snapshot().Connected {
+		t.Fatal("disconnect should be blocked during upgrade")
+	}
+	// 不占用 dialMu，可立即加锁验证切换其他主机无阻塞。
+	if !k.dialMu.TryLock() {
+		t.Fatal("upgradeRemote unexpectedly held dialMu")
+	}
+	k.dialMu.Unlock()
+
+	close(release)
+	for range 40 {
+		a.runPending()
+		b.runPending()
+		if !b.upgrading.Load() {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if b.upgrading.Load() || b.upgradeHandingOff.Load() || b.upgradeErr != "" || b.upgradeNotice == "" {
+		t.Fatalf("upgrade did not complete cleanly: upgrading=%v handingOff=%v err=%q notice=%q", b.upgrading.Load(), b.upgradeHandingOff.Load(), b.upgradeErr, b.upgradeNotice)
+	}
+	snap := b.host.snapshot()
+	if !snap.Connected || !snap.Controlled || snap.Desktop.InstanceID != "inst-2" || takeCalls.Load() <= beforeTakes {
+		t.Fatalf("seamless reattach failed: snap=%+v takes=%d->%d", snap, beforeTakes, takeCalls.Load())
+	}
+	if b.panes[0] == nil || b.panes[0].id != "term-keep" {
+		t.Fatalf("seamless reattach cleared panes: %+v", b.panes[0])
+	}
+	b.panes[0] = nil // 清理占位 termView，避免切走或 Cleanup 中 ensurePanes 关闭 nil Terminal
+
+	// 3. P1-3 + P1-6 回归：升级期间切走（detach）再切回后取消 Stage 1，应自动重连活动视图而非停在断开态。
+	cancelEntered := make(chan struct{})
+	k.upgrade = func(ctx context.Context, _ string, _ remote.Options) (rpc.RemoteInfo, bool, error) {
+		close(cancelEntered)
+		<-ctx.Done()
+		return rpc.RemoteInfo{}, false, ctx.Err()
+	}
+	var redials atomic.Int32
+	doneTransport := make(chan struct{})
+	t.Cleanup(func() { close(doneTransport) })
+	k.dial = func(context.Context, remote.Host, remote.Options) (hostTransport, error) {
+		redials.Add(1)
+		return hostTransport{client: baseClient, done: doneTransport}, nil
+	}
+	k.upgradeRemote(h.ID)
+	<-cancelEntered
+	a.selectLocalHost() // 切走（触发 b.host.detach()）
+	// 即使 b 已 detach，编辑连接字段仍被视为热升级中变更而禁止。
+	a.openHostDialog(h)
+	a.hostDlg.target = "changed@host.example"
+	if !a.editingLiveConnectionChanged(&a.hostDlg) {
+		t.Fatal("expected editingLiveConnectionChanged=true while detached but still upgrading")
+	}
+	a.hostDlg.open = false
+	a.openHost(h) // 切回仍在升级的主机（不重复拨号）
+	if redials.Load() != 0 {
+		t.Fatalf("openHost unexpectedly dialed while upgrading: redials=%d", redials.Load())
+	}
+	k.cancelHostUpgrade(h.ID)
+	for range 40 {
+		a.runPending()
+		b.runPending()
+		if !b.upgrading.Load() && b.host.snapshot().Connected {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if redials.Load() != 1 || !b.host.snapshot().Connected {
+		t.Fatalf("canceled upgrade after switch-back did not restore active view: redials=%d snap=%+v", redials.Load(), b.host.snapshot())
 	}
 }

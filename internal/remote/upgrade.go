@@ -2,6 +2,7 @@ package remote
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -12,7 +13,105 @@ import (
 	"posse/internal/rpc"
 )
 
-const upgradeCheckCooldown = 30 * time.Second
+const (
+	upgradeCheckCooldown = 30 * time.Second
+	handoffBudgetTimeout = 60 * time.Second
+)
+
+// ErrServerUpToDate 表示远端托管无头服务端已是最新可用版本，无需执行热升级。
+var ErrServerUpToDate = errors.New("remote server is already up to date")
+
+// ServerUpgradeCheck 描述一次轻量更新检查的结果（不下载完整压缩包）。
+type ServerUpgradeCheck struct {
+	Available      bool
+	UpToDate       bool
+	DesktopTooOld  bool
+	Source         string // "local" | "remote" | "none"
+	CurrentVersion string
+	CurrentCommit  string
+	TargetVersion  string
+	TargetCommit   string
+	TargetBuiltAt  time.Time
+	DesktopVersion string
+	CheckedAt      time.Time
+}
+
+// CheckServerUpgrade 对托管无头服务端执行轻量更新检查：
+// 1. 优先检查受信本地包目录（inspectAndSnapshot 后立即 Close，不留快照文件）；
+// 2. 无本地包时仅拉取并验签 R2 上的 server-<os>-<arch>.json 清单（≤ 64 KiB，不下载压缩包）；
+// 3. 远端清单只比较 Version 且受 compareSemver(daemon.Version, manifest.Version) >= 0 约束，不把远端升到比桌面更新。
+func CheckServerUpgrade(ctx context.Context, info rpc.RemoteInfo, opts Options) (ServerUpgradeCheck, error) {
+	if err := ctx.Err(); err != nil {
+		return ServerUpgradeCheck{}, err
+	}
+	if !isManagedHeadless(info) {
+		return ServerUpgradeCheck{}, errors.New("server upgrade is only supported for managed headless nodes")
+	}
+	goos, err := NormalizeOS(info.Platform)
+	if err != nil {
+		return ServerUpgradeCheck{}, err
+	}
+	goarch, err := NormalizeArch(info.Arch)
+	if err != nil {
+		return ServerUpgradeCheck{}, err
+	}
+	curCommit, _ := parseBuildInfo(info.Build)
+	res := ServerUpgradeCheck{
+		Source:         "none",
+		CurrentVersion: info.Version,
+		CurrentCommit:  curCommit,
+		DesktopVersion: daemon.Version,
+		CheckedAt:      time.Now(),
+	}
+
+	localOpts := opts
+	localOpts.DisableRemoteDownload = true
+	pkg, localErr := localOpts.resolveServer(ctx, goos, goarch)
+	if localErr == nil {
+		pkg.Close()
+		res.Source = "local"
+		res.TargetVersion = pkg.Version
+		res.TargetCommit = pkg.Commit
+		res.TargetBuiltAt = pkg.BuiltAt
+		avail := shouldAutoUpgradeHeadless(info, pkg.Version, pkg.Commit, pkg.BuiltAt)
+		res.Available = avail
+		res.UpToDate = !avail
+		return res, nil
+	}
+	if ctx.Err() != nil {
+		return ServerUpgradeCheck{}, ctx.Err()
+	}
+	if opts.ServerArchive != "" || opts.DisableRemoteDownload {
+		return res, localErr
+	}
+
+	m, _, err := fetchVerifiedServerManifest(ctx, ServerResolveOptions{
+		TargetOS:      goos,
+		TargetArch:    goarch,
+		LocalHome:     opts.LocalHome,
+		BaseURL:       opts.ServerBaseURL,
+		PublicKey:     opts.ServerPubKey,
+		DisableRemote: opts.DisableRemoteDownload,
+	}, goos, goarch)
+	if err != nil {
+		return res, err
+	}
+	res.Source = "remote"
+	res.TargetVersion = m.Version
+	res.TargetCommit = strings.TrimSpace(m.Commit)
+	newerThanRemote := compareSemver(m.Version, info.Version) > 0
+	withinDesktop := compareSemver(daemon.Version, m.Version) >= 0
+	switch {
+	case newerThanRemote && withinDesktop:
+		res.Available = true
+	case newerThanRemote && !withinDesktop:
+		res.DesktopTooOld = true
+		res.UpToDate = compareSemver(info.Version, daemon.Version) >= 0
+	default:
+		res.UpToDate = true
+	}
+	return res, nil
+}
 
 // compareSemver 按 SemVer 2.0 规则比较版本号（含点分预发布数字段：beta.10 > beta.9，正式版 > 预发布版）。
 func compareSemver(a, b string) int {
@@ -138,47 +237,139 @@ func shouldAutoUpgradeHeadless(info rpc.RemoteInfo, targetVersion, targetCommit 
 }
 
 func (s *Session) upgradeHeadless(ctx context.Context, opts Options, pkg ServerPackage) (newInfo rpc.RemoteInfo, handedOff bool, err error) {
+	cur := s.CurrentInfo()
 	opts.report(StageUpload, 0)
-	exePath, err := s.stageAndCommitServer(ctx, s.Info.Home, pkg, opts.Progress)
+	stage := s.stageAndCommitServer
+	if s.stageOverride != nil {
+		stage = s.stageOverride
+	}
+	exePath, err := stage(ctx, cur.Home, pkg, opts.Progress)
 	if err != nil {
 		return rpc.RemoteInfo{}, false, fmt.Errorf("auto-upgrade install failed: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return rpc.RemoteInfo{}, false, err
+	}
+	if opts.BeforeHandoff != nil {
+		if err := opts.BeforeHandoff(ctx); err != nil {
+			return rpc.RemoteInfo{}, false, err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return rpc.RemoteInfo{}, false, err
+	}
+
+	// 从 daemon.handoff 发出起改用 WithoutCancel + 60s 独立预算，避免窗口关闭或上层取消导致 handoff 与 activate 中断。
+	handoffBudgetCtx, cancelBudget := context.WithTimeout(context.WithoutCancel(ctx), handoffBudgetTimeout)
+	defer cancelBudget()
+
 	opts.report(StageUpgrade, 0)
-	newInfo, err = handoffAndVerify(ctx, s.Socket, exePath, s.Info.InstanceID, "headless", opts.Required, s.Info.Home)
+	newInfo, err = handoffAndVerify(handoffBudgetCtx, s.Socket, exePath, cur.InstanceID, "headless", opts.Required, cur.Home, pkg.OS, pkg.Arch, pkg.Version, pkg.Tag)
+	if err != nil {
+		// 若 handoff 已确认切换到不同版本，绝不激活本次旧包，直接保留新快照并报错。
+		if errors.Is(err, errMismatchedHandoffTarget) {
+			return newInfo, true, err
+		}
+		// 明确的交接前拒绝（如 CodeBusy/CodeReadOnly/CodeBadRequest）无需误判为已交接。
+		var re *rpc.Error
+		if errors.As(err, &re) && (re.Code == rpc.CodeBusy || re.Code == rpc.CodeReadOnly || re.Code == rpc.CodeBadRequest) {
+			return rpc.RemoteInfo{}, false, fmt.Errorf("auto-upgrade handoff failed: %w", err)
+		}
+		// 传输瞬断或回复丢失时，在总预算内最多 3 次有限重试复查 daemon.info 并严格核对目标版本/tag。
+		for attempt := 0; attempt < 3 && handoffBudgetCtx.Err() == nil; attempt++ {
+			if attempt > 0 {
+				select {
+				case <-handoffBudgetCtx.Done():
+				case <-time.After(500 * time.Millisecond):
+				}
+			}
+			var alive rpc.RemoteInfo
+			checkCtx, checkCancel := context.WithTimeout(handoffBudgetCtx, 5*time.Second)
+			checkErr := rpc.Call(checkCtx, s.Socket, "daemon.info", nil, &alive)
+			checkCancel()
+			if checkErr != nil {
+				continue
+			}
+			if alive.InstanceID == "" || alive.InstanceID == cur.InstanceID {
+				break
+			}
+			if !matchesUpgradeTarget(alive, cur.InstanceID, cur.Home, pkg.OS, pkg.Arch, pkg.Version, pkg.Tag) {
+				return alive, true, errMismatchedHandoffTarget
+			}
+			if capErr := checkRequiredCapabilities(alive, opts.Required); capErr != nil {
+				return alive, true, capErr
+			}
+			newInfo = alive
+			err = nil
+			break
+		}
+	}
 	if err != nil {
 		return rpc.RemoteInfo{}, false, fmt.Errorf("auto-upgrade handoff failed: %w", err)
 	}
-	if err := s.activateServer(ctx, exePath, s.Info.Home, pkg.Tag); err != nil {
-		// 热交接已切换实例，重试一次 activate；仍失败则返回错误，不静默留存过期 current
-		if rerr := s.activateServer(ctx, exePath, s.Info.Home, pkg.Tag); rerr != nil {
-			return newInfo, true, fmt.Errorf("remote server activate failed after handoff: %w", rerr)
+
+	opts.report(StageActivate, 0)
+	activate := s.activateServer
+	if s.activateOverride != nil {
+		activate = s.activateOverride
+	}
+	var actErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		actCtx, actCancel := context.WithTimeout(handoffBudgetCtx, 15*time.Second)
+		actErr = activate(actCtx, exePath, cur.Home, pkg.Tag)
+		actCancel()
+		if actErr == nil {
+			break
 		}
+	}
+	if actErr != nil {
+		return newInfo, true, fmt.Errorf("remote server activate failed after handoff: %w", actErr)
 	}
 	return newInfo, true, nil
 }
 
 // maybeUpgradeHeadless 在握手或健康复用通过后，检查托管无头服务端是否有更新包可用并做无损热交接。
 // 优先查本地包（零网络开销）；无本地包时仅在主 Mac 版本高于远端版本时才检查 R2。
-// 仅在尚未切换实例且原实例通过完整握手与能力复检时才降级保留原会话；已交接但激活失败会明确报错。
+// 仅在尚未切换实例且原实例（InstanceID 相同）通过完整握手与能力复检时才降级保留原会话；已交接但激活失败会明确报错。
 func (s *Session) maybeUpgradeHeadless(ctx context.Context, h Host, opts Options) error {
-	if !opts.AutoInstall || h.Executable != "" || !isManagedHeadless(s.Info) {
+	if !opts.AutoInstall || h.Executable != "" {
+		return nil
+	}
+	// 与手动 UpgradeActive 互斥：若该会话已有热升级正在执行，自动检查直接让路而不并发重复升级。
+	if !s.tryLockUpgrade() {
+		return nil
+	}
+	defer s.unlockUpgrade()
+	return s.maybeUpgradeHeadlessLocked(ctx, h, opts)
+}
+
+func (s *Session) maybeUpgradeHeadlessLocked(ctx context.Context, h Host, opts Options) error {
+	if !opts.AutoInstall || h.Executable != "" {
+		return nil
+	}
+	s.mu.Lock()
+	cur := s.Info
+	if !isManagedHeadless(cur) {
+		s.mu.Unlock()
 		return nil
 	}
 	now := time.Now()
 	if !s.lastUpgradeCheck.IsZero() && now.Sub(s.lastUpgradeCheck) < upgradeCheckCooldown {
+		s.mu.Unlock()
 		return nil
 	}
 	s.lastUpgradeCheck = now
+	s.mu.Unlock()
 
 	localOpts := opts
 	localOpts.DisableRemoteDownload = true
-	pkg, err := localOpts.resolveServer(ctx, s.Info.Platform, s.Info.Arch)
+	pkg, err := localOpts.resolveServer(ctx, cur.Platform, cur.Arch)
 	if err != nil {
-		if opts.DisableRemoteDownload || compareSemver(daemon.Version, s.Info.Version) <= 0 {
+		if opts.DisableRemoteDownload || compareSemver(daemon.Version, cur.Version) <= 0 {
 			return nil
 		}
 		dlCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		pkg, err = opts.resolveServer(dlCtx, s.Info.Platform, s.Info.Arch)
+		pkg, err = opts.resolveServer(dlCtx, cur.Platform, cur.Arch)
 		cancel()
 		if err != nil {
 			return nil
@@ -186,26 +377,31 @@ func (s *Session) maybeUpgradeHeadless(ctx context.Context, h Host, opts Options
 	}
 	defer pkg.Close()
 
-	if !shouldAutoUpgradeHeadless(s.Info, pkg.Version, pkg.Commit, pkg.BuiltAt) {
+	if !shouldAutoUpgradeHeadless(cur, pkg.Version, pkg.Commit, pkg.BuiltAt) {
 		return nil
 	}
 
 	newInfo, handedOff, err := s.upgradeHeadless(ctx, opts, pkg)
 	if err != nil {
 		if handedOff {
-			// 新实例已接管但 server/current 未能切换：保留最新 Info 并明确报错，避免隐藏过期启动入口
-			s.Info = newInfo
+			// 新实例已接管但 server/current 未能切换或版本失配：保留最新 Info 并明确报错，避免隐藏过期启动入口
+			s.setInfo(newInfo)
 			return err
 		}
-		var alive rpc.RemoteInfo
-		if checkErr := rpc.Call(ctx, s.Socket, "daemon.info", nil, &alive); checkErr == nil {
-			if validateInfo(s.Probe, alive, opts.Required) == nil && filepath.Clean(alive.Home) == filepath.Clean(s.Info.Home) {
-				s.Info = alive
-				return nil
+		if ctx.Err() == nil {
+			var alive rpc.RemoteInfo
+			checkCtx, checkCancel := context.WithTimeout(ctx, 5*time.Second)
+			checkErr := rpc.Call(checkCtx, s.Socket, "daemon.info", nil, &alive)
+			checkCancel()
+			if checkErr == nil && alive.InstanceID == cur.InstanceID {
+				if validateInfo(s.Probe, alive, opts.Required) == nil && filepath.Clean(alive.Home) == filepath.Clean(cur.Home) {
+					s.setInfo(alive)
+					return nil
+				}
 			}
 		}
 		return err
 	}
-	s.Info = newInfo
+	s.setInfo(newInfo)
 	return nil
 }

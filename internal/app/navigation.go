@@ -320,6 +320,7 @@ type hostConnState int
 const (
 	hostConnOffline hostConnState = iota
 	hostConnConnecting
+	hostConnUpgrading
 	hostConnOnline
 	hostConnViewing
 	hostConnError
@@ -331,6 +332,9 @@ func (a *app) remoteHostConnState(id string) hostConnState {
 		v = a.views.all[id]
 	}
 	if v != nil {
+		if v.upgrading.Load() {
+			return hostConnUpgrading
+		}
 		if v.connecting {
 			return hostConnConnecting
 		}
@@ -366,7 +370,7 @@ func (a *app) remoteHostStatusDot(c *ui.Context, state hostConnState) {
 	}
 	col := p.sage
 	switch state {
-	case hostConnConnecting, hostConnViewing:
+	case hostConnConnecting, hostConnUpgrading, hostConnViewing:
 		col = p.honey
 	case hostConnError:
 		col = t.Danger

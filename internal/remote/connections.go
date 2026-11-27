@@ -25,6 +25,8 @@ type Connections struct {
 	activeConfig string
 	pending      *connectionAttempt
 	idle         map[string]*idleConnection
+	pins         map[*Session]int
+	pendingClose map[*Session]bool
 	work         sync.WaitGroup
 	limit        int
 	ttl          time.Duration
@@ -48,9 +50,18 @@ type idleConnection struct {
 // Session 不保留认证回调，密码和口令不会进入连接缓存。
 func NewConnections() *Connections {
 	return &Connections{
-		idle: make(map[string]*idleConnection), limit: idleConnectionLimit, ttl: idleConnectionTTL,
-		dial: Connect,
+		idle:         make(map[string]*idleConnection),
+		pins:         make(map[*Session]int),
+		pendingClose: make(map[*Session]bool),
+		limit:        idleConnectionLimit,
+		ttl:          idleConnectionTTL,
+		dial:         Connect,
 		check: func(ctx context.Context, s *Session, opts Options) error {
+			// 探测、发布快照与自动升级决策置于同一升级互斥内，防止复用握手把旧快照写覆盖到正在进行的手动热升级。
+			if !s.tryLockUpgrade() {
+				return rpc.Errorf(rpc.CodeBusy, "remote server upgrade is in progress")
+			}
+			defer s.unlockUpgrade()
 			var info rpc.RemoteInfo
 			if err := rpc.Call(ctx, s.Socket, "daemon.info", nil, &info); err != nil {
 				return err
@@ -58,8 +69,8 @@ func NewConnections() *Connections {
 			if err := validateInfo(s.Probe, info, opts.Required); err != nil {
 				return err
 			}
-			s.Info = info
-			if err := s.maybeUpgradeHeadless(ctx, s.Host, opts); err != nil {
+			s.setInfo(info)
+			if err := s.maybeUpgradeHeadlessLocked(ctx, s.Host, opts); err != nil {
 				return err
 			}
 			return nil
@@ -101,8 +112,33 @@ func (p *Connections) Open(ctx context.Context, h Host, opts Options) (*Session,
 	p.work.Add(1)
 	var s *Session
 	if entry != nil {
+		// 正在执行热升级（被 pin）的会话禁止并发复用探测或重拨第二条 SSH master，保留在原位并明确返回 busy。
+		if p.pins[entry.session] > 0 {
+			if p.pending == attempt {
+				p.pending = nil
+			}
+			p.work.Done()
+			cancel()
+			if sessionAlive(entry.session) {
+				p.idle[h.ID] = entry
+				if p.ttl > 0 {
+					entry.timer = time.AfterFunc(p.ttl, func() {
+						p.mu.Lock()
+						defer p.mu.Unlock()
+						if p.idle[h.ID] == entry {
+							delete(p.idle, h.ID)
+							p.closeLocked(entry.session)
+						}
+					})
+				}
+			} else {
+				p.closeLocked(entry.session)
+			}
+			p.mu.Unlock()
+			return nil, rpc.Errorf(rpc.CodeBusy, "remote server upgrade is in progress")
+		}
 		if entry.session.Host.SameConnection(h) && entry.config == opts.config && sessionAlive(entry.session) {
-			entry.session.Host = h
+			// Session.Host 作为不可变传输身份不再原地覆写，彻底避免与并发操作产生数据竞态。
 			s = entry.session
 		} else {
 			p.closeLocked(entry.session)
@@ -214,9 +250,20 @@ func (p *Connections) parkLocked() {
 	})
 	for len(p.idle) > p.limit {
 		var oldest *idleConnection
+		// 优先淘汰未 pin 的空闲隧道，避免误标记正在热升级的会话。
 		for _, e := range p.idle {
+			if p.pins[e.session] > 0 {
+				continue
+			}
 			if oldest == nil || e.at.Before(oldest.at) {
 				oldest = e
+			}
+		}
+		if oldest == nil {
+			for _, e := range p.idle {
+				if oldest == nil || e.at.Before(oldest.at) {
+					oldest = e
+				}
 			}
 		}
 		delete(p.idle, oldest.session.Host.ID)
@@ -277,7 +324,124 @@ func (p *Connections) Disconnect(id string) {
 	}
 }
 
+func (p *Connections) pinLocked(s *Session) {
+	if p.pins == nil {
+		p.pins = make(map[*Session]int)
+	}
+	p.pins[s]++
+}
+
+func (p *Connections) unpin(s *Session) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.pins[s] > 1 {
+		p.pins[s]--
+		return
+	}
+	delete(p.pins, s)
+	if p.pendingClose[s] || p.closed {
+		delete(p.pendingClose, s)
+		p.work.Add(1)
+		go func() { defer p.work.Done(); s.Close() }()
+	}
+}
+
+// UpgradeActive 对指定主机当前存活的活动或保活 SSH 隧道执行托管无头服务端热升级。
+// 升级期间 pin 住 Session（Park/TTL/淘汰仅标待关闭，解钉后再关），并与自动升级检查共用 s.upgradeMu，
+// 不占用窗口建连锁 dialMu，也不影响切换其他主机。
+func (p *Connections) UpgradeActive(ctx context.Context, hostID string, opts Options) (rpc.RemoteInfo, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return rpc.RemoteInfo{}, false, err
+	}
+	if hostID == "" {
+		return rpc.RemoteInfo{}, false, errors.New("host ID required")
+	}
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return rpc.RemoteInfo{}, false, context.Canceled
+	}
+	var s *Session
+	if p.active != nil && p.active.Host.ID == hostID && sessionAlive(p.active) {
+		s = p.active
+	} else if entry := p.idle[hostID]; entry != nil && sessionAlive(entry.session) {
+		s = entry.session
+	}
+	if s == nil {
+		p.mu.Unlock()
+		return rpc.RemoteInfo{}, false, errors.New("remote host is not connected")
+	}
+	if s.Host.Executable != "" {
+		p.mu.Unlock()
+		return rpc.RemoteInfo{}, false, errors.New("server upgrade is disabled when custom executable path is configured")
+	}
+	p.pinLocked(s)
+	p.work.Add(1)
+	p.mu.Unlock()
+	defer func() {
+		p.unpin(s)
+		p.work.Done()
+	}()
+
+	if !s.tryLockUpgrade() {
+		return rpc.RemoteInfo{}, false, rpc.Errorf(rpc.CodeBusy, "remote server upgrade is in progress")
+	}
+	defer s.unlockUpgrade()
+	if err := ctx.Err(); err != nil {
+		return rpc.RemoteInfo{}, false, err
+	}
+
+	var live rpc.RemoteInfo
+	infoCtx, infoCancel := context.WithTimeout(ctx, 5*time.Second)
+	err := rpc.Call(infoCtx, s.Socket, "daemon.info", nil, &live)
+	infoCancel()
+	if err != nil {
+		return rpc.RemoteInfo{}, false, err
+	}
+	if !isManagedHeadless(live) {
+		return rpc.RemoteInfo{}, false, errors.New("server upgrade is only supported for managed headless nodes")
+	}
+	s.setInfo(live)
+
+	opts.report(StagePackage, 0)
+	localOpts := opts
+	localOpts.DisableRemoteDownload = true
+	pkg, err := localOpts.resolveServer(ctx, live.Platform, live.Arch)
+	if err != nil {
+		if ctx.Err() != nil {
+			return rpc.RemoteInfo{}, false, ctx.Err()
+		}
+		if opts.ServerArchive != "" || opts.DisableRemoteDownload {
+			return rpc.RemoteInfo{}, false, err
+		}
+		pkg, err = opts.resolveServer(ctx, live.Platform, live.Arch)
+		if err != nil {
+			return rpc.RemoteInfo{}, false, err
+		}
+	}
+	defer pkg.Close()
+
+	// 真正上传前对最终实际包再次核验单调向前约束。
+	if !shouldAutoUpgradeHeadless(live, pkg.Version, pkg.Commit, pkg.BuiltAt) {
+		return live, false, ErrServerUpToDate
+	}
+
+	newInfo, handedOff, err := s.upgradeHeadless(ctx, opts, pkg)
+	if handedOff {
+		s.setInfo(newInfo)
+	}
+	return newInfo, handedOff, err
+}
+
 func (p *Connections) closeLocked(s *Session) {
+	if p.pins[s] > 0 {
+		if p.pendingClose == nil {
+			p.pendingClose = make(map[*Session]bool)
+		}
+		p.pendingClose[s] = true
+		return
+	}
+	delete(p.pendingClose, s)
 	p.work.Add(1)
 	go func() { defer p.work.Done(); s.Close() }()
 }

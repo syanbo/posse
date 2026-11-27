@@ -557,6 +557,45 @@ func (d *Daemon) adopt(in *incoming) error {
 	return nil
 }
 
+// activateAdoptedServer 在托管无头服务端完成热交接（adopt）并恢复 PTY/RPC 后异步自愈 server/current，
+// 仅认领严格受管的 server/versions/<tag>/posse（绝不触碰完整版或 APFS 副本），
+// 并在有限重试与退出取消约束下运行，不阻塞终端与 RPC，也不会在已退出/再交接后覆盖更新版本。
+func (d *Daemon) activateAdoptedServer(ctx context.Context, exe string) {
+	_ = d.activateAdoptedServerEdition(ctx, exe, Edition)
+}
+
+func (d *Daemon) activateAdoptedServerEdition(ctx context.Context, exe, edition string) error {
+	if edition != "headless" || d.runtime == "" {
+		return nil
+	}
+	tag := spawn.ServerVersionTag(exe, d.cfg.Home)
+	if tag == "" {
+		return nil
+	}
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if ctx.Err() != nil || d.exiting.Load() || d.handoff.handedOff() {
+			return ctx.Err()
+		}
+		actCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		_, err := spawn.ActivateServerVersionContext(actCtx, d.cfg.Home, tag)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if attempt < 2 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Second):
+			}
+		}
+	}
+	log.Printf("activate server %s after adopt: %v", tag, lastErr)
+	return lastErr
+}
+
 // recordEndedAdopted 补记交接前已经退出的终端：旧进程等 resumeSettle 才记退出（留给关机时的恢复），
 // 等到之前就交接出去、退出了，这些终端在库里还是 running，不补记会被 MarkRunningLost 记成 lost，
 // 列表里既有退出的它又有一个等着恢复的它，下次启动被「恢复」成新 shell。

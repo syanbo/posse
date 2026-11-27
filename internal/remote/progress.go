@@ -10,6 +10,7 @@ const (
 	StageUpload    Stage = "upload"
 	StageStart     Stage = "start"
 	StageUpgrade   Stage = "upgrade"
+	StageActivate  Stage = "activate"
 	StageHandshake Stage = "handshake"
 )
 

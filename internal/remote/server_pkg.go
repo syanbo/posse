@@ -57,18 +57,29 @@ func (p *ServerPackage) Close() {
 	}
 }
 
+// ServerDesktopTooOldError 表示线上无头服务端发行版本高于当前本机桌面版，需先更新桌面端。
+type ServerDesktopTooOldError struct {
+	TargetVersion  string
+	DesktopVersion string
+}
+
+func (e *ServerDesktopTooOldError) Error() string {
+	return fmt.Sprintf("online server release %s is newer than this Posse version %s; update Posse on this Mac first", e.TargetVersion, e.DesktopVersion)
+}
+
 // ServerResolveOptions 控制如何获取目标平台对应的无头服务端压缩包。
 type ServerResolveOptions struct {
-	TargetOS      string
-	TargetArch    string
-	Version       string
-	LocalHome     string
-	ExplicitFile  string
-	SearchDirs    []string
-	BaseURL       string
-	PublicKey     string
-	HTTPClient    *http.Client
-	DisableRemote bool
+	TargetOS         string
+	TargetArch       string
+	Version          string
+	MaxRemoteVersion string
+	LocalHome        string
+	ExplicitFile     string
+	SearchDirs       []string
+	BaseURL          string
+	PublicKey        string
+	HTTPClient       *http.Client
+	DisableRemote    bool
 }
 
 // NormalizeArch 把 uname -m 规范为 Go 架构名。
@@ -489,7 +500,7 @@ func validDownloadURL(rawURL, baseURL string) error {
 	return fmt.Errorf("unsupported server download URL scheme %q", u.Scheme)
 }
 
-func downloadServerPackage(ctx context.Context, opts ServerResolveOptions, _ string, goos, goarch string) (ServerPackage, error) {
+func fetchVerifiedServerManifest(ctx context.Context, opts ServerResolveOptions, goos, goarch string) (ServerManifest, *http.Client, error) {
 	baseURL := strings.TrimRight(opts.BaseURL, "/")
 	if baseURL == "" {
 		baseURL = strings.TrimRight(os.Getenv("POSSE_SERVER_URL"), "/")
@@ -498,7 +509,7 @@ func downloadServerPackage(ctx context.Context, opts ServerResolveOptions, _ str
 		baseURL = defaultServerBaseURL
 	}
 	if err := validDownloadURL(baseURL, baseURL); err != nil {
-		return ServerPackage{}, err
+		return ServerManifest{}, nil, err
 	}
 	pubB64 := opts.PublicKey
 	if pubB64 == "" {
@@ -506,7 +517,7 @@ func downloadServerPackage(ctx context.Context, opts ServerResolveOptions, _ str
 	}
 	pubKey, err := ParseUpdatePublicKey(pubB64)
 	if err != nil {
-		return ServerPackage{}, err
+		return ServerManifest{}, nil, err
 	}
 	baseClient := opts.HTTPClient
 	if baseClient == nil {
@@ -527,25 +538,45 @@ func downloadServerPackage(ctx context.Context, opts ServerResolveOptions, _ str
 		return nil
 	}
 
+	manifestClient := client
+	manifestClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if !strings.HasSuffix(strings.ToLower(req.URL.Path), ".json") {
+			return errors.New("manifest redirect must target a JSON document")
+		}
+		return client.CheckRedirect(req, via)
+	}
+
 	manifestURL := fmt.Sprintf("%s/server-%s-%s.json", baseURL, goos, goarch)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
 	if err != nil {
-		return ServerPackage{}, err
+		return ServerManifest{}, nil, err
 	}
-	resp, err := client.Do(req)
+	resp, err := manifestClient.Do(req)
 	if err != nil {
-		return ServerPackage{}, fmt.Errorf("download server manifest failed (build locally with scripts/build-server.sh or check network): %w", err)
+		return ServerManifest{}, nil, fmt.Errorf("download server manifest failed (build locally with scripts/build-server.sh or check network): %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return ServerPackage{}, fmt.Errorf("server manifest unavailable (HTTP %d); build locally with scripts/build-server.sh or pass --file", resp.StatusCode)
+		return ServerManifest{}, nil, fmt.Errorf("server manifest unavailable (HTTP %d); build locally with scripts/build-server.sh or pass --file", resp.StatusCode)
 	}
 	m, err := DecodeServerManifest(resp.Body)
 	if err != nil {
-		return ServerPackage{}, err
+		return ServerManifest{}, nil, err
 	}
 	if err := VerifyServerManifest(m, goos, goarch, baseURL, pubKey); err != nil {
+		return ServerManifest{}, nil, err
+	}
+	return m, &client, nil
+}
+
+func downloadServerPackage(ctx context.Context, opts ServerResolveOptions, _ string, goos, goarch string) (ServerPackage, error) {
+	m, client, err := fetchVerifiedServerManifest(ctx, opts, goos, goarch)
+	if err != nil {
 		return ServerPackage{}, err
+	}
+	// 在下载大压缩包之前先核对桌面版本上限，绝不浪费流量或把远端升到比桌面更新。
+	if opts.MaxRemoteVersion != "" && compareSemver(opts.MaxRemoteVersion, m.Version) < 0 {
+		return ServerPackage{}, &ServerDesktopTooOldError{TargetVersion: m.Version, DesktopVersion: opts.MaxRemoteVersion}
 	}
 
 	// 按完整 SHA-256 存为不可变对象，每次读取都重新核对签名、全文件摘要与内外版本一致

@@ -110,6 +110,16 @@ func RuntimeDirFor(exe, home, edition string) string {
 	return ""
 }
 
+// ServerVersionTag 仅当 exe 严格位于 <realHome>/server/versions/<tag>/posse 且含受管标记时返回 tag，
+// 绝不认领 APFS .app 运行副本目录或外部独立二进制。
+func ServerVersionTag(exe, home string) string {
+	dir := serverVersionDir(exe, home)
+	if dir == "" {
+		return ""
+	}
+	return filepath.Base(dir)
+}
+
 // validServerTag 限制无头版本目录名，防止路径穿越和隐藏/临时目录名。
 func validServerTag(tag string) bool {
 	if tag == "" || tag == "." || tag == ".." || strings.HasPrefix(tag, ".") || len(tag) > 128 {

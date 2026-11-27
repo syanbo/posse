@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"posse/internal/daemon"
 	"posse/internal/rpc"
 	"posse/internal/spawn"
 )
@@ -366,19 +367,49 @@ func (s *Session) probePlatformAndHome(ctx context.Context, configuredHome strin
 
 func (opts Options) resolveServer(ctx context.Context, targetOS, targetArch string) (ServerPackage, error) {
 	return ResolveServerPackage(ctx, ServerResolveOptions{
-		TargetOS:      targetOS,
-		TargetArch:    targetArch,
-		LocalHome:     opts.LocalHome,
-		ExplicitFile:  opts.ServerArchive,
-		SearchDirs:    opts.ServerSearch,
-		BaseURL:       opts.ServerBaseURL,
-		PublicKey:     opts.ServerPubKey,
-		DisableRemote: opts.DisableRemoteDownload,
+		TargetOS:         targetOS,
+		TargetArch:       targetArch,
+		MaxRemoteVersion: daemon.Version,
+		LocalHome:        opts.LocalHome,
+		ExplicitFile:     opts.ServerArchive,
+		SearchDirs:       opts.ServerSearch,
+		BaseURL:          opts.ServerBaseURL,
+		PublicKey:        opts.ServerPubKey,
+		DisableRemote:    opts.DisableRemoteDownload,
 	})
 }
 
-// handoffAndVerify 向已转发的 socket 发起带实例与形态校验的热交接，确认新实例就绪后返回新 RemoteInfo。
-func handoffAndVerify(ctx context.Context, socket, exePath, expectedInstance, expectedEdition string, required []string, expectedHome string) (rpc.RemoteInfo, error) {
+var errMismatchedHandoffTarget = errors.New("remote daemon switched to a different version during handoff")
+
+// matchesUpgradeTarget 严格核对热交接后的新实例是否确实是本次上传的目标受管无头版本，
+// 避免并发升级或外部重启导致旧客户端误把 server/current 切回旧版本。
+func matchesUpgradeTarget(info rpc.RemoteInfo, oldInstance, expectedHome, expectedOS, expectedArch, expectedVersion, expectedTag string) bool {
+	if info.InstanceID == "" || (oldInstance != "" && info.InstanceID == oldInstance) {
+		return false
+	}
+	if info.Edition != "headless" || !info.Managed {
+		return false
+	}
+	if expectedHome != "" && filepath.Clean(info.Home) != filepath.Clean(expectedHome) {
+		return false
+	}
+	if expectedOS != "" && info.Platform != "" && info.Platform != expectedOS {
+		return false
+	}
+	if expectedArch != "" && info.Arch != "" && info.Arch != expectedArch {
+		return false
+	}
+	if expectedTag != "" && info.ServerTag != "" {
+		return info.ServerTag == expectedTag
+	}
+	if expectedVersion != "" && info.Version != expectedVersion {
+		return false
+	}
+	return true
+}
+
+// handoffAndVerify 向已转发的 socket 发起带实例与形态校验的热交接，确认新实例就绪且匹配目标版本后返回新 RemoteInfo。
+func handoffAndVerify(ctx context.Context, socket, exePath, expectedInstance, expectedEdition string, required []string, expectedHome, expectedOS, expectedArch, expectedVersion, expectedTag string) (rpc.RemoteInfo, error) {
 	handoffCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	err := rpc.Call(handoffCtx, socket, "daemon.handoff", map[string]string{
 		"exe":                exePath,
@@ -389,8 +420,11 @@ func handoffAndVerify(ctx context.Context, socket, exePath, expectedInstance, ex
 	if err != nil {
 		return rpc.RemoteInfo{}, fmt.Errorf("remote daemon handoff failed: %w", err)
 	}
+	infoCtx, infoCancel := context.WithTimeout(ctx, 5*time.Second)
 	var info rpc.RemoteInfo
-	if err := rpc.Call(ctx, socket, "daemon.info", nil, &info); err != nil {
+	err = rpc.Call(infoCtx, socket, "daemon.info", nil, &info)
+	infoCancel()
+	if err != nil {
 		return rpc.RemoteInfo{}, fmt.Errorf("verify daemon after handoff failed: %w", err)
 	}
 	if expectedInstance != "" && info.InstanceID == expectedInstance {
@@ -402,6 +436,16 @@ func handoffAndVerify(ctx context.Context, socket, exePath, expectedInstance, ex
 	if expectedHome != "" && filepath.Clean(info.Home) != filepath.Clean(expectedHome) {
 		return rpc.RemoteInfo{}, errors.New("remote daemon home changed unexpectedly after handoff")
 	}
+	if !matchesUpgradeTarget(info, expectedInstance, expectedHome, expectedOS, expectedArch, expectedVersion, expectedTag) {
+		return info, errMismatchedHandoffTarget
+	}
+	if err := checkRequiredCapabilities(info, required); err != nil {
+		return info, err
+	}
+	return info, nil
+}
+
+func checkRequiredCapabilities(info rpc.RemoteInfo, required []string) error {
 	for _, cap := range required {
 		found := false
 		for _, have := range info.Capabilities {
@@ -411,10 +455,10 @@ func handoffAndVerify(ctx context.Context, socket, exePath, expectedInstance, ex
 			}
 		}
 		if !found {
-			return rpc.RemoteInfo{}, &MissingCapabilityError{Capability: cap}
+			return &MissingCapabilityError{Capability: cap}
 		}
 	}
-	return info, nil
+	return nil
 }
 
 // Install 通过 SSH 将无头服务端推送安装到目标主机：
@@ -490,7 +534,7 @@ func Install(ctx context.Context, h Host, opts Options) (InstallResult, error) {
 		if filepath.Clean(before.Home) != filepath.Clean(canonicalHome) {
 			return res, errors.New("remote daemon home does not match discovery")
 		}
-		if _, err := handoffAndVerify(ctx, s.Socket, exePath, before.InstanceID, "", opts.Required, canonicalHome); err != nil {
+		if _, err := handoffAndVerify(ctx, s.Socket, exePath, before.InstanceID, "", opts.Required, canonicalHome, pkg.OS, pkg.Arch, pkg.Version, pkg.Tag); err != nil {
 			return res, err
 		}
 		if err := s.activateServer(ctx, exePath, canonicalHome, pkg.Tag); err != nil {

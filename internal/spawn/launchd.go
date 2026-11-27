@@ -407,7 +407,18 @@ func lockServiceUnitCtx(ctx context.Context, dir, base string) (func(), error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	lockPath := filepath.Join(dir, "."+base+".lock")
+	return lockFileCtx(ctx, filepath.Join(dir, "."+base+".lock"))
+}
+
+// lockDirCtx 对已存在目录 dir 下的 .lock 文件执行可取消的非阻塞 flock。
+func lockDirCtx(ctx context.Context, dir string) (func(), error) {
+	return lockFileCtx(ctx, filepath.Join(dir, ".lock"))
+}
+
+func lockFileCtx(ctx context.Context, lockPath string) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err

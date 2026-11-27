@@ -234,6 +234,12 @@ func (a *app) hostActionsBuild(m locales.Messages, h remote.Host, active bool) f
 		s = a.host.snapshot()
 	}
 	connecting, releasing := a.connecting, a.hostMenu.releasing != 0
+	upgrading := false
+	if a.views != nil {
+		if v := a.views.all[h.ID]; v != nil {
+			upgrading = v.upgrading.Load()
+		}
+	}
 	return func(menu *popMenu) {
 		if h.ID == localHostID {
 			if active && a.host != nil && s.Connected && !s.Controlled {
@@ -255,7 +261,7 @@ func (a *app) hostActionsBuild(m locales.Messages, h remote.Host, active bool) f
 					a.windowOwner().hosts.disconnect(h.ID)
 				}
 			case !s.Connected:
-				if menu.Item(m.HostReconnect()).Chosen() {
+				if menu.Item(m.HostReconnect()).Disabled(upgrading).Chosen() {
 					a.selectRemoteHost(h)
 				}
 			default:
@@ -264,12 +270,12 @@ func (a *app) hostActionsBuild(m locales.Messages, h remote.Host, active bool) f
 						a.takeHost(m, s)
 					}
 				}
-				if menu.Item(m.HostDisconnect()).Chosen() {
+				if menu.Item(m.HostDisconnect()).Disabled(upgrading).Chosen() {
 					a.windowOwner().hosts.disconnect(h.ID)
 				}
 			}
 		} else {
-			if menu.Item(m.HostConnect()).Chosen() {
+			if menu.Item(m.HostConnect()).Disabled(upgrading).Chosen() {
 				a.selectRemoteHost(h)
 			}
 		}
@@ -280,7 +286,7 @@ func (a *app) hostActionsBuild(m locales.Messages, h remote.Host, active bool) f
 		if menu.Item(m.HostEditItem()).Chosen() {
 			a.openHostDialog(h)
 		}
-		if menu.Item(m.HostRemoveItem()).Danger().Chosen() {
+		if menu.Item(m.HostRemoveItem()).Danger().Disabled(upgrading).Chosen() {
 			a.confirmRemoveHost(m, h)
 		}
 	}
@@ -331,7 +337,7 @@ func (a *app) hostSwitchBuild(m locales.Messages) func(*popMenu) {
 							a.takeHost(m, s)
 						}
 					}
-					if menu.Item(m.HostDisconnect()).Chosen() {
+					if menu.Item(m.HostDisconnect()).Disabled(a.upgrading.Load()).Chosen() {
 						a.windowOwner().hosts.disconnect(a.viewID)
 					}
 				}
@@ -421,7 +427,7 @@ func (a *app) openHost(h remote.Host) {
 		}
 		return
 	}
-	if target != nil && (target.connecting || target.host != nil && target.host.snapshot().Connected || owner.hosts == nil) {
+	if target != nil && (target.connecting || target.upgrading.Load() || target.host != nil && target.host.snapshot().Connected || owner.hosts == nil) {
 		if a.views.active.Load() != target {
 			a.views.activate(h.ID)
 		}
@@ -436,6 +442,10 @@ func (a *app) openHost(h remote.Host) {
 func (a *app) selectRemoteHost(h remote.Host) {
 	k := a.windowOwner().hosts
 	if k == nil || k.closed {
+		return
+	}
+	if a.isHostUpgrading(h.ID) {
+		a.openHost(h)
 		return
 	}
 	if a.viewID == h.ID && (a.connecting || a.host != nil && a.host.snapshot().Connected) {
@@ -523,6 +533,9 @@ func (a *app) hostControlJob(generation uint64, work func(context.Context) error
 func (a *app) hostStatus(m locales.Messages) string {
 	if a.host == nil {
 		return ""
+	}
+	if a.upgrading.Load() {
+		return a.upgradeStageText(m)
 	}
 	if a.connecting {
 		return a.connectStageText(m)

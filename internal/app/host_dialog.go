@@ -137,7 +137,7 @@ func (a *app) hostDialog(c *ui.Context) {
 			_, wh := c.Size()
 			scrollMax := max(sz(240), min(wh-sz(220), sz(560)))
 			if onOverview {
-				scrollMax = max(sz(240), min(wh-sz(200), sz(680)))
+				scrollMax = max(sz(240), min(wh-sz(180), sz(760)))
 			}
 
 			// 滚动区向两边扩到弹窗内边距里，内容再缩回来：滚动条落在右边留白上，不压输入框和按钮；上下留 2px 防聚焦框被裁
@@ -332,8 +332,16 @@ func (a *app) hostDialog(c *ui.Context) {
 				})
 			})
 
+			upgrading := false
+			if isEdit && owner.views != nil {
+				if tv := owner.views.all[d.editing.ID]; tv != nil {
+					upgrading = tv.upgrading.Load()
+				}
+			}
 			reconnectLive := isEdit && !onOverview && a.editingLiveConnectionChanged(d)
-			if reconnectLive {
+			if reconnectLive && upgrading {
+				ui.Text(c, m.HostUpgradeLockNote()).FontSize(fsSmall).TextColor(p.honey).Wrap()
+			} else if reconnectLive {
 				ui.Text(c, m.HostEditLiveNote()).FontSize(fsSmall).TextColor(t.TextMuted).Wrap()
 			}
 			if !onOverview && d.err != "" {
@@ -343,8 +351,8 @@ func (a *app) hostDialog(c *ui.Context) {
 			// 底部按钮行
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(8, 0, 0, 0).Children(func() {
 				if isEdit {
-					rm := confirmButton(c, pressable(textButton(c.Key("host-remove"), m.HostRemove()).TextColor(t.Danger).Disabled(d.saving)))
-					if rm.Clicked() && !d.saving {
+					rm := confirmButton(c, pressable(textButton(c.Key("host-remove"), m.HostRemove()).TextColor(t.Danger).Disabled(d.saving || upgrading)))
+					if rm.Clicked() && !d.saving && !upgrading {
 						editing := d.editing
 						owner.cancelHostDetails()
 						owner.dropHostIconFile(d.iconImage, d.editing.IconImage)
@@ -373,12 +381,13 @@ func (a *app) hostDialog(c *ui.Context) {
 						primary = m.HostSaveReconnect()
 					}
 				}
-				if confirmButton(c, pressable(accentButton(c.Key("host-submit"), primary).Disabled(d.saving))).Clicked() && !d.saving {
+				submitDisabled := d.saving || (reconnectLive && upgrading)
+				if confirmButton(c, pressable(accentButton(c.Key("host-submit"), primary).Disabled(submitDisabled))).Clicked() && !submitDisabled {
 					submit = true
 				}
 			})
 
-			if submit && !d.saving {
+			if submit && !d.saving && !(reconnectLive && upgrading) {
 				a.submitHostDialog(m, d, reconnectLive)
 			}
 		})
@@ -502,12 +511,25 @@ func (a *app) duplicateEndpointName(d *hostDialogState) string {
 	return ""
 }
 
+func (a *app) isHostUpgrading(id string) bool {
+	if id == "" || id == localHostID {
+		return false
+	}
+	owner := a.windowOwner()
+	if owner == nil || owner.views == nil {
+		return false
+	}
+	v := owner.views.all[id]
+	return v != nil && v.upgrading.Load()
+}
+
 func (a *app) editingLiveConnectionChanged(d *hostDialogState) bool {
 	if d.editing.ID == "" || a.views == nil {
 		return false
 	}
 	view := a.views.all[d.editing.ID]
-	if view == nil || (!view.connecting && (view.host == nil || !view.host.snapshot().Connected)) {
+	upgrading := view != nil && view.upgrading.Load()
+	if view == nil || (!upgrading && !view.connecting && (view.host == nil || !view.host.snapshot().Connected)) {
 		return false
 	}
 	h, _, portOK := a.buildHostFromDialog(d)
@@ -524,12 +546,16 @@ func (a *app) submitHostDialog(m locales.Messages, d *hostDialogState, reconnect
 		return
 	}
 	isEdit := h.ID != ""
+	owner := a.windowOwner()
+	if isEdit && owner.isHostUpgrading(h.ID) && (reconnectLive || a.editingLiveConnectionChanged(d)) {
+		d.err = m.HostUpgradeLockNote()
+		return
+	}
 	var expected *remote.Host
 	if isEdit {
 		cp := d.editing
 		expected = &cp
 	}
-	owner := a.windowOwner()
 	gen := d.gen
 	d.saving = true
 	go func() {
@@ -555,7 +581,7 @@ func (a *app) submitHostDialog(m locales.Messages, d *hostDialogState, reconnect
 			owner.hostDlg.open = false
 			if !isEdit {
 				owner.selectRemoteHost(saved)
-			} else if reconnectLive {
+			} else if reconnectLive && !owner.isHostUpgrading(saved.ID) {
 				owner.hosts.disconnect(saved.ID)
 				owner.selectRemoteHost(saved)
 			}
@@ -565,7 +591,14 @@ func (a *app) submitHostDialog(m locales.Messages, d *hostDialogState, reconnect
 
 func (a *app) confirmRemoveHost(m locales.Messages, h remote.Host) {
 	owner := a.windowOwner()
+	if owner.isHostUpgrading(h.ID) {
+		return
+	}
 	a.confirm(m.HostRemoveTitle(h.Name), m.HostRemoveBody(), m.CommonRemove(), func() {
+		// 确认弹开期间若已进入热升级，落盘前再次复查并拒绝移除，避免删掉正在升级的主机配置。
+		if owner.isHostUpgrading(h.ID) {
+			return
+		}
 		// 先在锁内核对并落盘移除，确认写盘成功后再切换视图与回收连接
 		err := remote.RemoveIf(owner.home, h)
 		owner.update(func() {

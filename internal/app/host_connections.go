@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"sync"
+	"time"
 
 	"posse/internal/client"
 	"posse/internal/errtext"
@@ -33,16 +34,18 @@ type hostTransportCleanup interface {
 }
 
 type hostConnections struct {
-	views   *hostViews
-	ctx     context.Context
-	cancel  context.CancelFunc
-	pool    hostTransportCleanup
-	closing map[string]uint64
-	active  *hostAttempt
-	closed  bool
-	jobs    sync.WaitGroup
-	dialMu  sync.Mutex
-	dial    func(context.Context, remote.Host, remote.Options) (hostTransport, error)
+	views        *hostViews
+	ctx          context.Context
+	cancel       context.CancelFunc
+	pool         hostTransportCleanup
+	closing      map[string]uint64
+	active       *hostAttempt
+	closed       bool
+	jobs         sync.WaitGroup
+	dialMu       sync.Mutex
+	dial         func(context.Context, remote.Host, remote.Options) (hostTransport, error)
+	checkUpgrade func(context.Context, rpc.RemoteInfo, remote.Options) (remote.ServerUpgradeCheck, error)
+	upgrade      func(context.Context, string, remote.Options) (rpc.RemoteInfo, bool, error)
 }
 
 func newHostConnections(v *hostViews) *hostConnections {
@@ -54,8 +57,11 @@ func newHostConnections(v *hostViews) *hostConnections {
 		if err != nil {
 			return hostTransport{}, err
 		}
-		return hostTransport{client: &client.Client{Home: s.Info.Home, UserHome: s.Info.UserHome, Platform: s.Info.Platform, Socket: s.Socket, Remote: true}, done: s.Done()}, nil
+		info := s.CurrentInfo()
+		return hostTransport{client: &client.Client{Home: info.Home, UserHome: info.UserHome, Platform: info.Platform, Socket: s.Socket, Remote: true}, done: s.Done()}, nil
 	}
+	k.checkUpgrade = remote.CheckServerUpgrade
+	k.upgrade = pool.UpgradeActive
 	return k
 }
 
@@ -236,6 +242,9 @@ func (k *hostConnections) disconnect(id string) {
 	if k.closed {
 		return
 	}
+	if v := k.views.all[id]; v != nil && v.upgrading.Load() {
+		return
+	}
 	if k.views.suspendedRemote != nil && k.views.suspendedRemote.id == id {
 		k.views.suspendedRemote = nil
 	}
@@ -252,10 +261,220 @@ func (k *hostConnections) disconnect(id string) {
 	}
 }
 
+func upgradeCheckIdentity(info rpc.RemoteInfo) string {
+	return info.InstanceID + "|" + info.Version + "|" + info.Build + "|" + info.ServerTag
+}
+
+// checkHostUpgrade 在后台对托管无头节点执行轻量更新检查（只验本地包或签名的 R2 清单，不下载压缩包）。
+func (k *hostConnections) checkHostUpgrade(hostID string, info rpc.RemoteInfo) {
+	if k.closed || hostID == "" || hostID == localHostID {
+		return
+	}
+	a := k.views.all[hostID]
+	if a == nil || a.upgrading.Load() || a.upgradeChecking {
+		return
+	}
+	checkFn := k.checkUpgrade
+	if checkFn == nil {
+		checkFn = remote.CheckServerUpgrade
+	}
+	a.upgradeCheckGen++
+	gen := a.upgradeCheckGen
+	targetKey := upgradeCheckIdentity(info)
+	a.upgradeChecking = true
+	a.upgradeCheckErr = ""
+	a.upgradeErr = ""
+	a.upgradeNotice = ""
+	opts := remote.Options{
+		LocalHome: k.views.local.home,
+		Required:  slices.Clone(rpc.RemoteCapabilities),
+	}
+	k.jobs.Go(func() {
+		ctx, cancel := context.WithTimeout(k.ctx, 20*time.Second)
+		res, err := checkFn(ctx, info, opts)
+		cancel()
+		a.update(func() {
+			if k.closed || a.upgradeCheckGen != gen {
+				return
+			}
+			a.upgradeChecking = false
+			if err != nil {
+				a.upgradeCheck = nil
+				a.upgradeCheckKey = ""
+				a.upgradeCheckErr = errtext.Text(err)
+				return
+			}
+			cp := res
+			a.upgradeCheck = &cp
+			a.upgradeCheckKey = targetKey
+			a.upgradeCheckErr = ""
+		})
+	})
+}
+
+// cancelHostUpgrade 仅在热升级尚未进入 daemon.handoff（上传与提交阶段）时取消升级。
+func (k *hostConnections) cancelHostUpgrade(hostID string) {
+	if k.closed || hostID == "" || hostID == localHostID {
+		return
+	}
+	a := k.views.all[hostID]
+	if a == nil || !a.upgrading.Load() || a.upgradeHandingOff.Load() || a.upgradeCancel == nil {
+		return
+	}
+	a.upgradeCancel()
+	a.upgradeCancel = nil
+}
+
+// upgradeRemote 对当前活动且受控的远端托管无头主机执行无损热升级：
+// 1. 打包与上传阶段保持心跳续租不丢桌面控制权；进入 daemon.handoff 前核对控制权未转移并切换 upgradeHandingOff 抑制瞬断；
+// 2. 不占 dialMu（切换其他主机无阻塞），与在途自启写入互斥；
+// 3. handoff 成功后在后台调用 connectRemoteAt 沿原隧道无感恢复桌面控制，不清空 panes 与标签；
+// 4. 若升级期间切走又切回（hostSession 已 detach），无论是否交接，结束后若仍停留在当前主机视图均自动恢复连接。
+func (k *hostConnections) upgradeRemote(hostID string) {
+	if k.closed || hostID == "" || hostID == localHostID || k.upgrade == nil {
+		return
+	}
+	a := k.views.all[hostID]
+	if a == nil || k.views.active.Load() != a || a.host == nil || a.upgrading.Load() {
+		return
+	}
+	snap := a.host.snapshot()
+	if !snap.Connected || !snap.Controlled || snap.Client == nil {
+		return
+	}
+	if a.autostartOp != nil && a.autostartOp.instanceID == snap.Desktop.InstanceID && a.autostartOp.busy {
+		return
+	}
+	origHost, hasOrigHost := k.views.local.findSavedHost(hostID)
+	gen := snap.Generation
+	baseClient := *snap.Client
+	baseClient.Desktop = nil
+	ctx, cancel := context.WithCancel(k.ctx)
+
+	a.upgrading.Store(true)
+	a.upgradeHandingOff.Store(false)
+	a.upgradeStage = remote.StagePackage
+	a.upgradePct = 0
+	a.upgradeErr = ""
+	a.upgradeNotice = ""
+	a.upgradeCheckErr = ""
+	a.upgradeCancel = cancel
+
+	opts := remote.Options{
+		LocalHome: k.views.local.home,
+		Required:  slices.Clone(rpc.RemoteCapabilities),
+		BeforeHandoff: func(context.Context) error {
+			cur := a.host.snapshot()
+			if !cur.Connected || !cur.Controlled || cur.Generation != gen {
+				return rpc.Errorf(rpc.CodeReadOnly, "desktop control was lost before handoff")
+			}
+			a.upgradeHandingOff.Store(true)
+			return nil
+		},
+		Progress: func(stage remote.Stage, pct float64) {
+			if stage == remote.StageUpgrade || stage == remote.StageActivate || stage == remote.StageHandshake {
+				a.upgradeHandingOff.Store(true)
+			}
+			a.update(func() {
+				if k.closed || !a.upgrading.Load() {
+					return
+				}
+				a.upgradeStage, a.upgradePct = stage, pct
+				if stage == remote.StageUpgrade || stage == remote.StageActivate || stage == remote.StageHandshake {
+					a.upgradeCancel = nil
+				}
+			})
+		},
+	}
+
+	k.jobs.Go(func() {
+		newInfo, handedOff, err := k.upgrade(ctx, hostID, opts)
+		cancel()
+
+		if handedOff {
+			a.upgradeHandingOff.Store(true)
+			a.update(func() {
+				if k.closed || !a.upgrading.Load() {
+					return
+				}
+				a.upgradeStage, a.upgradePct = remote.StageHandshake, 0
+				a.upgradeCancel = nil
+			})
+			newBase := baseClient
+			if newInfo.Home != "" {
+				newBase.Home = newInfo.Home
+			}
+			if newInfo.UserHome != "" {
+				newBase.UserHome = newInfo.UserHome
+			}
+			if newInfo.Platform != "" {
+				newBase.Platform = newInfo.Platform
+			}
+			newBase.Desktop = nil
+			newBase.Remote = true
+			reattachCtx, reattachCancel := context.WithTimeout(k.ctx, 15*time.Second)
+			reattachErr := a.host.connectRemoteAt(reattachCtx, &newBase, gen)
+			reattachCancel()
+			if err == nil && reattachErr != nil && !errors.Is(reattachErr, context.Canceled) {
+				err = reattachErr
+			}
+		}
+
+		a.update(func() {
+			a.upgrading.Store(false)
+			a.upgradeHandingOff.Store(false)
+			a.upgradeStage, a.upgradePct = "", 0
+			a.upgradeCancel = nil
+			if k.closed {
+				return
+			}
+			restoreIfDetachedActive := func() {
+				if k.views.active.Load() != a || a.host.snapshot().Connected || !hasOrigHost {
+					return
+				}
+				if curSaved, ok := k.views.local.findSavedHost(hostID); ok && curSaved.SameConnection(origHost) {
+					k.connectRemote(origHost, true)
+				}
+			}
+			if handedOff {
+				cp := newInfo
+				a.remoteInfo = &cp
+				a.upgradeCheck = nil
+				a.upgradeCheckKey = ""
+				a.upgradeCheckErr = ""
+				if err != nil {
+					a.upgradeErr = errtext.Text(err)
+				} else {
+					a.upgradeErr = ""
+					a.upgradeNotice = appL().HostUpgradeDone(newInfo.Version)
+				}
+				a.pollForce.Store(true)
+				a.wakePoll()
+				if owner := k.views.local; owner.hostDlg.open && owner.hostDlg.editing.ID == hostID {
+					owner.refreshHostDetails(owner, &owner.hostDlg)
+				}
+				restoreIfDetachedActive()
+				return
+			}
+			if errors.Is(err, remote.ErrServerUpToDate) {
+				a.upgradeNotice = appL().HostUpgradeUpToDate()
+			} else if err != nil && !errors.Is(err, context.Canceled) {
+				a.upgradeErr = errtext.Text(err)
+			}
+			// 切走又切回后取消或遇到 CodeBusy/上传失败时，统一恢复当前活动主机视图的连接。
+			restoreIfDetachedActive()
+		})
+	})
+}
+
 // heartbeat 不经 appRequest.update：连接失效后仍须发布断线状态；回到界面线程再核对代次。
 func (k *hostConnections) heartbeat(a *app) bool {
 	if a.host == nil {
 		return true
+	}
+	// 仅在真正进入 daemon.handoff 短窗口期间抑制心跳；打包/上传阶段继续续租防止 15 秒控制租约过期。
+	if a.upgradeHandingOff.Load() {
+		return false
 	}
 	before := a.host.snapshot()
 	if !before.Connected {
@@ -269,7 +488,7 @@ func (k *hostConnections) heartbeat(a *app) bool {
 				}
 				return
 			}
-			if k.closed || k.active == nil || k.active.app != a || a.host.snapshot().Generation != before.Generation {
+			if k.closed || a.upgradeHandingOff.Load() || k.active == nil || k.active.app != a || a.host.snapshot().Generation != before.Generation {
 				return
 			}
 			k.failed(k.active, err)

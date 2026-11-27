@@ -163,22 +163,34 @@ type app struct {
 	c   *client.Client
 	win *mygo.Window
 	// 视图上下文的主机归属创建后不变；连接、控制身份的变化只由 host 管理。
-	host           *hostSession
-	views          *hostViews
-	sshAuth        *sshAuthentication // 窗口共用，只由 windowOwner 持有。
-	hosts          *hostConnections
-	hostMenu       hostMenuState
-	hostDlg        hostDialogState // 窗口共用，只由 windowOwner 持有
-	connecting     bool
-	platform       string           // 最近一次连上目标 daemon 时的操作系统（darwin/linux），断开后保留判断
-	remoteInfo     *rpc.RemoteInfo  // 最近一次通过 daemon.info 读取到的远端节点快照（仅内存，供非活动或断开态概览参考）
-	autostartGen   uint64           // 自启读写共享代次：发起写入立刻作废更早的只读查询回包
-	autostartOp    *hostAutostartOp // 按主机实例保留的在途/结果未知自启写操作，关弹窗与切页不遗忘
-	connectStage   remote.Stage
-	connectPct     float64
-	viewID         string
-	viewGeneration atomic.Uint64
-	windowFocused  atomic.Bool // 实际窗口焦点，由本机上下文持有
+	host              *hostSession
+	views             *hostViews
+	sshAuth           *sshAuthentication // 窗口共用，只由 windowOwner 持有。
+	hosts             *hostConnections
+	hostMenu          hostMenuState
+	hostDlg           hostDialogState // 窗口共用，只由 windowOwner 持有
+	connecting        bool
+	platform          string           // 最近一次连上目标 daemon 时的操作系统（darwin/linux），断开后保留判断
+	remoteInfo        *rpc.RemoteInfo  // 最近一次通过 daemon.info 读取到的远端节点快照（仅内存，供非活动或断开态概览参考）
+	autostartGen      uint64           // 自启读写共享代次：发起写入立刻作废更早的只读查询回包
+	autostartOp       *hostAutostartOp // 按主机实例保留的在途/结果未知自启写操作，关弹窗与切页不遗忘
+	upgrading         atomic.Bool      // 远端无头服务端热升级进行中（跨界面线程与轮询协程读写）
+	upgradeHandingOff atomic.Bool      // 已进入 daemon.handoff 阶段：仅此短窗口内抑制心跳断线与轮询报错，上传阶段继续续租
+	upgradeStage      remote.Stage
+	upgradePct        float64
+	upgradeErr        string
+	upgradeNotice     string
+	upgradeCancel     context.CancelFunc
+	upgradeCheck      *remote.ServerUpgradeCheck
+	upgradeCheckKey   string
+	upgradeChecking   bool
+	upgradeCheckErr   string
+	upgradeCheckGen   uint64
+	connectStage      remote.Stage
+	connectPct        float64
+	viewID            string
+	viewGeneration    atomic.Uint64
+	windowFocused     atomic.Bool // 实际窗口焦点，由本机上下文持有
 
 	// 讨论页（discussions.go）：轮询在后台协程里读 discWant、discSeq
 	disc        discBoard
@@ -874,6 +886,9 @@ func (a *app) refreshRequest(q appRequest) {
 	prevErr := a.lastPoll != nil && a.lastPoll.err != ""
 	a.lastPoll, a.lastPollClient = &r, q.client
 	q.update(func() {
+		if a.upgradeHandingOff.Load() && r.err != "" {
+			return
+		}
 		a.pollDown = r.err != ""
 		if r.err != "" {
 			a.err = r.err

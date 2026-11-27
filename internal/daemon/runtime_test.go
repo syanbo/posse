@@ -1,11 +1,16 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
+
+	"posse/internal/spawn"
 )
 
 // 终端记着拉起它的副本，交接后新进程照样知道：回收副本时要留着它。
@@ -104,5 +109,81 @@ func TestLinkPosse(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(filepath.Join(home, "bin")); len(entries) != 1 {
 		t.Fatalf("leftovers: %v", entries)
+	}
+}
+
+func TestActivateAdoptedServerSelfHealing(t *testing.T) {
+	home := t.TempDir()
+	tag := "0.1.55-abcdef123456"
+	verDir := filepath.Join(home, "server", "versions", tag)
+	if err := os.MkdirAll(verDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(verDir, "posse")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(verDir, spawn.ServerManagedMarker), []byte(tag+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. 完整版（full）绝不触碰 server/current。
+	dFull := &Daemon{cfg: Config{Home: home}, runtime: verDir}
+	_ = dFull.activateAdoptedServerEdition(context.Background(), exe, "full")
+	if _, err := os.Lstat(filepath.Join(home, "server", "current")); !os.IsNotExist(err) {
+		t.Fatalf("full edition unexpectedly touched server/current: err=%v", err)
+	}
+
+	// 2. 非托管无头（runtime 为空）或外部非 server/versions 目录绝不触碰 server/current。
+	dUnmanaged := &Daemon{cfg: Config{Home: home}, runtime: ""}
+	_ = dUnmanaged.activateAdoptedServerEdition(context.Background(), exe, "headless")
+	if _, err := os.Lstat(filepath.Join(home, "server", "current")); !os.IsNotExist(err) {
+		t.Fatalf("unmanaged daemon unexpectedly touched server/current: err=%v", err)
+	}
+	fakeCopyDir := filepath.Join(t.TempDir(), "Posse.app", "Contents", "MacOS")
+	if err := os.MkdirAll(fakeCopyDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fakeCopyExe := filepath.Join(fakeCopyDir, "posse")
+	if err := os.WriteFile(fakeCopyExe, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if tag := spawn.ServerVersionTag(fakeCopyExe, home); tag != "" {
+		t.Fatalf("ServerVersionTag matched non-server path: %q", tag)
+	}
+
+	// 3. 持有 versions/.lock 且 ctx 取消时，ActivateServerVersionContext 立刻响应取消而非无限阻塞。
+	lockFile, err := os.OpenFile(filepath.Join(home, "server", "versions", ".lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX); err != nil {
+		lockFile.Close()
+		t.Fatal(err)
+	}
+	cctx, ccancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	dLocked := &Daemon{cfg: Config{Home: home}, runtime: verDir}
+	lockErr := dLocked.activateAdoptedServerEdition(cctx, exe, "headless")
+	ccancel()
+	_ = unix.Flock(int(lockFile.Fd()), unix.LOCK_UN)
+	lockFile.Close()
+	if lockErr == nil {
+		t.Fatal("expected deadline error while versions/.lock was held")
+	}
+
+	// 4. 受管无头节点 adopt 成功后自愈 server/current -> versions/<tag>，且可安全幂等重复执行。
+	dManaged := &Daemon{cfg: Config{Home: home}, runtime: verDir}
+	if err := dManaged.activateAdoptedServerEdition(context.Background(), exe, "headless"); err != nil {
+		t.Fatalf("activateAdoptedServerEdition failed: %v", err)
+	}
+	if err := dManaged.activateAdoptedServerEdition(context.Background(), exe, "headless"); err != nil {
+		t.Fatalf("second idempotent activateAdoptedServerEdition failed: %v", err)
+	}
+	target, err := os.Readlink(filepath.Join(home, "server", "current"))
+	if err != nil {
+		t.Fatalf("server/current not activated: %v", err)
+	}
+	if target != filepath.Join("versions", tag) {
+		t.Fatalf("server/current -> %q, want %q", target, filepath.Join("versions", tag))
 	}
 }

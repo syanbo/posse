@@ -688,6 +688,8 @@ func Run(ctx context.Context, cfg Config) error {
 		d.collabStart(ctx)
 		d.larkStart(ctx)
 	} else {
+		// 异步自愈托管无头节点的 server/current，不阻塞 PTY 恢复与 RPC 受理；遇锁冲突有限重试并响应退出取消。
+		go d.activateAdoptedServer(ctx, exe)
 		// 交接过来的不等锁就开始服务（hook 只等 2 秒），旧进程退出放锁之后才开手机服务：端口在它手里。
 		// 一直等下去，等不到也不退出，终端都在这个进程里
 		go func() {

@@ -25,6 +25,7 @@ const probeMarker = "POSSE_REMOTE_V1:"
 type Options struct {
 	Prompt                PromptFunc
 	Progress              func(Stage, float64)
+	BeforeHandoff         func(context.Context) error
 	Start                 bool
 	AutoInstall           bool
 	LocalHome             string
@@ -49,7 +50,46 @@ type Session struct {
 	done             chan struct{}
 	stderr           boundedOutput
 	closeOnce        sync.Once
+	mu               sync.Mutex // 保护 Info、lastUpgradeCheck 与 upgrading 互斥标记
+	upgrading        bool
 	lastUpgradeCheck time.Time
+	stageOverride    func(context.Context, string, ServerPackage, func(Stage, float64)) (string, error)
+	activateOverride func(context.Context, string, string, string) error
+}
+
+// CurrentInfo 并发安全地返回最近一次确认的远端节点信息深拷贝副本。
+func (s *Session) CurrentInfo() rpc.RemoteInfo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := s.Info
+	cp.Capabilities = slices.Clone(s.Info.Capabilities)
+	cp.Features = slices.Clone(s.Info.Features)
+	return cp
+}
+
+func (s *Session) setInfo(info rpc.RemoteInfo) {
+	cp := info
+	cp.Capabilities = slices.Clone(info.Capabilities)
+	cp.Features = slices.Clone(info.Features)
+	s.mu.Lock()
+	s.Info = cp
+	s.mu.Unlock()
+}
+
+func (s *Session) tryLockUpgrade() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.upgrading {
+		return false
+	}
+	s.upgrading = true
+	return true
+}
+
+func (s *Session) unlockUpgrade() {
+	s.mu.Lock()
+	s.upgrading = false
+	s.mu.Unlock()
 }
 
 func (s *Session) Done() <-chan struct{} { return s.done }

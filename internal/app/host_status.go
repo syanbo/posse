@@ -33,10 +33,36 @@ func (a *app) connectStageText(m locales.Messages) string {
 		return m.HostStageStart()
 	case remote.StageUpgrade:
 		return m.HostStageUpgrade()
+	case remote.StageActivate:
+		return m.HostStageActivate()
 	case remote.StageHandshake:
 		return m.HostStageHandshake()
 	default:
 		return m.HostConnecting()
+	}
+}
+
+func (a *app) upgradeStageText(m locales.Messages) string {
+	switch a.upgradeStage {
+	case remote.StagePackage:
+		return m.HostStagePackage()
+	case remote.StageUpload:
+		pct := int(math.Round(a.upgradePct * 100))
+		if pct < 0 {
+			pct = 0
+		}
+		if pct > 100 {
+			pct = 100
+		}
+		return m.HostStageUpload(pct)
+	case remote.StageUpgrade:
+		return m.HostStageUpgrade()
+	case remote.StageActivate:
+		return m.HostStageActivate()
+	case remote.StageHandshake:
+		return m.HostStageReattach()
+	default:
+		return m.HostUpgrading()
 	}
 }
 
@@ -81,7 +107,7 @@ func (a *app) hostChip(c *ui.Context) {
 		}
 	}
 
-	if !a.connecting && s.Connected && s.Controlled {
+	if !a.connecting && !a.upgrading.Load() && s.Connected && s.Controlled {
 		return
 	}
 
@@ -94,6 +120,21 @@ func (a *app) hostChip(c *ui.Context) {
 	b.Background(b.AnimateColor("bg", bg, hover))
 
 	switch {
+	case a.upgrading.Load():
+		stage := a.upgradeStageText(m)
+		b.Label(stage).Tooltip(stage).Children(func() {
+			if c.Preferences().ReduceMotion {
+				ui.Icon(c, iconHexOutline).FontSize(fsSmall).TextColor(p.honey).Shrink(0)
+			} else {
+				ui.Spinner(c).Size(fsSmall, fsSmall).TextColor(p.honey).Shrink(0)
+			}
+			ui.Text(c, stage).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Ellipsis("…").MaxWidth(hostChipNameMax()).Shrink(1).MinWidth(0)
+		})
+		if b.Clicked() {
+			if h, ok := a.findSavedHost(a.viewID); ok {
+				a.openHostDetails(h)
+			}
+		}
 	case a.connecting:
 		stage := a.connectStageText(m)
 		b.Label(stage).Tooltip(a.withKey(stage, "switchHost")).Children(func() {
@@ -230,6 +271,21 @@ func (a *app) remoteStatusCard(c *ui.Context) {
 	card := ui.Column(c).MaxWidth(hostDialogWidth()).Padding(24).Gap(12).Radius(rCard).Background(p.card).AlignItems(ui.Center)
 	elevCard(c, card)
 	card.Children(func() {
+		if a.upgrading.Load() {
+			posseLoader(c, tileLarge(), t.Accent, c.Preferences().ReduceMotion)
+			titleText(c, m.HostUpgradingTitle(name), fsTitle)
+			ui.Text(c, a.upgradeStageText(m)).FontSize(fsBody).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine()
+			if a.upgradeCancel != nil {
+				ui.Row(c).Gap(8).Padding(8, 0, 0, 0).Children(func() {
+					if confirmButton(c, pressable(textButton(c, m.HostUpgradeCancelBtn()))).Clicked() {
+						if k := a.windowOwner().hosts; k != nil {
+							k.cancelHostUpgrade(a.viewID)
+						}
+					}
+				})
+			}
+			return
+		}
 		if a.connecting {
 			posseLoader(c, tileLarge(), t.Accent, c.Preferences().ReduceMotion)
 			titleText(c, m.HostConnectingTitle(name), fsTitle)

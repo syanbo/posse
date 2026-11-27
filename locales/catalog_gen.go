@@ -1679,6 +1679,298 @@ func (msgs Messages) HostAutostartUpdating() string {
 	return Catalog.Format(msgs.locale, "hostAutostartUpdating", nil)
 }
 
+// HostStageActivate says "Activating new version"
+// in the language the app shows.
+//
+// Progress stage while switching the remote server current symlink.
+func HostStageActivate() string { return In(i18n.Locale()).HostStageActivate() }
+
+// HostStageActivate says "Activating new version"
+// in the language of msgs.
+//
+// Progress stage while switching the remote server current symlink.
+func (msgs Messages) HostStageActivate() string {
+	return Catalog.Format(msgs.locale, "hostStageActivate", nil)
+}
+
+// HostStageReattach says "Restoring desktop control"
+// in the language the app shows.
+//
+// Progress stage while reattaching desktop control after hot handoff.
+func HostStageReattach() string { return In(i18n.Locale()).HostStageReattach() }
+
+// HostStageReattach says "Restoring desktop control"
+// in the language of msgs.
+//
+// Progress stage while reattaching desktop control after hot handoff.
+func (msgs Messages) HostStageReattach() string {
+	return Catalog.Format(msgs.locale, "hostStageReattach", nil)
+}
+
+// HostUpgrading says "Upgrading server…"
+// in the language the app shows.
+//
+// Fallback status text while hot-upgrading a remote headless server.
+func HostUpgrading() string { return In(i18n.Locale()).HostUpgrading() }
+
+// HostUpgrading says "Upgrading server…"
+// in the language of msgs.
+//
+// Fallback status text while hot-upgrading a remote headless server.
+func (msgs Messages) HostUpgrading() string {
+	return Catalog.Format(msgs.locale, "hostUpgrading", nil)
+}
+
+// HostUpgradingTitle says "Upgrading {name}"
+// in the language the app shows.
+//
+// Title on the remote landing card while a server upgrade is in progress.
+func HostUpgradingTitle(name string) string { return In(i18n.Locale()).HostUpgradingTitle(name) }
+
+// HostUpgradingTitle says "Upgrading {name}"
+// in the language of msgs.
+//
+// Title on the remote landing card while a server upgrade is in progress.
+func (msgs Messages) HostUpgradingTitle(name string) string {
+	return Catalog.Format(msgs.locale, "hostUpgradingTitle", map[string]any{"name": name})
+}
+
+// HostOverviewSectionUpgrade says "Server Update"
+// in the language the app shows.
+//
+// Section title for headless server update check and hot upgrade in host
+// details.
+func HostOverviewSectionUpgrade() string { return In(i18n.Locale()).HostOverviewSectionUpgrade() }
+
+// HostOverviewSectionUpgrade says "Server Update"
+// in the language of msgs.
+//
+// Section title for headless server update check and hot upgrade in host
+// details.
+func (msgs Messages) HostOverviewSectionUpgrade() string {
+	return Catalog.Format(msgs.locale, "hostOverviewSectionUpgrade", nil)
+}
+
+// HostUpgradeHint says "Check for a newer headless server bundle and hot-upgrade without closing terminals."
+// in the language the app shows.
+//
+// Description under the Server Update section before an update check has
+// run.
+func HostUpgradeHint() string { return In(i18n.Locale()).HostUpgradeHint() }
+
+// HostUpgradeHint says "Check for a newer headless server bundle and hot-upgrade without closing terminals."
+// in the language of msgs.
+//
+// Description under the Server Update section before an update check has
+// run.
+func (msgs Messages) HostUpgradeHint() string {
+	return Catalog.Format(msgs.locale, "hostUpgradeHint", nil)
+}
+
+// HostUpgradeCheckBtn says "Check for Updates"
+// in the language the app shows.
+//
+// Button to check local bundles or signed online manifest for remote server
+// updates.
+func HostUpgradeCheckBtn() string { return In(i18n.Locale()).HostUpgradeCheckBtn() }
+
+// HostUpgradeCheckBtn says "Check for Updates"
+// in the language of msgs.
+//
+// Button to check local bundles or signed online manifest for remote server
+// updates.
+func (msgs Messages) HostUpgradeCheckBtn() string {
+	return Catalog.Format(msgs.locale, "hostUpgradeCheckBtn", nil)
+}
+
+// HostUpgradeChecking says "Checking for updates…"
+// in the language the app shows.
+//
+// Status label while checking for remote server updates.
+func HostUpgradeChecking() string { return In(i18n.Locale()).HostUpgradeChecking() }
+
+// HostUpgradeChecking says "Checking for updates…"
+// in the language of msgs.
+//
+// Status label while checking for remote server updates.
+func (msgs Messages) HostUpgradeChecking() string {
+	return Catalog.Format(msgs.locale, "hostUpgradeChecking", nil)
+}
+
+// HostUpgradeRunBtn says "Hot Upgrade Now"
+// in the language the app shows.
+//
+// Primary button to perform a lossless hot upgrade of the remote headless
+// server.
+func HostUpgradeRunBtn() string { return In(i18n.Locale()).HostUpgradeRunBtn() }
+
+// HostUpgradeRunBtn says "Hot Upgrade Now"
+// in the language of msgs.
+//
+// Primary button to perform a lossless hot upgrade of the remote headless
+// server.
+func (msgs Messages) HostUpgradeRunBtn() string {
+	return Catalog.Format(msgs.locale, "hostUpgradeRunBtn", nil)
+}
+
+// HostUpgradeCancelBtn says "Cancel Upgrade"
+// in the language the app shows.
+//
+// Button to cancel a server upgrade while still uploading.
+func HostUpgradeCancelBtn() string { return In(i18n.Locale()).HostUpgradeCancelBtn() }
+
+// HostUpgradeCancelBtn says "Cancel Upgrade"
+// in the language of msgs.
+//
+// Button to cancel a server upgrade while still uploading.
+func (msgs Messages) HostUpgradeCancelBtn() string {
+	return Catalog.Format(msgs.locale, "hostUpgradeCancelBtn", nil)
+}
+
+// HostUpgradeUpToDate says "Up to date"
+// in the language the app shows.
+//
+// Status label when the remote headless server is already at the latest
+// available version.
+func HostUpgradeUpToDate() string { return In(i18n.Locale()).HostUpgradeUpToDate() }
+
+// HostUpgradeUpToDate says "Up to date"
+// in the language of msgs.
+//
+// Status label when the remote headless server is already at the latest
+// available version.
+func (msgs Messages) HostUpgradeUpToDate() string {
+	return Catalog.Format(msgs.locale, "hostUpgradeUpToDate", nil)
+}
+
+// HostUpgradeAvailableLocal says "Local bundle available: {version}"
+// in the language the app shows.
+//
+// Notice when a newer local server bundle is ready for hot upgrade.
+func HostUpgradeAvailableLocal(version string) string {
+	return In(i18n.Locale()).HostUpgradeAvailableLocal(version)
+}
+
+// HostUpgradeAvailableLocal says "Local bundle available: {version}"
+// in the language of msgs.
+//
+// Notice when a newer local server bundle is ready for hot upgrade.
+func (msgs Messages) HostUpgradeAvailableLocal(version string) string {
+	return Catalog.Format(msgs.locale, "hostUpgradeAvailableLocal", map[string]any{"version": version})
+}
+
+// HostUpgradeAvailableRemote says "Online release available: {version}"
+// in the language the app shows.
+//
+// Notice when a newer signed online server release is ready for hot
+// upgrade.
+func HostUpgradeAvailableRemote(version string) string {
+	return In(i18n.Locale()).HostUpgradeAvailableRemote(version)
+}
+
+// HostUpgradeAvailableRemote says "Online release available: {version}"
+// in the language of msgs.
+//
+// Notice when a newer signed online server release is ready for hot
+// upgrade.
+func (msgs Messages) HostUpgradeAvailableRemote(version string) string {
+	return Catalog.Format(msgs.locale, "hostUpgradeAvailableRemote", map[string]any{"version": version})
+}
+
+// HostUpgradeDesktopTooOld says "Online release {target} requires updating Posse on this Mac first (current {desktop})."
+// in the language the app shows.
+//
+// Notice when the online server release is newer than the local desktop
+// Posse version.
+func HostUpgradeDesktopTooOld(target string, desktop string) string {
+	return In(i18n.Locale()).HostUpgradeDesktopTooOld(target, desktop)
+}
+
+// HostUpgradeDesktopTooOld says "Online release {target} requires updating Posse on this Mac first (current {desktop})."
+// in the language of msgs.
+//
+// Notice when the online server release is newer than the local desktop
+// Posse version.
+func (msgs Messages) HostUpgradeDesktopTooOld(target string, desktop string) string {
+	return Catalog.Format(msgs.locale, "hostUpgradeDesktopTooOld", map[string]any{"target": target, "desktop": desktop})
+}
+
+// HostUpgradeDone says "Upgraded to {version}; all terminals preserved."
+// in the language the app shows.
+//
+// Success notice after a lossless hot upgrade completes.
+func HostUpgradeDone(version string) string { return In(i18n.Locale()).HostUpgradeDone(version) }
+
+// HostUpgradeDone says "Upgraded to {version}; all terminals preserved."
+// in the language of msgs.
+//
+// Success notice after a lossless hot upgrade completes.
+func (msgs Messages) HostUpgradeDone(version string) string {
+	return Catalog.Format(msgs.locale, "hostUpgradeDone", map[string]any{"version": version})
+}
+
+// HostUpgradeViewOnlyNote says "Take control of this host to check or run a server upgrade."
+// in the language the app shows.
+//
+// Hint shown when viewing a remote host without desktop control.
+func HostUpgradeViewOnlyNote() string { return In(i18n.Locale()).HostUpgradeViewOnlyNote() }
+
+// HostUpgradeViewOnlyNote says "Take control of this host to check or run a server upgrade."
+// in the language of msgs.
+//
+// Hint shown when viewing a remote host without desktop control.
+func (msgs Messages) HostUpgradeViewOnlyNote() string {
+	return Catalog.Format(msgs.locale, "hostUpgradeViewOnlyNote", nil)
+}
+
+// HostUpgradeFullAppNote says "Full Posse.app updates are managed on the target Mac."
+// in the language the app shows.
+//
+// Read-only hint for full Posse.app remote hosts in the Server Update
+// section.
+func HostUpgradeFullAppNote() string { return In(i18n.Locale()).HostUpgradeFullAppNote() }
+
+// HostUpgradeFullAppNote says "Full Posse.app updates are managed on the target Mac."
+// in the language of msgs.
+//
+// Read-only hint for full Posse.app remote hosts in the Server Update
+// section.
+func (msgs Messages) HostUpgradeFullAppNote() string {
+	return Catalog.Format(msgs.locale, "hostUpgradeFullAppNote", nil)
+}
+
+// HostUpgradeUnmanagedNote says "Only Posse-managed headless servers without a custom executable path support online hot upgrades."
+// in the language the app shows.
+//
+// Read-only hint for unmanaged headless servers or hosts with a custom
+// executable.
+func HostUpgradeUnmanagedNote() string { return In(i18n.Locale()).HostUpgradeUnmanagedNote() }
+
+// HostUpgradeUnmanagedNote says "Only Posse-managed headless servers without a custom executable path support online hot upgrades."
+// in the language of msgs.
+//
+// Read-only hint for unmanaged headless servers or hosts with a custom
+// executable.
+func (msgs Messages) HostUpgradeUnmanagedNote() string {
+	return Catalog.Format(msgs.locale, "hostUpgradeUnmanagedNote", nil)
+}
+
+// HostUpgradeLockNote says "Wait for the server upgrade to finish before changing connection settings."
+// in the language the app shows.
+//
+// Hint in connection settings tab when Save and Reconnect is disabled
+// during a hot upgrade.
+func HostUpgradeLockNote() string { return In(i18n.Locale()).HostUpgradeLockNote() }
+
+// HostUpgradeLockNote says "Wait for the server upgrade to finish before changing connection settings."
+// in the language of msgs.
+//
+// Hint in connection settings tab when Save and Reconnect is disabled
+// during a hot upgrade.
+func (msgs Messages) HostUpgradeLockNote() string {
+	return Catalog.Format(msgs.locale, "hostUpgradeLockNote", nil)
+}
+
 // HostUptimeDays says "{days}d {hours}h"
 // in the language the app shows.
 //

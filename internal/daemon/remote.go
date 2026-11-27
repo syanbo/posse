@@ -11,6 +11,7 @@ import (
 	"slices"
 
 	"posse/internal/rpc"
+	"posse/internal/spawn"
 )
 
 func (d *Daemon) registerRemote(srv *rpc.Server) {
@@ -36,6 +37,10 @@ func (d *Daemon) remoteInfo(context.Context, json.RawMessage) (any, error) {
 		return nil, err
 	}
 	userHome, _ := os.UserHomeDir()
+	serverTag := ""
+	if Edition == "headless" && d.runtime != "" {
+		serverTag = spawn.ServerVersionTag(filepath.Join(d.runtime, "posse"), d.cfg.Home)
+	}
 	return rpc.RemoteInfo{
 		Protocol:     rpc.RemoteProtocol,
 		InstanceID:   d.instanceID,
@@ -46,6 +51,7 @@ func (d *Daemon) remoteInfo(context.Context, json.RawMessage) (any, error) {
 		Build:        Build,
 		Edition:      Edition,
 		Managed:      Edition == "headless" && d.runtime != "",
+		ServerTag:    serverTag,
 		UserHome:     userHome,
 		Capabilities: slices.Clone(rpc.RemoteCapabilities),
 		Features:     rpc.RemoteFeatures(runtime.GOOS, Edition),

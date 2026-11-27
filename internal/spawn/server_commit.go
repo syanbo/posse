@@ -1,6 +1,7 @@
 package spawn
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -92,6 +93,15 @@ func CommitServerVersion(home, stageDir, tag, libName, posseSHA, libSHA string) 
 // ActivateServerVersion 持有 versions/.lock 原子切换 <realHome>/server/current -> versions/<tag>。
 // 若 current 已存在但不是符号链接（如实体目录），直接报错而非在其内部建链。
 func ActivateServerVersion(home, tag string) (string, error) {
+	return ActivateServerVersionContext(context.Background(), home, tag)
+}
+
+// ActivateServerVersionContext 带可取消 ctx 持有 versions/.lock 并原子切换 server/current。
+// 等待锁和切换前均响应 ctx.Done()，防止已交接退出或被取消的进程阻塞或覆盖新版本。
+func ActivateServerVersionContext(ctx context.Context, home, tag string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if home == "" {
 		return "", errors.New("server home required")
 	}
@@ -104,11 +114,14 @@ func ActivateServerVersion(home, tag string) (string, error) {
 	}
 	serverDir := filepath.Join(realHome, "server")
 	versionsDir := filepath.Join(serverDir, "versions")
-	unlock, err := lockDir(versionsDir)
+	unlock, err := lockDirCtx(ctx, versionsDir)
 	if err != nil {
 		return "", err
 	}
 	defer unlock()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 
 	dest := filepath.Join(versionsDir, tag)
 	if !hasManagedMarker(dest) {
