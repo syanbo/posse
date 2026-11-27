@@ -117,6 +117,34 @@ func TestHistoryWatchIndexesWrite(t *testing.T) {
 	t.Fatalf("watch did not index the new session (gen %d)", d.historyGeneration())
 }
 
+func TestHistoryRootsSignatureSymlinkAndCancel(t *testing.T) {
+	realRoot := t.TempDir()
+	linkParent := t.TempDir()
+	linkRoot := filepath.Join(linkParent, "projects")
+	if err := os.Symlink(realRoot, linkRoot); err != nil {
+		t.Fatal(err)
+	}
+	before, ok := historyRootsSignature(context.Background(), []string{linkRoot})
+	if !ok {
+		t.Fatal("initial signature canceled")
+	}
+	if err := os.WriteFile(filepath.Join(realRoot, "session.jsonl"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	after, ok := historyRootsSignature(context.Background(), []string{linkRoot})
+	if !ok {
+		t.Fatal("second signature canceled")
+	}
+	if after == before {
+		t.Fatal("symlinked root did not detect new jsonl file")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, ok := historyRootsSignature(ctx, []string{linkRoot}); ok {
+		t.Fatal("canceled context returned ok=true")
+	}
+}
+
 func waitHistoryWatch(t *testing.T, d *Daemon, want bool) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)

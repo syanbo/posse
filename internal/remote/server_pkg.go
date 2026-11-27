@@ -114,9 +114,6 @@ func ResolveServerPackage(ctx context.Context, opts ServerResolveOptions) (Serve
 	if err != nil {
 		return ServerPackage{}, err
 	}
-	if goos != "darwin" {
-		return ServerPackage{}, fmt.Errorf("automatic server install is currently supported for macOS targets only (got %s/%s)", goos, goarch)
-	}
 	ver := opts.Version
 	if ver == "" {
 		ver = daemon.Version

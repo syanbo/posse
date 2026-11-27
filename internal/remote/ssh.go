@@ -34,6 +34,7 @@ type Options struct {
 	ServerPubKey          string
 	DisableRemoteDownload bool
 	InstallLaunchd        bool
+	InstallSystemd        bool
 	Required              []string
 	config                string
 }
@@ -383,8 +384,8 @@ func parseProbe(data []byte) (rpc.RemoteProbe, error) {
 	if !foundProbe {
 		return p, errors.New("remote Posse discovery unavailable; update remote Posse")
 	}
-	if p.Protocol != rpc.RemoteProtocol || p.Platform != "darwin" {
-		return p, errors.New("incompatible remote Posse; a supported Mac version is required")
+	if p.Protocol != rpc.RemoteProtocol || !supportedRemotePlatform(p.Platform) {
+		return p, errors.New("incompatible remote Posse; a supported macOS or Linux version is required")
 	}
 	if !filepath.IsAbs(p.Home) || !filepath.IsAbs(p.Socket) || strings.ContainsAny(p.Socket, "\x00\r\n:[]%\\$") || len(p.Socket) > 100 {
 		return p, errors.New("unsupported remote home or socket path")
@@ -392,8 +393,12 @@ func parseProbe(data []byte) (rpc.RemoteProbe, error) {
 	return p, nil
 }
 
+func supportedRemotePlatform(platform string) bool {
+	return platform == "darwin" || platform == "linux"
+}
+
 func validateInfo(p rpc.RemoteProbe, info rpc.RemoteInfo, required []string) error {
-	if info.Protocol != rpc.RemoteProtocol || info.Platform != "darwin" || info.InstanceID == "" {
+	if info.Protocol != rpc.RemoteProtocol || !supportedRemotePlatform(info.Platform) || (p.Platform != "" && info.Platform != p.Platform) || info.InstanceID == "" {
 		return errors.New("incompatible remote daemon; update and restart remote Posse")
 	}
 	if filepath.Clean(info.Home) != filepath.Clean(p.Home) {

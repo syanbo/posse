@@ -14,6 +14,16 @@ posse_ts_tags_darwin() {
 	printf '%s\n' "$tags"
 }
 
+posse_ts_tags_linux() {
+	src="${1:-internal/tslink/tslink.go}"
+	tags=$(sed -n 's/^[[:space:]]*BuildTagsLinux[[:space:]]*=[[:space:]]*"\([^"]*\)"/\1/p' "$src")
+	if [ -z "$tags" ]; then
+		echo "读不到 $src 里的 BuildTagsLinux" >&2
+		return 1
+	fi
+	printf '%s\n' "$tags"
+}
+
 # posse_merge_goflags_tags <已有 GOFLAGS> <要追加的 tags CSV>
 # 严格遵循 Go cmd/internal/quoted.Split 与 cmd/go/internal/work.tagsFlag.Set 两层语法：
 # 1. GOFLAGS 外层只把「token 开头」的 '...' 或 "..." 当作引号包裹（中间出现的引号按普通字符保留）；

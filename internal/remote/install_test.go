@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"posse/internal/rpc"
+	"posse/internal/spawn"
 )
 
 func TestParseMissingMarker(t *testing.T) {
@@ -113,5 +114,31 @@ func TestConnectionsReuseFallbackOnStoppedDaemon(t *testing.T) {
 	}
 	if checkCalls != 1 || dialCalls != 2 {
 		t.Fatalf("checkCalls=%d dialCalls=%d, want 1 and 2", checkCalls, dialCalls)
+	}
+}
+
+func TestDecodeCLIResultEnvelope(t *testing.T) {
+	// 真实 CLI `--json` 包装为 {"ok":true,"result":{...}}
+	sysRaw := `{"ok":true,"result":{"unit":"posse-server.service","servicePath":"/home/u/.config/systemd/user/posse-server.service","timerPath":"/home/u/.config/systemd/user/posse-server.timer","installed":true,"enabled":false,"active":false,"linger":"no","note":"enable linger"}}`
+	st, err := decodeCLIResult[spawn.SystemdUserStatus](sysRaw)
+	if err != nil {
+		t.Fatalf("decodeCLIResult systemd: %v", err)
+	}
+	if !st.Installed || st.Unit != "posse-server.service" || st.Linger != "no" || st.Note != "enable linger" {
+		t.Fatalf("decoded systemd = %+v", st)
+	}
+	ldRaw := `{"ok":true,"result":{"label":"com.dengbo.posse.server","plist":"/Users/u/Library/LaunchAgents/com.dengbo.posse.server.plist","installed":true,"loaded":true}}`
+	ld, err := decodeCLIResult[spawn.LaunchAgentStatus](ldRaw)
+	if err != nil || !ld.Loaded || ld.Label != "com.dengbo.posse.server" {
+		t.Fatalf("decoded launchd = %+v err=%v", ld, err)
+	}
+	if _, err := decodeCLIResult[spawn.SystemdUserStatus](`{"ok":false,"error":"permission denied"}`); err == nil {
+		t.Fatal("expected error for ok=false envelope")
+	}
+	if _, err := decodeCLIResult[spawn.SystemdUserStatus](`{"ok":true}`); err == nil {
+		t.Fatal("expected error for empty result")
+	}
+	if _, err := decodeCLIResult[spawn.SystemdUserStatus](`{"installed":true}`); err == nil {
+		t.Fatal("expected error for unwrapped JSON lacking ok=true")
 	}
 }

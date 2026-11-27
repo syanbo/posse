@@ -85,7 +85,7 @@ var zh = [][2]string{
 	{"remote SSH connection is unavailable; reconnect to the host", "SSH 连接已断开，请重新连接主机"},
 	{"directory selection is not available for remote hosts", "远程主机暂不支持选择目录"},
 	{"Posse executable not found on the remote host; run posse remote install or connect with auto-install", "远程主机未找到 Posse 服务端，请运行 posse remote install 或开启自动安装后连接"},
-	{"automatic server install is currently supported for macOS targets only (got %s/%s)", "自动推送无头服务端目前仅支持 macOS 目标机（当前为 {1}/{2}）"},
+	{"incompatible remote Posse; a supported macOS or Linux version is required", "远端 Posse 版本或平台不兼容，需要受支持的 macOS 或 Linux 版本"},
 	{"headless server bundle %s not found locally; run scripts/build-server.sh or pass --file", "本机未找到无头服务端包 {1}，请先运行 scripts/build-server.sh 或通过 --file 指定"},
 	{"server manifest unavailable (HTTP %d); build locally with scripts/build-server.sh or pass --file", "无法获取服务端清单（HTTP {1}），可先在本机运行 scripts/build-server.sh 或通过 --file 指定"},
 	{"server manifest signature verification failed", "服务端清单签名校验失败"},

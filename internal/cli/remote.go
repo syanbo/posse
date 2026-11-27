@@ -123,13 +123,14 @@ func cmdRemoteInstall(e *env, args []string) error {
 	file := fs.String("file", "", "")
 	start := fs.Bool("start", true, "")
 	launchd := fs.Bool("launchd", false, "")
+	systemd := fs.Bool("systemd", false, "")
 	batch := fs.Bool("batch", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
-	if len(pos) != 1 {
-		return errors.New("usage: posse remote install <host> [--file TAR] [--start] [--launchd] [--batch]")
+	if len(pos) != 1 || (*launchd && *systemd) {
+		return errors.New("usage: posse remote install <host> [--file TAR] [--start] [--launchd | --systemd] [--batch]")
 	}
 	h, err := remote.Find(e.home, pos[0])
 	if err != nil {
@@ -142,6 +143,7 @@ func cmdRemoteInstall(e *env, args []string) error {
 	opts := remote.Options{
 		Start:          *start,
 		InstallLaunchd: *launchd,
+		InstallSystemd: *systemd,
 		LocalHome:      e.home,
 		ServerArchive:  *file,
 	}
@@ -169,6 +171,18 @@ func cmdRemoteInstall(e *env, args []string) error {
 			fmt.Fprintf(e.out, "launchd: %s (%s)\n", lstate, res.Launchd.Plist)
 			if res.Launchd.Note != "" {
 				fmt.Fprintf(e.out, "note: %s\n", res.Launchd.Note)
+			}
+		}
+		if res.Systemd != nil {
+			sstate := "enabled and active"
+			if !res.Systemd.Enabled {
+				sstate = "installed (not yet enabled)"
+			} else if !res.Systemd.Active {
+				sstate = "enabled (inactive)"
+			}
+			fmt.Fprintf(e.out, "systemd: %s (%s)\n", sstate, res.Systemd.ServicePath)
+			if res.Systemd.Note != "" {
+				fmt.Fprintf(e.out, "note: %s\n", res.Systemd.Note)
 			}
 		}
 	})

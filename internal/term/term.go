@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -1121,9 +1122,6 @@ func lossyMouse(data []byte) bool {
 
 var sgrReport = regexp.MustCompile(`^\x1b\[<(\d+);\d+;\d+[Mm]`)
 
-// fionread 是 macOS 的 FIONREAD（x/sys 没有导出）：对主端取的是从端还没读的输入字节数。
-const fionread = 0x4004667f
-
 // inputQueued 返回程序还没读的输入字节数，取不到时为 0。
 func (t *Terminal) inputQueued() int {
 	t.pmu.Lock()
@@ -1134,7 +1132,7 @@ func (t *Terminal) inputQueued() int {
 	n := 0
 	if rc, err := t.pty.SyscallConn(); err == nil {
 		rc.Control(func(fd uintptr) {
-			n, _ = unix.IoctlGetInt(int(fd), fionread)
+			n = ptyInputQueued(fd)
 		})
 	}
 	return n
@@ -1202,8 +1200,7 @@ func (t *Terminal) dropStaleMouse() {
 	}
 	if rc, err := t.pty.SyscallConn(); err == nil {
 		rc.Control(func(fd uintptr) {
-			// 在主端 TIOCFLUSH FREAD 清的是从端还没读的输入队列
-			unix.IoctlSetPointerInt(int(fd), unix.TIOCFLUSH, 1)
+			flushPTYInput(fd)
 		})
 	}
 }
@@ -1367,7 +1364,11 @@ func Environ(extra []string) []string {
 	// 判断，要 FORCE_HYPERLINK 才会把 [Image #N]、文件路径输出成可点的链接
 	env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=posse", "FORCE_HYPERLINK=1")
 	if !hasLang {
-		env = append(env, "LANG=en_US.UTF-8")
+		if runtime.GOOS == "linux" {
+			env = append(env, "LANG=C.UTF-8")
+		} else {
+			env = append(env, "LANG=en_US.UTF-8")
+		}
 	}
 	return append(env, extra...)
 }

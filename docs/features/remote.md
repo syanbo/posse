@@ -4,19 +4,21 @@
 
 ## 配置与诊断
 
-目标 Mac 只需开启系统「远程登录」（SSH），**不再要求目标机预先安装或打开 `Posse.app`**。主 Mac 在主机菜单点击远端主机、或通过 CLI 执行 `posse remote install <host>` / `posse remote check <host> --install` 时，若目标 Mac 尚未安装 Posse，会复用同一条已认证的 SSH 连接自动推送轻量无头服务端（`posse` + `libghostty-vt.dylib`）到目标机 `$POSSE_HOME/server/versions/<版本>-<摘要>/`、原子切换 `current` 符号链接并拉起常驻进程；已安装 `Posse.app` 的目标机继续直接复用。
+目标主机支持 **macOS（`darwin/arm64`、`darwin/amd64`）与 Linux（`linux/amd64`、`linux/arm64`，要求 glibc ≥ 2.28，如 Debian 10+、Ubuntu 18.10+、RHEL/Rocky 8+、Fedora；暂不支持 musl/Alpine）**，只需开启系统 SSH，**不再要求目标机预先安装或打开 `Posse.app`**。主 Mac 在主机菜单点击远端主机、或通过 CLI 执行 `posse remote install <host>` / `posse remote check <host> --install` 时，若目标机尚未安装 Posse，会复用同一条已认证的 SSH 连接自动推送轻量无头服务端（`posse` + `libghostty-vt.dylib` / `libghostty-vt.so`）到目标机 `$POSSE_HOME/server/versions/<版本>-<摘要>/`、原子切换 `current` 符号链接并拉起常驻进程；已安装 `Posse.app` 的目标 Mac 继续直接复用。
 
 ```sh
 posse remote add office office-mac
+posse remote add linux-box dev@linux-dev.local
 posse remote add studio user@studio.local --port 22 --home '~/.posse' --executable '/Applications/Posse.app/Contents/MacOS/Posse'
 posse remote list
 posse remote install office [--file build/server/posse-server-0.1.54-darwin-arm64.tar.gz] [--launchd]
+posse remote install linux-box [--file build/server/posse-server-0.1.54-linux-amd64.tar.gz] [--systemd]
 posse remote check office [--start] [--install]
 ```
 
 目标可以是 `~/.ssh/config` 的 Host 别名，沿用系统 OpenSSH 的 IdentityFile、ssh-agent、Keychain、known_hosts 和 ProxyJump。Posse 默认不转发 ssh-agent，不执行配置中的额外 LocalForward/RemoteForward 或 LocalCommand。未知主机显示 SSH 的指纹确认，主机密钥变化直接失败；密码和私钥口令仅经过本次连接的私有认证通道，不写入配置或日志。
 
-`remote check` 默认只探测、不启动也不安装远端 daemon；加 `--start` 在未运行时拉起；加 `--install` 在目标机未安装 Posse 时自动推送无头服务端并拉起（也可通过 `--file` 指定本机压缩包，或通过 `scripts/build-server.sh` 离线构建）。`remote install` 显式推送安装或热升级远端无头服务端：目标 daemon 已在运行时自动执行 `daemon.handoff` 无损交接（终端不断线）；附加 `--launchd` 时会在目标 Mac 写入 Aqua 会话 `LaunchAgent`（也可在目标 Mac 本机用 `posse server install/status/uninstall --launchd` 管理；卸载自启不停止运行中的 daemon）。未运行 daemon 时 `--launchd` 优先由 Aqua 会话拉起以访问登录钥匙串；若目标 Mac 尚未进行图形登录（`fdesetup authrestart` 仅跳过 FileVault 解锁，不自动建立 Aqua 会话），plist 会保留待下次图形登录加载，本次仍回退经 SSH 启动。`--batch` 禁止认证提示，适合已有密钥认证和信任记录的检查。Ctrl-C 取消建连。
+`remote check` 默认只探测、不启动也不安装远端 daemon；加 `--start` 在未运行时拉起；加 `--install` 在目标机未安装 Posse 时自动推送无头服务端并拉起（也可通过 `--file` 指定本机压缩包，或通过 `scripts/build-server.sh --os linux --all` 离线构建）。`remote install` 显式推送安装或热升级远端无头服务端：目标 daemon 已在运行时自动执行 `daemon.handoff` 无损交接（终端不断线）；macOS 目标附加 `--launchd` 时写入 Aqua 会话 `LaunchAgent`（本机可用 `posse server install/status/uninstall --launchd` 管理），Linux 目标附加 `--systemd` 时写入 `Type=oneshot` + `KillMode=process` 的 `systemd --user` 服务与定时器（本机可用 `posse server install/status/uninstall --systemd` 管理；卸载自启不停止运行中的 daemon 或终端；如需在最后一个 SSH 退出后继续常驻并在开机时自动拉起，需在目标 Linux 上执行 `loginctl enable-linger $USER`）。未运行 daemon 时优先由服务拉起，若目标机当前无活跃 Aqua 会话或 systemd user bus，服务文件保留，本次仍回退经 SSH 启动（`--start=false --systemd` 仅启用单元不立即启动）。`--batch` 禁止认证提示，适合已有密钥认证和信任记录的检查。Ctrl-C 取消建连。
 
 诊断结果来自隧道内的 `daemon.info`，包含实际运行的版本、构建、构建形态（`edition`: `full` / `headless`）、是否托管无头安装（`managed`）、远端用户主目录（`userHome`）、特性集（`features`）、home、实例 ID 和已实现的能力；CLI 版本不会代替 daemon 能力。当前 daemon 宣布 `rpc.v1`、`terminal.stream.v1`、`desktop.control.v1`、`files.v1` 和 `git.v1`；桌面窗口建连时要求完整能力集，`remote check` 仍只要求 `rpc.v1` 以输出远端实际能力诊断。托管的 `headless` 节点（`managed=true`）若缺少必需能力，或在重连/健康复用时检测到严格更新的版本（或同版本构建时间更晚且 commit 不同的本地包），带自动安装的建连会自动推送新版并热交接（绝不降级，仅在尚未切换实例且原实例通过完整复检时保留连接；热交接后激活失败会明确报错）；非托管二进制与完整 `Posse.app` 节点不自动换包。
 

@@ -67,7 +67,7 @@ fi
 # Apple 芯片和 Intel 各一个包、各一份清单（桌面端 + 无头服务端分别校验，清单最后传）。
 # 线上清单已是这个版本的平台在重试时跳过，不重新打包覆盖清单签过的文件，只补没发完的平台。
 archs=
-server_archs=
+server_targets=
 manifest=$(mktemp)
 trap 'rm -f "$manifest"' EXIT
 for arch in arm64 amd64; do
@@ -95,12 +95,16 @@ for arch in arm64 amd64; do
 	else
 		archs="$archs $arch"
 	fi
+done
 
-	scode=$(curl -sS -o "$manifest" -w '%{http_code}' "$url/server/server-darwin-$arch.json" || true)
+for target in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64; do
+	os_t=${target%/*}
+	arch=${target#*/}
+	scode=$(curl -sS -o "$manifest" -w '%{http_code}' "$url/server/server-$os_t-$arch.json" || true)
 	case $scode in
 	200)
-		verified=$(go run ./tools/servermanifest --verify --manifest "$manifest" --os darwin --arch "$arch" --base-url "$url/server" --public-key "$pubkey") || {
-			echo "线上 server/server-darwin-$arch.json 签名或格式无效，拒绝跳过" >&2
+		verified=$(go run ./tools/servermanifest --verify --manifest "$manifest" --os "$os_t" --arch "$arch" --base-url "$url/server" --public-key "$pubkey") || {
+			echo "线上 server/server-$os_t-$arch.json 签名或格式无效，拒绝跳过" >&2
 			exit 1
 		}
 		spublished=$(printf '%s\n' "$verified" | awk -F '\t' '{print $1}')
@@ -111,33 +115,41 @@ for arch in arm64 amd64; do
 		sarchive_url=
 		;;
 	*)
-		echo "读不到线上的 server/server-darwin-$arch.json（HTTP ${scode}）" >&2
+		echo "读不到线上的 server/server-$os_t-$arch.json（HTTP ${scode}）" >&2
 		exit 1
 		;;
 	esac
 	if [ -n "$spublished" ]; then
 		snewest=$(printf '%s\n%s\n' "$spublished" "$version" | sort -V | tail -1)
 		if [ "$snewest" != "$version" ] || { [ "$spublished" = "$version" ] && [ -n "$bump" ]; }; then
-			echo "无头服务端 darwin-$arch 线上已经是 ${spublished}，$version 要比它新" >&2
+			echo "无头服务端 $os_t-$arch 线上已经是 ${spublished}，$version 要比它新" >&2
 			exit 1
 		fi
 		if [ "$spublished" = "$version" ]; then
-			# 清单已验签且同版本，再确认其指向的归档对象在线上可达
-			if curl -fsSI "$sarchive_url" >/dev/null 2>&1; then
-				echo "无头服务端 darwin-$arch 已经发布了 ${version}，跳过"
-			else
-				echo "无头服务端 darwin-$arch 清单已为 ${version} 但归档不可访问（$sarchive_url），重新补发" >&2
-				server_archs="$server_archs $arch"
-			fi
+			# 清单已验签且同版本，再严格核对归档对象 HTTP 状态：仅 200 跳过，仅明确 404 补传，其余 5xx/超时一律报错不覆盖
+			acode=$(curl -sS -o /dev/null -w '%{http_code}' -I "$sarchive_url" || true)
+			case $acode in
+			200)
+				echo "无头服务端 ${os_t}-${arch} 已经发布了 ${version}，跳过"
+				;;
+			404)
+				echo "无头服务端 ${os_t}-${arch} 清单已为 ${version} 但归档缺失（404: ${sarchive_url}），重新补发" >&2
+				server_targets="$server_targets $target"
+				;;
+			*)
+				echo "无法确认无头服务端 ${os_t}-${arch} 归档可达性（HTTP ${acode}: ${sarchive_url}），拒绝覆盖已发布版本" >&2
+				exit 1
+				;;
+			esac
 		else
-			server_archs="$server_archs $arch"
+			server_targets="$server_targets $target"
 		fi
 	else
-		server_archs="$server_archs $arch"
+		server_targets="$server_targets $target"
 	fi
 done
-if [ -z "$archs" ] && [ -z "$server_archs" ]; then
-	echo "$version 两个平台桌面版与无头服务端都已发布" >&2
+if [ -z "$archs" ] && [ -z "$server_targets" ]; then
+	echo "$version 所有平台桌面版与无头服务端都已发布" >&2
 	exit 1
 fi
 # 打包、公证要一分钟，先确认能上传
@@ -200,21 +212,26 @@ if [ -n "$archs" ]; then
 	done
 fi
 
-if [ -n "$server_archs" ]; then
+if [ -n "$server_targets" ]; then
 	commit=$(git rev-parse --short=7 HEAD)
 	server_out="$out/server"
 	mkdir -p "$server_out"
 	server_failed=0
-	publish_server_arch() {
-		arch="$1"
+	publish_server_target() {
+		os_t="$1"
+		arch="$2"
 		work=$(mktemp -d "${TMPDIR:-/tmp}/posse-release-server.XXXXXX")
-		archive_name="posse-server-$version-darwin-$arch.tar.gz"
+		archive_name="posse-server-$version-$os_t-$arch.tar.gz"
 		archive="$work/$archive_name"
-		smanifest="$work/server-darwin-$arch.json"
-		if scripts/build-server.sh --require-signing --arch "$arch" --version "$version" --commit "$commit" --out "$work" &&
+		smanifest="$work/server-$os_t-$arch.json"
+		sign_flag=""
+		if [ "$os_t" = "darwin" ]; then
+			sign_flag="--require-signing"
+		fi
+		if scripts/build-server.sh $sign_flag --os "$os_t" --arch "$arch" --version "$version" --commit "$commit" --out "$work" &&
 			MYGO_UPDATER_PRIVATE_KEY=$(cat "$key") go run ./tools/servermanifest \
 				--archive "$archive" \
-				--os darwin \
+				--os "$os_t" \
 				--arch "$arch" \
 				--version "$version" \
 				--commit "$commit" \
@@ -222,7 +239,7 @@ if [ -n "$server_archs" ]; then
 				--public-key "$pubkey" \
 				--out "$smanifest" &&
 			put "server/$archive_name" "$archive" application/gzip &&
-			put "server/server-darwin-$arch.json" "$smanifest" application/json no-cache; then
+			put "server/server-$os_t-$arch.json" "$smanifest" application/json no-cache; then
 			cp -f "$archive" "${archive}.sha256" "$smanifest" "$server_out/"
 			rm -rf "$work"
 			return 0
@@ -230,14 +247,16 @@ if [ -n "$server_archs" ]; then
 		rm -rf "$work"
 		return 1
 	}
-	for arch in $server_archs; do
-		if ! publish_server_arch "$arch"; then
-			echo "无头服务端 darwin-$arch 发布失败，继续尝试其余架构" >&2
+	for target in $server_targets; do
+		os_t=${target%/*}
+		arch=${target#*/}
+		if ! publish_server_target "$os_t" "$arch"; then
+			echo "无头服务端 $os_t-$arch 发布失败，继续尝试其余平台" >&2
 			server_failed=1
 		fi
 	done
 	if [ "$server_failed" -ne 0 ]; then
-		echo "部分无头服务端架构发布失败，请修复后不带参数重跑 scripts/release.sh 补发" >&2
+		echo "部分无头服务端平台发布失败，请修复后不带参数重跑 scripts/release.sh 补发" >&2
 		exit 1
 	fi
 fi

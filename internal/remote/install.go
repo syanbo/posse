@@ -22,6 +22,7 @@ const (
 	installedMarker = "POSSE_REMOTE_INSTALLED:"
 	activatedMarker = "POSSE_REMOTE_ACTIVATED:"
 	launchdMarker   = "POSSE_REMOTE_LAUNCHD:"
+	systemdMarker   = "POSSE_REMOTE_SYSTEMD:"
 )
 
 // RemoteNotInstalledError 表示目标主机上未找到 Posse 可执行文件，同时带回远端系统、架构与解析后的 home。
@@ -55,6 +56,7 @@ type InstallResult struct {
 	HandedOff  bool                     `json:"handedOff"`
 	Started    bool                     `json:"started"`
 	Launchd    *spawn.LaunchAgentStatus `json:"launchd,omitempty"`
+	Systemd    *spawn.SystemdUserStatus `json:"systemd,omitempty"`
 }
 
 func parseMissing(line []byte) (*RemoteNotInstalledError, bool) {
@@ -245,6 +247,33 @@ func installLaunchdCommand(exePath, home string) string {
 	return "/bin/sh -c " + shellQuote(script)
 }
 
+// decodeCLIResult 解包 posse CLI `--json` 的 {"ok":true,"result":...} 外壳并解码为目标类型。
+func decodeCLIResult[T any](raw string) (T, error) {
+	var zero T
+	var env struct {
+		OK     bool            `json:"ok"`
+		Error  string          `json:"error"`
+		Result json.RawMessage `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(raw), &env); err != nil {
+		return zero, err
+	}
+	if !env.OK {
+		if env.Error != "" {
+			return zero, errors.New(env.Error)
+		}
+		return zero, errors.New("remote command returned ok=false")
+	}
+	if len(bytes.TrimSpace(env.Result)) == 0 || string(bytes.TrimSpace(env.Result)) == "null" {
+		return zero, errors.New("remote command returned empty result")
+	}
+	var out T
+	if err := json.Unmarshal(env.Result, &out); err != nil {
+		return zero, err
+	}
+	return out, nil
+}
+
 func (s *Session) installLaunchd(ctx context.Context, exePath, home string) (*spawn.LaunchAgentStatus, error) {
 	out, err := s.command(ctx, installLaunchdCommand(exePath, home))
 	if err != nil {
@@ -254,9 +283,51 @@ func (s *Session) installLaunchd(ctx context.Context, exePath, home string) (*sp
 	if err != nil {
 		return nil, fmt.Errorf("parse remote launchd status failed: %w", err)
 	}
-	var st spawn.LaunchAgentStatus
-	if err := json.Unmarshal([]byte(raw), &st); err != nil {
+	st, err := decodeCLIResult[spawn.LaunchAgentStatus](raw)
+	if err != nil {
 		return nil, fmt.Errorf("parse remote launchd status failed: %w", err)
+	}
+	if st.Label == "" || st.Plist == "" {
+		return nil, errors.New("parse remote launchd status failed: missing label or plist")
+	}
+	return &st, nil
+}
+
+func installSystemdCommand(exePath, home string, noStart bool) string {
+	homeExpr := `"$HOME/.posse"`
+	if home != "" {
+		homeExpr = remotePath(home)
+	}
+	extra := ""
+	if noStart {
+		extra = " --no-start"
+	}
+	script := "set -u\n" +
+		"export POSSE_HOME=" + homeExpr + "\n" +
+		"unset POSSE_SOCKET\n" +
+		"out=$(" + remotePath(exePath) + " server install --systemd" + extra + " --home \"$POSSE_HOME\" --json 2>&1) || {\n" +
+		"  printf '%s\\n' \"$out\" >&2\n" +
+		"  exit 1\n" +
+		"}\n" +
+		"printf '%s%s\\n' " + shellQuote(systemdMarker) + " \"$out\"\n"
+	return "/bin/sh -c " + shellQuote(script)
+}
+
+func (s *Session) installSystemd(ctx context.Context, exePath, home string, noStart bool) (*spawn.SystemdUserStatus, error) {
+	out, err := s.command(ctx, installSystemdCommand(exePath, home, noStart))
+	if err != nil {
+		return nil, fmt.Errorf("remote systemd install failed: %w", err)
+	}
+	raw, err := parseSingleMarker(out, systemdMarker)
+	if err != nil {
+		return nil, fmt.Errorf("parse remote systemd status failed: %w", err)
+	}
+	st, err := decodeCLIResult[spawn.SystemdUserStatus](raw)
+	if err != nil {
+		return nil, fmt.Errorf("parse remote systemd status failed: %w", err)
+	}
+	if st.Unit == "" || st.ServicePath == "" {
+		return nil, errors.New("parse remote systemd status failed: missing unit or servicePath")
 	}
 	return &st, nil
 }
@@ -380,11 +451,20 @@ func Install(ctx context.Context, h Host, opts Options) (InstallResult, error) {
 	}
 
 	opts.report(StagePackage, 0)
+	if opts.InstallLaunchd && opts.InstallSystemd {
+		return InstallResult{}, errors.New("cannot specify both --launchd and --systemd")
+	}
 	pkg, err := opts.resolveServer(ctx, targetOS, targetArch)
 	if err != nil {
 		return InstallResult{}, err
 	}
 	defer pkg.Close()
+	if opts.InstallLaunchd && pkg.OS != "darwin" {
+		return InstallResult{}, fmt.Errorf("--launchd is only supported on macOS targets (got %s)", pkg.OS)
+	}
+	if opts.InstallSystemd && pkg.OS != "linux" {
+		return InstallResult{}, fmt.Errorf("--systemd is only supported on Linux targets (got %s)", pkg.OS)
+	}
 
 	opts.report(StageUpload, 0)
 	exePath, err := s.stageAndCommitServer(ctx, canonicalHome, pkg, opts.Progress)
@@ -425,21 +505,39 @@ func Install(ctx context.Context, h Host, opts Options) (InstallResult, error) {
 			}
 			res.Launchd = st
 		}
+		if opts.InstallSystemd {
+			st, err := s.installSystemd(ctx, exePath, canonicalHome, false)
+			if err != nil {
+				return res, err
+			}
+			res.Systemd = st
+		}
 		return res, nil
 	}
 
-	// 未运行且请求 LaunchAgent：先切 current 并安装 LaunchAgent，若 Aqua 会话活跃则优先等待由 Aqua 拉起 daemon。
-	if opts.InstallLaunchd {
+	// 未运行且请求 LaunchAgent / systemd：先切 current 并安装服务，若用户会话活跃则优先等待服务拉起 daemon。
+	if opts.InstallLaunchd || opts.InstallSystemd {
 		if err := s.activateServer(ctx, exePath, canonicalHome, pkg.Tag); err != nil {
 			return res, err
 		}
-		st, err := s.installLaunchd(ctx, exePath, canonicalHome)
-		if err != nil {
-			return res, err
+		waitStarted := false
+		if opts.InstallLaunchd {
+			st, err := s.installLaunchd(ctx, exePath, canonicalHome)
+			if err != nil {
+				return res, err
+			}
+			res.Launchd = st
+			waitStarted = st.Loaded
+		} else {
+			st, err := s.installSystemd(ctx, exePath, canonicalHome, !opts.Start)
+			if err != nil {
+				return res, err
+			}
+			res.Systemd = st
+			waitStarted = st.Active
 		}
-		res.Launchd = st
 		if opts.Start {
-			if st.Loaded {
+			if waitStarted {
 				deadline := time.Now().Add(5 * time.Second)
 				for {
 					p, perr := s.probeAt(ctx, exePath, canonicalHome, false)
@@ -458,7 +556,7 @@ func Install(ctx context.Context, h Host, opts Options) (InstallResult, error) {
 					}
 				}
 			}
-			// 无活跃 Aqua 会话或 RunAtLoad 未在窗口内拉起时，回退经 SSH 启动以保证当前可用。
+			// 无活跃用户会话或服务未在窗口内拉起时，回退经 SSH 启动以保证当前可用。
 			p, err := s.probeAt(ctx, exePath, canonicalHome, true)
 			if err != nil {
 				return res, err

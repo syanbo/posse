@@ -39,6 +39,20 @@ func TestDiscoveryQuotesAndNoise(t *testing.T) {
 	if err != nil || got.Socket != p.Socket {
 		t.Fatalf("%+v %v", got, err)
 	}
+	// Linux 平台探针与握手同样受支持，且平台不一致时拒绝
+	lp := rpc.RemoteProbe{Protocol: rpc.RemoteProtocol, Platform: "linux", Home: "/home/dev/.posse", Socket: "/home/dev/.posse/possed.sock", Running: true}
+	lb, _ := json.Marshal(lp)
+	if lgot, lerr := parseProbe(append([]byte(probeMarker), lb...)); lerr != nil || lgot.Platform != "linux" {
+		t.Fatalf("linux probe = %+v, err=%v", lgot, lerr)
+	}
+	linfo := rpc.RemoteInfo{Protocol: rpc.RemoteProtocol, Platform: "linux", Home: lp.Home, InstanceID: "lin-1", Capabilities: []string{"rpc.v1"}}
+	if err := validateInfo(lp, linfo, []string{"rpc.v1"}); err != nil {
+		t.Fatalf("linux validateInfo failed: %v", err)
+	}
+	linfo.Platform = "darwin"
+	if err := validateInfo(lp, linfo, []string{"rpc.v1"}); err == nil {
+		t.Fatal("mismatched probe/info platform accepted")
+	}
 	if _, err := parseProbe([]byte(probeMarker + string(b) + "\n" + probeMarker + string(b))); err == nil {
 		t.Fatal("duplicate response accepted")
 	}

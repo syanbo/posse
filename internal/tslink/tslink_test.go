@@ -482,7 +482,7 @@ func TestNodeRealStartIdempotentAndFailedStartKeepsOwnedDir(t *testing.T) {
 }
 
 func TestBuildTagsPreserveRequiredFeatures(t *testing.T) {
-	for name, tags := range map[string]string{"darwin": BuildTagsDarwin, "android": BuildTagsAndroid} {
+	for name, tags := range map[string]string{"darwin": BuildTagsDarwin, "linux": BuildTagsLinux, "android": BuildTagsAndroid} {
 		// 必须裁掉 logtail，防止向 Tailscale 上传日志
 		if !strings.Contains(tags, "ts_omit_logtail") {
 			t.Errorf("%s tags missing ts_omit_logtail", name)
@@ -568,6 +568,10 @@ func TestBuildTagsSyncAcrossMobileAndScripts(t *testing.T) {
 	gotExtracted := runSh(`. scripts/ts-tags.sh && posse_ts_tags_darwin`)
 	if gotExtracted != BuildTagsDarwin {
 		t.Fatalf("ts-tags.sh extracted %q, want %q", gotExtracted, BuildTagsDarwin)
+	}
+	gotLinux := runSh(`. scripts/ts-tags.sh && posse_ts_tags_linux`)
+	if gotLinux != BuildTagsLinux {
+		t.Fatalf("ts-tags.sh linux extracted %q, want %q", gotLinux, BuildTagsLinux)
 	}
 
 	cases := []struct {

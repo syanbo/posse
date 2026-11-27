@@ -3,6 +3,7 @@
 package agent
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
@@ -11,6 +12,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -459,7 +462,45 @@ func UserShell() string {
 	if sh := os.Getenv("SHELL"); sh != "" {
 		return sh
 	}
-	return "/bin/zsh"
+	if runtime.GOOS == "darwin" {
+		return "/bin/zsh"
+	}
+	if sh := passwdShell(os.Getuid()); sh != "" {
+		return sh
+	}
+	for _, cand := range []string{"/bin/bash", "/usr/bin/bash", "/bin/zsh", "/bin/sh"} {
+		if info, err := os.Stat(cand); err == nil && !info.IsDir() {
+			return cand
+		}
+	}
+	return "/bin/sh"
+}
+
+func passwdShell(uid int) string {
+	f, err := os.Open("/etc/passwd")
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	want := strconv.Itoa(uid)
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Split(line, ":")
+		if len(fields) >= 7 && fields[2] == want {
+			sh := strings.TrimSpace(fields[6])
+			if sh != "" && !strings.HasSuffix(sh, "/nologin") && !strings.HasSuffix(sh, "/false") {
+				if info, err := os.Stat(sh); err == nil && !info.IsDir() {
+					return sh
+				}
+			}
+			break
+		}
+	}
+	return ""
 }
 
 // Quote 用单引号转义，适用于 sh/bash/zsh。

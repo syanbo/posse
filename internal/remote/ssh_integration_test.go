@@ -225,7 +225,7 @@ ready:
 		t.Fatalf("explicit start: %v", err)
 	}
 	started.Close()
-	stoppedProbe.Platform = "linux"
+	stoppedProbe.Platform = "freebsd"
 	unsupportedJSON, _ := json.Marshal(stoppedProbe)
 	startMarker := filepath.Join(dir, "unexpected-start")
 	unsupportedScript := "#!/bin/sh\nif test \"$3\" = --start; then touch " + shellQuote(startMarker) + "; fi\nprintf '%s\\n' " + shellQuote(probeMarker+string(unsupportedJSON)) + "\n"

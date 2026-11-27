@@ -55,7 +55,14 @@ posse server uninstall --launchd
 - **R2 发布接入**：`scripts/release.sh` 在发布桌面版的同时，针对 `darwin/arm64` 与 `darwin/amd64` 分别校验 `server/server-darwin-<arch>.json`、以 `scripts/build-server.sh --require-signing` 构建 Developer ID 签名压缩包，调用 `tools/servermanifest` 使用同一份 `mygo-update.key`（`MYGO_UPDATER_PRIVATE_KEY`）签发 Ed25519 清单并核对 `mygo.json` 的 `updates.publicKey`，按先包后清单的顺序上传至 R2 `posse-updates/server/`（支持断点重试跳过已发架构）。
 - **钥匙串与开机常驻（Mac 打包机场景）**：`posse server install --launchd`（及 `posse remote install <host> --launchd`）在 `~/Library/LaunchAgents/` 写入 Aqua 会话 `LaunchAgent`（`RunAtLoad` + `StartInterval=60` + `ProcessType=Interactive`，不设 `KeepAlive`，托管无头模式固定启动 `$POSSE_HOME/server/current/posse daemon start` 并传入 `POSSE_HOME`）。首次无人值守部署且未运行 daemon 时优先经 Aqua LaunchAgent 拉起；若当前未登录 GUI（无活跃 Aqua 会话），plist 保留待下次 macOS 图形登录生效（`fdesetup authrestart` 只跳过 FileVault 磁盘解锁，Aqua 会话与登录钥匙串仍需图形自动登录或交互登录）。卸载与查询对应 `posse server uninstall --launchd` 与 `posse server status --launchd`（卸载自启不停止已运行的 daemon）。
 
-## 4. 后续规划（Phase 3）
+## 4. 已落地 Linux 无头节点与 0 `mygo` 依赖（Phase 3）
 
-- **彻底去 `mygo` 依赖**：替换 `internal/daemon/history_watch.go` 的 `mygo.WatchFiles`，使 headless 构建达到 0 `mygo` 依赖。
-- **Linux 无头节点**：补齐 `pidfd` 进程退出监视、`TCFLSH`/`FIONREAD` 平台化、`desk` 桩函数、`procmem_linux.go`（`/proc`）、`UserShell`/`LANG`、`BuildTagsLinux`、`systemd --user` 托管与 `ssh.go` 放开 `Platform == "linux"`。
+- **彻底去 `mygo` 依赖**：`internal/daemon/history_watch.go` 改用轻量目录树摘要轮询与防抖（不占额外 kqueue/inotify 描述符），`headless` 构建彻底实现 0 `github.com/egoist/mygo` 依赖。
+- **Linux 平台适配**：
+  - `internal/term`：`watch_linux.go` 使用 `pidfd_open` + `poll`（旧内核 `ENOSYS` 回退 `kill(pid, 0)` 轮询）监视交接进程退出；`pty_ioctl_linux.go` 使用 `TIOCINQ` 与 `TCFLSH`/`TCIFLUSH`；缺省 `LANG` 在 Linux 上回退 `C.UTF-8`。
+  - `internal/agent`：`UserShell()` 在 Linux 缺 `SHELL` 时依次读取 `/etc/passwd` 与 `/bin/bash` → `/bin/sh`，不再硬编码 `/bin/zsh`。
+  - `internal/procmem/procmem_linux.go`：基于 `/proc/<pid>/smaps_rollup`（PSS）、`status`（VmRSS）、`task/*/children`、`exe`/`cmdline`、`cwd`、`fd` 实现全套进程内存与上下文查询。
+  - `internal/desk/run_other.go`：非 macOS 桌面采集子进程桩函数。
+  - `internal/spawn/runtime_linux.go`：通过 `/proc/[0-9]*/exe` 识别活跃无头版本目录，使 `server/versions` 旧版本可按引用回收。
+- **`systemd --user` 托管**：`internal/spawn/systemd.go`、`posse server install/status/uninstall --systemd` 与 `posse remote install <host> --systemd` 写入 `Type=oneshot` + `KillMode=process` 的 `<unit>.service` 和周期 `<unit>.timer`，保证 `daemon.handoff` 无损热交接与卸载都不会误杀运行中的常驻进程和终端；SSH 会话无活跃 user bus 时保留单元文件并提示启用 linger。
+- **构建、远端接入与发布**：`internal/tslink.BuildTagsLinux` 与 `scripts/ts-tags.sh`（`posse_ts_tags_linux`）、`internal/remote` 放开 `darwin`/`linux` 探针与自动安装、`scripts/build-server.sh --os linux --all`（含 `libghostty-vt.so` SHA-256 核验与 ELF 架构校验）以及 `scripts/release.sh` 四平台 R2 发布（`darwin/arm64`、`darwin/amd64`、`linux/amd64`、`linux/arm64`）。

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -22,17 +23,48 @@ func resolveServerHomeFlag(raw string) string {
 func cmdServerInstall(e *env, args []string) error {
 	fs := flag.NewFlagSet("server install", flag.ContinueOnError)
 	launchd := fs.Bool("launchd", false, "")
+	systemd := fs.Bool("systemd", false, "")
+	noStart := fs.Bool("no-start", false, "")
 	home := fs.String("home", e.home, "")
 	interval := fs.Int("interval", 60, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
-	if len(pos) != 0 || !*launchd {
-		return errors.New("usage: posse server install --launchd [--interval SEC] [--home DIR]")
+	if len(pos) != 0 || (*launchd == *systemd) {
+		return errors.New("usage: posse server install (--launchd | --systemd) [--interval SEC] [--no-start] [--home DIR]")
+	}
+	if *launchd && runtime.GOOS != "darwin" {
+		return errors.New("--launchd is only supported on macOS")
+	}
+	if *systemd && runtime.GOOS != "linux" {
+		return errors.New("--systemd is only supported on Linux")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+	if *systemd {
+		st, err := spawn.InstallSystemdUser(ctx, spawn.SystemdUserOptions{
+			Home:     resolveServerHomeFlag(*home),
+			Interval: *interval,
+			NoStart:  *noStart,
+		})
+		if err != nil {
+			return err
+		}
+		return e.emit(st, func() {
+			state := "installed and enabled"
+			if !st.Enabled {
+				state = "installed (not yet enabled)"
+			}
+			fmt.Fprintf(e.out, "systemd user service %s\nunit: %s\nservice: %s\ntimer: %s\nexecutable: %s\nhome: %s\n", state, st.Unit, st.ServicePath, st.TimerPath, st.Executable, st.Home)
+			if st.Linger != "" {
+				fmt.Fprintf(e.out, "linger: %s\n", st.Linger)
+			}
+			if st.Note != "" {
+				fmt.Fprintf(e.out, "note: %s\n", st.Note)
+			}
+		})
+	}
 	st, err := spawn.InstallLaunchAgent(ctx, spawn.LaunchAgentOptions{
 		Home:     resolveServerHomeFlag(*home),
 		Interval: *interval,
@@ -55,16 +87,32 @@ func cmdServerInstall(e *env, args []string) error {
 func cmdServerUninstall(e *env, args []string) error {
 	fs := flag.NewFlagSet("server uninstall", flag.ContinueOnError)
 	launchd := fs.Bool("launchd", false, "")
+	systemd := fs.Bool("systemd", false, "")
 	home := fs.String("home", e.home, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
-	if len(pos) != 0 || !*launchd {
-		return errors.New("usage: posse server uninstall --launchd [--home DIR]")
+	if len(pos) != 0 || (*launchd == *systemd) {
+		return errors.New("usage: posse server uninstall (--launchd | --systemd) [--home DIR]")
+	}
+	if *launchd && runtime.GOOS != "darwin" {
+		return errors.New("--launchd is only supported on macOS")
+	}
+	if *systemd && runtime.GOOS != "linux" {
+		return errors.New("--systemd is only supported on Linux")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+	if *systemd {
+		st, err := spawn.UninstallSystemdUser(ctx, spawn.SystemdUserOptions{Home: resolveServerHomeFlag(*home)})
+		if err != nil {
+			return err
+		}
+		return e.emit(st, func() {
+			fmt.Fprintf(e.out, "systemd user service removed\nunit: %s\nservice: %s\ntimer: %s\n", st.Unit, st.ServicePath, st.TimerPath)
+		})
+	}
 	st, err := spawn.UninstallLaunchAgent(ctx, spawn.LaunchAgentOptions{Home: resolveServerHomeFlag(*home)})
 	if err != nil {
 		return err
@@ -76,17 +124,40 @@ func cmdServerUninstall(e *env, args []string) error {
 
 func cmdServerStatus(e *env, args []string) error {
 	fs := flag.NewFlagSet("server status", flag.ContinueOnError)
-	launchd := fs.Bool("launchd", true, "")
+	launchd := fs.Bool("launchd", false, "")
+	systemd := fs.Bool("systemd", false, "")
 	home := fs.String("home", e.home, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
-	if len(pos) != 0 || !*launchd {
-		return errors.New("usage: posse server status [--launchd] [--home DIR]")
+	if len(pos) != 0 || (*launchd && *systemd) {
+		return errors.New("usage: posse server status [--launchd | --systemd] [--home DIR]")
 	}
+	if *launchd && runtime.GOOS != "darwin" {
+		return errors.New("--launchd is only supported on macOS")
+	}
+	if *systemd && runtime.GOOS != "linux" {
+		return errors.New("--systemd is only supported on Linux")
+	}
+	useSystemd := *systemd || (!*launchd && runtime.GOOS == "linux")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+	if useSystemd {
+		st, err := spawn.QuerySystemdUser(ctx, spawn.SystemdUserOptions{Home: resolveServerHomeFlag(*home)})
+		if err != nil {
+			return err
+		}
+		return e.emit(st, func() {
+			fmt.Fprintf(e.out, "unit: %s\nservice: %s\ntimer: %s\ninstalled: %v\nenabled: %v\nactive: %v\nhome: %s\n", st.Unit, st.ServicePath, st.TimerPath, st.Installed, st.Enabled, st.Active, st.Home)
+			if st.Linger != "" {
+				fmt.Fprintf(e.out, "linger: %s\n", st.Linger)
+			}
+			if st.Note != "" {
+				fmt.Fprintf(e.out, "note: %s\n", st.Note)
+			}
+		})
+	}
 	st, err := spawn.QueryLaunchAgent(ctx, spawn.LaunchAgentOptions{Home: resolveServerHomeFlag(*home)})
 	if err != nil {
 		return err

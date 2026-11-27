@@ -40,15 +40,19 @@ func makeTestServerArchiveBytes(t *testing.T, dir, version, goos, goarch string,
 			t.Fatal(err)
 		}
 	}
+	libName := "libghostty-vt.dylib"
+	if goos == "linux" {
+		libName = "libghostty-vt.so"
+	}
 	pSum := sha256.Sum256(posseBody)
 	lSum := sha256.Sum256(libBody)
 	writeFile("posse", 0o755, posseBody)
-	writeFile("libghostty-vt.dylib", 0o644, libBody)
+	writeFile(libName, 0o644, libBody)
 	manifest, _ := json.Marshal(map[string]any{
 		"version": version, "os": goos, "arch": goarch, "edition": "headless",
 		"sha256": map[string]string{
-			"posse":               hex.EncodeToString(pSum[:]),
-			"libghostty-vt.dylib": hex.EncodeToString(lSum[:]),
+			"posse": hex.EncodeToString(pSum[:]),
+			libName: hex.EncodeToString(lSum[:]),
 		},
 	})
 	writeFile("manifest.json", 0o644, manifest)
@@ -254,6 +258,25 @@ func TestSignAndVerifyServerManifest(t *testing.T) {
 	parsedPub, err := ParseUpdatePublicKey(base64.StdEncoding.EncodeToString(pub))
 	if err != nil || !parsedPub.Equal(pub) {
 		t.Fatalf("ParseUpdatePublicKey roundtrip failed: %v", err)
+	}
+}
+
+func TestResolveServerPackageLinux(t *testing.T) {
+	dir := t.TempDir()
+	archivePath, wantSHA := makeTestServerArchive(t, dir, "0.9.1", "linux", "amd64")
+	pkg, err := ResolveServerPackage(context.Background(), ServerResolveOptions{
+		TargetOS:      "Linux",
+		TargetArch:    "x86_64",
+		Version:       "0.9.1",
+		SearchDirs:    []string{dir},
+		DisableRemote: true,
+	})
+	if err != nil {
+		t.Fatalf("ResolveServerPackage linux/amd64 failed: %v", err)
+	}
+	defer pkg.Close()
+	if pkg.OS != "linux" || pkg.Arch != "amd64" || pkg.LibName != "libghostty-vt.so" || pkg.SHA256 != wantSHA {
+		t.Fatalf("unexpected linux package: %+v (archive=%s)", pkg, archivePath)
 	}
 }
 

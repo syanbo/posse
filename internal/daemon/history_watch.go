@@ -2,12 +2,14 @@ package daemon
 
 import (
 	"context"
-	"log"
+	"encoding/binary"
+	"errors"
+	"hash/fnv"
+	"io/fs"
 	"os"
-	"sync"
+	"path/filepath"
+	"strings"
 	"time"
-
-	"github.com/egoist/mygo"
 
 	"posse/internal/history"
 )
@@ -17,6 +19,13 @@ const historyPageGrace = 4 * time.Second
 
 // historyWatchDebounce 是目录变化攒一攒再索引的时间，避免一次保存连着触发。
 var historyWatchDebounce = 300 * time.Millisecond
+
+const (
+	historyWatchMaxEntries  = 25000
+	historyWatchDefaultScan = time.Second
+	historyWatchMaxBackoff  = 5 * time.Second
+	historyWatchMaxDebounce = 2 * time.Second
+)
 
 type historyWatch struct {
 	cancel context.CancelFunc
@@ -54,8 +63,8 @@ func (d *Daemon) historyWatchRoots() []string {
 	return history.WatchDirs(home, d.zcodeDatabase())
 }
 
-// watchHistoryDirs 在历史页开着时盯会话目录。每个目录一个监视、不给每个文件建快照；
-// 有变化就做一次增量索引，索引仍在子进程里。页面关上就停。
+// watchHistoryDirs 在历史页开着时按完成后的间隔扫描会话目录树摘要（支持取消、条目预算与大目录自适应退避），
+// 不占用 kqueue/inotify 描述符也不依赖 mygo；持续写入时受最大防抖时长约束仍会定期索引，页面关上即停止。
 func (d *Daemon) watchHistoryDirs() {
 	ctx, cancel := context.WithCancel(context.Background())
 	stop := &historyWatch{cancel: cancel}
@@ -77,53 +86,162 @@ func (d *Daemon) watchHistoryDirs() {
 		h.mu.Unlock()
 	}()
 
-	events := make(chan struct{}, 1)
-	var wg sync.WaitGroup
-	for _, dir := range d.historyWatchRoots() {
-		w, err := mygo.WatchFiles(ctx, dir, mygo.FileWatchOptions{
-			Recursive: true,
-			HintsOnly: true,
-			Debounce:  historyWatchDebounce,
-		})
-		if err != nil {
-			log.Printf("history watch %s: %v", dir, err)
-			continue
-		}
-		wg.Add(1)
-		go func(w *mygo.FileWatcher) {
-			defer wg.Done()
-			defer w.Close()
-			for {
-				if _, err := w.Next(ctx); err != nil {
-					return
-				}
+	lastSig, ok := historyRootsSignature(ctx, d.historyWatchRoots())
+	if !ok {
+		return
+	}
+
+	debounce := historyWatchDebounce
+	if debounce < 25*time.Millisecond {
+		debounce = 25 * time.Millisecond
+	}
+	baseInterval := historyWatchDefaultScan
+	if debounce < 300*time.Millisecond {
+		baseInterval = max(debounce, 50*time.Millisecond)
+	}
+	maxDebounce := max(debounce*4, historyWatchMaxDebounce)
+	if debounce < 300*time.Millisecond {
+		maxDebounce = max(debounce*4, 400*time.Millisecond)
+	}
+
+	scanTimer := time.NewTimer(baseInterval)
+	defer scanTimer.Stop()
+	graceTick := time.NewTicker(time.Second)
+	defer graceTick.Stop()
+
+	var debounceTimer *time.Timer
+	var debounceCh <-chan time.Time
+	var dirtySince time.Time
+	stopDebounce := func() {
+		if debounceTimer != nil {
+			if !debounceTimer.Stop() {
 				select {
-				case events <- struct{}{}:
+				case <-debounceTimer.C:
 				default:
 				}
 			}
-		}(w)
+			debounceTimer = nil
+		}
+		debounceCh = nil
+		dirtySince = time.Time{}
 	}
-	tick := time.NewTicker(time.Second)
-	defer tick.Stop()
+	defer stopDebounce()
+
 	for {
 		select {
 		case <-ctx.Done():
-			wg.Wait()
 			return
-		case <-events:
+		case <-scanTimer.C:
+			started := time.Now()
+			sig, ok := historyRootsSignature(ctx, d.historyWatchRoots())
+			if !ok {
+				return
+			}
+			if sig != lastSig {
+				lastSig = sig
+				now := time.Now()
+				if dirtySince.IsZero() {
+					dirtySince = now
+				}
+				if now.Sub(dirtySince) >= maxDebounce {
+					stopDebounce()
+					d.pokeHistory()
+				} else if debounceTimer == nil {
+					debounceTimer = time.NewTimer(debounce)
+					debounceCh = debounceTimer.C
+				} else {
+					if !debounceTimer.Stop() {
+						select {
+						case <-debounceTimer.C:
+						default:
+						}
+					}
+					debounceTimer.Reset(debounce)
+				}
+			}
+			elapsed := time.Since(started)
+			nextWait := baseInterval
+			if elapsed > 50*time.Millisecond {
+				if adaptive := elapsed * 4; adaptive > nextWait {
+					nextWait = min(adaptive, historyWatchMaxBackoff)
+				}
+			}
+			scanTimer.Reset(nextWait)
+		case <-debounceCh:
+			stopDebounce()
 			d.pokeHistory()
-		case <-tick.C:
+		case <-graceTick.C:
 			h.mu.Lock()
 			open := time.Now().Before(h.pageUntil)
 			h.mu.Unlock()
 			if !open {
-				cancel()
-				wg.Wait()
 				return
 			}
 		}
 	}
+}
+
+var errWatchStop = errors.New("history watch stop")
+
+func isHistoryWatchFile(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	case ".jsonl", ".json", ".db", ".sqlite", ".sqlite3", ".vscdb", ".pb", ".wal", ".shm":
+		return true
+	}
+	return false
+}
+
+// historyRootsSignature 对会话目录树里相关条目做可取消、带上限的轻量指纹；
+// 解析顶层根路径的软链接（支持数据目录软链），内部 WalkDir 不跟随任意子软链以防成环。
+func historyRootsSignature(ctx context.Context, roots []string) (uint64, bool) {
+	sum := fnv.New64a()
+	var buf [16]byte
+	seenEntries := 0
+	for _, root := range roots {
+		if ctx.Err() != nil {
+			return 0, false
+		}
+		walkRoot := root
+		if resolved, err := filepath.EvalSymlinks(root); err == nil {
+			walkRoot = resolved
+		}
+		_, _ = sum.Write([]byte(root))
+		_, _ = sum.Write([]byte{0})
+		err := filepath.WalkDir(walkRoot, func(p string, d fs.DirEntry, err error) error {
+			if ctx.Err() != nil {
+				return errWatchStop
+			}
+			if err != nil {
+				return nil
+			}
+			if seenEntries >= historyWatchMaxEntries {
+				return errWatchStop
+			}
+			if !d.IsDir() && !isHistoryWatchFile(d.Name()) {
+				return nil
+			}
+			seenEntries++
+			info, ierr := d.Info()
+			if ierr != nil {
+				return nil
+			}
+			_, _ = sum.Write([]byte(p))
+			var kind byte
+			if d.IsDir() {
+				kind = 1
+			}
+			_, _ = sum.Write([]byte{kind})
+			binary.LittleEndian.PutUint64(buf[:8], uint64(info.Size()))
+			binary.LittleEndian.PutUint64(buf[8:], uint64(info.ModTime().UnixNano()))
+			_, _ = sum.Write(buf[:])
+			return nil
+		})
+		if errors.Is(err, errWatchStop) && ctx.Err() != nil {
+			return 0, false
+		}
+	}
+	return sum.Sum64(), true
 }
 
 // pokeHistory 立刻做一轮增量索引。上一轮还在跑就记下来，做完再来一轮。
