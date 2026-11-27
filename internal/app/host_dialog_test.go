@@ -353,8 +353,8 @@ func TestRemoteDisconnectedCardAndStatusBar(t *testing.T) {
 	for i := 0; i < 4 && b.connecting; i++ {
 		awaitHostUpdate(t, b)
 	}
-	if !b.host.snapshot().Connected || b.manuallyDisconnected {
-		t.Fatalf("clicking reconnect on disconnected card did not reconnect: snap=%+v manual=%v", b.host.snapshot(), b.manuallyDisconnected)
+	if !b.host.snapshot().Connected || b.isHostManuallyDisconnected(h.ID) {
+		t.Fatalf("clicking reconnect on disconnected card did not reconnect: snap=%+v manual=%v", b.host.snapshot(), b.isHostManuallyDisconnected(h.ID))
 	}
 
 	// 报错断开时显示「无法连接 bwh」与「重试」。

@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode"
 
+	"posse/internal/client"
 	"posse/internal/errtext"
 	"posse/internal/remote"
 	"posse/locales"
@@ -362,14 +363,57 @@ func (a *app) selectLocalHost() {
 	local.openWorkspaces()
 }
 
+func (a *app) isHostManuallyDisconnected(id string) bool {
+	return id != "" && slices.Contains(a.windowOwner().state.DisconnectedHosts, id)
+}
+
+func (a *app) setHostManuallyDisconnected(id string, disconnected bool) {
+	if id == "" || id == localHostID {
+		return
+	}
+	owner := a.windowOwner()
+	idx := slices.Index(owner.state.DisconnectedHosts, id)
+	if disconnected {
+		if idx >= 0 {
+			return
+		}
+		owner.state.DisconnectedHosts = append(owner.state.DisconnectedHosts, id)
+		owner.saveState()
+		return
+	}
+	if idx < 0 {
+		return
+	}
+	owner.state.DisconnectedHosts = slices.Delete(owner.state.DisconnectedHosts, idx, idx+1)
+	owner.saveState()
+}
+
 // openHost 是点击左侧导航栏远端主机磁贴或 ⌃⌥H 列表项的动作：
-// 已连接、连接中或用户主动断开时直接切回该主机视图（不重复拆建，也不擅自重连）；其余未连接状态走 selectRemoteHost 发起连接。
+// 已连接、连接中或用户主动断开（含重启后从 ui.json 恢复）时直接切回该主机视图（不重复拆建，也不擅自重连）；
+// 其余未连接状态走 selectRemoteHost 发起连接。
 func (a *app) openHost(h remote.Host) {
 	if a.views == nil {
 		return
 	}
+	owner := a.windowOwner()
 	target := a.views.all[h.ID]
-	if target != nil && (target.connecting || target.manuallyDisconnected || target.host != nil && target.host.snapshot().Connected || a.windowOwner().hosts == nil) {
+	if a.isHostManuallyDisconnected(h.ID) {
+		if owner.hostMenu.names == nil {
+			owner.hostMenu.names = make(map[string]string)
+		}
+		owner.hostMenu.names[h.ID] = h.Name
+		if target == nil {
+			target = a.views.forHost(newHostSession(h.ID, appName()), &client.Client{Remote: true})
+		}
+		if a.views.active.Load() != target {
+			a.views.activate(h.ID)
+		}
+		if !target.workspaceModule() {
+			target.openWorkspaces()
+		}
+		return
+	}
+	if target != nil && (target.connecting || target.host != nil && target.host.snapshot().Connected || owner.hosts == nil) {
 		if a.views.active.Load() != target {
 			a.views.activate(h.ID)
 		}

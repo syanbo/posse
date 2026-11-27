@@ -95,7 +95,7 @@ func (k *hostConnections) connectRemoteReady(h remote.Host, start bool, onReady 
 	if k.poolConnected(h.ID) {
 		initialStage = remote.StageHandshake
 	}
-	a.manuallyDisconnected = false
+	k.views.local.setHostManuallyDisconnected(h.ID, false)
 	a.connecting, a.connectStage, a.connectPct, a.err = true, initialStage, 0, ""
 	ctx, cancel := context.WithCancel(k.ctx)
 	r := &hostAttempt{app: a, ctx: ctx, cancel: cancel, onReady: onReady}
@@ -240,14 +240,13 @@ func (k *hostConnections) disconnect(id string) {
 		k.views.suspendedRemote = nil
 	}
 	if k.active != nil && k.active.app.viewID == id {
-		// 主动断开已建立的会话记下标记，切走再切回不再自动重连；取消尚未连上的拨号不阻断再次点击重试。
-		k.active.app.manuallyDisconnected = !k.active.app.connecting
+		// 主动断开已建立的会话持久化记入本机 ui.json，切走或重启后再点磁贴也不自动重连；
+		// 取消尚未连上的拨号不阻断再次点击重试。
+		k.views.local.setHostManuallyDisconnected(id, !k.active.app.connecting)
 		k.failed(k.active, context.Canceled)
 		return
 	}
-	if target := k.views.all[id]; target != nil {
-		target.manuallyDisconnected = true
-	}
+	k.views.local.setHostManuallyDisconnected(id, true)
 	if _, pending := k.closing[id]; !pending {
 		k.pool.Disconnect(id)
 	}

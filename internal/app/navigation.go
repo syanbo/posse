@@ -474,7 +474,7 @@ func (a *app) newMenu(c *ui.Context, m *popMenu) {
 }
 
 func (a *app) sidebarNotices(c *ui.Context) {
-	if !a.loaded && !(a.remoteHost() && !a.connecting && a.err == "") {
+	if !a.loaded && !a.remoteHost() {
 		msg, color := L(c).SidebarConnecting(), c.Theme().TextMuted
 		if a.err != "" {
 			msg, color = L(c).SidebarConnectError(a.err), c.Theme().Danger

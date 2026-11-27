@@ -618,8 +618,8 @@ func TestHostOpenRespectsManualDisconnect(t *testing.T) {
 
 	// 主动点击「断开连接」后切回本机，再点击远端磁贴只切入已断开视图，不自动重连。
 	k.disconnect(h.ID)
-	if !b.manuallyDisconnected || b.host.snapshot().Connected {
-		t.Fatalf("manual disconnect did not mark disconnected state: manual=%v snap=%+v", b.manuallyDisconnected, b.host.snapshot())
+	if !b.isHostManuallyDisconnected(h.ID) || b.host.snapshot().Connected {
+		t.Fatalf("manual disconnect did not mark disconnected state: manual=%v snap=%+v", b.isHostManuallyDisconnected(h.ID), b.host.snapshot())
 	}
 	b.selectLocalHost()
 	a.openHost(h)
@@ -627,15 +627,43 @@ func TestHostOpenRespectsManualDisconnect(t *testing.T) {
 		t.Fatalf("openHost auto-reconnected manually disconnected host: active=%s connecting=%v snap=%+v dials=%d", k.views.active.Load().viewID, b.connecting, b.host.snapshot(), dials.Load())
 	}
 
+	// 模拟退出 Posse 并重开（同步落盘后用新窗口读回 ui.json，此时 views.all 里尚无该远端视图）：
+	// 点击远端磁贴仍停在已断开视图，不自动重连。
+	if err := saveUIState(a.home, a.state); err != nil {
+		t.Fatal(err)
+	}
+	fresh := newHostApp(a.c, a.home)
+	fresh.state = loadUIState(a.home)
+	freshViews := newHostViews(fresh)
+	var freshDials atomic.Int32
+	freshConn := newHostConnections(freshViews)
+	freshConn.dial = func(context.Context, remote.Host, remote.Options) (hostTransport, error) {
+		freshDials.Add(1)
+		return hostTransport{base, make(chan struct{})}, nil
+	}
+	t.Cleanup(freshConn.close)
+	fresh.hosts = freshConn
+	writeHostMenuConfig(t, fresh, h)
+	fresh.loadHostMenu()
+	fresh.openHost(h)
+	reopened := freshViews.all[h.ID]
+	if reopened == nil || freshViews.active.Load() != reopened || reopened.connecting || reopened.host.snapshot().Connected || freshDials.Load() != 0 {
+		t.Fatalf("openHost after restart auto-reconnected manually disconnected host: view=%v dials=%d", reopened, freshDials.Load())
+	}
+
 	// 显式「重新连接」会清除主动断开标记并重新连上，之后正常切换恢复无感重连。
 	b.selectRemoteHost(h)
-	awaitHostUpdate(t, b)
-	if b.manuallyDisconnected || !b.host.snapshot().Connected || dials.Load() != 3 {
-		t.Fatalf("explicit reconnect failed or kept manual flag: manual=%v snap=%+v dials=%d", b.manuallyDisconnected, b.host.snapshot(), dials.Load())
+	for i := 0; i < 4 && b.connecting; i++ {
+		awaitHostUpdate(t, b)
+	}
+	if b.isHostManuallyDisconnected(h.ID) || !b.host.snapshot().Connected || dials.Load() != 3 {
+		t.Fatalf("explicit reconnect failed or kept manual flag: manual=%v snap=%+v dials=%d", b.isHostManuallyDisconnected(h.ID), b.host.snapshot(), dials.Load())
 	}
 	b.selectLocalHost()
 	a.openHost(h)
-	awaitHostUpdate(t, b)
+	for i := 0; i < 4 && b.connecting; i++ {
+		awaitHostUpdate(t, b)
+	}
 	if !b.host.snapshot().Connected || dials.Load() != 4 {
 		t.Fatalf("switch after explicit reconnect did not resume auto-reconnect: snap=%+v dials=%d", b.host.snapshot(), dials.Load())
 	}
@@ -648,7 +676,7 @@ func TestHostOpenRespectsManualDisconnect(t *testing.T) {
 		t.Fatal("expected dial to stay in connecting state")
 	}
 	k.disconnect(h.ID)
-	if b.manuallyDisconnected {
+	if b.isHostManuallyDisconnected(h.ID) {
 		t.Fatal("canceling an in-progress dial unexpectedly set manuallyDisconnected")
 	}
 	holdNext.Store(false)

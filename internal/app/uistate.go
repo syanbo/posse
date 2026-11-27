@@ -32,6 +32,7 @@ type uiState struct {
 	TopTiles             []string  `json:"topTiles,omitempty"`             // 旧版全局页面和固定工作区的混合顺序
 	NavigationOrder      []string  `json:"navigationOrder,omitempty"`      // 全局导航顺序
 	HostOrder            []string  `json:"hostOrder,omitempty"`            // 左侧导航栏远端主机的显示顺序（只存在本机 ui.json）
+	DisconnectedHosts    []string  `json:"disconnectedHosts,omitempty"`    // 用户主动断开的远端主机 ID（只存在本机 ui.json），重启后仍保持已断开直到显式重连
 	PinnedWorkspaces     []string  `json:"pinnedWorkspaces,omitempty"`     // 旧的固定工作区，不再显示；迁移和分主机状态仍保留
 	LastWorkspace        string    `json:"lastWorkspace,omitempty"`        // 工作区模块上次选择，聊天单独恢复
 	WorkspaceMetaHidden  bool      `json:"workspaceMetaHidden,omitempty"`  // 侧栏项目下面的工作区行不显示分支，只留名字

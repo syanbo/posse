@@ -528,6 +528,7 @@ func (a *app) confirmRemoveHost(m locales.Messages, h remote.Host) {
 			} else if owner.hosts != nil {
 				owner.hosts.disconnect(h.ID)
 			}
+			owner.setHostManuallyDisconnected(h.ID, false)
 		})
 	})
 }
