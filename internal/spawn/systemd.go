@@ -49,6 +49,7 @@ type SystemdUserStatus struct {
 	Active      bool   `json:"active"`
 	Linger      string `json:"linger,omitempty"`
 	Note        string `json:"note,omitempty"`
+	NoteCode    string `json:"noteCode,omitempty"`
 }
 
 // SystemdUnitBase 为默认 ~/.posse 返回固定单元名，自定义 home 追加路径摘要隔离。
@@ -179,6 +180,7 @@ func InstallSystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUs
 
 	if out, err := cfg.run(ctx, "--user", "daemon-reload"); err != nil {
 		if ctx.Err() == nil && isSystemdBusUnavailable(out, err) {
+			st.NoteCode = "systemd_bus_inactive"
 			st.Note = fmt.Sprintf("systemd user session bus is not active; unit files are installed. Enable linger (loginctl enable-linger $USER) and run: systemctl --user enable --now %s %s", cfg.serviceUnit, cfg.timerUnit)
 			return st, nil
 		}
@@ -189,6 +191,7 @@ func InstallSystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUs
 
 	if out, err := cfg.run(ctx, "--user", "enable", cfg.serviceUnit, cfg.timerUnit); err != nil {
 		if ctx.Err() == nil && isSystemdBusUnavailable(out, err) {
+			st.NoteCode = "systemd_bus_inactive"
 			st.Note = fmt.Sprintf("systemd user session bus is not active; unit files are installed. Enable linger (loginctl enable-linger $USER) and run: systemctl --user enable --now %s %s", cfg.serviceUnit, cfg.timerUnit)
 			return st, nil
 		}
@@ -203,6 +206,7 @@ func InstallSystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUs
 		if out, err := cfg.run(ctx, "--user", "start", cfg.timerUnit, cfg.serviceUnit); err != nil {
 			if ctx.Err() == nil && isSystemdBusUnavailable(out, err) {
 				st.Enabled = false
+				st.NoteCode = "systemd_bus_inactive"
 				st.Note = fmt.Sprintf("systemd user session bus is not active; unit files are installed. Enable linger (loginctl enable-linger $USER) and run: systemctl --user enable --now %s %s", cfg.serviceUnit, cfg.timerUnit)
 				return st, nil
 			}
@@ -220,6 +224,7 @@ func InstallSystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUs
 	if linger := querySystemdLinger(ctx, cfg.runLoginctl); linger != "" {
 		st.Linger = linger
 		if linger == "no" {
+			st.NoteCode = "systemd_linger_disabled"
 			st.Note = "systemd user linger is disabled; run `loginctl enable-linger $USER` so the timer and service survive SSH logout and start on boot"
 		}
 	}
@@ -298,6 +303,7 @@ func QuerySystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUser
 	case ctx.Err() != nil:
 		return st, ctx.Err()
 	case isSystemdBusUnavailable(enOut, enErr):
+		st.NoteCode = "systemd_bus_inactive"
 		st.Note = "systemd user session bus is not active"
 		return st, nil
 	case isSystemdNotEnabledOrMissing(enOut, enErr):
@@ -313,6 +319,7 @@ func QuerySystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUser
 	case ctx.Err() != nil:
 		return st, ctx.Err()
 	case isSystemdBusUnavailable(actOut, actErr):
+		st.NoteCode = "systemd_bus_inactive"
 		st.Note = "systemd user session bus is not active"
 		return st, nil
 	case isSystemdInactiveOrMissing(actOut, actErr):
@@ -321,6 +328,7 @@ func QuerySystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUser
 		return st, wrapSystemctlError("is-active", actOut, actErr)
 	}
 	if st.Linger == "no" {
+		st.NoteCode = "systemd_linger_disabled"
 		st.Note = "systemd user linger is disabled; run `loginctl enable-linger $USER` so the timer and service survive SSH logout and start on boot"
 	}
 	return st, nil
@@ -428,9 +436,50 @@ func cLocaleEnv() []string {
 	return append(env, "LC_ALL=C", "LANG=C")
 }
 
+func systemctlEnvFrom(base []string, uid int) []string {
+	var env []string
+	var xdgDir, dbusAddr string
+	for _, kv := range base {
+		switch {
+		case strings.HasPrefix(kv, "LC_ALL="), strings.HasPrefix(kv, "LANG="), strings.HasPrefix(kv, "LANGUAGE="):
+			continue
+		case strings.HasPrefix(kv, "XDG_RUNTIME_DIR="):
+			v := strings.TrimSpace(strings.TrimPrefix(kv, "XDG_RUNTIME_DIR="))
+			if v == "" {
+				continue // 空值视作缺失，避免挡住回填
+			}
+			xdgDir = v
+		case strings.HasPrefix(kv, "DBUS_SESSION_BUS_ADDRESS="):
+			v := strings.TrimSpace(strings.TrimPrefix(kv, "DBUS_SESSION_BUS_ADDRESS="))
+			if v == "" {
+				continue
+			}
+			dbusAddr = v
+		}
+		env = append(env, kv)
+	}
+	env = append(env, "LC_ALL=C", "LANG=C")
+
+	// 仅补齐 cmd.Env（绝不调 os.Setenv 污染常驻进程与后续终端环境）；若已有有效自定义 XDG_RUNTIME_DIR 则以它为准。
+	if xdgDir == "" {
+		cand := fmt.Sprintf("/run/user/%d", uid)
+		if info, err := os.Stat(cand); err == nil && info.IsDir() {
+			xdgDir = cand
+			env = append(env, "XDG_RUNTIME_DIR="+xdgDir)
+		}
+	}
+	if dbusAddr == "" && xdgDir != "" {
+		busPath := filepath.Join(xdgDir, "bus")
+		if info, err := os.Stat(busPath); err == nil && info.Mode()&os.ModeSocket != 0 {
+			env = append(env, "DBUS_SESSION_BUS_ADDRESS=unix:path="+busPath)
+		}
+	}
+	return env
+}
+
 func defaultRunSystemctl(ctx context.Context, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "systemctl", args...)
-	cmd.Env = cLocaleEnv()
+	cmd.Env = systemctlEnvFrom(os.Environ(), os.Getuid())
 	return cmd.CombinedOutput()
 }
 

@@ -39,7 +39,7 @@ const (
 // DesktopMethod 只开放已核对的桌面入口；worker/hook 和终端输入仍走各自协议。
 func DesktopMethod(method string) (write, allowed bool) {
 	switch method {
-	case "daemon.info", "daemon.status", "project.list", "workspace.list", "workspace.show", "workspace.current", "workspace.diff", "usage.get",
+	case "daemon.info", "daemon.status", "daemon.memory", "server.autostart.status", "project.list", "workspace.list", "workspace.show", "workspace.current", "workspace.diff", "usage.get",
 		"terminal.list", "terminal.show", "terminal.read", "terminal.wait", "terminal.cheatsheet", "task.list", "task.show", "git.trace", "git.discover", "git.status", "git.branches", "git.file", "git.blobRange", "git.log", "git.commitFiles", "git.blame", "git.compare", "git.worktreeCompare", "git.pushPreview", "git.divergence", "git.remotesContaining",
 		"history.list", "history.search", "history.show", "session.tools", "media.list", "media.path", "files.entry", "files.version", "files.stat", "files.readDirs", "files.readRange", "files.resourceRange", "files.resourceVersion", "files.list", "files.search", "files.symbols", "files.definition":
 		return false, true

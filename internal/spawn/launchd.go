@@ -43,7 +43,9 @@ type LaunchAgentStatus struct {
 	Interval   int    `json:"interval,omitempty"`
 	Installed  bool   `json:"installed"`
 	Loaded     bool   `json:"loaded"`
+	Disabled   bool   `json:"disabled,omitempty"`
 	Note       string `json:"note,omitempty"`
+	NoteCode   string `json:"noteCode,omitempty"`
 }
 
 // LaunchAgentLabel 为默认 ~/.posse 返回固定标签，自定义 home 追加路径摘要隔离。
@@ -115,6 +117,7 @@ func InstallLaunchAgent(ctx context.Context, opts LaunchAgentOptions) (LaunchAge
 	if ctx.Err() == nil && !errors.Is(err, exec.ErrNotFound) {
 		if dout, derr := cfg.run(ctx, "print-disabled", cfg.domain); isLaunchctlDomainNotFound(dout, derr) {
 			st.Loaded = false
+			st.NoteCode = "aqua_inactive"
 			st.Note = "GUI login session (Aqua) is not active; LaunchAgent is installed and will load after macOS GUI login"
 			return st, nil
 		}
@@ -199,10 +202,26 @@ func QueryLaunchAgent(ctx context.Context, opts LaunchAgentOptions) (LaunchAgent
 	switch {
 	case err == nil:
 		st.Loaded = true
+		if dout, derr := cfg.run(ctx, "print-disabled", cfg.domain); derr == nil {
+			st.Disabled = parseLaunchctlDisabled(dout, cfg.label)
+		}
 	case ctx.Err() != nil:
 		return st, ctx.Err()
 	case isLaunchctlServiceNotFound(out, err) || isLaunchctlDomainNotFound(out, err):
 		st.Loaded = false
+		// print 报 exit 113 时不能单凭返回码区分「服务未加载」与「无活跃 Aqua 域」，复查 print-disabled 核实域与禁用覆写状态。
+		dout, derr := cfg.run(ctx, "print-disabled", cfg.domain)
+		switch {
+		case ctx.Err() != nil:
+			return st, ctx.Err()
+		case isLaunchctlDomainNotFound(dout, derr):
+			if st.Installed {
+				st.NoteCode = "aqua_inactive"
+				st.Note = "GUI login session (Aqua) is not active; LaunchAgent is installed and will load after macOS GUI login"
+			}
+		case derr == nil:
+			st.Disabled = parseLaunchctlDisabled(dout, cfg.label)
+		}
 	default:
 		msg := strings.TrimSpace(string(out))
 		if msg != "" {
@@ -211,6 +230,23 @@ func QueryLaunchAgent(ctx context.Context, opts LaunchAgentOptions) (LaunchAgent
 		return st, fmt.Errorf("launchctl print failed: %w", err)
 	}
 	return st, nil
+}
+
+// parseLaunchctlDisabled 解析 `launchctl print-disabled` 输出，判断目标 label 是否被系统标记为 disabled/true。
+func parseLaunchctlDisabled(out []byte, label string) bool {
+	needle := `"` + label + `"`
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.Contains(line, needle) {
+			continue
+		}
+		_, rhs, ok := strings.Cut(line, "=>")
+		if !ok {
+			continue
+		}
+		v := strings.ToLower(strings.TrimSpace(rhs))
+		return v == "true" || v == "disabled"
+	}
+	return false
 }
 
 func isLaunchctlDomainNotFound(out []byte, err error) bool {

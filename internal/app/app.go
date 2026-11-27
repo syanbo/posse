@@ -127,7 +127,9 @@ type worktreeDiff struct {
 
 type daemonStatus struct {
 	FootprintKB  int64
+	Terminals    int
 	Running      int
+	Home         string            `json:"home"`
 	Awake        *awakeStatus      // 旧常驻进程没有防休眠时为空
 	Usage        *planStatus       // 旧常驻进程没有套餐用量时为空
 	Version      string            `json:"version"`
@@ -168,7 +170,8 @@ type app struct {
 	hostMenu       hostMenuState
 	hostDlg        hostDialogState // 窗口共用，只由 windowOwner 持有
 	connecting     bool
-	platform       string // 最近一次连上目标 daemon 时的操作系统（darwin/linux），断开后保留判断
+	platform       string          // 最近一次连上目标 daemon 时的操作系统（darwin/linux），断开后保留判断
+	remoteInfo     *rpc.RemoteInfo // 最近一次通过 daemon.info 读取到的远端节点快照（仅内存，供非活动或断开态概览参考）
 	connectStage   remote.Stage
 	connectPct     float64
 	viewID         string
@@ -823,7 +826,7 @@ func (a *app) refreshRequest(q appRequest) {
 	if err != nil {
 		r = pollResult{err: errtext.Text(err)}
 		if statusOK {
-			r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt}
+			r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Edition: st.Edition, Pid: st.Pid, Home: st.Home, Terminals: st.Terminals, StartedAt: st.StartedAt}
 			if !q.client.Remote {
 				a.autoUpgrade(r.daemonInfo)
 			}
@@ -846,7 +849,7 @@ func (a *app) refreshRequest(q appRequest) {
 		}
 		r.running, r.daemonKB, r.selfKB, r.termKB, r.awake = st.Running, st.FootprintKB, self, a.lastTerm, st.Awake
 		r.usage = st.Usage
-		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt, MobileOnline: st.MobileOnline, DeskViewer: st.DeskViewer, DeskMissing: st.DeskMissing, Agents: st.Agents, Chat: st.Chat}
+		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Edition: st.Edition, Pid: st.Pid, Home: st.Home, Terminals: st.Terminals, StartedAt: st.StartedAt, MobileOnline: st.MobileOnline, DeskViewer: st.DeskViewer, DeskMissing: st.DeskMissing, Agents: st.Agents, Chat: st.Chat}
 		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self+a.lastTerm)
 		if !q.client.Remote {
 			a.autoUpgrade(r.daemonInfo)

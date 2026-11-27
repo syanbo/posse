@@ -461,12 +461,14 @@ type Daemon struct {
 	gitTrace  *gitTrace // 终端里的 git 命令，测试里为空
 	ln        *gateListener
 	handoff   handoffState
-	agents    agentScan        // 本机装了哪些 agent（agents.go）
-	models    agentModelsState // 本机各家 agent 可用模型缓存（models.go）
-	disc      discState        // 讨论的调度（discussion.go）
-	collab    collabState      // 讨论的局域网协作（collab.go、collab_join.go）
-	perms     permissionHub    // 手机与飞书共用的权限审批协调（permission.go）
-	lark      larkState        // 飞书多机器人网关（lark.go）
+	agents    agentScan                                          // 本机装了哪些 agent（agents.go）
+	models    agentModelsState                                   // 本机各家 agent 可用模型缓存（models.go）
+	disc      discState                                          // 讨论的调度（discussion.go）
+	collab    collabState                                        // 讨论的局域网协作（collab.go、collab_join.go）
+	perms     permissionHub                                      // 手机与飞书共用的权限审批协调（permission.go）
+	lark      larkState                                          // 飞书多机器人网关（lark.go）
+	mem       daemonMemoryState                                  // daemon.memory 的 singleflight 与短缓存（server_manage.go）
+	autostart func(context.Context) (rpc.AutostartStatus, error) // 测试替换自启状态查询
 
 	// zsh 集成和同名脚本（agent.WriteShellFiles）：写成功一次就不再写
 	shellMu     sync.Mutex
@@ -805,6 +807,8 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	d.registerRemote(srv)
 	d.registerDesktop(srv)
 	srv.Handle("daemon.status", d.status)
+	srv.Handle("daemon.memory", d.daemonMemory)
+	srv.Handle("server.autostart.status", d.serverAutostartStatus)
 	srv.Handle("desk.stop", d.deskStop)
 	srv.Handle("daemon.handoff", func(ctx context.Context, raw json.RawMessage) (any, error) {
 		return d.daemonHandoff(ctx, raw, stop)

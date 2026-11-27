@@ -792,5 +792,9 @@ var zh = [][2]string{
 	{"Staged attachments expired.", "暂存附件已过期。"},
 	{"Image", "图片"},
 	{"File", "文件"},
+	{"daemon.memory parameters exceed size limit", "内存查询参数超出大小限制"},
+	{"invalid daemon.memory parameters", "内存查询参数格式不正确"},
+	{"launchd status query failed: %w", "查询 LaunchAgent 状态失败：{1}"},
+	{"systemd status query failed: %w", "查询 systemd 服务状态失败：{1}"},
 	{"not found", "找不到"},
 }

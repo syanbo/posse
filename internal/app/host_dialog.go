@@ -16,6 +16,7 @@ import (
 type hostDialogState struct {
 	open        bool
 	gen         uint64
+	tab         int         // hostTabOverview / hostTabSettings（仅编辑已有主机时有效）
 	editing     remote.Host // ID 为空表示添加
 	target      string
 	name        string
@@ -36,19 +37,33 @@ type hostDialogState struct {
 	err         string
 	aliases     []remote.Alias
 	aliasesDone bool
+	detail      hostDetailState
 }
 
 func (a *app) openHostDialog(editing remote.Host) {
+	a.openHostDialogTab(editing, hostTabSettings)
+}
+
+func (a *app) openHostDetails(h remote.Host) {
+	a.openHostDialogTab(h, hostTabOverview)
+}
+
+func (a *app) openHostDialogTab(editing remote.Host, tab int) {
 	owner := a.windowOwner()
 	if owner.hostDlg.open {
 		owner.dropHostIconFile(owner.hostDlg.iconImage, owner.hostDlg.editing.IconImage)
 	}
+	owner.cancelHostDetails()
 	owner.loadHostMenu()
 	d := &owner.hostDlg
 	nextGen := d.gen + 1
+	if editing.ID == "" {
+		tab = hostTabSettings
+	}
 	*d = hostDialogState{
 		open:        true,
 		gen:         nextGen,
+		tab:         tab,
 		editing:     editing,
 		target:      editing.Target,
 		name:        editing.Name,
@@ -63,6 +78,9 @@ func (a *app) openHostDialog(editing remote.Host) {
 	}
 	if editing.Port != 0 {
 		d.port = strconv.Itoa(editing.Port)
+	}
+	if editing.ID != "" && tab == hostTabOverview {
+		a.refreshHostDetails(owner, d)
 	}
 	go func(gen uint64) {
 		homeDir, _ := os.UserHomeDir()
@@ -84,9 +102,14 @@ func (a *app) hostDialog(c *ui.Context) {
 	}
 	t, p, m := c.Theme(), colors(c.Theme()), L(c)
 	isEdit := d.editing.ID != ""
+	onOverview := isEdit && d.tab == hostTabOverview
 	title := m.HostDialogAddTitle()
 	if isEdit {
-		title = m.HostDialogEditTitle(d.editing.Name)
+		if onOverview {
+			title = m.HostDialogDetailsTitle(d.editing.Name)
+		} else {
+			title = m.HostDialogEditTitle(d.editing.Name)
+		}
 	}
 
 	// 直接传 &d.open 让 mygo 的 Escape 生效；点遮罩或保存中恢复打开，避免误点丢掉表单内容
@@ -94,13 +117,36 @@ func (a *app) hostDialog(c *ui.Context) {
 		ui.Column(c).Width(hostDialogWidth()).Gap(12).Children(func() {
 			titleText(c, title, fsTitle)
 
+			if isEdit {
+				settingsLabel := m.HostTabSettings()
+				if a.hostDialogDirty(d) {
+					settingsLabel += " *"
+				}
+				if segmented(c.Key("host-dialog-tabs"), &d.tab, m.HostTabLabel(), m.HostTabOverview(), settingsLabel) {
+					if d.tab == hostTabOverview {
+						a.refreshHostDetails(owner, d)
+					} else {
+						owner.cancelHostDetails()
+						d.detail.liveKey = ""
+					}
+				}
+				onOverview = d.tab == hostTabOverview
+			}
+
 			var submit bool
 			_, wh := c.Size()
 			scrollMax := max(sz(240), min(wh-sz(220), sz(560)))
+			if onOverview {
+				scrollMax = max(sz(240), min(wh-sz(200), sz(680)))
+			}
 
 			// 滚动区向两边扩到弹窗内边距里，内容再缩回来：滚动条落在右边留白上，不压输入框和按钮；上下留 2px 防聚焦框被裁
 			ui.Scroll(c).MaxHeight(scrollMax).Margin(0, -cardPad).Children(func() {
 				ui.Column(c).Gap(12).Padding(2, cardPad).Children(func() {
+					if onOverview {
+						a.hostOverviewTab(c, owner, d)
+						return
+					}
 					// SSH 目标
 					ui.Column(c).Gap(4).Children(func() {
 						ui.Text(c, m.HostFieldTarget()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
@@ -286,11 +332,11 @@ func (a *app) hostDialog(c *ui.Context) {
 				})
 			})
 
-			reconnectLive := isEdit && a.editingLiveConnectionChanged(d)
+			reconnectLive := isEdit && !onOverview && a.editingLiveConnectionChanged(d)
 			if reconnectLive {
 				ui.Text(c, m.HostEditLiveNote()).FontSize(fsSmall).TextColor(t.TextMuted).Wrap()
 			}
-			if d.err != "" {
+			if !onOverview && d.err != "" {
 				ui.Text(c, d.err).FontSize(fsSmall).TextColor(t.Danger).Wrap()
 			}
 
@@ -300,13 +346,23 @@ func (a *app) hostDialog(c *ui.Context) {
 					rm := confirmButton(c, pressable(textButton(c.Key("host-remove"), m.HostRemove()).TextColor(t.Danger).Disabled(d.saving)))
 					if rm.Clicked() && !d.saving {
 						editing := d.editing
+						owner.cancelHostDetails()
 						owner.dropHostIconFile(d.iconImage, d.editing.IconImage)
 						d.open = false
 						a.confirmRemoveHost(m, editing)
 					}
 				}
 				ui.Spacer(c)
+				if onOverview {
+					if confirmButton(c, pressable(textButton(c.Key("host-close"), m.CommonClose()))).Clicked() {
+						owner.cancelHostDetails()
+						owner.dropHostIconFile(d.iconImage, d.editing.IconImage)
+						d.open = false
+					}
+					return
+				}
 				if confirmButton(c, pressable(textButton(c.Key("host-cancel"), m.CommonCancel()).Disabled(d.saving))).Clicked() && !d.saving {
+					owner.cancelHostDetails()
 					owner.dropHostIconFile(d.iconImage, d.editing.IconImage)
 					d.open = false
 				}
@@ -330,6 +386,7 @@ func (a *app) hostDialog(c *ui.Context) {
 	if modal.ClickedOutside() || d.saving {
 		d.open = true
 	} else if !d.open {
+		owner.cancelHostDetails()
 		owner.dropHostIconFile(d.iconImage, d.editing.IconImage)
 	}
 }

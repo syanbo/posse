@@ -2,6 +2,8 @@ package app
 
 import (
 	"cmp"
+	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -10,18 +12,26 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/procmem"
+	"posse/internal/rpc"
 )
 
 // 底栏的内存浮窗：posse 自己（常驻进程、窗口）和各工作区终端里跑的程序（shell、agent 和它拉起的子进程）。
 // 终端的内存由窗口进程按 pid 统计整棵进程树的 phys_footprint，和活动监视器一致；只在浮窗开着时统计。
 
 type memView struct {
-	open     bool
-	expanded map[string]bool // 展开了进程明细的终端
-	poll     panelPoll
-	rows     []memWorkspace
-	terms    int64 // 所有终端合计（KB）
+	open                 bool
+	expanded             map[string]bool // 展开了进程明细的终端
+	poll                 panelPoll
+	rows                 []memWorkspace
+	terms                int64 // 所有终端合计（KB）
+	loadGen              uint64
+	cancel               context.CancelFunc
+	remoteUnsupported    bool   // 旧远端常驻进程不支持 daemon.memory
+	remoteLegacyInstance string // 已确认不支持 daemon.memory 的远端实例 ID，同实例不再每 3 秒重复请求
+	remoteTruncated      bool   // 远端进程树查询触发预算截断
+	remoteErr            string
 }
 
 type memWorkspace struct {
@@ -89,11 +99,86 @@ func terminalsFootprint(ws []workspace) int64 {
 	return kb
 }
 
-// loadMemory 在后台统计各终端的进程树。
+func (a *app) cancelMemoryLoad() {
+	if a.mem.cancel != nil {
+		a.mem.cancel()
+		a.mem.cancel = nil
+	}
+	a.mem.loadGen++
+	a.mem.poll.done()
+}
+
+// loadMemory 在后台统计各终端的进程树；远端主机按需调 daemon.memory。
 func (a *app) loadMemory() {
 	if a.remoteHost() {
-		a.mem.poll.done()
-		a.mem.rows, a.mem.terms = []memWorkspace{}, 0
+		r := a.request()
+		if r.client == nil || a.remoteOffline() {
+			a.cancelMemoryLoad()
+			return
+		}
+		inst := r.snapshot.Desktop.InstanceID
+		if a.mem.remoteUnsupported && inst != "" && a.mem.remoteLegacyInstance == inst {
+			a.mem.poll.done()
+			return
+		}
+		if a.mem.cancel != nil {
+			a.mem.cancel()
+		}
+		ctx, cancel := context.WithCancel(a.windowContext())
+		a.mem.cancel = cancel
+		a.mem.loadGen++
+		gen := a.mem.loadGen
+		requested := maps.Clone(a.mem.expanded)
+		var expanded []string
+		for id, open := range requested {
+			if open {
+				expanded = append(expanded, id)
+			}
+		}
+		go func() {
+			qctx, qcancel := context.WithTimeout(ctx, 4*time.Second)
+			defer qcancel()
+			res, err := r.client.DaemonMemory(qctx, expanded)
+			// 用 a.update 而非 r.update：连接换代时也必须清掉 poll.busy，避免浮窗永久卡在 busy。
+			a.update(func() {
+				m := &a.mem
+				if m.loadGen != gen {
+					return
+				}
+				m.cancel = nil
+				m.poll.done()
+				if ctx.Err() != nil || !r.current() {
+					return
+				}
+				if err != nil {
+					var re *rpc.Error
+					if errors.As(err, &re) && re.Code == rpc.CodeUnknown {
+						m.remoteUnsupported = true
+						m.remoteLegacyInstance = inst
+						m.remoteTruncated = false
+						m.remoteErr = ""
+						m.rows, m.terms = []memWorkspace{}, 0
+						return
+					}
+					m.remoteErr = errtext.Text(err)
+					return
+				}
+				m.remoteUnsupported = false
+				m.remoteLegacyInstance = ""
+				m.remoteErr = ""
+				m.remoteTruncated = res.Truncated
+				m.terms = res.TotalKB
+				m.rows = remoteMemoryRows(res)
+				// 仅在本次请求途中新展开、且尚未出现在 requested 里的终端才立即补查一次；已请求但因预算裁剪为空的保持正常周期。
+				for _, row := range m.rows {
+					for _, x := range row.terms {
+						if m.expanded[x.term.ID] && !requested[x.term.ID] && x.procs == nil {
+							m.poll.at = time.Time{}
+						}
+					}
+				}
+			})
+		}()
 		return
 	}
 	type job struct {
@@ -174,14 +259,22 @@ func (a *app) memoryButton(c *ui.Context) {
 	})
 	if b.Clicked() {
 		m.open = !m.open
-		m.poll = panelPoll{}
+		if !m.open {
+			a.cancelMemoryLoad()
+		} else {
+			m.poll = panelPoll{}
+		}
 	}
+	wasOpen := m.open
 	ui.Popover(c, b, &m.open, func() {
 		if m.poll.due(c, memRefresh) {
 			a.loadMemory()
 		}
 		a.memoryPanel(c)
 	})
+	if wasOpen && !m.open {
+		a.cancelMemoryLoad()
+	}
 }
 
 // memLine 是浮窗里的一行：名称和内存。level 0 是小节合计，1 是一项，2 是终端（缩进、次要色），3 是终端里的程序。
@@ -223,16 +316,43 @@ func memSection(c *ui.Context, title, value string) {
 	})
 }
 
+func remoteMemoryRows(res rpc.DaemonMemoryResult) []memWorkspace {
+	rows := make([]memWorkspace, 0, len(res.Workspaces))
+	for _, ws := range res.Workspaces {
+		row := memWorkspace{id: ws.ID, label: ws.Label, kb: ws.KB, terms: make([]memTerminal, 0, len(ws.Terminals))}
+		for _, t := range ws.Terminals {
+			var procs []memProc
+			if len(t.Procs) > 0 {
+				procs = make([]memProc, 0, len(t.Procs))
+				for _, p := range t.Procs {
+					procs = append(procs, memProc{name: p.Name, kb: p.KB, n: p.Count})
+				}
+			}
+			row.terms = append(row.terms, memTerminal{
+				term:  terminalInfo{ID: t.ID, Title: t.Title, Agent: t.Agent},
+				kb:    t.KB,
+				procs: procs,
+			})
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
 func (a *app) memoryPanel(c *ui.Context) {
 	t := c.Theme()
 	l := L(c)
 	m := &a.mem
 	if a.remoteHost() {
 		host := a.hostName(l)
+		terms := m.terms
+		if m.remoteUnsupported {
+			terms = 0
+		}
 		ui.Column(c).Width(320).Gap(12).Padding(8, 8, 6, 8).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Children(func() {
 				titleText(c, l.MemoryTitle(), fsTitle).Grow(1)
-				ui.Text(c, mb(a.daemon.FootprintKB)).FontSize(fsTitle).FontWeight(fwMedium).FontFeatures("tnum")
+				ui.Text(c, mb(a.daemon.FootprintKB+terms)).FontSize(fsTitle).FontWeight(fwMedium).FontFeatures("tnum")
 			})
 			ui.Column(c).Children(func() {
 				memSection(c, "POSSE", "")
@@ -240,8 +360,25 @@ func (a *app) memoryPanel(c *ui.Context) {
 				memLine(c, "window", nil, l.MemoryWindow(fmt.Sprint(os.Getpid())), mb(a.windowOwner().selfKB), 1)
 			})
 			hline(c)
-			ui.Text(c, l.MemoryRemoteNote(host)).
-				FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
+			if m.remoteUnsupported {
+				ui.Text(c, l.MemoryRemoteNote(host)).
+					FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
+				return
+			}
+			if m.remoteErr != "" {
+				ui.Column(c).Gap(6).Children(func() {
+					ui.Text(c, m.remoteErr).FontSize(fsSmall).TextColor(t.Danger).Wrap()
+					if pressable(textButton(c.Key("mem-retry"), l.CommonRetry())).Clicked() {
+						m.remoteErr = ""
+						m.poll.at = time.Time{}
+					}
+				})
+				return
+			}
+			a.memoryTermRows(c, m)
+			if m.remoteTruncated {
+				ui.Text(c, l.HostResTruncated()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0).Wrap()
+			}
 		})
 		return
 	}
@@ -260,74 +397,80 @@ func (a *app) memoryPanel(c *ui.Context) {
 			memLine(c, "window", nil, l.MemoryWindow(fmt.Sprint(os.Getpid())), mb(a.selfKB), 1)
 		})
 		hline(c)
-		ui.Column(c).Children(func() {
-			if m.rows == nil {
-				memSection(c, l.MemoryTermPrograms(), "")
-				ui.Text(c, l.MemoryCounting()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 0)
-				return
-			}
-			memSection(c, l.MemoryTermPrograms(), mb(m.terms))
-			if len(m.rows) == 0 {
-				ui.Text(c, l.MemoryNoTerminals()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 0)
-				return
-			}
-			// 滚动区向两边扩到浮窗的内边距里，内容再缩回来：滚动条落在右边的留白上，不压着数字
-			ui.Scroll(c).MaxHeight(380).Margin(0, -8).Children(func() {
-				ui.Column(c).Gap(8).Padding(0, 8).Children(func() {
-					for _, r := range m.rows {
-						ui.Column(c.Key(r.id)).Children(func() {
-							memLine(c, "ws", func() {
-								ui.Icon(c, iconFolder).FontSize(fsBody).TextColor(t.Accent).Shrink(0)
-							}, r.label, mb(r.kb), 0)
-							for _, x := range r.terms {
-								name, detail := tabLabel(L(c), x.term)
-								if detail != "" {
-									name = detail
-								}
-								open := m.expanded[x.term.ID]
-								row := memLine(c, x.term.ID, func() {
-									chevron := iconChevron
-									if open {
-										chevron = iconDown
-									}
-									ui.Icon(c, chevron).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
-									if x.term.Agent != "" {
-										agentTile(c, x.term.Agent, smallIcon())
-									} else {
-										ui.Icon(c, iconTerminal).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
-									}
-								}, name, mb(x.kb), 2).Role(ui.RoleButton).Radius(rRow)
-								if row.Hovered() {
-									row.Background(colors(t).wash)
-								}
-								if row.Clicked() {
-									if m.expanded == nil {
-										m.expanded = map[string]bool{}
-									}
-									m.expanded[x.term.ID] = !open
-									if !open && x.procs == nil && !m.poll.busy {
-										m.poll.at = time.Time{} // 马上统计这个终端的明细
-									}
-								}
-								if open && x.procs == nil {
-									memLine(c, x.term.ID+"-loading", nil, l.MemoryCounting(), "", 3)
-								}
-								if open {
-									for i, pr := range x.procs {
-										label := pr.name
-										if pr.n > 1 {
-											label = fmt.Sprintf("%s ×%d", pr.name, pr.n)
-										}
-										memLine(c, fmt.Sprint(x.term.ID, "-", i), nil, label, mb(pr.kb), 3)
-									}
-								}
-							}
-						})
-					}
-				})
-			})
-		})
+		a.memoryTermRows(c, m)
 		ui.Text(c, l.MemoryNote()).
 			FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
+	})
+}
+
+func (a *app) memoryTermRows(c *ui.Context, m *memView) {
+	t := c.Theme()
+	l := L(c)
+	ui.Column(c).Children(func() {
+		if m.rows == nil {
+			memSection(c, l.MemoryTermPrograms(), "")
+			ui.Text(c, l.MemoryCounting()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 0)
+			return
+		}
+		memSection(c, l.MemoryTermPrograms(), mb(m.terms))
+		if len(m.rows) == 0 {
+			ui.Text(c, l.MemoryNoTerminals()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 0)
+			return
+		}
+		// 滚动区向两边扩到浮窗的内边距里，内容再缩回来：滚动条落在右边的留白上，不压着数字
+		ui.Scroll(c).MaxHeight(380).Margin(0, -8).Children(func() {
+			ui.Column(c).Gap(8).Padding(0, 8).Children(func() {
+				for _, r := range m.rows {
+					ui.Column(c.Key(r.id)).Children(func() {
+						memLine(c, "ws", func() {
+							ui.Icon(c, iconFolder).FontSize(fsBody).TextColor(t.Accent).Shrink(0)
+						}, r.label, mb(r.kb), 0)
+						for _, x := range r.terms {
+							name, detail := tabLabel(L(c), x.term)
+							if detail != "" {
+								name = detail
+							}
+							open := m.expanded[x.term.ID]
+							row := memLine(c, x.term.ID, func() {
+								chevron := iconChevron
+								if open {
+									chevron = iconDown
+								}
+								ui.Icon(c, chevron).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+								if x.term.Agent != "" {
+									agentTile(c, x.term.Agent, smallIcon())
+								} else {
+									ui.Icon(c, iconTerminal).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
+								}
+							}, name, mb(x.kb), 2).Role(ui.RoleButton).Radius(rRow)
+							if row.Hovered() {
+								row.Background(colors(t).wash)
+							}
+							if row.Clicked() {
+								if m.expanded == nil {
+									m.expanded = map[string]bool{}
+								}
+								m.expanded[x.term.ID] = !open
+								if !open && x.procs == nil && !m.poll.busy {
+									m.poll.at = time.Time{} // 马上统计这个终端的明细
+								}
+							}
+							if open && x.procs == nil {
+								memLine(c, x.term.ID+"-loading", nil, l.MemoryCounting(), "", 3)
+							}
+							if open {
+								for i, pr := range x.procs {
+									label := pr.name
+									if pr.n > 1 {
+										label = fmt.Sprintf("%s ×%d", pr.name, pr.n)
+									}
+									memLine(c, fmt.Sprint(x.term.ID, "-", i), nil, label, mb(pr.kb), 3)
+								}
+							}
+						}
+					})
+				}
+			})
+		})
 	})
 }

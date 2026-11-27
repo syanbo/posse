@@ -1,9 +1,11 @@
 package procmem
 
 import (
+	"context"
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 // TreeFootprint 是 pid 和它所有子孙进程的 phys_footprint 之和（字节）。
@@ -22,6 +24,71 @@ func TreeFootprint(pid int) uint64 {
 		stack = append(stack, Children(p)...)
 	}
 	return sum
+}
+
+// TreeFootprintBounded 在 ctx 与全局进程访问预算内累加 pid 及其子孙进程内存（字节）。
+// 预算耗尽或 ctx 取消时提前停止并返回 truncated=true，避免深进程树拖慢常驻进程。
+func TreeFootprintBounded(ctx context.Context, pid int, budget *int) (sum uint64, truncated bool) {
+	if pid <= 0 {
+		return 0, false
+	}
+	seen := map[int]bool{}
+	stack := []int{pid}
+	for len(stack) > 0 {
+		if ctx != nil && ctx.Err() != nil {
+			return sum, true
+		}
+		if budget != nil && *budget <= 0 {
+			return sum, true
+		}
+		p := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		if budget != nil {
+			*budget--
+		}
+		sum += Footprint(p)
+		stack = append(stack, Children(p)...)
+	}
+	return sum, false
+}
+
+// TruncateName 清理无效 UTF-8 后，按字符边界把短名裁到不超过 maxBytes 字节。
+func TruncateName(s string, maxBytes int) string {
+	if maxBytes <= 0 {
+		return ""
+	}
+	s = strings.ToValidUTF8(s, "")
+	if len(s) <= maxBytes {
+		return s
+	}
+	i := maxBytes
+	for i > 0 && !utf8.RuneStart(s[i]) {
+		i--
+	}
+	return s[:i]
+}
+
+// SafeExeName 只从内核可执行路径提取短名，不解析任何启动参数，用于远端只读 RPC 防参数/凭据泄露。
+func SafeExeName(exe string) string {
+	exe = strings.TrimSpace(strings.ToValidUTF8(exe, ""))
+	if exe == "" {
+		return ""
+	}
+	base := filepath.Base(exe)
+	if base == "" || base == "." || base == "/" {
+		return ""
+	}
+	return base
+}
+
+// SafeName 返回 pid 对应内核可执行文件的 basename，绝不读取 argv[1:]，避免向只读查看端泄露命令参数或内联脚本。
+func SafeName(pid int) string {
+	exe, _ := ExeArgs(pid)
+	return SafeExeName(exe)
 }
 
 // launchers 是只负责启动别的程序的命令：起名时跳过它们，用后面真正运行的包或脚本。

@@ -3,6 +3,7 @@ package spawn
 import (
 	"context"
 	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -247,5 +248,39 @@ func TestSystemdUserInstallBusUnavailableAndRollback(t *testing.T) {
 	}
 	if _, serr := os.Stat(st2.ServicePath); !errors.Is(serr, os.ErrNotExist) {
 		t.Fatalf("service file was not rolled back: %v", serr)
+	}
+}
+
+func TestSystemctlEnvCustomXDGAndSocket(t *testing.T) {
+	beforeEnv := slices.Clone(os.Environ())
+	dir := t.TempDir()
+	busPath := filepath.Join(dir, "bus")
+	ln, err := net.Listen("unix", busPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	// 已有自定义 XDG_RUNTIME_DIR 且缺少 DBUS_SESSION_BUS_ADDRESS 时，从该 XDG 目录推导并校验 Unix socket。
+	env := systemctlEnvFrom([]string{"PATH=/usr/bin", "XDG_RUNTIME_DIR=" + dir, "DBUS_SESSION_BUS_ADDRESS="}, os.Getuid())
+	if !slices.Contains(env, "XDG_RUNTIME_DIR="+dir) {
+		t.Fatalf("custom XDG_RUNTIME_DIR missing: %v", env)
+	}
+	if !slices.Contains(env, "DBUS_SESSION_BUS_ADDRESS=unix:path="+busPath) {
+		t.Fatalf("bus address not derived from custom XDG dir: %v", env)
+	}
+	// 普通文件不是 Unix socket，不应写入 DBUS_SESSION_BUS_ADDRESS。
+	plainDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(plainDir, "bus"), []byte("not-a-socket"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	envPlain := systemctlEnvFrom([]string{"XDG_RUNTIME_DIR=" + plainDir}, os.Getuid())
+	for _, kv := range envPlain {
+		if strings.HasPrefix(kv, "DBUS_SESSION_BUS_ADDRESS=") {
+			t.Fatalf("regular file was accepted as DBus socket: %v", envPlain)
+		}
+	}
+	if !slices.Equal(beforeEnv, os.Environ()) {
+		t.Fatal("systemctlEnvFrom mutated process os.Environ")
 	}
 }

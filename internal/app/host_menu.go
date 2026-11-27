@@ -274,6 +274,9 @@ func (a *app) hostActionsBuild(m locales.Messages, h remote.Host, active bool) f
 			}
 		}
 		menu.Separator()
+		if menu.Item(m.HostDetailsItem()).Chosen() {
+			a.openHostDetails(h)
+		}
 		if menu.Item(m.HostEditItem()).Chosen() {
 			a.openHostDialog(h)
 		}
@@ -330,6 +333,11 @@ func (a *app) hostSwitchBuild(m locales.Messages) func(*popMenu) {
 					}
 					if menu.Item(m.HostDisconnect()).Chosen() {
 						a.windowOwner().hosts.disconnect(a.viewID)
+					}
+				}
+				if ok {
+					if menu.Item(m.HostDetailsItem()).Chosen() {
+						a.openHostDetails(selected)
 					}
 				}
 			} else if s.Connected && !s.Controlled {

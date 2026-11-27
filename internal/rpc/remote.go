@@ -15,11 +15,11 @@ func RemoteFeatures(goos, edition string) []string {
 	switch goos {
 	case "darwin":
 		if edition == "headless" {
-			return []string{"awake.v1", "media.thumbs.v1", "mobile.v1", "procmem.v1", "tailscale.v1", "trash.v1"}
+			return []string{"autostart.v1", "awake.v1", "media.thumbs.v1", "memory.v1", "mobile.v1", "procmem.v1", "tailscale.v1", "trash.v1"}
 		}
-		return []string{"awake.v1", "desk.v1", "media.thumbs.v1", "mobile.v1", "procmem.v1", "tailscale.v1", "trash.v1"}
+		return []string{"autostart.v1", "awake.v1", "desk.v1", "media.thumbs.v1", "memory.v1", "mobile.v1", "procmem.v1", "tailscale.v1", "trash.v1"}
 	case "linux":
-		return []string{"mobile.v1", "tailscale.v1"}
+		return []string{"autostart.v1", "memory.v1", "mobile.v1", "procmem.v1", "tailscale.v1"}
 	default:
 		return nil
 	}
@@ -51,4 +51,57 @@ type RemoteProbe struct {
 	Build    string `json:"build"`
 	Edition  string `json:"edition,omitempty"`
 	Running  bool   `json:"running"`
+}
+
+const (
+	AutostartNoteAquaInactive          = "aqua_inactive"
+	AutostartNoteSystemdBusInactive    = "systemd_bus_inactive"
+	AutostartNoteSystemdLingerDisabled = "systemd_linger_disabled"
+)
+
+// AutostartStatus 描述目标主机的开机自启服务状态（macOS LaunchAgent 或 Linux systemd --user）。
+type AutostartStatus struct {
+	Supported          bool   `json:"supported"`
+	Kind               string `json:"kind,omitempty"`
+	Managed            bool   `json:"managed,omitempty"`
+	Installed          bool   `json:"installed"`
+	Enabled            bool   `json:"enabled"`
+	Active             bool   `json:"active"`
+	Unit               string `json:"unit,omitempty"`
+	Path               string `json:"path,omitempty"`
+	TimerPath          string `json:"timerPath,omitempty"`
+	ExpectedExecutable string `json:"expectedExecutable,omitempty"`
+	Linger             string `json:"linger,omitempty"`
+	NoteCode           string `json:"noteCode,omitempty"`
+}
+
+type DaemonMemoryParams struct {
+	Expanded []string `json:"expanded,omitempty"`
+}
+
+type DaemonMemoryResult struct {
+	TotalKB    int64                   `json:"totalKB"`
+	Workspaces []DaemonMemoryWorkspace `json:"workspaces"`
+	Truncated  bool                    `json:"truncated,omitempty"`
+}
+
+type DaemonMemoryWorkspace struct {
+	ID        string                 `json:"id"`
+	Label     string                 `json:"label"`
+	KB        int64                  `json:"kb"`
+	Terminals []DaemonMemoryTerminal `json:"terminals"`
+}
+
+type DaemonMemoryTerminal struct {
+	ID    string             `json:"id"`
+	Title string             `json:"title"`
+	Agent string             `json:"agent,omitempty"`
+	KB    int64              `json:"kb"`
+	Procs []DaemonMemoryProc `json:"procs,omitempty"`
+}
+
+type DaemonMemoryProc struct {
+	Name  string `json:"name"`
+	KB    int64  `json:"kb"`
+	Count int    `json:"count"`
 }

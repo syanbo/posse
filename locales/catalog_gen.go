@@ -331,6 +331,20 @@ func (msgs Messages) HostAddItem() string {
 	return Catalog.Format(msgs.locale, "hostAddItem", nil)
 }
 
+// HostDetailsItem says "Host details…"
+// in the language the app shows.
+//
+// Menu item to open the remote host overview and service details dialog.
+func HostDetailsItem() string { return In(i18n.Locale()).HostDetailsItem() }
+
+// HostDetailsItem says "Host details…"
+// in the language of msgs.
+//
+// Menu item to open the remote host overview and service details dialog.
+func (msgs Messages) HostDetailsItem() string {
+	return Catalog.Format(msgs.locale, "hostDetailsItem", nil)
+}
+
 // HostEditItem says "Edit host…"
 // in the language the app shows.
 //
@@ -951,6 +965,732 @@ func HostBackLocal() string { return In(i18n.Locale()).HostBackLocal() }
 // Button to return to the local host from a failed remote connection.
 func (msgs Messages) HostBackLocal() string {
 	return Catalog.Format(msgs.locale, "hostBackLocal", nil)
+}
+
+// HostDialogDetailsTitle says "{name} Details"
+// in the language the app shows.
+//
+// Dialog title when viewing remote host overview details.
+func HostDialogDetailsTitle(name string) string {
+	return In(i18n.Locale()).HostDialogDetailsTitle(name)
+}
+
+// HostDialogDetailsTitle says "{name} Details"
+// in the language of msgs.
+//
+// Dialog title when viewing remote host overview details.
+func (msgs Messages) HostDialogDetailsTitle(name string) string {
+	return Catalog.Format(msgs.locale, "hostDialogDetailsTitle", map[string]any{"name": name})
+}
+
+// HostTabOverview says "Overview"
+// in the language the app shows.
+//
+// Overview tab in the remote host dialog.
+func HostTabOverview() string { return In(i18n.Locale()).HostTabOverview() }
+
+// HostTabOverview says "Overview"
+// in the language of msgs.
+//
+// Overview tab in the remote host dialog.
+func (msgs Messages) HostTabOverview() string {
+	return Catalog.Format(msgs.locale, "hostTabOverview", nil)
+}
+
+// HostTabSettings says "Connection"
+// in the language the app shows.
+//
+// Connection settings tab in the remote host dialog.
+func HostTabSettings() string { return In(i18n.Locale()).HostTabSettings() }
+
+// HostTabSettings says "Connection"
+// in the language of msgs.
+//
+// Connection settings tab in the remote host dialog.
+func (msgs Messages) HostTabSettings() string {
+	return Catalog.Format(msgs.locale, "hostTabSettings", nil)
+}
+
+// HostTabLabel says "Host dialog section"
+// in the language the app shows.
+//
+// Accessibility label for the host dialog segmented tabs.
+func HostTabLabel() string { return In(i18n.Locale()).HostTabLabel() }
+
+// HostTabLabel says "Host dialog section"
+// in the language of msgs.
+//
+// Accessibility label for the host dialog segmented tabs.
+func (msgs Messages) HostTabLabel() string {
+	return Catalog.Format(msgs.locale, "hostTabLabel", nil)
+}
+
+// HostStatusControlled says "Connected"
+// in the language the app shows.
+//
+// Remote host status when connected and holding desktop control.
+func HostStatusControlled() string { return In(i18n.Locale()).HostStatusControlled() }
+
+// HostStatusControlled says "Connected"
+// in the language of msgs.
+//
+// Remote host status when connected and holding desktop control.
+func (msgs Messages) HostStatusControlled() string {
+	return Catalog.Format(msgs.locale, "hostStatusControlled", nil)
+}
+
+// HostStatusPooled says "Tunnel ready"
+// in the language the app shows.
+//
+// Remote host status when an SSH tunnel is parked in the connection pool.
+func HostStatusPooled() string { return In(i18n.Locale()).HostStatusPooled() }
+
+// HostStatusPooled says "Tunnel ready"
+// in the language of msgs.
+//
+// Remote host status when an SSH tunnel is parked in the connection pool.
+func (msgs Messages) HostStatusPooled() string {
+	return Catalog.Format(msgs.locale, "hostStatusPooled", nil)
+}
+
+// HostStatusError says "Connection failed"
+// in the language the app shows.
+//
+// Remote host status when the last connection failed.
+func HostStatusError() string { return In(i18n.Locale()).HostStatusError() }
+
+// HostStatusError says "Connection failed"
+// in the language of msgs.
+//
+// Remote host status when the last connection failed.
+func (msgs Messages) HostStatusError() string {
+	return Catalog.Format(msgs.locale, "hostStatusError", nil)
+}
+
+// HostSwitchHere says "Switch to host"
+// in the language the app shows.
+//
+// Button in host overview to switch to an inactive remote host.
+func HostSwitchHere() string { return In(i18n.Locale()).HostSwitchHere() }
+
+// HostSwitchHere says "Switch to host"
+// in the language of msgs.
+//
+// Button in host overview to switch to an inactive remote host.
+func (msgs Messages) HostSwitchHere() string {
+	return Catalog.Format(msgs.locale, "hostSwitchHere", nil)
+}
+
+// HostOverviewInactiveNote says "Switch to this host to inspect live server status, resource usage, and startup service settings."
+// in the language the app shows.
+//
+// Hint in host overview when inspecting a host that is not currently
+// active.
+func HostOverviewInactiveNote() string { return In(i18n.Locale()).HostOverviewInactiveNote() }
+
+// HostOverviewInactiveNote says "Switch to this host to inspect live server status, resource usage, and startup service settings."
+// in the language of msgs.
+//
+// Hint in host overview when inspecting a host that is not currently
+// active.
+func (msgs Messages) HostOverviewInactiveNote() string {
+	return Catalog.Format(msgs.locale, "hostOverviewInactiveNote", nil)
+}
+
+// HostOverviewDisconnectedNote says "Connect to inspect live server status, resource usage, and startup service settings."
+// in the language the app shows.
+//
+// Hint in host overview when the displayed remote host is disconnected.
+func HostOverviewDisconnectedNote() string { return In(i18n.Locale()).HostOverviewDisconnectedNote() }
+
+// HostOverviewDisconnectedNote says "Connect to inspect live server status, resource usage, and startup service settings."
+// in the language of msgs.
+//
+// Hint in host overview when the displayed remote host is disconnected.
+func (msgs Messages) HostOverviewDisconnectedNote() string {
+	return Catalog.Format(msgs.locale, "hostOverviewDisconnectedNote", nil)
+}
+
+// HostOverviewSectionServer says "Server"
+// in the language the app shows.
+//
+// Section title for remote server identity and version.
+func HostOverviewSectionServer() string { return In(i18n.Locale()).HostOverviewSectionServer() }
+
+// HostOverviewSectionServer says "Server"
+// in the language of msgs.
+//
+// Section title for remote server identity and version.
+func (msgs Messages) HostOverviewSectionServer() string {
+	return Catalog.Format(msgs.locale, "hostOverviewSectionServer", nil)
+}
+
+// HostOverviewSectionResources says "Resources"
+// in the language the app shows.
+//
+// Section title for remote daemon and terminal memory usage.
+func HostOverviewSectionResources() string { return In(i18n.Locale()).HostOverviewSectionResources() }
+
+// HostOverviewSectionResources says "Resources"
+// in the language of msgs.
+//
+// Section title for remote daemon and terminal memory usage.
+func (msgs Messages) HostOverviewSectionResources() string {
+	return Catalog.Format(msgs.locale, "hostOverviewSectionResources", nil)
+}
+
+// HostOverviewSectionAutostart says "Startup"
+// in the language the app shows.
+//
+// Section title for remote startup service status.
+func HostOverviewSectionAutostart() string { return In(i18n.Locale()).HostOverviewSectionAutostart() }
+
+// HostOverviewSectionAutostart says "Startup"
+// in the language of msgs.
+//
+// Section title for remote startup service status.
+func (msgs Messages) HostOverviewSectionAutostart() string {
+	return Catalog.Format(msgs.locale, "hostOverviewSectionAutostart", nil)
+}
+
+// HostFieldEdition says "Edition"
+// in the language the app shows.
+//
+// Label for remote Posse server edition.
+func HostFieldEdition() string { return In(i18n.Locale()).HostFieldEdition() }
+
+// HostFieldEdition says "Edition"
+// in the language of msgs.
+//
+// Label for remote Posse server edition.
+func (msgs Messages) HostFieldEdition() string {
+	return Catalog.Format(msgs.locale, "hostFieldEdition", nil)
+}
+
+// HostEditionHeadlessManaged says "Headless server (managed)"
+// in the language the app shows.
+//
+// Edition value for a Posse-managed headless server.
+func HostEditionHeadlessManaged() string { return In(i18n.Locale()).HostEditionHeadlessManaged() }
+
+// HostEditionHeadlessManaged says "Headless server (managed)"
+// in the language of msgs.
+//
+// Edition value for a Posse-managed headless server.
+func (msgs Messages) HostEditionHeadlessManaged() string {
+	return Catalog.Format(msgs.locale, "hostEditionHeadlessManaged", nil)
+}
+
+// HostEditionHeadlessCustom says "Headless server (custom)"
+// in the language the app shows.
+//
+// Edition value for an unmanaged headless binary.
+func HostEditionHeadlessCustom() string { return In(i18n.Locale()).HostEditionHeadlessCustom() }
+
+// HostEditionHeadlessCustom says "Headless server (custom)"
+// in the language of msgs.
+//
+// Edition value for an unmanaged headless binary.
+func (msgs Messages) HostEditionHeadlessCustom() string {
+	return Catalog.Format(msgs.locale, "hostEditionHeadlessCustom", nil)
+}
+
+// HostEditionFull says "Posse.app (full)"
+// in the language the app shows.
+//
+// Edition value for a full Posse.app desktop daemon.
+func HostEditionFull() string { return In(i18n.Locale()).HostEditionFull() }
+
+// HostEditionFull says "Posse.app (full)"
+// in the language of msgs.
+//
+// Edition value for a full Posse.app desktop daemon.
+func (msgs Messages) HostEditionFull() string {
+	return Catalog.Format(msgs.locale, "hostEditionFull", nil)
+}
+
+// HostFieldVersion says "Version"
+// in the language the app shows.
+//
+// Label for remote daemon version.
+func HostFieldVersion() string { return In(i18n.Locale()).HostFieldVersion() }
+
+// HostFieldVersion says "Version"
+// in the language of msgs.
+//
+// Label for remote daemon version.
+func (msgs Messages) HostFieldVersion() string {
+	return Catalog.Format(msgs.locale, "hostFieldVersion", nil)
+}
+
+// HostFieldPlatform says "System"
+// in the language the app shows.
+//
+// Label for remote operating system and architecture.
+func HostFieldPlatform() string { return In(i18n.Locale()).HostFieldPlatform() }
+
+// HostFieldPlatform says "System"
+// in the language of msgs.
+//
+// Label for remote operating system and architecture.
+func (msgs Messages) HostFieldPlatform() string {
+	return Catalog.Format(msgs.locale, "hostFieldPlatform", nil)
+}
+
+// HostFieldProcess says "Process"
+// in the language the app shows.
+//
+// Label for remote daemon PID and uptime.
+func HostFieldProcess() string { return In(i18n.Locale()).HostFieldProcess() }
+
+// HostFieldProcess says "Process"
+// in the language of msgs.
+//
+// Label for remote daemon PID and uptime.
+func (msgs Messages) HostFieldProcess() string {
+	return Catalog.Format(msgs.locale, "hostFieldProcess", nil)
+}
+
+// HostProcessPid says "PID {pid}"
+// in the language the app shows.
+//
+// Remote daemon process ID.
+func HostProcessPid(pid string) string { return In(i18n.Locale()).HostProcessPid(pid) }
+
+// HostProcessPid says "PID {pid}"
+// in the language of msgs.
+//
+// Remote daemon process ID.
+func (msgs Messages) HostProcessPid(pid string) string {
+	return Catalog.Format(msgs.locale, "hostProcessPid", map[string]any{"pid": pid})
+}
+
+// HostProcessUp says "Up {uptime}"
+// in the language the app shows.
+//
+// Remote daemon uptime.
+func HostProcessUp(uptime string) string { return In(i18n.Locale()).HostProcessUp(uptime) }
+
+// HostProcessUp says "Up {uptime}"
+// in the language of msgs.
+//
+// Remote daemon uptime.
+func (msgs Messages) HostProcessUp(uptime string) string {
+	return Catalog.Format(msgs.locale, "hostProcessUp", map[string]any{"uptime": uptime})
+}
+
+// HostFieldDataDir says "Data directory"
+// in the language the app shows.
+//
+// Label for remote Posse home directory path.
+func HostFieldDataDir() string { return In(i18n.Locale()).HostFieldDataDir() }
+
+// HostFieldDataDir says "Data directory"
+// in the language of msgs.
+//
+// Label for remote Posse home directory path.
+func (msgs Messages) HostFieldDataDir() string {
+	return Catalog.Format(msgs.locale, "hostFieldDataDir", nil)
+}
+
+// HostResDaemonMem says "Daemon memory"
+// in the language the app shows.
+//
+// Label for remote daemon memory usage.
+func HostResDaemonMem() string { return In(i18n.Locale()).HostResDaemonMem() }
+
+// HostResDaemonMem says "Daemon memory"
+// in the language of msgs.
+//
+// Label for remote daemon memory usage.
+func (msgs Messages) HostResDaemonMem() string {
+	return Catalog.Format(msgs.locale, "hostResDaemonMem", nil)
+}
+
+// HostResTerminals says "Terminals"
+// in the language the app shows.
+//
+// Label for remote terminal counts.
+func HostResTerminals() string { return In(i18n.Locale()).HostResTerminals() }
+
+// HostResTerminals says "Terminals"
+// in the language of msgs.
+//
+// Label for remote terminal counts.
+func (msgs Messages) HostResTerminals() string {
+	return Catalog.Format(msgs.locale, "hostResTerminals", nil)
+}
+
+// HostResTerminalsCount says "{running} running / {total} total"
+// in the language the app shows.
+//
+// Running and total terminal counts on the remote host.
+func HostResTerminalsCount(running int, total int) string {
+	return In(i18n.Locale()).HostResTerminalsCount(running, total)
+}
+
+// HostResTerminalsCount says "{running} running / {total} total"
+// in the language of msgs.
+//
+// Running and total terminal counts on the remote host.
+func (msgs Messages) HostResTerminalsCount(running int, total int) string {
+	return Catalog.Format(msgs.locale, "hostResTerminalsCount", map[string]any{"running": running, "total": total})
+}
+
+// HostResTermsMem says "Terminal processes"
+// in the language the app shows.
+//
+// Label for remote running terminal process tree memory.
+func HostResTermsMem() string { return In(i18n.Locale()).HostResTermsMem() }
+
+// HostResTermsMem says "Terminal processes"
+// in the language of msgs.
+//
+// Label for remote running terminal process tree memory.
+func (msgs Messages) HostResTermsMem() string {
+	return Catalog.Format(msgs.locale, "hostResTermsMem", nil)
+}
+
+// HostResTruncated says "Some deep process trees were truncated to keep the query responsive."
+// in the language the app shows.
+//
+// Notice when daemon.memory hit its process or size budget.
+func HostResTruncated() string { return In(i18n.Locale()).HostResTruncated() }
+
+// HostResTruncated says "Some deep process trees were truncated to keep the query responsive."
+// in the language of msgs.
+//
+// Notice when daemon.memory hit its process or size budget.
+func (msgs Messages) HostResTruncated() string {
+	return Catalog.Format(msgs.locale, "hostResTruncated", nil)
+}
+
+// HostResLegacyNote says "Upgrade the remote server to view terminal process tree memory."
+// in the language the app shows.
+//
+// Fallback note when an older remote daemon does not support daemon.memory.
+func HostResLegacyNote() string { return In(i18n.Locale()).HostResLegacyNote() }
+
+// HostResLegacyNote says "Upgrade the remote server to view terminal process tree memory."
+// in the language of msgs.
+//
+// Fallback note when an older remote daemon does not support daemon.memory.
+func (msgs Messages) HostResLegacyNote() string {
+	return Catalog.Format(msgs.locale, "hostResLegacyNote", nil)
+}
+
+// HostAutostartLaunchd says "macOS LaunchAgent"
+// in the language the app shows.
+//
+// Startup service kind on macOS.
+func HostAutostartLaunchd() string { return In(i18n.Locale()).HostAutostartLaunchd() }
+
+// HostAutostartLaunchd says "macOS LaunchAgent"
+// in the language of msgs.
+//
+// Startup service kind on macOS.
+func (msgs Messages) HostAutostartLaunchd() string {
+	return Catalog.Format(msgs.locale, "hostAutostartLaunchd", nil)
+}
+
+// HostAutostartSystemd says "Linux systemd --user"
+// in the language the app shows.
+//
+// Startup service kind on Linux.
+func HostAutostartSystemd() string { return In(i18n.Locale()).HostAutostartSystemd() }
+
+// HostAutostartSystemd says "Linux systemd --user"
+// in the language of msgs.
+//
+// Startup service kind on Linux.
+func (msgs Messages) HostAutostartSystemd() string {
+	return Catalog.Format(msgs.locale, "hostAutostartSystemd", nil)
+}
+
+// HostAutostartOn says "Enabled"
+// in the language the app shows.
+//
+// Startup service installed and enabled.
+func HostAutostartOn() string { return In(i18n.Locale()).HostAutostartOn() }
+
+// HostAutostartOn says "Enabled"
+// in the language of msgs.
+//
+// Startup service installed and enabled.
+func (msgs Messages) HostAutostartOn() string {
+	return Catalog.Format(msgs.locale, "hostAutostartOn", nil)
+}
+
+// HostAutostartOff says "Disabled"
+// in the language the app shows.
+//
+// Startup service not installed.
+func HostAutostartOff() string { return In(i18n.Locale()).HostAutostartOff() }
+
+// HostAutostartOff says "Disabled"
+// in the language of msgs.
+//
+// Startup service not installed.
+func (msgs Messages) HostAutostartOff() string {
+	return Catalog.Format(msgs.locale, "hostAutostartOff", nil)
+}
+
+// HostAutostartLoaded says "Loaded"
+// in the language the app shows.
+//
+// macOS LaunchAgent is currently loaded.
+func HostAutostartLoaded() string { return In(i18n.Locale()).HostAutostartLoaded() }
+
+// HostAutostartLoaded says "Loaded"
+// in the language of msgs.
+//
+// macOS LaunchAgent is currently loaded.
+func (msgs Messages) HostAutostartLoaded() string {
+	return Catalog.Format(msgs.locale, "hostAutostartLoaded", nil)
+}
+
+// HostAutostartTimerActive says "Timer active"
+// in the language the app shows.
+//
+// Linux systemd user timer is currently active.
+func HostAutostartTimerActive() string { return In(i18n.Locale()).HostAutostartTimerActive() }
+
+// HostAutostartTimerActive says "Timer active"
+// in the language of msgs.
+//
+// Linux systemd user timer is currently active.
+func (msgs Messages) HostAutostartTimerActive() string {
+	return Catalog.Format(msgs.locale, "hostAutostartTimerActive", nil)
+}
+
+// HostAutostartInstalledPending says "Installed (inactive)"
+// in the language the app shows.
+//
+// Startup service files exist but are not currently loaded or active.
+func HostAutostartInstalledPending() string { return In(i18n.Locale()).HostAutostartInstalledPending() }
+
+// HostAutostartInstalledPending says "Installed (inactive)"
+// in the language of msgs.
+//
+// Startup service files exist but are not currently loaded or active.
+func (msgs Messages) HostAutostartInstalledPending() string {
+	return Catalog.Format(msgs.locale, "hostAutostartInstalledPending", nil)
+}
+
+// HostAutostartFieldPath says "Config file"
+// in the language the app shows.
+//
+// Label for LaunchAgent plist or systemd unit file path.
+func HostAutostartFieldPath() string { return In(i18n.Locale()).HostAutostartFieldPath() }
+
+// HostAutostartFieldPath says "Config file"
+// in the language of msgs.
+//
+// Label for LaunchAgent plist or systemd unit file path.
+func (msgs Messages) HostAutostartFieldPath() string {
+	return Catalog.Format(msgs.locale, "hostAutostartFieldPath", nil)
+}
+
+// HostAutostartFieldExpectedExe says "Expected binary"
+// in the language the app shows.
+//
+// Label for expected startup executable path.
+func HostAutostartFieldExpectedExe() string { return In(i18n.Locale()).HostAutostartFieldExpectedExe() }
+
+// HostAutostartFieldExpectedExe says "Expected binary"
+// in the language of msgs.
+//
+// Label for expected startup executable path.
+func (msgs Messages) HostAutostartFieldExpectedExe() string {
+	return Catalog.Format(msgs.locale, "hostAutostartFieldExpectedExe", nil)
+}
+
+// HostAutostartNoteAqua says "macOS GUI login session (Aqua) is not active; LaunchAgent will load after GUI login."
+// in the language the app shows.
+//
+// Status note when macOS LaunchAgent is installed without an active GUI
+// session.
+func HostAutostartNoteAqua() string { return In(i18n.Locale()).HostAutostartNoteAqua() }
+
+// HostAutostartNoteAqua says "macOS GUI login session (Aqua) is not active; LaunchAgent will load after GUI login."
+// in the language of msgs.
+//
+// Status note when macOS LaunchAgent is installed without an active GUI
+// session.
+func (msgs Messages) HostAutostartNoteAqua() string {
+	return Catalog.Format(msgs.locale, "hostAutostartNoteAqua", nil)
+}
+
+// HostAutostartNoteSystemdBus says "systemd user bus is not active; unit files will take effect after login or enabling linger."
+// in the language the app shows.
+//
+// Status note when systemd --user cannot reach the user session bus.
+func HostAutostartNoteSystemdBus() string { return In(i18n.Locale()).HostAutostartNoteSystemdBus() }
+
+// HostAutostartNoteSystemdBus says "systemd user bus is not active; unit files will take effect after login or enabling linger."
+// in the language of msgs.
+//
+// Status note when systemd --user cannot reach the user session bus.
+func (msgs Messages) HostAutostartNoteSystemdBus() string {
+	return Catalog.Format(msgs.locale, "hostAutostartNoteSystemdBus", nil)
+}
+
+// HostAutostartNoteLinger says "User linger is disabled; the timer and service may stop after the last SSH session exits."
+// in the language the app shows.
+//
+// Warning note on Linux when loginctl linger is disabled.
+func HostAutostartNoteLinger() string { return In(i18n.Locale()).HostAutostartNoteLinger() }
+
+// HostAutostartNoteLinger says "User linger is disabled; the timer and service may stop after the last SSH session exits."
+// in the language of msgs.
+//
+// Warning note on Linux when loginctl linger is disabled.
+func (msgs Messages) HostAutostartNoteLinger() string {
+	return Catalog.Format(msgs.locale, "hostAutostartNoteLinger", nil)
+}
+
+// HostAutostartCopyLinger says "Copy command"
+// in the language the app shows.
+//
+// Button to copy the loginctl enable-linger command.
+func HostAutostartCopyLinger() string { return In(i18n.Locale()).HostAutostartCopyLinger() }
+
+// HostAutostartCopyLinger says "Copy command"
+// in the language of msgs.
+//
+// Button to copy the loginctl enable-linger command.
+func (msgs Messages) HostAutostartCopyLinger() string {
+	return Catalog.Format(msgs.locale, "hostAutostartCopyLinger", nil)
+}
+
+// HostAutostartFullNote says "Managed by Posse.app on the target Mac."
+// in the language the app shows.
+//
+// Read-only hint for full Posse.app remote hosts.
+func HostAutostartFullNote() string { return In(i18n.Locale()).HostAutostartFullNote() }
+
+// HostAutostartFullNote says "Managed by Posse.app on the target Mac."
+// in the language of msgs.
+//
+// Read-only hint for full Posse.app remote hosts.
+func (msgs Messages) HostAutostartFullNote() string {
+	return Catalog.Format(msgs.locale, "hostAutostartFullNote", nil)
+}
+
+// HostAutostartLegacyNote says "Upgrade the remote server to view startup service status."
+// in the language the app shows.
+//
+// Fallback note when an older remote daemon does not support
+// server.autostart.status.
+func HostAutostartLegacyNote() string { return In(i18n.Locale()).HostAutostartLegacyNote() }
+
+// HostAutostartLegacyNote says "Upgrade the remote server to view startup service status."
+// in the language of msgs.
+//
+// Fallback note when an older remote daemon does not support
+// server.autostart.status.
+func (msgs Messages) HostAutostartLegacyNote() string {
+	return Catalog.Format(msgs.locale, "hostAutostartLegacyNote", nil)
+}
+
+// HostAutostartUnsupported says "Startup service management is not supported on this platform."
+// in the language the app shows.
+//
+// Fallback note on platforms without LaunchAgent or systemd user support.
+func HostAutostartUnsupported() string { return In(i18n.Locale()).HostAutostartUnsupported() }
+
+// HostAutostartUnsupported says "Startup service management is not supported on this platform."
+// in the language of msgs.
+//
+// Fallback note on platforms without LaunchAgent or systemd user support.
+func (msgs Messages) HostAutostartUnsupported() string {
+	return Catalog.Format(msgs.locale, "hostAutostartUnsupported", nil)
+}
+
+// HostUptimeDays says "{days}d {hours}h"
+// in the language the app shows.
+//
+// Uptime formatted in days and hours.
+func HostUptimeDays(days int, hours int) string { return In(i18n.Locale()).HostUptimeDays(days, hours) }
+
+// HostUptimeDays says "{days}d {hours}h"
+// in the language of msgs.
+//
+// Uptime formatted in days and hours.
+func (msgs Messages) HostUptimeDays(days int, hours int) string {
+	return Catalog.Format(msgs.locale, "hostUptimeDays", map[string]any{"days": days, "hours": hours})
+}
+
+// HostUptimeHours says "{hours}h {mins}m"
+// in the language the app shows.
+//
+// Uptime formatted in hours and minutes.
+func HostUptimeHours(hours int, mins int) string {
+	return In(i18n.Locale()).HostUptimeHours(hours, mins)
+}
+
+// HostUptimeHours says "{hours}h {mins}m"
+// in the language of msgs.
+//
+// Uptime formatted in hours and minutes.
+func (msgs Messages) HostUptimeHours(hours int, mins int) string {
+	return Catalog.Format(msgs.locale, "hostUptimeHours", map[string]any{"hours": hours, "mins": mins})
+}
+
+// HostUptimeMins says "{mins}m"
+// in the language the app shows.
+//
+// Uptime formatted in minutes.
+func HostUptimeMins(mins int) string { return In(i18n.Locale()).HostUptimeMins(mins) }
+
+// HostUptimeMins says "{mins}m"
+// in the language of msgs.
+//
+// Uptime formatted in minutes.
+func (msgs Messages) HostUptimeMins(mins int) string {
+	return Catalog.Format(msgs.locale, "hostUptimeMins", map[string]any{"mins": mins})
+}
+
+// HostUptimeSeconds says "< 1m"
+// in the language the app shows.
+//
+// Uptime shorter than one minute.
+func HostUptimeSeconds() string { return In(i18n.Locale()).HostUptimeSeconds() }
+
+// HostUptimeSeconds says "< 1m"
+// in the language of msgs.
+//
+// Uptime shorter than one minute.
+func (msgs Messages) HostUptimeSeconds() string {
+	return Catalog.Format(msgs.locale, "hostUptimeSeconds", nil)
+}
+
+// HostDetailLoading says "Loading…"
+// in the language the app shows.
+//
+// Inline loading indicator inside remote host details.
+func HostDetailLoading() string { return In(i18n.Locale()).HostDetailLoading() }
+
+// HostDetailLoading says "Loading…"
+// in the language of msgs.
+//
+// Inline loading indicator inside remote host details.
+func (msgs Messages) HostDetailLoading() string {
+	return Catalog.Format(msgs.locale, "hostDetailLoading", nil)
+}
+
+// HostDetailCopied says "Copied"
+// in the language the app shows.
+//
+// Temporary feedback after copying a path or command.
+func HostDetailCopied() string { return In(i18n.Locale()).HostDetailCopied() }
+
+// HostDetailCopied says "Copied"
+// in the language of msgs.
+//
+// Temporary feedback after copying a path or command.
+func (msgs Messages) HostDetailCopied() string {
+	return Catalog.Format(msgs.locale, "hostDetailCopied", nil)
 }
 
 // HostTileTip says "{name}\n{target}"
@@ -30341,13 +31081,13 @@ func (msgs Messages) MemoryRemoteDaemon(host string) string {
 	return Catalog.Format(msgs.locale, "memoryRemoteDaemon", map[string]any{"host": host})
 }
 
-// MemoryRemoteNote says "Terminal process trees run on {host} and are not counted on this Mac."
+// MemoryRemoteNote says "Upgrade the Posse server on {host} to view terminal process tree memory."
 // in the language the app shows.
 //
 // Memory popover note when viewing a remote host.
 func MemoryRemoteNote(host string) string { return In(i18n.Locale()).MemoryRemoteNote(host) }
 
-// MemoryRemoteNote says "Terminal process trees run on {host} and are not counted on this Mac."
+// MemoryRemoteNote says "Upgrade the Posse server on {host} to view terminal process tree memory."
 // in the language of msgs.
 //
 // Memory popover note when viewing a remote host.
