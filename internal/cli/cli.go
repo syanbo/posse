@@ -14,7 +14,6 @@ import (
 	"strings"
 	"syscall"
 
-	"posse/internal/app"
 	"posse/internal/client"
 	"posse/internal/daemon"
 	"posse/internal/rpc"
@@ -49,6 +48,7 @@ var commands []command
 func init() {
 	commands = []command{
 		{"app", "Open the Posse window", "", cmdApp},
+		{"daemon start", "Start the daemon if it is not running", "", cmdDaemonStart},
 		{"daemon run", "Run the daemon in the foreground", "", cmdDaemonRun},
 		{"daemon status", "Show daemon status", "", cmdDaemonStatus},
 		{"daemon stop", "Stop the daemon and every terminal it hosts", "", cmdDaemonStop},
@@ -56,9 +56,12 @@ func init() {
 		{"remote add", "Save an SSH host (use --id to update it)", "<name> <target> [--user U] [--port N] [--home DIR] [--executable PATH] [--id ID]", cmdRemoteAdd},
 		{"remote list", "List saved SSH hosts", "", cmdRemoteList},
 		{"remote rm", "Forget an SSH host (remote data stays)", "<host>", cmdRemoteRemove},
-		{"remote check", "Check SSH discovery, socket forwarding and daemon capabilities", "<host> [--start] [--batch]", cmdRemoteCheck},
+		{"remote check", "Check SSH discovery, socket forwarding and daemon capabilities", "<host> [--start] [--install] [--file TAR] [--batch]", cmdRemoteCheck},
+		{"remote install", "Push and install the headless Posse server on a remote host over SSH", "<host> [--file TAR] [--start] [--batch]", cmdRemoteInstall},
 		{"remote probe", "Discover the remote daemon without starting it unless requested", "[--start]", cmdRemoteProbe},
 		{"remote askpass", "Answer a private SSH authentication request (used by SSH)", "<prompt>", cmdRemoteAskpass},
+		{"server commit", "Commit a staged headless server version (internal)", "--stage DIR --tag TAG --lib NAME [--home DIR] [--posse-sha SHA] [--lib-sha SHA]", cmdServerCommit},
+		{"server activate", "Atomically switch the active headless server symlink (internal)", "--tag TAG [--home DIR]", cmdServerActivate},
 		{"project add", "Add a folder or git repository", "<path> [--name N] [--setup SCRIPT]", cmdProjectAdd},
 		{"project list", "List projects", "", cmdProjectList},
 		{"project set", "Update a project", "<project> [--name N] [--setup SCRIPT] [--multi-repo on|off]", cmdProjectSet},
@@ -377,5 +380,3 @@ func inAppBundle() bool {
 	root := spawn.RuntimeRoot()
 	return root == "" || !strings.HasPrefix(exe, root+string(filepath.Separator)) || os.Getppid() == 1
 }
-
-func cmdApp(e *env, args []string) error { return app.Run(e.client()) }

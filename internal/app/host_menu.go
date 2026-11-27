@@ -162,7 +162,7 @@ func (a *app) selectRemoteHost(h remote.Host) {
 		k.views.local.hostMenu.names = make(map[string]string)
 	}
 	k.views.local.hostMenu.names[h.ID] = h.Name
-	k.connectRemote(h, false)
+	k.connectRemote(h, true)
 }
 
 func (a *app) takeHost(m locales.Messages, s hostSnapshot) {

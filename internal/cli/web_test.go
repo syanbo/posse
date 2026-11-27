@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"posse/internal/app"
 	"posse/internal/rpc"
 )
 
@@ -38,13 +37,13 @@ func TestWebNoWindow(t *testing.T) {
 		t.Fatalf("no socket: %v", err)
 	}
 	// 窗口进程崩溃留下的 socket 文件，没人应答
-	ln, err := net.Listen("unix", app.CtlSocket(e.home))
+	ln, err := net.Listen("unix", rpc.AppCtlSocket(e.home))
 	if err != nil {
 		t.Fatal(err)
 	}
 	ln.(*net.UnixListener).SetUnlinkOnClose(false)
 	ln.Close()
-	if _, err := os.Stat(app.CtlSocket(e.home)); err != nil {
+	if _, err := os.Stat(rpc.AppCtlSocket(e.home)); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.callApp(time.Second, "web.list", nil, nil); errCode(err) != codeNoWindow {
@@ -54,7 +53,7 @@ func TestWebNoWindow(t *testing.T) {
 
 func TestWebTimeout(t *testing.T) {
 	e := webEnv(t)
-	ln, err := net.Listen("unix", app.CtlSocket(e.home))
+	ln, err := net.Listen("unix", rpc.AppCtlSocket(e.home))
 	if err != nil {
 		t.Fatal(err)
 	}

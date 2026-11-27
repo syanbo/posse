@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,7 +22,7 @@ import (
 var webctlJS string
 
 // CtlSocket 是窗口进程接 posse web 请求的 socket。
-func CtlSocket(home string) string { return filepath.Join(home, "app.sock") }
+func CtlSocket(home string) string { return rpc.AppCtlSocket(home) }
 
 // errCtlBusy 是同一 home 已有窗口进程在接 posse web 的请求。
 var errCtlBusy = errors.New("another Posse window already serves app.sock")

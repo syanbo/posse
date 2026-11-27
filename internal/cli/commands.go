@@ -124,6 +124,20 @@ func termArg(pos []string) string {
 
 // --- daemon
 
+func cmdDaemonStart(e *env, args []string) error {
+	pos, err := parse(flag.NewFlagSet("daemon start", flag.ContinueOnError), args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 0 {
+		return errors.New("usage: posse daemon start")
+	}
+	if err := e.ensureDaemon(); err != nil {
+		return err
+	}
+	return e.emit(map[string]bool{"running": true}, func() { fmt.Fprintln(e.out, "daemon running") })
+}
+
 func cmdDaemonRun(e *env, args []string) error {
 	fs := flag.NewFlagSet("daemon run", flag.ContinueOnError)
 	scrollback := fs.Int("scrollback-mb", 4, "scrollback kept per terminal, in MB")

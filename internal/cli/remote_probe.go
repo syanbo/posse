@@ -38,6 +38,7 @@ func cmdRemoteProbe(e *env, args []string) error {
 		Socket:   e.socket,
 		Version:  daemon.Version,
 		Build:    daemon.Build,
+		Edition:  daemon.Edition,
 		Running:  e.daemonUp(),
 	}
 	data, err := json.Marshal(probe)

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/creack/pty"
-	"github.com/egoist/mygo/plugins/terminal"
 	"golang.org/x/sys/unix"
 
 	"posse/internal/vt"
@@ -77,10 +76,13 @@ type AgentState struct {
 var libOnce sync.Once
 var libErr error
 
-// loadLib 加载 MyGo 终端插件所用的同一个 libghostty-vt（首次运行时由插件下载）。
+// Preload 提前加载 libghostty-vt，供无头服务端在启动阶段早失败检查。
+func Preload() error { return loadLib() }
+
+// loadLib 加载 libghostty-vt。
 func loadLib() error {
 	libOnce.Do(func() {
-		path, err := terminal.LibraryPath()
+		path, err := vt.LibraryPath()
 		if err != nil {
 			libErr = err
 			return

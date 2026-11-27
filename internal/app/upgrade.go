@@ -66,13 +66,13 @@ func (u *upgradeState) status(pid int) (running, unsupported bool) {
 	return u.running, u.unsupported[pid]
 }
 
-// buildTime 取构建标识里可执行文件的修改时间。
+// buildTime 取构建标识里可执行文件的修改时间（兼容 "<commit> <RFC3339>" 与纯 "<RFC3339>"）。
 func buildTime(build string) (time.Time, bool) {
-	_, ts, ok := strings.Cut(build, " ")
-	if !ok {
-		return time.Time{}, false
+	if _, ts, ok := strings.Cut(build, " "); ok {
+		t, err := time.Parse(time.RFC3339, ts)
+		return t, err == nil
 	}
-	t, err := time.Parse(time.RFC3339, ts)
+	t, err := time.Parse(time.RFC3339, build)
 	return t, err == nil
 }
 
@@ -80,6 +80,10 @@ func buildTime(build string) (time.Time, bool) {
 // 打开一个旧的 Posse.app 不会把常驻进程换回旧包。
 func (a *app) autoUpgrade(d daemonStatus) {
 	if a.c.Remote || d.Pid == 0 || d.Build == "" || d.Build == daemon.Build {
+		return
+	}
+	// 无头服务端与完整桌面版不互相自动交接，避免同机共存时反复来回切换
+	if d.Edition != "" && d.Edition != daemon.Edition {
 		return
 	}
 	mine, ok1 := buildTime(daemon.Build)

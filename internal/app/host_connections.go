@@ -91,9 +91,15 @@ func (k *hostConnections) connectRemote(h remote.Host, start bool) {
 	r := &hostAttempt{app: a, ctx: ctx, cancel: cancel}
 	k.active = r
 	generation := a.host.snapshot().Generation
-	opts := remote.Options{Start: start, Required: slices.Clone(rpc.RemoteCapabilities), Prompt: func(ctx context.Context, p remote.Prompt) (string, error) {
-		return k.views.local.sshAuth.ask(ctx, h.Name, p, cancel)
-	}}
+	opts := remote.Options{
+		Start:       start,
+		AutoInstall: start,
+		LocalHome:   k.views.local.home,
+		Required:    slices.Clone(rpc.RemoteCapabilities),
+		Prompt: func(ctx context.Context, p remote.Prompt) (string, error) {
+			return k.views.local.sshAuth.ask(ctx, h.Name, p, cancel)
+		},
+	}
 	k.jobs.Go(func() {
 		k.dialMu.Lock()
 		var transport hostTransport

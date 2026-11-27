@@ -71,13 +71,15 @@ func cmdRemoteRemove(e *env, args []string) error {
 func cmdRemoteCheck(e *env, args []string) error {
 	fs := flag.NewFlagSet("remote check", flag.ContinueOnError)
 	start := fs.Bool("start", false, "")
+	install := fs.Bool("install", false, "")
+	file := fs.String("file", "", "")
 	batch := fs.Bool("batch", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) != 1 {
-		return errors.New("usage: posse remote check <host> [--start] [--batch]")
+		return errors.New("usage: posse remote check <host> [--start] [--install] [--file TAR] [--batch]")
 	}
 	h, err := remote.Find(e.home, pos[0])
 	if err != nil {
@@ -87,7 +89,13 @@ func cmdRemoteCheck(e *env, args []string) error {
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	opts := remote.Options{Start: *start, Required: []string{"rpc.v1"}}
+	opts := remote.Options{
+		Start:         *start || *install,
+		AutoInstall:   *install,
+		LocalHome:     e.home,
+		ServerArchive: *file,
+		Required:      []string{"rpc.v1"},
+	}
 	if !*batch {
 		opts.Prompt = remoteTerminalPrompt
 	}
@@ -97,7 +105,55 @@ func cmdRemoteCheck(e *env, args []string) error {
 	}
 	defer s.Close()
 	return e.emit(s.Info, func() {
-		fmt.Fprintf(e.out, "Connected to %s\nhome: %s\ndaemon: %s (%s)\ninstance: %s\ncapabilities: %v\n", h.Name, s.Info.Home, s.Info.Version, s.Info.Build, s.Info.InstanceID, s.Info.Capabilities)
+		edition := s.Info.Edition
+		if edition == "" {
+			edition = "full"
+		}
+		fmt.Fprintf(e.out, "Connected to %s\nhome: %s\ndaemon: %s (%s, %s)\ninstance: %s\ncapabilities: %v\n", h.Name, s.Info.Home, s.Info.Version, s.Info.Build, edition, s.Info.InstanceID, s.Info.Capabilities)
+	})
+}
+
+func cmdRemoteInstall(e *env, args []string) error {
+	fs := flag.NewFlagSet("remote install", flag.ContinueOnError)
+	file := fs.String("file", "", "")
+	start := fs.Bool("start", true, "")
+	batch := fs.Bool("batch", false, "")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		return errors.New("usage: posse remote install <host> [--file TAR] [--start] [--batch]")
+	}
+	h, err := remote.Find(e.home, pos[0])
+	if err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	opts := remote.Options{
+		Start:         *start,
+		LocalHome:     e.home,
+		ServerArchive: *file,
+	}
+	if !*batch {
+		opts.Prompt = remoteTerminalPrompt
+	}
+	res, err := remote.Install(ctx, h, opts)
+	if err != nil {
+		return err
+	}
+	return e.emit(res, func() {
+		state := "installed"
+		switch {
+		case res.HandedOff:
+			state = "installed and handed off (terminals preserved)"
+		case res.Started:
+			state = "installed and started"
+		}
+		fmt.Fprintf(e.out, "%s on %s (%s/%s)\nversion: %s (%s)\nexecutable: %s\n", state, h.Name, res.OS, res.Arch, res.Version, res.Tag, res.Executable)
 	})
 }
 

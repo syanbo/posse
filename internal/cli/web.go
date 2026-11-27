@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"posse/internal/app"
 	"posse/internal/rpc"
 )
 
@@ -74,7 +73,7 @@ func (e *env) callApp(timeout time.Duration, method string, params, out any) err
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	err := rpc.Call(ctx, app.CtlSocket(e.home), method, params, out)
+	err := rpc.Call(ctx, rpc.AppCtlSocket(e.home), method, params, out)
 	var op *net.OpError
 	switch {
 	case err == nil:

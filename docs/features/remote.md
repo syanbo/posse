@@ -4,20 +4,21 @@
 
 ## 配置与诊断
 
-两端需安装带 `remote probe` 的 Posse。目标 Mac 开启系统「远程登录」，先在目标 Mac 正常打开 Posse，完成项目目录授权。
+目标 Mac 只需开启系统「远程登录」（SSH），**不再要求目标机预先安装或打开 `Posse.app`**。主 Mac 在主机菜单点击远端主机、或通过 CLI 执行 `posse remote install <host>` / `posse remote check <host> --install` 时，若目标 Mac 尚未安装 Posse，会复用同一条已认证的 SSH 连接自动推送轻量无头服务端（`posse` + `libghostty-vt.dylib`）到目标机 `$POSSE_HOME/server/versions/<版本>-<摘要>/`、原子切换 `current` 符号链接并拉起常驻进程；已安装 `Posse.app` 的目标机继续直接复用。
 
 ```sh
 posse remote add office office-mac
 posse remote add studio user@studio.local --port 22 --home '~/.posse' --executable '/Applications/Posse.app/Contents/MacOS/Posse'
 posse remote list
-posse remote check office
+posse remote install office [--file build/server/posse-server-0.1.54-darwin-arm64.tar.gz]
+posse remote check office [--start] [--install]
 ```
 
 目标可以是 `~/.ssh/config` 的 Host 别名，沿用系统 OpenSSH 的 IdentityFile、ssh-agent、Keychain、known_hosts 和 ProxyJump。Posse 默认不转发 ssh-agent，不执行配置中的额外 LocalForward/RemoteForward 或 LocalCommand。未知主机显示 SSH 的指纹确认，主机密钥变化直接失败；密码和私钥口令仅经过本次连接的私有认证通道，不写入配置或日志。
 
-`remote check` 默认不启动远端 daemon。加 `--start` 才通过目标 Posse 自己的启动流程拉起；不会安装、升级或交接远端程序。`--batch` 禁止认证提示，适合已有密钥认证和信任记录的检查。Ctrl-C 取消建连。
+`remote check` 默认只探测、不启动也不安装远端 daemon；加 `--start` 在未运行时拉起；加 `--install` 在目标机未安装 Posse 时自动推送无头服务端并拉起（也可通过 `--file` 指定本机压缩包，或通过 `scripts/build-server.sh` 离线构建）。`remote install` 显式推送安装或热升级远端无头服务端：目标 daemon 已在运行时自动执行 `daemon.handoff` 无损交接（终端不断线）。`--batch` 禁止认证提示，适合已有密钥认证和信任记录的检查。Ctrl-C 取消建连。
 
-诊断结果来自隧道内的 `daemon.info`，包含实际运行的版本、构建、home、实例 ID 和已实现的能力；CLI 版本不会代替 daemon 能力。当前 daemon 宣布 `rpc.v1`、`terminal.stream.v1`、`desktop.control.v1`、`files.v1` 和 `git.v1`；桌面窗口建连时要求完整能力集，`remote check` 仍只要求 `rpc.v1` 以输出远端实际能力诊断。旧 daemon 不认识 `daemon.info` 或缺少所需能力时提示检查转发和更新远端。
+诊断结果来自隧道内的 `daemon.info`，包含实际运行的版本、构建、构建形态（`edition`: `full` / `headless`）、特性集（`features`）、home、实例 ID 和已实现的能力；CLI 版本不会代替 daemon 能力。当前 daemon 宣布 `rpc.v1`、`terminal.stream.v1`、`desktop.control.v1`、`files.v1` 和 `git.v1`；桌面窗口建连时要求完整能力集，`remote check` 仍只要求 `rpc.v1` 以输出远端实际能力诊断。托管的 `headless` 节点若缺少必需能力，带自动安装的建连会自动推送新版并热交接；完整 `Posse.app` 节点不自动换包。
 
 检查结束关闭本次 SSH master，不停止远端 daemon 或终端。每次连接使用 Posse 自己的私有目录、control socket 和转发 socket，不复用或关闭用户其他工具的 master。一个连接内的发现命令、普通 RPC 和二进制流复用同一 SSH master。
 
@@ -29,7 +30,7 @@ posse remote check office
 
 主机配置存于本机 `$POSSE_HOME/hosts.json`，权限 0600；每项有稳定 ID。用 `remote add ... --id <ID>` 更新现有项；`remote rm <名称或ID>` 仅忘记配置，不删除远端数据。重名时用 ID。配置可指定用户名、端口、远端 home 和可执行文件，路径必须绝对或以 `~/` 开头。
 
-未指定程序路径时依次寻找目标 home 的 `bin/posse`、系统和用户 Applications 下的 Posse.app，以及 Homebrew 常用位置。目标 home 默认 `~/.posse`。发现输出使用独立标记行，允许 shell 启动时有其他输出。远端 socket 当前要求绝对路径、不超过 100 字节，且不含冒号、方括号、百分号、反斜杠或美元符号，避免 OpenSSH 转发语法改变路径。目标 home 在远端解析符号链接后参与身份核对。
+未指定程序路径时依次寻找目标 home 的 `server/current/posse`、`bin/posse`、系统和用户 Applications 下的 Posse.app、Homebrew 常用位置与 `~/.local/bin/posse`；全部未找到时返回 `POSSE_REMOTE_MISSING:<os>:<arch>` 以便自动推送安装。目标 home 默认 `~/.posse`。发现输出使用独立标记行，允许 shell 启动时有其他输出。远端 socket 当前要求绝对路径、不超过 100 字节，且不含冒号、方括号、百分号、反斜杠或美元符号，避免 OpenSSH 转发语法改变路径。目标 home 在远端解析符号链接后参与身份核对。
 
 ## 窗口主机菜单
 

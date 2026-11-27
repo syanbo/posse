@@ -114,6 +114,14 @@ func (p *Connections) Open(ctx context.Context, h Host, opts Options) (*Session,
 		s, err = p.dial(ctx, h, opts)
 	} else {
 		err = p.check(ctx, s, opts)
+		// 复用空闲 master 时若远端 daemon 已停或版本能力不足且允许启动/自动安装，丢弃旧隧道后走一次完整建连
+		if err != nil && (opts.Start || opts.AutoInstall) && ctx.Err() == nil {
+			p.mu.Lock()
+			p.closeLocked(s)
+			p.mu.Unlock()
+			s, err = p.dial(ctx, h, opts)
+			fresh = true
+		}
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()

@@ -43,6 +43,8 @@ func (d *Daemon) remoteInfo(context.Context, json.RawMessage) (any, error) {
 		Home:         home,
 		Version:      Version,
 		Build:        Build,
+		Edition:      Edition,
 		Capabilities: slices.Clone(rpc.RemoteCapabilities),
+		Features:     rpc.RemoteFeatures(runtime.GOOS, Edition),
 	}, nil
 }

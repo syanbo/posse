@@ -23,10 +23,17 @@ const probeMarker = "POSSE_REMOTE_V1:"
 
 // Options 的 ctx 只限定建连；成功后的隧道由 Session.Close 关闭。
 type Options struct {
-	Prompt   PromptFunc
-	Start    bool
-	Required []string
-	config   string
+	Prompt                PromptFunc
+	Start                 bool
+	AutoInstall           bool
+	LocalHome             string
+	ServerArchive         string
+	ServerSearch          []string
+	ServerBaseURL         string
+	ServerPubKey          string
+	DisableRemoteDownload bool
+	Required              []string
+	config                string
 }
 
 type Session struct {
@@ -48,7 +55,7 @@ func (s *Session) Close() {
 	s.closeOnce.Do(func() { s.cancel(); <-s.done; os.RemoveAll(s.dir) })
 }
 
-func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) {
+func openMaster(ctx context.Context, h Host, opts Options) (_ *Session, err error) {
 	if err := h.Validate(); err != nil {
 		return nil, err
 	}
@@ -104,8 +111,66 @@ func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) 
 	if err = s.waitReady(ctx); err != nil {
 		return nil, err
 	}
+	return s, nil
+}
+
+func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) {
+	s, err := openMaster(ctx, h, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			s.Close()
+		}
+	}()
 	s.Probe, err = s.discover(ctx, false)
 	if err != nil {
+		var missing *RemoteNotInstalledError
+		if errors.As(err, &missing) && opts.AutoInstall && h.Executable == "" {
+			if err = validateRemoteHomeForInstall(missing.Home); err != nil {
+				return nil, err
+			}
+			var pkg ServerPackage
+			pkg, err = opts.resolveServer(ctx, missing.OS, missing.Arch)
+			if err != nil {
+				return nil, err
+			}
+			defer pkg.Close()
+			var exePath string
+			exePath, err = s.stageAndCommitServer(ctx, missing.Home, pkg)
+			if err != nil {
+				return nil, err
+			}
+			s.Probe, err = s.probeAt(ctx, exePath, missing.Home, opts.Start)
+			if err != nil {
+				return nil, err
+			}
+			if !opts.Start {
+				// AutoInstall 但未允许 Start 时只提交并验证二进制，不拉起 daemon
+				if err = s.activateServer(ctx, exePath, missing.Home, pkg.Tag); err != nil {
+					return nil, err
+				}
+				return nil, errors.New("remote daemon is not running; start Posse on the remote Mac or connect with --start")
+			}
+			if !s.Probe.Running {
+				return nil, errors.New("installed headless server did not start")
+			}
+			if err = s.mux(ctx, "forward", "-L", s.Socket+":"+s.Probe.Socket); err != nil {
+				return nil, fmt.Errorf("SSH socket forwarding failed: %w", err)
+			}
+			if err = rpc.Call(ctx, s.Socket, "daemon.info", nil, &s.Info); err != nil {
+				return nil, fmt.Errorf("remote daemon handshake failed; check socket forwarding and update remote Posse if needed: %w", err)
+			}
+			if err = validateInfo(s.Probe, s.Info, opts.Required); err != nil {
+				return nil, err
+			}
+			// 确认新 daemon 握手通过后再原子提交 server/current
+			if err = s.activateServer(ctx, exePath, missing.Home, pkg.Tag); err != nil {
+				return nil, err
+			}
+			return s, nil
+		}
 		return nil, err
 	}
 	// 先验证平台及协议，再决定是否启动，避免在不支持的目标上产生副作用。
@@ -125,6 +190,28 @@ func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) 
 		return nil, fmt.Errorf("remote daemon handshake failed; check socket forwarding and update remote Posse if needed: %w", err)
 	}
 	if err = validateInfo(s.Probe, s.Info, opts.Required); err != nil {
+		// 仅对托管的 headless 节点在缺少必需能力时尝试热升级交接，并保留真实升级错误不静默吞掉
+		var capErr *MissingCapabilityError
+		if errors.As(err, &capErr) && opts.AutoInstall && h.Executable == "" && s.Info.Edition == "headless" {
+			pkg, rerr := opts.resolveServer(ctx, s.Info.Platform, s.Info.Arch)
+			if rerr != nil {
+				return nil, fmt.Errorf("%w (auto-upgrade resolve failed: %v)", err, rerr)
+			}
+			defer pkg.Close()
+			exePath, ierr := s.stageAndCommitServer(ctx, s.Info.Home, pkg)
+			if ierr != nil {
+				return nil, fmt.Errorf("%w (auto-upgrade install failed: %v)", err, ierr)
+			}
+			newInfo, herr := handoffAndVerify(ctx, s.Socket, exePath, s.Info.InstanceID, "headless", opts.Required, s.Info.Home)
+			if herr != nil {
+				return nil, fmt.Errorf("%w (auto-upgrade failed: %v)", err, herr)
+			}
+			if aerr := s.activateServer(ctx, exePath, s.Info.Home, pkg.Tag); aerr != nil {
+				return nil, fmt.Errorf("remote server activate failed after handoff: %w", aerr)
+			}
+			s.Info = newInfo
+			return s, nil
+		}
 		return nil, err
 	}
 	return s, nil
@@ -231,10 +318,14 @@ func discoveryCommand(h Host, start bool) string {
 		script += "exe=" + remotePath(h.Executable) + "\n"
 	} else {
 		script += `exe=""
-for candidate in "$POSSE_HOME/bin/posse" /Applications/Posse.app/Contents/MacOS/Posse "$HOME/Applications/Posse.app/Contents/MacOS/Posse" /opt/homebrew/bin/posse /usr/local/bin/posse; do
+for candidate in "$POSSE_HOME/server/current/posse" "$POSSE_HOME/bin/posse" /Applications/Posse.app/Contents/MacOS/Posse "$HOME/Applications/Posse.app/Contents/MacOS/Posse" /opt/homebrew/bin/posse /usr/local/bin/posse "$HOME/.local/bin/posse"; do
   if test -x "$candidate"; then exe="$candidate"; break; fi
 done
-if test -z "$exe"; then printf '%s\n' 'Posse executable not found; specify its remote path' >&2; exit 127; fi
+if test -z "$exe"; then
+  h_esc=$(printf '%s' "$POSSE_HOME" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  printf 'POSSE_REMOTE_MISSING:{"os":"%s","arch":"%s","home":"%s"}\n' "$(uname -s)" "$(uname -m)" "$h_esc"
+  exit 0
+fi
 `
 	}
 	script += `exec "$exe" remote probe`
@@ -246,21 +337,36 @@ if test -z "$exe"; then printf '%s\n' 'Posse executable not found; specify its r
 
 func parseProbe(data []byte) (rpc.RemoteProbe, error) {
 	var p rpc.RemoteProbe
-	found := false
+	var missing *RemoteNotInstalledError
+	foundProbe, foundMissing := false, false
 	for _, line := range bytes.Split(data, []byte{'\n'}) {
 		line = bytes.TrimSuffix(line, []byte{'\r'})
+		if m, ok := parseMissing(line); ok {
+			if foundMissing {
+				return p, errors.New("ambiguous remote discovery response")
+			}
+			foundMissing = true
+			missing = m
+			continue
+		}
 		if !bytes.HasPrefix(line, []byte(probeMarker)) {
 			continue
 		}
-		if found {
+		if foundProbe {
 			return p, errors.New("ambiguous remote discovery response")
 		}
-		found = true
+		foundProbe = true
 		if err := json.Unmarshal(line[len(probeMarker):], &p); err != nil {
 			return p, fmt.Errorf("invalid remote discovery response: %w", err)
 		}
 	}
-	if !found {
+	if foundProbe && foundMissing {
+		return p, errors.New("ambiguous remote discovery response")
+	}
+	if foundMissing {
+		return p, missing
+	}
+	if !foundProbe {
 		return p, errors.New("remote Posse discovery unavailable; update remote Posse")
 	}
 	if p.Protocol != rpc.RemoteProtocol || p.Platform != "darwin" {
@@ -281,7 +387,7 @@ func validateInfo(p rpc.RemoteProbe, info rpc.RemoteInfo, required []string) err
 	}
 	for _, cap := range required {
 		if !slices.Contains(info.Capabilities, cap) {
-			return fmt.Errorf("remote daemon does not support %s; update remote Posse", cap)
+			return &MissingCapabilityError{Capability: cap}
 		}
 	}
 	return nil

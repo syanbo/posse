@@ -530,6 +530,19 @@ func Run(ctx context.Context, cfg Config) error {
 		os.Remove(sock)
 	}
 
+	if Edition == "headless" {
+		if err := term.Preload(); err != nil {
+			if in != nil {
+				in.answer(err)
+				in.close()
+			}
+			if unlock != nil {
+				unlock()
+			}
+			return err
+		}
+	}
+
 	st, err := store.Open(filepath.Join(cfg.Home, "posse.db"))
 	if err != nil {
 		if in != nil {
@@ -550,16 +563,20 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := spawn.Retain(exe, cfg.Home); err != nil {
 		log.Printf("runtime copy: %v", err)
 	}
-	hookExe, err := linkPosse(cfg.Home, exe)
-	if err != nil {
-		log.Printf("link %s: %v", PosseLink(cfg.Home), err)
-		hookExe = exe
+	hookExe := PosseLink(cfg.Home)
+	if in == nil {
+		var lerr error
+		hookExe, lerr = linkPosse(cfg.Home, exe)
+		if lerr != nil {
+			log.Printf("link %s: %v", PosseLink(cfg.Home), lerr)
+			hookExe = exe
+		}
 	}
 	if err := agent.RemoveOldPlugins(cfg.Home); err != nil {
 		log.Printf("old plugins: %v", err)
 	}
 	d := &Daemon{cfg: cfg, store: st, started: time.Now(), terms: map[string]*session{}, tchanged: make(chan struct{}),
-		launcher: agent.Launcher{Exe: hookExe, Home: cfg.Home}, runtime: spawn.RuntimeDir(exe),
+		launcher: agent.Launcher{Exe: hookExe, Home: cfg.Home}, runtime: spawn.RuntimeDirFor(exe, cfg.Home, Edition),
 		awake: newAwake(cfg.Home), userZdotdir: userZdotdir(cfg.Home), host: host.Local{}}
 	d.perms.SetRootsResolver(d.larkReadOnlyRoots)
 
@@ -577,6 +594,12 @@ func Run(ctx context.Context, cfg Config) error {
 		if err != nil {
 			in.close()
 			return fmt.Errorf("adopt: %w", err)
+		}
+		// 交接成功后才切 $POSSE_HOME/bin/posse，避免 adopt 失败留下指向坏版本的链接
+		if linked, lerr := linkPosse(cfg.Home, exe); lerr != nil {
+			log.Printf("link %s: %v", PosseLink(cfg.Home), lerr)
+		} else {
+			d.launcher.Exe = linked
 		}
 		keep, ln = in.ids(), in.ln
 		// 回话成功才开始读 PTY：失败时旧进程恢复读，这边不能先读走输出
@@ -609,8 +632,18 @@ func Run(ctx context.Context, cfg Config) error {
 	} else {
 		d.disc.waitLock.Store(true)
 	}
-	// 交接过来的终端还用着旧进程的副本，上一个常驻进程崩溃时留下的登记在这里去掉
-	go d.collectRuntimes("")
+	// 交接过来的终端还用着旧进程的副本，上一个常驻进程崩溃时留下的登记在这里去掉；
+	// 另在宽限期满后兜底扫一次，避免无终端退出事件时旧版本目录长期滞留。
+	go func() {
+		d.collectRuntimes("")
+		timer := time.NewTimer(spawn.RefGrace + 5*time.Second)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+		case <-timer.C:
+			d.collectRuntimes("")
+		}
+	}()
 
 	if ln == nil {
 		l, err := net.Listen("unix", sock)
@@ -943,6 +976,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 type statusResult struct {
 	Version   string    `json:"version"`
 	Build     string    `json:"build"`
+	Edition   string    `json:"edition,omitempty"`
 	Pid       int       `json:"pid"`
 	Home      string    `json:"home"`
 	StartedAt time.Time `json:"startedAt"`
@@ -992,7 +1026,7 @@ func (d *Daemon) status(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	d.mu.Unlock()
 	r := statusResult{
-		Version: Version, Build: Build, Pid: os.Getpid(), Home: d.cfg.Home, StartedAt: d.started,
+		Version: Version, Build: Build, Edition: Edition, Pid: os.Getpid(), Home: d.cfg.Home, StartedAt: d.started,
 		Terminals: total, Running: running,
 		RSSKB: int64(procmem.Resident(os.Getpid()) >> 10), FootprintKB: int64(procmem.Footprint(os.Getpid()) >> 10),
 	}

@@ -131,6 +131,7 @@ type daemonStatus struct {
 	Usage        *planStatus       // 旧常驻进程没有套餐用量时为空
 	Version      string            `json:"version"`
 	Build        string            `json:"build"` // 旧常驻进程没有这个字段时为空
+	Edition      string            `json:"edition"`
 	Pid          int               `json:"pid"`
 	StartedAt    time.Time         `json:"startedAt"`
 	GitTraceSeq  int64             `json:"gitTraceSeq"`  // 终端 git 命令记录的最新序号，旧常驻进程没有时为 0

@@ -193,6 +193,9 @@ func (l *gateListener) release(closed bool) {
 type daemonHandoffParams struct {
 	// Exe 是新包里的 posse，为空时用自己的（测试交接本身）
 	Exe string `json:"exe"`
+	// ExpectedInstanceID / ExpectedEdition 非空时校验目标实例与构建形态，防止误交接或跨形态覆盖
+	ExpectedInstanceID string `json:"expectedInstanceId,omitempty"`
+	ExpectedEdition    string `json:"expectedEdition,omitempty"`
 }
 
 type daemonHandoffResult struct {
@@ -208,6 +211,12 @@ func (d *Daemon) daemonHandoff(ctx context.Context, raw json.RawMessage, stop co
 	}
 	if d.ln == nil {
 		return nil, rpc.Errorf(rpc.CodeInternal, "listener not available")
+	}
+	if p.ExpectedInstanceID != "" && p.ExpectedInstanceID != d.instanceID {
+		return nil, rpc.Errorf(rpc.CodeConflict, "daemon instance changed before handoff")
+	}
+	if p.ExpectedEdition != "" && p.ExpectedEdition != Edition {
+		return nil, rpc.Errorf(rpc.CodeConflict, "daemon edition does not match handoff expectation")
 	}
 	exe := p.Exe
 	if exe == "" {

@@ -63,6 +63,7 @@ func TestRemoteProbeStopped(t *testing.T) {
 		want := rpc.RemoteProbe{
 			Protocol: rpc.RemoteProtocol, Platform: runtime.GOOS, Arch: runtime.GOARCH,
 			Home: e.home, Socket: e.socket, Version: daemon.Version, Build: daemon.Build,
+			Edition: daemon.Edition,
 			Running: false,
 		}
 		if !reflect.DeepEqual(got, want) {

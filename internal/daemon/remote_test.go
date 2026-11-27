@@ -47,8 +47,9 @@ func TestRemoteInfo(t *testing.T) {
 	want := rpc.RemoteInfo{
 		Protocol: rpc.RemoteProtocol, InstanceID: d.instanceID,
 		Platform: runtime.GOOS, Arch: runtime.GOARCH, Home: home,
-		Version: Version, Build: Build,
+		Version: Version, Build: Build, Edition: Edition,
 		Capabilities: rpc.RemoteCapabilities,
+		Features:     rpc.RemoteFeatures(runtime.GOOS, Edition),
 	}
 	if first.InstanceID == "" || !reflect.DeepEqual(first, want) {
 		t.Fatalf("daemon.info = %+v, want %+v with nonempty instance ID", first, want)

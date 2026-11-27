@@ -33,6 +33,12 @@ import (
 // refGrace 内刚登记的副本不去登记：调用方先准备副本、再拉起或交接常驻进程，中间那一下常驻进程还不知道它。
 const refGrace = time.Minute
 
+// RefGrace 导出给 daemon 安排宽限期满后的兜底回收。
+const RefGrace = refGrace
+
+// ServerManagedMarker 标记该目录由 Posse 无头安装器受管创建，防止回收误删陌生目录。
+const ServerManagedMarker = ".posse-server-managed"
+
 // RuntimeRoot 是副本的根目录。
 func RuntimeRoot() string {
 	dir, err := os.UserConfigDir()
@@ -87,9 +93,74 @@ func BundleID(exe string) string {
 	return id
 }
 
-// RuntimeDir 是 exe 所在副本的目录（<根>/<包ID>/<版本>-<构建>），不是副本时为空。
+// RuntimeDir 是 exe 所在 .app 副本目录（<根>/<包ID>/<版本>-<构建>），不是副本时为空。
 func RuntimeDir(exe string) string {
 	return runtimeDir(RuntimeRoot(), exe)
+}
+
+// RuntimeDirFor 返回 exe 所在的受管目录：优先认 .app 副本，仅当 edition=="headless" 且位于
+// <realHome>/server/versions/<合法tag>/posse 且带受管标记文件时才认作无头版本目录。
+func RuntimeDirFor(exe, home, edition string) string {
+	if dir := runtimeDir(RuntimeRoot(), exe); dir != "" {
+		return dir
+	}
+	if edition == "headless" {
+		return serverVersionDir(exe, home)
+	}
+	return ""
+}
+
+// validServerTag 限制无头版本目录名，防止路径穿越和隐藏/临时目录名。
+func validServerTag(tag string) bool {
+	if tag == "" || tag == "." || tag == ".." || strings.HasPrefix(tag, ".") || len(tag) > 128 {
+		return false
+	}
+	for _, r := range tag {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+// serverVersionDir 严格校验 exe 是否属于 home 的受管无头版本目录：
+// 必须位于 <realHome>/server/versions/<tag>/posse，且版本目录内存在普通文件 .posse-server-managed。
+func serverVersionDir(exe, home string) string {
+	if exe == "" || home == "" {
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	if filepath.Base(exe) != "posse" {
+		return ""
+	}
+	realHome := filepath.Clean(home)
+	if resolved, err := filepath.EvalSymlinks(realHome); err == nil {
+		realHome = resolved
+	}
+	verDir := filepath.Dir(exe)
+	versionsDir := filepath.Dir(verDir)
+	wantVersions := filepath.Join(realHome, "server", "versions")
+	if filepath.Clean(versionsDir) != wantVersions {
+		return ""
+	}
+	if !validServerTag(filepath.Base(verDir)) {
+		return ""
+	}
+	if !hasManagedMarker(verDir) {
+		return ""
+	}
+	return verDir
+}
+
+func hasManagedMarker(dir string) bool {
+	info, err := os.Lstat(filepath.Join(dir, ServerManagedMarker))
+	return err == nil && info.Mode().IsRegular()
+}
+
+func isServerVersionsBase(base string) bool {
+	return filepath.Base(base) == "versions" && filepath.Base(filepath.Dir(base)) == "server"
 }
 
 func runtimeDir(root, exe string) string {
@@ -240,9 +311,12 @@ func addRef(dir, home string) error {
 	return os.WriteFile(filepath.Join(refs, refName(home)), []byte(filepath.Clean(home)+"\n"), 0o600)
 }
 
-// Retain 登记 home 在用 exe 所在的副本（常驻进程启动时调用）；exe 不是副本时什么也不做。
+// Retain 登记 home 在用 exe 所在的受管副本或无头版本目录（常驻进程启动时调用）。
 func Retain(exe, home string) error {
 	dir := RuntimeDir(exe)
+	if dir == "" {
+		dir = serverVersionDir(exe, home)
+	}
 	if dir == "" {
 		return nil
 	}
@@ -280,6 +354,16 @@ func collect(base, home string, keep []string, running func(dirs []string) map[s
 			kept[filepath.Clean(k)] = true
 		}
 	}
+	// 无头服务端版本目录永远保留 current 符号链接指向的版本，避免安装/交接空档被误删
+	serverVersions := isServerVersionsBase(base)
+	if serverVersions {
+		link := filepath.Join(filepath.Dir(base), "current")
+		if info, err := os.Lstat(link); err == nil && info.Mode()&os.ModeSymlink != 0 {
+			if cur, err := filepath.EvalSymlinks(link); err == nil && cur != "" {
+				kept[filepath.Clean(cur)] = true
+			}
+		}
+	}
 	var idle []string
 	for _, e := range entries {
 		name := e.Name()
@@ -290,6 +374,10 @@ func collect(base, home string, keep []string, running func(dirs []string) map[s
 			continue
 		}
 		if !e.IsDir() || strings.HasPrefix(name, ".") {
+			continue
+		}
+		// 无头版本根下只允许回收带受管标记文件的版本目录，跳过任何陌生目录
+		if serverVersions && (!validServerTag(name) || !hasManagedMarker(path)) {
 			continue
 		}
 		if kept[path] {
