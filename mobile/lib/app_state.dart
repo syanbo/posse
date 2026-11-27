@@ -607,12 +607,46 @@ class PrefsSettingsStore implements SettingsStore {
 }
 
 /// 一台配对过的电脑。按主机公钥认：同一台电脑重新配对会替换掉旧的配对码。
+/// 已连接电脑经 status.get 报上来的实时平台、形态与能力。旧电脑未报能力时 capabilities 为 null。
+class HostStatusInfo {
+  const HostStatusInfo({
+    this.platform = '',
+    this.arch = '',
+    this.edition = '',
+    this.managed = false,
+    this.version = '',
+    this.commit = '',
+    this.capabilities,
+  });
+
+  final String platform;
+  final String arch;
+  final String edition;
+  final bool managed;
+  final String version;
+  final String commit;
+  final Set<String>? capabilities;
+
+  bool get deskSupported {
+    final caps = capabilities;
+    if (caps != null) return caps.contains('desk');
+    return platform != 'linux' && edition != 'headless';
+  }
+
+  bool get isServer => platform == 'linux' || edition == 'headless';
+}
+
 class SavedComputer {
   SavedComputer({
     required this.id,
     required this.code,
     this.name = '',
     this.customName = '',
+    this.platform = '',
+    this.edition = '',
+    this.managed = false,
+    this.version = '',
+    this.deskAvailable,
     List<String>? projectOrder,
     List<String>? collapsed,
     List<String>? collapsedWorkspaces,
@@ -630,6 +664,17 @@ class SavedComputer {
 
   /// 用户在手机上起的名字，优先于电脑报上来的。只存在手机上，不改电脑的主机名。
   String customName;
+
+  /// 最近一次从 status.get 同步到的平台（darwin / linux）、构建形态（full / headless）、是否托管及版本。
+  String platform;
+  String edition;
+  bool managed;
+  String version;
+
+  /// 最近一次从 status.get 确认的是否支持看桌面；null 表示旧版电脑未宣告。
+  bool? deskAvailable;
+
+  bool get isServer => platform == 'linux' || edition == 'headless';
 
   /// 首页项目的顺序（项目名），在手机上拖动排好的。没列到的项目排在后面。
   List<String> projectOrder;
@@ -659,6 +704,11 @@ class SavedComputer {
     'code': code,
     'name': name,
     'customName': customName,
+    if (platform.isNotEmpty) 'platform': platform,
+    if (edition.isNotEmpty) 'edition': edition,
+    if (managed) 'managed': managed,
+    if (version.isNotEmpty) 'version': version,
+    if (deskAvailable != null) 'deskAvailable': deskAvailable,
     'projectOrder': projectOrder,
     'collapsed': collapsed,
     'collapsedWorkspaces': collapsedWorkspaces,
@@ -677,6 +727,13 @@ class SavedComputer {
       code: code,
       name: raw['name'] as String? ?? '',
       customName: raw['customName'] as String? ?? '',
+      platform: raw['platform'] as String? ?? '',
+      edition: raw['edition'] as String? ?? '',
+      managed: raw['managed'] == true,
+      version: raw['version'] as String? ?? '',
+      deskAvailable: raw['deskAvailable'] is bool
+          ? raw['deskAvailable'] as bool
+          : null,
       projectOrder: order is List ? order.whereType<String>().toList() : null,
       collapsed: collapsed is List
           ? collapsed.whereType<String>().toList()
@@ -926,11 +983,22 @@ class PosseAppModel extends ChangeNotifier {
 
   /// 最近一次连接或刷新的报错（原样的异常），显示时经 [friendlyError] 按界面语言写。
   Object? error;
+  HostStatusInfo? hostStatus;
   Timer? _poll;
   var _connectGen = 0;
   var saved = SavedComputers();
 
   PhoneRpc? get rpc => link?.rpc;
+
+  /// 当前连接或选中的电脑是否支持看桌面；旧版电脑未宣告能力时默认支持，不破坏向后兼容。
+  bool get currentDeskSupported {
+    final live = hostStatus;
+    if (live != null) return live.deskSupported;
+    final c = current;
+    if (c == null) return true;
+    if (c.deskAvailable != null) return c.deskAvailable!;
+    return !c.isServer;
+  }
 
   /// 连接停在失败上：没在连，也没有连接在后台重连（[PosseLink] 只在连上过之后断线时一直重连，
   /// 一开始就没连上时没有它），等用户点重试。
@@ -1069,7 +1137,8 @@ class PosseAppModel extends ChangeNotifier {
         if (gen != _connectGen || !identical(link, created)) return;
         final now = created.rpc;
         if (now == null) {
-          // 断线期间按项目的先后排，连上后拉到新的状态再按状态排
+          // 断线期间按项目的先后排，连上后拉到新的状态再按状态排；同时清理实时主机能力回退已保存信息
+          hostStatus = null;
           if (seen != null) {
             runOrder = null;
             tabsStale = true;
@@ -1078,9 +1147,11 @@ class PosseAppModel extends ChangeNotifier {
             error = created.lastError!;
           }
         } else if (!identical(now, seen)) {
-          // 换上了新连接（重连、升级到 QUIC）：断线期间的会话状态可能已经变了，马上拉一次，
+          // 换上了新连接（重连、升级到 QUIC）：清旧实时主机能力，马上用新 RPC 重拉状态和会话，
           // 不等下一轮轮询。重试失败留下的报错也不再作数，不然首页会先闪一下红色的「连不上电脑」
           error = null;
+          hostStatus = null;
+          unawaited(_fetchName(created, now, id, gen));
           unawaited(refreshWorktrees());
           unawaited(registerPush());
           unawaited(refreshAgents());
@@ -1124,6 +1195,8 @@ class PosseAppModel extends ChangeNotifier {
       final switched = offer?.publicKeyB64 != parsed.publicKeyB64;
       link = next;
       offer = parsed;
+      // 无论是否同公钥（同主机不同地址也算切换），一律清理旧实时能力，先回退目标已保存数据
+      hostStatus = null;
       if (switched) {
         agents = const [];
         worktrees = const [];
@@ -1140,7 +1213,9 @@ class PosseAppModel extends ChangeNotifier {
       );
       // 先离开配对页。工作区列表回来再补，不让扫码结果卡在「正在连接」。
       notifyListeners();
-      unawaited(_fetchName(created, computerId(parsed)));
+      if (created.rpc case final initialRpc?) {
+        unawaited(_fetchName(created, initialRpc, id, gen));
+      }
       unawaited(registerPush());
       unawaited(refreshAgents());
       await refreshWorktrees();
@@ -1237,18 +1312,81 @@ class PosseAppModel extends ChangeNotifier {
     unawaited(store.write(saved.encode()));
   }
 
-  /// 电脑名取自 status.get，桌面端报的是 "Posse 主机名"。
-  Future<void> _fetchName(PosseLink link, String id) async {
+  /// 电脑名与主机元信息取自 status.get，桌面端报的是 "Posse 主机名"。
+  /// 严格校验连接代次、当前链路、精确 RPC 实例与电脑 ID，防止 WS→QUIC 切换或切主机后的迟到回复覆盖新状态。
+  Future<void> _fetchName(
+    PosseLink targetLink,
+    PhoneRpc targetRpc,
+    String id,
+    int gen,
+  ) async {
     try {
-      final rpc = link.rpc;
-      if (rpc == null) return;
-      final status = await rpc.call('status.get', const {});
+      final status = await targetRpc.call('status.get', const {});
+      if (gen != _connectGen ||
+          !identical(link, targetLink) ||
+          !identical(targetLink.rpc, targetRpc) ||
+          activeId != id) {
+        return;
+      }
       var name = status['machineName'] as String? ?? '';
       name = name.replaceFirst(RegExp(r'^Posse\s+'), '').trim();
+      final platform = status['hostPlatform'] as String? ?? '';
+      final arch = status['hostArch'] as String? ?? '';
+      final edition = status['hostEdition'] as String? ?? '';
+      final managed = status['hostManaged'] == true;
+      final version = status['posseVersion'] as String? ?? '';
+      final commit = status['posseCommit'] as String? ?? '';
+      final rawCaps = status['hostCapabilities'];
+      final Set<String>? caps = rawCaps is List
+          ? rawCaps.whereType<String>().toSet()
+          : null;
+      final info = HostStatusInfo(
+        platform: platform,
+        arch: arch,
+        edition: edition,
+        managed: managed,
+        version: version,
+        commit: commit,
+        capabilities: caps,
+      );
+      hostStatus = info;
+
       final computer = saved.computers.where((c) => c.id == id).firstOrNull;
-      if (computer == null || name.isEmpty || computer.name == name) return;
-      computer.name = name;
-      await store.write(saved.encode());
+      var persisted = false;
+      if (computer != null) {
+        if (name.isNotEmpty && computer.name != name) {
+          computer.name = name;
+          persisted = true;
+        }
+        if (platform.isNotEmpty && computer.platform != platform) {
+          computer.platform = platform;
+          persisted = true;
+        }
+        if (edition.isNotEmpty && computer.edition != edition) {
+          computer.edition = edition;
+          persisted = true;
+        }
+        if (computer.managed != managed) {
+          computer.managed = managed;
+          persisted = true;
+        }
+        if (version.isNotEmpty && computer.version != version) {
+          computer.version = version;
+          persisted = true;
+        }
+        final deskAvail = caps != null
+            ? caps.contains('desk')
+            : (platform.isNotEmpty || edition.isNotEmpty)
+            ? info.deskSupported
+            : null;
+        if (deskAvail != null && computer.deskAvailable != deskAvail) {
+          computer.deskAvailable = deskAvail;
+          persisted = true;
+        }
+        if (persisted) {
+          await store.write(saved.encode());
+        }
+      }
       notifyListeners();
     } catch (_) {}
   }
@@ -1321,6 +1459,7 @@ class PosseAppModel extends ChangeNotifier {
     worktrees = const [];
     tabs = const {};
     runOrder = null;
+    hostStatus = null;
     error = null;
     connecting = false;
     notifyListeners();

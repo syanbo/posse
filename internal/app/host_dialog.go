@@ -16,7 +16,7 @@ import (
 type hostDialogState struct {
 	open        bool
 	gen         uint64
-	tab         int         // hostTabOverview / hostTabSettings（仅编辑已有主机时有效）
+	tab         int         // hostTabOverview / hostTabMobile / hostTabSettings（仅编辑已有主机时有效）
 	editing     remote.Host // ID 为空表示添加
 	target      string
 	name        string
@@ -38,6 +38,7 @@ type hostDialogState struct {
 	aliases     []remote.Alias
 	aliasesDone bool
 	detail      hostDetailState
+	mobile      hostMobileState
 }
 
 func (a *app) openHostDialog(editing remote.Host) {
@@ -79,8 +80,13 @@ func (a *app) openHostDialogTab(editing remote.Host, tab int) {
 	if editing.Port != 0 {
 		d.port = strconv.Itoa(editing.Port)
 	}
-	if editing.ID != "" && tab == hostTabOverview {
-		a.refreshHostDetails(owner, d)
+	if editing.ID != "" {
+		switch tab {
+		case hostTabOverview:
+			a.refreshHostDetails(owner, d)
+		case hostTabMobile:
+			a.refreshHostMobile(owner, d, false, false)
+		}
 	}
 	go func(gen uint64) {
 		homeDir, _ := os.UserHomeDir()
@@ -103,9 +109,11 @@ func (a *app) hostDialog(c *ui.Context) {
 	t, p, m := c.Theme(), colors(c.Theme()), L(c)
 	isEdit := d.editing.ID != ""
 	onOverview := isEdit && d.tab == hostTabOverview
+	onMobile := isEdit && d.tab == hostTabMobile
+	onInfoTab := onOverview || onMobile
 	title := m.HostDialogAddTitle()
 	if isEdit {
-		if onOverview {
+		if onInfoTab {
 			title = m.HostDialogDetailsTitle(d.editing.Name)
 		} else {
 			title = m.HostDialogEditTitle(d.editing.Name)
@@ -122,21 +130,31 @@ func (a *app) hostDialog(c *ui.Context) {
 				if a.hostDialogDirty(d) {
 					settingsLabel += " *"
 				}
-				if segmented(c.Key("host-dialog-tabs"), &d.tab, m.HostTabLabel(), m.HostTabOverview(), settingsLabel) {
-					if d.tab == hostTabOverview {
+				if segmented(c.Key("host-dialog-tabs"), &d.tab, m.HostTabLabel(), m.HostTabOverview(), m.HostTabMobile(), settingsLabel) {
+					switch d.tab {
+					case hostTabOverview:
+						owner.cancelHostMobile()
+						d.mobile.liveKey = ""
 						a.refreshHostDetails(owner, d)
-					} else {
+					case hostTabMobile:
 						owner.cancelHostDetails()
 						d.detail.liveKey = ""
+						a.refreshHostMobile(owner, d, false, false)
+					default:
+						owner.cancelHostDetails()
+						d.detail.liveKey = ""
+						d.mobile.liveKey = ""
 					}
 				}
 				onOverview = d.tab == hostTabOverview
+				onMobile = d.tab == hostTabMobile
+				onInfoTab = onOverview || onMobile
 			}
 
 			var submit bool
 			_, wh := c.Size()
 			scrollMax := max(sz(240), min(wh-sz(220), sz(560)))
-			if onOverview {
+			if onInfoTab {
 				scrollMax = max(sz(240), min(wh-sz(180), sz(760)))
 			}
 
@@ -145,6 +163,10 @@ func (a *app) hostDialog(c *ui.Context) {
 				ui.Column(c).Gap(12).Padding(2, cardPad).Children(func() {
 					if onOverview {
 						a.hostOverviewTab(c, owner, d)
+						return
+					}
+					if onMobile {
+						a.hostMobileTab(c, owner, d)
 						return
 					}
 					// SSH 目标
@@ -338,13 +360,13 @@ func (a *app) hostDialog(c *ui.Context) {
 					upgrading = tv.upgrading.Load()
 				}
 			}
-			reconnectLive := isEdit && !onOverview && a.editingLiveConnectionChanged(d)
+			reconnectLive := isEdit && !onInfoTab && a.editingLiveConnectionChanged(d)
 			if reconnectLive && upgrading {
 				ui.Text(c, m.HostUpgradeLockNote()).FontSize(fsSmall).TextColor(p.honey).Wrap()
 			} else if reconnectLive {
 				ui.Text(c, m.HostEditLiveNote()).FontSize(fsSmall).TextColor(t.TextMuted).Wrap()
 			}
-			if !onOverview && d.err != "" {
+			if !onInfoTab && d.err != "" {
 				ui.Text(c, d.err).FontSize(fsSmall).TextColor(t.Danger).Wrap()
 			}
 
@@ -361,7 +383,7 @@ func (a *app) hostDialog(c *ui.Context) {
 					}
 				}
 				ui.Spacer(c)
-				if onOverview {
+				if onInfoTab {
 					if confirmButton(c, pressable(textButton(c.Key("host-close"), m.CommonClose()))).Clicked() {
 						owner.cancelHostDetails()
 						owner.dropHostIconFile(d.iconImage, d.editing.IconImage)

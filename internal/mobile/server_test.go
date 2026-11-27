@@ -520,7 +520,9 @@ func TestPhoneSession(t *testing.T) {
 
 	// 移除设备后旧 token 不再能用
 	dev := srv.Devices()[0]
-	srv.RemoveDevice(dev.ID)
+	if ok, err := srv.RemoveDevice(dev.ID); err != nil || !ok {
+		t.Fatalf("RemoveDevice failed: ok=%v err=%v", ok, err)
+	}
 	if srv.pair.valid(p.token) {
 		t.Fatal("token still valid after removal")
 	}
@@ -882,7 +884,7 @@ func TestPhoneIdentityMergesTokens(t *testing.T) {
 	if len(ds) != 1 || ds[0].Links != 2 {
 		t.Fatalf("after claim %+v", ds)
 	}
-	if !srv.RemoveDevice(ds[0].ID) || len(srv.Devices()) != 0 || srv.pair.valid(p2.token) || srv.pair.valid(p3.token) {
+	if ok, err := srv.RemoveDevice(ds[0].ID); err != nil || !ok || len(srv.Devices()) != 0 || srv.pair.valid(p2.token) || srv.pair.valid(p3.token) {
 		t.Fatal("remove did not drop every token of the phone")
 	}
 }

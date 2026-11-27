@@ -21,7 +21,8 @@ import (
 
 const (
 	hostTabOverview = 0
-	hostTabSettings = 1
+	hostTabMobile   = 1
+	hostTabSettings = 2
 )
 
 const linuxLingerCommand = "loginctl enable-linger $USER"
@@ -70,6 +71,7 @@ func (a *app) cancelHostDetails() {
 	}
 	owner.hostDlg.detail.ctx = nil
 	owner.hostDlg.detail.memSeq++
+	owner.cancelHostMobile()
 }
 
 func (a *app) hostDialogDirty(d *hostDialogState) bool {

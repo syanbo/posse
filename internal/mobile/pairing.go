@@ -93,12 +93,35 @@ func b64(b [32]byte) string { return base64.StdEncoding.EncodeToString(b[:]) }
 
 // save 在持有 mu 时调用（或在创建时）。
 func (p *pairing) save() error {
-	b, _ := json.MarshalIndent(p.st, "", "  ")
-	tmp := p.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	return p.saveState(p.st)
+}
+
+func (p *pairing) saveState(st state) error {
+	b, _ := json.MarshalIndent(st, "", "  ")
+	f, err := os.CreateTemp(filepath.Dir(p.path), ".mobile.json.*")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, p.path)
+	tmp := f.Name()
+	if err := f.Chmod(0o600); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, p.path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 func randHex(n int) string {
@@ -284,26 +307,39 @@ func (p *pairing) relayToken(id string) []byte {
 	return nil
 }
 
-// remove 移除一台手机：报过安装 ID 的连同它的其他 token 一起移除。返回移除的设备 ID。
-func (p *pairing) remove(id string) []string {
+// remove 移除一台手机：报过安装 ID 的连同它的其他 token 一起移除。
+// 先持久化新快照再更新内存状态，写盘失败时原状态保持不变并返回错误，避免重启后旧令牌恢复。
+func (p *pairing) remove(id string) ([]string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	i := slices.IndexFunc(p.st.Devices, func(d Device) bool { return d.ID == id })
 	if i < 0 {
-		return nil
+		return nil, nil
 	}
 	phone := p.st.Devices[i].Phone
 	var removed []string
-	p.st.Devices = slices.DeleteFunc(p.st.Devices, func(d Device) bool {
+	next := state{
+		PublicKey: p.st.PublicKey,
+		SecretKey: p.st.SecretKey,
+		Devices:   make([]Device, 0, len(p.st.Devices)),
+	}
+	for _, d := range p.st.Devices {
 		if d.ID == id || phone != "" && d.Phone == phone {
 			removed = append(removed, d.ID)
-			return true
+			continue
 		}
-		return false
-	})
-	p.prunePushLocked()
-	p.save()
-	return removed
+		next.Devices = append(next.Devices, d)
+	}
+	for _, t := range p.st.Push {
+		if slices.ContainsFunc(next.Devices, func(d Device) bool { return d.Phone == t.Phone }) {
+			next.Push = append(next.Push, t)
+		}
+	}
+	if err := p.saveState(next); err != nil {
+		return nil, err
+	}
+	p.st = next
+	return removed, nil
 }
 
 // offerCode 是二维码里 orca://pair?code= 后面的部分（前缀和字段沿用 Orca 协议的配对码），base64url 不补位。

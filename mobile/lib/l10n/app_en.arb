@@ -875,6 +875,10 @@
   "@deskFailGeneric": {
     "description": "Remote Desktop: banner for any other connection failure."
   },
+  "deskFailHostUnsupported": "Remote desktop is not available on this host",
+  "@deskFailHostUnsupported": {
+    "description": "Remote Desktop: banner when connected to a Linux or headless host that does not support screen capture."
+  },
   "deskFailLan": "This phone and the Mac aren’t on the same local network",
   "@deskFailLan": {
     "description": "Remote Desktop: banner when the guessed LAN address doesn’t reach the Mac."
@@ -1865,6 +1869,26 @@
   "homeRemoteDesktop": "Remote Desktop",
   "@homeRemoteDesktop": {
     "description": "Mac list row and Settings section/toggle: view and control the Mac’s screen."
+  },
+  "homeHostLinux": "Linux",
+  "@homeHostLinux": {
+    "description": "Home › computer list: short platform tag for a Linux server host."
+  },
+  "homeHostHeadless": "Headless",
+  "@homeHostHeadless": {
+    "description": "Home › computer list: short edition tag for a headless server host."
+  },
+  "homeHostSubtitleWithTag": "{tag} · {endpoint}",
+  "@homeHostSubtitleWithTag": {
+    "description": "Home › computer list: subtitle combining a host platform or edition tag with its endpoint.",
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      },
+      "endpoint": {
+        "type": "String"
+      }
+    }
   },
   "homeRename": "Rename",
   "@homeRename": {

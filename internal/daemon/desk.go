@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -69,7 +70,14 @@ func (h mobileHost) Desk(ctx context.Context, req mobile.DeskRequest, notify fun
 // srcDefaultViewer 是没报名字的手机在看桌面时的叫法。
 const srcDefaultViewer = "Phone"
 
+func deskHostSupported(goos, edition string) bool {
+	return slices.Contains(rpc.RemoteFeatures(goos, edition), "desk.v1")
+}
+
 func (d *Daemon) deskStart(ctx context.Context, req mobile.DeskRequest, notify func(mobile.DeskEvent)) (mobile.DeskReady, error) {
+	if !deskHostSupported(runtime.GOOS, Edition) {
+		return mobile.DeskReady{}, mobile.DeskError("desk_unsupported", "remote desktop is not available on this host")
+	}
 	codec, err := deskCodec(req.Codecs)
 	if err != nil {
 		return mobile.DeskReady{}, err

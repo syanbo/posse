@@ -113,7 +113,7 @@ func (d *Daemon) stopTailscale() {
 	}
 }
 
-func (d *Daemon) tailscaleStatus(_ context.Context, _ json.RawMessage) (any, error) {
+func (d *Daemon) tailscaleStatus(ctx context.Context, _ json.RawMessage) (any, error) {
 	cfg, err := tslink.LoadConfig(d.cfg.Home)
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeInternal, "%v", err)
@@ -123,24 +123,31 @@ func (d *Daemon) tailscaleStatus(_ context.Context, _ json.RawMessage) (any, err
 	node := d.ts
 	d.tsMu.Unlock()
 
+	var out tslink.Status
 	if node == nil {
-		return tslink.Status{
+		out = tslink.Status{
 			Enabled:              cfg.Enabled,
 			State:                tslink.StateDisabled,
 			Hostname:             cfg.Hostname,
 			ControlURL:           cfg.ControlURL,
 			DisableBindInterface: cfg.DisableBindInterface,
-		}, nil
+		}
+	} else {
+		st := node.Status()
+		if !allowed && cfg.Enabled && st.State == tslink.StateDisabled {
+			st.Enabled = true
+			st.State = tslink.StateStarting
+			st.Hostname = cfg.Hostname
+			st.ControlURL = cfg.ControlURL
+			st.DisableBindInterface = cfg.DisableBindInterface
+		}
+		out = mergeDisabledConfig(st, cfg)
 	}
-	st := node.Status()
-	if !allowed && cfg.Enabled && st.State == tslink.StateDisabled {
-		st.Enabled = true
-		st.State = tslink.StateStarting
-		st.Hostname = cfg.Hostname
-		st.ControlURL = cfg.ControlURL
-		st.DisableBindInterface = cfg.DisableBindInterface
+	// 经 desktop.call 的只读查询只用于展示可达性概要，绝不暴露可完成节点登录的 AuthURL。
+	if isDesktopRequest(ctx) {
+		out.AuthURL = ""
 	}
-	return mergeDisabledConfig(st, cfg), nil
+	return out, nil
 }
 
 // mergeDisabledConfig 在节点处于禁用态时，把磁盘中已保存的配置合并到返回快照，

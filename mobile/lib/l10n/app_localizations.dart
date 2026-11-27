@@ -1064,6 +1064,12 @@ abstract class AppLocalizations {
   /// **'Couldn’t connect'**
   String get deskFailGeneric;
 
+  /// Remote Desktop: banner when connected to a Linux or headless host that does not support screen capture.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote desktop is not available on this host'**
+  String get deskFailHostUnsupported;
+
   /// Remote Desktop: banner when the guessed LAN address doesn’t reach the Mac.
   ///
   /// In en, this message translates to:
@@ -2371,6 +2377,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remote Desktop'**
   String get homeRemoteDesktop;
+
+  /// Home › computer list: short platform tag for a Linux server host.
+  ///
+  /// In en, this message translates to:
+  /// **'Linux'**
+  String get homeHostLinux;
+
+  /// Home › computer list: short edition tag for a headless server host.
+  ///
+  /// In en, this message translates to:
+  /// **'Headless'**
+  String get homeHostHeadless;
+
+  /// Home › computer list: subtitle combining a host platform or edition tag with its endpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'{tag} · {endpoint}'**
+  String homeHostSubtitleWithTag(String tag, String endpoint);
 
   /// Mac actions sheet: rename this Mac.
   ///

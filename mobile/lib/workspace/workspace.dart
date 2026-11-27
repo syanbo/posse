@@ -1469,7 +1469,9 @@ class _ComputerSheet extends StatelessWidget {
         final list = Section(
           inset: 50,
           children: [
-            if (deskSupported && model.settings.deskWatch)
+            if (deskSupported &&
+                model.settings.deskWatch &&
+                model.currentDeskSupported)
               RowTile(
                 leading: Icon(
                   Icons.desktop_mac_rounded,
@@ -1483,16 +1485,20 @@ class _ComputerSheet extends StatelessWidget {
               RowTile(
                 chevron: false,
                 leading: Icon(
-                  Icons.laptop_mac_rounded,
+                  computerIcon(computer),
                   size: Ic.button,
                   color: c.accent,
                 ),
                 title: Text(model.labelOf(computer, l)),
                 // 连着的那台写实际连上的地址，其余写配对码里的主地址
                 subtitle: Text(
-                  computer.id == active && model.connectedUrl != null
-                      ? hostOf(l, model.connectedUrl) ?? ''
-                      : computerEndpoint(computer),
+                  computerSubtitle(
+                    l,
+                    computer,
+                    computer.id == active && model.connectedUrl != null
+                        ? hostOf(l, model.connectedUrl) ?? ''
+                        : computerEndpoint(computer),
+                  ),
                   style: mono(Fs.small, color: c.muted),
                 ),
                 trailing: computer.id == active
@@ -1573,6 +1579,27 @@ class _ComputerSheet extends StatelessWidget {
 /// 电脑列表弹窗至少这么高才固定底下的按钮、只滚列表：按钮和提示约占 200，列表至少留两行。
 const _sheetPinnedHeight = 360.0;
 
+/// 按主机平台和形态区分图标：Linux 或无头服务端显示服务器图标，其余显示 Mac 图标。
+IconData computerIcon(SavedComputer computer) =>
+    computer.isServer ? Icons.dns_rounded : Icons.laptop_mac_rounded;
+
+/// 电脑列表副标题：无头/Linux 节点在地址前附简短标识，完整 Mac 只显示地址。
+String computerSubtitle(
+  AppLocalizations l,
+  SavedComputer computer,
+  String endpoint,
+) {
+  String tag = '';
+  if (computer.platform == 'linux') {
+    tag = l.homeHostLinux;
+  } else if (computer.edition == 'headless') {
+    tag = l.homeHostHeadless;
+  }
+  if (tag.isEmpty) return endpoint;
+  if (endpoint.isEmpty) return tag;
+  return l.homeHostSubtitleWithTag(tag, endpoint);
+}
+
 /// 配对码里的主地址（host:port），电脑列表的副标题。
 String computerEndpoint(SavedComputer computer) {
   try {
@@ -1607,13 +1634,17 @@ class _DisconnectedList extends StatelessWidget {
             for (final computer in computers)
               RowTile(
                 leading: Icon(
-                  Icons.laptop_mac_rounded,
+                  computerIcon(computer),
                   size: Ic.button,
                   color: c.accent,
                 ),
                 title: Text(model.labelOf(computer, context.l10n)),
                 subtitle: Text(
-                  computerEndpoint(computer),
+                  computerSubtitle(
+                    context.l10n,
+                    computer,
+                    computerEndpoint(computer),
+                  ),
                   style: mono(Fs.small, color: c.muted),
                 ),
                 onTap: () => model.connectCode(computer.code),

@@ -612,6 +612,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deskFailGeneric => '连接失败';
 
   @override
+  String get deskFailHostUnsupported => '这台主机不支持看桌面';
+
+  @override
   String get deskFailLan => '手机和这台 Mac 不在同一个局域网';
 
   @override
@@ -1320,6 +1323,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get homeRemoteDesktop => '看桌面';
+
+  @override
+  String get homeHostLinux => 'Linux';
+
+  @override
+  String get homeHostHeadless => '无头服务端';
+
+  @override
+  String homeHostSubtitleWithTag(String tag, String endpoint) {
+    return '$tag · $endpoint';
+  }
 
   @override
   String get homeRename => '重命名';

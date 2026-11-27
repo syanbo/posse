@@ -1,9 +1,11 @@
 import 'dart:convert';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/desk/status.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
+import 'package:posse_mobile/workspace/workspace.dart';
 
 String pairCode(String key, String endpoint) {
   final json = jsonEncode({
@@ -101,5 +103,104 @@ void main() {
     expect(model.labelOf(model.computers.last, en), 'MacBook (192.168.1.5)');
     model.renameComputer('k@ws://192.168.1.5:6788', '家里');
     expect(model.labelOf(model.computers.last, zh), '家里');
+  });
+
+  test('host metadata persists and controls desk availability and icons', () {
+    final saved = SavedComputers(
+      computers: [
+        SavedComputer(
+          id: 'k1',
+          code: pairCode('k1', 'ws://100.64.0.2:6788'),
+          name: 'bwh',
+          platform: 'linux',
+          edition: 'headless',
+          managed: true,
+          version: '0.1.55',
+          deskAvailable: false,
+        ),
+        SavedComputer(
+          id: 'k2',
+          code: pairCode('k2', 'ws://100.64.0.3:6788'),
+          name: 'pur-mac-mini',
+          platform: 'darwin',
+          edition: 'headless',
+          managed: true,
+          version: '0.1.55',
+          deskAvailable: false,
+        ),
+        SavedComputer(
+          id: 'k3',
+          code: pairCode('k3', 'ws://192.168.1.9:6788'),
+          name: 'MacBook',
+        ),
+      ],
+      active: 'k1',
+    );
+    final back = SavedComputers.decode(saved.encode());
+    expect(back.computers[0].platform, 'linux');
+    expect(back.computers[0].edition, 'headless');
+    expect(back.computers[0].managed, isTrue);
+    expect(back.computers[0].deskAvailable, isFalse);
+    expect(back.computers[2].deskAvailable, isNull);
+
+    final model = PosseAppModel(store: MemoryPairingStore());
+    model.saved = back;
+    // Linux 无头节点不支持看桌面
+    expect(model.currentDeskSupported, isFalse);
+    // 旧版 Mac 未宣告能力时默认支持，保持向后兼容
+    model.saved.active = back.computers[2].id;
+    expect(model.currentDeskSupported, isTrue);
+    // 实时 hostStatus 覆盖缓存状态；显式空能力数组（wire []）表示无能力，与旧服务端缺字段（null）区分。
+    model.hostStatus = const HostStatusInfo(
+      platform: 'darwin',
+      edition: 'full',
+      capabilities: <String>{},
+    );
+    expect(model.currentDeskSupported, isFalse);
+    model.hostStatus = const HostStatusInfo(
+      platform: 'darwin',
+      edition: 'full',
+      capabilities: null,
+    );
+    expect(model.currentDeskSupported, isTrue);
+    model.hostStatus = const HostStatusInfo(
+      platform: 'darwin',
+      edition: 'headless',
+      capabilities: {'memory', 'autostart'},
+    );
+    expect(model.currentDeskSupported, isFalse);
+    model.hostStatus = const HostStatusInfo(
+      platform: 'darwin',
+      edition: 'full',
+      capabilities: {'desk', 'memory', 'autostart'},
+    );
+    expect(model.currentDeskSupported, isTrue);
+
+    final zh = lookupAppLocalizations(const Locale('zh'));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(computerIcon(back.computers[0]), Icons.dns_rounded);
+    expect(computerIcon(back.computers[1]), Icons.dns_rounded);
+    expect(computerIcon(back.computers[2]), Icons.laptop_mac_rounded);
+    expect(
+      computerSubtitle(zh, back.computers[0], '100.64.0.2:6788'),
+      'Linux · 100.64.0.2:6788',
+    );
+    expect(
+      computerSubtitle(zh, back.computers[1], '100.64.0.3:6788'),
+      '无头服务端 · 100.64.0.3:6788',
+    );
+    expect(
+      computerSubtitle(en, back.computers[1], '100.64.0.3:6788'),
+      'Headless · 100.64.0.3:6788',
+    );
+    expect(
+      computerSubtitle(zh, back.computers[2], '192.168.1.9:6788'),
+      '192.168.1.9:6788',
+    );
+    expect(deskFailText(zh, 'desk_unsupported'), '这台主机不支持看桌面');
+    expect(
+      deskFailText(en, 'desk_unsupported'),
+      'Remote desktop is not available on this host',
+    );
   });
 }

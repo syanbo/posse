@@ -63,6 +63,7 @@ type PairInfo struct {
 	Code      string   `json:"code"`
 	Endpoint  string   `json:"endpoint"`
 	Endpoints []string `json:"endpoints,omitempty"`
+	Locals    []string `json:"locals,omitempty"` // 本机（目标主机）检测到的 Tailscale / 局域网地址
 }
 
 func New(home string, host Host, port int) (*Server, error) {
@@ -225,7 +226,7 @@ func (s *Server) Pair(rotate bool, addr string) (PairInfo, error) {
 		return PairInfo{}, err
 	}
 	code := offerCode(primary, eps, d.Token, s.pair.pub, d.ID)
-	return PairInfo{URL: "orca://pair?code=" + code, Code: code, Endpoint: primary, Endpoints: eps}, nil
+	return PairInfo{URL: "orca://pair?code=" + code, Code: code, Endpoint: primary, Endpoints: eps, Locals: LocalEndpoints()}, nil
 }
 
 // Devices 列出配对过的手机，标出现在连着的。
@@ -246,14 +247,17 @@ func (s *Server) Devices() []Device {
 	return out
 }
 
-// RemoveDevice 移除配对，并断开这台手机现有的连接。
-func (s *Server) RemoveDevice(id string) bool {
-	removed := s.pair.remove(id)
+// RemoveDevice 移除配对并持久化，成功后再断开这台手机现有的连接。
+func (s *Server) RemoveDevice(id string) (bool, error) {
+	removed, err := s.pair.remove(id)
+	if err != nil {
+		return false, err
+	}
 	if len(removed) == 0 {
-		return false
+		return false, nil
 	}
 	s.dropDevices(removed)
-	return true
+	return true, nil
 }
 
 // dropDevices 断开用这些设备 token 连着的连接。

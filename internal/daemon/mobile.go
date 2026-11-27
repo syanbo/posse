@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"time"
@@ -24,6 +25,37 @@ import (
 
 // mobileHost 把常驻进程的项目、工作区和终端交给手机服务。
 type mobileHost struct{ d *Daemon }
+
+func (h mobileHost) HostMeta() mobile.HostMeta {
+	return buildMobileHostMeta(runtime.GOOS, runtime.GOARCH, Edition, h.d.runtime != "", Version, Commit)
+}
+
+func buildMobileHostMeta(goos, goarch, edition string, managed bool, version, commit string) mobile.HostMeta {
+	isManaged := edition == "headless" && managed
+	features := rpc.RemoteFeatures(goos, edition)
+	caps := make([]string, 0, 4)
+	if slices.Contains(features, "desk.v1") {
+		caps = append(caps, "desk")
+	}
+	if slices.Contains(features, "memory.v1") {
+		caps = append(caps, "memory")
+	}
+	if slices.Contains(features, "autostart.v1") {
+		caps = append(caps, "autostart")
+	}
+	if isManaged && slices.Contains(features, "autostart.write.v1") {
+		caps = append(caps, "autostartWrite")
+	}
+	return mobile.HostMeta{
+		Platform:     goos,
+		Arch:         goarch,
+		Edition:      edition,
+		Managed:      isManaged,
+		Version:      version,
+		Commit:       commit,
+		Capabilities: caps,
+	}
+}
 
 // startMobile 打开手机服务；已经配对过手机时立刻监听。端口可用 POSSE_MOBILE_PORT 改（端到端测试用，免得和日常的冲突），
 // 开发包不设时用 devMobilePort。
@@ -357,7 +389,14 @@ func (d *Daemon) mobileRm(ctx context.Context, raw json.RawMessage) (any, error)
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	if d.mobile == nil || !d.mobile.RemoveDevice(p.Device) {
+	if d.mobile == nil {
+		return nil, rpc.Errorf(rpc.CodeNotFound, "device %q not found", p.Device)
+	}
+	found, err := d.mobile.RemoveDevice(p.Device)
+	if err != nil {
+		return nil, rpc.Errorf(rpc.CodeInternal, "%v", err)
+	}
+	if !found {
 		return nil, rpc.Errorf(rpc.CodeNotFound, "device %q not found", p.Device)
 	}
 	return map[string]any{"removed": p.Device}, nil

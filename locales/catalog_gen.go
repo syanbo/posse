@@ -997,6 +997,20 @@ func (msgs Messages) HostTabOverview() string {
 	return Catalog.Format(msgs.locale, "hostTabOverview", nil)
 }
 
+// HostTabMobile says "Mobile"
+// in the language the app shows.
+//
+// Mobile pairing tab in the remote host dialog.
+func HostTabMobile() string { return In(i18n.Locale()).HostTabMobile() }
+
+// HostTabMobile says "Mobile"
+// in the language of msgs.
+//
+// Mobile pairing tab in the remote host dialog.
+func (msgs Messages) HostTabMobile() string {
+	return Catalog.Format(msgs.locale, "hostTabMobile", nil)
+}
+
 // HostTabSettings says "Connection"
 // in the language the app shows.
 //
@@ -1009,6 +1023,158 @@ func HostTabSettings() string { return In(i18n.Locale()).HostTabSettings() }
 // Connection settings tab in the remote host dialog.
 func (msgs Messages) HostTabSettings() string {
 	return Catalog.Format(msgs.locale, "hostTabSettings", nil)
+}
+
+// HostMobileInactiveNote says "Switch to this host to generate a mobile pairing code and manage paired devices."
+// in the language the app shows.
+//
+// Note shown in the Mobile tab when the remote host is not the active view.
+func HostMobileInactiveNote() string { return In(i18n.Locale()).HostMobileInactiveNote() }
+
+// HostMobileInactiveNote says "Switch to this host to generate a mobile pairing code and manage paired devices."
+// in the language of msgs.
+//
+// Note shown in the Mobile tab when the remote host is not the active view.
+func (msgs Messages) HostMobileInactiveNote() string {
+	return Catalog.Format(msgs.locale, "hostMobileInactiveNote", nil)
+}
+
+// HostMobileDisconnectedNote says "Connect to this host to generate a mobile pairing code and manage paired devices."
+// in the language the app shows.
+//
+// Note shown in the Mobile tab when the remote host is disconnected.
+func HostMobileDisconnectedNote() string { return In(i18n.Locale()).HostMobileDisconnectedNote() }
+
+// HostMobileDisconnectedNote says "Connect to this host to generate a mobile pairing code and manage paired devices."
+// in the language of msgs.
+//
+// Note shown in the Mobile tab when the remote host is disconnected.
+func (msgs Messages) HostMobileDisconnectedNote() string {
+	return Catalog.Format(msgs.locale, "hostMobileDisconnectedNote", nil)
+}
+
+// HostMobileLegacyNote says "Update the remote Posse server to manage mobile pairing from this dialog."
+// in the language the app shows.
+//
+// Note shown when the remote daemon does not expose mobile pairing over
+// desktop calls.
+func HostMobileLegacyNote() string { return In(i18n.Locale()).HostMobileLegacyNote() }
+
+// HostMobileLegacyNote says "Update the remote Posse server to manage mobile pairing from this dialog."
+// in the language of msgs.
+//
+// Note shown when the remote daemon does not expose mobile pairing over
+// desktop calls.
+func (msgs Messages) HostMobileLegacyNote() string {
+	return Catalog.Format(msgs.locale, "hostMobileLegacyNote", nil)
+}
+
+// HostMobileReadOnlyNote says "Take desktop control to generate a pairing code or remove paired devices."
+// in the language the app shows.
+//
+// Note shown in the Mobile tab when the window is in view-only mode.
+func HostMobileReadOnlyNote() string { return In(i18n.Locale()).HostMobileReadOnlyNote() }
+
+// HostMobileReadOnlyNote says "Take desktop control to generate a pairing code or remove paired devices."
+// in the language of msgs.
+//
+// Note shown in the Mobile tab when the window is in view-only mode.
+func (msgs Messages) HostMobileReadOnlyNote() string {
+	return Catalog.Format(msgs.locale, "hostMobileReadOnlyNote", nil)
+}
+
+// HostMobilePairNote says "Scan with Posse Mobile over LAN, Tailscale, or a custom address to pair directly with this remote host."
+// in the language the app shows.
+//
+// Description next to the QR code in the remote host Mobile pairing tab.
+func HostMobilePairNote() string { return In(i18n.Locale()).HostMobilePairNote() }
+
+// HostMobilePairNote says "Scan with Posse Mobile over LAN, Tailscale, or a custom address to pair directly with this remote host."
+// in the language of msgs.
+//
+// Description next to the QR code in the remote host Mobile pairing tab.
+func (msgs Messages) HostMobilePairNote() string {
+	return Catalog.Format(msgs.locale, "hostMobilePairNote", nil)
+}
+
+// HostMobileAddressTitle says "Target host address"
+// in the language the app shows.
+//
+// Label above the address selector in the remote host Mobile pairing tab.
+func HostMobileAddressTitle() string { return In(i18n.Locale()).HostMobileAddressTitle() }
+
+// HostMobileAddressTitle says "Target host address"
+// in the language of msgs.
+//
+// Label above the address selector in the remote host Mobile pairing tab.
+func (msgs Messages) HostMobileAddressTitle() string {
+	return Catalog.Format(msgs.locale, "hostMobileAddressTitle", nil)
+}
+
+// HostMobileAddressCustom says "Custom, e.g. host:6788"
+// in the language the app shows.
+//
+// Compact placeholder for custom pairing address input in the remote host
+// Mobile tab.
+func HostMobileAddressCustom() string { return In(i18n.Locale()).HostMobileAddressCustom() }
+
+// HostMobileAddressCustom says "Custom, e.g. host:6788"
+// in the language of msgs.
+//
+// Compact placeholder for custom pairing address input in the remote host
+// Mobile tab.
+func (msgs Messages) HostMobileAddressCustom() string {
+	return Catalog.Format(msgs.locale, "hostMobileAddressCustom", nil)
+}
+
+// HostMobileRetryPair says "Generate Code"
+// in the language the app shows.
+//
+// Button to request a fresh pairing code after a previous failure in the
+// remote host Mobile tab.
+func HostMobileRetryPair() string { return In(i18n.Locale()).HostMobileRetryPair() }
+
+// HostMobileRetryPair says "Generate Code"
+// in the language of msgs.
+//
+// Button to request a fresh pairing code after a previous failure in the
+// remote host Mobile tab.
+func (msgs Messages) HostMobileRetryPair() string {
+	return Catalog.Format(msgs.locale, "hostMobileRetryPair", nil)
+}
+
+// HostMobileRemoveOutcomeUnknown says "Device removal result was unknown; refreshed the current paired list."
+// in the language the app shows.
+//
+// Notice when a remote device unpair response was lost and the current list
+// was refreshed instead of resending.
+func HostMobileRemoveOutcomeUnknown() string {
+	return In(i18n.Locale()).HostMobileRemoveOutcomeUnknown()
+}
+
+// HostMobileRemoveOutcomeUnknown says "Device removal result was unknown; refreshed the current paired list."
+// in the language of msgs.
+//
+// Notice when a remote device unpair response was lost and the current list
+// was refreshed instead of resending.
+func (msgs Messages) HostMobileRemoveOutcomeUnknown() string {
+	return Catalog.Format(msgs.locale, "hostMobileRemoveOutcomeUnknown", nil)
+}
+
+// HostMobileReachabilityTitle says "Remote Reachability"
+// in the language the app shows.
+//
+// Section title for Tailscale and relay reachability summary in the remote
+// host Mobile tab.
+func HostMobileReachabilityTitle() string { return In(i18n.Locale()).HostMobileReachabilityTitle() }
+
+// HostMobileReachabilityTitle says "Remote Reachability"
+// in the language of msgs.
+//
+// Section title for Tailscale and relay reachability summary in the remote
+// host Mobile tab.
+func (msgs Messages) HostMobileReachabilityTitle() string {
+	return Catalog.Format(msgs.locale, "hostMobileReachabilityTitle", nil)
 }
 
 // HostTabLabel says "Host dialog section"

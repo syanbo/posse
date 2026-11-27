@@ -32,6 +32,13 @@ type desktopOperation struct {
 	cancel         context.CancelFunc
 	bytes          int
 	saveInputBytes int
+	// secret 标记响应包含一次性凭据（如手机配对码）：绝不写入缓存的 value.Result，也不允许经重复提交或状态查询回放。
+	secret bool
+	direct chan json.RawMessage
+}
+
+func desktopSecretResult(method string) bool {
+	return method == "mobile.pair"
 }
 
 // 只记当前控制代次的滑动窗口，回收结果后也不能把旧序号当作新操作执行。
@@ -139,6 +146,14 @@ func (d *Daemon) desktopCall(srv *rpc.Server, ctx context.Context, raw json.RawM
 	c.expireLocked()
 	c.pruneOperationsLocked()
 	if op := c.operations[ref]; op != nil {
+		if op.secret {
+			valid := d.desktopValidLocked(&p.Desktop)
+			c.mu.Unlock()
+			if !valid {
+				return nil, rpc.Errorf(rpc.CodeReadOnly, "desktop control is no longer held")
+			}
+			return nil, rpc.Errorf(rpc.CodeOutcomeUnknown, "pairing credential cannot be replayed; request a new code")
+		}
 		c.mu.Unlock()
 		if op.digest != digest {
 			return nil, rpc.Errorf(rpc.CodeConflict, "desktop request sequence was already used with different parameters")
@@ -173,9 +188,15 @@ func (d *Daemon) desktopCall(srv *rpc.Server, ctx context.Context, raw json.RawM
 	}
 	opCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	opCtx = context.WithValue(opCtx, desktopCallContext{}, desktopRequestContext{identity: p.Desktop})
+	secret := desktopSecretResult(p.Method)
+	var direct chan json.RawMessage
+	if secret {
+		direct = make(chan json.RawMessage, 1)
+	}
 	op := &desktopOperation{
 		value:  rpc.DesktopOperation{DesktopOperationRef: ref, Method: p.Method, State: "running", StartedAt: time.Now().UnixMilli()},
 		digest: digest, done: make(chan struct{}), cancel: cancel, bytes: desktopResultLimit, saveInputBytes: inputBytes,
+		secret: secret, direct: direct,
 	}
 	if c.operations == nil {
 		c.operations = make(map[rpc.DesktopOperationRef]*desktopOperation)
@@ -195,6 +216,14 @@ func waitDesktopOperation(ctx context.Context, op *desktopOperation) (any, error
 	case <-op.done:
 		if op.value.Error != nil {
 			return nil, op.value.Error
+		}
+		if op.secret {
+			select {
+			case raw := <-op.direct:
+				return raw, nil
+			default:
+				return nil, rpc.Errorf(rpc.CodeOutcomeUnknown, "pairing credential cannot be replayed; request a new code")
+			}
 		}
 		return op.value.Result, nil
 	case <-ctx.Done():
@@ -229,9 +258,22 @@ func (d *Daemon) runDesktopOperation(ctx context.Context, op *desktopOperation, 
 	c.saveInputBytes -= op.saveInputBytes
 	op.saveInputBytes = 0
 	c.operationBytes -= op.bytes
-	op.bytes = len(encoded) + len(errorBytes)
-	c.operationBytes += op.bytes
-	op.value.Result, op.value.Error = encoded, failure
+	if op.secret {
+		// 秘密结果只走一次性直传通道，绝不落入通用回执缓存。
+		op.bytes = len(errorBytes)
+		c.operationBytes += op.bytes
+		op.value.Result, op.value.Error = nil, failure
+		if failure == nil && op.direct != nil {
+			select {
+			case op.direct <- encoded:
+			default:
+			}
+		}
+	} else {
+		op.bytes = len(encoded) + len(errorBytes)
+		c.operationBytes += op.bytes
+		op.value.Result, op.value.Error = encoded, failure
+	}
 	op.value.State, op.value.FinishedAt = "done", time.Now().UnixMilli()
 	c.active--
 	close(op.done)

@@ -643,6 +643,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deskFailGeneric => 'Couldn’t connect';
 
   @override
+  String get deskFailHostUnsupported =>
+      'Remote desktop is not available on this host';
+
+  @override
   String get deskFailLan =>
       'This phone and the Mac aren’t on the same local network';
 
@@ -1397,6 +1401,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeRemoteDesktop => 'Remote Desktop';
+
+  @override
+  String get homeHostLinux => 'Linux';
+
+  @override
+  String get homeHostHeadless => 'Headless';
+
+  @override
+  String homeHostSubtitleWithTag(String tag, String endpoint) {
+    return '$tag · $endpoint';
+  }
 
   @override
   String get homeRename => 'Rename';

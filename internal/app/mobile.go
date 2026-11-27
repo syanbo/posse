@@ -113,9 +113,10 @@ func (a *app) pollMobile(c *ui.Context) {
 // 成功后 addr 才成为选中的地址，自定义的记进 ui.json：填错的地址不留下。
 func (a *app) loadMobile(seq int, rotate bool, addr string, builtIn bool, poll bool) {
 	var info struct {
-		URL      string `json:"url"`
-		Code     string `json:"code"`
-		Endpoint string `json:"endpoint"`
+		URL      string   `json:"url"`
+		Code     string   `json:"code"`
+		Endpoint string   `json:"endpoint"`
+		Locals   []string `json:"locals"`
 	}
 	var devices []mobileDevice
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -129,7 +130,10 @@ func (a *app) loadMobile(seq int, rotate bool, addr string, builtIn bool, poll b
 	if err == nil {
 		img, err = qrImage(info.URL)
 	}
-	locals := mobile.LocalEndpoints()
+	locals := info.Locals
+	if len(locals) == 0 {
+		locals = mobile.LocalEndpoints()
+	}
 	a.update(func() {
 		m := &a.mobile
 		if seq != m.seq {

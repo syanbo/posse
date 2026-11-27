@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +53,22 @@ type Host interface {
 	BeginGitWrite(ctx context.Context, target GitWriteTarget) (context.Context, func(), error)
 	// RecordGit 把手机做的 git 操作记进桌面 Git 日志的操作记录
 	RecordGit(r GitRecord)
+}
+
+// HostMeta 描述当前常驻进程所在主机的平台、构建形态与开放给手机的能力，供 status.get 宣告。
+type HostMeta struct {
+	Platform     string
+	Arch         string
+	Edition      string
+	Managed      bool
+	Version      string
+	Commit       string
+	Capabilities []string
+}
+
+// HostMetaProvider 是可选接口，未实现时 status.get 按当前运行平台回退。
+type HostMetaProvider interface {
+	HostMeta() HostMeta
 }
 
 // ResumeResult 是在电脑上继续一个历史会话的结果：会话所在的终端和工作区（手机上的 ID）。
@@ -401,12 +418,40 @@ func (s *Server) setActive(wid, termID string) {
 func (s *Server) status() map[string]any {
 	name, _ := os.Hostname()
 	name = strings.TrimSuffix(name, ".local")
-	return map[string]any{
+	platform := runtime.GOOS
+	arch := runtime.GOARCH
+	out := map[string]any{
 		"runtimeId": s.epoch, "protocolVersion": 3, "minCompatibleMobileVersion": 2,
 		"runtimeProtocolVersion": 3, "minCompatibleRuntimeClientVersion": 2,
-		"appVersion": "posse", "capabilities": []string{}, "hostPlatform": "darwin",
+		"appVersion": "posse", "capabilities": []string{}, "hostPlatform": platform,
+		"hostArch":    arch,
 		"machineName": "Posse " + name, "graphStatus": "ready", "floatingWorkspaceEnabled": false,
 	}
+	if p, ok := s.host.(HostMetaProvider); ok {
+		meta := p.HostMeta()
+		if meta.Platform != "" {
+			out["hostPlatform"] = meta.Platform
+		}
+		if meta.Arch != "" {
+			out["hostArch"] = meta.Arch
+		}
+		if meta.Edition != "" {
+			out["hostEdition"] = meta.Edition
+		}
+		out["hostManaged"] = meta.Managed
+		if meta.Version != "" {
+			out["posseVersion"] = meta.Version
+		}
+		if meta.Commit != "" {
+			out["posseCommit"] = meta.Commit
+		}
+		if meta.Capabilities != nil {
+			caps := make([]string, len(meta.Capabilities))
+			copy(caps, meta.Capabilities)
+			out["hostCapabilities"] = caps
+		}
+	}
+	return out
 }
 
 type wtParams struct {
