@@ -18,7 +18,7 @@ posse remote check office [--start] [--install]
 
 `remote check` 默认只探测、不启动也不安装远端 daemon；加 `--start` 在未运行时拉起；加 `--install` 在目标机未安装 Posse 时自动推送无头服务端并拉起（也可通过 `--file` 指定本机压缩包，或通过 `scripts/build-server.sh` 离线构建）。`remote install` 显式推送安装或热升级远端无头服务端：目标 daemon 已在运行时自动执行 `daemon.handoff` 无损交接（终端不断线）；附加 `--launchd` 时会在目标 Mac 写入 Aqua 会话 `LaunchAgent`（也可在目标 Mac 本机用 `posse server install/status/uninstall --launchd` 管理；卸载自启不停止运行中的 daemon）。未运行 daemon 时 `--launchd` 优先由 Aqua 会话拉起以访问登录钥匙串；若目标 Mac 尚未进行图形登录（`fdesetup authrestart` 仅跳过 FileVault 解锁，不自动建立 Aqua 会话），plist 会保留待下次图形登录加载，本次仍回退经 SSH 启动。`--batch` 禁止认证提示，适合已有密钥认证和信任记录的检查。Ctrl-C 取消建连。
 
-诊断结果来自隧道内的 `daemon.info`，包含实际运行的版本、构建、构建形态（`edition`: `full` / `headless`）、特性集（`features`）、home、实例 ID 和已实现的能力；CLI 版本不会代替 daemon 能力。当前 daemon 宣布 `rpc.v1`、`terminal.stream.v1`、`desktop.control.v1`、`files.v1` 和 `git.v1`；桌面窗口建连时要求完整能力集，`remote check` 仍只要求 `rpc.v1` 以输出远端实际能力诊断。托管的 `headless` 节点若缺少必需能力，带自动安装的建连会自动推送新版并热交接；完整 `Posse.app` 节点不自动换包。
+诊断结果来自隧道内的 `daemon.info`，包含实际运行的版本、构建、构建形态（`edition`: `full` / `headless`）、特性集（`features`）、home、实例 ID 和已实现的能力；CLI 版本不会代替 daemon 能力。当前 daemon 宣布 `rpc.v1`、`terminal.stream.v1`、`desktop.control.v1`、`files.v1` 和 `git.v1`；桌面窗口建连时要求完整能力集，`remote check` 仍只要求 `rpc.v1` 以输出远端实际能力诊断。托管的 `headless` 节点若缺少必需能力，或重连时检测到更新版本（或本地新构建 commit），带自动安装的建连会自动推送新版并热交接（绝不降级，离线或升级失败时若原 daemon 健康仍保留连接）；完整 `Posse.app` 节点不自动换包。
 
 检查结束关闭本次 SSH master，不停止远端 daemon 或终端。每次连接使用 Posse 自己的私有目录、control socket 和转发 socket，不复用或关闭用户其他工具的 master。一个连接内的发现命令、普通 RPC 和二进制流复用同一 SSH master。
 

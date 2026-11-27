@@ -37,6 +37,7 @@ const (
 type ServerPackage struct {
 	Path        string
 	Version     string
+	Commit      string
 	Tag         string
 	OS          string
 	Arch        string
@@ -265,6 +266,7 @@ func validateSnapshotStream(ctx context.Context, snap *os.File, snapPath, sum, f
 	var totalUncompressed int64
 	entries := 0
 	ver := fallbackVer
+	commit := ""
 	var manifestSHAs map[string]string
 	hasManifest := false
 
@@ -355,6 +357,7 @@ func validateSnapshotStream(ctx context.Context, snap *os.File, snapPath, sum, f
 			totalUncompressed += int64(len(raw))
 			var m struct {
 				Version string            `json:"version"`
+				Commit  string            `json:"commit"`
 				OS      string            `json:"os"`
 				Arch    string            `json:"arch"`
 				Edition string            `json:"edition"`
@@ -381,6 +384,7 @@ func validateSnapshotStream(ctx context.Context, snap *os.File, snapPath, sum, f
 				return ServerPackage{}, fmt.Errorf("invalid server version %q", m.Version)
 			}
 			ver = m.Version
+			commit = strings.TrimSpace(m.Commit)
 			manifestSHAs = m.SHA256
 			hasManifest = true
 		default:
@@ -421,6 +425,7 @@ func validateSnapshotStream(ctx context.Context, snap *os.File, snapPath, sum, f
 	return ServerPackage{
 		Path:        snapPath,
 		Version:     ver,
+		Commit:      commit,
 		Tag:         tag,
 		OS:          goos,
 		Arch:        goarch,

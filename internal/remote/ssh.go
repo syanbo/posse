@@ -211,22 +211,17 @@ func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) 
 				return nil, fmt.Errorf("%w (auto-upgrade resolve failed: %v)", err, rerr)
 			}
 			defer pkg.Close()
-			opts.report(StageUpload, 0)
-			exePath, ierr := s.stageAndCommitServer(ctx, s.Info.Home, pkg, opts.Progress)
-			if ierr != nil {
-				return nil, fmt.Errorf("%w (auto-upgrade install failed: %v)", err, ierr)
-			}
-			opts.report(StageUpgrade, 0)
-			newInfo, herr := handoffAndVerify(ctx, s.Socket, exePath, s.Info.InstanceID, "headless", opts.Required, s.Info.Home)
-			if herr != nil {
-				return nil, fmt.Errorf("%w (auto-upgrade failed: %v)", err, herr)
-			}
-			if aerr := s.activateServer(ctx, exePath, s.Info.Home, pkg.Tag); aerr != nil {
-				return nil, fmt.Errorf("remote server activate failed after handoff: %w", aerr)
+			newInfo, uerr := s.upgradeHeadless(ctx, opts, pkg)
+			if uerr != nil {
+				return nil, fmt.Errorf("%w (%v)", err, uerr)
 			}
 			s.Info = newInfo
 			return s, nil
 		}
+		return nil, err
+	}
+	// 托管的 headless 节点若存在更新版本（或同版本新 commit），重连时自动无损热升级并保留终端
+	if err = s.maybeUpgradeHeadless(ctx, h, opts); err != nil {
 		return nil, err
 	}
 	return s, nil
