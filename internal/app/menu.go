@@ -139,11 +139,31 @@ func menuButton(c *ui.Context, b ui.Element, build func(m *popMenu)) {
 		st.open = !st.open
 		st.reset()
 	}
+	menuAt(c, b, st, build)
+}
+
+// menuAt 把菜单锚定到指定元素并按 st.open 决定显示，不拦截该元素自己的点击。
+func menuAt(c *ui.Context, anchor ui.Element, st *menuState, build func(m *popMenu)) {
 	if !st.open {
 		return
 	}
-	ui.PopoverBase(c, b, &st.open, func(panel ui.Element) {
+	ui.PopoverBase(c, anchor, &st.open, func(panel ui.Element) {
 		showMenu(c, panel, st, build)
+	})
+}
+
+// menuAtRight 把菜单锚定到指定元素的右侧弹出（不遮挡左侧导航栏下方磁贴）。
+func menuAtRight(c *ui.Context, anchor ui.Element, st *menuState, build func(m *popMenu)) {
+	if !st.open {
+		return
+	}
+	ui.Overlay(c, func() {
+		panel := ui.Box(c.Key("posse-menu-right")).Role(ui.RolePopup).AttachTo(anchor, ui.AnchorTopLeft, ui.AnchorTopRight).Margin(0, 0, 0, 4)
+		fresh := !st.focused
+		showMenu(c, panel, st, build)
+		if !fresh && panel.PressedOutside() || panel.Shortcut(0, ui.KeyEscape) || panel.OverlayShortcut(0, ui.KeyEscape) {
+			st.open = false
+		}
 	})
 }
 

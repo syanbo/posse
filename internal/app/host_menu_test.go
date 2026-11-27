@@ -46,7 +46,7 @@ func writeHostMenuConfig(t *testing.T, a *app, hosts ...remote.Host) {
 func hostMenuLabels(a *app) []string {
 	seq := 0
 	m := newPopMenu(&seq, -1)
-	a.hostMenuBuild(appL())(m)
+	a.hostSwitchBuild(appL())(m)
 	var labels []string
 	for _, item := range m.items {
 		if item.sep {
@@ -61,11 +61,11 @@ func hostMenuChoose(t *testing.T, a *app, label string) {
 	t.Helper()
 	seq := 0
 	m := newPopMenu(&seq, -1)
-	a.hostMenuBuild(appL())(m)
+	a.hostSwitchBuild(appL())(m)
 	for _, item := range m.items {
 		if item.label == label && !item.disabled {
 			seq = 0
-			a.hostMenuBuild(appL())(newPopMenu(&seq, item.seq))
+			a.hostSwitchBuild(appL())(newPopMenu(&seq, item.seq))
 			return
 		}
 	}
@@ -77,11 +77,11 @@ func TestHostMenuConfiguration(t *testing.T) {
 	h1, h2 := remoteTestHost("second"), remoteTestHost("first")
 	h1.Name, h2.Name = "Studio Mac", "Office Mac"
 	writeHostMenuConfig(t, a, h1, h2)
-	tt := newTester(a.hostMenuButton, 600, 500)
+	tt := newTester(func(c *ui.Context) {
+		ui.Row(c).Fill().Children(func() { a.navigation(c) })
+	}, 600, 500)
 	settleMenu(tt)
-	if err := tt.Click(locales.In("zh-Hans").HostLocal()); err != nil {
-		t.Fatal(err)
-	}
+	a.openHostMenu()
 	settleMenu(tt)
 	want := []string{appL().HostLocal(), "Studio Mac", "Office Mac"}
 	if got := hostMenuLabels(a); !reflect.DeepEqual(got, want) {
@@ -93,9 +93,7 @@ func TestHostMenuConfiguration(t *testing.T) {
 	// 关闭再打开才重读；配置损坏仍留下本机入口，并沿用现有错误条。
 	tt.Key(0, ui.KeyEscape)
 	settleMenu(tt)
-	if err := tt.Click(locales.In("zh-Hans").HostLocal()); err != nil {
-		t.Fatal(err)
-	}
+	a.openHostMenu()
 	settleMenu(tt)
 	if got := hostMenuLabels(a); !reflect.DeepEqual(got, want[:1]) || a.err == "" {
 		t.Fatalf("invalid configuration menu=%v error=%q", got, a.err)
@@ -126,17 +124,13 @@ func TestHostMenuRemoteLifecycle(t *testing.T) {
 	writeHostMenuConfig(t, a, h)
 	a.loadHostMenu()
 	hostMenuChoose(t, a, h.Name)
-	if !b.connecting || b.hostStatus(appL()) != appL().HostConnecting() {
-		t.Fatal("connection in progress was not shown")
+	if !b.connecting || b.hostStatus(appL()) != appL().HostStageAuth() {
+		t.Fatalf("connection in progress was not shown: connecting=%v status=%q", b.connecting, b.hostStatus(appL()))
 	}
 	awaitHostUpdate(t, b)
-	if !b.host.snapshot().Connected || b.host.snapshot().Controlled || b.hostStatus(appL()) != appL().HostViewing() {
-		t.Fatal("remote connection did not start in viewing mode")
-	}
-	hostMenuChoose(t, b, appL().HostTake())
-	awaitHostUpdate(t, b)
-	if !b.host.snapshot().Controlled || b.hostStatus(appL()) != "" {
-		t.Fatal("explicit takeover did not obtain control")
+	// 无人控制的远端主机会自动接管
+	if !b.host.snapshot().Connected || !b.host.snapshot().Controlled || b.hostStatus(appL()) != "" {
+		t.Fatalf("unowned remote connection did not auto-take control: snap=%+v", b.host.snapshot())
 	}
 	old := b.host.snapshot()
 	hostMenuChoose(t, b, appL().HostRelease())
@@ -156,23 +150,35 @@ func TestHostMenuRemoteLifecycle(t *testing.T) {
 			t.Fatal("viewing refresh restored control")
 		}
 	}
-	hostMenuChoose(t, b, appL().HostTake())
-	awaitHostUpdate(t, b)
+	// 主动释放后断开再重连，同一个实例应保持查看（blockedInstance 生效）
 	hostMenuChoose(t, b, appL().HostDisconnect())
 	if b.host.snapshot().Connected || b.hostStatus(appL()) != appL().HostDisconnected() || k.views.active.Load() != b {
 		t.Fatal("disconnect did not retain the disconnected remote view")
 	}
+	hostMenuChoose(t, b, appL().HostReconnect())
 	awaitHostUpdate(t, b)
+	if !b.host.snapshot().Connected || b.host.snapshot().Controlled {
+		t.Fatal("reconnect after explicit release retook control")
+	}
+	// 显式接管后再断开重连，无人控制会重新自动接管
+	hostMenuChoose(t, b, appL().HostTake())
+	awaitHostUpdate(t, b)
+	if !b.host.snapshot().Controlled {
+		t.Fatal("explicit takeover did not obtain control")
+	}
+	hostMenuChoose(t, b, appL().HostDisconnect())
+	k.jobs.Wait()
+	b.runPending()
 	f.mu.Lock()
 	owner = f.state.Owner
 	f.mu.Unlock()
 	if owner != "" {
 		t.Fatal("disconnect left control held")
 	}
-	hostMenuChoose(t, b, appL().HostConnect())
+	hostMenuChoose(t, b, appL().HostReconnect())
 	awaitHostUpdate(t, b)
-	if !b.host.snapshot().Connected || b.host.snapshot().Controlled {
-		t.Fatal("reconnect did not start from viewing")
+	if !b.host.snapshot().Connected || !b.host.snapshot().Controlled {
+		t.Fatal("reconnect after explicit takeover did not auto-take unowned remote")
 	}
 }
 
@@ -274,12 +280,14 @@ func TestHostMenuRemoteNoRetries(t *testing.T) {
 				t.Fatal("connection failure omitted error")
 			}
 			b.selectRemoteHost(remoteTestHost("remote"))
-			awaitHostUpdate(t, b)
+			for i := 0; i < 4 && b.connecting; i++ {
+				awaitHostUpdate(t, b)
+			}
 			f.mu.Lock()
 			takes := f.takes
 			f.mu.Unlock()
-			if dials.Load() != 2 || !b.host.snapshot().Connected || b.host.snapshot().Controlled || takes != 0 {
-				t.Fatal("explicit reconnect did not establish a new viewing session")
+			if dials.Load() != 2 || !b.host.snapshot().Connected || !b.host.snapshot().Controlled || takes == 0 {
+				t.Fatalf("explicit reconnect did not establish an auto-taken session: dials=%d snap=%+v takes=%d", dials.Load(), b.host.snapshot(), takes)
 			}
 		})
 	}
@@ -381,8 +389,9 @@ func TestHostMenuRemoteHeartbeatAndInstance(t *testing.T) {
 	k, a, b, f, _, _ := connectionFixture(t)
 	a.selectRemoteHost(remoteTestHost("remote"))
 	awaitHostUpdate(t, b)
-	b.takeHost(appL(), b.host.snapshot())
-	awaitHostUpdate(t, b)
+	if !b.host.snapshot().Controlled {
+		t.Fatal("unowned remote did not auto-take control")
+	}
 	f.mu.Lock()
 	f.heartbeatFail = true
 	f.mu.Unlock()
@@ -423,9 +432,9 @@ func TestHostMenuDiscussionAndGitGuards(t *testing.T) {
 	if _, ok := local.find("discussion.list"); !ok {
 		t.Fatal("discussion did not reach local server")
 	}
-	for _, controlled := range []bool{false, true} {
-		if controlled {
-			b.takeHost(appL(), b.host.snapshot())
+	for _, controlled := range []bool{true, false} {
+		if !controlled {
+			b.releaseHost(b.host.snapshot())
 			awaitHostUpdate(t, b)
 		}
 		v := &filesView{root: t.TempDir(), remote: true}
@@ -449,8 +458,9 @@ func TestHostMenuReleaseThenDisconnect(t *testing.T) {
 	k, a, b, f, _, _ := connectionFixture(t)
 	a.selectRemoteHost(remoteTestHost("remote"))
 	awaitHostUpdate(t, b)
-	b.takeHost(appL(), b.host.snapshot())
-	awaitHostUpdate(t, b)
+	if !b.host.snapshot().Controlled {
+		t.Fatal("unowned remote did not auto-take control")
+	}
 	entered, finish := make(chan struct{}), make(chan struct{})
 	var signal, unblock sync.Once
 	defer unblock.Do(func() { close(finish) })
@@ -542,20 +552,32 @@ func TestHostMenuFrameKeepsActionNumbers(t *testing.T) {
 	k, _, b, _, _, _ := connectionFixture(t)
 	k.connectRemote(remoteTestHost("remote"), false)
 	awaitHostUpdate(t, b)
-	build := b.hostMenuBuild(appL())
+	build := b.hostSwitchBuild(appL())
+	actions := b.hostActionsBuild(appL(), remoteTestHost("remote"), true)
 	seq := 0
 	before := newPopMenu(&seq, -1)
 	build(before)
+	seq = 0
+	beforeActions := newPopMenu(&seq, -1)
+	actions(beforeActions)
 	k.disconnect("remote")
 	seq = 0
 	after := newPopMenu(&seq, -1)
 	build(after)
-	if len(before.items) != len(after.items) {
+	seq = 0
+	afterActions := newPopMenu(&seq, -1)
+	actions(afterActions)
+	if len(before.items) != len(after.items) || len(beforeActions.items) != len(afterActions.items) {
 		t.Fatal("connection state changed menu numbering within the same frame")
 	}
 	for i, item := range before.items {
 		if item.label != after.items[i].label || item.disabled != after.items[i].disabled {
 			t.Fatal("connection state replaced a captured menu action")
+		}
+	}
+	for i, item := range beforeActions.items {
+		if item.label != afterActions.items[i].label || item.disabled != afterActions.items[i].disabled {
+			t.Fatal("connection state replaced a captured host action item")
 		}
 	}
 }

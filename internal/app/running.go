@@ -36,6 +36,7 @@ func (a *app) sidebarGroupSwitch(c *ui.Context) {
 			a.saveState()
 		}
 	})
+	a.hostContextRow(c)
 }
 
 // runRank 是「运行中」里的排序：要你处理的在前，空闲在后，还没恢复的最后。

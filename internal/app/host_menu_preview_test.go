@@ -9,7 +9,6 @@ import (
 
 	"posse/internal/client"
 	"posse/internal/rpc"
-	"posse/locales"
 )
 
 func TestPreviewHostMenu(t *testing.T) {
@@ -48,9 +47,7 @@ func TestPreviewHostMenu(t *testing.T) {
 				tt.SetDark(dark)
 				tt.SetScale(2)
 				settleMenu(tt)
-				if err := tt.Click(a.hostName(locales.In("zh-Hans"))); err != nil {
-					t.Fatal(err)
-				}
+				a.openHostMenu()
 				settleMenu(tt)
 				suffix := "light"
 				if dark {

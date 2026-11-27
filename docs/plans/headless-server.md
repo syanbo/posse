@@ -40,7 +40,7 @@ scripts/build-server.sh            # 或 --all 同时打 arm64 + amd64
 # 2. 添加目标 Mac（目标 Mac 只需开启「系统设置 → 通用 → 共享 → 远程登录」）
 posse remote add builder user@mac-builder.local
 
-# 3. 直接在 Posse 窗口顶栏主机菜单（⌃⌥H）选择 builder，或 CLI 一键推送/检查：
+# 3. 方式 B：直接在 Posse 左下「+」或状态栏内存左侧「添加 SSH」添加 builder，随后点击最左侧导航栏里的 builder 磁贴（或按 ⌃⌥H）自动推送拉起并自动接管
 posse remote install builder
 posse remote check builder --install
 ```

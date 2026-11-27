@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -149,7 +150,34 @@ func parseSingleMarker(data []byte, marker string) (string, error) {
 	return found, nil
 }
 
-func (s *Session) stageAndCommitServer(ctx context.Context, home string, pkg ServerPackage) (string, error) {
+type progressReader struct {
+	r       io.Reader
+	total   int64
+	read    int64
+	lastPct float64
+	lastAt  time.Time
+	report  func(Stage, float64)
+}
+
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	if n > 0 && p.report != nil && p.total > 0 {
+		p.read += int64(n)
+		pct := float64(p.read) / float64(p.total)
+		if pct > 1 {
+			pct = 1
+		}
+		now := time.Now()
+		if pct >= 1 || pct-p.lastPct >= 0.02 || now.Sub(p.lastAt) >= 100*time.Millisecond {
+			p.lastPct = pct
+			p.lastAt = now
+			p.report(StageUpload, pct)
+		}
+	}
+	return n, err
+}
+
+func (s *Session) stageAndCommitServer(ctx context.Context, home string, pkg ServerPackage, progress func(Stage, float64)) (string, error) {
 	if home != "" {
 		if err := validateRemoteHomeForInstall(home); err != nil {
 			return "", err
@@ -160,6 +188,10 @@ func (s *Session) stageAndCommitServer(ctx context.Context, home string, pkg Ser
 		return "", err
 	}
 	defer f.Close()
+	var total int64
+	if st, serr := f.Stat(); serr == nil {
+		total = st.Size()
+	}
 
 	args := []string{
 		"-F", "/dev/null", "-T", "-S", s.control,
@@ -167,7 +199,11 @@ func (s *Session) stageAndCommitServer(ctx context.Context, home string, pkg Ser
 		"--", s.Host.Target, stageAndCommitCommand(home, pkg),
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/ssh", args...)
-	cmd.Stdin = f
+	if progress != nil && total > 0 {
+		cmd.Stdin = &progressReader{r: f, total: total, report: progress}
+	} else {
+		cmd.Stdin = f
+	}
 	var stdout, stderr boundedOutput
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -307,13 +343,15 @@ func Install(ctx context.Context, h Host, opts Options) (InstallResult, error) {
 		return InstallResult{}, err
 	}
 
+	opts.report(StagePackage, 0)
 	pkg, err := opts.resolveServer(ctx, targetOS, targetArch)
 	if err != nil {
 		return InstallResult{}, err
 	}
 	defer pkg.Close()
 
-	exePath, err := s.stageAndCommitServer(ctx, canonicalHome, pkg)
+	opts.report(StageUpload, 0)
+	exePath, err := s.stageAndCommitServer(ctx, canonicalHome, pkg, opts.Progress)
 	if err != nil {
 		return InstallResult{}, err
 	}

@@ -41,6 +41,7 @@ var (
 	iconClose      = icon(`<path d="M17 7 7 17M7 7l10 10"/>`)
 	iconSearch     = icon(`<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>`)
 	iconTerminal   = icon(`<g transform="translate(0 -0.5)"><path d="m5 16 5-4-5-4M12 17h7"/></g>`)
+	iconHost       = icon(`<rect x="3.5" y="4.5" width="17" height="12" rx="2"/><path d="M8.5 20h7M12 16.5V20"/>`)
 	iconFolder     = icon(folderShape)
 	iconBranch     = icon(branchShape)
 	iconHome       = icon(`<g transform="translate(0 0.5)"><path d="M4 10.4a1.5 1.5 0 0 1 .55-1.16l6.5-5.3a1.5 1.5 0 0 1 1.9 0l6.5 5.3a1.5 1.5 0 0 1 .55 1.16V18a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18z"/><path d="M9.75 19.5v-4.75a1 1 0 0 1 1-1h2.5a1 1 0 0 1 1 1v4.75"/></g>`) // 项目下的主工作区，和项目行的文件夹区分开

@@ -123,6 +123,53 @@ func Put(home string, h Host) (Host, error) {
 	return h, err
 }
 
+// PutUnique 在文件锁内同时校验名称唯一性与（编辑时的）原快照未变，供桌面弹窗安全读写。
+func PutUnique(home string, h Host, expected *Host) (Host, error) {
+	if err := h.Validate(); err != nil {
+		return h, err
+	}
+	err := updateHosts(home, func(hosts []Host) ([]Host, error) {
+		for _, other := range hosts {
+			if other.ID != h.ID && other.Name == h.Name {
+				return nil, errors.New("host name already exists")
+			}
+		}
+		if h.ID == "" {
+			var id [16]byte
+			if _, err := rand.Read(id[:]); err != nil {
+				return nil, err
+			}
+			h.ID = "h_" + hex.EncodeToString(id[:])
+			return append(hosts, h), nil
+		}
+		for i := range hosts {
+			if hosts[i].ID == h.ID {
+				if expected != nil && hosts[i] != *expected {
+					return nil, errors.New("host configuration changed; reopen the dialog to edit")
+				}
+				hosts[i] = h
+				return hosts, nil
+			}
+		}
+		return nil, fmt.Errorf("host %q not found", h.ID)
+	})
+	return h, err
+}
+
+// RemoveIf 仅在锁内核对磁盘记录仍与 expected 一致时移除，避免删掉刚被他处修改的主机。
+func RemoveIf(home string, expected Host) error {
+	return updateHosts(home, func(hosts []Host) ([]Host, error) {
+		i := slices.IndexFunc(hosts, func(h Host) bool { return h.ID == expected.ID })
+		if i < 0 {
+			return nil, fmt.Errorf("host %q not found", expected.ID)
+		}
+		if hosts[i] != expected {
+			return nil, errors.New("host configuration changed; reopen the dialog to edit")
+		}
+		return slices.Delete(hosts, i, i+1), nil
+	})
+}
+
 func Remove(home, id string) error {
 	return updateHosts(home, func(hosts []Host) ([]Host, error) {
 		i := slices.IndexFunc(hosts, func(h Host) bool { return h.ID == id })

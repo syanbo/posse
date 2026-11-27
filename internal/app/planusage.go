@@ -154,6 +154,7 @@ func (a *app) statusBar(c *ui.Context, w *workspace) {
 			plan.Justify(ui.End)
 		}
 		plan.Children(func() { a.planButton(c, st) })
+		a.hostChip(c)
 		if a.loaded {
 			// 终端数和内存放在一个按钮里：点开的浮窗按工作区列的就是这些终端占的内存
 			a.memoryButton(c)

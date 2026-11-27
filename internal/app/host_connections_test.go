@@ -45,17 +45,14 @@ func TestHostConnectionsHandshakeAndClose(t *testing.T) {
 	k.connectRemote(remoteTestHost("remote"), false)
 	awaitHostUpdate(t, b)
 	s := b.host.snapshot()
-	if b.connecting || !s.Connected || s.Controlled || s.Client.Home != base.Home || !s.Client.Remote {
+	if b.connecting || !s.Connected || !s.Controlled || s.Client.Home != base.Home || !s.Client.Remote {
 		t.Fatalf("remote handshake = %+v", s)
 	}
 	f.mu.Lock()
 	takes := f.takes
 	f.mu.Unlock()
-	if takes != 0 {
-		t.Fatal("connection automatically took control")
-	}
-	if err := b.host.take(context.Background(), s); err != nil {
-		t.Fatal(err)
+	if takes != 1 {
+		t.Fatalf("unowned remote connection did not auto-take control: takes=%d", takes)
 	}
 	k.close()
 	f.mu.Lock()
@@ -202,10 +199,10 @@ func TestHostConnectionsReleaseBeforeTransportClose(t *testing.T) {
 				t.Fatal(err)
 			}
 			entered, finish := make(chan struct{}), make(chan struct{})
-			var once sync.Once
+			var signal, once sync.Once
 			t.Cleanup(func() { once.Do(func() { close(finish) }) })
 			f.mu.Lock()
-			f.beforeRelease = func() { close(entered); <-finish }
+			f.beforeRelease = func() { signal.Do(func() { close(entered) }); <-finish }
 			f.mu.Unlock()
 			pool := &observedHostCleanup{k.pool, make(chan struct{}, 8), make(chan struct{}, 8)}
 			k.pool = pool
@@ -255,7 +252,11 @@ func TestHostConnectionsReleaseBeforeTransportClose(t *testing.T) {
 			f.mu.Lock()
 			owner := f.state.Owner
 			f.mu.Unlock()
-			if owner != "" {
+			if action == "reconnect" {
+				if !b.host.snapshot().Controlled || owner != b.host.controllerID {
+					t.Fatalf("old release revoked reconnected control: snap=%+v owner=%q", b.host.snapshot(), owner)
+				}
+			} else if owner != "" {
 				t.Fatal("transport cleanup left the desktop lease held")
 			}
 		})

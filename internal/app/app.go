@@ -34,6 +34,7 @@ import (
 	"posse/internal/gitx"
 	"posse/internal/procmem"
 	"posse/internal/projicon"
+	"posse/internal/remote"
 	"posse/internal/rpc"
 	"posse/locales"
 )
@@ -165,7 +166,10 @@ type app struct {
 	sshAuth        *sshAuthentication // 窗口共用，只由 windowOwner 持有。
 	hosts          *hostConnections
 	hostMenu       hostMenuState
+	hostDlg        hostDialogState // 窗口共用，只由 windowOwner 持有
 	connecting     bool
+	connectStage   remote.Stage
+	connectPct     float64
 	viewID         string
 	viewGeneration atomic.Uint64
 	windowFocused  atomic.Bool // 实际窗口焦点，由本机上下文持有
@@ -512,6 +516,7 @@ func newWindowApp(c *client.Client) *app {
 	a := newHostApp(c, c.Home)
 	a.host = newHostSession(localHostID, appName())
 	a.hosts = newHostConnections(newHostViews(a))
+	a.loadHostMenu()
 	return a
 }
 
@@ -652,6 +657,7 @@ func (a *app) poll(ctx context.Context) {
 			a.discussionRequest().refreshDiscussions()
 		}
 		a.checkReplaced()
+		a.checkHostsFile()
 		select {
 		case <-ctx.Done():
 			return

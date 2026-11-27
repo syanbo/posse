@@ -24,6 +24,7 @@ const probeMarker = "POSSE_REMOTE_V1:"
 // Options 的 ctx 只限定建连；成功后的隧道由 Session.Close 关闭。
 type Options struct {
 	Prompt                PromptFunc
+	Progress              func(Stage, float64)
 	Start                 bool
 	AutoInstall           bool
 	LocalHome             string
@@ -108,6 +109,7 @@ func openMaster(ctx context.Context, h Host, opts Options) (_ *Session, err erro
 			s.Close()
 		}
 	}()
+	opts.report(StageAuth, 0)
 	if err = s.waitReady(ctx); err != nil {
 		return nil, err
 	}
@@ -124,6 +126,7 @@ func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) 
 			s.Close()
 		}
 	}()
+	opts.report(StageProbe, 0)
 	s.Probe, err = s.discover(ctx, false)
 	if err != nil {
 		var missing *RemoteNotInstalledError
@@ -131,16 +134,21 @@ func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) 
 			if err = validateRemoteHomeForInstall(missing.Home); err != nil {
 				return nil, err
 			}
+			opts.report(StagePackage, 0)
 			var pkg ServerPackage
 			pkg, err = opts.resolveServer(ctx, missing.OS, missing.Arch)
 			if err != nil {
 				return nil, err
 			}
 			defer pkg.Close()
+			opts.report(StageUpload, 0)
 			var exePath string
-			exePath, err = s.stageAndCommitServer(ctx, missing.Home, pkg)
+			exePath, err = s.stageAndCommitServer(ctx, missing.Home, pkg, opts.Progress)
 			if err != nil {
 				return nil, err
+			}
+			if opts.Start {
+				opts.report(StageStart, 0)
 			}
 			s.Probe, err = s.probeAt(ctx, exePath, missing.Home, opts.Start)
 			if err != nil {
@@ -156,6 +164,7 @@ func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) 
 			if !s.Probe.Running {
 				return nil, errors.New("installed headless server did not start")
 			}
+			opts.report(StageHandshake, 0)
 			if err = s.mux(ctx, "forward", "-L", s.Socket+":"+s.Probe.Socket); err != nil {
 				return nil, fmt.Errorf("SSH socket forwarding failed: %w", err)
 			}
@@ -175,6 +184,7 @@ func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) 
 	}
 	// 先验证平台及协议，再决定是否启动，避免在不支持的目标上产生副作用。
 	if !s.Probe.Running && opts.Start {
+		opts.report(StageStart, 0)
 		s.Probe, err = s.discover(ctx, true)
 		if err != nil {
 			return nil, err
@@ -183,6 +193,7 @@ func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) 
 	if !s.Probe.Running {
 		return nil, errors.New("remote daemon is not running; start Posse on the remote Mac or connect with --start")
 	}
+	opts.report(StageHandshake, 0)
 	if err = s.mux(ctx, "forward", "-L", s.Socket+":"+s.Probe.Socket); err != nil {
 		return nil, fmt.Errorf("SSH socket forwarding failed: %w", err)
 	}
@@ -193,15 +204,18 @@ func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) 
 		// 仅对托管的 headless 节点在缺少必需能力时尝试热升级交接，并保留真实升级错误不静默吞掉
 		var capErr *MissingCapabilityError
 		if errors.As(err, &capErr) && opts.AutoInstall && h.Executable == "" && s.Info.Edition == "headless" {
+			opts.report(StagePackage, 0)
 			pkg, rerr := opts.resolveServer(ctx, s.Info.Platform, s.Info.Arch)
 			if rerr != nil {
 				return nil, fmt.Errorf("%w (auto-upgrade resolve failed: %v)", err, rerr)
 			}
 			defer pkg.Close()
-			exePath, ierr := s.stageAndCommitServer(ctx, s.Info.Home, pkg)
+			opts.report(StageUpload, 0)
+			exePath, ierr := s.stageAndCommitServer(ctx, s.Info.Home, pkg, opts.Progress)
 			if ierr != nil {
 				return nil, fmt.Errorf("%w (auto-upgrade install failed: %v)", err, ierr)
 			}
+			opts.report(StageUpgrade, 0)
 			newInfo, herr := handoffAndVerify(ctx, s.Socket, exePath, s.Info.InstanceID, "headless", opts.Required, s.Info.Home)
 			if herr != nil {
 				return nil, fmt.Errorf("%w (auto-upgrade failed: %v)", err, herr)

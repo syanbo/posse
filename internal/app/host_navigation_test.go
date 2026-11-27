@@ -74,9 +74,16 @@ func TestHostNavigationDiscussionIdentity(t *testing.T) {
 }
 
 func TestHostNavigationClicks(t *testing.T) {
-	v, a, b := hostViewsFixture(t)
+	k, a, b, _, _, _ := connectionFixture(t)
+	v := k.views
+	h := remoteTestHost("remote")
+	h.Name = "Office Mac"
+	writeHostMenuConfig(t, a, h)
+	a.loadHostMenu()
 	b.selected, b.state.LastWorkspace = "remote-w", "remote-w"
 	b.workspaces = []workspace{{ID: "remote-w", Path: "/remote/project"}}
+	a.selected, a.state.LastWorkspace = "local-w", "local-w"
+	a.workspaces = []workspace{{ID: "local-w", Path: "/local/project"}}
 	v.activate("remote")
 	tt := newTester(func(c *ui.Context) {
 		ui.Row(c).Fill().Children(func() { v.active.Load().navigation(c) })
@@ -90,13 +97,23 @@ func TestHostNavigationClicks(t *testing.T) {
 		if v.active.Load() != a || v.target != b {
 			t.Fatal("local navigation selected remote context")
 		}
-		if err := tt.Click("工作区"); err != nil {
+		// 点击左侧导航栏里的远端主机磁贴切回远端工作区并重新发起连接
+		if err := tt.Click("Office Mac"); err != nil {
 			t.Fatal(err)
 		}
 		settle(tt)
+		awaitHostUpdate(t, b)
 		if v.active.Load() != b || b.selected != "remote-w" {
-			t.Fatal("workspace navigation lost remote context")
+			t.Fatal("remote host tile did not restore remote workspace")
 		}
+	}
+	// 点击 >_ 固定切回本机工作区
+	if err := tt.Click("工作区"); err != nil {
+		t.Fatal(err)
+	}
+	settle(tt)
+	if v.active.Load() != a || v.target != a || a.selected != "local-w" {
+		t.Fatal("local workspace tile did not switch back to local host")
 	}
 }
 

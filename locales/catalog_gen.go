@@ -303,6 +303,628 @@ func (msgs Messages) HostTakeBody(label string) string {
 	return Catalog.Format(msgs.locale, "hostTakeBody", map[string]any{"label": label})
 }
 
+// HostAddShort says "Add SSH"
+// in the language the app shows.
+//
+// Compact status bar label to add the first SSH host.
+func HostAddShort() string { return In(i18n.Locale()).HostAddShort() }
+
+// HostAddShort says "Add SSH"
+// in the language of msgs.
+//
+// Compact status bar label to add the first SSH host.
+func (msgs Messages) HostAddShort() string {
+	return Catalog.Format(msgs.locale, "hostAddShort", nil)
+}
+
+// HostAddItem says "Add SSH host…"
+// in the language the app shows.
+//
+// Menu item to open the add SSH host dialog.
+func HostAddItem() string { return In(i18n.Locale()).HostAddItem() }
+
+// HostAddItem says "Add SSH host…"
+// in the language of msgs.
+//
+// Menu item to open the add SSH host dialog.
+func (msgs Messages) HostAddItem() string {
+	return Catalog.Format(msgs.locale, "hostAddItem", nil)
+}
+
+// HostEditItem says "Edit host…"
+// in the language the app shows.
+//
+// Action to edit an existing SSH host.
+func HostEditItem() string { return In(i18n.Locale()).HostEditItem() }
+
+// HostEditItem says "Edit host…"
+// in the language of msgs.
+//
+// Action to edit an existing SSH host.
+func (msgs Messages) HostEditItem() string {
+	return Catalog.Format(msgs.locale, "hostEditItem", nil)
+}
+
+// HostRemoveItem says "Remove host…"
+// in the language the app shows.
+//
+// Menu item to remove an existing SSH host.
+func HostRemoveItem() string { return In(i18n.Locale()).HostRemoveItem() }
+
+// HostRemoveItem says "Remove host…"
+// in the language of msgs.
+//
+// Menu item to remove an existing SSH host.
+func (msgs Messages) HostRemoveItem() string {
+	return Catalog.Format(msgs.locale, "hostRemoveItem", nil)
+}
+
+// HostCancelConnect says "Cancel connection"
+// in the language the app shows.
+//
+// Cancel an in-progress SSH connection or deployment.
+func HostCancelConnect() string { return In(i18n.Locale()).HostCancelConnect() }
+
+// HostCancelConnect says "Cancel connection"
+// in the language of msgs.
+//
+// Cancel an in-progress SSH connection or deployment.
+func (msgs Messages) HostCancelConnect() string {
+	return Catalog.Format(msgs.locale, "hostCancelConnect", nil)
+}
+
+// HostReconnect says "Reconnect"
+// in the language the app shows.
+//
+// Reconnect to a disconnected SSH host.
+func HostReconnect() string { return In(i18n.Locale()).HostReconnect() }
+
+// HostReconnect says "Reconnect"
+// in the language of msgs.
+//
+// Reconnect to a disconnected SSH host.
+func (msgs Messages) HostReconnect() string {
+	return Catalog.Format(msgs.locale, "hostReconnect", nil)
+}
+
+// HostStageAuth says "Waiting for authentication"
+// in the language the app shows.
+//
+// SSH authentication stage while connecting.
+func HostStageAuth() string { return In(i18n.Locale()).HostStageAuth() }
+
+// HostStageAuth says "Waiting for authentication"
+// in the language of msgs.
+//
+// SSH authentication stage while connecting.
+func (msgs Messages) HostStageAuth() string {
+	return Catalog.Format(msgs.locale, "hostStageAuth", nil)
+}
+
+// HostStageProbe says "Checking server"
+// in the language the app shows.
+//
+// Checking remote Posse server availability.
+func HostStageProbe() string { return In(i18n.Locale()).HostStageProbe() }
+
+// HostStageProbe says "Checking server"
+// in the language of msgs.
+//
+// Checking remote Posse server availability.
+func (msgs Messages) HostStageProbe() string {
+	return Catalog.Format(msgs.locale, "hostStageProbe", nil)
+}
+
+// HostStagePackage says "Preparing server"
+// in the language the app shows.
+//
+// Resolving or downloading the headless server bundle.
+func HostStagePackage() string { return In(i18n.Locale()).HostStagePackage() }
+
+// HostStagePackage says "Preparing server"
+// in the language of msgs.
+//
+// Resolving or downloading the headless server bundle.
+func (msgs Messages) HostStagePackage() string {
+	return Catalog.Format(msgs.locale, "hostStagePackage", nil)
+}
+
+// HostStageUpload says "Deploying server {percent}%"
+// in the language the app shows.
+//
+// Uploading the headless server bundle over SSH.
+func HostStageUpload(percent int) string { return In(i18n.Locale()).HostStageUpload(percent) }
+
+// HostStageUpload says "Deploying server {percent}%"
+// in the language of msgs.
+//
+// Uploading the headless server bundle over SSH.
+func (msgs Messages) HostStageUpload(percent int) string {
+	return Catalog.Format(msgs.locale, "hostStageUpload", map[string]any{"percent": percent})
+}
+
+// HostStageStart says "Starting server"
+// in the language the app shows.
+//
+// Starting the remote Posse daemon.
+func HostStageStart() string { return In(i18n.Locale()).HostStageStart() }
+
+// HostStageStart says "Starting server"
+// in the language of msgs.
+//
+// Starting the remote Posse daemon.
+func (msgs Messages) HostStageStart() string {
+	return Catalog.Format(msgs.locale, "hostStageStart", nil)
+}
+
+// HostStageUpgrade says "Upgrading server"
+// in the language the app shows.
+//
+// Handing off the remote daemon to a newer headless build.
+func HostStageUpgrade() string { return In(i18n.Locale()).HostStageUpgrade() }
+
+// HostStageUpgrade says "Upgrading server"
+// in the language of msgs.
+//
+// Handing off the remote daemon to a newer headless build.
+func (msgs Messages) HostStageUpgrade() string {
+	return Catalog.Format(msgs.locale, "hostStageUpgrade", nil)
+}
+
+// HostStageHandshake says "Connecting"
+// in the language the app shows.
+//
+// Final handshake with the remote daemon.
+func HostStageHandshake() string { return In(i18n.Locale()).HostStageHandshake() }
+
+// HostStageHandshake says "Connecting"
+// in the language of msgs.
+//
+// Final handshake with the remote daemon.
+func (msgs Messages) HostStageHandshake() string {
+	return Catalog.Format(msgs.locale, "hostStageHandshake", nil)
+}
+
+// HostDialogAddTitle says "Add SSH host"
+// in the language the app shows.
+//
+// Title of the add SSH host dialog.
+func HostDialogAddTitle() string { return In(i18n.Locale()).HostDialogAddTitle() }
+
+// HostDialogAddTitle says "Add SSH host"
+// in the language of msgs.
+//
+// Title of the add SSH host dialog.
+func (msgs Messages) HostDialogAddTitle() string {
+	return Catalog.Format(msgs.locale, "hostDialogAddTitle", nil)
+}
+
+// HostDialogEditTitle says "Edit {name}"
+// in the language the app shows.
+//
+// Title of the edit SSH host dialog.
+func HostDialogEditTitle(name string) string { return In(i18n.Locale()).HostDialogEditTitle(name) }
+
+// HostDialogEditTitle says "Edit {name}"
+// in the language of msgs.
+//
+// Title of the edit SSH host dialog.
+func (msgs Messages) HostDialogEditTitle(name string) string {
+	return Catalog.Format(msgs.locale, "hostDialogEditTitle", map[string]any{"name": name})
+}
+
+// HostFieldTarget says "SSH target"
+// in the language the app shows.
+//
+// Label for the SSH target input.
+func HostFieldTarget() string { return In(i18n.Locale()).HostFieldTarget() }
+
+// HostFieldTarget says "SSH target"
+// in the language of msgs.
+//
+// Label for the SSH target input.
+func (msgs Messages) HostFieldTarget() string {
+	return Catalog.Format(msgs.locale, "hostFieldTarget", nil)
+}
+
+// HostFieldTargetPlaceholder says "user@host, ~/.ssh/config alias, or ssh command"
+// in the language the app shows.
+//
+// Placeholder for the SSH target input.
+func HostFieldTargetPlaceholder() string { return In(i18n.Locale()).HostFieldTargetPlaceholder() }
+
+// HostFieldTargetPlaceholder says "user@host, ~/.ssh/config alias, or ssh command"
+// in the language of msgs.
+//
+// Placeholder for the SSH target input.
+func (msgs Messages) HostFieldTargetPlaceholder() string {
+	return Catalog.Format(msgs.locale, "hostFieldTargetPlaceholder", nil)
+}
+
+// HostFieldName says "Name"
+// in the language the app shows.
+//
+// Label for the SSH host display name input.
+func HostFieldName() string { return In(i18n.Locale()).HostFieldName() }
+
+// HostFieldName says "Name"
+// in the language of msgs.
+//
+// Label for the SSH host display name input.
+func (msgs Messages) HostFieldName() string {
+	return Catalog.Format(msgs.locale, "hostFieldName", nil)
+}
+
+// HostAdvanced says "Advanced"
+// in the language the app shows.
+//
+// Collapsible advanced SSH settings section.
+func HostAdvanced() string { return In(i18n.Locale()).HostAdvanced() }
+
+// HostAdvanced says "Advanced"
+// in the language of msgs.
+//
+// Collapsible advanced SSH settings section.
+func (msgs Messages) HostAdvanced() string {
+	return Catalog.Format(msgs.locale, "hostAdvanced", nil)
+}
+
+// HostFieldUser says "Username"
+// in the language the app shows.
+//
+// Label for optional SSH username override.
+func HostFieldUser() string { return In(i18n.Locale()).HostFieldUser() }
+
+// HostFieldUser says "Username"
+// in the language of msgs.
+//
+// Label for optional SSH username override.
+func (msgs Messages) HostFieldUser() string {
+	return Catalog.Format(msgs.locale, "hostFieldUser", nil)
+}
+
+// HostFieldPort says "Port"
+// in the language the app shows.
+//
+// Label for optional SSH port override.
+func HostFieldPort() string { return In(i18n.Locale()).HostFieldPort() }
+
+// HostFieldPort says "Port"
+// in the language of msgs.
+//
+// Label for optional SSH port override.
+func (msgs Messages) HostFieldPort() string {
+	return Catalog.Format(msgs.locale, "hostFieldPort", nil)
+}
+
+// HostFieldHome says "Remote Posse directory"
+// in the language the app shows.
+//
+// Label for optional remote POSSE_HOME override.
+func HostFieldHome() string { return In(i18n.Locale()).HostFieldHome() }
+
+// HostFieldHome says "Remote Posse directory"
+// in the language of msgs.
+//
+// Label for optional remote POSSE_HOME override.
+func (msgs Messages) HostFieldHome() string {
+	return Catalog.Format(msgs.locale, "hostFieldHome", nil)
+}
+
+// HostFieldExecutable says "Posse executable path"
+// in the language the app shows.
+//
+// Label for optional remote Posse binary path.
+func HostFieldExecutable() string { return In(i18n.Locale()).HostFieldExecutable() }
+
+// HostFieldExecutable says "Posse executable path"
+// in the language of msgs.
+//
+// Label for optional remote Posse binary path.
+func (msgs Messages) HostFieldExecutable() string {
+	return Catalog.Format(msgs.locale, "hostFieldExecutable", nil)
+}
+
+// HostFieldExecutablePlaceholder says "Leave blank to auto-detect or install"
+// in the language the app shows.
+//
+// Placeholder for optional remote Posse binary path.
+func HostFieldExecutablePlaceholder() string {
+	return In(i18n.Locale()).HostFieldExecutablePlaceholder()
+}
+
+// HostFieldExecutablePlaceholder says "Leave blank to auto-detect or install"
+// in the language of msgs.
+//
+// Placeholder for optional remote Posse binary path.
+func (msgs Messages) HostFieldExecutablePlaceholder() string {
+	return Catalog.Format(msgs.locale, "hostFieldExecutablePlaceholder", nil)
+}
+
+// HostSshConfig says "From ~/.ssh/config"
+// in the language the app shows.
+//
+// Section title for static ~/.ssh/config host aliases.
+func HostSshConfig() string { return In(i18n.Locale()).HostSshConfig() }
+
+// HostSshConfig says "From ~/.ssh/config"
+// in the language of msgs.
+//
+// Section title for static ~/.ssh/config host aliases.
+func (msgs Messages) HostSshConfig() string {
+	return Catalog.Format(msgs.locale, "hostSshConfig", nil)
+}
+
+// HostParsedPort says "Detected port {port} from command"
+// in the language the app shows.
+//
+// Hint shown when a pasted ssh command sets a port.
+func HostParsedPort(port int) string { return In(i18n.Locale()).HostParsedPort(port) }
+
+// HostParsedPort says "Detected port {port} from command"
+// in the language of msgs.
+//
+// Hint shown when a pasted ssh command sets a port.
+func (msgs Messages) HostParsedPort(port int) string {
+	return Catalog.Format(msgs.locale, "hostParsedPort", map[string]any{"port": port})
+}
+
+// HostParsedIgnored says "{flags} are not saved; put them in ~/.ssh/config if needed"
+// in the language the app shows.
+//
+// Hint shown when a pasted ssh command includes unsupported flags.
+func HostParsedIgnored(flags string) string { return In(i18n.Locale()).HostParsedIgnored(flags) }
+
+// HostParsedIgnored says "{flags} are not saved; put them in ~/.ssh/config if needed"
+// in the language of msgs.
+//
+// Hint shown when a pasted ssh command includes unsupported flags.
+func (msgs Messages) HostParsedIgnored(flags string) string {
+	return Catalog.Format(msgs.locale, "hostParsedIgnored", map[string]any{"flags": flags})
+}
+
+// HostAddConnect says "Add and connect"
+// in the language the app shows.
+//
+// Primary button when adding a new SSH host.
+func HostAddConnect() string { return In(i18n.Locale()).HostAddConnect() }
+
+// HostAddConnect says "Add and connect"
+// in the language of msgs.
+//
+// Primary button when adding a new SSH host.
+func (msgs Messages) HostAddConnect() string {
+	return Catalog.Format(msgs.locale, "hostAddConnect", nil)
+}
+
+// HostSaveReconnect says "Save and reconnect"
+// in the language the app shows.
+//
+// Primary button when editing connection details of the active host.
+func HostSaveReconnect() string { return In(i18n.Locale()).HostSaveReconnect() }
+
+// HostSaveReconnect says "Save and reconnect"
+// in the language of msgs.
+//
+// Primary button when editing connection details of the active host.
+func (msgs Messages) HostSaveReconnect() string {
+	return Catalog.Format(msgs.locale, "hostSaveReconnect", nil)
+}
+
+// HostEditLiveNote says "Connection settings changed; saving will reconnect to apply them."
+// in the language the app shows.
+//
+// Hint when editing connection parameters of a connected host.
+func HostEditLiveNote() string { return In(i18n.Locale()).HostEditLiveNote() }
+
+// HostEditLiveNote says "Connection settings changed; saving will reconnect to apply them."
+// in the language of msgs.
+//
+// Hint when editing connection parameters of a connected host.
+func (msgs Messages) HostEditLiveNote() string {
+	return Catalog.Format(msgs.locale, "hostEditLiveNote", nil)
+}
+
+// HostRemove says "Remove host"
+// in the language the app shows.
+//
+// Button to remove a saved SSH host in the edit dialog.
+func HostRemove() string { return In(i18n.Locale()).HostRemove() }
+
+// HostRemove says "Remove host"
+// in the language of msgs.
+//
+// Button to remove a saved SSH host in the edit dialog.
+func (msgs Messages) HostRemove() string {
+	return Catalog.Format(msgs.locale, "hostRemove", nil)
+}
+
+// HostRemoveTitle says "Remove {name}?"
+// in the language the app shows.
+//
+// Confirmation title before removing a saved SSH host.
+func HostRemoveTitle(name string) string { return In(i18n.Locale()).HostRemoveTitle(name) }
+
+// HostRemoveTitle says "Remove {name}?"
+// in the language of msgs.
+//
+// Confirmation title before removing a saved SSH host.
+func (msgs Messages) HostRemoveTitle(name string) string {
+	return Catalog.Format(msgs.locale, "hostRemoveTitle", map[string]any{"name": name})
+}
+
+// HostRemoveBody says "This only removes the saved connection on this Mac. Files, terminals, and the server on the remote machine are not de…"
+// in the language the app shows.
+//
+// Confirmation body explaining that removing a host only forgets local
+// config.
+func HostRemoveBody() string { return In(i18n.Locale()).HostRemoveBody() }
+
+// HostRemoveBody says "This only removes the saved connection on this Mac. Files, terminals, and the server on the remote machine are not de…"
+// in the language of msgs.
+//
+// Confirmation body explaining that removing a host only forgets local
+// config.
+func (msgs Messages) HostRemoveBody() string {
+	return Catalog.Format(msgs.locale, "hostRemoveBody", nil)
+}
+
+// HostErrTargetRequired says "Enter an SSH target"
+// in the language the app shows.
+//
+// Validation error when SSH target is empty.
+func HostErrTargetRequired() string { return In(i18n.Locale()).HostErrTargetRequired() }
+
+// HostErrTargetRequired says "Enter an SSH target"
+// in the language of msgs.
+//
+// Validation error when SSH target is empty.
+func (msgs Messages) HostErrTargetRequired() string {
+	return Catalog.Format(msgs.locale, "hostErrTargetRequired", nil)
+}
+
+// HostErrTargetInvalid says "Enter user@host or an alias from ~/.ssh/config"
+// in the language the app shows.
+//
+// Validation error when SSH target syntax is invalid.
+func HostErrTargetInvalid() string { return In(i18n.Locale()).HostErrTargetInvalid() }
+
+// HostErrTargetInvalid says "Enter user@host or an alias from ~/.ssh/config"
+// in the language of msgs.
+//
+// Validation error when SSH target syntax is invalid.
+func (msgs Messages) HostErrTargetInvalid() string {
+	return Catalog.Format(msgs.locale, "hostErrTargetInvalid", nil)
+}
+
+// HostErrNameTaken says "A host with this name already exists"
+// in the language the app shows.
+//
+// Validation error when host display name collides.
+func HostErrNameTaken() string { return In(i18n.Locale()).HostErrNameTaken() }
+
+// HostErrNameTaken says "A host with this name already exists"
+// in the language of msgs.
+//
+// Validation error when host display name collides.
+func (msgs Messages) HostErrNameTaken() string {
+	return Catalog.Format(msgs.locale, "hostErrNameTaken", nil)
+}
+
+// HostErrPort says "Port must be between 1 and 65535"
+// in the language the app shows.
+//
+// Validation error when SSH port is out of range.
+func HostErrPort() string { return In(i18n.Locale()).HostErrPort() }
+
+// HostErrPort says "Port must be between 1 and 65535"
+// in the language of msgs.
+//
+// Validation error when SSH port is out of range.
+func (msgs Messages) HostErrPort() string {
+	return Catalog.Format(msgs.locale, "hostErrPort", nil)
+}
+
+// HostErrUserConflict says "Specify the username either in the target or in Username"
+// in the language the app shows.
+//
+// Validation error when username is set in both target and user fields.
+func HostErrUserConflict() string { return In(i18n.Locale()).HostErrUserConflict() }
+
+// HostErrUserConflict says "Specify the username either in the target or in Username"
+// in the language of msgs.
+//
+// Validation error when username is set in both target and user fields.
+func (msgs Messages) HostErrUserConflict() string {
+	return Catalog.Format(msgs.locale, "hostErrUserConflict", nil)
+}
+
+// HostErrPath says "Path must be absolute or start with ~/"
+// in the language the app shows.
+//
+// Validation error when remote home or executable path is relative.
+func HostErrPath() string { return In(i18n.Locale()).HostErrPath() }
+
+// HostErrPath says "Path must be absolute or start with ~/"
+// in the language of msgs.
+//
+// Validation error when remote home or executable path is relative.
+func (msgs Messages) HostErrPath() string {
+	return Catalog.Format(msgs.locale, "hostErrPath", nil)
+}
+
+// HostDuplicateEndpoint says "This host is already saved as {name}"
+// in the language the app shows.
+//
+// Non-blocking warning when target/user/port matches an existing host.
+func HostDuplicateEndpoint(name string) string { return In(i18n.Locale()).HostDuplicateEndpoint(name) }
+
+// HostDuplicateEndpoint says "This host is already saved as {name}"
+// in the language of msgs.
+//
+// Non-blocking warning when target/user/port matches an existing host.
+func (msgs Messages) HostDuplicateEndpoint(name string) string {
+	return Catalog.Format(msgs.locale, "hostDuplicateEndpoint", map[string]any{"name": name})
+}
+
+// HostConnectingTitle says "Connecting to {name}"
+// in the language the app shows.
+//
+// Loading card title during initial connection to a remote host.
+func HostConnectingTitle(name string) string { return In(i18n.Locale()).HostConnectingTitle(name) }
+
+// HostConnectingTitle says "Connecting to {name}"
+// in the language of msgs.
+//
+// Loading card title during initial connection to a remote host.
+func (msgs Messages) HostConnectingTitle(name string) string {
+	return Catalog.Format(msgs.locale, "hostConnectingTitle", map[string]any{"name": name})
+}
+
+// HostFailedTitle says "Could not connect to {name}"
+// in the language the app shows.
+//
+// Error card title when initial remote connection fails.
+func HostFailedTitle(name string) string { return In(i18n.Locale()).HostFailedTitle(name) }
+
+// HostFailedTitle says "Could not connect to {name}"
+// in the language of msgs.
+//
+// Error card title when initial remote connection fails.
+func (msgs Messages) HostFailedTitle(name string) string {
+	return Catalog.Format(msgs.locale, "hostFailedTitle", map[string]any{"name": name})
+}
+
+// HostBackLocal says "Back to This Mac"
+// in the language the app shows.
+//
+// Button to return to the local host from a failed remote connection.
+func HostBackLocal() string { return In(i18n.Locale()).HostBackLocal() }
+
+// HostBackLocal says "Back to This Mac"
+// in the language of msgs.
+//
+// Button to return to the local host from a failed remote connection.
+func (msgs Messages) HostBackLocal() string {
+	return Catalog.Format(msgs.locale, "hostBackLocal", nil)
+}
+
+// HostTileTip says "{name}\n{target}"
+// in the language the app shows.
+//
+// Tooltip for a remote host tile in the navigation rail.
+func HostTileTip(name string, target string) string {
+	return In(i18n.Locale()).HostTileTip(name, target)
+}
+
+// HostTileTip says "{name}\n{target}"
+// in the language of msgs.
+//
+// Tooltip for a remote host tile in the navigation rail.
+func (msgs Messages) HostTileTip(name string, target string) string {
+	return Catalog.Format(msgs.locale, "hostTileTip", map[string]any{"name": name, "target": target})
+}
+
 // FetchManual says "Fetch from all remotes"
 // in the language the app shows.
 //

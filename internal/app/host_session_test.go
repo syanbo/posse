@@ -22,6 +22,7 @@ type hostControlFixture struct {
 	takes           int
 	heartbeats      int
 	statusError     error
+	takeError       error
 	heartbeatFail   bool
 	afterTake       func()
 	beforeRelease   func()
@@ -58,11 +59,17 @@ func newHostControlFixture(t *testing.T) (*hostControlFixture, *client.Client) {
 		}
 		f.mu.Lock()
 		f.takes++
+		if f.takeError != nil {
+			err := f.takeError
+			f.mu.Unlock()
+			return nil, err
+		}
 		if p.InstanceID != f.state.InstanceID || p.Epoch != f.state.Epoch {
 			f.mu.Unlock()
 			return nil, rpc.Errorf(rpc.CodeConflict, "desktop control changed; refresh before taking control")
 		}
-		if !p.Automatic || f.state.Owner == "" {
+		// 与真实 daemon（internal/daemon/desktop.go）一致：自动接管允许本端同一 ClientID 换代重取
+		if !p.Automatic || f.state.Owner == "" || f.state.Owner == p.ClientID {
 			f.state.Epoch++
 			f.state.Owner, f.state.Label = p.ClientID, p.Label
 		}
@@ -537,5 +544,21 @@ func TestHostSessionLostAutomaticReply(t *testing.T) {
 	defer f.mu.Unlock()
 	if f.takes != 1 {
 		t.Fatalf("automatic take attempts = %d", f.takes)
+	}
+}
+
+func TestHostSessionAutoTakeBusyKeepsViewing(t *testing.T) {
+	f, c := newHostControlFixture(t)
+	c.Remote = true
+	f.mu.Lock()
+	f.takeError = rpc.Errorf(rpc.CodeBusy, "handoff in progress")
+	f.mu.Unlock()
+	h := newHostSession("remote", "window")
+	if err := h.connectRemoteAt(context.Background(), c, h.snapshot().Generation); err != nil {
+		t.Fatalf("connectRemoteAt returned error on busy take: %v", err)
+	}
+	snap := h.snapshot()
+	if !snap.Connected || snap.Controlled {
+		t.Fatalf("busy auto-take should preserve viewing session, got %+v", snap)
 	}
 }

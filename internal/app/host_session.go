@@ -103,13 +103,22 @@ func (h *hostSession) detach() hostLease {
 }
 
 // connect 接收已经建立的本机连接或 SSH 隧道。本机每个 daemon 实例只自动申请一次；
-// 同实例重连和远端连接都从查看开始；显式切回本机由 prepareLocalReturn 单独授权。
+// 用户主动发起的远端连接经 connectRemoteAt 传入 autoTakeRemote，无人控制且未主动释放时自动接管。
 func (h *hostSession) connect(ctx context.Context, base *client.Client) error {
 	return h.connectAt(ctx, base, h.snapshot().Generation)
 }
 
 // 发起 SSH 建连之前也可捕获 generation，排队和握手期间离开主机都会使它失效。
 func (h *hostSession) connectAt(ctx context.Context, base *client.Client, expectedGeneration uint64) error {
+	return h.connectAtMode(ctx, base, expectedGeneration, false)
+}
+
+// connectRemoteAt 用于用户主动发起的远端主机连接：若目标无人控制且未被本端主动释放过，则自动接管。
+func (h *hostSession) connectRemoteAt(ctx context.Context, base *client.Client, expectedGeneration uint64) error {
+	return h.connectAtMode(ctx, base, expectedGeneration, true)
+}
+
+func (h *hostSession) connectAtMode(ctx context.Context, base *client.Client, expectedGeneration uint64, autoTakeRemote bool) error {
 	h.opMu.Lock()
 	defer h.opMu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -142,11 +151,11 @@ func (h *hostSession) connectAt(ctx context.Context, base *client.Client, expect
 	if err := hostControlCall(ctx, &copy, "desktop.status", nil, &state); err != nil {
 		return err
 	}
-	return h.observe(ctx, generation, &copy, state, returning)
+	return h.observe(ctx, generation, &copy, state, returning, autoTakeRemote)
 }
 
 // 只有成功读到状态才消耗该实例的自动接管机会；已有 owner 也消耗，防止稍后抢回。
-func (h *hostSession) observe(ctx context.Context, generation uint64, base *client.Client, state rpc.DesktopState, returning bool) error {
+func (h *hostSession) observe(ctx context.Context, generation uint64, base *client.Client, state rpc.DesktopState, returning, autoTakeRemote bool) error {
 	if !h.publish(generation, base, state, false) {
 		return context.Canceled
 	}
@@ -155,13 +164,47 @@ func (h *hostSession) observe(ctx context.Context, generation uint64, base *clie
 		h.mu.Unlock()
 		return context.Canceled
 	}
-	automatic := !base.Remote && state.InstanceID != "" && (state.InstanceID != h.automaticInstance || returning && state.InstanceID != h.blockedInstance)
+	var automatic bool
+	if base.Remote {
+		automatic = autoTakeRemote && state.InstanceID != "" && state.InstanceID != h.blockedInstance
+	} else {
+		automatic = state.InstanceID != "" && (state.InstanceID != h.automaticInstance || returning && state.InstanceID != h.blockedInstance)
+	}
 	if automatic {
 		h.automaticInstance = state.InstanceID
 	}
 	h.mu.Unlock()
-	if automatic && state.Owner == "" {
-		return h.takeLocked(ctx, generation, base, state, true)
+	if automatic && (state.Owner == "" || state.Owner == h.controllerID) {
+		err := h.takeLocked(ctx, generation, base, state, true)
+		var re *rpc.Error
+		if errors.As(err, &re) {
+			switch re.Code {
+			case rpc.CodeBusy, rpc.CodeReadOnly:
+				// 通道和查看身份已建立，目标正忙（如交接中）时保留可用查看连接而不是断开主机
+				return nil
+			case rpc.CodeConflict:
+				// 刚断开或切换时的旧 release 可能在 status 与 take 之间递增 epoch；重查一次后核对阻断状态再决定
+				var fresh rpc.DesktopState
+				if serr := hostControlCall(ctx, base, "desktop.status", nil, &fresh); serr == nil {
+					if !h.publish(generation, base, fresh, false) {
+						return context.Canceled
+					}
+					h.mu.Lock()
+					blocked := fresh.InstanceID == "" || fresh.InstanceID == h.blockedInstance
+					h.mu.Unlock()
+					if !blocked && (fresh.Owner == "" || fresh.Owner == h.controllerID) {
+						rerr := h.takeLocked(ctx, generation, base, fresh, true)
+						var re2 *rpc.Error
+						if errors.As(rerr, &re2) && (re2.Code == rpc.CodeBusy || re2.Code == rpc.CodeConflict || re2.Code == rpc.CodeReadOnly) {
+							return nil
+						}
+						return rerr
+					}
+					return nil
+				}
+			}
+		}
+		return err
 	}
 	return nil
 }
@@ -330,5 +373,5 @@ func (h *hostSession) refresh(ctx context.Context) error {
 		h.mu.Unlock()
 		return err
 	}
-	return h.observe(ctx, before.Generation, base, state, false)
+	return h.observe(ctx, before.Generation, base, state, false, false)
 }

@@ -4,11 +4,23 @@ import (
 	"slices"
 
 	"github.com/egoist/mygo/ui"
+
+	"posse/internal/remote"
+	"posse/locales"
 )
 
 const workspacesBoardID = "workspaces"
 
 type navigationDrag struct{ id string }
+type hostDrag struct{ id string }
+
+type tileState int
+
+const (
+	tileNormal tileState = iota
+	tileCurrentHost
+	tileSelected
+)
 
 func (a *app) navigationOrder() []string {
 	migrateNavigation(&a.state)
@@ -101,6 +113,19 @@ func (a *app) navigation(c *ui.Context) {
 
 func (a *app) navigationItems(c *ui.Context, local, target *app) {
 	m := L(c)
+	hosts := a.orderedHosts()
+	monograms := hostMonograms(hosts)
+	activeID := localHostID
+	targetID := localHostID
+	if a.views != nil {
+		if act := a.views.active.Load(); act != nil {
+			activeID = act.viewID
+		}
+		if a.views.target != nil {
+			targetID = a.views.target.viewID
+		}
+	}
+	onWorkspaces := a.workspaceModule()
 	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			secondary := false
@@ -112,9 +137,46 @@ func (a *app) navigationItems(c *ui.Context, local, target *app) {
 				var item ui.Element
 				switch id {
 				case workspacesBoardID:
-					item = navigationButton(c, id, iconTerminal, m.SidebarWorkspaces(), a.workspaceModule(), target.workspacesBadge(c))
+					st := tileNormal
+					if targetID == localHostID {
+						if onWorkspaces && activeID == localHostID {
+							st = tileSelected
+						} else {
+							st = tileCurrentHost
+						}
+					}
+					var badge func()
+					if activeID == localHostID {
+						badge = local.workspacesBadge(c)
+					}
+					item = navigationTile(c, id, iconTerminal, "", m.SidebarWorkspaces(), st, badge)
 					if item.Clicked() {
-						a.openWorkspaces()
+						a.selectLocalHost()
+						local.openWorkspaces()
+					}
+					var localBuild func(*popMenu)
+					contextMenu(c, item, func(menu *popMenu) {
+						if localBuild == nil {
+							localBuild = a.hostActionsBuild(m, remote.Host{ID: localHostID, Name: m.HostLocal()}, activeID == localHostID)
+						}
+						localBuild(menu)
+					})
+					hasTargetTile := false
+					for _, h := range hosts {
+						if h.ID == targetID {
+							hasTargetTile = true
+							break
+						}
+					}
+					if targetID == localHostID || !hasTargetTile {
+						a.consumeHostSwitchMenu(c, item, m)
+					}
+					// 远端 SSH 主机紧跟在 >_ 下方平级排开，有远端时画一条分隔线
+					if len(hosts) > 0 {
+						for _, h := range hosts {
+							a.remoteHostTile(c, m, h, monograms[h.ID], hosts, activeID, targetID, onWorkspaces)
+						}
+						hline(c).AlignSelf(ui.Stretch).Margin(4, 0)
 					}
 				case discBoardID:
 					item = local.discSidebarItem(c)
@@ -149,6 +211,83 @@ func (a *app) navigationItems(c *ui.Context, local, target *app) {
 	}
 }
 
+func (a *app) remoteHostTile(c *ui.Context, m locales.Messages, h remote.Host, monogram string, ordered []remote.Host, activeID, targetID string, onWorkspaces bool) {
+	st := tileNormal
+	if targetID == h.ID {
+		if onWorkspaces && activeID == h.ID {
+			st = tileSelected
+		} else {
+			st = tileCurrentHost
+		}
+	}
+	var badge func()
+	if activeID == h.ID && a.views != nil {
+		if v := a.views.all[h.ID]; v != nil {
+			badge = v.remoteHostBadge(c)
+		}
+	}
+	tile := navigationTile(c, "host-"+h.ID, nil, monogram, h.Name, st, badge)
+	tile.Tooltip(m.HostTileTip(h.Name, h.Target))
+	if tile.Clicked() {
+		a.openHost(h)
+	}
+	var tileBuild func(*popMenu)
+	contextMenu(c, tile, func(menu *popMenu) {
+		if tileBuild == nil {
+			tileBuild = a.hostActionsBuild(m, h, activeID == h.ID)
+		}
+		tileBuild(menu)
+	})
+	if targetID == h.ID {
+		a.consumeHostSwitchMenu(c, tile, m)
+	}
+	tile.Drag(hostDrag{h.ID})
+	if d, ok := ui.Drop[hostDrag](tile); ok && d.id != h.ID {
+		owner := a.windowOwner()
+		ids := make([]string, len(ordered))
+		for i, item := range ordered {
+			ids[i] = item.ID
+		}
+		owner.state.HostOrder = moveID(ids, d.id, h.ID)
+		owner.saveState()
+	}
+}
+
+func (a *app) consumeHostSwitchMenu(c *ui.Context, anchor ui.Element, m locales.Messages) {
+	owner := a.windowOwner()
+	st := ui.Local(anchor, "posse-host-switch", func() menuState { return menuState{} })
+	if owner.hostMenu.openRequested {
+		owner.hostMenu.openRequested = false
+		st.open = true
+		st.reset()
+	}
+	var build func(*popMenu)
+	menuAtRight(c, anchor, st, func(menu *popMenu) {
+		if build == nil {
+			if !st.focused {
+				a.loadHostMenu()
+			}
+			build = a.hostSwitchBuild(m)
+		}
+		build(menu)
+	})
+}
+
+func (a *app) remoteHostBadge(c *ui.Context) func() {
+	t := c.Theme()
+	if a.connecting {
+		return func() { ui.Icon(c, iconHexOutline).FontSize(smallIcon()).TextColor(t.Accent) }
+	}
+	if a.host != nil && !a.host.snapshot().Connected {
+		col := t.TextMuted
+		if a.err != "" {
+			col = t.Danger
+		}
+		return func() { ui.Icon(c, iconHexLost).FontSize(smallIcon()).TextColor(col) }
+	}
+	return a.workspacesBadge(c)
+}
+
 // workspacesBadge 汇总聊天以外所有工作区的会话状态，聊天磁贴自己显示聊天的。
 func (a *app) workspacesBadge(c *ui.Context) func() {
 	status := ""
@@ -167,16 +306,41 @@ func (a *app) workspacesBadge(c *ui.Context) func() {
 }
 
 func navigationButton(c *ui.Context, key string, glyph *ui.SVG, label string, selected bool, badge func()) ui.Element {
+	st := tileNormal
+	if selected {
+		st = tileSelected
+	}
+	return navigationTile(c, key, glyph, "", label, st, badge)
+}
+
+func navigationTile(c *ui.Context, key string, glyph *ui.SVG, text, label string, st tileState, badge func()) ui.Element {
 	t, p := c.Theme(), colors(c.Theme())
 	b := ui.Box(c.Key("navigation-"+key)).Size(navigationBox(), navigationBox()).Shrink(0).Radius(rControl).Center().Label(label).Role(ui.RoleButton).Focusable()
 	fg, bg := t.TextMuted, ui.Transparent
-	if selected {
+	switch st {
+	case tileSelected:
 		fg, bg = t.Accent, p.tint
-	} else if b.Hovered() {
-		fg, bg = t.Text, p.wash
+	case tileCurrentHost:
+		fg = t.Accent
+		if b.Hovered() {
+			bg = p.wash
+		}
+	default:
+		if b.Hovered() {
+			fg, bg = t.Text, p.wash
+		}
 	}
 	b.Background(b.AnimateColor("bg", bg, hover)).Children(func() {
-		ui.Icon(c, glyph).FontSize(navigationIcon()).TextColor(fg)
+		if glyph != nil {
+			ui.Icon(c, glyph).FontSize(navigationIcon()).TextColor(fg)
+		} else {
+			size := fsTitle
+			maxW := navigationBox() - 8
+			if w, _ := c.MeasureText(0, ui.Span{Text: text, Size: size, Weight: fwMedium}); w > maxW && w > 0 {
+				size *= maxW / w
+			}
+			ui.Text(c, text).FontSize(size).FontWeight(fwMedium).TextColor(fg).SingleLine()
+		}
 		if badge != nil {
 			ui.Row(c).Absolute().Top(0).Right(0).AlignItems(ui.Center).Children(badge)
 		}
@@ -195,6 +359,10 @@ func (a *app) newMenu(c *ui.Context, m *popMenu) {
 	}
 	if m.Item(l.TasksDispatchEllipsis()).Chosen() {
 		a.showModule(taskBoardID).openDispatch()
+	}
+	m.Separator()
+	if m.Item(l.HostAddItem()).Chosen() {
+		a.openHostDialog(remote.Host{})
 	}
 	m.Separator()
 	if m.Item(l.SidebarConnectPhone()).Chosen() {

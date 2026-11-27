@@ -431,6 +431,7 @@ func (a *app) taskSidebar(c *ui.Context) {
 			a.openDispatch()
 		}
 	})
+	a.hostContextRow(c)
 	// 可以聚焦：点过列表后方向键归它，不被别处拿走（和历史页一样）
 	ui.Column(c).Grow(1).MinHeight(0).Focusable().FocusRing(false).Label(m.TasksList()).Children(func() {
 		if len(a.tasks) == 0 {

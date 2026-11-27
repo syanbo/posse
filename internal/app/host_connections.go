@@ -65,7 +65,7 @@ func (a *app) windowContext() context.Context {
 	return context.Background()
 }
 
-// connectRemote 由主机入口在界面线程调用；连接成功只获得查看身份，不接管。
+// connectRemote 由主机入口在界面线程调用；连上无人控制的远端自动接管，有人控制时进入查看。
 func (k *hostConnections) connectRemote(h remote.Host, start bool) {
 	if k.closed {
 		return
@@ -86,7 +86,7 @@ func (k *hostConnections) connectRemote(h remote.Host, start bool) {
 	a.closeTargetPreviews()
 	a.ensurePanes([maxColumns]string{})
 	a.detachSkillRun()
-	a.connecting, a.err = true, ""
+	a.connecting, a.connectStage, a.connectPct, a.err = true, remote.StageAuth, 0, ""
 	ctx, cancel := context.WithCancel(k.ctx)
 	r := &hostAttempt{app: a, ctx: ctx, cancel: cancel}
 	k.active = r
@@ -99,6 +99,14 @@ func (k *hostConnections) connectRemote(h remote.Host, start bool) {
 		Prompt: func(ctx context.Context, p remote.Prompt) (string, error) {
 			return k.views.local.sshAuth.ask(ctx, h.Name, p, cancel)
 		},
+		Progress: func(stage remote.Stage, pct float64) {
+			a.update(func() {
+				if k.closed || k.active != r || ctx.Err() != nil {
+					return
+				}
+				a.connectStage, a.connectPct = stage, pct
+			})
+		},
 	}
 	k.jobs.Go(func() {
 		k.dialMu.Lock()
@@ -109,7 +117,7 @@ func (k *hostConnections) connectRemote(h remote.Host, start bool) {
 		}
 		k.dialMu.Unlock()
 		if err == nil {
-			err = a.host.connectAt(ctx, transport.client, generation)
+			err = a.host.connectRemoteAt(ctx, transport.client, generation)
 		}
 		if err == nil {
 			err = ctx.Err()
@@ -118,7 +126,7 @@ func (k *hostConnections) connectRemote(h remote.Host, start bool) {
 			if k.closed || k.active != r {
 				return
 			}
-			a.connecting = false
+			a.connecting, a.connectStage, a.connectPct = false, "", 0
 			if ctx.Err() != nil {
 				k.failed(r, ctx.Err())
 				return
@@ -145,6 +153,8 @@ func (k *hostConnections) leave() {
 	if k.active != nil {
 		k.active.cancel()
 		k.active.app.connecting = false
+		k.active.app.connectStage = ""
+		k.active.app.connectPct = 0
 		k.active = nil
 	}
 	k.views.local.sshAuth.cancelPending(false)

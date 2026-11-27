@@ -127,7 +127,6 @@ func (a *app) build(c *ui.Context) {
 		}
 		// 只占剩下的宽度：标签多了也不撑出窗口（右边停靠的文件栏要完整显示）
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Background(p.canvas).Children(func() {
-			a.hostStatusView(c)
 			// 分支按钮只在工作区的主界面显示，分支弹窗也只在那里画
 			var bw *workspace
 			ui.Column(c).Grow(1).MinHeight(0).Children(func() {
@@ -145,8 +144,10 @@ func (a *app) build(c *ui.Context) {
 				case a.selected == settingsBoardID:
 					a.settingsBoard(c)
 				default:
-					a.main(c, w, cur)
-					bw = w
+					if !a.remoteLandingCard(c) {
+						a.main(c, w, cur)
+						bw = w
+					}
 				}
 			})
 			if !a.sidebarSlot() {
@@ -165,7 +166,6 @@ func (a *app) build(c *ui.Context) {
 	// 侧栏不占位置时跟在应用名后面，好再点开
 	ui.Row(c).Absolute().Top(0).Left(c.TitleBar().Left + titleGap).Height(titleHeight(c)).Gap(appNameGap).AlignItems(ui.Center).Children(func() {
 		titleText(c, appName(), fsBody).Width(appNameWidth(c)).Shrink(0)
-		a.hostMenuButton(c)
 		if a.hasContextSidebar() && !a.sidebarSlot() {
 			a.sidebarButton(c)
 		}
@@ -218,6 +218,7 @@ func (a *app) build(c *ui.Context) {
 	a.projectIconDialog(c)
 	a.sysMenuView(c)
 	a.targetDirectoryDialog(c)
+	a.hostDialog(c)
 	a.sshAuthDialog(c)
 }
 
@@ -492,9 +493,6 @@ func (a *app) barInset(c *ui.Context) float32 {
 	lead := appNameWidth(c)
 	if a.hasContextSidebar() {
 		lead += appNameGap + buttonBox()
-	}
-	if a.views != nil {
-		lead += appNameGap + a.hostMenuWidth(c)
 	}
 	return max(0, c.TitleBar().Left+titleGap+lead-navigationWidth())
 }

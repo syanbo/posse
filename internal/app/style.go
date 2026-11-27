@@ -54,6 +54,8 @@ func sidebarDefault() float32        { return sz(248) }
 func sidebarMin() float32            { return sz(224) }
 func sidebarMax() float32            { return sz(420) }
 func sshAuthWidth() float32          { return sz(420) }
+func hostDialogWidth() float32       { return sz(460) }
+func hostChipNameMax() float32       { return sz(160) }
 func targetDirectoryWidth() float32  { return sz(520) }
 func targetDirectoryHeight() float32 { return sz(260) }
 func pinnedRowHeight() float32       { return sz(32) }

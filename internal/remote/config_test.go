@@ -68,3 +68,36 @@ func TestHostValidation(t *testing.T) {
 		t.Fatal("invalid port accepted")
 	}
 }
+
+func TestPutUniqueAndRemoveIf(t *testing.T) {
+	home := t.TempDir()
+	h1, err := PutUnique(home, Host{Name: "Office", Target: "office.local"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PutUnique(home, Host{Name: "Office", Target: "other.local"}, nil); err == nil {
+		t.Fatal("duplicate host name accepted")
+	}
+	stale := h1
+	h1.Target = "office2.local"
+	updated, err := PutUnique(home, h1, &stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 用旧快照再次编辑和删除均应被并发冲突拦住
+	conflict := stale
+	conflict.Target = "office3.local"
+	if _, err := PutUnique(home, conflict, &stale); err == nil {
+		t.Fatal("stale edit accepted")
+	}
+	if err := RemoveIf(home, stale); err == nil {
+		t.Fatal("stale remove accepted")
+	}
+	if err := RemoveIf(home, updated); err != nil {
+		t.Fatalf("matching remove failed: %v", err)
+	}
+	hosts, err := Load(home)
+	if err != nil || len(hosts) != 0 {
+		t.Fatalf("hosts after remove = %+v (%v)", hosts, err)
+	}
+}

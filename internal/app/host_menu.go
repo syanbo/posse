@@ -2,31 +2,71 @@ package app
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"slices"
-
-	"github.com/egoist/mygo/ui"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+	"unicode"
 
 	"posse/internal/errtext"
 	"posse/internal/remote"
 	"posse/locales"
 )
 
+type hostFileStamp struct {
+	loaded bool
+	exists bool
+	mod    time.Time
+	size   int64
+	ino    uint64
+}
+
 type hostMenuState struct {
 	hosts         []remote.Host
 	names         map[string]string
 	releasing     uint64
 	openRequested bool
+	stampMu       sync.Mutex
+	stamp         hostFileStamp
 }
 
 func (a *app) openHostMenu() {
 	if a.views == nil {
 		return
 	}
-	a.windowOwner().hostMenu.openRequested = true
+	owner := a.windowOwner()
+	a.loadHostMenu()
+	// 还没有配置任何远程主机时，直接进入添加弹窗；配置文件损坏导致 a.err 非空时仍打开菜单显示错误条
+	if len(owner.hostMenu.hosts) == 0 && a.err == "" && a.viewID == localHostID {
+		a.openHostDialog(remote.Host{})
+		return
+	}
+	owner.hostMenu.openRequested = true
+}
+
+func statHostFile(path string) hostFileStamp {
+	st, err := os.Stat(path)
+	if err != nil {
+		return hostFileStamp{loaded: true, exists: false}
+	}
+	var ino uint64
+	if sys, ok := st.Sys().(*syscall.Stat_t); ok {
+		ino = sys.Ino
+	}
+	return hostFileStamp{loaded: true, exists: true, mod: st.ModTime(), size: st.Size(), ino: ino}
 }
 
 func (a *app) loadHostMenu() {
 	owner := a.windowOwner()
+	path := filepath.Join(owner.home, "hosts.json")
+	stamp := statHostFile(path)
+	owner.hostMenu.stampMu.Lock()
+	owner.hostMenu.stamp = stamp
+	owner.hostMenu.stampMu.Unlock()
 	hosts, err := remote.Load(owner.home)
 	owner.hostMenu.hosts = hosts
 	if owner.hostMenu.names == nil {
@@ -40,97 +80,276 @@ func (a *app) loadHostMenu() {
 	}
 }
 
+// checkHostsFile 在每秒轮询中 stat 本机 hosts.json；仅当文件身份、大小或修改时间真正变化时才排队重绘。
+func (a *app) checkHostsFile() {
+	owner := a.windowOwner()
+	if owner.home == "" {
+		return
+	}
+	cur := statHostFile(filepath.Join(owner.home, "hosts.json"))
+	owner.hostMenu.stampMu.Lock()
+	same := owner.hostMenu.stamp == cur
+	owner.hostMenu.stampMu.Unlock()
+	if same {
+		return
+	}
+	owner.update(func() {
+		owner.loadHostMenu()
+	})
+}
+
+// orderedHosts 按本机 ui.json 的 HostOrder 排好序，未登记的新主机排在末尾。
+func (a *app) orderedHosts() []remote.Host {
+	owner := a.windowOwner()
+	hosts := owner.hostMenu.hosts
+	if len(hosts) <= 1 || len(owner.state.HostOrder) == 0 {
+		return slices.Clone(hosts)
+	}
+	byID := make(map[string]remote.Host, len(hosts))
+	for _, h := range hosts {
+		byID[h.ID] = h
+	}
+	out := make([]remote.Host, 0, len(hosts))
+	seen := make(map[string]bool, len(hosts))
+	for _, id := range owner.state.HostOrder {
+		if h, ok := byID[id]; ok && !seen[id] {
+			out = append(out, h)
+			seen[id] = true
+		}
+	}
+	for _, h := range hosts {
+		if !seen[h.ID] {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+func (a *app) findSavedHost(id string) (remote.Host, bool) {
+	for _, h := range a.windowOwner().hostMenu.hosts {
+		if h.ID == id {
+			return h, true
+		}
+	}
+	return remote.Host{}, false
+}
+
 func (a *app) hostName(m locales.Messages) string {
 	if a.viewID == "" || a.viewID == localHostID {
 		return m.HostLocal()
 	}
-	return a.windowOwner().hostMenu.names[a.viewID]
+	if name := a.windowOwner().hostMenu.names[a.viewID]; name != "" {
+		return name
+	}
+	return a.viewID
 }
 
-// 主机名在侧栏顶栏余下的宽度内截断；收起侧栏后仍按同一宽度留位。
-func (a *app) hostMenuWidth(c *ui.Context) float32 {
-	if a.views == nil {
-		return 0
-	}
-	w, _ := c.MeasureText(0, ui.Span{Text: a.hostName(L(c)), Size: fsSmall, Weight: fwBody})
-	available := navigationWidth() + a.sidebarWidth() - c.TitleBar().Left - titleGap - appNameWidth(c) - 2*appNameGap - buttonBox() - iconBarPad()
-	return min(w+16+4+fsSmall, max(buttonBox(), available))
-}
-
-func (a *app) hostMenuButton(c *ui.Context) {
-	if a.views == nil {
-		return
-	}
-	name := a.hostName(L(c))
-	b := ui.ButtonBase(c.Key("host-menu")).Width(a.hostMenuWidth(c)).Height(compactBox()).Padding(0, 8).Radius(rSmall).Label(name).Tooltip(a.withKey(name, "switchHost"))
-	if b.Hovered() {
-		b.Background(colors(c.Theme()).wash)
-	}
-	b.Children(func() {
-		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, name).FontSize(fsSmall).TextColor(c.Theme().TextMuted).SingleLine().Ellipsis("…").Shrink(1)
-			ui.Icon(c, iconDown).Size(fsSmall, fsSmall).TextColor(c.Theme().TextMuted).Shrink(0)
-		})
-	})
-	if owner := a.windowOwner(); owner.hostMenu.openRequested {
-		owner.hostMenu.openRequested = false
-		st := menuStateOf(b)
-		st.open = true
-		st.reset()
-	}
-	var build func(*popMenu)
-	menuButton(c, b, func(m *popMenu) {
-		if build == nil {
-			if !menuStateOf(b).focused {
-				a.loadHostMenu()
+// hostMonograms 为每台远端主机生成 1–2 字的磁贴缩写；撞字时依次尝试词首字母、首尾字母和数字后缀。
+func hostMonograms(hosts []remote.Host) map[string]string {
+	out := make(map[string]string, len(hosts))
+	used := make(map[string]bool, len(hosts))
+	for _, h := range hosts {
+		cands := monogramCandidates(h.Name)
+		chosen := ""
+		for _, cand := range cands {
+			if cand != "" && !used[cand] {
+				chosen = cand
+				break
 			}
-			build = a.hostMenuBuild(L(c))
 		}
-		build(m)
-	})
+		if chosen == "" {
+			base := "S"
+			if len(cands) > 0 {
+				base = string([]rune(cands[0])[:1])
+			}
+			for n := 2; n < 100; n++ {
+				cand := base + strconv.Itoa(n)
+				if !used[cand] {
+					chosen = cand
+					break
+				}
+			}
+			if chosen == "" {
+				chosen = base
+			}
+		}
+		used[chosen] = true
+		out[h.ID] = chosen
+	}
+	return out
 }
 
-// 同一帧的收集和执行共用快照，后台握手完成不能改变菜单项的编号。
-func (a *app) hostMenuBuild(m locales.Messages) func(*popMenu) {
+func monogramCandidates(name string) []string {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return []string{"SH"}
+	}
+	runes := []rune(trimmed)
+	// 非 ASCII（如中文）：优先取首字，撞字再取前两字
+	if runes[0] > 127 {
+		cands := []string{string(runes[0])}
+		if len(runes) > 1 {
+			cands = append(cands, string(runes[:2]))
+		}
+		return cands
+	}
+	var cands []string
+	add := func(s string) {
+		s = strings.ToUpper(s)
+		if s != "" && !slices.Contains(cands, s) {
+			cands = append(cands, s)
+		}
+	}
+	// 收集纯字母数字字符
+	var alnum []rune
+	for _, r := range runes {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			alnum = append(alnum, r)
+		}
+	}
+	if len(alnum) >= 2 {
+		add(string(alnum[:2]))
+	} else if len(alnum) == 1 {
+		add(string(alnum[0]))
+	}
+	// 多词首字母（如 Office Mac -> OM）
+	words := strings.FieldsFunc(trimmed, func(r rune) bool {
+		return !(unicode.IsLetter(r) || unicode.IsDigit(r))
+	})
+	if len(words) >= 2 {
+		w0, w1 := []rune(words[0]), []rune(words[1])
+		add(string([]rune{w0[0], w1[0]}))
+	}
+	if len(alnum) >= 3 {
+		add(string([]rune{alnum[0], alnum[len(alnum)-1]}))
+	}
+	return cands
+}
+
+// hostActionsBuild 捕获当前帧的快照构建单台主机右键菜单，确保同一帧收集与执行两遍项号完全一致。
+func (a *app) hostActionsBuild(m locales.Messages, h remote.Host, active bool) func(*popMenu) {
+	var s hostSnapshot
+	if active && a.host != nil {
+		s = a.host.snapshot()
+	}
+	connecting, releasing := a.connecting, a.hostMenu.releasing != 0
+	return func(menu *popMenu) {
+		if h.ID == localHostID {
+			if active && a.host != nil {
+				if s.Controlled {
+					if menu.Item(m.HostRelease()).Chosen() {
+						a.releaseHost(s)
+					}
+				} else if menu.Item(m.HostTake()).Disabled(!s.Connected || connecting || releasing).Chosen() {
+					a.takeHost(m, s)
+				}
+				menu.Separator()
+			}
+			if menu.Item(m.HostAddItem()).Icon(iconPlus).Chosen() {
+				a.openHostDialog(remote.Host{})
+			}
+			return
+		}
+
+		if active {
+			switch {
+			case connecting:
+				if menu.Item(m.HostCancelConnect()).Chosen() {
+					a.windowOwner().hosts.disconnect(h.ID)
+				}
+			case !s.Connected:
+				if menu.Item(m.HostReconnect()).Chosen() {
+					a.selectRemoteHost(h)
+				}
+			default:
+				if s.Controlled {
+					if menu.Item(m.HostRelease()).Chosen() {
+						a.releaseHost(s)
+					}
+				} else if menu.Item(m.HostTake()).Disabled(releasing).Chosen() {
+					a.takeHost(m, s)
+				}
+				if menu.Item(m.HostDisconnect()).Chosen() {
+					a.windowOwner().hosts.disconnect(h.ID)
+				}
+			}
+		} else {
+			if menu.Item(m.HostConnect()).Chosen() {
+				a.selectRemoteHost(h)
+			}
+		}
+		menu.Separator()
+		if menu.Item(m.HostEditItem()).Chosen() {
+			a.openHostDialog(h)
+		}
+		if menu.Item(m.HostRemoveItem()).Danger().Chosen() {
+			a.confirmRemoveHost(m, h)
+		}
+	}
+}
+
+// hostSwitchBuild 构建 ⌃⌥H 弹出的主机切换菜单（同一帧收集与执行共用快照）。
+func (a *app) hostSwitchBuild(m locales.Messages) func(*popMenu) {
 	var s hostSnapshot
 	if a.host != nil {
 		s = a.host.snapshot()
 	}
-	hosts := slices.Clone(a.windowOwner().hostMenu.hosts)
+	hosts := a.orderedHosts()
 	connecting, releasing := a.connecting, a.hostMenu.releasing != 0
+	targetID := localHostID
+	if a.views != nil && a.views.target != nil {
+		targetID = a.views.target.viewID
+	}
 	return func(menu *popMenu) {
-		if menu.Item(m.HostLocal()).Checked(a.viewID == localHostID).Chosen() {
+		if menu.Item(m.HostLocal()).Checked(targetID == localHostID).Chosen() {
 			a.selectLocalHost()
 		}
 		for _, h := range hosts {
-			if menu.Item(h.Name).Checked(a.viewID == h.ID).Chosen() {
-				a.selectRemoteHost(h)
+			item := menu.Item(h.Name).Checked(targetID == h.ID)
+			if a.viewID == h.ID && connecting {
+				item.Spin(true)
+			}
+			if item.Chosen() {
+				a.openHost(h)
 			}
 		}
-		if a.host == nil {
-			return
-		}
-		menu.Separator()
-		if a.viewID != localHostID && !s.Connected {
-			var selected remote.Host
-			for _, h := range hosts {
-				if h.ID == a.viewID {
-					selected = h
+		if a.host != nil {
+			menu.Separator()
+			if a.viewID != localHostID {
+				selected, ok := a.findSavedHost(a.viewID)
+				if connecting {
+					if menu.Item(m.HostCancelConnect()).Chosen() {
+						a.windowOwner().hosts.disconnect(a.viewID)
+					}
+				} else if !s.Connected && ok {
+					if menu.Item(m.HostReconnect()).Chosen() {
+						a.selectRemoteHost(selected)
+					}
+				} else if s.Connected {
+					if s.Controlled {
+						if menu.Item(m.HostRelease()).Chosen() {
+							a.releaseHost(s)
+						}
+					} else if menu.Item(m.HostTake()).Disabled(releasing).Chosen() {
+						a.takeHost(m, s)
+					}
+					if menu.Item(m.HostDisconnect()).Chosen() {
+						a.windowOwner().hosts.disconnect(a.viewID)
+					}
+				}
+			} else {
+				if s.Controlled {
+					if menu.Item(m.HostRelease()).Chosen() {
+						a.releaseHost(s)
+					}
+				} else if menu.Item(m.HostTake()).Disabled(!s.Connected || connecting || releasing).Chosen() {
+					a.takeHost(m, s)
 				}
 			}
-			if menu.Item(m.HostConnect()).Disabled(connecting || selected.ID == "").Chosen() {
-				a.selectRemoteHost(selected)
-			}
 		}
-		if s.Controlled {
-			if menu.Item(m.HostRelease()).Chosen() {
-				a.releaseHost(s)
-			}
-		} else if menu.Item(m.HostTake()).Disabled(!s.Connected || connecting || releasing).Chosen() {
-			a.takeHost(m, s)
-		}
-		if a.viewID != localHostID && menu.Item(m.HostDisconnect()).Disabled(!s.Connected && !connecting).Chosen() {
-			a.windowOwner().hosts.disconnect(a.viewID)
+		menu.Separator()
+		if menu.Item(m.HostAddItem()).Icon(iconPlus).Chosen() {
+			a.openHostDialog(remote.Host{})
 		}
 	}
 }
@@ -140,7 +359,9 @@ func (a *app) selectLocalHost() {
 		return
 	}
 	local := a.views.local
-	if a.views.active.Load() == local {
+	// 仅当显示视图和工作区目标都已是本机时才保留当前页面；
+	// 处于本机设备页（设置/技能/手机/讨论）且 target 仍是远端时，必须把 target 切回本机。
+	if a.views.active.Load() == local && a.views.target == local {
 		return
 	}
 	if local.host != nil {
@@ -150,12 +371,32 @@ func (a *app) selectLocalHost() {
 	local.openWorkspaces()
 }
 
+// openHost 是点击左侧导航栏远端主机磁贴的左键动作：
+// 未切到该主机或已断开（含从本机设备页返回）时重走 selectRemoteHost（空闲 master 会复用不重新认证），
+// 已连接但在别的模块时回到该主机的工作区。
+func (a *app) openHost(h remote.Host) {
+	if a.views == nil {
+		return
+	}
+	target := a.views.all[h.ID]
+	if a.views.active.Load() == target && target != nil && (target.connecting || target.host != nil && target.host.snapshot().Connected) {
+		if !target.workspaceModule() {
+			target.openWorkspaces()
+		}
+		return
+	}
+	a.selectRemoteHost(h)
+}
+
 func (a *app) selectRemoteHost(h remote.Host) {
 	k := a.windowOwner().hosts
 	if k == nil || k.closed {
 		return
 	}
 	if a.viewID == h.ID && (a.connecting || a.host != nil && a.host.snapshot().Connected) {
+		if !a.workspaceModule() {
+			a.openWorkspaces()
+		}
 		return
 	}
 	if k.views.local.hostMenu.names == nil {
@@ -163,6 +404,9 @@ func (a *app) selectRemoteHost(h remote.Host) {
 	}
 	k.views.local.hostMenu.names[h.ID] = h.Name
 	k.connectRemote(h, true)
+	if active := k.views.active.Load(); active != nil && !active.workspaceModule() {
+		active.openWorkspaces()
+	}
 }
 
 func (a *app) takeHost(m locales.Messages, s hostSnapshot) {
@@ -236,7 +480,7 @@ func (a *app) hostStatus(m locales.Messages) string {
 		return ""
 	}
 	if a.connecting {
-		return m.HostConnecting()
+		return a.connectStageText(m)
 	}
 	s := a.host.snapshot()
 	if !s.Connected {
@@ -249,12 +493,4 @@ func (a *app) hostStatus(m locales.Messages) string {
 		return m.HostViewingOwner(s.Desktop.Label)
 	}
 	return m.HostViewing()
-}
-
-func (a *app) hostStatusView(c *ui.Context) {
-	if status := a.hostStatus(L(c)); status != "" {
-		ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, trafficLightX, 0, max(trafficLightX, a.barInset(c))).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, status).FontSize(fsSmall).TextColor(c.Theme().TextMuted).SingleLine().Ellipsis("…")
-		})
-	}
 }

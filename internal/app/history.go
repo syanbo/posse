@@ -739,6 +739,7 @@ func (a *app) historySidebar(c *ui.Context) {
 	h := &a.history
 	m := L(c)
 	moduleHeader(c, a.moduleLabel(c, historyBoardID, m.HistoryTitle()), func() { a.historyAgentMenu(c) })
+	a.hostContextRow(c)
 	ui.Column(c).Padding(0, iconBarPad(), 8, trafficLightX).Gap(8).Shrink(0).Children(func() {
 		// 系统搜索框的占位文字固定是英文 Search，这里用普通输入框
 		search := fieldInput(c, &h.query, m.HistorySearchPlaceholder(a.keyText("historySearch"))).Label(m.HistorySearchLabel())
