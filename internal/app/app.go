@@ -383,7 +383,7 @@ type app struct {
 	iconEdit       iconEditor                // 更换项目图标的对话框
 	projIcons      map[string]projectIcon    // 项目自定义的图标，键是项目 ID
 	projIconCache  map[string]ui.ImageSource // 项目图标的图片，键是文件名
-	hostIconCache  map[string]ui.ImageSource // SSH 主机自定义图标的图片缓存，只由 windowOwner 持有
+	hostIconCache  map[string]hostIconEntry  // SSH 主机自定义图标的图片缓存，只由 windowOwner 持有
 	previewLoading map[string]bool
 	// lastPanel 是最后打开的右侧面板：关闭动画期间还要画它
 	lastPanel string
@@ -1680,8 +1680,16 @@ func (r appRequest) addProject(m locales.Messages) {
 	if r.client != nil && r.client.Remote {
 		start := "/"
 		var fallbacks []string
-		if h := filepath.Clean(r.client.Home); filepath.IsAbs(h) && h != "/" {
-			userHome := filepath.Dir(h)
+		userHome := filepath.Clean(r.client.UserHome)
+		if !filepath.IsAbs(userHome) || userHome == "/" {
+			// 兼容旧版未上报 UserHome 的远端 daemon：仅当数据目录名为隐藏目录（如 ~/.posse）时才推算父级
+			if h := filepath.Clean(r.client.Home); filepath.IsAbs(h) && h != "/" && strings.HasPrefix(filepath.Base(h), ".") {
+				userHome = filepath.Dir(h)
+			} else {
+				userHome = ""
+			}
+		}
+		if userHome != "" && userHome != "/" {
 			start = filepath.Join(userHome, "Desktop")
 			fallbacks = []string{userHome, "/"}
 		}

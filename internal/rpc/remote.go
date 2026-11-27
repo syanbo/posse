@@ -34,6 +34,8 @@ type RemoteInfo struct {
 	Version      string   `json:"version"`
 	Build        string   `json:"build"`
 	Edition      string   `json:"edition,omitempty"`
+	Managed      bool     `json:"managed,omitempty"`
+	UserHome     string   `json:"userHome,omitempty"`
 	Capabilities []string `json:"capabilities"`
 	Features     []string `json:"features,omitempty"`
 }

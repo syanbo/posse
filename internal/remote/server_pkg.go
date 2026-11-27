@@ -38,6 +38,7 @@ type ServerPackage struct {
 	Path        string
 	Version     string
 	Commit      string
+	BuiltAt     time.Time
 	Tag         string
 	OS          string
 	Arch        string
@@ -169,9 +170,16 @@ func serverSearchDirs(opts ServerResolveOptions) []string {
 		if filepath.Base(exeDir) == "bin" {
 			add(filepath.Join(exeDir, "..", "build", "server"))
 		}
-		// 仓库内 build/darwin-<arch>/Posse.app 或 build/dev/PosseDev.app -> build/server
-		if buildDir := filepath.Clean(filepath.Join(exeDir, "..", "..", "..", "..")); filepath.Base(buildDir) == "build" {
-			add(filepath.Join(buildDir, "server"))
+		// 仓库内 build/(darwin-arm64|darwin-amd64|dev)/*.app -> build/server
+		contentsDir := filepath.Dir(exeDir)
+		appDir := filepath.Dir(contentsDir)
+		platDir := filepath.Dir(appDir)
+		buildDir := filepath.Dir(platDir)
+		if filepath.Base(exeDir) == "MacOS" && filepath.Base(contentsDir) == "Contents" && strings.HasSuffix(appDir, ".app") && filepath.Base(buildDir) == "build" {
+			switch filepath.Base(platDir) {
+			case "darwin-arm64", "darwin-amd64", "dev":
+				add(filepath.Join(buildDir, "server"))
+			}
 		}
 	}
 	return dirs
@@ -267,6 +275,7 @@ func validateSnapshotStream(ctx context.Context, snap *os.File, snapPath, sum, f
 	entries := 0
 	ver := fallbackVer
 	commit := ""
+	var builtAt time.Time
 	var manifestSHAs map[string]string
 	hasManifest := false
 
@@ -358,6 +367,7 @@ func validateSnapshotStream(ctx context.Context, snap *os.File, snapPath, sum, f
 			var m struct {
 				Version string            `json:"version"`
 				Commit  string            `json:"commit"`
+				BuiltAt string            `json:"builtAt"`
 				OS      string            `json:"os"`
 				Arch    string            `json:"arch"`
 				Edition string            `json:"edition"`
@@ -385,6 +395,11 @@ func validateSnapshotStream(ctx context.Context, snap *os.File, snapPath, sum, f
 			}
 			ver = m.Version
 			commit = strings.TrimSpace(m.Commit)
+			if ts := strings.TrimSpace(m.BuiltAt); ts != "" {
+				if parsed, perr := time.Parse(time.RFC3339, ts); perr == nil {
+					builtAt = parsed
+				}
+			}
 			manifestSHAs = m.SHA256
 			hasManifest = true
 		default:
@@ -426,6 +441,7 @@ func validateSnapshotStream(ctx context.Context, snap *os.File, snapPath, sum, f
 		Path:        snapPath,
 		Version:     ver,
 		Commit:      commit,
+		BuiltAt:     builtAt,
 		Tag:         tag,
 		OS:          goos,
 		Arch:        goarch,

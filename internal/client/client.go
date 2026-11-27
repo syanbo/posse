@@ -20,9 +20,10 @@ import (
 )
 
 type Client struct {
-	Home   string
-	Socket string
-	Remote bool
+	Home     string
+	UserHome string
+	Socket   string
+	Remote   bool
 	// Desktop 随 Client 固定；控制代次变化时创建新 Client，旧异步请求保留旧身份。
 	Desktop *rpc.DesktopIdentity
 }

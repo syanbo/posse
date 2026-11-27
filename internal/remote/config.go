@@ -29,6 +29,16 @@ type Host struct {
 	IconImage  string `json:"iconImage,omitempty"`
 }
 
+// SameConnection 判断两条主机记录的连接传输参数是否一致（忽略仅用于界面展示的名称与自定义图标）。
+func (h Host) SameConnection(other Host) bool {
+	return h.ID == other.ID &&
+		h.Target == other.Target &&
+		h.User == other.User &&
+		h.Port == other.Port &&
+		h.Executable == other.Executable &&
+		h.Home == other.Home
+}
+
 func (h Host) Validate() error {
 	if strings.TrimSpace(h.Name) == "" {
 		return errors.New("host name required")

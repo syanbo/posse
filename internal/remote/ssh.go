@@ -39,15 +39,16 @@ type Options struct {
 }
 
 type Session struct {
-	Host         Host
-	Probe        rpc.RemoteProbe
-	Info         rpc.RemoteInfo
-	Socket       string
-	dir, control string
-	cancel       context.CancelFunc
-	done         chan struct{}
-	stderr       boundedOutput
-	closeOnce    sync.Once
+	Host             Host
+	Probe            rpc.RemoteProbe
+	Info             rpc.RemoteInfo
+	Socket           string
+	dir, control     string
+	cancel           context.CancelFunc
+	done             chan struct{}
+	stderr           boundedOutput
+	closeOnce        sync.Once
+	lastUpgradeCheck time.Time
 }
 
 func (s *Session) Done() <-chan struct{} { return s.done }
@@ -202,16 +203,19 @@ func Connect(ctx context.Context, h Host, opts Options) (_ *Session, err error) 
 		return nil, fmt.Errorf("remote daemon handshake failed; check socket forwarding and update remote Posse if needed: %w", err)
 	}
 	if err = validateInfo(s.Probe, s.Info, opts.Required); err != nil {
-		// 仅对托管的 headless 节点在缺少必需能力时尝试热升级交接，并保留真实升级错误不静默吞掉
+		// 仅对托管的 headless 节点在缺少必需能力时尝试热升级交接，绝不降级且保留真实错误
 		var capErr *MissingCapabilityError
-		if errors.As(err, &capErr) && opts.AutoInstall && h.Executable == "" && s.Info.Edition == "headless" {
+		if errors.As(err, &capErr) && opts.AutoInstall && h.Executable == "" && isManagedHeadless(s.Info) {
 			opts.report(StagePackage, 0)
 			pkg, rerr := opts.resolveServer(ctx, s.Info.Platform, s.Info.Arch)
 			if rerr != nil {
 				return nil, fmt.Errorf("%w (auto-upgrade resolve failed: %v)", err, rerr)
 			}
 			defer pkg.Close()
-			newInfo, uerr := s.upgradeHeadless(ctx, opts, pkg)
+			if compareSemver(pkg.Version, s.Info.Version) < 0 {
+				return nil, fmt.Errorf("%w (resolved bundle %s is older than remote %s)", err, pkg.Version, s.Info.Version)
+			}
+			newInfo, _, uerr := s.upgradeHeadless(ctx, opts, pkg)
 			if uerr != nil {
 				return nil, fmt.Errorf("%w (%v)", err, uerr)
 			}

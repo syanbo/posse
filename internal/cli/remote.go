@@ -29,6 +29,11 @@ func cmdRemoteAdd(e *env, args []string) error {
 		return errors.New("usage: posse remote add <name> <target> [--user U] [--port N] [--home DIR] [--executable PATH] [--id ID]")
 	}
 	h.Name, h.Target = pos[0], pos[1]
+	if h.ID != "" {
+		if prev, ferr := remote.Find(e.home, h.ID); ferr == nil {
+			h.Icon, h.IconImage = prev.Icon, prev.IconImage
+		}
+	}
 	h, err = remote.Put(e.home, h)
 	if err != nil {
 		return err

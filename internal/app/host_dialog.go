@@ -95,10 +95,12 @@ func (a *app) hostDialog(c *ui.Context) {
 			titleText(c, title, fsTitle)
 
 			var submit bool
+			_, wh := c.Size()
+			scrollMax := max(sz(240), min(wh-sz(220), sz(560)))
 
-			// 表单正文放入可滚动容器，确保 900×560 最小窗口下底部按钮始终可达
-			ui.Scroll(c).MaxHeight(sz(360)).Children(func() {
-				ui.Column(c).Gap(12).Children(func() {
+			// 滚动区向两边扩到弹窗内边距里，内容再缩回来：滚动条落在右边留白上，不压输入框和按钮；上下留 2px 防聚焦框被裁
+			ui.Scroll(c).MaxHeight(scrollMax).Margin(0, -cardPad).Children(func() {
+				ui.Column(c).Gap(12).Padding(2, cardPad).Children(func() {
 					// SSH 目标
 					ui.Column(c).Gap(4).Children(func() {
 						ui.Text(c, m.HostFieldTarget()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
@@ -205,7 +207,7 @@ func (a *app) hostDialog(c *ui.Context) {
 							}
 							if pressable(textButton(c.Key("host-icon-pick"), pickLabel).Disabled(d.pickingIcon || d.saving)).Clicked() && !d.pickingIcon && !d.saving {
 								d.pickingIcon = true
-								go a.pickHostIcon(m, d.gen, draftHost.Name)
+								go a.pickHostIcon(m, owner.home, d.gen, draftHost.Name)
 							}
 							if strings.TrimSpace(d.icon) != "" || d.iconImage != "" {
 								if pressable(textButton(c.Key("host-icon-reset"), m.CommonResetToDefault()).Disabled(d.saving)).Clicked() && !d.saving {
@@ -218,11 +220,12 @@ func (a *app) hostDialog(c *ui.Context) {
 
 					// 折叠高级设置
 					ui.Column(c).Gap(8).Children(func() {
+						hline(c)
 						chev := iconChevron
 						if d.advanced {
 							chev = iconDown
 						}
-						toggle := ui.Row(c.Key("host-advanced-toggle")).Height(sz(24)).Padding(0, 4).Gap(6).Radius(rSmall).
+						toggle := ui.Row(c.Key("host-advanced-toggle")).Height(sz(24)).Padding(0, 4).Margin(0, 0, 0, -4).Gap(6).Radius(rSmall).
 							AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton).Label(m.HostAdvanced())
 						if toggle.Hovered() {
 							toggle.Background(p.wash)
@@ -235,7 +238,7 @@ func (a *app) hostDialog(c *ui.Context) {
 							d.advanced = !d.advanced
 						}
 						if d.advanced {
-							ui.Column(c).Gap(8).Padding(0, 0, 0, 12).Children(func() {
+							ui.Column(c).Gap(8).Children(func() {
 								ui.Row(c).Gap(8).Children(func() {
 									ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
 										ui.Text(c, m.HostFieldUser()).FontSize(fsSmall).TextColor(t.TextMuted)

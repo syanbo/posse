@@ -102,6 +102,10 @@ func TestHostDialogValidationPasteAndSave(t *testing.T) {
 	if a.editingLiveConnectionChanged(&a.hostDlg) {
 		t.Fatal("changing only host icon triggered live reconnect")
 	}
+	// 图标读取拒绝路径穿越且不缓存损坏项
+	if img := a.hostIconImage("../escape.png"); img != nil {
+		t.Fatal("hostIconImage accepted path traversal")
+	}
 }
 
 func TestHostChipVisibilityAndZeroHostOpensDialog(t *testing.T) {

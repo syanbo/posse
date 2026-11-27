@@ -1,9 +1,13 @@
 package app
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/egoist/mygo"
@@ -13,48 +17,112 @@ import (
 	"posse/locales"
 )
 
+const maxHostIconBytes = 4 << 20
+
+type hostIconEntry struct {
+	img     ui.ImageSource
+	modTime time.Time
+	size    int64
+}
+
 func hostIconDir(home string) string { return filepath.Join(home, "host-icons") }
 
+func isSafeHostIconName(name string) bool {
+	return name != "" && filepath.Base(name) == name && name != "." && name != ".." && !strings.ContainsAny(name, "/\\\x00\r\n")
+}
+
+// importHostIcon 使用与主机 ID 无关的随机文件名把选中的图片缩放存到 $POSSE_HOME/host-icons/，避免配置 ID 拼出越界路径。
+func importHostIcon(home, src string) (string, error) {
+	var rnd [8]byte
+	if _, err := rand.Read(rnd[:]); err != nil {
+		return "", err
+	}
+	return importIconPNG(hostIconDir(home), "host-"+hex.EncodeToString(rnd[:]), src)
+}
+
 func (a *app) hostIconImage(name string) ui.ImageSource {
-	if name == "" {
+	if !isSafeHostIconName(name) {
 		return nil
 	}
 	owner := a.windowOwner()
-	if img, ok := owner.hostIconCache[name]; ok {
-		return img
+	if owner.home == "" {
+		return nil
+	}
+	root, err := os.OpenRoot(hostIconDir(owner.home))
+	if err != nil {
+		return nil
+	}
+	defer root.Close()
+	info, err := root.Lstat(name)
+	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > maxHostIconBytes {
+		delete(owner.hostIconCache, name)
+		return nil
+	}
+	if cached, ok := owner.hostIconCache[name]; ok && cached.modTime.Equal(info.ModTime()) && cached.size == info.Size() {
+		return cached.img
+	}
+	f, err := root.Open(name)
+	if err != nil {
+		return nil
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxHostIconBytes+1))
+	f.Close()
+	if err != nil || len(data) == 0 || len(data) > maxHostIconBytes {
+		return nil
+	}
+	bm, err := ui.DecodeBitmap(data)
+	if err != nil {
+		return nil
 	}
 	if owner.hostIconCache == nil {
-		owner.hostIconCache = map[string]ui.ImageSource{}
+		owner.hostIconCache = map[string]hostIconEntry{}
 	}
-	var img ui.ImageSource
-	if data, err := os.ReadFile(filepath.Join(hostIconDir(owner.home), name)); err == nil {
-		if bm, err := ui.DecodeBitmap(data); err == nil {
-			img = bm
+	owner.hostIconCache[name] = hostIconEntry{img: bm, modTime: info.ModTime(), size: info.Size()}
+	return bm
+}
+
+func (a *app) hostIconReferenced(name string) bool {
+	owner := a.windowOwner()
+	for _, h := range owner.hostMenu.hosts {
+		if h.IconImage == name {
+			return true
 		}
 	}
-	owner.hostIconCache[name] = img
-	return img
+	return false
+}
+
+func removeHostIconInDir(home, name string) {
+	if home == "" || !isSafeHostIconName(name) {
+		return
+	}
+	root, err := os.OpenRoot(hostIconDir(home))
+	if err != nil {
+		return
+	}
+	defer root.Close()
+	_ = root.Remove(name)
 }
 
 func (a *app) dropHostIconFile(name, keepSaved string) {
-	if name == "" || name == keepSaved {
+	if !isSafeHostIconName(name) || name == keepSaved || a.hostIconReferenced(name) {
 		return
 	}
 	owner := a.windowOwner()
-	_ = os.Remove(filepath.Join(hostIconDir(owner.home), name))
+	removeHostIconInDir(owner.home, name)
 	delete(owner.hostIconCache, name)
 }
 
 func (a *app) removeHostIconFile(name string) {
-	if name == "" {
+	if !isSafeHostIconName(name) || a.hostIconReferenced(name) {
 		return
 	}
 	owner := a.windowOwner()
-	_ = os.Remove(filepath.Join(hostIconDir(owner.home), name))
+	removeHostIconInDir(owner.home, name)
 	delete(owner.hostIconCache, name)
 }
 
-func (a *app) pickHostIcon(m locales.Messages, gen uint64, label string) {
+// pickHostIcon 只使用调用前捕获的不可变 home/gen/label，不在后台协程中读取 owner.hostDlg。
+func (a *app) pickHostIcon(m locales.Messages, home string, gen uint64, label string) {
 	owner := a.windowOwner()
 	if label == "" {
 		label = m.HostDialogAddTitle()
@@ -67,17 +135,13 @@ func (a *app) pickHostIcon(m locales.Messages, gen uint64, label string) {
 	})
 	var name string
 	if err == nil && len(paths) > 0 {
-		prefix := "host"
-		if id := owner.hostDlg.editing.ID; id != "" {
-			prefix = id
-		}
-		name, err = importIconPNG(hostIconDir(owner.home), prefix, paths[0])
+		name, err = importHostIcon(home, paths[0])
 	}
 	owner.update(func() {
 		d := &owner.hostDlg
 		if d.gen != gen {
 			if name != "" {
-				_ = os.Remove(filepath.Join(hostIconDir(owner.home), name))
+				removeHostIconInDir(home, name)
 			}
 			return
 		}
@@ -90,7 +154,7 @@ func (a *app) pickHostIcon(m locales.Messages, gen uint64, label string) {
 			d.iconImage, d.icon = name, ""
 			d.err = ""
 		case name != "":
-			_ = os.Remove(filepath.Join(hostIconDir(owner.home), name))
+			removeHostIconInDir(home, name)
 		}
 	})
 }

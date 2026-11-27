@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"posse/internal/remote"
 )
 
 func TestHostNavigationModuleOwners(t *testing.T) {
@@ -97,12 +99,14 @@ func TestHostNavigationClicks(t *testing.T) {
 		if v.active.Load() != a || v.target != b {
 			t.Fatal("local navigation selected remote context")
 		}
-		// 点击左侧导航栏里的远端主机磁贴切回远端工作区并重新发起连接
+		// 点击左侧导航栏里的远端主机磁贴切回远端工作区（首次未连时发起连接，已连时直接切回不重拨）
 		if err := tt.Click("Office Mac"); err != nil {
 			t.Fatal(err)
 		}
 		settle(tt)
-		awaitHostUpdate(t, b)
+		if b.connecting {
+			awaitHostUpdate(t, b)
+		}
 		if v.active.Load() != b || b.selected != "remote-w" {
 			t.Fatal("remote host tile did not restore remote workspace")
 		}
@@ -199,6 +203,7 @@ func TestPreviewHostNavigation(t *testing.T) {
 			a.disc.panel = false
 			b.selected, b.state.LastWorkspace = "w9", "w9"
 			b.projects[0].Name = "Remote machine"
+			a.hostMenu.hosts = []remote.Host{{ID: "remote", Name: "Office Mac", Target: "office"}}
 			v := newHostViews(a)
 			v.add("remote", b)
 			v.activate("remote")
@@ -214,7 +219,7 @@ func TestPreviewHostNavigation(t *testing.T) {
 				t.Fatal("local discussion did not render")
 			}
 			savePNG(t, tt, fmt.Sprintf("host-navigation-discussions-%t.png", dark))
-			if err := tt.Click("工作区"); err != nil {
+			if err := tt.Click("Office Mac"); err != nil {
 				t.Fatal(err)
 			}
 			settle(tt)

@@ -3,6 +3,7 @@ package remote
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -11,7 +12,9 @@ import (
 	"posse/internal/rpc"
 )
 
-// compareSemver 按数字段比较版本号（如 0.1.55 > 0.1.54，正式版 > 预发布版）。
+const upgradeCheckCooldown = 30 * time.Second
+
+// compareSemver 按 SemVer 2.0 规则比较版本号（含点分预发布数字段：beta.10 > beta.9，正式版 > 预发布版）。
 func compareSemver(a, b string) int {
 	a, b = strings.TrimPrefix(strings.TrimSpace(a), "v"), strings.TrimPrefix(strings.TrimSpace(b), "v")
 	a, _, _ = strings.Cut(a, "+")
@@ -35,35 +38,88 @@ func compareSemver(a, b string) int {
 			return 1
 		}
 	}
+	return comparePrerelease(apre, bpre)
+}
+
+func comparePrerelease(a, b string) int {
 	switch {
-	case apre == bpre:
+	case a == b:
 		return 0
-	case apre == "":
+	case a == "":
 		return 1
-	case bpre == "":
+	case b == "":
 		return -1
-	case apre < bpre:
+	}
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	n := min(len(as), len(bs))
+	for i := 0; i < n; i++ {
+		if as[i] == bs[i] {
+			continue
+		}
+		ai, aErr := strconv.Atoi(as[i])
+		bi, bErr := strconv.Atoi(bs[i])
+		switch {
+		case aErr == nil && bErr == nil:
+			if ai < bi {
+				return -1
+			}
+			return 1
+		case aErr == nil:
+			return -1 // SemVer 2.0：数字标识符优先级低于非数字
+		case bErr == nil:
+			return 1
+		case as[i] < bs[i]:
+			return -1
+		default:
+			return 1
+		}
+	}
+	if len(as) < len(bs) {
 		return -1
-	default:
+	}
+	if len(as) > len(bs) {
 		return 1
 	}
+	return 0
 }
 
-// buildCommit 从 daemon.info 的 Build（格式 "<rev> <RFC3339>" 或 "<RFC3339>"）提取 commit 短哈希。
-func buildCommit(build string) string {
-	rev, _, ok := strings.Cut(strings.TrimSpace(build), " ")
-	if !ok || rev == "" || rev == "dev" {
-		return ""
+// parseBuildInfo 从 daemon.info 的 Build（"<rev> <RFC3339>" 或 "<RFC3339>"）解析 commit 与构建时间。
+func parseBuildInfo(build string) (commit string, builtAt time.Time) {
+	s := strings.TrimSpace(build)
+	if s == "" {
+		return "", time.Time{}
 	}
-	return rev
+	first, rest, hasSpace := strings.Cut(s, " ")
+	if hasSpace {
+		if first != "" && first != "dev" {
+			commit = first
+		}
+		if t, err := time.Parse(time.RFC3339, strings.TrimSpace(rest)); err == nil {
+			builtAt = t
+		}
+		return commit, builtAt
+	}
+	if t, err := time.Parse(time.RFC3339, first); err == nil {
+		return "", t
+	}
+	if first != "dev" {
+		return first, time.Time{}
+	}
+	return "", time.Time{}
 }
 
-// shouldAutoUpgradeHeadless 判断托管无头服务端是否需要自动热升级：
-// 1. 仅限 edition == "headless"；
+// isManagedHeadless 仅认可由目标 daemon 自身核对过的受管无头版本目录（spawn.RuntimeDirFor + 受管标记），
+// 避免自动升级接管用户手工放置的独立二进制。
+func isManagedHeadless(info rpc.RemoteInfo) bool {
+	return info.Edition == "headless" && info.Managed
+}
+
+// shouldAutoUpgradeHeadless 判断托管无头服务端是否需要单调向前热升级：
+// 1. 仅限托管 headless 安装；
 // 2. 目标版本严格更新时升级（绝不降级）；
-// 3. 同版本且双方都有有效 commit 且不同时升级（便于开发迭代与同版本热修）。
-func shouldAutoUpgradeHeadless(info rpc.RemoteInfo, targetVersion, targetCommit string) bool {
-	if info.Edition != "headless" || targetVersion == "" {
+// 3. 同版本时仅当目标包具备更新的构建时间戳且 commit 不同才升级（杜绝双机开发构建来回切换）。
+func shouldAutoUpgradeHeadless(info rpc.RemoteInfo, targetVersion, targetCommit string, targetBuiltAt time.Time) bool {
+	if !isManagedHeadless(info) || targetVersion == "" {
 		return false
 	}
 	cmp := compareSemver(targetVersion, info.Version)
@@ -73,41 +129,51 @@ func shouldAutoUpgradeHeadless(info rpc.RemoteInfo, targetVersion, targetCommit 
 	if cmp < 0 {
 		return false
 	}
-	rc := buildCommit(info.Build)
+	rc, rTime := parseBuildInfo(info.Build)
 	tc := strings.TrimSpace(targetCommit)
-	return rc != "" && tc != "" && tc != "dev" && rc != tc
+	if rc == "" || tc == "" || tc == "dev" || rc == tc {
+		return false
+	}
+	return !targetBuiltAt.IsZero() && !rTime.IsZero() && targetBuiltAt.After(rTime)
 }
 
-func (s *Session) upgradeHeadless(ctx context.Context, opts Options, pkg ServerPackage) (rpc.RemoteInfo, error) {
+func (s *Session) upgradeHeadless(ctx context.Context, opts Options, pkg ServerPackage) (newInfo rpc.RemoteInfo, handedOff bool, err error) {
 	opts.report(StageUpload, 0)
 	exePath, err := s.stageAndCommitServer(ctx, s.Info.Home, pkg, opts.Progress)
 	if err != nil {
-		return rpc.RemoteInfo{}, fmt.Errorf("auto-upgrade install failed: %w", err)
+		return rpc.RemoteInfo{}, false, fmt.Errorf("auto-upgrade install failed: %w", err)
 	}
 	opts.report(StageUpgrade, 0)
-	newInfo, err := handoffAndVerify(ctx, s.Socket, exePath, s.Info.InstanceID, "headless", opts.Required, s.Info.Home)
+	newInfo, err = handoffAndVerify(ctx, s.Socket, exePath, s.Info.InstanceID, "headless", opts.Required, s.Info.Home)
 	if err != nil {
-		return rpc.RemoteInfo{}, fmt.Errorf("auto-upgrade handoff failed: %w", err)
+		return rpc.RemoteInfo{}, false, fmt.Errorf("auto-upgrade handoff failed: %w", err)
 	}
 	if err := s.activateServer(ctx, exePath, s.Info.Home, pkg.Tag); err != nil {
-		return rpc.RemoteInfo{}, fmt.Errorf("remote server activate failed after handoff: %w", err)
+		// 热交接已切换实例，重试一次 activate；仍失败则返回错误，不静默留存过期 current
+		if rerr := s.activateServer(ctx, exePath, s.Info.Home, pkg.Tag); rerr != nil {
+			return newInfo, true, fmt.Errorf("remote server activate failed after handoff: %w", rerr)
+		}
 	}
-	return newInfo, nil
+	return newInfo, true, nil
 }
 
-// maybeUpgradeHeadless 在重连握手已通过后，检查托管无头服务端是否有新包可用并做无损热交接。
+// maybeUpgradeHeadless 在握手或健康复用通过后，检查托管无头服务端是否有更新包可用并做无损热交接。
 // 优先查本地包（零网络开销）；无本地包时仅在主 Mac 版本高于远端版本时才检查 R2。
-// 任何非致命失败（如离线无法拉 R2）都会保留已建立的可用连接，不阻断用户重连。
+// 仅在尚未切换实例且原实例通过完整握手与能力复检时才降级保留原会话；已交接但激活失败会明确报错。
 func (s *Session) maybeUpgradeHeadless(ctx context.Context, h Host, opts Options) error {
-	if !opts.AutoInstall || h.Executable != "" || s.Info.Edition != "headless" {
+	if !opts.AutoInstall || h.Executable != "" || !isManagedHeadless(s.Info) {
 		return nil
 	}
-	// 先查本地已有压缩包（无网络开销，能识别本地新版本或同版本新 commit）
+	now := time.Now()
+	if !s.lastUpgradeCheck.IsZero() && now.Sub(s.lastUpgradeCheck) < upgradeCheckCooldown {
+		return nil
+	}
+	s.lastUpgradeCheck = now
+
 	localOpts := opts
 	localOpts.DisableRemoteDownload = true
 	pkg, err := localOpts.resolveServer(ctx, s.Info.Platform, s.Info.Arch)
 	if err != nil {
-		// 本地无包：仅当本机 Posse 版本严格高于远端时才尝试联网查 R2，避免常规重连多一次外网请求
 		if opts.DisableRemoteDownload || compareSemver(daemon.Version, s.Info.Version) <= 0 {
 			return nil
 		}
@@ -120,17 +186,23 @@ func (s *Session) maybeUpgradeHeadless(ctx context.Context, h Host, opts Options
 	}
 	defer pkg.Close()
 
-	if !shouldAutoUpgradeHeadless(s.Info, pkg.Version, pkg.Commit) {
+	if !shouldAutoUpgradeHeadless(s.Info, pkg.Version, pkg.Commit, pkg.BuiltAt) {
 		return nil
 	}
 
-	newInfo, err := s.upgradeHeadless(ctx, opts, pkg)
+	newInfo, handedOff, err := s.upgradeHeadless(ctx, opts, pkg)
 	if err != nil {
-		// 升级失败时复检原连接是否仍健康：原 daemon 仍可用则优雅降级保留当前会话，不阻断连接
+		if handedOff {
+			// 新实例已接管但 server/current 未能切换：保留最新 Info 并明确报错，避免隐藏过期启动入口
+			s.Info = newInfo
+			return err
+		}
 		var alive rpc.RemoteInfo
 		if checkErr := rpc.Call(ctx, s.Socket, "daemon.info", nil, &alive); checkErr == nil {
-			s.Info = alive
-			return nil
+			if validateInfo(s.Probe, alive, opts.Required) == nil && filepath.Clean(alive.Home) == filepath.Clean(s.Info.Home) {
+				s.Info = alive
+				return nil
+			}
 		}
 		return err
 	}

@@ -35,6 +35,7 @@ func (d *Daemon) remoteInfo(context.Context, json.RawMessage) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	userHome, _ := os.UserHomeDir()
 	return rpc.RemoteInfo{
 		Protocol:     rpc.RemoteProtocol,
 		InstanceID:   d.instanceID,
@@ -44,6 +45,8 @@ func (d *Daemon) remoteInfo(context.Context, json.RawMessage) (any, error) {
 		Version:      Version,
 		Build:        Build,
 		Edition:      Edition,
+		Managed:      Edition == "headless" && d.runtime != "",
+		UserHome:     userHome,
 		Capabilities: slices.Clone(rpc.RemoteCapabilities),
 		Features:     rpc.RemoteFeatures(runtime.GOOS, Edition),
 	}, nil

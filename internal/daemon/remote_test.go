@@ -44,10 +44,12 @@ func TestRemoteInfo(t *testing.T) {
 	if err := rpc.Call(callCtx, ln.Addr().String(), "daemon.info", nil, &first); err != nil {
 		t.Fatal(err)
 	}
+	userHome, _ := os.UserHomeDir()
 	want := rpc.RemoteInfo{
 		Protocol: rpc.RemoteProtocol, InstanceID: d.instanceID,
 		Platform: runtime.GOOS, Arch: runtime.GOARCH, Home: home,
 		Version: Version, Build: Build, Edition: Edition,
+		UserHome:     userHome,
 		Capabilities: rpc.RemoteCapabilities,
 		Features:     rpc.RemoteFeatures(runtime.GOOS, Edition),
 	}

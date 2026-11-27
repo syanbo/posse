@@ -189,10 +189,12 @@ for arch in $archs; do
 
 	posse_sha=$(shasum -a 256 "$stage/posse" | awk '{print $1}')
 	dylib_sha=$(shasum -a 256 "$stage/libghostty-vt.dylib" | awk '{print $1}')
+	built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 	cat >"$stage/manifest.json" <<EOF
 {
   "version": "$version",
   "commit": "$commit",
+  "builtAt": "$built_at",
   "os": "darwin",
   "arch": "$arch",
   "edition": "headless",

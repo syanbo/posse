@@ -59,6 +59,9 @@ func NewConnections() *Connections {
 				return err
 			}
 			s.Info = info
+			if err := s.maybeUpgradeHeadless(ctx, s.Host, opts); err != nil {
+				return err
+			}
 			return nil
 		},
 	}
@@ -98,7 +101,8 @@ func (p *Connections) Open(ctx context.Context, h Host, opts Options) (*Session,
 	p.work.Add(1)
 	var s *Session
 	if entry != nil {
-		if entry.session.Host == h && entry.config == opts.config && sessionAlive(entry.session) {
+		if entry.session.Host.SameConnection(h) && entry.config == opts.config && sessionAlive(entry.session) {
+			entry.session.Host = h
 			s = entry.session
 		} else {
 			p.closeLocked(entry.session)

@@ -248,7 +248,6 @@ func (a *app) remoteHostTile(c *ui.Context, m locales.Messages, h remote.Host, m
 			ui.Row(c).Absolute().Top(0).Right(0).AlignItems(ui.Center).Children(badge)
 		}
 	})
-	tile.Tooltip(m.HostTileTip(h.Name, h.Target))
 	if tile.Clicked() {
 		a.openHost(h)
 	}

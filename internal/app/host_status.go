@@ -136,21 +136,19 @@ func (a *app) hostChip(c *ui.Context) {
 }
 
 // hostHeaderBadge 画在工作区、聊天、任务、历史模块侧栏标题（如「项目」）右侧，
-// 仅远端主机显示，与标题垂直居中对齐；点击可呼出主机切换菜单。
+// 仅远端主机显示，与标题垂直居中对齐；点击展开当前主机的操作菜单（不重复列主机切换列表）。
 func (a *app) hostHeaderBadge(c *ui.Context) {
 	if !a.remoteHost() {
 		return
 	}
 	t, p, m := c.Theme(), colors(c.Theme()), L(c)
 	name := a.hostName(m)
-	status := a.hostStatus(m)
-	saved, _ := a.findSavedHost(a.viewID)
-	tip := name
-	if status != "" {
-		tip += " · " + status
+	saved, ok := a.findSavedHost(a.viewID)
+	if !ok {
+		saved = remote.Host{ID: a.viewID, Name: name}
 	}
 	chip := ui.Row(c.Key("host-context-badge")).Height(sz(22)).Padding(0, 6).Gap(4).Radius(rRow).
-		AlignItems(ui.Center).Shrink(1).MinWidth(0).Role(ui.RoleButton).Label(name).Tooltip(tip).
+		AlignItems(ui.Center).Shrink(1).MinWidth(0).Role(ui.RoleButton).Label(name).
 		BorderWidth(hairline).BorderColor(p.line)
 	bg := p.fill
 	if chip.Hovered() {
@@ -160,9 +158,13 @@ func (a *app) hostHeaderBadge(c *ui.Context) {
 		a.hostMiniGlyph(c, saved)
 		ui.Text(c, name).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.Text).SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
 	})
-	if chip.Clicked() {
-		a.openHostMenu()
-	}
+	var build func(*popMenu)
+	menuButton(c, chip, func(menu *popMenu) {
+		if build == nil {
+			build = a.hostActionsBuild(m, saved, true)
+		}
+		build(menu)
+	})
 }
 
 // remoteLandingCard 在首次连接远端（尚无缓存数据）期间或失败时占据主区域中央，避免整块白屏。

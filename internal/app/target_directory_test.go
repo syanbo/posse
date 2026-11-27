@@ -496,15 +496,72 @@ func TestTargetDirectoryFallbackSearchAndCreateFolder(t *testing.T) {
 		t.Fatalf("submitInput did not enter matched folder: path=%q", d.path)
 	}
 
-	// 3. 创建文件夹调用 files.mkdir 并自动进入新目录
+	// 3. 明确绝对路径回车必须按原路径加载，绝不误替换为模糊匹配的另一目录
+	d.load("/Users/pur")
+	waitFileUpdate(t, a)
+	a.runPending()
+	d.input = "/Users/pur/flu"
+	d.submitInput()
+	waitFileUpdate(t, a)
+	a.runPending()
+	if d.path != "/Users/pur/flu" {
+		t.Fatalf("absolute submit was replaced by fuzzy match: path=%q", d.path)
+	}
+
+	// 4. 编辑路径切换到另一父目录时，防抖自动加载新父目录并联动过滤；同值重输时旧防抖令牌失效
+	d.load("/Users/pur/ohio")
+	waitFileUpdate(t, a)
+	a.runPending()
+	d.input = "/Users/p"
+	d.onInputChanged()
+	oldSeq := d.browseSeq
+	d.stopBrowseTimer()
+	if d.browseSeq == oldSeq {
+		t.Fatal("stopBrowseTimer did not invalidate browseSeq")
+	}
+	d.input = "/Users/p"
+	d.onInputChanged()
+	waitFileUpdate(t, a)
+	a.runPending()
+	waitFileUpdate(t, a)
+	a.runPending()
+	if d.path != "/Users" || d.input != "/Users/p" || d.filterQuery() != "p" {
+		t.Fatalf("debounced parent browse failed: path=%q input=%q filter=%q", d.path, d.input, d.filterQuery())
+	}
+	d.load("/Users/pur/ohio")
+	waitFileUpdate(t, a)
+	a.runPending()
+
+	// 5. 创建文件夹期间导航被阻止，且创建完成后正确进入新目录、解除 creating
 	d.newOpen = true
 	d.newName = "new-app"
 	d.createFolder(appL())
+	if !d.creating {
+		t.Fatal("createFolder did not set creating")
+	}
+	d.load("/should-be-ignored-while-creating")
+	if d.path != "/Users/pur/ohio" {
+		t.Fatalf("navigation succeeded during folder creation: %q", d.path)
+	}
 	waitFileUpdate(t, a)
 	a.runPending()
 	waitFileUpdate(t, a)
 	a.runPending()
-	if createdPath != "/Users/pur/ohio/new-app" || d.path != "/Users/pur/ohio/new-app" || d.newOpen {
-		t.Fatalf("createFolder: created=%q path=%q newOpen=%v", createdPath, d.path, d.newOpen)
+	if createdPath != "/Users/pur/ohio/new-app" || d.path != "/Users/pur/ohio/new-app" || d.newOpen || d.creating {
+		t.Fatalf("createFolder: created=%q path=%q newOpen=%v creating=%v", createdPath, d.path, d.newOpen, d.creating)
+	}
+
+	// 6. 传输超时错误不得触发回退链
+	f.mu.Lock()
+	f.desktopCall = func(_ context.Context, p rpc.DesktopCall) (any, error) {
+		return nil, context.DeadlineExceeded
+	}
+	f.mu.Unlock()
+	a.request().chooseTargetDirectoryWithFallbacks(appL().AppAddProjectTitle(), appL().AppAddProjectButton(), "/Users/pur/Desktop", []string{"/Users/pur", "/"}, nil)
+	a.runPending()
+	waitFileUpdate(t, a)
+	a.runPending()
+	if a.targetDir.path != "/Users/pur/Desktop" || a.targetDir.err == nil {
+		t.Fatalf("transport timeout triggered fallback: path=%q err=%v", a.targetDir.path, a.targetDir.err)
 	}
 }

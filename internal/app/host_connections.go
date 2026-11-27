@@ -53,7 +53,7 @@ func newHostConnections(v *hostViews) *hostConnections {
 		if err != nil {
 			return hostTransport{}, err
 		}
-		return hostTransport{client: &client.Client{Home: s.Info.Home, Socket: s.Socket, Remote: true}, done: s.Done()}, nil
+		return hostTransport{client: &client.Client{Home: s.Info.Home, UserHome: s.Info.UserHome, Socket: s.Socket, Remote: true}, done: s.Done()}, nil
 	}
 	return k
 }
