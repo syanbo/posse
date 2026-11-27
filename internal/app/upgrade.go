@@ -131,7 +131,7 @@ func (a *app) upgradeDaemon(m locales.Messages, pid int, auto bool) {
 			}
 		})
 		a.pollForce.Store(true)
-		a.refresh()
+		a.wakePoll()
 	}()
 }
 

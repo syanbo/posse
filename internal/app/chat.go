@@ -74,9 +74,9 @@ func (a *app) chatSidebarItem(c *ui.Context) ui.Element {
 	tile := navigationButton(c, chatBoardID, iconChat, l.ChatTitle(), a.displayed() == a && a.isChat(a.selected), badge)
 	if w != nil {
 		contextMenu(c, tile, func(m *popMenu) {
-			// 收集菜单项不能切页面；执行选中动作时先显示所属主机，确认框和请求才有正确上下文。
+			// 收集菜单项不能切页面；执行选中动作时先经 showModule 显示或恢复所属主机。
 			if m.chosen >= 0 && a.views != nil {
-				a.views.show(a.viewID)
+				a.showModule(chatBoardID)
 			}
 			a.workspaceMenu(c, m, *w)
 		})
@@ -108,7 +108,12 @@ func (a *app) chatHeader(c *ui.Context) {
 // openChat 切到聊天工作区（停在上次看的标签），fresh 时再开一个新聊天：沿用最近一次聊天的 agent，
 // 还没聊过时只切过去，空工作区里有选 agent 的卡片。聊天目录还不是项目时先建目录、加成项目。
 func (a *app) openChat(l locales.Messages, fresh bool) {
-	a = a.showModule(chatBoardID)
+	a.showModuleReady(chatBoardID, func(target *app) {
+		target.openChatReady(l, fresh)
+	})
+}
+
+func (a *app) openChatReady(l locales.Messages, fresh bool) {
 	if w := a.chatWorkspace(); w != nil {
 		a.selected = w.ID
 		if fresh {

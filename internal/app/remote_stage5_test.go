@@ -37,7 +37,7 @@ func TestRemoteStage5CapabilitiesAndHostShortcut(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Ctrl|ui.Alt, ui.KeyH)
 	tt.Frame()
-	if !tt.HasText(locales.In("zh-Hans").HostRelease()) {
+	if !tt.HasText(locales.In("zh-Hans").HostDisconnect()) {
 		t.Fatalf("switchHost shortcut did not open host menu: %v", tt.Texts())
 	}
 }

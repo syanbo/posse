@@ -24,6 +24,7 @@ type hostSession struct {
 	base              *client.Client
 	current           hostSnapshot
 	automaticInstance string
+	retryBusyGen      uint64
 	blockedInstance   string
 	returnLease       hostLease
 	returnRequested   bool
@@ -94,6 +95,7 @@ func (h *hostSession) detach() hostLease {
 		h.returnLease = lease
 	}
 	h.returnRequested = false
+	h.retryBusyGen = 0
 	h.generation++
 	h.base = nil
 	h.current.Client = nil
@@ -138,6 +140,7 @@ func (h *hostSession) connectAtMode(ctx context.Context, base *client.Client, ex
 		old = h.returnLease
 	}
 	h.returnLease = hostLease{}
+	h.retryBusyGen = 0
 	h.generation++
 	h.base = &copy
 	generation := h.generation
@@ -165,13 +168,22 @@ func (h *hostSession) observe(ctx context.Context, generation uint64, base *clie
 		return context.Canceled
 	}
 	var automatic bool
-	if base.Remote {
-		automatic = autoTakeRemote && state.InstanceID != "" && state.InstanceID != h.blockedInstance
-	} else {
-		automatic = state.InstanceID != "" && (state.InstanceID != h.automaticInstance || returning && state.InstanceID != h.blockedInstance)
+	prevAutomatic := h.automaticInstance
+	busyRetry := h.retryBusyGen != 0 && h.retryBusyGen == generation
+	if !busyRetry || (state.Owner != "" && state.Owner != h.controllerID) {
+		h.retryBusyGen = 0
+		busyRetry = false
+	}
+	if state.InstanceID != "" && state.InstanceID != h.blockedInstance {
+		if base.Remote {
+			automatic = autoTakeRemote || busyRetry
+		} else {
+			automatic = state.InstanceID != h.automaticInstance || busyRetry || returning
+		}
 	}
 	if automatic {
 		h.automaticInstance = state.InstanceID
+		h.retryBusyGen = 0
 	}
 	h.mu.Unlock()
 	if automatic && (state.Owner == "" || state.Owner == h.controllerID) {
@@ -179,8 +191,12 @@ func (h *hostSession) observe(ctx context.Context, generation uint64, base *clie
 		var re *rpc.Error
 		if errors.As(err, &re) {
 			switch re.Code {
-			case rpc.CodeBusy, rpc.CodeReadOnly:
-				// 通道和查看身份已建立，目标正忙（如交接中）时保留可用查看连接而不是断开主机
+			case rpc.CodeBusy:
+				// 交接等瞬时忙碌不消耗自动接管机会，也不切断当前查看连接；交接完成后下次轮询自动接管。
+				h.restoreBusyAutomatic(generation, base, state.InstanceID, prevAutomatic)
+				return nil
+			case rpc.CodeReadOnly:
+				// 通道和查看身份已建立，目标当前只读时保留可用查看连接而不是断开主机
 				return nil
 			case rpc.CodeConflict:
 				// 刚断开或切换时的旧 release 可能在 status 与 take 之间递增 epoch；重查一次后核对阻断状态再决定
@@ -190,13 +206,30 @@ func (h *hostSession) observe(ctx context.Context, generation uint64, base *clie
 						return context.Canceled
 					}
 					h.mu.Lock()
+					if generation != h.generation || base != h.base {
+						h.mu.Unlock()
+						return context.Canceled
+					}
+					freshPrevAutomatic := prevAutomatic
+					if fresh.InstanceID != state.InstanceID {
+						freshPrevAutomatic = h.automaticInstance
+					}
 					blocked := fresh.InstanceID == "" || fresh.InstanceID == h.blockedInstance
+					if fresh.InstanceID != "" {
+						h.automaticInstance = fresh.InstanceID
+					}
 					h.mu.Unlock()
 					if !blocked && (fresh.Owner == "" || fresh.Owner == h.controllerID) {
 						rerr := h.takeLocked(ctx, generation, base, fresh, true)
 						var re2 *rpc.Error
-						if errors.As(rerr, &re2) && (re2.Code == rpc.CodeBusy || re2.Code == rpc.CodeConflict || re2.Code == rpc.CodeReadOnly) {
-							return nil
+						if errors.As(rerr, &re2) {
+							if re2.Code == rpc.CodeBusy {
+								h.restoreBusyAutomatic(generation, base, fresh.InstanceID, freshPrevAutomatic)
+								return nil
+							}
+							if re2.Code == rpc.CodeConflict || re2.Code == rpc.CodeReadOnly {
+								return nil
+							}
 						}
 						return rerr
 					}
@@ -207,6 +240,17 @@ func (h *hostSession) observe(ctx context.Context, generation uint64, base *clie
 		return err
 	}
 	return nil
+}
+
+func (h *hostSession) restoreBusyAutomatic(generation uint64, base *client.Client, instance, prevAutomatic string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.generation == generation && h.base == base && h.current.Desktop.InstanceID == instance && instance != h.blockedInstance {
+		h.retryBusyGen = generation
+		if h.automaticInstance == instance {
+			h.automaticInstance = prevAutomatic
+		}
+	}
 }
 
 // 切回本机单独授权一次自动申请；主动释放、心跳失效和接管结果未知的实例仍保持查看。
@@ -229,6 +273,7 @@ func (h *hostSession) yield(expected hostSnapshot) hostLease {
 	h.pendingRelease = lease
 	h.returnLease, h.returnRequested = hostLease{}, false
 	h.automaticInstance = h.current.Desktop.InstanceID
+	h.retryBusyGen = 0
 	h.blockedInstance = h.current.Desktop.InstanceID
 	h.generation++
 	h.current.Generation = h.generation
@@ -293,6 +338,7 @@ func (h *hostSession) takeLocked(ctx context.Context, generation uint64, base *c
 			h.mu.Lock()
 			if h.current.Desktop.InstanceID == expected.InstanceID {
 				h.blockedInstance = expected.InstanceID
+				h.retryBusyGen = 0
 			}
 			h.mu.Unlock()
 			h.publish(generation, base, expected, false)
@@ -312,6 +358,7 @@ func (h *hostSession) takeLocked(ctx context.Context, generation uint64, base *c
 		h.mu.Lock()
 		if h.generation == generation && h.base == base {
 			h.blockedInstance = ""
+			h.retryBusyGen = 0
 		}
 		h.mu.Unlock()
 	}
@@ -323,6 +370,7 @@ func (h *hostSession) blockAutomaticReturn(generation uint64, base *client.Clien
 	defer h.mu.Unlock()
 	if h.generation == generation && h.base == base {
 		h.blockedInstance = instance
+		h.retryBusyGen = 0
 	}
 }
 

@@ -133,7 +133,7 @@ func TestHostMenuRemoteLifecycle(t *testing.T) {
 		t.Fatalf("unowned remote connection did not auto-take control: snap=%+v", b.host.snapshot())
 	}
 	old := b.host.snapshot()
-	hostMenuChoose(t, b, appL().HostRelease())
+	b.releaseHost(old)
 	viewer := b.host.snapshot()
 	if !viewer.Connected || viewer.Controlled || b.host.matches(old) || k.active == nil {
 		t.Fatal("release did not immediately revoke control while keeping the connection")

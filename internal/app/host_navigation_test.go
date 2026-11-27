@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -118,6 +119,105 @@ func TestHostNavigationClicks(t *testing.T) {
 	settle(tt)
 	if v.active.Load() != a || v.target != a || a.selected != "local-w" {
 		t.Fatal("local workspace tile did not switch back to local host")
+	}
+}
+
+func TestHostNavigationLocalDevicePageRoundTrip(t *testing.T) {
+	k, a, b, _, _, _ := connectionFixture(t)
+	_, localBase := newHostControlFixture(t)
+	a.c = localBase
+	a.host = newHostSession(localHostID, "Posse")
+	a.connectLocal(context.Background())
+	if !a.host.snapshot().Controlled {
+		t.Fatal("local initial connect did not take control")
+	}
+	h := remoteTestHost("remote")
+	writeHostMenuConfig(t, a, h)
+	a.loadHostMenu()
+
+	// 连接远端并自动接管
+	a.selectRemoteHost(h)
+	awaitHostUpdate(t, b)
+	if !b.host.snapshot().Connected || !b.host.snapshot().Controlled {
+		t.Fatalf("remote did not connect with control: %+v", b.host.snapshot())
+	}
+
+	// 从远端进入本机设置页：本机应自动请求控制，不卡只读
+	b.openBoard(settingsBoardID)
+	a.connectLocal(context.Background())
+	if !a.host.snapshot().Connected || !a.host.snapshot().Controlled {
+		t.Fatalf("entering local settings left local read-only: %+v", a.host.snapshot())
+	}
+
+	// 从本机设置页切回远端任务页：应自动复用连接并恢复控制，不停在已断开
+	a.openBoard(taskBoardID)
+	awaitHostUpdate(t, b)
+	if k.views.active.Load() != b || !b.host.snapshot().Connected || !b.host.snapshot().Controlled {
+		t.Fatalf("returning from local settings to remote task did not seamlessly reconnect: active=%s snap=%+v", k.views.active.Load().viewID, b.host.snapshot())
+	}
+
+	// 若用户主动断开远端，再进设置页并切回任务页，不得擅自重连
+	k.disconnect(h.ID)
+	b.openBoard(settingsBoardID)
+	a.openBoard(taskBoardID)
+	if b.connecting || b.host.snapshot().Connected {
+		t.Fatalf("manually disconnected remote unexpectedly reconnected: connecting=%v snap=%+v", b.connecting, b.host.snapshot())
+	}
+
+	// 从设置页经 showModuleReady 返回挂起的远端，动作回调须等重连完成后再以有效控制身份执行
+	a.selectRemoteHost(h)
+	for i := 0; i < 4 && b.connecting; i++ {
+		awaitHostUpdate(t, b)
+	}
+	b.openBoard(settingsBoardID)
+	var ran, writable bool
+	a.showModuleReady(workspacesBoardID, func(target *app) {
+		ran = true
+		writable = target.request().canWrite()
+	})
+	if ran {
+		t.Fatal("showModuleReady invoked callback before remote reconnect finished")
+	}
+	for i := 0; i < 4 && b.connecting; i++ {
+		awaitHostUpdate(t, b)
+	}
+	if !ran || !writable {
+		t.Fatalf("showModuleReady callback after reconnect: ran=%v writable=%v", ran, writable)
+	}
+
+	// 离开远端进入设置页后若配置的目标地址变更，返回远端模块不得自动连向新地址
+	b.openBoard(settingsBoardID)
+	changed := h
+	changed.Target = "new-target.example"
+	writeHostMenuConfig(t, a, changed)
+	a.loadHostMenu()
+	a.openBoard(taskBoardID)
+	if b.connecting || b.host.snapshot().Connected {
+		t.Fatalf("changed host config unexpectedly auto-reconnected: connecting=%v snap=%+v", b.connecting, b.host.snapshot())
+	}
+
+	// 尚未连上的建连中状态切入设置页（原建连被取消），返回任务页不得自动重新拨号
+	writeHostMenuConfig(t, a, h)
+	a.loadHostMenu()
+	blockDial := make(chan struct{})
+	defer close(blockDial)
+	oldDial := k.dial
+	k.dial = func(ctx context.Context, host remote.Host, opts remote.Options) (hostTransport, error) {
+		select {
+		case <-ctx.Done():
+			return hostTransport{}, ctx.Err()
+		case <-blockDial:
+			return oldDial(ctx, host, opts)
+		}
+	}
+	a.selectRemoteHost(h)
+	if !b.connecting {
+		t.Fatal("expected remote host to be connecting")
+	}
+	b.openBoard(settingsBoardID)
+	a.openBoard(taskBoardID)
+	if b.connecting || b.host.snapshot().Connected {
+		t.Fatalf("canceled dial unexpectedly auto-reconnected on module return: connecting=%v snap=%+v", b.connecting, b.host.snapshot())
 	}
 }
 

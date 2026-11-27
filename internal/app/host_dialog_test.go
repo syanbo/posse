@@ -123,12 +123,23 @@ func TestHostChipVisibilityAndZeroHostOpensDialog(t *testing.T) {
 	if !a.hostDlg.open {
 		t.Fatal("clicking zero-host chip did not open add dialog")
 	}
-	// 已有主机且在本机：隐藏不占位
+	// 已有主机且在本机正常控制时隐藏；但若本机意外退回只读查看态，仍必须显示查看芯片
 	writeHostMenuConfig(t, a, remoteTestHost("office"))
 	a.loadHostMenu()
 	settle(tt)
 	if tt.HasText(locales.In("zh-Hans").HostAddShort()) {
 		t.Fatalf("local chip should hide when hosts exist: %v", tt.Texts())
+	}
+	a.host = newHostSession(localHostID, "Posse")
+	a.host.current = hostSnapshot{HostID: localHostID, Connected: true, Controlled: false, Desktop: rpc.DesktopState{InstanceID: "local-i"}}
+	settle(tt)
+	if !tt.HasText(locales.In("zh-Hans").HostViewing()) {
+		t.Fatalf("local viewing chip hidden when remote hosts exist: %v", tt.Texts())
+	}
+	a.host.current.Controlled = true
+	settle(tt)
+	if len(tt.Texts()) != 0 {
+		t.Fatalf("controlled local chip should hide when remote hosts exist: %v", tt.Texts())
 	}
 	// 远端正常控制时隐藏；查看中显示「查看」；连接中显示阶段文字
 	b.host = newHostSession("office", "Posse")
@@ -215,5 +226,65 @@ func TestSelectLocalHostFromLocalDevicePageResetsRemoteTarget(t *testing.T) {
 	a.selectLocalHost()
 	if v.active.Load() != a || v.target != a {
 		t.Fatalf("selectLocalHost left target=%s, want local", v.target.viewID)
+	}
+}
+
+func TestHostMenuTakeAndStatusDotStates(t *testing.T) {
+	_, a, b := hostViewsFixture(t)
+	m := locales.In("zh-Hans")
+	a.host = newHostSession(localHostID, "Posse")
+	b.host = newHostSession("remote", "Posse")
+
+	hasLabel := func(build func(*popMenu), label string) bool {
+		seq := 0
+		pm := newPopMenu(&seq, -1)
+		build(pm)
+		for _, item := range pm.items {
+			if item.label == label {
+				return true
+			}
+		}
+		return false
+	}
+
+	// 本机未连接时不显示禁用的「接管控制」
+	a.host.current = hostSnapshot{HostID: localHostID, Connected: false, Controlled: false}
+	if hasLabel(a.hostActionsBuild(m, remote.Host{ID: localHostID}, true), m.HostTake()) ||
+		hasLabel(a.hostSwitchBuild(m), m.HostTake()) {
+		t.Fatal("disconnected local host menu unexpectedly showed Take control")
+	}
+	// 本机处于已连接只读态时显示「接管控制」，不显示「释放控制」
+	a.host.current = hostSnapshot{HostID: localHostID, Connected: true, Controlled: false}
+	if !hasLabel(a.hostActionsBuild(m, remote.Host{ID: localHostID}, true), m.HostTake()) ||
+		!hasLabel(a.hostSwitchBuild(m), m.HostTake()) {
+		t.Fatal("viewing local host menu missing Take control")
+	}
+	// 本机正常控制态既不显示「释放控制」也不显示「接管控制」
+	a.host.current = hostSnapshot{HostID: localHostID, Connected: true, Controlled: true}
+	if hasLabel(a.hostActionsBuild(m, remote.Host{ID: localHostID}, true), m.HostRelease()) ||
+		hasLabel(a.hostActionsBuild(m, remote.Host{ID: localHostID}, true), m.HostTake()) {
+		t.Fatal("controlled local host menu should omit Release and Take")
+	}
+
+	// 远端磁贴右下角连接状态枚举核对
+	if got := a.remoteHostConnState("remote"); got != hostConnOffline {
+		t.Fatalf("offline state = %v, want offline", got)
+	}
+	b.err = "ssh timeout"
+	if got := a.remoteHostConnState("remote"); got != hostConnError {
+		t.Fatalf("error state = %v, want error", got)
+	}
+	b.connecting = true
+	if got := a.remoteHostConnState("remote"); got != hostConnConnecting {
+		t.Fatalf("connecting state = %v, want connecting", got)
+	}
+	b.connecting = false
+	b.host.current = hostSnapshot{HostID: "remote", Connected: true, Controlled: false}
+	if got := a.remoteHostConnState("remote"); got != hostConnViewing {
+		t.Fatalf("viewing state = %v, want viewing", got)
+	}
+	b.host.current.Controlled = true
+	if got := a.remoteHostConnState("remote"); got != hostConnOnline {
+		t.Fatalf("online state = %v, want online", got)
 	}
 }

@@ -12,6 +12,7 @@ import (
 
 	"posse/internal/agent"
 	"posse/internal/client"
+	"posse/internal/remote"
 )
 
 const localHostID = "local"
@@ -22,6 +23,7 @@ func newHostApp(c *client.Client, home string) *app {
 		activeTerm: map[string]string{}, sectionsOpen: map[string]*bool{},
 		lastStatus: map[string]string{}, lastTask: map[string]string{},
 		diffs: map[string]*worktreeDiff{}, fontSize: defaultFontSize,
+		pollWake: make(chan struct{}, 1),
 	}
 	a.selected, a.revealSel = a.state.Selected, true
 	if !c.Remote {
@@ -43,12 +45,18 @@ func (v *hostViews) forHost(h *hostSession, c *client.Client) *app {
 
 // hostViews 持有稳定的视图对象，不搬运 app 里的锁、编辑器缓冲区和后台队列。
 // 只有 active 供轮询线程读取，其余成员及切换都由界面线程操作。
+type suspendedRemoteHost struct {
+	id   string
+	host remote.Host
+}
+
 type hostViews struct {
-	local  *app
-	target *app // 当前选择的工作区主机，临时进入本机设备页面时保留。
-	all    map[string]*app
-	order  []string
-	active atomic.Pointer[app]
+	local           *app
+	target          *app // 当前选择的工作区主机，临时进入本机设备页面时保留。
+	suspendedRemote *suspendedRemoteHost
+	all             map[string]*app
+	order           []string
+	active          atomic.Pointer[app]
 }
 
 func newHostViews(local *app) *hostViews {
@@ -105,6 +113,7 @@ func (v *hostViews) activate(id string) bool {
 		return false
 	}
 	v.target = v.all[id]
+	v.suspendedRemote = nil
 	return true
 }
 
@@ -118,6 +127,15 @@ func (v *hostViews) show(id string) bool {
 	old := v.active.Load()
 	if next == old {
 		return true
+	}
+	// 从已连接的远端临时跳入本机设备页时记录连接配置基线，返回远端模块且配置未变时无缝重连；
+	// 尚未建连成功的连接中状态不记录，主动切换或断开会清空。
+	if id == localHostID && old != v.local && v.target == old && old.host != nil && !old.connecting && old.host.snapshot().Connected {
+		if saved, ok := v.local.findSavedHost(old.viewID); ok {
+			v.suspendedRemote = &suspendedRemoteHost{id: old.viewID, host: saved}
+		}
+	} else if id != localHostID {
+		v.suspendedRemote = nil
 	}
 	if v.local.hosts != nil {
 		v.local.hosts.leave()
@@ -169,6 +187,7 @@ func (v *hostViews) show(id string) bool {
 	next.focused.Store(v.focused())
 	v.active.Store(next)
 	next.updateBadge()
+	v.local.wakePoll()
 	return true
 }
 

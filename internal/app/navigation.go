@@ -62,9 +62,29 @@ func (a *app) moduleOwner(id string) *app {
 }
 
 func (a *app) showModule(id string) *app {
+	return a.showModuleReady(id, nil)
+}
+
+func (a *app) showModuleReady(id string, onReady func(*app)) *app {
 	owner := a.moduleOwner(id)
 	if owner.views != nil {
+		if owner == owner.views.local && owner.host != nil {
+			owner.host.prepareLocalReturn()
+		}
+		if owner != owner.views.local && owner.views.suspendedRemote != nil && owner.views.suspendedRemote.id == owner.viewID && owner.views.local.hosts != nil {
+			saved := owner.views.suspendedRemote.host
+			owner.views.suspendedRemote = nil
+			if !owner.connecting && (owner.host == nil || !owner.host.snapshot().Connected) {
+				if h, ok := owner.findSavedHost(owner.viewID); ok && h.SameConnection(saved) {
+					owner.views.local.hosts.connectRemoteReady(h, true, onReady)
+					return owner
+				}
+			}
+		}
 		owner.views.show(owner.viewID)
+	}
+	if onReady != nil {
+		onReady(owner)
 	}
 	return owner
 }
@@ -226,6 +246,7 @@ func (a *app) remoteHostTile(c *ui.Context, m locales.Messages, h remote.Host, m
 			badge = v.remoteHostBadge(c)
 		}
 	}
+	connState := a.remoteHostConnState(h.ID)
 	t, p := c.Theme(), colors(c.Theme())
 	tile := ui.Box(c.Key("navigation-host-"+h.ID)).Size(navigationBox(), navigationBox()).Shrink(0).Radius(rControl).Center().Label(h.Name).Role(ui.RoleButton).Focusable()
 	fg, bg, border := t.TextMuted, p.fill, p.line
@@ -247,6 +268,7 @@ func (a *app) remoteHostTile(c *ui.Context, m locales.Messages, h remote.Host, m
 		if badge != nil {
 			ui.Row(c).Absolute().Top(0).Right(0).AlignItems(ui.Center).Children(badge)
 		}
+		a.remoteHostStatusDot(c, connState)
 	})
 	if tile.Clicked() {
 		a.openHost(h)
@@ -293,17 +315,69 @@ func (a *app) consumeHostSwitchMenu(c *ui.Context, anchor ui.Element, m locales.
 	})
 }
 
-func (a *app) remoteHostBadge(c *ui.Context) func() {
-	t := c.Theme()
-	if a.connecting {
-		return func() { ui.Icon(c, iconHexOutline).FontSize(smallIcon()).TextColor(t.Accent) }
+type hostConnState int
+
+const (
+	hostConnOffline hostConnState = iota
+	hostConnConnecting
+	hostConnOnline
+	hostConnViewing
+	hostConnError
+)
+
+func (a *app) remoteHostConnState(id string) hostConnState {
+	var v *app
+	if a.views != nil {
+		v = a.views.all[id]
 	}
-	if a.host != nil && !a.host.snapshot().Connected {
-		col := t.TextMuted
-		if a.err != "" {
-			col = t.Danger
+	if v != nil {
+		if v.connecting {
+			return hostConnConnecting
 		}
-		return func() { ui.Icon(c, iconHexLost).FontSize(smallIcon()).TextColor(col) }
+		if v.host != nil {
+			if s := v.host.snapshot(); s.Connected {
+				if s.Controlled {
+					return hostConnOnline
+				}
+				return hostConnViewing
+			}
+		}
+	}
+	if k := a.windowOwner().hosts; k != nil && k.poolConnected(id) {
+		return hostConnOnline
+	}
+	if v != nil && v.err != "" {
+		return hostConnError
+	}
+	return hostConnOffline
+}
+
+// remoteHostStatusDot 画在远端主机磁贴右下角：在线绿点、连接中/查看中琥珀点、错误红点、已断开空心灰圈。
+func (a *app) remoteHostStatusDot(c *ui.Context, state hostConnState) {
+	t, p := c.Theme(), colors(c.Theme())
+	outer := hostStatusDot()
+	inset := hostStatusDotInset()
+	if state == hostConnOffline {
+		inner := hostStatusDotInner()
+		ui.Box(c).Absolute().Bottom(inset).Right(inset).Size(outer, outer).Radius(full(outer)).Background(p.side).Center().Children(func() {
+			ui.Box(c).Size(inner, inner).Radius(full(inner)).Background(p.side).BorderWidth(hostStatusDotStroke()).BorderColor(t.TextMuted)
+		})
+		return
+	}
+	col := p.sage
+	switch state {
+	case hostConnConnecting, hostConnViewing:
+		col = p.honey
+	case hostConnError:
+		col = t.Danger
+	}
+	ui.Box(c).Absolute().Bottom(inset).Right(inset).Size(outer, outer).Radius(full(outer)).
+		Background(col).BorderWidth(hostStatusDotRing()).BorderColor(p.side)
+}
+
+func (a *app) remoteHostBadge(c *ui.Context) func() {
+	if a.connecting || (a.host != nil && !a.host.snapshot().Connected) {
+		return nil
 	}
 	return a.workspacesBadge(c)
 }
@@ -371,14 +445,20 @@ func navigationTile(c *ui.Context, key string, glyph *ui.SVG, text, label string
 func (a *app) newMenu(c *ui.Context, m *popMenu) {
 	l := L(c)
 	if m.Item(l.SidebarAddProject()).Chosen() {
-		r := a.showModule(workspacesBoardID).request()
-		go r.addProject(l)
+		a.showModuleReady(workspacesBoardID, func(target *app) {
+			r := target.request()
+			go r.addProject(l)
+		})
 	}
 	if m.Item(l.SidebarNewWorkspace()).Keys(a.keyText("newWorkspace")).Chosen() {
-		a.showModule(workspacesBoardID).openNewWorkspace()
+		a.showModuleReady(workspacesBoardID, func(target *app) {
+			target.openNewWorkspace()
+		})
 	}
 	if m.Item(l.TasksDispatchEllipsis()).Chosen() {
-		a.showModule(taskBoardID).openDispatch()
+		a.showModuleReady(taskBoardID, func(target *app) {
+			target.openDispatch()
+		})
 	}
 	m.Separator()
 	if m.Item(l.HostAddItem()).Chosen() {

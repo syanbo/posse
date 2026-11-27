@@ -561,4 +561,147 @@ func TestHostSessionAutoTakeBusyKeepsViewing(t *testing.T) {
 	if !snap.Connected || snap.Controlled {
 		t.Fatalf("busy auto-take should preserve viewing session, got %+v", snap)
 	}
+	// 交接结束后（即使交接切换了新实例 ID）下次轮询应自动补完接管，无需手动点接管
+	f.mu.Lock()
+	f.takeError = nil
+	f.state = rpc.DesktopState{InstanceID: "remote-handoff-next", Epoch: 1}
+	f.mu.Unlock()
+	if err := h.refresh(context.Background()); err != nil {
+		t.Fatalf("refresh after busy handoff failed: %v", err)
+	}
+	if !h.snapshot().Controlled {
+		t.Fatalf("remote host did not auto-take across handoff instance change: %+v", h.snapshot())
+	}
+}
+
+func TestHostSessionLocalBusyRespectsBlockedAndConflictOwner(t *testing.T) {
+	// 1. 本机遇 Busy 后手动接管发生传输取消（blockedInstance），下次刷新不得绕过阻断
+	t.Run("blocked-after-busy", func(t *testing.T) {
+		f, c := newHostControlFixture(t)
+		ctx := context.Background()
+		h := newHostSession(localHostID, "window")
+		f.mu.Lock()
+		f.takeError = rpc.Errorf(rpc.CodeBusy, "handoff in progress")
+		f.mu.Unlock()
+		if err := h.connect(ctx, c); err != nil {
+			t.Fatal(err)
+		}
+		entered, release := make(chan struct{}), make(chan struct{})
+		defer close(release)
+		f.mu.Lock()
+		f.takeError = nil
+		f.afterTake = func() { close(entered); <-release }
+		f.mu.Unlock()
+		takeCtx, cancel := context.WithCancel(ctx)
+		done := make(chan error, 1)
+		go func() { done <- h.take(takeCtx, h.snapshot()) }()
+		waitConnectionEvent(t, entered)
+		cancel()
+		if err := <-done; err == nil {
+			t.Fatal("canceled manual take unexpectedly succeeded")
+		}
+		f.mu.Lock()
+		f.afterTake = nil
+		f.mu.Unlock()
+		if err := h.refresh(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if h.snapshot().Controlled {
+			t.Fatal("refresh bypassed blockedInstance after prior busy rollback")
+		}
+	})
+
+	// 2. Conflict 重查发现新实例已被另一端持有，对方稍后释放时不得自动抢占
+	t.Run("conflict-observes-new-instance-owner", func(t *testing.T) {
+		f, c := newHostControlFixture(t)
+		ctx := context.Background()
+		h := newHostSession(localHostID, "window")
+		f.mu.Lock()
+		f.state = rpc.DesktopState{InstanceID: "inst-1", Epoch: 1}
+		f.mu.Unlock()
+		if err := h.connect(ctx, c); err != nil {
+			t.Fatal(err)
+		}
+		if !h.snapshot().Controlled {
+			t.Fatal("initial connect did not take control")
+		}
+		// 模拟本机热切到 inst-2 时先看到空闲 inst-2，但 take 返回 CodeConflict，重查 desktop.status 返回已被他端持有的 inst-3
+		f.mu.Lock()
+		f.state = rpc.DesktopState{InstanceID: "inst-3", Epoch: 2, Owner: "other", Label: "Other Mac"}
+		f.takeError = rpc.Errorf(rpc.CodeConflict, "stale epoch")
+		f.mu.Unlock()
+		h.mu.Lock()
+		gen, base := h.generation, h.base
+		h.mu.Unlock()
+		if err := h.observe(ctx, gen, base, rpc.DesktopState{InstanceID: "inst-2", Epoch: 1}, false, false); err != nil {
+			t.Fatalf("observe conflict failed: %v", err)
+		}
+		if h.snapshot().Controlled || h.snapshot().Desktop.InstanceID != "inst-3" {
+			t.Fatalf("expected viewing inst-3 after conflict re-query, got %+v", h.snapshot())
+		}
+		// 对方释放 inst-3 后，同实例不应再自动接管
+		f.mu.Lock()
+		f.takeError = nil
+		f.state.Owner = ""
+		f.state.Epoch++
+		f.mu.Unlock()
+		if err := h.refresh(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if h.snapshot().Controlled {
+			t.Fatal("local auto-took inst-3 after other owner released")
+		}
+	})
+}
+
+func TestHostSessionLocalHandoffBusyRetriesAutomatically(t *testing.T) {
+	f, c := newHostControlFixture(t)
+	ctx := context.Background()
+	h := newHostSession(localHostID, "window")
+	if err := h.connect(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	if !h.snapshot().Controlled {
+		t.Fatal("initial local connect did not take control")
+	}
+	// 模拟本机热交接：新实例尚在接管终端，desktop.take 返回 CodeBusy
+	f.mu.Lock()
+	f.state = rpc.DesktopState{InstanceID: "handoff-next", Epoch: 1}
+	f.takeError = rpc.Errorf(rpc.CodeBusy, "desktop control is unavailable during handoff")
+	f.mu.Unlock()
+	if err := h.refresh(ctx); err != nil {
+		t.Fatalf("refresh during handoff failed: %v", err)
+	}
+	if !h.snapshot().Connected || h.snapshot().Controlled {
+		t.Fatalf("during busy handoff should stay viewing, got %+v", h.snapshot())
+	}
+	// 交接完成后再次轮询：不能因为前面 CodeBusy 消耗掉自动接管机会而永久卡只读
+	f.mu.Lock()
+	f.takeError = nil
+	f.mu.Unlock()
+	if err := h.refresh(ctx); err != nil {
+		t.Fatalf("refresh after handoff failed: %v", err)
+	}
+	if !h.snapshot().Controlled {
+		t.Fatalf("local host stayed read-only after handoff finished: %+v", h.snapshot())
+	}
+
+	// 若交接结束前已被另一台 Mac 接管，则不得抢夺对方控制权
+	f.mu.Lock()
+	f.state = rpc.DesktopState{InstanceID: "handoff-third", Epoch: 1}
+	f.takeError = rpc.Errorf(rpc.CodeBusy, "desktop control is unavailable during handoff")
+	f.mu.Unlock()
+	if err := h.refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	f.takeError = nil
+	f.state.Owner, f.state.Label, f.state.Epoch = "other-mac", "Other Mac", 2
+	f.mu.Unlock()
+	if err := h.refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if h.snapshot().Controlled {
+		t.Fatal("busy retry stole control from another owner")
+	}
 }

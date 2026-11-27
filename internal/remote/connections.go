@@ -240,6 +240,25 @@ func (p *Connections) watch(s *Session) {
 	p.closeLocked(s)
 }
 
+// Connected 报告指定主机当前是否有存活的活动或保活 SSH 隧道。
+func (p *Connections) Connected(id string) bool {
+	if p == nil || id == "" {
+		return false
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return false
+	}
+	if p.active != nil && p.active.Host.ID == id && sessionAlive(p.active) {
+		return true
+	}
+	if entry := p.idle[id]; entry != nil && sessionAlive(entry.session) {
+		return true
+	}
+	return false
+}
+
 // Disconnect 只回收指定主机，不忘记配置，也不结束目标 daemon 或终端。
 func (p *Connections) Disconnect(id string) {
 	p.mu.Lock()

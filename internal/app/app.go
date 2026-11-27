@@ -238,8 +238,9 @@ type app struct {
 	paneDue        atomic.Bool          // paneGone 里有等着到期的：轮询结果没变、不走 apply 时轮询也在界面线程上跑一次 prunePanes
 	termAt         time.Time            // 上次统计终端内存的时间（轮询协程里用）
 	lastTerm       int64
-	pollForce      atomic.Bool // 下一次轮询无论有没有变化都交给界面
-	refreshQueued  atomic.Bool // selectTask 排的那次轮询还没开始
+	pollForce      atomic.Bool   // 下一次轮询无论有没有变化都交给界面
+	pollWake       chan struct{} // 切回本机或热交接后立刻唤醒轮询，不等下一个 1 秒周期
+	refreshQueued  atomic.Bool   // selectTask 排的那次轮询还没开始
 	// shade 是窗口上一帧的深浅：0 还没画过，1 浅色，2 深色；轮询报给常驻进程（statusParams）
 	shade atomic.Int32
 	// panes 是主区域每格接入的终端（下标同 cols，选中的不是终端的格为 nil）；pane 是焦点所在的格
@@ -639,6 +640,17 @@ func (a *app) statusParams() any {
 	return p
 }
 
+func (a *app) wakePoll() {
+	owner := a.windowOwner()
+	if owner.pollWake == nil {
+		return
+	}
+	select {
+	case owner.pollWake <- struct{}{}:
+	default:
+	}
+}
+
 // poll 定期从常驻进程拉取项目、工作区和终端状态；常驻进程不在时拉起它。
 func (a *app) poll(ctx context.Context) {
 	tick := time.NewTicker(time.Second)
@@ -663,6 +675,7 @@ func (a *app) poll(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
+		case <-a.pollWake:
 		}
 	}
 }

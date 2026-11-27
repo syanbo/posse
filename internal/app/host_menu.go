@@ -235,12 +235,8 @@ func (a *app) hostActionsBuild(m locales.Messages, h remote.Host, active bool) f
 	connecting, releasing := a.connecting, a.hostMenu.releasing != 0
 	return func(menu *popMenu) {
 		if h.ID == localHostID {
-			if active && a.host != nil {
-				if s.Controlled {
-					if menu.Item(m.HostRelease()).Chosen() {
-						a.releaseHost(s)
-					}
-				} else if menu.Item(m.HostTake()).Disabled(!s.Connected || connecting || releasing).Chosen() {
+			if active && a.host != nil && s.Connected && !s.Controlled {
+				if menu.Item(m.HostTake()).Disabled(connecting || releasing).Chosen() {
 					a.takeHost(m, s)
 				}
 				menu.Separator()
@@ -262,12 +258,10 @@ func (a *app) hostActionsBuild(m locales.Messages, h remote.Host, active bool) f
 					a.selectRemoteHost(h)
 				}
 			default:
-				if s.Controlled {
-					if menu.Item(m.HostRelease()).Chosen() {
-						a.releaseHost(s)
+				if !s.Controlled {
+					if menu.Item(m.HostTake()).Disabled(releasing).Chosen() {
+						a.takeHost(m, s)
 					}
-				} else if menu.Item(m.HostTake()).Disabled(releasing).Chosen() {
-					a.takeHost(m, s)
 				}
 				if menu.Item(m.HostDisconnect()).Chosen() {
 					a.windowOwner().hosts.disconnect(h.ID)
@@ -314,35 +308,32 @@ func (a *app) hostSwitchBuild(m locales.Messages) func(*popMenu) {
 			}
 		}
 		if a.host != nil {
-			menu.Separator()
 			if a.viewID != localHostID {
 				selected, ok := a.findSavedHost(a.viewID)
 				if connecting {
+					menu.Separator()
 					if menu.Item(m.HostCancelConnect()).Chosen() {
 						a.windowOwner().hosts.disconnect(a.viewID)
 					}
 				} else if !s.Connected && ok {
+					menu.Separator()
 					if menu.Item(m.HostReconnect()).Chosen() {
 						a.selectRemoteHost(selected)
 					}
 				} else if s.Connected {
-					if s.Controlled {
-						if menu.Item(m.HostRelease()).Chosen() {
-							a.releaseHost(s)
+					menu.Separator()
+					if !s.Controlled {
+						if menu.Item(m.HostTake()).Disabled(releasing).Chosen() {
+							a.takeHost(m, s)
 						}
-					} else if menu.Item(m.HostTake()).Disabled(releasing).Chosen() {
-						a.takeHost(m, s)
 					}
 					if menu.Item(m.HostDisconnect()).Chosen() {
 						a.windowOwner().hosts.disconnect(a.viewID)
 					}
 				}
-			} else {
-				if s.Controlled {
-					if menu.Item(m.HostRelease()).Chosen() {
-						a.releaseHost(s)
-					}
-				} else if menu.Item(m.HostTake()).Disabled(!s.Connected || connecting || releasing).Chosen() {
+			} else if s.Connected && !s.Controlled {
+				menu.Separator()
+				if menu.Item(m.HostTake()).Disabled(connecting || releasing).Chosen() {
 					a.takeHost(m, s)
 				}
 			}

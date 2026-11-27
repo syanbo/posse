@@ -50,6 +50,11 @@ func compactBox() float32 { return iconSize + 8 }
 func navigationWidth() float32       { return sz(48) }
 func navigationBox() float32         { return sz(36) }
 func navigationIcon() float32        { return iconSize + 6 }
+func hostStatusDot() float32         { return sz(10) }
+func hostStatusDotInner() float32    { return sz(6) }
+func hostStatusDotInset() float32    { return -2 }
+func hostStatusDotRing() float32     { return 2 }
+func hostStatusDotStroke() float32   { return 1.5 }
 func sidebarDefault() float32        { return sz(248) }
 func sidebarMin() float32            { return sz(224) }
 func sidebarMax() float32            { return sz(420) }

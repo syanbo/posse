@@ -53,30 +53,34 @@ func (a *app) hostChip(c *ui.Context) {
 	t, p, m := c.Theme(), colors(c.Theme()), L(c)
 	owner := a.windowOwner()
 
-	if !a.remoteHost() {
-		if len(owner.hostMenu.hosts) > 0 {
-			return
-		}
-		b := ui.Row(c.Key("host-chip")).Height(sz(24)).Padding(0, chipPad).Gap(6).Radius(rRow).AlignItems(ui.Center).Shrink(1).
-			MinWidth(fsBody + 2*chipPad).Role(ui.RoleButton).Label(m.HostAddItem()).Tooltip(a.withKey(m.HostAddItem(), "switchHost"))
-		bg := ui.Transparent
-		if b.Hovered() {
-			bg = p.wash
-		}
-		b.Background(b.AnimateColor("bg", bg, hover)).Children(func() {
-			ui.Icon(c, iconHost).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
-			ui.Text(c, m.HostAddShort()).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-		})
-		if b.Clicked() {
-			a.openHostDialog(remote.Host{})
-		}
-		return
-	}
-
 	var s hostSnapshot
 	if a.host != nil {
 		s = a.host.snapshot()
 	}
+
+	if !a.remoteHost() {
+		// 本机处于只读查看态（例如被其他端持有控制）时照常显示查看芯片，不因已配远程主机而藏起异常状态。
+		if !s.Connected || s.Controlled {
+			if len(owner.hostMenu.hosts) > 0 {
+				return
+			}
+			b := ui.Row(c.Key("host-chip")).Height(sz(24)).Padding(0, chipPad).Gap(6).Radius(rRow).AlignItems(ui.Center).Shrink(1).
+				MinWidth(fsBody + 2*chipPad).Role(ui.RoleButton).Label(m.HostAddItem()).Tooltip(a.withKey(m.HostAddItem(), "switchHost"))
+			bg := ui.Transparent
+			if b.Hovered() {
+				bg = p.wash
+			}
+			b.Background(b.AnimateColor("bg", bg, hover)).Children(func() {
+				ui.Icon(c, iconHost).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, m.HostAddShort()).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
+			})
+			if b.Clicked() {
+				a.openHostDialog(remote.Host{})
+			}
+			return
+		}
+	}
+
 	if !a.connecting && s.Connected && s.Controlled {
 		return
 	}

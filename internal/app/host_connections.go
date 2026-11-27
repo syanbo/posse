@@ -18,9 +18,10 @@ type hostTransport struct {
 }
 
 type hostAttempt struct {
-	app    *app
-	ctx    context.Context
-	cancel context.CancelFunc
+	app     *app
+	ctx     context.Context
+	cancel  context.CancelFunc
+	onReady func(*app)
 }
 
 // 控制器的选择状态只在界面线程修改；后台只持有单次请求与固定 Client。
@@ -67,6 +68,10 @@ func (a *app) windowContext() context.Context {
 
 // connectRemote 由主机入口在界面线程调用；连上无人控制的远端自动接管，有人控制时进入查看。
 func (k *hostConnections) connectRemote(h remote.Host, start bool) {
+	k.connectRemoteReady(h, start, nil)
+}
+
+func (k *hostConnections) connectRemoteReady(h remote.Host, start bool, onReady func(*app)) {
 	if k.closed {
 		return
 	}
@@ -88,7 +93,7 @@ func (k *hostConnections) connectRemote(h remote.Host, start bool) {
 	a.detachSkillRun()
 	a.connecting, a.connectStage, a.connectPct, a.err = true, remote.StageAuth, 0, ""
 	ctx, cancel := context.WithCancel(k.ctx)
-	r := &hostAttempt{app: a, ctx: ctx, cancel: cancel}
+	r := &hostAttempt{app: a, ctx: ctx, cancel: cancel, onReady: onReady}
 	k.active = r
 	generation := a.host.snapshot().Generation
 	opts := remote.Options{
@@ -136,6 +141,10 @@ func (k *hostConnections) connectRemote(h remote.Host, start bool) {
 				return
 			}
 			a.pollForce.Store(true)
+			a.wakePoll()
+			if r.onReady != nil && a.displayed() == a && a.host.snapshot().Connected {
+				r.onReady(a)
+			}
 		})
 		if err != nil {
 			return
@@ -205,9 +214,22 @@ func (k *hostConnections) failed(r *hostAttempt, err error) {
 	}
 }
 
+func (k *hostConnections) poolConnected(id string) bool {
+	if k == nil || k.closed {
+		return false
+	}
+	if p, ok := k.pool.(interface{ Connected(string) bool }); ok {
+		return p.Connected(id)
+	}
+	return false
+}
+
 func (k *hostConnections) disconnect(id string) {
 	if k.closed {
 		return
+	}
+	if k.views.suspendedRemote != nil && k.views.suspendedRemote.id == id {
+		k.views.suspendedRemote = nil
 	}
 	if k.active != nil && k.active.app.viewID == id {
 		k.failed(k.active, context.Canceled)
