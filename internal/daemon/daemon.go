@@ -33,7 +33,7 @@ import (
 	"posse/internal/writecoord"
 )
 
-const Version = "0.1.54"
+const Version = "0.1.55"
 
 type Config struct {
 	Home       string

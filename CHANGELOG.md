@@ -3,6 +3,20 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.55
+
+- 新增 macOS / Linux 无头服务端（`headless`）与远端 SSH 主机可视化管理：支持四平台无头包 R2 签名发布、SSH 自动推送安装与重连自动无损热升级；重构左下角远端主机磁贴与管理弹窗（自定义图标、状态点、主动断开记忆与离线重连卡片、远端目录搜索与新建文件夹、兼容无 Git / 无 Agent 环境）。
+- 新增远端主机三页签详情弹窗（概览 / 内存 / 手机配对）：查看节点平台、版本、运行时长与工作区/终端内存及进程组明细，支持托管无头节点（macOS LaunchAgent / Linux systemd user）开机自启在线开关、手动检查更新与一键无损热升级，以及直接为远端主机生成手机配对码和管理已配对设备。
+- 手机服务端新增真实平台与能力宣告（`status.get`）及 `posse.host.v1` 协议，支持手机端查看主机详情、终端内存明细与控制托管无头节点开机自启，并在 Linux / 无头节点自动隐藏看桌面入口。
+- 桌面与手机端代码编辑器新增鸿蒙 ArkTS（`.ets`）语法高亮、图标与符号跳转；Antigravity 套餐用量摘要仅显示主力短期与周期窗口，手机详情同步分组。
+
+### English
+
+- Added macOS / Linux headless server (`headless`) support and visual SSH host management: signed 4-platform headless server distribution on R2, automatic SSH push installation, and lossless hot upgrade on reconnect; redesigned the bottom-left remote host tiles and management modal with custom host icons, status dots, persisted manual disconnect state with a reconnect card, remote folder search/creation, and graceful handling of hosts without Git or agents.
+- Added a three-tab Remote Host Details modal (Overview / Memory / Mobile Pairing): inspect host platform, version, uptime, and workspace/terminal memory & grouped processes; toggle startup service online (macOS LaunchAgent / Linux systemd user) on managed headless hosts; manually check for updates and trigger lossless hot upgrades; and generate mobile pairing QR codes and manage paired phones directly for remote hosts.
+- Extended the mobile server with real host platform/edition/capability announcements (`status.get`) and `posse.host.v1` RPCs for host overview, terminal memory breakdown, and managed headless autostart control, automatically disabling Remote Desktop on Linux and headless hosts.
+- Added HarmonyOS ArkTS (`.ets`) syntax highlighting, file icons, and symbol jump across desktop and mobile editors, and updated Antigravity plan usage summaries to show primary short and cycle windows only with grouped mobile details.
+
 ## 0.1.54
 
 - 修复 Cursor（`cursor-agent`）作为飞书机器人、讨论或任务 worker 时，首轮回复后一直停在 `working`、后续追问持续卡在「排队中」的问题：在不修改用户全局 `~/.cursor/hooks.json` 的前提下，当 Cursor worker 通过 `posse task done` 汇报完成后，若因 `cursor-agent` 插件 `stop` hook 漏触发而未收到空闲事件，常驻进程在确认无用户新键入、输出与 hook 静默且终端底部已稳定回到 Cursor 空闲输入框（无 `ctrl+c to stop` 或审批/交互弹窗）后自动兜底切回空闲，放行后续排队轮次与追加提醒，并兼容升级交接（`daemon handoff`）。
