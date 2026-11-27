@@ -2,6 +2,7 @@ package app
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -286,5 +287,81 @@ func TestHostMenuTakeAndStatusDotStates(t *testing.T) {
 	b.host.current.Controlled = true
 	if got := a.remoteHostConnState("remote"); got != hostConnOnline {
 		t.Fatalf("online state = %v, want online", got)
+	}
+}
+
+func TestRemoteDisconnectedCardAndStatusBar(t *testing.T) {
+	k, a, b, _, base, _ := connectionFixture(t)
+	base.Platform = "linux"
+	h := remoteTestHost("remote")
+	h.Name = "bwh"
+	writeHostMenuConfig(t, a, h)
+	a.loadHostMenu()
+
+	a.openHost(h)
+	awaitHostUpdate(t, b)
+	if !b.host.snapshot().Connected || b.targetPlatform() != "linux" {
+		t.Fatalf("remote did not capture linux platform: snap=%+v platform=%q", b.host.snapshot(), b.targetPlatform())
+	}
+	b.loaded = true
+	b.daemon.FootprintKB = 43 * 1024
+	b.daemon.Running = 1
+	b.daemon.Awake = &awakeStatus{Mode: "auto"}
+	b.workspaces = []workspace{{ID: "w1", Project: "ai", Label: "ai", Path: "/home/dev/ai", Terminals: []terminalInfo{{ID: "t1", Title: "bash"}}}}
+	b.selected = "w1"
+	b.activeTerm = map[string]string{"w1": "t1"}
+
+	// 主动断开后仍记住 linux 平台，且主区域直接显示「已断开 bwh」和「重新连接」卡片，不回落到空工作区。
+	k.disconnect(h.ID)
+	if b.targetPlatform() != "linux" {
+		t.Fatalf("targetPlatform lost linux after disconnect: got %q", b.targetPlatform())
+	}
+	m := locales.In("zh-Hans")
+	tt := newTester(func(c *ui.Context) {
+		ui.Column(c).Fill().Children(func() {
+			if !b.remoteLandingCard(c, &b.workspaces[0]) {
+				b.emptyWorkspace(c, &b.workspaces[0])
+			}
+			b.statusBar(c, &b.workspaces[0])
+		})
+	}, 900, 600)
+	settle(tt)
+	if !tt.HasText(m.HostDisconnectedTitle("bwh")) || !tt.HasText(m.HostReconnect()) {
+		t.Fatalf("disconnected remote missing card or reconnect button: %v", tt.Texts())
+	}
+	if tt.HasText(m.EmptyNewTerminal()) {
+		t.Fatalf("disconnected remote fell back to empty workspace: %v", tt.Texts())
+	}
+	if slices.Contains(tt.Texts(), m.AwakeRunningShort()) || tt.HasText("43 MB") {
+		t.Fatalf("disconnected remote status bar showed stale telemetry or awake button: %v", tt.Texts())
+	}
+
+	// 有已打开的内存文档标签时，保留文档视图不遮挡草稿。
+	v := b.filesFor(&b.workspaces[0])
+	doc := &fileDoc{path: "/home/dev/ai/draft.md", kind: docText}
+	v.docs = []*fileDoc{doc}
+	b.activeTerm["w1"] = docKey(doc)
+	if !b.hasActiveDocTab(&b.workspaces[0]) {
+		t.Fatal("expected active doc tab to be detected")
+	}
+	b.activeTerm["w1"] = "t1"
+
+	// 点击卡片上的「重新连接」按钮会发起重连。
+	if err := tt.Click(m.HostReconnect()); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 4 && b.connecting; i++ {
+		awaitHostUpdate(t, b)
+	}
+	if !b.host.snapshot().Connected || b.manuallyDisconnected {
+		t.Fatalf("clicking reconnect on disconnected card did not reconnect: snap=%+v manual=%v", b.host.snapshot(), b.manuallyDisconnected)
+	}
+
+	// 报错断开时显示「无法连接 bwh」与「重试」。
+	k.disconnect(h.ID)
+	b.err = "connection refused"
+	settle(tt)
+	if !tt.HasText(m.HostFailedTitle("bwh")) || !tt.HasText(m.CommonRetry()) {
+		t.Fatalf("error disconnected remote missing failure card or retry button: %v", tt.Texts())
 	}
 }

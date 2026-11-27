@@ -145,6 +145,9 @@ func (k *hostConnections) connectRemoteReady(h remote.Host, start bool, onReady 
 				k.failed(r, err)
 				return
 			}
+			if transport.client != nil && transport.client.Platform != "" {
+				a.platform = transport.client.Platform
+			}
 			a.pollForce.Store(true)
 			a.wakePoll()
 			if r.onReady != nil && a.displayed() == a && a.host.snapshot().Connected {

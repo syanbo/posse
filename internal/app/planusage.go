@@ -136,10 +136,11 @@ func (a *app) statusBar(c *ui.Context, w *workspace) {
 	ui.Row(c).Height(footHeight).Padding(0, trafficLightX-chipPad).Shrink(0).AlignItems(ui.Center).Clip().
 		Background(footShade(t)).BorderWidth(hairline, 0, 0, 0).BorderColor(p.line).Children(func() {
 		a.overBranchButton = false
+		offline := a.remoteOffline()
 		inBar := !a.state.GitInTabBar
 		switch {
-		case w == nil || a.gitBranch(w) == "":
-			// 切到别的页面时弹窗画不出来、也收不到点外面，不收掉的话回来又自己弹出
+		case offline || w == nil || a.gitBranch(w) == "":
+			// 切到别的页面或远端断开时弹窗画不出来、也收不到点外面，不收掉的话回来又自己弹出
 			a.branchPop = nil
 		case inBar:
 			a.branchButton(c, w)
@@ -153,9 +154,11 @@ func (a *app) statusBar(c *ui.Context, w *workspace) {
 		if inBar {
 			plan.Justify(ui.End)
 		}
-		plan.Children(func() { a.planButton(c, st) })
+		if !offline {
+			plan.Children(func() { a.planButton(c, st) })
+		}
 		a.hostChip(c)
-		if a.loaded {
+		if a.loaded && !offline {
 			// 终端数和内存放在一个按钮里：点开的浮窗按工作区列的就是这些终端占的内存
 			a.memoryButton(c)
 			a.awakeButton(c)

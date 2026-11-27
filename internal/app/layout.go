@@ -1270,6 +1270,12 @@ func (a *app) columnBody(c *ui.Context, w *workspace, i int) {
 	default:
 		_, term := a.findTerminal(col.active)
 		if term == nil || i >= maxColumns || a.panes[i] == nil {
+			if a.remoteOffline() {
+				ui.Column(c.Key("pane-remote-offline")).Grow(1).Center().Padding(24).Children(func() {
+					a.remoteStatusCard(c)
+				})
+				return
+			}
 			if !a.splitShown() {
 				a.emptyWorkspace(c, w)
 				return
@@ -1339,7 +1345,9 @@ func (a *app) columnStrip(c *ui.Context, w *workspace, i int) {
 				}
 			})
 		})
-		ui.Row(c).Shrink(0).Height(titleHeight(c)).AlignItems(ui.Center).Children(func() { a.newTerminalButton(c, w, i) })
+		if !a.remoteOffline() {
+			ui.Row(c).Shrink(0).Height(titleHeight(c)).AlignItems(ui.Center).Children(func() { a.newTerminalButton(c, w, i) })
+		}
 		// 标签后面的空处也接住拖来的标签：移进这一格
 		tail := ui.Box(c.Key("strip-tail")).Grow(1).AlignSelf(ui.Stretch)
 		if g, over := ui.DragOver[tabDrag](tail); over && g.ws == w.ID && a.colOf(g.key) != i && col.id != "" {

@@ -169,6 +169,7 @@ type app struct {
 	hostDlg              hostDialogState // 窗口共用，只由 windowOwner 持有
 	connecting           bool
 	manuallyDisconnected bool
+	platform             string // 最近一次连上目标 daemon 时的操作系统（darwin/linux），断开后保留判断
 	connectStage         remote.Stage
 	connectPct           float64
 	viewID               string

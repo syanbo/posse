@@ -171,54 +171,104 @@ func (a *app) hostHeaderBadge(c *ui.Context) {
 	})
 }
 
-// remoteLandingCard 在首次连接远端（尚无缓存数据）期间或失败时占据主区域中央，避免整块白屏。
-func (a *app) remoteLandingCard(c *ui.Context) bool {
-	if !a.remoteHost() || a.loaded {
+// remoteOffline 表示远端主机当前处于连接中或已断开状态（无可用实时连接）。
+func (a *app) remoteOffline() bool {
+	if !a.remoteHost() {
 		return false
 	}
-	t, p, m := c.Theme(), colors(c.Theme()), L(c)
-	name := a.hostName(m)
+	if a.connecting {
+		return true
+	}
+	return a.host != nil && !a.host.snapshot().Connected
+}
+
+// hasActiveDocTab 判断当前工作区是否存在已打开且正在显示的内存文档标签，
+// 远端断开时仍允许查看与复制已保留的未保存草稿。
+func (a *app) hasActiveDocTab(w *workspace) bool {
+	if w == nil || !a.loaded {
+		return false
+	}
+	for _, col := range a.cols {
+		if isDocKey(col.active) && a.docByKey(w, col.active) != nil {
+			return true
+		}
+	}
+	if len(a.cols) == 0 {
+		if key := a.activeTerm[w.ID]; isDocKey(key) && a.docByKey(w, key) != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// remoteLandingCard 在远端主机连接中、失败或已断开且当前未浏览内存文档标签时占据主区域中央，
+// 避免退回空工作区启动页或整块白屏，并直接提供重新连接入口。
+func (a *app) remoteLandingCard(c *ui.Context, w *workspace) bool {
+	if !a.remoteHost() {
+		return false
+	}
 	var s hostSnapshot
 	if a.host != nil {
 		s = a.host.snapshot()
 	}
-	if s.Connected && !a.connecting {
+	offline := a.connecting || (!a.loaded && !s.Connected) || (a.host != nil && !s.Connected)
+	if !offline || a.hasActiveDocTab(w) {
 		return false
 	}
-	ui.Column(c.Key("remote-landing")).Grow(1).Center().Padding(24).Children(func() {
-		card := ui.Column(c).MaxWidth(hostDialogWidth()).Padding(24).Gap(12).Radius(rCard).Background(p.card).AlignItems(ui.Center)
-		elevCard(c, card)
-		card.Children(func() {
-			if a.connecting {
-				posseLoader(c, tileLarge(), t.Accent, c.Preferences().ReduceMotion)
-				titleText(c, m.HostConnectingTitle(name), fsTitle)
-				ui.Text(c, a.connectStageText(m)).FontSize(fsBody).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine()
-				ui.Row(c).Gap(8).Padding(8, 0, 0, 0).Children(func() {
-					if confirmButton(c, pressable(textButton(c, m.CommonCancel()))).Clicked() {
-						a.windowOwner().hosts.disconnect(a.viewID)
-					}
-				})
-				return
-			}
-			ui.Icon(c, iconHost).FontSize(tileLarge()).TextColor(t.Danger)
-			titleText(c, m.HostFailedTitle(name), fsTitle)
-			if a.err != "" {
-				ui.Text(c, a.err).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5).Wrap()
-			}
-			ui.Row(c).Gap(8).Padding(8, 0, 0, 0).Children(func() {
-				if confirmButton(c, pressable(textButton(c, m.HostBackLocal()))).Clicked() {
-					a.selectLocalHost()
-				}
-				if h, ok := a.findSavedHost(a.viewID); ok {
-					if confirmButton(c, pressable(textButton(c, m.HostEditItem()))).Clicked() {
-						a.openHostDialog(h)
-					}
-					if confirmButton(c, pressable(accentButton(c, m.CommonRetry()))).Clicked() {
-						a.selectRemoteHost(h)
-					}
-				}
-			})
+	ui.Column(c.Key("remote-landing")).Grow(1).Children(func() {
+		ui.Box(c).Height(titleHeight(c)).Shrink(0).DragWindow()
+		ui.Column(c).Grow(1).Center().Padding(24).Children(func() {
+			a.remoteStatusCard(c)
 		})
 	})
 	return true
+}
+
+func (a *app) remoteStatusCard(c *ui.Context) {
+	t, p, m := c.Theme(), colors(c.Theme()), L(c)
+	name := a.hostName(m)
+	card := ui.Column(c).MaxWidth(hostDialogWidth()).Padding(24).Gap(12).Radius(rCard).Background(p.card).AlignItems(ui.Center)
+	elevCard(c, card)
+	card.Children(func() {
+		if a.connecting {
+			posseLoader(c, tileLarge(), t.Accent, c.Preferences().ReduceMotion)
+			titleText(c, m.HostConnectingTitle(name), fsTitle)
+			ui.Text(c, a.connectStageText(m)).FontSize(fsBody).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine()
+			ui.Row(c).Gap(8).Padding(8, 0, 0, 0).Children(func() {
+				if confirmButton(c, pressable(textButton(c, m.CommonCancel()))).Clicked() {
+					a.windowOwner().hosts.disconnect(a.viewID)
+				}
+			})
+			return
+		}
+		failed := a.err != ""
+		iconColor := t.TextMuted
+		title := m.HostDisconnectedTitle(name)
+		body := m.HostDisconnectedBody()
+		primary := m.HostReconnect()
+		if failed {
+			iconColor = t.Danger
+			title = m.HostFailedTitle(name)
+			body = a.err
+			primary = m.CommonRetry()
+		}
+		ui.Icon(c, iconHost).FontSize(tileLarge()).TextColor(iconColor)
+		titleText(c, title, fsTitle)
+		if body != "" {
+			ui.Text(c, body).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5).TextAlign(ui.Center).Wrap()
+		}
+		ui.Row(c).Gap(8).Padding(8, 0, 0, 0).Children(func() {
+			if confirmButton(c, pressable(textButton(c, m.HostBackLocal()))).Clicked() {
+				a.selectLocalHost()
+			}
+			if h, ok := a.findSavedHost(a.viewID); ok {
+				if confirmButton(c, pressable(textButton(c, m.HostEditItem()))).Clicked() {
+					a.openHostDialog(h)
+				}
+				if confirmButton(c, pressable(accentButton(c, primary))).Clicked() {
+					a.selectRemoteHost(h)
+				}
+			}
+		})
+	})
 }

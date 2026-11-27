@@ -49,6 +49,9 @@ func (a *app) targetPlatform() string {
 			return c.Platform
 		}
 	}
+	if a.platform != "" {
+		return a.platform
+	}
 	if a.c != nil {
 		return a.c.Platform
 	}

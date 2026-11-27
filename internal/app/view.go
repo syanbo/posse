@@ -144,7 +144,7 @@ func (a *app) build(c *ui.Context) {
 				case a.selected == settingsBoardID:
 					a.settingsBoard(c)
 				default:
-					if !a.remoteLandingCard(c) {
+					if !a.remoteLandingCard(c, w) {
 						a.main(c, w, cur)
 						bw = w
 					}

@@ -444,18 +444,21 @@ func navigationTile(c *ui.Context, key string, glyph *ui.SVG, text, label string
 
 func (a *app) newMenu(c *ui.Context, m *popMenu) {
 	l := L(c)
-	if m.Item(l.SidebarAddProject()).Chosen() {
+	target := a.moduleOwner(workspacesBoardID)
+	suspended := target.views != nil && target.views.suspendedRemote != nil && target.views.suspendedRemote.id == target.viewID
+	remoteDisabled := a.windowOwner().hosts != nil && target.remoteOffline() && !suspended
+	if m.Item(l.SidebarAddProject()).Disabled(remoteDisabled).Chosen() {
 		a.showModuleReady(workspacesBoardID, func(target *app) {
 			r := target.request()
 			go r.addProject(l)
 		})
 	}
-	if m.Item(l.SidebarNewWorkspace()).Keys(a.keyText("newWorkspace")).Chosen() {
+	if m.Item(l.SidebarNewWorkspace()).Disabled(remoteDisabled).Keys(a.keyText("newWorkspace")).Chosen() {
 		a.showModuleReady(workspacesBoardID, func(target *app) {
 			target.openNewWorkspace()
 		})
 	}
-	if m.Item(l.TasksDispatchEllipsis()).Chosen() {
+	if m.Item(l.TasksDispatchEllipsis()).Disabled(remoteDisabled).Chosen() {
 		a.showModuleReady(taskBoardID, func(target *app) {
 			target.openDispatch()
 		})
@@ -471,7 +474,7 @@ func (a *app) newMenu(c *ui.Context, m *popMenu) {
 }
 
 func (a *app) sidebarNotices(c *ui.Context) {
-	if !a.loaded {
+	if !a.loaded && !(a.remoteHost() && !a.connecting && a.err == "") {
 		msg, color := L(c).SidebarConnecting(), c.Theme().TextMuted
 		if a.err != "" {
 			msg, color = L(c).SidebarConnectError(a.err), c.Theme().Danger

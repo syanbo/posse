@@ -60,6 +60,8 @@
   "hostErrPath": "路径须为绝对路径或以 ~/ 开头",
   "hostDuplicateEndpoint": "这台主机已添加为 {name}",
   "hostConnectingTitle": "正在连接 {name}",
+  "hostDisconnectedTitle": "已断开 {name}",
+  "hostDisconnectedBody": "远端常驻进程和终端仍在后台运行，重新连接即可恢复。",
   "hostFailedTitle": "无法连接 {name}",
   "hostBackLocal": "回到本机",
   "hostTileTip": "{name}\n{target}",

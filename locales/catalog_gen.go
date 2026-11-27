@@ -895,6 +895,36 @@ func (msgs Messages) HostConnectingTitle(name string) string {
 	return Catalog.Format(msgs.locale, "hostConnectingTitle", map[string]any{"name": name})
 }
 
+// HostDisconnectedTitle says "Disconnected from {name}"
+// in the language the app shows.
+//
+// Card title when a remote host is disconnected without an error.
+func HostDisconnectedTitle(name string) string { return In(i18n.Locale()).HostDisconnectedTitle(name) }
+
+// HostDisconnectedTitle says "Disconnected from {name}"
+// in the language of msgs.
+//
+// Card title when a remote host is disconnected without an error.
+func (msgs Messages) HostDisconnectedTitle(name string) string {
+	return Catalog.Format(msgs.locale, "hostDisconnectedTitle", map[string]any{"name": name})
+}
+
+// HostDisconnectedBody says "The remote daemon and terminals are still running in the background. Reconnect anytime to resume."
+// in the language the app shows.
+//
+// Explanation on the disconnected remote host card reassuring the user that
+// remote sessions keep running.
+func HostDisconnectedBody() string { return In(i18n.Locale()).HostDisconnectedBody() }
+
+// HostDisconnectedBody says "The remote daemon and terminals are still running in the background. Reconnect anytime to resume."
+// in the language of msgs.
+//
+// Explanation on the disconnected remote host card reassuring the user that
+// remote sessions keep running.
+func (msgs Messages) HostDisconnectedBody() string {
+	return Catalog.Format(msgs.locale, "hostDisconnectedBody", nil)
+}
+
 // HostFailedTitle says "Could not connect to {name}"
 // in the language the app shows.
 //
