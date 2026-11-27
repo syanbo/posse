@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -23,27 +24,36 @@ const (
 
 const linuxLingerCommand = "loginctl enable-linger $USER"
 
+type hostAutostartOp struct {
+	instanceID string
+	busy       bool
+	status     *rpc.AutostartStatus
+	notice     string
+	err        string
+}
+
 type hostDetailState struct {
-	ctx                  context.Context
-	cancel               context.CancelFunc
-	memCancel            context.CancelFunc
-	memSeq               uint64
-	liveKey              string
-	fetchedGen           uint64
-	loadingInfo          bool
-	loadingAutostart     bool
-	loadingMem           bool
-	info                 *rpc.RemoteInfo
-	infoErr              string
-	autostart            *rpc.AutostartStatus
-	autostartErr         string
-	autostartUnsupported bool
-	mem                  *rpc.DaemonMemoryResult
-	memErr               string
-	memUnsupported       bool
-	memExpanded          map[string]bool
-	copiedKey            string
-	copiedAt             time.Time
+	ctx                       context.Context
+	cancel                    context.CancelFunc
+	memCancel                 context.CancelFunc
+	memSeq                    uint64
+	liveKey                   string
+	fetchedGen                uint64
+	loadingInfo               bool
+	loadingAutostart          bool
+	loadingMem                bool
+	info                      *rpc.RemoteInfo
+	infoErr                   string
+	autostart                 *rpc.AutostartStatus
+	autostartErr              string
+	autostartUnsupported      bool
+	autostartWriteUnsupported bool
+	mem                       *rpc.DaemonMemoryResult
+	memErr                    string
+	memUnsupported            bool
+	memExpanded               map[string]bool
+	copiedKey                 string
+	copiedAt                  time.Time
 }
 
 func (a *app) cancelHostDetails() {
@@ -121,6 +131,7 @@ func (a *app) refreshHostDetails(owner *app, d *hostDialogState) {
 	}
 	gen := d.gen
 	liveKey := detailLiveKey(d.editing.ID, target)
+	prevLiveKey := d.detail.liveKey
 	ctx, cancel := context.WithCancel(owner.windowContext())
 	d.detail.ctx = ctx
 	d.detail.cancel = cancel
@@ -132,6 +143,17 @@ func (a *app) refreshHostDetails(owner *app, d *hostDialogState) {
 	d.detail.infoErr = ""
 	d.detail.autostartErr = ""
 	d.detail.memErr = ""
+	if prevLiveKey != liveKey {
+		// 切换主机、重连或更换 daemon 实例时清掉上一实例的自启缓存，避免拿旧实例状态开放新实例开关。
+		d.detail.autostart = nil
+		d.detail.autostartUnsupported = false
+		d.detail.autostartWriteUnsupported = false
+		if target.autostartOp != nil && target.autostartOp.instanceID != r.snapshot.Desktop.InstanceID {
+			target.autostartOp = nil
+		}
+	}
+	target.autostartGen++
+	autostartReadGen := target.autostartGen
 	d.detail.memSeq++
 	memSeq := d.detail.memSeq
 	memCtx, memCancel := context.WithCancel(ctx)
@@ -172,6 +194,11 @@ func (a *app) refreshHostDetails(owner *app, d *hostDialogState) {
 		st, err := r.client.AutostartStatus(qctx)
 		owner.update(func() {
 			if !owner.hostDlg.open || owner.hostDlg.gen != gen || owner.hostDlg.detail.liveKey != liveKey || ctx.Err() != nil || !r.current() {
+				return
+			}
+			// 读请求期间若已发起写入或更晚的读写操作，丢弃迟到的状态回包，绝不覆盖更新后的写入结果。
+			if target.autostartGen != autostartReadGen {
+				owner.hostDlg.detail.loadingAutostart = false
 				return
 			}
 			owner.hostDlg.detail.loadingAutostart = false
@@ -335,7 +362,7 @@ func (a *app) hostOverviewTab(c *ui.Context, owner *app, d *hostDialogState) {
 		hline(c)
 		a.hostOverviewResourcesSection(c, owner, d, target)
 		hline(c)
-		a.hostOverviewAutostartSection(c, owner, d, info)
+		a.hostOverviewAutostartSection(c, owner, d, target, info)
 	}
 }
 
@@ -579,7 +606,7 @@ func (a *app) hostOverviewResourcesSection(c *ui.Context, owner *app, d *hostDia
 	})
 }
 
-func (a *app) hostOverviewAutostartSection(c *ui.Context, owner *app, d *hostDialogState, info *rpc.RemoteInfo) {
+func (a *app) hostOverviewAutostartSection(c *ui.Context, owner *app, d *hostDialogState, target *app, info *rpc.RemoteInfo) {
 	t, p, m := c.Theme(), colors(c.Theme()), L(c)
 	ui.Text(c, m.HostOverviewSectionAutostart()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 	if info != nil && len(info.Features) > 0 && !slices.Contains(info.Features, "autostart.v1") {
@@ -594,12 +621,28 @@ func (a *app) hostOverviewAutostartSection(c *ui.Context, owner *app, d *hostDia
 		ui.Text(c, m.HostDetailLoading()).FontSize(fsSmall).TextColor(t.TextMuted)
 		return
 	}
-	if d.detail.autostartErr != "" {
-		ui.Text(c, d.detail.autostartErr).FontSize(fsSmall).TextColor(t.Danger).Wrap()
-		return
-	}
 	st := d.detail.autostart
+	var opState *hostAutostartOp
+	if target != nil && target.host != nil && target.autostartOp != nil && target.autostartOp.instanceID == target.host.snapshot().Desktop.InstanceID {
+		opState = target.autostartOp
+		if opState.status != nil {
+			st = opState.status
+		}
+	}
+	autostartBusy := opState != nil && opState.busy
+	autostartErr := d.detail.autostartErr
+	autostartNotice := ""
+	if opState != nil {
+		if opState.err != "" {
+			autostartErr = opState.err
+		}
+		autostartNotice = opState.notice
+	}
+
 	if st == nil {
+		if autostartErr != "" {
+			ui.Text(c, autostartErr).FontSize(fsSmall).TextColor(t.Danger).Wrap()
+		}
 		return
 	}
 	if !st.Supported {
@@ -613,7 +656,9 @@ func (a *app) hostOverviewAutostartSection(c *ui.Context, owner *app, d *hostDia
 	}
 	statusText := m.HostAutostartOff()
 	statusColor := p.faint
-	if st.Installed {
+	if autostartBusy {
+		statusText, statusColor = m.HostAutostartUpdating(), p.honey
+	} else if st.Installed {
 		switch {
 		case st.Kind == "systemd" && st.Active:
 			statusText, statusColor = m.HostAutostartTimerActive(), p.sage
@@ -626,6 +671,13 @@ func (a *app) hostOverviewAutostartSection(c *ui.Context, owner *app, d *hostDia
 		}
 	}
 
+	controlled := target != nil && target.host != nil && target.host.snapshot().Controlled
+	// 仅远端明确宣告写能力（autostart.write.v1 + st.Writable）时开放开关，兼容只读的一期旧无头节点。
+	writable := st.Writable && st.Managed && !d.detail.autostartWriteUnsupported && (info == nil || len(info.Features) == 0 || slices.Contains(info.Features, "autostart.write.v1"))
+	canToggle := writable && controlled && !autostartBusy && !d.detail.loadingAutostart && d.detail.autostartErr == ""
+	// 无活跃 bus 或 Aqua 会话下已写入 unit/plist 文件时仍视为待启用态，允许用户切回关闭以清理文件。
+	on := st.Installed && (st.Enabled || st.NoteCode == rpc.AutostartNoteSystemdBusInactive || st.NoteCode == rpc.AutostartNoteAquaInactive)
+
 	ui.Column(c).Gap(6).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, kindLabel).FontSize(fsBody).TextColor(t.Text).Grow(1).Shrink(1).SingleLine().Ellipsis("…")
@@ -633,15 +685,36 @@ func (a *app) hostOverviewAutostartSection(c *ui.Context, owner *app, d *hostDia
 				ui.Box(c).Size(hostStatusDotInner(), hostStatusDotInner()).Radius(full(hostStatusDotInner())).Background(statusColor).Shrink(0)
 				ui.Text(c, statusText).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
 			})
+			if writable {
+				sw := ui.Switch(c.Key("host-autostart-switch"), &on).Label(kindLabel).Disabled(!canToggle)
+				if sw.Changed() && canToggle {
+					a.toggleHostAutostart(owner, d, target, on)
+				}
+			}
 		})
+		if autostartErr != "" {
+			ui.Text(c, autostartErr).FontSize(fsSmall).TextColor(t.Danger).Wrap()
+		}
+		if autostartNotice != "" {
+			ui.Text(c, autostartNotice).FontSize(fsSmall).TextColor(p.honey).LineHeight(1.5).Wrap()
+		}
 		if st.Path != "" {
 			a.hostDetailCopyRow(c, d, "autostart-path", m.HostAutostartFieldPath(), st.Path)
 		}
 		if st.ExpectedExecutable != "" {
 			hostDetailKV(c, m.HostAutostartFieldExpectedExe(), st.ExpectedExecutable, true)
 		}
-		if !st.Managed && info != nil && info.Edition != "headless" {
+		switch {
+		case writable && !controlled:
+			ui.Text(c, m.HostAutostartReadOnlyNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Wrap()
+		case writable:
+			ui.Text(c, m.HostAutostartToggleNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Wrap()
+		case st.Managed:
+			ui.Text(c, m.HostAutostartLegacyNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Wrap()
+		case info != nil && info.Edition != "headless":
 			ui.Text(c, m.HostAutostartFullNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Wrap()
+		default:
+			ui.Text(c, m.HostAutostartCustomNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Wrap()
 		}
 		switch st.NoteCode {
 		case rpc.AutostartNoteAquaInactive:
@@ -708,6 +781,142 @@ func hostPlatformLabel(goos, arch string) string {
 		return osName + " (" + arch + ")"
 	}
 	return osName
+}
+
+func (a *app) toggleHostAutostart(owner *app, d *hostDialogState, target *app, enabled bool) {
+	if target == nil {
+		return
+	}
+	r := target.request()
+	if !r.canWrite() || r.client == nil {
+		return
+	}
+	inst := r.snapshot.Desktop.InstanceID
+	if target.autostartOp != nil && target.autostartOp.instanceID == inst && target.autostartOp.busy {
+		return
+	}
+	op, err := r.client.PrepareSetAutostart(enabled)
+	if err != nil {
+		d.detail.autostartErr = errtext.Text(err)
+		return
+	}
+	// 写操作立刻推进共享代次，使所有更早发出的只读状态查询回包失效；操作状态挂在 target 上，关弹窗/切页不遗忘。
+	target.autostartGen++
+	writeGen := target.autostartGen
+	state := &hostAutostartOp{
+		instanceID: inst,
+		busy:       true,
+	}
+	target.autostartOp = state
+	d.detail.autostartErr = ""
+	winCtx := owner.windowContext()
+	m := appL()
+
+	go func() {
+		execCtx, execCancel := context.WithTimeout(winCtx, 35*time.Second)
+		var out rpc.AutostartStatus
+		err := op.Execute(execCtx, &out)
+		execCancel()
+
+		var notice string
+		var finalSt *rpc.AutostartStatus
+		var writeUnsupported bool
+		if err == nil {
+			cp := out
+			finalSt = &cp
+		} else {
+			var re *rpc.Error
+			switch {
+			case errors.As(err, &re) && re.Code == rpc.CodeUnknown:
+				writeUnsupported = true
+				err = nil
+			case errors.As(err, &re) && re.Code == rpc.CodeOutcomeUnknown:
+				// 结果未知：始终使用 Prepare 固定的原 ref，在共用 30s 预算内重试临时查询错误并最终以 status 对账，绝不自动重发。
+				ref := op.Ref()
+				resolved := false
+				pollCtx, pollCancel := context.WithTimeout(winCtx, 30*time.Second)
+				for pollCtx.Err() == nil {
+					qctx, qcancel := context.WithTimeout(pollCtx, 4*time.Second)
+					opSt, qerr := r.client.DesktopOperationStatus(qctx, ref)
+					qcancel()
+					if qerr != nil {
+						var qre *rpc.Error
+						if errors.As(qerr, &qre) && (qre.Code == rpc.CodeUnknown || qre.Code == rpc.CodeBadRequest || qre.Code == rpc.CodeReadOnly) {
+							break
+						}
+						if pollCtx.Err() != nil {
+							break
+						}
+						select {
+						case <-pollCtx.Done():
+						case <-time.After(time.Second):
+						}
+						continue
+					}
+					if opSt.Method != "" && opSt.Method != "server.autostart.set" {
+						break
+					}
+					if opSt.State == "running" {
+						select {
+						case <-pollCtx.Done():
+						case <-time.After(time.Second):
+						}
+						continue
+					}
+					if opSt.State == "done" {
+						if opSt.Error != nil {
+							err = opSt.Error
+						} else if len(opSt.Result) > 0 && json.Unmarshal(opSt.Result, &out) == nil {
+							cp := out
+							finalSt = &cp
+							err = nil
+						}
+						resolved = true
+					}
+					break
+				}
+				pollCancel()
+				sctx, scancel := context.WithTimeout(winCtx, 8*time.Second)
+				if fresh, ferr := r.client.AutostartStatus(sctx); ferr == nil {
+					cp := fresh
+					finalSt = &cp
+					if !resolved {
+						err = nil
+						notice = m.HostAutostartOutcomeUnknown()
+					}
+				}
+				scancel()
+			}
+		}
+
+		owner.update(func() {
+			if target.autostartOp != state {
+				return
+			}
+			state.busy = false
+			if target.autostartGen != writeGen {
+				return
+			}
+			if finalSt != nil {
+				state.status = finalSt
+			}
+			state.notice = notice
+			if err != nil {
+				state.err = errtext.Text(err)
+			} else {
+				state.err = ""
+			}
+			if owner.hostDlg.open && owner.hostDlg.editing.ID == target.viewID {
+				if writeUnsupported {
+					owner.hostDlg.detail.autostartWriteUnsupported = true
+				}
+				if finalSt != nil {
+					owner.hostDlg.detail.autostart = finalSt
+				}
+				owner.hostDlg.detail.autostartErr = state.err
+			}
+		})
+	}()
 }
 
 func formatHostUptime(m locales.Messages, d time.Duration) string {

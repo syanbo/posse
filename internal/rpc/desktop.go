@@ -46,7 +46,7 @@ func DesktopMethod(method string) (write, allowed bool) {
 	case "git.history", "git.integrate", "git.stash", "git.commit", "git.paths", "git.branch", "git.update", "git.push", "git.fetch", "chat.ensure", "project.add", "project.set", "project.rm", "workspace.create", "workspace.rm", "workspace.relocate", "workspace.merge",
 		"terminal.create", "terminal.clear", "terminal.rename", "terminal.seen", "terminal.reclaimSize", "terminal.close",
 		"task.start", "task.reply", "task.send", "task.close", "task.clear", "history.resume", "history.trash", "files.save", "files.mkdir", "files.trash", "files.pasteImage", "files.pasteFile",
-		"awake.set", "usage.refresh":
+		"awake.set", "usage.refresh", "server.autostart.set":
 		return true, true
 	default:
 		return false, false

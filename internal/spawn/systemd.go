@@ -12,7 +12,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -26,14 +25,15 @@ const (
 
 // SystemdUserOptions 配置 Linux systemd --user 服务安装、卸载或状态查询参数。
 type SystemdUserOptions struct {
-	Home         string
-	UserHome     string
-	UnitsDir     string
-	Executable   string
-	Interval     int
-	NoStart      bool
-	RunSystemctl func(ctx context.Context, args ...string) ([]byte, error)
-	RunLoginctl  func(ctx context.Context, args ...string) ([]byte, error)
+	Home                  string
+	UserHome              string
+	UnitsDir              string
+	Executable            string
+	Interval              int
+	NoStart               bool
+	RequireManagedCurrent bool // 仅允许通过 serverVersionDir 校验的 server/current/posse，禁止回退或改写 bin/posse
+	RunSystemctl          func(ctx context.Context, args ...string) ([]byte, error)
+	RunLoginctl           func(ctx context.Context, args ...string) ([]byte, error)
 }
 
 // SystemdUserStatus 描述 Linux systemd --user 服务与定时器的安装与启用状态。
@@ -63,24 +63,9 @@ func SystemdUnitBase(home, userHome string) string {
 	return defaultSystemdUnit + "-" + hex.EncodeToString(sum[:4])
 }
 
-// lockSystemdUnit 串行化同一单元的安装与卸载，避免并发写 unit 文件与回滚互相覆盖。
-func lockSystemdUnit(unitsDir, base string) (func(), error) {
-	if err := os.MkdirAll(unitsDir, 0o755); err != nil {
-		return nil, err
-	}
-	lockPath := filepath.Join(unitsDir, "."+base+".lock")
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, err
-	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		f.Close()
-		return nil, err
-	}
-	return func() {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		_ = f.Close()
-	}, nil
+// lockSystemdUnit 串行化同一单元的安装与卸载，支持 ctx 取消与超时，避免阻塞 daemon 写操作。
+func lockSystemdUnit(ctx context.Context, unitsDir, base string) (func(), error) {
+	return lockServiceUnitCtx(ctx, unitsDir, base)
 }
 
 // InstallSystemdUser 安装并启用 Linux systemd --user 单元（Type=oneshot + KillMode=process + 定时器）。
@@ -99,13 +84,18 @@ func InstallSystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUs
 		return SystemdUserStatus{}, fmt.Errorf("systemd timer interval must be between %d and %d seconds", minSystemdInterval, maxSystemdInterval)
 	}
 
-	unlock, err := lockSystemdUnit(cfg.unitsDir, cfg.base)
+	unlock, err := lockSystemdUnit(ctx, cfg.unitsDir, cfg.base)
 	if err != nil {
 		return SystemdUserStatus{}, err
 	}
 	defer unlock()
 
-	exePath, err := resolveLaunchAgentExecutable(cfg.home, opts.Executable)
+	var exePath string
+	if opts.RequireManagedCurrent {
+		exePath, err = resolveManagedServerExecutable(cfg.home)
+	} else {
+		exePath, err = resolveLaunchAgentExecutable(cfg.home, opts.Executable)
+	}
 	if err != nil {
 		return SystemdUserStatus{}, err
 	}
@@ -136,15 +126,16 @@ func InstallSystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUs
 		wasActive = true
 	}
 
-	enabledNow := false
-	startedNow := false
+	enabledAttempted := false
+	startedAttempted := false
 	rollback := func() {
 		cleanCtx, cancel := context.WithTimeout(context.Background(), systemdCleanupTimeout)
 		defer cancel()
-		if startedNow && !wasActive {
+		// 即使 start/enable 仅部分生效便失败或超时，也必须撤销本次尝试新增的 timer 激活和启用状态。
+		if startedAttempted && !wasActive {
 			_, _ = cfg.run(cleanCtx, "--user", "stop", cfg.timerUnit)
 		}
-		if enabledNow && !wasEnabled {
+		if enabledAttempted && !wasEnabled {
 			_, _ = cfg.run(cleanCtx, "--user", "disable", cfg.timerUnit, cfg.serviceUnit)
 		}
 		if hadPrevSvc {
@@ -189,6 +180,7 @@ func InstallSystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUs
 		return st, wrapSystemctlError("daemon-reload", out, err)
 	}
 
+	enabledAttempted = true
 	if out, err := cfg.run(ctx, "--user", "enable", cfg.serviceUnit, cfg.timerUnit); err != nil {
 		if ctx.Err() == nil && isSystemdBusUnavailable(out, err) {
 			st.NoteCode = "systemd_bus_inactive"
@@ -199,10 +191,10 @@ func InstallSystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUs
 		st.Installed = hadPrevSvc || hadPrevTimer
 		return st, wrapSystemctlError("enable", out, err)
 	}
-	enabledNow = true
 	st.Enabled = true
 
 	if !opts.NoStart {
+		startedAttempted = true
 		if out, err := cfg.run(ctx, "--user", "start", cfg.timerUnit, cfg.serviceUnit); err != nil {
 			if ctx.Err() == nil && isSystemdBusUnavailable(out, err) {
 				st.Enabled = false
@@ -216,7 +208,6 @@ func InstallSystemdUser(ctx context.Context, opts SystemdUserOptions) (SystemdUs
 			st.Active = wasActive
 			return st, wrapSystemctlError("start", out, err)
 		}
-		startedNow = true
 		st.Active = true
 	}
 
@@ -237,7 +228,7 @@ func UninstallSystemdUser(ctx context.Context, opts SystemdUserOptions) (Systemd
 	if err != nil {
 		return SystemdUserStatus{}, err
 	}
-	unlock, err := lockSystemdUnit(cfg.unitsDir, cfg.base)
+	unlock, err := lockSystemdUnit(ctx, cfg.unitsDir, cfg.base)
 	if err != nil {
 		return SystemdUserStatus{}, err
 	}

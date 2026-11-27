@@ -15,11 +15,11 @@ func RemoteFeatures(goos, edition string) []string {
 	switch goos {
 	case "darwin":
 		if edition == "headless" {
-			return []string{"autostart.v1", "awake.v1", "media.thumbs.v1", "memory.v1", "mobile.v1", "procmem.v1", "tailscale.v1", "trash.v1"}
+			return []string{"autostart.v1", "autostart.write.v1", "awake.v1", "media.thumbs.v1", "memory.v1", "mobile.v1", "procmem.v1", "tailscale.v1", "trash.v1"}
 		}
-		return []string{"autostart.v1", "awake.v1", "desk.v1", "media.thumbs.v1", "memory.v1", "mobile.v1", "procmem.v1", "tailscale.v1", "trash.v1"}
+		return []string{"autostart.v1", "autostart.write.v1", "awake.v1", "desk.v1", "media.thumbs.v1", "memory.v1", "mobile.v1", "procmem.v1", "tailscale.v1", "trash.v1"}
 	case "linux":
-		return []string{"autostart.v1", "memory.v1", "mobile.v1", "procmem.v1", "tailscale.v1"}
+		return []string{"autostart.v1", "autostart.write.v1", "memory.v1", "mobile.v1", "procmem.v1", "tailscale.v1"}
 	default:
 		return nil
 	}
@@ -64,6 +64,7 @@ type AutostartStatus struct {
 	Supported          bool   `json:"supported"`
 	Kind               string `json:"kind,omitempty"`
 	Managed            bool   `json:"managed,omitempty"`
+	Writable           bool   `json:"writable,omitempty"`
 	Installed          bool   `json:"installed"`
 	Enabled            bool   `json:"enabled"`
 	Active             bool   `json:"active"`
@@ -73,6 +74,10 @@ type AutostartStatus struct {
 	ExpectedExecutable string `json:"expectedExecutable,omitempty"`
 	Linger             string `json:"linger,omitempty"`
 	NoteCode           string `json:"noteCode,omitempty"`
+}
+
+type AutostartSetParams struct {
+	Enabled *bool `json:"enabled"`
 }
 
 type DaemonMemoryParams struct {

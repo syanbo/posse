@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -84,6 +85,7 @@ func TestHostDetailsOverviewTabsAndLegacyFallback(t *testing.T) {
 		Supported:          true,
 		Kind:               "systemd",
 		Managed:            true,
+		Writable:           true,
 		Installed:          true,
 		Enabled:            true,
 		Active:             true,
@@ -134,6 +136,9 @@ func startHostDetailsMockRPC(t *testing.T, handlers map[string]rpc.Handler) stri
 		t.Fatal(err)
 	}
 	srv := rpc.NewServer()
+	if h, ok := handlers["desktop.operation"]; ok {
+		srv.Handle("desktop.operation", h)
+	}
 	srv.Handle("desktop.call", func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var call rpc.DesktopCall
 		if err := rpc.Decode(raw, &call); err != nil {
@@ -281,6 +286,116 @@ func TestHostDetailsRealRPCRaceOrderAutoRefreshAndLegacy(t *testing.T) {
 	settle(tt)
 	if !tt.HasText(m.HostResLegacyNote()) || !tt.HasText(m.HostAutostartLegacyNote()) {
 		t.Fatalf("real CodeUnknown legacy fallback missing: %v", tt.Texts())
+	}
+}
+
+func TestHostDetailsAutostartToggleAndOutcomeUnknownReconcile(t *testing.T) {
+	_, a, b := hostViewsFixture(t)
+	h := remoteTestHost("remote")
+	h.Name = "bwh"
+	writeHostMenuConfig(t, a, h)
+	a.loadHostMenu()
+
+	var setCalls atomic.Int32
+	var statusCalls atomic.Int32
+	var opPolls atomic.Int32
+	var mu sync.Mutex
+	currentInstalled := false
+	mode := "ok" // "ok" | "unknown"
+
+	sock := startHostDetailsMockRPC(t, map[string]rpc.Handler{
+		"daemon.info": func(context.Context, json.RawMessage) (any, error) {
+			return rpc.RemoteInfo{Protocol: 1, InstanceID: "inst-1", Platform: "linux", Arch: "amd64", Home: "/home/dev/.posse", Version: "0.1.54", Edition: "headless", Managed: true, Features: []string{"autostart.v1", "autostart.write.v1", "memory.v1"}}, nil
+		},
+		"daemon.memory": func(context.Context, json.RawMessage) (any, error) {
+			return rpc.DaemonMemoryResult{}, nil
+		},
+		"server.autostart.status": func(context.Context, json.RawMessage) (any, error) {
+			statusCalls.Add(1)
+			mu.Lock()
+			on := currentInstalled
+			mu.Unlock()
+			return rpc.AutostartStatus{Supported: true, Kind: "systemd", Managed: true, Writable: true, Installed: on, Enabled: on, Active: on}, nil
+		},
+		"server.autostart.set": func(_ context.Context, raw json.RawMessage) (any, error) {
+			setCalls.Add(1)
+			var p rpc.AutostartSetParams
+			_ = rpc.Decode(raw, &p)
+			en := p.Enabled != nil && *p.Enabled
+			mu.Lock()
+			m := mode
+			currentInstalled = en
+			mu.Unlock()
+			if m == "unknown" {
+				return nil, rpc.Errorf(rpc.CodeOutcomeUnknown, "response lost")
+			}
+			return rpc.AutostartStatus{Supported: true, Kind: "systemd", Managed: true, Writable: true, Installed: en, Enabled: en, Active: en}, nil
+		},
+		"desktop.operation": func(_ context.Context, raw json.RawMessage) (any, error) {
+			var ref rpc.DesktopOperationRef
+			_ = rpc.Decode(raw, &ref)
+			n := opPolls.Add(1)
+			// 第一次模拟临时查询错误，验证客户端按原 ref 重试而不提前退出；第二次返回协议规范的 unknown（Method 为空）走最终 status 对账。
+			if n == 1 {
+				return nil, errors.New("transient read failure")
+			}
+			return rpc.DesktopOperation{DesktopOperationRef: ref, State: "unknown"}, nil
+		},
+	})
+
+	id := rpc.DesktopIdentity{ClientID: "win", InstanceID: "inst-1", Epoch: 1}
+	c := (&client.Client{Socket: sock, Remote: true, Platform: "linux"}).WithDesktop(id)
+	a.views.activate(h.ID)
+	b.host.generation = 1
+	b.host.current = hostSnapshot{HostID: h.ID, Connected: true, Controlled: true, Generation: 1, Client: c, Desktop: rpc.DesktopState{InstanceID: "inst-1", Epoch: 1}}
+
+	a.openHostDetails(h)
+	for range 20 {
+		a.runPending()
+		if a.hostDlg.detail.autostart != nil {
+			break
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+	if a.hostDlg.detail.autostart == nil || a.hostDlg.detail.autostart.Installed {
+		t.Fatalf("initial autostart status unexpected: %+v", a.hostDlg.detail.autostart)
+	}
+
+	// 1. 控制端切换开启，走 PrepareSetAutostart -> server.autostart.set 成功。
+	a.toggleHostAutostart(a, &a.hostDlg, b, true)
+	for range 30 {
+		a.runPending()
+		if b.autostartOp != nil && !b.autostartOp.busy {
+			break
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+	if setCalls.Load() != 1 || !a.hostDlg.detail.autostart.Installed || a.hostDlg.detail.autostartErr != "" {
+		t.Fatalf("toggle enable failed: calls=%d st=%+v err=%q", setCalls.Load(), a.hostDlg.detail.autostart, a.hostDlg.detail.autostartErr)
+	}
+
+	// 2. 遇到 outcome_unknown 时即使关闭弹窗也保留主机级操作状态，重试临时读错后按原 ref 查终态再经 status 对账，不重发 set。
+	mu.Lock()
+	mode = "unknown"
+	mu.Unlock()
+	beforeStatus := statusCalls.Load()
+	a.toggleHostAutostart(a, &a.hostDlg, b, false)
+	a.hostDlg.open = false
+	for range 60 {
+		a.runPending()
+		if b.autostartOp != nil && !b.autostartOp.busy {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if setCalls.Load() != 2 {
+		t.Fatalf("outcome_unknown unexpectedly retried set: calls=%d", setCalls.Load())
+	}
+	if opPolls.Load() < 2 {
+		t.Fatalf("outcome_unknown did not retry transient operation status query: polls=%d", opPolls.Load())
+	}
+	if statusCalls.Load() <= beforeStatus || b.autostartOp.status == nil || b.autostartOp.status.Installed || b.autostartOp.notice == "" {
+		t.Fatalf("outcome_unknown did not reconcile via status: statusCalls=%d->%d op=%+v", beforeStatus, statusCalls.Load(), b.autostartOp)
 	}
 }
 

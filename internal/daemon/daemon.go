@@ -447,28 +447,29 @@ type Daemon struct {
 	restoreMu sync.Mutex  // 恢复终端一个一个来，同一个终端不会拉起两次
 	noLost    atomic.Bool // 已经没有等着恢复的终端了（lostIn）
 
-	history   historyState
-	media     mediaState
-	mobile    *mobile.Server
-	tsMu      sync.Mutex
-	tsAllowed bool
-	tsStopped bool
-	ts        *tslink.Node
-	host      host.Host // 托管终端，测试里为空时用进程内的
-	awake     *awake    // 防休眠，测试里为空
-	desk      deskState // 手机看桌面，同一时间一台
-	usage     usageState
-	gitTrace  *gitTrace // 终端里的 git 命令，测试里为空
-	ln        *gateListener
-	handoff   handoffState
-	agents    agentScan                                          // 本机装了哪些 agent（agents.go）
-	models    agentModelsState                                   // 本机各家 agent 可用模型缓存（models.go）
-	disc      discState                                          // 讨论的调度（discussion.go）
-	collab    collabState                                        // 讨论的局域网协作（collab.go、collab_join.go）
-	perms     permissionHub                                      // 手机与飞书共用的权限审批协调（permission.go）
-	lark      larkState                                          // 飞书多机器人网关（lark.go）
-	mem       daemonMemoryState                                  // daemon.memory 的 singleflight 与短缓存（server_manage.go）
-	autostart func(context.Context) (rpc.AutostartStatus, error) // 测试替换自启状态查询
+	history      historyState
+	media        mediaState
+	mobile       *mobile.Server
+	tsMu         sync.Mutex
+	tsAllowed    bool
+	tsStopped    bool
+	ts           *tslink.Node
+	host         host.Host // 托管终端，测试里为空时用进程内的
+	awake        *awake    // 防休眠，测试里为空
+	desk         deskState // 手机看桌面，同一时间一台
+	usage        usageState
+	gitTrace     *gitTrace // 终端里的 git 命令，测试里为空
+	ln           *gateListener
+	handoff      handoffState
+	agents       agentScan                                                // 本机装了哪些 agent（agents.go）
+	models       agentModelsState                                         // 本机各家 agent 可用模型缓存（models.go）
+	disc         discState                                                // 讨论的调度（discussion.go）
+	collab       collabState                                              // 讨论的局域网协作（collab.go、collab_join.go）
+	perms        permissionHub                                            // 手机与飞书共用的权限审批协调（permission.go）
+	lark         larkState                                                // 飞书多机器人网关（lark.go）
+	mem          daemonMemoryState                                        // daemon.memory 的 singleflight 与短缓存（server_manage.go）
+	autostart    func(context.Context) (rpc.AutostartStatus, error)       // 测试替换自启状态查询
+	setAutostart func(context.Context, bool) (rpc.AutostartStatus, error) // 测试替换自启开关写入
 
 	// zsh 集成和同名脚本（agent.WriteShellFiles）：写成功一次就不再写
 	shellMu     sync.Mutex
@@ -809,6 +810,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("daemon.status", d.status)
 	srv.Handle("daemon.memory", d.daemonMemory)
 	srv.Handle("server.autostart.status", d.serverAutostartStatus)
+	srv.Handle("server.autostart.set", d.serverAutostartSet)
 	srv.Handle("desk.stop", d.deskStop)
 	srv.Handle("daemon.handoff", func(ctx context.Context, raw json.RawMessage) (any, error) {
 		return d.daemonHandoff(ctx, raw, stop)

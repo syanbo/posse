@@ -1,12 +1,15 @@
 package daemon
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -16,6 +19,7 @@ import (
 	"posse/internal/procmem"
 	"posse/internal/rpc"
 	"posse/internal/spawn"
+	"posse/internal/writecoord"
 )
 
 const (
@@ -31,6 +35,7 @@ const (
 	daemonMemoryTimeout       = 2 * time.Second
 	daemonMemoryCacheTTL      = 2 * time.Second
 	autostartQueryTimeout     = 10 * time.Second
+	autostartSetTimeout       = 30 * time.Second
 )
 
 type daemonMemoryCall struct {
@@ -451,6 +456,33 @@ func enforceDaemonMemorySizeBudget(res *rpc.DaemonMemoryResult, expanded map[str
 	}
 }
 
+func (d *Daemon) autostartExpectedExecutable(managed bool, hint string) string {
+	if managed && d.cfg.Home != "" {
+		return filepath.Join(d.cfg.Home, "server", "current", "posse")
+	}
+	return hint
+}
+
+func decodeAutostartSetParams(raw json.RawMessage) (bool, error) {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	var p rpc.AutostartSetParams
+	if err := dec.Decode(&p); err != nil {
+		return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
+	}
+	var trailing any
+	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
+	}
+	if p.Enabled == nil {
+		return false, rpc.Errorf(rpc.CodeBadRequest, "invalid server.autostart.set parameters")
+	}
+	return *p.Enabled, nil
+}
+
 func (d *Daemon) serverAutostartStatus(ctx context.Context, _ json.RawMessage) (any, error) {
 	qctx, cancel := context.WithTimeout(ctx, autostartQueryTimeout)
 	defer cancel()
@@ -471,12 +503,13 @@ func (d *Daemon) serverAutostartStatus(ctx context.Context, _ json.RawMessage) (
 			Supported:          true,
 			Kind:               "launchd",
 			Managed:            managed,
+			Writable:           managed,
 			Installed:          st.Installed,
 			Enabled:            st.Installed && !st.Disabled,
 			Active:             st.Loaded,
 			Unit:               st.Label,
 			Path:               st.Plist,
-			ExpectedExecutable: st.Executable,
+			ExpectedExecutable: d.autostartExpectedExecutable(managed, st.Executable),
 			NoteCode:           st.NoteCode,
 		}, nil
 	case "linux":
@@ -491,17 +524,117 @@ func (d *Daemon) serverAutostartStatus(ctx context.Context, _ json.RawMessage) (
 			Supported:          true,
 			Kind:               "systemd",
 			Managed:            managed,
+			Writable:           managed,
 			Installed:          st.Installed,
 			Enabled:            st.Enabled,
 			Active:             st.Active,
 			Unit:               st.Unit,
 			Path:               st.ServicePath,
 			TimerPath:          st.TimerPath,
-			ExpectedExecutable: st.Executable,
+			ExpectedExecutable: d.autostartExpectedExecutable(managed, st.Executable),
 			Linger:             st.Linger,
 			NoteCode:           st.NoteCode,
 		}, nil
 	default:
 		return rpc.AutostartStatus{Supported: false, Managed: managed}, nil
+	}
+}
+
+func (d *Daemon) serverAutostartSet(ctx context.Context, raw json.RawMessage) (any, error) {
+	// 仅允许通过 desktop.call 校验过控制权、序号去重与 handoff 门禁的桌面写请求进入，禁止经转发 socket 直调绕过。
+	if !isDesktopWriteRequest(ctx) {
+		return nil, rpc.Errorf(rpc.CodeReadOnly, "desktop control required for server.autostart.set")
+	}
+	enabled, err := decodeAutostartSetParams(raw)
+	if err != nil {
+		return nil, err
+	}
+	managed := Edition == "headless" && d.runtime != ""
+	if d.setAutostart == nil && !managed {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "autostart can only be managed on managed headless servers")
+	}
+	qctx, cancel := context.WithTimeout(ctx, autostartSetTimeout)
+	defer cancel()
+
+	// 进程内经 writecoord 串行化同一 home 的自启修改（零值可用且支持 ctx 取消）。
+	release, err := d.writes.Acquire(qctx, writecoord.Scope{Keys: []string{"autostart:" + d.cfg.Home}})
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	if d.setAutostart != nil {
+		return d.setAutostart(qctx, enabled)
+	}
+
+	switch runtime.GOOS {
+	case "darwin":
+		var (
+			st  spawn.LaunchAgentStatus
+			err error
+		)
+		if enabled {
+			st, err = spawn.InstallLaunchAgent(qctx, spawn.LaunchAgentOptions{
+				Home:                  d.cfg.Home,
+				RequireManagedCurrent: true,
+			})
+		} else {
+			st, err = spawn.UninstallLaunchAgent(qctx, spawn.LaunchAgentOptions{Home: d.cfg.Home})
+		}
+		if err != nil {
+			if errors.Is(err, exec.ErrNotFound) {
+				return nil, rpc.Errorf(rpc.CodeBadRequest, "startup service tool is not available on this host")
+			}
+			return nil, fmt.Errorf("launchd autostart update failed: %w", err)
+		}
+		return rpc.AutostartStatus{
+			Supported:          true,
+			Kind:               "launchd",
+			Managed:            managed,
+			Writable:           managed,
+			Installed:          st.Installed,
+			Enabled:            st.Installed && !st.Disabled,
+			Active:             st.Loaded,
+			Unit:               st.Label,
+			Path:               st.Plist,
+			ExpectedExecutable: d.autostartExpectedExecutable(managed, st.Executable),
+			NoteCode:           st.NoteCode,
+		}, nil
+	case "linux":
+		var (
+			st  spawn.SystemdUserStatus
+			err error
+		)
+		if enabled {
+			st, err = spawn.InstallSystemdUser(qctx, spawn.SystemdUserOptions{
+				Home:                  d.cfg.Home,
+				RequireManagedCurrent: true,
+			})
+		} else {
+			st, err = spawn.UninstallSystemdUser(qctx, spawn.SystemdUserOptions{Home: d.cfg.Home})
+		}
+		if err != nil {
+			if errors.Is(err, exec.ErrNotFound) {
+				return nil, rpc.Errorf(rpc.CodeBadRequest, "startup service tool is not available on this host")
+			}
+			return nil, fmt.Errorf("systemd autostart update failed: %w", err)
+		}
+		return rpc.AutostartStatus{
+			Supported:          true,
+			Kind:               "systemd",
+			Managed:            managed,
+			Writable:           managed,
+			Installed:          st.Installed,
+			Enabled:            st.Enabled,
+			Active:             st.Active,
+			Unit:               st.Unit,
+			Path:               st.ServicePath,
+			TimerPath:          st.TimerPath,
+			ExpectedExecutable: d.autostartExpectedExecutable(managed, st.Executable),
+			Linger:             st.Linger,
+			NoteCode:           st.NoteCode,
+		}, nil
+	default:
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "startup service management is not supported on this platform")
 	}
 }

@@ -220,3 +220,91 @@ func TestServerAutostartStatusViaDesktopViewer(t *testing.T) {
 		t.Fatalf("autostart status = %+v, want %+v", got, want)
 	}
 }
+
+func TestServerAutostartSetGatesAndHandoffMutex(t *testing.T) {
+	// 0. 严禁绕过 desktop.call 直调 server.autostart.set（即便 handoff 阻塞或无身份也不允许执行）。
+	calledDirect := false
+	dDirect := &Daemon{
+		instanceID: "one",
+		setAutostart: func(context.Context, bool) (rpc.AutostartStatus, error) {
+			calledDirect = true
+			return rpc.AutostartStatus{}, nil
+		},
+	}
+	t.Cleanup(dDirect.desktop.shutdown)
+	_, err := dDirect.serverAutostartSet(context.Background(), json.RawMessage(`{"enabled":true}`))
+	desktopErrorCode(t, err, rpc.CodeReadOnly)
+	if calledDirect {
+		t.Fatal("direct RPC bypassed desktop control gate")
+	}
+
+	// 1. 缺参、空对象、null、未知字段和尾随数据均必须返回 bad_request，绝不按 false 卸载。
+	for _, bad := range []string{"", "{}", `{"enabled":null}`, `{"enabled":true,"extra":1}`, `{"enabled":true}{"enabled":false}`} {
+		if _, err := decodeAutostartSetParams(json.RawMessage(bad)); err == nil {
+			t.Fatalf("decodeAutostartSetParams(%s) unexpectedly succeeded", bad)
+		}
+	}
+
+	// 2. 非托管节点拒绝写入。
+	dNonManaged := &Daemon{instanceID: "one"}
+	t.Cleanup(dNonManaged.desktop.shutdown)
+	srvNM := rpc.NewServer()
+	srvNM.Handle("server.autostart.set", dNonManaged.serverAutostartSet)
+	ctrlNM := desktopTakeTest(t, dNonManaged, "A")
+	_, err = desktopRequestCall(dNonManaged, srvNM, context.Background(), rpc.DesktopCall{
+		Desktop:  ctrlNM,
+		Sequence: 1,
+		Method:   "server.autostart.set",
+		Params:   json.RawMessage(`{"enabled":true}`),
+	})
+	desktopErrorCode(t, err, rpc.CodeBadRequest)
+
+	// 3. 查看者拒绝写入；控制者在执行期间阻塞 handoff；同序号去重不重复执行。
+	entered, release := make(chan struct{}), make(chan struct{})
+	var calls int
+	d := &Daemon{
+		instanceID: "one",
+		setAutostart: func(ctx context.Context, enabled bool) (rpc.AutostartStatus, error) {
+			calls++
+			if calls == 1 {
+				close(entered)
+				<-release
+			}
+			return rpc.AutostartStatus{Supported: true, Kind: "launchd", Managed: true, Installed: enabled, Enabled: enabled, Active: enabled}, nil
+		},
+	}
+	t.Cleanup(d.desktop.shutdown)
+	srv := rpc.NewServer()
+	srv.Handle("server.autostart.set", d.serverAutostartSet)
+
+	st := desktopTestCall(t, d.desktopStatus, nil)
+	viewer := rpc.DesktopIdentity{ClientID: "viewer", InstanceID: st.InstanceID, Epoch: st.Epoch}
+	_, err = desktopRequestCall(d, srv, context.Background(), rpc.DesktopCall{
+		Desktop:  viewer,
+		Sequence: 1,
+		Method:   "server.autostart.set",
+		Params:   json.RawMessage(`{"enabled":true}`),
+	})
+	desktopErrorCode(t, err, rpc.CodeReadOnly)
+
+	ctrl := desktopTakeTest(t, d, "A")
+	req := rpc.DesktopCall{Desktop: ctrl, Sequence: 1, Method: "server.autostart.set", Params: json.RawMessage(`{"enabled":true}`)}
+	done := make(chan error, 1)
+	go func() {
+		_, err := desktopRequestCall(d, srv, context.Background(), req)
+		done <- err
+	}()
+	<-entered
+	desktopErrorCode(t, d.desktop.blockHandoff(), rpc.CodeBusy)
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("controller autostart.set failed: %v", err)
+	}
+	// 同序号重复调用命中去重缓存，不再触发第二次执行。
+	if _, err := desktopRequestCall(d, srv, context.Background(), req); err != nil {
+		t.Fatalf("deduplicated autostart.set failed: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("expected 1 execution with deduplication, got %d", calls)
+	}
+}

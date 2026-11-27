@@ -1607,6 +1607,78 @@ func (msgs Messages) HostAutostartUnsupported() string {
 	return Catalog.Format(msgs.locale, "hostAutostartUnsupported", nil)
 }
 
+// HostAutostartToggleNote says "Turning off only removes startup auto-launch; running daemon and terminals keep running."
+// in the language the app shows.
+//
+// Reassuring note explaining that disabling autostart does not stop the
+// running daemon or terminals.
+func HostAutostartToggleNote() string { return In(i18n.Locale()).HostAutostartToggleNote() }
+
+// HostAutostartToggleNote says "Turning off only removes startup auto-launch; running daemon and terminals keep running."
+// in the language of msgs.
+//
+// Reassuring note explaining that disabling autostart does not stop the
+// running daemon or terminals.
+func (msgs Messages) HostAutostartToggleNote() string {
+	return Catalog.Format(msgs.locale, "hostAutostartToggleNote", nil)
+}
+
+// HostAutostartReadOnlyNote says "Take control of this host to change startup settings."
+// in the language the app shows.
+//
+// Hint shown when viewing a remote host without desktop control.
+func HostAutostartReadOnlyNote() string { return In(i18n.Locale()).HostAutostartReadOnlyNote() }
+
+// HostAutostartReadOnlyNote says "Take control of this host to change startup settings."
+// in the language of msgs.
+//
+// Hint shown when viewing a remote host without desktop control.
+func (msgs Messages) HostAutostartReadOnlyNote() string {
+	return Catalog.Format(msgs.locale, "hostAutostartReadOnlyNote", nil)
+}
+
+// HostAutostartCustomNote says "Only Posse-managed headless servers can toggle startup settings here."
+// in the language the app shows.
+//
+// Hint shown for unmanaged custom headless binaries.
+func HostAutostartCustomNote() string { return In(i18n.Locale()).HostAutostartCustomNote() }
+
+// HostAutostartCustomNote says "Only Posse-managed headless servers can toggle startup settings here."
+// in the language of msgs.
+//
+// Hint shown for unmanaged custom headless binaries.
+func (msgs Messages) HostAutostartCustomNote() string {
+	return Catalog.Format(msgs.locale, "hostAutostartCustomNote", nil)
+}
+
+// HostAutostartOutcomeUnknown says "The previous startup change result is unknown; refreshed to match the current server state."
+// in the language the app shows.
+//
+// Notice shown after reconciling an outcome_unknown autostart change.
+func HostAutostartOutcomeUnknown() string { return In(i18n.Locale()).HostAutostartOutcomeUnknown() }
+
+// HostAutostartOutcomeUnknown says "The previous startup change result is unknown; refreshed to match the current server state."
+// in the language of msgs.
+//
+// Notice shown after reconciling an outcome_unknown autostart change.
+func (msgs Messages) HostAutostartOutcomeUnknown() string {
+	return Catalog.Format(msgs.locale, "hostAutostartOutcomeUnknown", nil)
+}
+
+// HostAutostartUpdating says "Updating…"
+// in the language the app shows.
+//
+// Status text while toggling remote startup service.
+func HostAutostartUpdating() string { return In(i18n.Locale()).HostAutostartUpdating() }
+
+// HostAutostartUpdating says "Updating…"
+// in the language of msgs.
+//
+// Status text while toggling remote startup service.
+func (msgs Messages) HostAutostartUpdating() string {
+	return Catalog.Format(msgs.locale, "hostAutostartUpdating", nil)
+}
+
 // HostUptimeDays says "{days}d {hours}h"
 // in the language the app shows.
 //

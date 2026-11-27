@@ -170,8 +170,10 @@ type app struct {
 	hostMenu       hostMenuState
 	hostDlg        hostDialogState // 窗口共用，只由 windowOwner 持有
 	connecting     bool
-	platform       string          // 最近一次连上目标 daemon 时的操作系统（darwin/linux），断开后保留判断
-	remoteInfo     *rpc.RemoteInfo // 最近一次通过 daemon.info 读取到的远端节点快照（仅内存，供非活动或断开态概览参考）
+	platform       string           // 最近一次连上目标 daemon 时的操作系统（darwin/linux），断开后保留判断
+	remoteInfo     *rpc.RemoteInfo  // 最近一次通过 daemon.info 读取到的远端节点快照（仅内存，供非活动或断开态概览参考）
+	autostartGen   uint64           // 自启读写共享代次：发起写入立刻作废更早的只读查询回包
+	autostartOp    *hostAutostartOp // 按主机实例保留的在途/结果未知自启写操作，关弹窗与切页不遗忘
 	connectStage   remote.Stage
 	connectPct     float64
 	viewID         string

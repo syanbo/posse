@@ -304,6 +304,11 @@ func isDesktopRequest(ctx context.Context) bool {
 	return ok
 }
 
+func isDesktopWriteRequest(ctx context.Context) bool {
+	p, ok := ctx.Value(desktopCallContext{}).(desktopRequestContext)
+	return ok && !p.readOnly
+}
+
 func (d *Daemon) sessionForRequest(ctx context.Context, id string) (*session, error) {
 	if p, ok := ctx.Value(desktopCallContext{}).(desktopRequestContext); ok && p.readOnly {
 		if s := d.liveSession(id); s != nil {

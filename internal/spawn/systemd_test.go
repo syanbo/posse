@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSystemdUnitBase(t *testing.T) {
@@ -282,5 +283,182 @@ func TestSystemctlEnvCustomXDGAndSocket(t *testing.T) {
 	}
 	if !slices.Equal(beforeEnv, os.Environ()) {
 		t.Fatal("systemctlEnvFrom mutated process os.Environ")
+	}
+}
+
+func TestManagedCurrentStrictResolverAndCancelableLock(t *testing.T) {
+	home := t.TempDir()
+	// 1. 仅放 bin/posse 而没有受管 server/current/posse 时，RequireManagedCurrent 必须拒绝且不得改写 bin/posse。
+	binDir := filepath.Join(home, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binPosse := filepath.Join(binDir, "posse")
+	if err := os.WriteFile(binPosse, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolveManagedServerExecutable(home); err == nil {
+		t.Fatal("resolveManagedServerExecutable unexpectedly fell back to bin/posse")
+	}
+
+	// 2. server/current/posse 指向无 .posse-server-managed 标记的版本目录也必须拒绝。
+	verDir := filepath.Join(home, "server", "versions", "0.1.54-abc123456789")
+	if err := os.MkdirAll(verDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(verDir, "posse"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(verDir, filepath.Join(home, "server", "current")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolveManagedServerExecutable(home); err == nil {
+		t.Fatal("resolveManagedServerExecutable accepted unmanaged version dir without marker")
+	}
+
+	// 3. 补齐受管标记后校验通过，返回稳定的 server/current/posse 路径。
+	if err := os.WriteFile(filepath.Join(verDir, ServerManagedMarker), []byte("managed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := resolveManagedServerExecutable(home)
+	if err != nil || got != filepath.Join(home, "server", "current", "posse") {
+		t.Fatalf("resolveManagedServerExecutable = %q, %v", got, err)
+	}
+
+	// 4. 锁被持有时，lockServiceUnitCtx 必须按 ctx 取消而不是无限阻塞。
+	lockDir := t.TempDir()
+	unlock, err := lockServiceUnitCtx(context.Background(), lockDir, "posse-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	cctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
+	defer cancel()
+	if _, err := lockServiceUnitCtx(cctx, lockDir, "posse-test"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("contested lock did not honor ctx cancel: err=%v", err)
+	}
+
+	// 5. 提前取消的上下文在无竞争目录上不得创建锁文件或拿锁成功。
+	canceledDir := filepath.Join(t.TempDir(), "should-not-exist")
+	preCanceled, preCancel := context.WithCancel(context.Background())
+	preCancel()
+	if _, err := lockServiceUnitCtx(preCanceled, canceledDir, "posse-test"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("pre-canceled lock succeeded: err=%v", err)
+	}
+	if _, err := os.Stat(canceledDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("pre-canceled lock created dir: err=%v", err)
+	}
+
+	// 6. systemd start 部分失败时回滚必须执行 stop timer。
+	home2 := t.TempDir()
+	verDir2 := filepath.Join(home2, "server", "versions", "0.1.54-def123456789")
+	if err := os.MkdirAll(verDir2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(verDir2, "posse"), []byte("#!/bin/sh\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(verDir2, ServerManagedMarker), []byte("managed\n"), 0o600)
+	_ = os.Symlink(verDir2, filepath.Join(home2, "server", "current"))
+	var calls [][]string
+	_, err = InstallSystemdUser(context.Background(), SystemdUserOptions{
+		Home:                  home2,
+		UserHome:              t.TempDir(),
+		UnitsDir:              t.TempDir(),
+		RequireManagedCurrent: true,
+		RunSystemctl: func(_ context.Context, args ...string) ([]byte, error) {
+			calls = append(calls, slices.Clone(args))
+			if len(args) >= 2 && args[1] == "is-enabled" {
+				return []byte("not-found"), errors.New("exit 1")
+			}
+			if len(args) >= 2 && args[1] == "is-active" {
+				return []byte("inactive"), errors.New("exit 3")
+			}
+			if len(args) >= 2 && args[1] == "start" {
+				return []byte("service failed"), errors.New("exit 1")
+			}
+			return nil, nil
+		},
+	})
+	if err == nil {
+		t.Fatal("expected start failure")
+	}
+	stopped := false
+	for _, c := range calls {
+		if len(c) >= 2 && c[1] == "stop" {
+			stopped = true
+		}
+	}
+	if !stopped {
+		t.Fatalf("systemd partial start failure rollback missed stop timer: calls=%v", calls)
+	}
+
+	// 7. macOS LaunchAgent 被系统禁用时应自动 enable 并重试 bootstrap；旧 plist 原先未加载时失败回滚不得误 bootstrap。
+	agentsDir := t.TempDir()
+	userHome3 := t.TempDir()
+	label3 := LaunchAgentLabel(home2, userHome3)
+	oldPlist := filepath.Join(agentsDir, label3+".plist")
+	_ = os.WriteFile(oldPlist, []byte("<plist>old</plist>"), 0o644)
+	var lcalls [][]string
+	bootCount := 0
+	st, err := InstallLaunchAgent(context.Background(), LaunchAgentOptions{
+		Home:                  home2,
+		UserHome:              userHome3,
+		AgentsDir:             agentsDir,
+		Domain:                "gui/501",
+		RequireManagedCurrent: true,
+		RunLaunchctl: func(_ context.Context, args ...string) ([]byte, error) {
+			lcalls = append(lcalls, slices.Clone(args))
+			switch args[0] {
+			case "bootout":
+				return []byte("Could not find service"), errors.New("exit status 113")
+			case "bootstrap":
+				bootCount++
+				if bootCount == 1 {
+					return []byte("Bootstrap failed: 125: Domain does not support specified action"), errors.New("exit status 125")
+				}
+				return nil, nil
+			case "print-disabled":
+				return []byte("\"" + label3 + "\" => true\n"), nil
+			case "enable":
+				return nil, nil
+			}
+			return nil, nil
+		},
+	})
+	if err != nil || !st.Loaded {
+		t.Fatalf("disabled LaunchAgent was not re-enabled: st=%+v err=%v calls=%v", st, err, lcalls)
+	}
+
+	// 回滚不误启未加载的旧 plist。
+	var rbCalls [][]string
+	_, err = InstallLaunchAgent(context.Background(), LaunchAgentOptions{
+		Home:                  home2,
+		UserHome:              userHome3,
+		AgentsDir:             agentsDir,
+		Domain:                "gui/501",
+		RequireManagedCurrent: true,
+		RunLaunchctl: func(_ context.Context, args ...string) ([]byte, error) {
+			rbCalls = append(rbCalls, slices.Clone(args))
+			switch args[0] {
+			case "bootout":
+				return []byte("Could not find service"), errors.New("exit status 113")
+			case "bootstrap":
+				return []byte("Bootstrap failed"), errors.New("exit status 5")
+			case "print-disabled":
+				return []byte("disabled services = {}\n"), nil
+			}
+			return nil, nil
+		},
+	})
+	if err == nil {
+		t.Fatal("expected bootstrap failure")
+	}
+	bootstraps := 0
+	for _, c := range rbCalls {
+		if len(c) > 0 && c[0] == "bootstrap" {
+			bootstraps++
+		}
+	}
+	if bootstraps != 1 {
+		t.Fatalf("rollback unexpectedly re-bootstrapped previously unloaded plist: calls=%v", rbCalls)
 	}
 }

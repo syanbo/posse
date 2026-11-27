@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 )
 
 const (
@@ -20,17 +22,19 @@ const (
 	defaultLaunchAgentInterval = 60
 	minLaunchAgentInterval     = 10
 	maxLaunchAgentInterval     = 86400
+	launchdCleanupTimeout      = 5 * time.Second
 )
 
 // LaunchAgentOptions 配置 macOS LaunchAgent 安装、卸载或状态查询参数。
 type LaunchAgentOptions struct {
-	Home         string
-	UserHome     string
-	AgentsDir    string
-	Executable   string
-	Interval     int
-	Domain       string
-	RunLaunchctl func(ctx context.Context, args ...string) ([]byte, error)
+	Home                  string
+	UserHome              string
+	AgentsDir             string
+	Executable            string
+	Interval              int
+	Domain                string
+	RequireManagedCurrent bool // 仅允许通过 serverVersionDir 校验的 server/current/posse，禁止回退或改写 bin/posse
+	RunLaunchctl          func(ctx context.Context, args ...string) ([]byte, error)
 }
 
 // LaunchAgentStatus 描述 macOS LaunchAgent 的安装与加载状态。
@@ -75,15 +79,23 @@ func InstallLaunchAgent(ctx context.Context, opts LaunchAgentOptions) (LaunchAge
 		return LaunchAgentStatus{}, fmt.Errorf("launchd start interval must be between %d and %d seconds", minLaunchAgentInterval, maxLaunchAgentInterval)
 	}
 
-	exePath, err := resolveLaunchAgentExecutable(cfg.home, opts.Executable)
+	unlock, err := lockServiceUnitCtx(ctx, cfg.agentsDir, cfg.label)
+	if err != nil {
+		return LaunchAgentStatus{}, err
+	}
+	defer unlock()
+
+	var exePath string
+	if opts.RequireManagedCurrent {
+		exePath, err = resolveManagedServerExecutable(cfg.home)
+	} else {
+		exePath, err = resolveLaunchAgentExecutable(cfg.home, opts.Executable)
+	}
 	if err != nil {
 		return LaunchAgentStatus{}, err
 	}
 	plistData, err := renderLaunchAgentPlist(cfg.label, exePath, cfg.home, interval)
 	if err != nil {
-		return LaunchAgentStatus{}, err
-	}
-	if err := os.MkdirAll(cfg.agentsDir, 0o755); err != nil {
 		return LaunchAgentStatus{}, err
 	}
 
@@ -106,33 +118,60 @@ func InstallLaunchAgent(ctx context.Context, opts LaunchAgentOptions) (LaunchAge
 		Installed:  true,
 	}
 
-	// 先卸载旧登记（未加载时忽略失败），再加载最新 plist。
-	_, _ = cfg.run(ctx, "bootout", cfg.domain+"/"+cfg.label)
-	out, err := cfg.run(ctx, "bootstrap", cfg.domain, cfg.plistPath)
-	if err == nil {
-		st.Loaded = true
-		return st, nil
+	// 先卸载旧登记并记录先前是否已加载（bootout 成功说明原先已加载，失败则未加载），避免回滚时误拉起原先未运行的旧 plist。
+	bootoutOut, bootoutErr := cfg.run(ctx, "bootout", cfg.domain+"/"+cfg.label)
+	wasLoaded := bootoutErr == nil
+	if bootoutErr != nil && !isLaunchctlServiceNotFound(bootoutOut, bootoutErr) && !isLaunchctlDomainNotFound(bootoutOut, bootoutErr) {
+		wasLoaded = true
 	}
-	// 仅在上下文未取消且明确探测到 GUI Aqua 域不存在时，保留 plist 待下次 GUI 登录生效。
-	if ctx.Err() == nil && !errors.Is(err, exec.ErrNotFound) {
-		if dout, derr := cfg.run(ctx, "print-disabled", cfg.domain); isLaunchctlDomainNotFound(dout, derr) {
+
+	enabledOverride := false
+	out, err := cfg.run(ctx, "bootstrap", cfg.domain, cfg.plistPath)
+	if err != nil && ctx.Err() == nil && !errors.Is(err, exec.ErrNotFound) {
+		dout, derr := cfg.run(ctx, "print-disabled", cfg.domain)
+		switch {
+		case isLaunchctlDomainNotFound(dout, derr):
 			st.Loaded = false
 			st.NoteCode = "aqua_inactive"
 			st.Note = "GUI login session (Aqua) is not active; LaunchAgent is installed and will load after macOS GUI login"
 			return st, nil
+		case derr == nil && parseLaunchctlDisabled(dout, cfg.label):
+			// 该 label 曾被系统显式 disable：先执行 launchctl enable 再重试 bootstrap。
+			if _, enErr := cfg.run(ctx, "enable", cfg.domain+"/"+cfg.label); enErr == nil {
+				enabledOverride = true
+				out, err = cfg.run(ctx, "bootstrap", cfg.domain, cfg.plistPath)
+			}
 		}
 	}
+	if err == nil {
+		st.Loaded = true
+		return st, nil
+	}
 
-	// 真实加载失败：恢复旧 plist（如存在）或清理本次写入，避免留下半更新状态。
+	// 真实加载失败：在 5 秒清理预算内仅恢复先前状态（未曾加载过的旧 plist 绝不重新 bootstrap）。
+	rctx, rcancel := context.WithTimeout(context.Background(), launchdCleanupTimeout)
+	defer rcancel()
+	var rollbackErr error
+	if enabledOverride {
+		_, _ = cfg.run(rctx, "disable", cfg.domain+"/"+cfg.label)
+	}
 	if hadPrev {
-		if rerr := atomicWriteFile(cfg.plistPath, prevData, 0o644); rerr == nil {
-			_, _ = cfg.run(context.Background(), "bootstrap", cfg.domain, cfg.plistPath)
+		if rerr := atomicWriteFile(cfg.plistPath, prevData, 0o644); rerr != nil {
+			rollbackErr = rerr
+		} else if wasLoaded {
+			_, _ = cfg.run(rctx, "bootstrap", cfg.domain, cfg.plistPath)
 		}
 	} else {
-		_ = os.Remove(cfg.plistPath)
+		_, _ = cfg.run(rctx, "bootout", cfg.domain+"/"+cfg.label)
+		if rerr := os.Remove(cfg.plistPath); rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
+			rollbackErr = rerr
+		}
 		st.Installed = false
 	}
 	msg := strings.TrimSpace(string(out))
+	if rollbackErr != nil {
+		return st, fmt.Errorf("launchctl bootstrap failed: %w (rollback failed: %v)", err, rollbackErr)
+	}
 	if msg != "" {
 		return st, fmt.Errorf("launchctl bootstrap failed: %w: %s", err, msg)
 	}
@@ -145,6 +184,11 @@ func UninstallLaunchAgent(ctx context.Context, opts LaunchAgentOptions) (LaunchA
 	if err != nil {
 		return LaunchAgentStatus{}, err
 	}
+	unlock, err := lockServiceUnitCtx(ctx, cfg.agentsDir, cfg.label)
+	if err != nil {
+		return LaunchAgentStatus{}, err
+	}
+	defer unlock()
 	out, err := cfg.run(ctx, "bootout", cfg.domain+"/"+cfg.label)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -353,6 +397,62 @@ func canonicalPath(p string) string {
 func isExecutableRegularFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular() && info.Mode()&0o111 != 0
+}
+
+// lockServiceUnitCtx 在 dir 下以非阻塞 flock + ctx 轮询串行化跨进程自启服务安装/卸载，可响应取消与超时。
+func lockServiceUnitCtx(ctx context.Context, dir, base string) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	lockPath := filepath.Join(dir, "."+base+".lock")
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			_ = f.Close()
+			return nil, err
+		}
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			if cerr := ctx.Err(); cerr != nil {
+				_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+				_ = f.Close()
+				return nil, cerr
+			}
+			return func() {
+				_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+				_ = f.Close()
+			}, nil
+		}
+		if errors.Is(err, syscall.EINTR) {
+			continue
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
+			_ = f.Close()
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			_ = f.Close()
+			return nil, ctx.Err()
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
+}
+
+// resolveManagedServerExecutable 严格校验 $POSSE_HOME/server/current/posse 是否为可执行文件且解析后落在受管版本目录下，
+// 绝不回退到 bin/posse（防止指向临时 APFS runtime 副本），也不改写任何符号链接。
+func resolveManagedServerExecutable(home string) (string, error) {
+	currentServer := filepath.Join(home, "server", "current", "posse")
+	if !isExecutableRegularFile(currentServer) || serverVersionDir(currentServer, home) == "" {
+		return "", fmt.Errorf("managed headless server binary not found at %s", currentServer)
+	}
+	return currentServer, nil
 }
 
 func launchAgentExecutableHint(home string) string {

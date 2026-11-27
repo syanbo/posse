@@ -23,3 +23,8 @@ func (c *Client) AutostartStatus(ctx context.Context) (rpc.AutostartStatus, erro
 	err := c.Call(ctx, "server.autostart.status", nil, &out)
 	return out, err
 }
+
+func (c *Client) PrepareSetAutostart(enabled bool) (*DesktopOperation, error) {
+	v := enabled
+	return c.PrepareDesktopOperation("server.autostart.set", rpc.AutostartSetParams{Enabled: &v})
+}
