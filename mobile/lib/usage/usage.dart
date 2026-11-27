@@ -29,6 +29,7 @@ class UsageWindow {
     this.minutes = 0,
     this.resetsAt,
     this.name = '',
+    this.quotaId = '',
     this.at,
     this.unknown = false,
   });
@@ -37,6 +38,7 @@ class UsageWindow {
   final int minutes;
   final DateTime? resetsAt;
   final String name;
+  final String quotaId;
   final DateTime? at;
   final bool unknown;
 
@@ -45,6 +47,7 @@ class UsageWindow {
     minutes: (j['minutes'] as num?)?.toInt() ?? 0,
     resetsAt: _ms(j['resetsAt']),
     name: j['name'] as String? ?? '',
+    quotaId: j['quotaId'] as String? ?? '',
     at: _ms(j['at']),
     unknown: j['unknown'] == true,
   );
@@ -171,6 +174,100 @@ class AgentUsage {
     if (ws.first.name.isEmpty) return ws.first;
     return ws.reduce((a, b) => b.percent > a.percent ? b : a);
   }
+
+  /// 首页卡片代表这一家的窗口列表，和桌面端 headWindows 一致：
+  /// Antigravity 只取主力模型池，按「短期（天/5h）在前、长期（周/月）在后」并排展示最多两个窗口，不展示三方额外池；
+  /// 其余 agent 维持单窗。
+  List<UsageWindow> get headWindows {
+    if (agent != 'antigravity') {
+      if (windows.isEmpty && aiCredits != null) return const [];
+      return [headWindow];
+    }
+    final primary = _antigravityPrimaryWindows(shownWindows);
+    if (primary.isEmpty) return const [];
+    UsageWindow? shortW;
+    UsageWindow? longW;
+    for (final w in primary) {
+      switch (WindowKind.of(w.minutes)) {
+        case WindowKind.day:
+          if (shortW == null ||
+              WindowKind.of(shortW.minutes) != WindowKind.day) {
+            shortW = w;
+          }
+        case WindowKind.fiveHours:
+          shortW ??= w;
+        case WindowKind.week:
+          if (longW == null ||
+              WindowKind.of(longW.minutes) != WindowKind.week) {
+            longW = w;
+          }
+        case WindowKind.month:
+          longW ??= w;
+        case WindowKind.period:
+        case WindowKind.other:
+      }
+    }
+    final out = <UsageWindow>[
+      if (shortW != null) shortW,
+      if (longW != null) longW,
+    ];
+    return out.isEmpty ? [primary.first] : out;
+  }
+}
+
+bool _isAntigravityExtraWindow(UsageWindow w) {
+  final id = w.quotaId.trim().toLowerCase();
+  if (id.startsWith('3p')) return true;
+  final name = w.name.toLowerCase();
+  return name.contains('claude') || name.contains('gpt');
+}
+
+List<UsageWindow> _antigravityPrimaryWindows(List<UsageWindow> ws) {
+  final byId = [
+    for (final w in ws)
+      if (w.quotaId.trim().toLowerCase().startsWith('gemini')) w,
+  ];
+  if (byId.isNotEmpty) return byId;
+  final byName = [
+    for (final w in ws)
+      if (w.name.toLowerCase().contains('gemini') &&
+          !_isAntigravityExtraWindow(w))
+        w,
+  ];
+  if (byName.isNotEmpty) return byName;
+  for (final g in groupAntigravityWindows(ws)) {
+    final keep = [
+      for (final w in g.windows)
+        if (!_isAntigravityExtraWindow(w)) w,
+    ];
+    if (keep.isNotEmpty) return keep;
+  }
+  return const [];
+}
+
+/// Antigravity 详情里按模型池合并的一组窗口，与桌面端 groupAntigravityWindows 一致。
+class UsageWindowGroup {
+  const UsageWindowGroup({required this.name, required this.windows});
+
+  final String name;
+  final List<UsageWindow> windows;
+}
+
+List<UsageWindowGroup> groupAntigravityWindows(List<UsageWindow> ws) {
+  final groups = <UsageWindowGroup>[];
+  final index = <String, int>{};
+  for (final w in ws) {
+    if (w.name.isNotEmpty) {
+      final i = index[w.name];
+      if (i != null) {
+        groups[i].windows.add(w);
+        continue;
+      }
+      index[w.name] = groups.length;
+    }
+    groups.add(UsageWindowGroup(name: w.name, windows: [w]));
+  }
+  return groups;
 }
 
 /// Cursor 两池在它控制台上的叫法：Auto 池含 Composer 和 Cursor Grok，API 池是其余模型。
@@ -328,6 +425,8 @@ String windowLabel(AppLocalizations l, int minutes) {
       return l.usageWindowPeriod;
     case WindowKind.fiveHours:
       return l.usageWindowFiveHours;
+    case WindowKind.day:
+      return l.usageWindowDay;
     case WindowKind.week:
       return l.usageWindowWeek;
     case WindowKind.month:
@@ -343,6 +442,7 @@ enum WindowKind {
   other,
   period, // 不知道长度：本期
   fiveHours,
+  day,
   week,
   month;
 
@@ -350,6 +450,7 @@ enum WindowKind {
     const day = 24 * 60;
     if (minutes == 0) return period;
     if (minutes >= 295 && minutes <= 305) return fiveHours;
+    if (minutes >= day - 10 && minutes <= day + 10) return WindowKind.day;
     if (minutes >= 7 * day - 10 && minutes <= 7 * day + 10) return week;
     if (minutes >= 27 * day && minutes <= 32 * day) return month;
     return other;
@@ -634,7 +735,7 @@ class UsageCardView extends StatelessWidget {
   }
 }
 
-/// 卡片里的一家，和桌面状态栏一样只写一个窗口：图标、窗口简称、百分比。有 5 小时就是它。
+/// 卡片里的一家，和桌面状态栏一致：图标、窗口简称、百分比；Antigravity 并排显示主力池的短期和长期窗口。
 class _UsageChip extends StatelessWidget {
   const _UsageChip({required this.usage, required this.remaining});
 
@@ -644,37 +745,38 @@ class _UsageChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
-    final w = usage.headWindow;
-    final unknown = usage.windowUnknown(w, DateTime.now());
-    final urgent = !unknown && w.percent >= usageUrgent;
-    final creditsOnly = usage.windows.isEmpty ? usage.aiCredits : null;
+    final now = DateTime.now();
+    final heads = usage.headWindows;
+    final creditsOnly = heads.isEmpty ? usage.aiCredits : null;
+    final windows = heads.isEmpty && creditsOnly == null
+        ? const [UsageWindow(percent: 0, unknown: true)]
+        : heads;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         AgentTile(agent: usage.agent, size: Ic.small),
         const SizedBox(width: 4),
-        if (creditsOnly == null) ...[
+        if (creditsOnly != null)
           Text(
-            windowShort(context.l10n, w.minutes),
-            style: TextStyle(fontSize: Fs.small, color: c.muted),
-          ),
-          const SizedBox(width: 4),
-        ],
-        Text(
-          creditsOnly != null
-              ? context.l10n.usageAICreditBalance(creditsOnly, '')
-              : unknown
-              ? context.l10n.usagePendingUpdate
-              : '${shownPercent(w, remaining).round()}%',
-          style: TextStyle(
-            fontSize: Fs.small,
-            fontWeight: Fw.medium,
-            color: urgent ? c.danger : c.text,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-        ),
-        if (usage.stale(DateTime.now()) &&
-            usage.updatedAt.millisecondsSinceEpoch > 0) ...[
+            context.l10n.usageAICreditBalance(creditsOnly, ''),
+            style: TextStyle(
+              fontSize: Fs.small,
+              fontWeight: Fw.medium,
+              color: c.text,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          )
+        else
+          for (final (i, w) in windows.indexed) ...[
+            if (i > 0) const SizedBox(width: 8),
+            _UsageChipWindow(
+              usage: usage,
+              window: w,
+              remaining: remaining,
+              now: now,
+            ),
+          ],
+        if (usage.stale(now) && usage.updatedAt.millisecondsSinceEpoch > 0) ...[
           const SizedBox(width: 4),
           Text(
             context.l10n.usageOldValue,
@@ -686,10 +788,53 @@ class _UsageChip extends StatelessWidget {
   }
 }
 
-/// 窗口简称，和桌面状态栏一致：5h、周、月。
+class _UsageChipWindow extends StatelessWidget {
+  const _UsageChipWindow({
+    required this.usage,
+    required this.window,
+    required this.remaining,
+    required this.now,
+  });
+
+  final AgentUsage usage;
+  final UsageWindow window;
+  final bool remaining;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = PosseColors.of(context);
+    final unknown = usage.windowUnknown(window, now);
+    final urgent = !unknown && window.percent >= usageUrgent;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          windowShort(context.l10n, window.minutes),
+          style: TextStyle(fontSize: Fs.small, color: c.muted),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          unknown
+              ? context.l10n.usagePendingUpdate
+              : '${shownPercent(window, remaining).round()}%',
+          style: TextStyle(
+            fontSize: Fs.small,
+            fontWeight: Fw.medium,
+            color: urgent ? c.danger : c.text,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 窗口简称，和桌面状态栏一致：5h、天、周、月。
 String windowShort(AppLocalizations l, int minutes) =>
     switch (WindowKind.of(minutes)) {
       WindowKind.fiveHours => '5h',
+      WindowKind.day => l.usageWindowDayShort,
       WindowKind.week => l.usageWindowWeekShort,
       WindowKind.month => l.usageWindowMonthShort,
       _ => windowLabel(l, minutes),
@@ -993,77 +1138,50 @@ class _UsageSheetState extends State<UsageSheet> {
                 style: TextStyle(fontSize: Fs.small, color: c.danger),
               ),
             ],
-            for (final w in u.shownWindows) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      windowName(l, w),
-                      style: TextStyle(fontSize: Fs.small, color: c.text),
-                    ),
-                  ),
+            if (u.agent == 'antigravity') ...[
+              for (final (gi, g) in groupAntigravityWindows(
+                u.shownWindows,
+              ).indexed) ...[
+                SizedBox(height: gi == 0 ? 12 : 14),
+                if (g.name.isNotEmpty)
                   Text(
-                    u.windowUnknown(w, now)
-                        ? ''
-                        : resetText(
-                            l,
-                            w.resetsAt,
-                            now,
-                            h24: use24Hour(context),
-                          ),
-                    style: TextStyle(fontSize: Fs.small, color: c.muted),
+                    g.name,
+                    style: TextStyle(
+                      fontSize: Fs.small,
+                      fontWeight: Fw.medium,
+                      color: c.muted,
+                    ),
+                  ),
+                for (final (wi, w) in g.windows.indexed) ...[
+                  SizedBox(height: wi == 0 && g.name.isNotEmpty ? 6 : 10),
+                  ..._windowRows(
+                    context,
+                    c,
+                    l,
+                    u,
+                    w,
+                    windowLabel(l, w.minutes),
+                    now,
+                    remaining,
+                    percentWidth,
                   ),
                 ],
-              ),
-              // 分池和总额度不是同一份读数（Claude 的 Fable 只在电脑上看 /usage 时更新）；单起一行，免得挤折左边的名字
-              if (w.at != null &&
-                  u.updatedAt.difference(w.at!) > const Duration(minutes: 10))
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    l.usageReadingFrom(agoText(l, w.at!, now)),
-                    textAlign: TextAlign.end,
-                    style: TextStyle(fontSize: Fs.small, color: c.muted),
-                  ),
+              ],
+            ] else
+              for (final w in u.shownWindows) ...[
+                const SizedBox(height: 12),
+                ..._windowRows(
+                  context,
+                  c,
+                  l,
+                  u,
+                  w,
+                  windowName(l, w),
+                  now,
+                  remaining,
+                  percentWidth,
                 ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: UsageBar(
-                      percent: u.windowUnknown(w, now)
-                          ? 0
-                          : shownPercent(w, remaining),
-                      urgent:
-                          !u.windowUnknown(w, now) && w.percent >= usageUrgent,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: percentWidth,
-                    child: Text(
-                      u.windowUnknown(w, now)
-                          ? l.usagePendingUpdate
-                          : l.usageShownPercent(
-                              remaining ? l.usageRemaining : l.usageUsed,
-                              '${shownPercent(w, remaining).round()}%',
-                            ),
-                      textAlign: TextAlign.end,
-                      style: TextStyle(
-                        fontSize: Fs.small,
-                        fontWeight: Fw.medium,
-                        color:
-                            !u.windowUnknown(w, now) && w.percent >= usageUrgent
-                            ? c.danger
-                            : c.text,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
             for (final f in usageFacts(l, u, now)) ...[
               const SizedBox(height: 8),
               Text(
@@ -1096,4 +1214,76 @@ class _UsageSheetState extends State<UsageSheet> {
       ),
     );
   }
+
+  List<Widget> _windowRows(
+    BuildContext context,
+    PosseColors c,
+    AppLocalizations l,
+    AgentUsage u,
+    UsageWindow w,
+    String title,
+    DateTime now,
+    bool remaining,
+    double percentWidth,
+  ) => [
+    Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(fontSize: Fs.small, color: c.text),
+          ),
+        ),
+        Text(
+          u.windowUnknown(w, now)
+              ? ''
+              : resetText(l, w.resetsAt, now, h24: use24Hour(context)),
+          style: TextStyle(fontSize: Fs.small, color: c.muted),
+        ),
+      ],
+    ),
+    // 分池和总额度不是同一份读数（Claude 的 Fable 只在电脑上看 /usage 时更新）；单起一行，免得挤折左边的名字
+    if (w.at != null &&
+        u.updatedAt.difference(w.at!) > const Duration(minutes: 10))
+      Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Text(
+          l.usageReadingFrom(agoText(l, w.at!, now)),
+          textAlign: TextAlign.end,
+          style: TextStyle(fontSize: Fs.small, color: c.muted),
+        ),
+      ),
+    const SizedBox(height: 6),
+    Row(
+      children: [
+        Expanded(
+          child: UsageBar(
+            percent: u.windowUnknown(w, now) ? 0 : shownPercent(w, remaining),
+            urgent: !u.windowUnknown(w, now) && w.percent >= usageUrgent,
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: percentWidth,
+          child: Text(
+            u.windowUnknown(w, now)
+                ? l.usagePendingUpdate
+                : l.usageShownPercent(
+                    remaining ? l.usageRemaining : l.usageUsed,
+                    '${shownPercent(w, remaining).round()}%',
+                  ),
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              fontSize: Fs.small,
+              fontWeight: Fw.medium,
+              color: !u.windowUnknown(w, now) && w.percent >= usageUrgent
+                  ? c.danger
+                  : c.text,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+      ],
+    ),
+  ];
 }

@@ -4082,6 +4082,18 @@ abstract class AppLocalizations {
   /// **'Used'**
   String get usageUsed;
 
+  /// Plan Usage: daily limit window.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily'**
+  String get usageWindowDay;
+
+  /// Plan Usage card: short name of the daily window.
+  ///
+  /// In en, this message translates to:
+  /// **'1d'**
+  String get usageWindowDayShort;
+
   /// Plan Usage: limit window measured in days.
   ///
   /// In en, this message translates to:

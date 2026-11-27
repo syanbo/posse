@@ -2482,6 +2482,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get usageUsed => 'Used';
 
   @override
+  String get usageWindowDay => 'Daily';
+
+  @override
+  String get usageWindowDayShort => '1d';
+
+  @override
   String usageWindowDays(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

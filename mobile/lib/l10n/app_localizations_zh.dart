@@ -2339,6 +2339,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get usageUsed => '已用';
 
   @override
+  String get usageWindowDay => '每天';
+
+  @override
+  String get usageWindowDayShort => '天';
+
+  @override
   String usageWindowDays(int count) {
     return '$count 天';
   }

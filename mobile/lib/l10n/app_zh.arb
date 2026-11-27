@@ -664,6 +664,8 @@
   "usageStaleReading": "（{time}的读数）",
   "usageTitle": "套餐用量",
   "usageUsed": "已用",
+  "usageWindowDay": "每天",
+  "usageWindowDayShort": "天",
   "usageWindowDays": "{count} 天",
   "usageWindowFiveHours": "5 小时",
   "usageWindowHours": "{count} 小时",

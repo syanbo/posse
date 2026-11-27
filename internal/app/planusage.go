@@ -38,6 +38,8 @@ func windowLabel(m locales.Messages, minutes int) string {
 		return m.UsageWindowPeriod()
 	case window5h:
 		return m.UsageWindowFiveHours()
+	case windowDay:
+		return m.UsageWindowDay()
 	case windowWeek:
 		return m.UsageWindowWeek()
 	case windowMonth:
@@ -56,6 +58,7 @@ const (
 	windowOther  windowKind = iota
 	windowPeriod            // 不知道长度：本期
 	window5h
+	windowDay
 	windowWeek
 	windowMonth
 )
@@ -68,6 +71,8 @@ func windowKindOf(minutes int) windowKind {
 		return windowPeriod
 	case minutes >= 295 && minutes <= 305:
 		return window5h
+	case minutes >= day-10 && minutes <= day+10:
+		return windowDay
 	case minutes >= 7*day-10 && minutes <= 7*day+10:
 		return windowWeek
 	case minutes >= 27*day && minutes <= 32*day:
@@ -187,21 +192,32 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() {
 		for _, u := range shown {
-			w := headWindow(u)
-			color := t.Text
-			if !w.Unknown && w.Percent >= planUrgent {
-				color = t.Danger
-			}
+			ws := headWindows(u)
 			ui.Row(c.Key(u.Agent)).Gap(4).AlignItems(ui.Center).Shrink(0).
 				Children(func() {
 					agentIcon(c, u.Agent, smallIcon())
-					if len(u.Windows) == 0 && u.AICredits != nil {
+					if len(ws) == 0 && u.AICredits != nil {
 						ui.Text(c, L(c).UsageAICreditBalance(int(u.AICredits.Remaining), "")).
 							FontSize(fsSmall).FontFeatures("tnum").SingleLine()
 						return
 					}
-					ui.Text(c, windowShort(L(c), w.Minutes)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
-					ui.Text(c, planPercent(L(c), a, w)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).SingleLine()
+					if len(ws) == 0 {
+						ws = []usage.Window{{Unknown: true}}
+					}
+					for i, w := range ws {
+						color := t.Text
+						if !w.Unknown && w.Percent >= planUrgent {
+							color = t.Danger
+						}
+						cell := ui.Row(c.Key(fmt.Sprint("w-", i))).Gap(4).AlignItems(ui.Center).Shrink(0)
+						if i > 0 {
+							cell.Margin(0, 0, 0, 4)
+						}
+						cell.Children(func() {
+							ui.Text(c, windowShort(L(c), w.Minutes)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
+							ui.Text(c, planPercent(L(c), a, w)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).SingleLine()
+						})
+					}
 				})
 		}
 	})
@@ -262,6 +278,98 @@ func headWindow(u usage.Usage) usage.Window {
 		}
 	}
 	return head
+}
+
+// headWindows 是状态栏里代表这一家的窗口列表：Antigravity 只取主力模型池，按「短期（天/5h）在前、长期（周/月）在后」
+// 并排展示最多两个窗口，不展示三方额外池；其余 agent 维持单窗。
+func headWindows(u usage.Usage) []usage.Window {
+	if u.Agent != "antigravity" {
+		if len(u.Windows) == 0 && u.AICredits != nil {
+			return nil
+		}
+		return []usage.Window{headWindow(u)}
+	}
+	primary := antigravityPrimaryWindows(planWindows(u))
+	if len(primary) == 0 {
+		return nil
+	}
+	var shortW, longW *usage.Window
+	for i := range primary {
+		w := &primary[i]
+		switch windowKindOf(w.Minutes) {
+		case windowDay:
+			// 天和 5h 同属短期槽，若同时存在优先展示天
+			if shortW == nil || windowKindOf(shortW.Minutes) != windowDay {
+				shortW = w
+			}
+		case window5h:
+			if shortW == nil {
+				shortW = w
+			}
+		case windowWeek:
+			if longW == nil || windowKindOf(longW.Minutes) != windowWeek {
+				longW = w
+			}
+		case windowMonth:
+			if longW == nil {
+				longW = w
+			}
+		}
+	}
+	var out []usage.Window
+	if shortW != nil {
+		out = append(out, *shortW)
+	}
+	if longW != nil {
+		out = append(out, *longW)
+	}
+	if len(out) == 0 {
+		out = append(out, primary[0])
+	}
+	return out
+}
+
+// antigravityPrimaryWindows 从 Antigravity 的多个模型组里挑出主力组（Gemini Models），排除三方额外池（3p-* / Claude & GPT）。
+func antigravityPrimaryWindows(ws []usage.Window) []usage.Window {
+	var byID []usage.Window
+	for _, w := range ws {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(w.QuotaID)), "gemini") {
+			byID = append(byID, w)
+		}
+	}
+	if len(byID) > 0 {
+		return byID
+	}
+	var byName []usage.Window
+	for _, w := range ws {
+		if strings.Contains(strings.ToLower(w.Name), "gemini") && !isAntigravityExtraWindow(w) {
+			byName = append(byName, w)
+		}
+	}
+	if len(byName) > 0 {
+		return byName
+	}
+	for _, g := range groupAntigravityWindows(ws) {
+		var keep []usage.Window
+		for _, w := range g.windows {
+			if !isAntigravityExtraWindow(w) {
+				keep = append(keep, w)
+			}
+		}
+		if len(keep) > 0 {
+			return keep
+		}
+	}
+	return nil
+}
+
+func isAntigravityExtraWindow(w usage.Window) bool {
+	id := strings.ToLower(strings.TrimSpace(w.QuotaID))
+	if strings.HasPrefix(id, "3p") {
+		return true
+	}
+	name := strings.ToLower(w.Name)
+	return strings.Contains(name, "claude") || strings.Contains(name, "gpt")
 }
 
 // cursorPools 是 Cursor 两池在它控制台上的叫法：Auto 池含 Composer 和 Cursor Grok，API 池是其余模型。
@@ -329,6 +437,8 @@ func windowShort(m locales.Messages, minutes int) string {
 	switch windowKindOf(minutes) {
 	case window5h:
 		return "5h"
+	case windowDay:
+		return m.UsageWindowDayShort()
 	case windowWeek:
 		return m.UsageWindowWeekShort()
 	case windowMonth:

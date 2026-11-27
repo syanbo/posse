@@ -9180,6 +9180,14 @@
   "@usageUsed": {
     "description": "Plan Usage settings or status popover: label for Used."
   },
+  "usageWindowDay": "Daily",
+  "@usageWindowDay": {
+    "description": "Plan Usage settings or status popover: label for WindowDay."
+  },
+  "usageWindowDayShort": "1d",
+  "@usageWindowDayShort": {
+    "description": "Plan Usage settings or status popover: label for WindowDayShort."
+  },
   "usageWindowDays": "{count, plural, one {# Day} other {# Days}}",
   "@usageWindowDays": {
     "description": "Plan Usage settings or status popover: label for WindowDays. Values: count.",

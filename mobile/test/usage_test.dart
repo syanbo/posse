@@ -661,4 +661,85 @@ void main() {
     expect(find.text(zh.usageQueryDisabled), findsOneWidget);
     expect(find.text(zh.usageNotConnected), findsNothing);
   });
+
+  testWidgets(
+    'Antigravity card shows primary short+long windows only and sheet groups all pools',
+    (tester) async {
+      final now = DateTime.now();
+      final future = now.add(const Duration(hours: 3)).millisecondsSinceEpoch;
+      final agy = AgentUsage.fromJson({
+        'agent': 'antigravity',
+        'updatedAt': now.millisecondsSinceEpoch,
+        'windows': [
+          {
+            'quotaId': 'gemini-weekly',
+            'name': 'Gemini Models',
+            'minutes': 10080,
+            'percent': 18,
+            'resetsAt': future,
+          },
+          {
+            'quotaId': 'gemini-daily',
+            'name': 'Gemini Models',
+            'minutes': 1440,
+            'percent': 35,
+            'resetsAt': future,
+          },
+          {
+            'quotaId': '3p-weekly',
+            'name': 'Claude and GPT models',
+            'minutes': 10080,
+            'percent': 92,
+            'resetsAt': future,
+          },
+          {
+            'quotaId': '3p-5h',
+            'name': 'Claude and GPT models',
+            'minutes': 300,
+            'percent': 41,
+            'resetsAt': future,
+          },
+        ],
+      });
+      final cursor = AgentUsage.fromJson({
+        'agent': 'cursor',
+        'updatedAt': now.millisecondsSinceEpoch,
+        'windows': [
+          {'name': 'Auto', 'minutes': 43200, 'percent': 34},
+          {'name': 'API', 'minutes': 43200, 'percent': 100},
+        ],
+      });
+      expect(agy.headWindows.map((w) => w.quotaId).toList(), [
+        'gemini-daily',
+        'gemini-weekly',
+      ]);
+      expect(windowShort(zh, 1440), '天');
+      expect(windowShort(en, 1440), '1d');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.light),
+          home: Scaffold(body: UsageCardView(usages: [cursor, agy])),
+        ),
+      );
+      // 首页卡片展示 Cursor 月和 Antigravity 主力的天+周，不泄露额外池 92% / 41%。
+      expect(find.text('月'), findsOneWidget);
+      expect(find.text('100%'), findsOneWidget);
+      expect(find.text('天'), findsOneWidget);
+      expect(find.text('35%'), findsOneWidget);
+      expect(find.text('周'), findsOneWidget);
+      expect(find.text('18%'), findsOneWidget);
+      expect(find.text('92%'), findsNothing);
+      expect(find.text('41%'), findsNothing);
+
+      // 点开详情页：按模型组小标题完整保留主力池与额外池。
+      await tester.tap(find.byType(UsageCardView));
+      await tester.pumpAndSettle();
+      expect(find.text('Gemini Models'), findsOneWidget);
+      expect(find.text('Claude and GPT models'), findsOneWidget);
+      expect(find.text('每天'), findsOneWidget);
+      expect(find.text('已用 92%'), findsOneWidget);
+      expect(find.text('已用 41%'), findsOneWidget);
+    },
+  );
 }

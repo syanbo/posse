@@ -25745,6 +25745,34 @@ func (msgs Messages) UsageUsed() string {
 	return Catalog.Format(msgs.locale, "usageUsed", nil)
 }
 
+// UsageWindowDay says "Daily"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for WindowDay.
+func UsageWindowDay() string { return In(i18n.Locale()).UsageWindowDay() }
+
+// UsageWindowDay says "Daily"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for WindowDay.
+func (msgs Messages) UsageWindowDay() string {
+	return Catalog.Format(msgs.locale, "usageWindowDay", nil)
+}
+
+// UsageWindowDayShort says "1d"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for WindowDayShort.
+func UsageWindowDayShort() string { return In(i18n.Locale()).UsageWindowDayShort() }
+
+// UsageWindowDayShort says "1d"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for WindowDayShort.
+func (msgs Messages) UsageWindowDayShort() string {
+	return Catalog.Format(msgs.locale, "usageWindowDayShort", nil)
+}
+
 // UsageWindowDays says "{count, plural, one {# Day} other {# Days}}"
 // in the language the app shows.
 //

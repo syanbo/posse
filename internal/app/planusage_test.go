@@ -81,6 +81,74 @@ func TestGroupAntigravityWindows(t *testing.T) {
 	}
 }
 
+func TestAntigravityHeadWindows(t *testing.T) {
+	now := time.Now()
+	future := now.Add(2 * time.Hour).UnixMilli()
+	// 5h + 周：只取主力 Gemini 池，排除三方 3p 池，且短期（5h）在前、长期（周）在后。
+	u := usage.Usage{Agent: "antigravity", Windows: []usage.Window{
+		{QuotaID: "gemini-weekly", Name: "Gemini Models", Minutes: 10080, Percent: 18, ResetsAt: future},
+		{QuotaID: "gemini-5h", Name: "Gemini Models", Minutes: 300, Percent: 17, ResetsAt: future},
+		{QuotaID: "3p-weekly", Name: "Claude and GPT models", Minutes: 10080, Percent: 56, ResetsAt: future},
+		{QuotaID: "3p-5h", Name: "Claude and GPT models", Minutes: 300, Percent: 41, ResetsAt: future},
+	}}
+	hs := headWindows(u)
+	if len(hs) != 2 || hs[0].QuotaID != "gemini-5h" || hs[1].QuotaID != "gemini-weekly" {
+		t.Fatalf("5h+week heads = %+v", hs)
+	}
+	// 天 + 周：天在前、周在后，中文简称分别为「天」「周」，英文为「1d」「wk」。
+	daily := usage.Usage{Agent: "antigravity", Windows: []usage.Window{
+		{QuotaID: "gemini-weekly", Name: "Gemini Models", Minutes: 10080, Percent: 22, ResetsAt: future},
+		{QuotaID: "gemini-daily", Name: "Gemini Models", Minutes: 1440, Percent: 35, ResetsAt: future},
+		{QuotaID: "3p-weekly", Name: "Claude and GPT models", Minutes: 10080, Percent: 95, ResetsAt: future},
+	}}
+	hs = headWindows(daily)
+	if len(hs) != 2 || hs[0].QuotaID != "gemini-daily" || hs[1].QuotaID != "gemini-weekly" {
+		t.Fatalf("daily+week heads = %+v", hs)
+	}
+	if got := windowShort(locales.In("zh-Hans"), 1440); got != "天" {
+		t.Fatalf("zh day short = %q", got)
+	}
+	if got := windowShort(locales.In("en"), 1440); got != "1d" {
+		t.Fatalf("en day short = %q", got)
+	}
+	// 无 quotaId 的旧读数按组名识别主力 Gemini 池，并兼容月周期。
+	legacy := usage.Usage{Agent: "antigravity", Windows: []usage.Window{
+		{Name: "Claude and GPT models", Minutes: 10080, Percent: 99, ResetsAt: future},
+		{Name: "Gemini Models", Minutes: 43200, Percent: 12, ResetsAt: future},
+		{Name: "Gemini Models", Minutes: 1440, Percent: 8, ResetsAt: future},
+	}}
+	hs = headWindows(legacy)
+	if len(hs) != 2 || hs[0].Minutes != 1440 || hs[1].Minutes != 43200 {
+		t.Fatalf("legacy daily+month heads = %+v", hs)
+	}
+	// 仅有三方额外池时不将其展示在底部摘要里。
+	extraOnly := usage.Usage{Agent: "antigravity", Windows: []usage.Window{
+		{QuotaID: "3p-weekly", Name: "Claude and GPT models", Minutes: 10080, Percent: 88, ResetsAt: future},
+	}}
+	if hs := headWindows(extraOnly); len(hs) != 0 {
+		t.Fatalf("extra-only should not appear in status bar: %+v", hs)
+	}
+	// 状态栏渲染核对：展示主力天与周，不展示三方 56%；Cursor 的月仍正常显示。
+	a := previewApp(t)
+	a.daemon.Usage = &planStatus{Usages: []usage.Usage{
+		{Agent: "cursor", UpdatedAt: now.UnixMilli(), Windows: []usage.Window{
+			{Name: "Auto", Minutes: 43200, Percent: 35},
+			{Name: "API", Minutes: 43200, Percent: 100},
+		}},
+		daily,
+	}}
+	tt := newTester(func(c *ui.Context) { a.planButton(c, a.daemon.Usage) }, 600, 80)
+	tt.Frame()
+	for _, want := range []string{"月", "100%", "天", "35%", "周", "22%"} {
+		if _, ok := tt.Find(want); !ok {
+			t.Fatalf("status bar missing %q", want)
+		}
+	}
+	if _, ok := tt.Find("95%"); ok {
+		t.Fatal("status bar leaked extra 3p pool percentage")
+	}
+}
+
 func TestPlanCreditActivityLinkKeyboardAndOverflow(t *testing.T) {
 	a := previewApp(t)
 	now := time.Now()

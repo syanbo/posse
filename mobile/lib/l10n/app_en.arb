@@ -3276,6 +3276,14 @@
   "@usageUsed": {
     "description": "Plan Usage sheet: segmented option showing used percentages."
   },
+  "usageWindowDay": "Daily",
+  "@usageWindowDay": {
+    "description": "Plan Usage: daily limit window."
+  },
+  "usageWindowDayShort": "1d",
+  "@usageWindowDayShort": {
+    "description": "Plan Usage card: short name of the daily window."
+  },
   "usageWindowDays": "{count, plural, one {{count} Day} other {{count} Days}}",
   "@usageWindowDays": {
     "description": "Plan Usage: limit window measured in days.",
