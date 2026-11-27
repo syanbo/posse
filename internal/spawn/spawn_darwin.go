@@ -179,7 +179,7 @@ func Start(cmd *exec.Cmd) (*os.Process, error) {
 	}
 	attrSetSigMask(&attr, &none)
 	attrSetSigDef(&attr, &all)
-	if !disclaimMissing {
+	if spawnDisclaim && !disclaimMissing {
 		if rc := disclaim(&attr, 1); rc != 0 {
 			return nil, fmt.Errorf("spawn: disclaim: %w", syscall.Errno(rc))
 		}
