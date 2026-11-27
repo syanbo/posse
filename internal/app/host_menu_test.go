@@ -581,3 +581,84 @@ func TestHostMenuFrameKeepsActionNumbers(t *testing.T) {
 		}
 	}
 }
+
+func TestHostOpenRespectsManualDisconnect(t *testing.T) {
+	k, a, b, _, base, _ := connectionFixture(t)
+	h := remoteTestHost("remote")
+	writeHostMenuConfig(t, a, h)
+	a.loadHostMenu()
+
+	var dials atomic.Int32
+	blockDial := make(chan struct{})
+	var holdNext atomic.Bool
+	k.dial = func(ctx context.Context, host remote.Host, opts remote.Options) (hostTransport, error) {
+		dials.Add(1)
+		if holdNext.Load() {
+			select {
+			case <-ctx.Done():
+				return hostTransport{}, ctx.Err()
+			case <-blockDial:
+			}
+		}
+		return hostTransport{base, make(chan struct{})}, nil
+	}
+
+	// 首次点击远端磁贴正常建连，正常切回本机再切回远端应自动重连。
+	a.openHost(h)
+	awaitHostUpdate(t, b)
+	if !b.host.snapshot().Connected || dials.Load() != 1 {
+		t.Fatalf("initial openHost did not connect: snap=%+v dials=%d", b.host.snapshot(), dials.Load())
+	}
+	b.selectLocalHost()
+	a.openHost(h)
+	awaitHostUpdate(t, b)
+	if !b.host.snapshot().Connected || dials.Load() != 2 {
+		t.Fatalf("normal host switch did not auto-reconnect: snap=%+v dials=%d", b.host.snapshot(), dials.Load())
+	}
+
+	// 主动点击「断开连接」后切回本机，再点击远端磁贴只切入已断开视图，不自动重连。
+	k.disconnect(h.ID)
+	if !b.manuallyDisconnected || b.host.snapshot().Connected {
+		t.Fatalf("manual disconnect did not mark disconnected state: manual=%v snap=%+v", b.manuallyDisconnected, b.host.snapshot())
+	}
+	b.selectLocalHost()
+	a.openHost(h)
+	if k.views.active.Load() != b || b.connecting || b.host.snapshot().Connected || dials.Load() != 2 {
+		t.Fatalf("openHost auto-reconnected manually disconnected host: active=%s connecting=%v snap=%+v dials=%d", k.views.active.Load().viewID, b.connecting, b.host.snapshot(), dials.Load())
+	}
+
+	// 显式「重新连接」会清除主动断开标记并重新连上，之后正常切换恢复无感重连。
+	b.selectRemoteHost(h)
+	awaitHostUpdate(t, b)
+	if b.manuallyDisconnected || !b.host.snapshot().Connected || dials.Load() != 3 {
+		t.Fatalf("explicit reconnect failed or kept manual flag: manual=%v snap=%+v dials=%d", b.manuallyDisconnected, b.host.snapshot(), dials.Load())
+	}
+	b.selectLocalHost()
+	a.openHost(h)
+	awaitHostUpdate(t, b)
+	if !b.host.snapshot().Connected || dials.Load() != 4 {
+		t.Fatalf("switch after explicit reconnect did not resume auto-reconnect: snap=%+v dials=%d", b.host.snapshot(), dials.Load())
+	}
+
+	// 取消尚未连上的拨号不记为主动断开，切走后再次点击磁贴仍可重新尝试建连。
+	b.selectLocalHost()
+	holdNext.Store(true)
+	a.openHost(h)
+	if !b.connecting {
+		t.Fatal("expected dial to stay in connecting state")
+	}
+	k.disconnect(h.ID)
+	if b.manuallyDisconnected {
+		t.Fatal("canceling an in-progress dial unexpectedly set manuallyDisconnected")
+	}
+	holdNext.Store(false)
+	close(blockDial)
+	b.selectLocalHost()
+	a.openHost(h)
+	for i := 0; i < 4 && b.connecting; i++ {
+		awaitHostUpdate(t, b)
+	}
+	if !b.host.snapshot().Connected {
+		t.Fatalf("openHost after canceled dial did not retry connecting: snap=%+v", b.host.snapshot())
+	}
+}

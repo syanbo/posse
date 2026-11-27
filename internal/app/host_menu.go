@@ -362,14 +362,14 @@ func (a *app) selectLocalHost() {
 	local.openWorkspaces()
 }
 
-// openHost 是点击左侧导航栏远端主机磁贴的左键动作：
-// 已连接（含从本机设备页返回）时直接切回该主机工作区，不重复拆建连接；未连接时走 selectRemoteHost 发起连接。
+// openHost 是点击左侧导航栏远端主机磁贴或 ⌃⌥H 列表项的动作：
+// 已连接、连接中或用户主动断开时直接切回该主机视图（不重复拆建，也不擅自重连）；其余未连接状态走 selectRemoteHost 发起连接。
 func (a *app) openHost(h remote.Host) {
 	if a.views == nil {
 		return
 	}
 	target := a.views.all[h.ID]
-	if target != nil && (target.connecting || target.host != nil && target.host.snapshot().Connected || a.windowOwner().hosts == nil) {
+	if target != nil && (target.connecting || target.manuallyDisconnected || target.host != nil && target.host.snapshot().Connected || a.windowOwner().hosts == nil) {
 		if a.views.active.Load() != target {
 			a.views.activate(h.ID)
 		}

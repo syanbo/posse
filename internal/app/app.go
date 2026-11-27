@@ -161,18 +161,19 @@ type app struct {
 	c   *client.Client
 	win *mygo.Window
 	// 视图上下文的主机归属创建后不变；连接、控制身份的变化只由 host 管理。
-	host           *hostSession
-	views          *hostViews
-	sshAuth        *sshAuthentication // 窗口共用，只由 windowOwner 持有。
-	hosts          *hostConnections
-	hostMenu       hostMenuState
-	hostDlg        hostDialogState // 窗口共用，只由 windowOwner 持有
-	connecting     bool
-	connectStage   remote.Stage
-	connectPct     float64
-	viewID         string
-	viewGeneration atomic.Uint64
-	windowFocused  atomic.Bool // 实际窗口焦点，由本机上下文持有
+	host                 *hostSession
+	views                *hostViews
+	sshAuth              *sshAuthentication // 窗口共用，只由 windowOwner 持有。
+	hosts                *hostConnections
+	hostMenu             hostMenuState
+	hostDlg              hostDialogState // 窗口共用，只由 windowOwner 持有
+	connecting           bool
+	manuallyDisconnected bool
+	connectStage         remote.Stage
+	connectPct           float64
+	viewID               string
+	viewGeneration       atomic.Uint64
+	windowFocused        atomic.Bool // 实际窗口焦点，由本机上下文持有
 
 	// 讨论页（discussions.go）：轮询在后台协程里读 discWant、discSeq
 	disc        discBoard
