@@ -3,6 +3,18 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.41
+
+- 适配 Linux 与无头服务端节点并新增「主机详情」页（从电脑列表进入）：按平台区分服务器/Mac 图标与标签，自动隐藏无头与 Linux 主机的「看桌面」入口；支持查看主机平台、形态、版本、PID、运行时长、各终端内存明细与可展开进程组，以及在线开关托管无头节点的开机自启（需搭配 Posse 0.1.55 或更新版本）。
+- 统一全量底部弹框与会话顶栏样式：关闭会话、忘掉电脑、压缩上下文、切分支等确认框统一改为底部滑出面板，所有底部弹框均与套餐明细一致延伸底色至屏幕底部安全区并避让 Home Indicator 与软键盘；会话详情与历史详情顶栏的 Agent 图标缩小并与标题同行垂直居中，移除右下角连接状态小圆点。
+- 文件浏览与代码查看新增鸿蒙 ArkTS（`.ets`）图标与语法高亮；首页 Antigravity 套餐卡片仅展示主力短期与周期窗口，套餐明细同步按池分组显示。
+
+### English
+
+- Added Linux and headless server support plus a new Host Details screen (from the computer picker): distinguishes server vs. Mac icons and tags, hides Remote Desktop on headless/Linux hosts, displays host platform, edition, version, PID, uptime, expandable per-terminal memory and grouped process breakdowns, and provides an online startup-service toggle for managed headless hosts (requires Posse 0.1.55 or later).
+- Unified all bottom sheets and streamlined the session detail header: converted all confirmation prompts (close session, forget computer, compact context, switch branch, etc.) to bottom sheets, aligned every modal sheet with the Plan Usage sheet so backgrounds extend seamlessly into the bottom safe area while padding avoids the Home Indicator and soft keyboard, and shrunk the Agent icon inline with the title while removing the corner connection dot in Chat, Terminal, and History headers.
+- Added HarmonyOS ArkTS (`.ets`) file icons and syntax highlighting in Files, and updated the Antigravity usage card to show primary short and cycle windows only with grouped pools in Plan Usage details.
+
 ## 0.1.40
 
 - 修复 iOS 界面中英文混排字重割裂与副标题偏细发虚的问题：iOS 全局界面字体统一使用系统内置 `PingFang SC`，与等宽代码字体独立、不影响安卓端。
